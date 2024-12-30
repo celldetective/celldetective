@@ -2764,7 +2764,7 @@ def load_image_dataset(datasets, channels, train_spatial_calibration=None, mask_
 					intersection = list(set(list(channels)) & set(list(existing_channels)))
 					print(f'{existing_channels=} {intersection=}')
 					if len(intersection)==0:
-						print(e,' channels could not be found in the config... Skipping image.')
+						print('Channels could not be found in the config... Skipping image.')
 						continue
 					else:
 						ch_idx = []

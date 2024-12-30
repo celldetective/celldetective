@@ -879,7 +879,6 @@ class SignalDetectionModel(object):
 
 		assert self.model_class.layers[0].input_shape[0] == self.model_reg.layers[0].input_shape[0], f"mismatch between input shape of classification: {self.model_class.layers[0].input_shape[0]} and regression {self.model_reg.layers[0].input_shape[0]} models... Error."
 
-
 		return True
 
 	def create_models_from_scratch(self):
@@ -898,7 +897,7 @@ class SignalDetectionModel(object):
 
 		self.model_class = ResNetModelCurrent(n_channels=self.n_channels,
 									n_slices=self.n_conv,
-									n_classes = self.n_classes,
+									n_classes = 3,
 									dense_collection=self.dense_collection,
 									dropout_rate=self.dropout_rate, 
 									header="classifier", 
@@ -1016,6 +1015,7 @@ class SignalDetectionModel(object):
 		self.loss_class = loss_class
 		self.show_plots = show_plots
 		self.channel_option = channel_option
+
 		assert self.n_channels==len(self.channel_option), f'Mismatch between the channel option and the number of channels of the model...'
 		
 		if isinstance(self.datasets[0], dict):
@@ -1075,7 +1075,7 @@ class SignalDetectionModel(object):
 		# If y-class is not one-hot encoded, encode it
 		if self.y_class_train.shape[-1] != self.n_classes:
 			self.class_weights = compute_weights(y=self.y_class_train,class_weight="balanced", classes=np.unique(self.y_class_train))
-			self.y_class_train = to_categorical(self.y_class_train)
+			self.y_class_train = to_categorical(self.y_class_train, num_classes=3)
 
 		if self.normalize:
 			self.y_time_train = self.y_time_train.astype(np.float32)/self.model_signal_length
@@ -1091,7 +1091,7 @@ class SignalDetectionModel(object):
 					self.x_val = pad_to_model_length(self.x_val, self.model_signal_length)
 				self.y_class_val = validation_data[1]
 				if self.y_class_val.shape[-1] != self.n_classes:
-					self.y_class_val = to_categorical(self.y_class_val)		
+					self.y_class_val = to_categorical(self.y_class_val, num_classes=3)
 				self.y_time_val = validation_data[2]
 				if self.normalize:
 					self.y_time_val = self.y_time_val.astype(np.float32)/self.model_signal_length
@@ -1111,7 +1111,7 @@ class SignalDetectionModel(object):
 					self.x_test = pad_to_model_length(self.x_test, self.model_signal_length)
 				self.y_class_test = test_data[1]
 				if self.y_class_test.shape[-1] != self.n_classes:
-					self.y_class_test = to_categorical(self.y_class_test)
+					self.y_class_test = to_categorical(self.y_class_test, num_classes=3)
 				self.y_time_test = test_data[2]
 				if self.normalize:
 					self.y_time_test = self.y_time_test.astype(np.float32)/self.model_signal_length
@@ -1320,6 +1320,8 @@ class SignalDetectionModel(object):
 		"""
 
 		# if pretrained model
+		self.n_classes = 3
+
 		if self.pretrained is not None:
 			# if recompile
 			if self.recompile_pretrained:
@@ -1352,6 +1354,7 @@ class SignalDetectionModel(object):
 		# 	plt.show()
 
 		if hasattr(self, 'x_val'):
+
 			self.history_classifier = self.model_class.fit(x=self.x_train,
 								y=self.y_class_train,
 								batch_size=self.batch_size,
@@ -1740,8 +1743,8 @@ class SignalDetectionModel(object):
 		
 		# Compute class weights and one-hot encode
 		self.class_weights = compute_weights(self.y_class_set)
-		self.nbr_classes = len(np.unique(self.y_class_set))
-		self.y_class_set = to_categorical(self.y_class_set)
+		self.nbr_classes = 3 #len(np.unique(self.y_class_set))
+		self.y_class_set = to_categorical(self.y_class_set, num_classes=3)
 
 		ds = train_test_split(self.x_set, 
 							  self.y_time_set, 
@@ -1799,6 +1802,7 @@ class SignalDetectionModel(object):
 		y_class_train_aug = []
 
 		counts = [0.,0.,0.]
+		# warning augmentation creates class 2 even if does not exist in data, need to address this
 		for k in indices:
 			counts[self.y_class_train[k].argmax()] += 1
 			aug = augmenter(self.x_train[k], 

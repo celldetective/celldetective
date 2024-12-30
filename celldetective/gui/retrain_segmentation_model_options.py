@@ -242,7 +242,7 @@ class ConfigSegmentationModelTraining(QMainWindow, Styles):
 		self.augmentation_slider.setSingleStep(0.01)
 		self.augmentation_slider.setTickInterval(0.01)		
 		self.augmentation_slider.setOrientation(1)
-		self.augmentation_slider.setRange(1, 5)
+		self.augmentation_slider.setRange(0.01, 3)
 		self.augmentation_slider.setValue(2.0)
 
 		augmentation_hbox.addWidget(self.augmentation_slider, 70)
