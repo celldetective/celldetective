@@ -2268,7 +2268,7 @@ def view_tracks_in_napari(position, population, stack=None, labels=None, relabel
 				new_cell['TRACK_ID'] = value_under
 				df = pd.concat([df, new_cell], ignore_index=True)
 
-			relabel = np.amax(df['TRACK_ID'].unique()) + 1
+			relabel = np.amax(viewer.layers['segmentation'].data) + 1
 			for f in viewer.layers['segmentation'].data[int(frame):]:
 				if target_track_id!=0:
 					f[np.where(f==target_track_id)] = relabel
