@@ -22,7 +22,7 @@ setuptools
 scipy
 seaborn
 opencv-python-headless==4.7.0.72
-#PyQt5==5.15.7
+PyQt5 #==5.15.7
 liblapack
 gputools
 lmfit #~=1.2.2
