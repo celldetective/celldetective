@@ -40,7 +40,7 @@ setup(name='celldetective',
 			license='GPL-3.0',
 			packages=setuptools.find_packages(),
 			zip_safe=False,
-			package_data={'celldetective': ['*',os.sep.join(['scripts','*']),os.sep.join(['gui','*']),os.sep.join(['gui','help','*']),os.sep.join(['models','*','*','*']),os.sep.join(['models','*']),os.sep.join(['models','*','*']),os.sep.join(['icons','*']),os.sep.join(['links','*']),os.sep.join(['datasets','*']), os.sep.join(['datasets','*','*'])]},
+			package_data={'celldetective': ['*',os.sep.join(['scripts','*']),os.sep.join(['gui','*']),os.sep.join(['gui','processes','*']),os.sep.join(['gui','help','*']),os.sep.join(['models','*','*','*']),os.sep.join(['models','*']),os.sep.join(['models','*','*']),os.sep.join(['icons','*']),os.sep.join(['links','*']),os.sep.join(['datasets','*']), os.sep.join(['datasets','*','*'])]},
 			entry_points = {
 				'console_scripts': [
 					'celldetective = celldetective.__main__:main'],
