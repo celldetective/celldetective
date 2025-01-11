@@ -960,28 +960,33 @@ def write_first_detection_class(df, img_shape=None, edge_threshold=20, column_la
 
 	column_labels : dict, optional
 		A dictionary mapping logical column names to actual column names in `tab`. Keys include:
-		- `'track'`: The column indicating the track ID (default: `"TRACK_ID"`).
-		- `'time'`: The column indicating the frame/time (default: `"FRAME"`).
-		- `'x'`: The column indicating the X-coordinate (default: `"POSITION_X"`).
-		- `'y'`: The column indicating the Y-coordinate (default: `"POSITION_Y"`).
+		
+			- `'track'`: The column indicating the track ID (default: `"TRACK_ID"`).
+			- `'time'`: The column indicating the frame/time (default: `"FRAME"`).
+			- `'x'`: The column indicating the X-coordinate (default: `"POSITION_X"`).
+			- `'y'`: The column indicating the Y-coordinate (default: `"POSITION_Y"`).
 
 	Returns
 	-------
 	pandas.DataFrame
 		The input DataFrame `df` with two additional columns:
-		- `'class_firstdetection'`: A class assigned based on detection status:
-			- `0`: Valid detection not near the edge and not at the initial frame.
-			- `2`: Detection near the edge, at the initial frame, or no detection available.
-		- `'t_firstdetection'`: The adjusted first detection time (in frame units):
-			- `-1`: Indicates no valid detection or detection near the edge.
-			- A float value representing the adjusted first detection time otherwise.
+		
+			- `'class_firstdetection'`: A class assigned based on detection status:
+			
+				- `0`: Valid detection not near the edge and not at the initial frame.
+				- `2`: Detection near the edge, at the initial frame, or no detection available.
+		
+			- `'t_firstdetection'`: The adjusted first detection time (in frame units):
+			
+				- `-1`: Indicates no valid detection or detection near the edge.
+				- A float value representing the adjusted first detection time otherwise.
 
 	Notes
 	-----
 	- The function assumes that tracks are grouped and sorted by track ID and frame.
 	- Detections near the edge or at the initial frame (frame 0) are considered invalid and assigned special values.
 	- If `img_shape` is not provided, edge checks are skipped.
-	
+
 	"""
 
 	df = df.sort_values(by=[column_labels['track'],column_labels['time']])

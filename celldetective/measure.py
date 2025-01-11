@@ -814,46 +814,6 @@ def measure_at_position(pos, mode, return_measurements=False, threads=1):
 
 def local_normalisation(image, labels, background_intensity, measurement='intensity_median', operation='subtract', clip=False):
 	
-	"""
-	 Perform local normalization on an image based on labels.
-
-	 Parameters:
-	 - image (numpy.ndarray): The input image.
-	 - labels (numpy.ndarray): An array specifying the labels for different regions in the image.
-	 - background_intensity (pandas.DataFrame): A DataFrame containing background intensity values
-												 corresponding to each label.
-	 - mode (str): The normalization mode ('Mean' or 'Median').
-	 - operation (str): The operation to perform ('Subtract' or 'Divide').
-
-	 Returns:
-	 - numpy.ndarray: The normalized image.
-
-	 This function performs local normalization on an image based on the provided labels. It iterates over
-	 each unique label, excluding the background label (0), and performs the specified operation with the
-	 background intensity values corresponding to that label. The background intensity values are obtained
-	 from the provided background_intensity DataFrame based on the normalization mode.
-
-	 If the operation is 'Subtract', the background intensity is subtracted from the image pixel values.
-	 If the operation is 'Divide', the image pixel values are divided by the background intensity.
-
-	 Example:
-	 >>> image = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
-	 >>> labels = np.array([[0, 1, 1], [2, 2, 3], [3, 3, 0]])
-	 >>> background_intensity = pd.DataFrame({'intensity_mean': [10, 20, 30]})
-	 >>> mode = 'Mean'
-	 >>> operation = 'Subtract'
-	 >>> result = local_normalisation(image, labels, background_intensity, mode, operation)
-	 >>> print(result)
-	[[-9. -8. -7.]
-	[14. 15.  6.]
-	[27. 28.  9.]]
-
-	 Note:
-	 - The background intensity DataFrame should have columns named 'intensity_mean' or 'intensity_median'
-	   based on the mode specified.
-	 - The background intensity values should be provided in the same order as the labels.
-
-	 """
 	
 	for index, cell in enumerate(np.unique(labels)):
 		if cell == 0:
@@ -872,43 +832,7 @@ def local_normalisation(image, labels, background_intensity, measurement='intens
 
 def normalise_by_cell(image, labels, distance=5, model='median', operation='subtract', clip=False):
 
-	"""
-	Normalize an image based on cell regions.
 
-	Parameters:
-	- image (numpy.ndarray): The input image.
-	- labels (numpy.ndarray): An array specifying the labels for different regions in the image.
-	- distance (float): The distance parameter for finding the contour of cell regions.
-	- mode (str): The normalization mode ('Mean' or 'Median').
-	- operation (str): The operation to perform ('Subtract' or 'Divide').
-
-	Returns:
-	- numpy.ndarray: The normalized image.
-
-	This function normalizes an image based on cell regions defined by the provided labels. It calculates
-	the border of cell regions using the contour_of_instance_segmentation function with the specified
-	distance parameter. Then, it computes the background intensity of each cell region based on the mode
-	('Mean' or 'Median'). Finally, it performs local normalization using the local_normalisation function
-	and returns the normalized image.
-
-	Example:
-	>>> image = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
-	>>> labels = np.array([[0, 1, 1], [2, 2, 3], [3, 3, 0]])
-	>>> distance = 2.0
-	>>> mode = 'Mean'
-	>>> operation = 'Subtract'
-	>>> result = normalise_by_cell(image, labels, distance, mode, operation)
-	>>> print(result)
-	[[-9. -8. -7.]
-	 [14. 15.  6.]
-	 [27. 28.  9.]]
-
-	Note:
-	- The contour of cell regions is calculated using the contour_of_instance_segmentation function.
-	- The background intensity is computed based on the specified mode ('Mean' or 'Median').
-	- The operation determines whether to subtract or divide the background intensity from the image.
-
-	"""
 	border = contour_of_instance_segmentation(label=labels, distance=distance * (-1))
 	if model == 'mean':
 		measurement = 'intensity_nanmean'
