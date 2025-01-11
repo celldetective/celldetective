@@ -16,7 +16,7 @@ import concurrent.futures
 from csbdeep.utils import normalize_mi_ma
 from csbdeep.io import save_tiff_imagej_compatible
 
-import skimage.io as skio
+import imageio.v2 as imageio
 from skimage.measure import regionprops_table, label
 
 from btrack.datasets import cell_config
@@ -3310,7 +3310,7 @@ def load_frames(img_nums, stack_path, scale=None, normalize_input=True, dtype=fl
 	"""
 
 	try:
-		frames = skio.imread(stack_path, key=img_nums, plugin="tifffile")
+		frames = imageio.imread(stack_path, key=img_nums)
 	except Exception as e:
 		print(
 			f'Error in loading the frame {img_nums} {e}. Please check that the experiment channel information is consistent with the movie being read.')
