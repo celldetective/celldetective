@@ -129,14 +129,7 @@ def measure_pairs(pos, neighborhood_protocol):
 
 
 def measure_pair_signals_at_position(pos, neighborhood_protocol, velocity_kwargs={'window': 3, 'mode': 'bi'}):
-	"""
-	pos: position to process
-	target_classes [list]: target classes to keep
-	neigh_dist: neighborhood cut distance
-	theta_dist: distance to edge threshold
-	velocity_kwargs: params for derivative of relative position
-	neighborhood_kwargs: params for neigh
-	"""
+
 
 	reference_population = neighborhood_protocol['reference']
 	neighbor_population = neighborhood_protocol['neighbor']
@@ -446,6 +439,7 @@ def timeline_matching(timeline1, timeline2):
 	- The function combines the two timelines and generates a continuous range from the minimum to the maximum time point.
 	- It then finds the indices of the original timelines in this unified timeline.
 	- The function assumes that the input timelines consist of integer values.
+
 	"""
 
 	min_t = np.amin(np.concatenate((timeline1, timeline2)))
@@ -572,8 +566,9 @@ def extract_neighborhoods_from_pickles(pos):
 	--------
 	>>> protocols = extract_neighborhoods_from_pickles('/path/to/data')
 	>>> for protocol in protocols:
-	>>>     print(protocol)
+	>>>		print(protocol)
 	{'reference': 'targets', 'neighbor': 'targets', 'type': 'contact', 'distance': 5.0, 'description': 'neighborhood_self_contact_5_px'}
+	
 	"""
 
 	tab_tc = pos + os.sep.join(['output', 'tables', 'trajectories_targets.pkl'])
@@ -644,6 +639,7 @@ def extract_neighborhood_settings(neigh_string, population='targets'):
 	--------
 	>>> extract_neighborhood_settings('neighborhood_self_contact_5_px', 'targets')
 	{'reference': 'targets', 'neighbor': 'targets', 'type': 'contact', 'distance': 5.0, 'description': 'neighborhood_self_contact_5_px'}
+	
 	"""
 
 	assert neigh_string.startswith('neighborhood')
@@ -684,23 +680,20 @@ def expand_pair_table(data):
 	Parameters
 	----------
 	data : pandas.DataFrame
-		DataFrame containing the pair table, which should include the columns:
-		- 'reference_population': The reference population type.
-		- 'neighbor_population': The neighbor population type.
-		- 'position': The position identifier for each pair.
+		DataFrame containing the pair table
 
 	Returns
 	-------
 	pandas.DataFrame
 		Expanded DataFrame that includes merged reference and neighbor data, sorted by position, reference population, 
-		neighbor population, and frame. Rows without values in 'REFERENCE_ID', 'NEIGHBOR_ID', 'reference_population', 
-		or 'neighbor_population' are dropped.
+		neighbor population, and frame. Rows without values in `REFERENCE_ID`, `NEIGHBOR_ID`, `reference_population`, 
+		or `neighbor_population` are dropped.
 
 	Notes
 	-----
 	- For each unique pair of `reference_population` and `neighbor_population`, the function identifies corresponding 
 	  trajectories CSV files based on the position identifier.
-	- The function reads the trajectories CSV files, prefixes columns with 'reference_' or 'neighbor_' to avoid 
+	- The function reads the trajectories CSV files, prefixes columns with `reference_` or `neighbor_` to avoid 
 	  conflicts, and merges data from reference and neighbor tables based on `TRACK_ID` or `ID`, and `FRAME`.
 	- Merges are performed in an outer join manner to retain all rows, regardless of missing values in the target files.
 	- The final DataFrame is sorted and cleaned to ensure only valid pairings are included.
@@ -713,7 +706,8 @@ def expand_pair_table(data):
 	Raises
 	------
 	AssertionError
-		If 'reference_population' or 'neighbor_population' is not found in the columns of `data`.
+		If `reference_population` or `neighbor_population` is not found in the columns of `data`.
+	
 	"""
 
 	assert 'reference_population' in list(data.columns),"Please provide a valid pair table..."

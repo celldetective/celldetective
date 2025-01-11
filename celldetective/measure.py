@@ -86,14 +86,14 @@ def measure(stack=None, labels=None, trajectories=None, channel_names=None,
 	>>> stack = np.random.rand(10, 100, 100, 3)
 	>>> labels = np.random.randint(0, 2, (10, 100, 100))
 	>>> trajectories = pd.DataFrame({'TRACK_ID': [1, 2, 3], 'FRAME': [1, 1, 1],
-	...                              'POSITION_X': [10, 20, 30], 'POSITION_Y': [15, 25, 35]})
+	...							'POSITION_X': [10, 20, 30], 'POSITION_Y': [15, 25, 35]})
 	>>> channel_names = ['channel1', 'channel2', 'channel3']
 	>>> features = ['area', 'intensity_mean']
 	>>> intensity_measurement_radii = [5, 10]
 	>>> border_distances = 2
 	>>> measurements = measure(stack=stack, labels=labels, trajectories=trajectories, channel_names=channel_names,
-	...                        features=features, intensity_measurement_radii=intensity_measurement_radii,
-	...                        border_distances=border_distances)
+	...							features=features, intensity_measurement_radii=intensity_measurement_radii,
+	...							border_distances=border_distances)
 	# Perform measurements on the stack, labels, and trajectories, computing isotropic intensities and additional features.
 
 	"""
@@ -661,12 +661,12 @@ def measure_isotropic_intensity(positions, # Dataframe of cell positions @ t
 	Examples
 	--------
 	>>> positions = pd.DataFrame({'TRACK_ID': [1, 2, 3], 'FRAME': [1, 1, 1],
-	...                           'POSITION_X': [10, 20, 30], 'POSITION_Y': [15, 25, 35]})
+	...							'POSITION_X': [10, 20, 30], 'POSITION_Y': [15, 25, 35]})
 	>>> img = np.random.rand(100, 100, 3)
 	>>> channels = ['channel1', 'channel2', 'channel3']
 	>>> intensity_measurement_radii = 5
 	>>> positions = measure_isotropic_intensity(positions, img, channels=channels,
-	...                                         intensity_measurement_radii=intensity_measurement_radii)
+	...											intensity_measurement_radii=intensity_measurement_radii)
 	# Measure isotropic intensity values around cell positions in the image.
 
 	"""
@@ -813,6 +813,7 @@ def measure_at_position(pos, mode, return_measurements=False, threads=1):
 
 
 def local_normalisation(image, labels, background_intensity, measurement='intensity_median', operation='subtract', clip=False):
+	
 	"""
 	 Perform local normalization on an image based on labels.
 
@@ -843,14 +844,15 @@ def local_normalisation(image, labels, background_intensity, measurement='intens
 	 >>> operation = 'Subtract'
 	 >>> result = local_normalisation(image, labels, background_intensity, mode, operation)
 	 >>> print(result)
-	 [[-9. -8. -7.]
-	  [14. 15.  6.]
-	  [27. 28.  9.]]
+	[[-9. -8. -7.]
+	[14. 15.  6.]
+	[27. 28.  9.]]
 
 	 Note:
 	 - The background intensity DataFrame should have columns named 'intensity_mean' or 'intensity_median'
 	   based on the mode specified.
 	 - The background intensity values should be provided in the same order as the labels.
+
 	 """
 	
 	for index, cell in enumerate(np.unique(labels)):
@@ -869,6 +871,7 @@ def local_normalisation(image, labels, background_intensity, measurement='intens
 
 
 def normalise_by_cell(image, labels, distance=5, model='median', operation='subtract', clip=False):
+
 	"""
 	Normalize an image based on cell regions.
 
@@ -904,6 +907,7 @@ def normalise_by_cell(image, labels, distance=5, model='median', operation='subt
 	- The contour of cell regions is calculated using the contour_of_instance_segmentation function.
 	- The background intensity is computed based on the specified mode ('Mean' or 'Median').
 	- The operation determines whether to subtract or divide the background intensity from the image.
+
 	"""
 	border = contour_of_instance_segmentation(label=labels, distance=distance * (-1))
 	if model == 'mean':
@@ -986,70 +990,6 @@ def blob_detection(image, label, diameter, threshold=0., channel_name=None, targ
 
 	return detections
 
-
-# def blob_detectionv0(image, label, threshold, diameter):
-# 	"""
-# 	Perform blob detection on an image based on labeled regions.
-
-# 	Parameters:
-# 	- image (numpy.ndarray): The input image data.
-# 	- label (numpy.ndarray): An array specifying labeled regions in the image.
-# 	- threshold (float): The threshold value for blob detection.
-# 	- diameter (float): The expected diameter of blobs.
-
-# 	Returns:
-# 	- dict: A dictionary containing information about detected blobs.
-
-# 	This function performs blob detection on an image based on labeled regions. It iterates over each labeled region
-# 	and detects blobs within the region using the Difference of Gaussians (DoG) method. Detected blobs are filtered
-# 	based on the specified threshold and expected diameter. The function returns a dictionary containing the number of
-# 	detected blobs and their mean intensity for each labeled region.
-
-# 	Example:
-# 	>>> image = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
-# 	>>> label = np.array([[0, 1, 1], [2, 2, 0], [3, 3, 0]])
-# 	>>> threshold = 0.1
-# 	>>> diameter = 5.0
-# 	>>> result = blob_detection(image, label, threshold, diameter)
-# 	>>> print(result)
-# 	{1: [1, 4.0], 2: [0, nan], 3: [0, nan]}
-
-# 	Note:
-# 	- Blobs are detected using the Difference of Gaussians (DoG) method.
-# 	- Detected blobs are filtered based on the specified threshold and expected diameter.
-# 	- The returned dictionary contains information about the number of detected blobs and their mean intensity
-# 	  for each labeled region.
-# 	"""
-# 	blob_labels = {}
-# 	dilated_image = ndimage.grey_dilation(label, footprint=disk(10))
-# 	for mask_index in np.unique(label):
-# 		if mask_index == 0:
-# 			continue
-# 		removed_background = image.copy()
-# 		one_mask = label.copy()
-# 		one_mask[np.where(label != mask_index)] = 0
-# 		dilated_copy = dilated_image.copy()
-# 		dilated_copy[np.where(dilated_image != mask_index)] = 0
-# 		removed_background[np.where(dilated_copy == 0)] = 0
-# 		min_sigma = (1 / (1 + math.sqrt(2))) * diameter
-# 		max_sigma = math.sqrt(2) * min_sigma
-# 		blobs = blob_dog(removed_background, threshold=threshold, min_sigma=min_sigma,
-# 										 max_sigma=max_sigma)
-
-# 		mask = np.array([one_mask[int(y), int(x)] != 0 for y, x, r in blobs])
-# 		if not np.any(mask):
-# 			continue
-# 		blobs_filtered = blobs[mask]
-# 		binary_blobs = np.zeros_like(label)
-# 		for blob in blobs_filtered:
-# 			y, x, r = blob
-# 			rr, cc = dsk((y, x), r, shape=binary_blobs.shape)
-# 			binary_blobs[rr, cc] = 1
-# 		spot_intensity = regionprops_table(binary_blobs, removed_background, ['intensity_mean'])
-# 		blob_labels[mask_index] = [blobs_filtered.shape[0], spot_intensity['intensity_mean'][0]]
-# 	return blob_labels
-
-### Classification ####
 
 def estimate_time(df, class_attr, model='step_function', class_of_interest=[2], r2_threshold=0.5):
 
@@ -1178,6 +1118,7 @@ def interpret_track_classification(df, class_attr, irreversible_event=False, uni
 	Example
 	-------
 	>>> df = interpret_track_classification(df, 'class', irreversible_event=True, r2_threshold=0.7)
+
 	"""
 
 	cols = list(df.columns)
@@ -1325,6 +1266,7 @@ def classify_irreversible_events(data, class_attr, r2_threshold=0.5, percentile_
 	Example
 	-------
 	>>> df = classify_irreversible_events(df, 'class', r2_threshold=0.7)
+
 	"""
 
 	df = data.copy()
@@ -1426,6 +1368,7 @@ def classify_unique_states(df, class_attr, percentile=50, pre_event=None):
 	Example
 	-------
 	>>> df = classify_unique_states(df, 'class', percentile=75)
+
 	"""
 
 	cols = list(df.columns)
@@ -1521,6 +1464,7 @@ def classify_cells_from_query(df, status_attr, query):
 	------
 	Exception
 		If the query is invalid or if there are issues with the DataFrame or query syntax, an error message is printed, and `None` is returned.
+	
 	"""
 
 

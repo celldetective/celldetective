@@ -325,9 +325,6 @@ def analyze_signals_at_position(pos, model, mode, use_gpu=True, return_table=Fal
 
 def analyze_pair_signals_at_position(pos, model, use_gpu=True):
 	
-	"""
-
-	"""
 
 	pos = pos.replace('\\','/')
 	pos = rf"{pos}"
@@ -366,9 +363,6 @@ def analyze_pair_signals_at_position(pos, model, use_gpu=True):
 
 def analyze_pair_signals(trajectories_pairs,trajectories_reference,trajectories_neighbors, model, interpolate_na=True, selected_signals=None,
 						model_path=None, plot_outcome=False, output_dir=None, column_labels = {'track': "TRACK_ID", 'time': 'FRAME', 'x': 'POSITION_X', 'y': 'POSITION_Y'}):
-	"""
-	to be written...
-	"""
 
 	model_path = locate_signal_model(model, path=model_path, pairs=True)
 	print(f'Looking for model in {model_path}...')
@@ -644,6 +638,7 @@ class SignalDetectionModel(object):
 		-----
 		- The models are expected to be saved in .h5 format with the filenames "classifier.h5" and "regressor.h5".
 		- The configuration file is expected to be named "config_input.json" and located in the same directory as the models.
+		
 		"""
 
 		if self.pretrained.endswith(os.sep):
@@ -705,6 +700,7 @@ class SignalDetectionModel(object):
 		-----
 		- The models are created using a custom ResNet architecture defined elsewhere in the codebase.
 		- The models are stored in the `model_class` and `model_reg` attributes of the class.
+		
 		"""
 
 		self.model_class = ResNetModelCurrent(n_channels=self.n_channels,
@@ -737,6 +733,7 @@ class SignalDetectionModel(object):
 		-----
 		- This method should be called before any TensorFlow/Keras operations that might allocate GPU memory.
 		- If no GPUs are detected, the method will pass silently.
+		
 		"""
 
 		try:
@@ -799,6 +796,7 @@ class SignalDetectionModel(object):
 		Notes
 		-----
 		- The method automatically splits the dataset into training, validation, and test sets according to the specified splits.
+		
 		"""
 
 		if not hasattr(self, 'normalization_percentile'):
@@ -861,6 +859,7 @@ class SignalDetectionModel(object):
 		-----
 		- This method provides an alternative way to train the model when data is already loaded into memory, offering
 		  flexibility for data preprocessing steps outside this class.
+		
 		"""
 
 		self.normalize = normalize
@@ -991,6 +990,7 @@ class SignalDetectionModel(object):
 		-----
 		- The method processes the input signals according to the specified options to ensure compatibility with the model's
 		  input requirements.
+		
 		"""
 
 		self.x = np.copy(x)
@@ -1052,6 +1052,7 @@ class SignalDetectionModel(object):
 		-----
 		- The method processes the input signals according to the specified options and uses the regression model to
 		  predict times at which a particular event of interest occurs.
+		
 		"""
 
 		self.x = np.copy(x)
@@ -1102,6 +1103,7 @@ class SignalDetectionModel(object):
 		-----
 		- This method is useful for preparing signals that have gaps or missing time points before further processing
 		  or model training.
+		
 		"""
 
 		for i in range(len(x_set)):
@@ -1129,6 +1131,7 @@ class SignalDetectionModel(object):
 		- The classifier model predicts the class of each signal, such as live, dead, or miscellaneous.
 		- Training parameters such as epochs, batch size, and learning rate are specified during class instantiation.
 		- Model performance metrics and training history are saved for analysis.
+		
 		"""
 
 		# if pretrained model
@@ -1273,6 +1276,7 @@ class SignalDetectionModel(object):
 		- The regressor model estimates the time at which an event of interest occurs within each signal.
 		- Only signals predicted to have an event by the classifier model are used for regressor training.
 		- Model performance metrics and training history are saved for analysis.
+		
 		"""
 
 
@@ -1357,6 +1361,7 @@ class SignalDetectionModel(object):
 		-----
 		- Plots include loss and accuracy metrics over epochs for the classifier, and loss metrics for the regressor.
 		- The plots are saved as image files in the model's output directory.
+		
 		"""
 
 		if mode=="regressor":
@@ -1401,6 +1406,7 @@ class SignalDetectionModel(object):
 		-----
 		- Evaluation is performed on both test and validation datasets, if available.
 		- Regression plots and performance metrics are saved in the model's output directory.
+		
 		"""
 
 
@@ -1453,6 +1459,7 @@ class SignalDetectionModel(object):
 		-----
 		- Callbacks include learning rate reduction on plateau, early stopping, model checkpointing, and TensorBoard logging.
 		- The list of callbacks is stored in the class attribute `cb` and used during model training.
+		
 		"""
 		
 		self.cb = []
@@ -1510,6 +1517,7 @@ class SignalDetectionModel(object):
 		-----
 		- Signal annotations are expected to be stored in .npy format and contain required channels and event information.
 		- The method applies specified normalization and interpolation options to prepare the signals for model training.
+		
 		"""
 
 		
@@ -1593,6 +1601,7 @@ class SignalDetectionModel(object):
 		-----
 		- Augmentation strategies include random time shifting and signal modifications to simulate variations in real data.
 		- The augmented dataset is used for training the classifier and regressor models to improve generalization.
+		
 		"""
 
 		
@@ -1757,6 +1766,7 @@ def _interpret_normalization_parameters(n_channels, normalization_percentile, no
 	>>> params = _interpret_normalization_parameters(n_channels, normalization_percentile, normalization_values, normalization_clip)
 	>>> print(params)
 	# ([True, True], [[0.1, 99.9], [0.1, 99.9]], [False, False])
+
 	"""
 
 
@@ -1830,6 +1840,7 @@ def normalize_signal_set(signal_set, channel_option, percentile_alive=[0.01,99.9
 	>>> channel_option = ['alive', 'dead']
 	>>> normalized_signals = normalize_signal_set(signal_set, channel_option)
 	# Normalizes the signal set based on the default percentile values for 'alive' and 'dead' channels.
+
 	"""
 
 	# Check normalization params are ok
@@ -2313,6 +2324,7 @@ def ResNetModelCurrent(n_channels, n_slices, depth=2, use_pooling=True, n_classe
 	--------
 	>>> model = ResNetModelCurrent(n_channels=1, n_slices=2, depth=2, use_pooling=True, n_classes=3, dropout_rate=0.1, dense_collection=512, header="classifier", model_signal_length=128)
 	# Creates a ResNet model configured for classification with 3 classes.
+
 	"""
 
 	if header=="classifier":
@@ -2381,6 +2393,7 @@ def train_signal_model(config):
 	>>> config_path = '/path/to/training_config.json'
 	>>> train_signal_model(config_path)
 	# This will execute the 'train_signal_model.py' script using the parameters specified in 'training_config.json'.
+
 	"""
 
 	config = config.replace('\\','/')
@@ -2427,6 +2440,7 @@ def T_MSD(x,y,dt):
 	>>> T_MSD(x, y, dt)
 	([6.0, 9.0, 4.666666666666667, 1.6666666666666667],
 	 array([1., 2., 3., 4.]))
+
 	"""
 
 	msd = []
@@ -2464,6 +2478,7 @@ def linear_msd(t, m):
 	>>> m = 2.0
 	>>> linear_msd(t, m)
 	array([2., 4., 6., 8.])
+
 	"""
 
 	return m*t
@@ -2495,6 +2510,7 @@ def alpha_msd(t, m, alpha):
 	>>> alpha = 0.5
 	>>> alpha_msd(t, m, alpha)
 	array([2.        , 4.        , 6.        , 8.        ])
+
 	"""
 
 	return m*t**alpha
@@ -2549,6 +2565,7 @@ def sliding_msd(x, y, timeline, window, mode='bi', n_points_migration=7,  n_poin
 	>>> timeline = np.array([0, 1, 2, 3, 4, 5, 6])
 	>>> window = 3
 	>>> s_msd, s_alpha = sliding_msd(x, y, timeline, window, n_points_migration=2, n_points_transport=3)
+
 	"""
 
 	assert window > n_points_migration,'Please set a window larger than the number of fit points...'
@@ -2685,6 +2702,7 @@ def sliding_msd_drift(x, y, timeline, window, mode='bi', n_points_migration=7,  
 	>>> window = 11
 	>>> diffusion, velocity = sliding_msd_drift(x, y, timeline, window, mode='bi')
 	# Calculates the diffusion coefficient and drift velocity using a bidirectional sliding window.
+
 	"""
 
 	assert window > n_points_migration,'Please set a window larger than the number of fit points...'
@@ -2736,7 +2754,7 @@ def columnwise_mean(matrix, min_nbr_values = 1):
 	"""
 	Calculate the column-wise mean and standard deviation of non-NaN elements in the input matrix.
 
-	Parameters:
+	Parameters
 	----------
 	matrix : numpy.ndarray
 		The input matrix for which column-wise mean and standard deviation are calculated.
@@ -2744,7 +2762,7 @@ def columnwise_mean(matrix, min_nbr_values = 1):
 		The minimum number of non-NaN values required in a column to calculate mean and standard deviation.
 		Default is 8.
 
-	Returns:
+	Returns
 	-------
 	mean_line : numpy.ndarray
 		An array containing the column-wise mean of non-NaN elements. Elements with fewer than `min_nbr_values` non-NaN
@@ -2753,11 +2771,12 @@ def columnwise_mean(matrix, min_nbr_values = 1):
 		An array containing the column-wise standard deviation of non-NaN elements. Elements with fewer than `min_nbr_values`
 		non-NaN values are replaced with NaN.
 
-	Notes:
-	------
+	Notes
+	-----
 	1. This function calculates the mean and standard deviation of non-NaN elements in each column of the input matrix.
 	2. Columns with fewer than `min_nbr_values` non-zero elements will have NaN as the mean and standard deviation.
 	3. NaN values in the input matrix are ignored during calculation.
+
 	"""
 
 	mean_line = np.zeros(matrix.shape[1])
@@ -2779,7 +2798,7 @@ def mean_signal(df, signal_name, class_col, time_col=None, class_value=[0], retu
 	"""
 	Calculate the mean and standard deviation of a specified signal for tracks of a given class in the input DataFrame.
 
-	Parameters:
+	Parameters
 	----------
 	df : pandas.DataFrame
 		Input DataFrame containing tracking data.
@@ -2792,7 +2811,7 @@ def mean_signal(df, signal_name, class_col, time_col=None, class_value=[0], retu
 	class_value : int, optional
 		Value representing the class of interest. Default is 0.
 
-	Returns:
+	Returns
 	-------
 	mean_signal : numpy.ndarray
 		An array containing the mean signal values for tracks of the specified class. Tracks with class not equal to
@@ -2803,12 +2822,13 @@ def mean_signal(df, signal_name, class_col, time_col=None, class_value=[0], retu
 	actual_timeline : numpy.ndarray
 		An array representing the time points corresponding to the mean signal values.
 
-	Notes:
-	------
+	Notes
+	-----
 	1. This function calculates the mean and standard deviation of the specified signal for tracks of a given class.
 	2. Tracks with class not equal to `class_value` are excluded from the calculation.
 	3. Tracks with missing or NaN values in the specified signal are ignored during calculation.
 	4. Tracks are aligned based on their 'FRAME' values and the specified `time_col` (if provided).
+	
 	"""
 
 	assert signal_name in list(df.columns),"The signal you want to plot is not one of the measured features."

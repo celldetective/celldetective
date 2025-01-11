@@ -42,7 +42,7 @@ If you want to compute a neighborhood you can go to the ``INTERACTION``  section
 2) (Optional): attach a status to the neighbor population. This will allow a decomposition of the neighbor counts with respect to that status (as *count_s0* for the neighbors with a status equal to 0 and *count_s1* for the neighbors with a status equal to 1). An invert button allows you to switch 0 and 1 in the status. 
 3) (Optional): enable the computation of the cumulated presence. This only makes sense if the neighbor population is tracked.
 4) (Optional): attach an event time to the reference population. This allows the computation of the mean number of neighbors (in status = 1) up to the event time for the reference cells. 
-5) Set the distance. We recommend using the viewer (:material-regular:`image_check;2em`) on the right side to tune directly on the image the neighborhood distance of interest. 
+5) Set the distance. We recommend using the viewer on the right side to tune directly on the image the neighborhood distance of interest. 
 6) (Optional): clear the previous neighborhoods (this will erase any previously existing neighborhood computation as well as subsequent pair tables and annotations).
 
 

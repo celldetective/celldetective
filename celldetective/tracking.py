@@ -937,18 +937,6 @@ def track_at_position(pos, mode, return_tracks=False, view_on_napari=False, thre
 		return df
 	else:
 		return None	
-	
-	# # if return_labels or view_on_napari:
-	# # 	labels = locate_labels(pos, population=mode)
-	# # if view_on_napari:
-	# # 	if stack_prefix is None:
-	# # 		stack_prefix = ''
-	# # 	stack = locate_stack(pos, prefix=stack_prefix)
-	# # 	_view_on_napari(tracks=None, stack=stack, labels=labels)
-	# # if return_labels:
-	# # 	return labels
-	# # else:
-	# return None
 
 def write_first_detection_class(df, img_shape=None, edge_threshold=20, column_labels={'track': "TRACK_ID", 'time': 'FRAME', 'x': 'POSITION_X', 'y': 'POSITION_Y'}):
 	
@@ -993,6 +981,7 @@ def write_first_detection_class(df, img_shape=None, edge_threshold=20, column_la
 	- The function assumes that tracks are grouped and sorted by track ID and frame.
 	- Detections near the edge or at the initial frame (frame 0) are considered invalid and assigned special values.
 	- If `img_shape` is not provided, edge checks are skipped.
+	
 	"""
 
 	df = df.sort_values(by=[column_labels['track'],column_labels['time']])

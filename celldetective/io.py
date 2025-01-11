@@ -58,6 +58,7 @@ def extract_experiment_from_well(well_path):
 	>>> well_path = "/path/to/experiment/plate/well"
 	>>> extract_experiment_from_well(well_path)
 	'/path/to/experiment'
+	
 	"""
 
 	if not well_path.endswith(os.sep):
@@ -94,6 +95,7 @@ def extract_well_from_position(pos_path):
 	>>> pos_path = "/path/to/experiment/plate/well/position"
 	>>> extract_well_from_position(pos_path)
 	'/path/to/experiment/plate/well/'
+
 	"""
 
 	if not pos_path.endswith(os.sep):
@@ -129,6 +131,7 @@ def extract_experiment_from_position(pos_path):
 	>>> pos_path = "/path/to/experiment/plate/well/position"
 	>>> extract_experiment_from_position(pos_path)
 	'/path/to/experiment'
+
 	"""
 
 	pos_path = pos_path.replace(os.sep, '/')
@@ -187,6 +190,7 @@ def collect_experiment_metadata(pos_path=None, well_path=None):
 	>>> metadata = collect_experiment_metadata(well_path=well_path)
 	>>> metadata["concentration"]
 	10.0
+
 	"""
 
 	if pos_path is not None:
@@ -289,6 +293,7 @@ def get_config(experiment):
 	>>> config_path = get_config(experiment)
 	>>> print(config_path)
 	'/path/to/experiment/config.ini'
+
 	"""
 
 	if not experiment.endswith(os.sep):
@@ -336,6 +341,7 @@ def get_spatial_calibration(experiment):
 	>>> calibration = get_spatial_calibration(experiment)
 	>>> print(calibration)
 	0.325  # pixels-to-micrometers conversion factor
+
 	"""
 
 	config = get_config(experiment)
@@ -380,6 +386,7 @@ def get_temporal_calibration(experiment):
 	>>> calibration = get_temporal_calibration(experiment)
 	>>> print(calibration)
 	0.5  # frames-to-minutes conversion factor
+
 	"""
 
 	config = get_config(experiment)
@@ -435,6 +442,7 @@ def get_experiment_concentrations(experiment, dtype=str):
 	>>> concentrations = get_experiment_concentrations(experiment, dtype=float)
 	>>> print(concentrations)
 	[0.1, 0.2, 0.5, 1.0]
+
 	"""
 	
 	config = get_config(experiment)
@@ -489,6 +497,7 @@ def get_experiment_cell_types(experiment, dtype=str):
 	>>> cell_types = get_experiment_cell_types(experiment, dtype=str)
 	>>> print(cell_types)
 	['TypeA', 'TypeB', 'TypeC', 'TypeD']
+
 	"""
 
 	config = get_config(experiment)
@@ -540,6 +549,7 @@ def get_experiment_antibodies(experiment, dtype=str):
 
 	>>> get_experiment_antibodies("path/to/experiment2", dtype=int)
 	array([0, 1, 2])
+
 	"""
 
 	config = get_config(experiment)
@@ -594,6 +604,7 @@ def get_experiment_pharmaceutical_agents(experiment, dtype=str):
 	>>> antibodies = get_experiment_antibodies(experiment, dtype=str)
 	>>> print(antibodies)
 	['AntibodyA', 'AntibodyB', 'AntibodyC', 'AntibodyD']
+
 	"""
 
 	config = get_config(experiment)
@@ -702,6 +713,7 @@ def extract_well_name_and_number(well):
 	>>> well_path = "another/path/W1"
 	>>> extract_well_name_and_number(well_path)
 	('W1', 1)
+
 	"""
 
 	split_well_path = well.split(os.sep)
@@ -740,6 +752,7 @@ def extract_position_name(pos):
 	>>> pos_path = "another/path/positionA"
 	>>> extract_position_name(pos_path)
 	'positionA'
+
 	"""
 
 	split_pos_path = pos.split(os.sep)
@@ -890,6 +903,7 @@ def get_position_movie_path(pos, prefix=''):
 	>>> pos_path = "nonexistent/path"
 	>>> get_position_movie_path(pos_path)
 	None
+
 	"""
 	
 
@@ -961,6 +975,7 @@ def load_experiment_tables(experiment, population='targets', well_option='*', po
 	Use pickle files for faster loading:
 
 	>>> df = load_experiment_tables("experiment_01", load_pickle=True)
+
 	"""
 
 	config = get_config(experiment)
@@ -1171,6 +1186,7 @@ def locate_labels(position, population='target', frames=None):
 	Load multiple specific frames:
 
 	>>> labels = locate_labels("/path/to/position", population="target", frames=[0, 1, 2])
+
 	"""
 
 	if not position.endswith(os.sep):
@@ -1241,6 +1257,7 @@ def fix_missing_labels(position, population='target', prefix='Aligned'):
 	-------
 	None
 		The function creates new label files in the corresponding folder for any frames missing label files.
+
 	"""
 
 	if not position.endswith(os.sep):
@@ -1414,6 +1431,7 @@ def auto_load_number_of_frames(stack_path):
 	>>> frames = auto_load_number_of_frames(None)
 	>>> print(frames)
 	None
+
 	"""
 
 	if stack_path is None:
@@ -1510,6 +1528,7 @@ def parse_isotropic_radii(string):
 	- It identifies ranges using square brackets and assumes that ranges are always 
 	  two consecutive values.
 	- Non-integer sections of the string are ignored.
+
 	"""
 
 	sections = re.split(',| ', string)
@@ -1618,6 +1637,7 @@ def interpret_tracking_configuration(config):
 
 	>>> interpret_tracking_configuration(None)
 	'/path/to/default/config.json'
+
 	"""
 
 	if isinstance(config, str):
@@ -1792,6 +1812,7 @@ def locate_signal_model(name, path=None, pairs=False):
 
 	>>> locate_signal_model("remote_model")
 	'path/to/celldetective/models/signal_detection/remote_model/'
+
 	"""
 
 	main_dir = os.sep.join([os.path.split(os.path.dirname(os.path.realpath(__file__)))[0], "celldetective"])
@@ -1859,6 +1880,7 @@ def locate_pair_signal_model(name, path=None):
 
 	>>> locate_pair_signal_model("custom_model", path="/additional/models/")
 	'/additional/models/custom_model/'
+
 	"""
 
 
@@ -1937,6 +1959,7 @@ def relabel_segmentation(labels, df, exclude_nans=True, column_labels={'track': 
 	... }
 	>>> new_labels = relabel_segmentation(labels, df, column_labels=column_labels, exclude_nans=True)
 	Done.
+
 	"""
 
 	n_threads = threads
@@ -2037,6 +2060,7 @@ def control_tracks(position, prefix="Aligned", population="target", relabel=True
 	Example
 	-------
 	>>> control_tracks("/path/to/data/position_1", prefix="Aligned", population="target", relabel=True, flush_memory=True, threads=4)
+	
 	"""
 	
 	if not position.endswith(os.sep):
@@ -2089,6 +2113,7 @@ def tracks_to_btrack(df, exclude_nans=False):
 	Example
 	-------
 	>>> data, properties, graph = tracks_to_btrack(df, exclude_nans=True)
+
 	"""
 
 	graph = {}

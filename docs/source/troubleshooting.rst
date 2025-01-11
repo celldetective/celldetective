@@ -57,7 +57,7 @@ The following error (when training a model):
 
 can be fixed by reinstalling torchvision and torchaudio:
 
-.. console-block:: console
+.. code-block:: console
     
     $ python -m pip uninstall torch torchvision torchaudio
     $ python -m pip install --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cu121
