@@ -415,7 +415,7 @@ def timeline_matching(timeline1, timeline2):
 	-------
 	tuple
 		A tuple containing:
-		
+
 			- full_timeline : numpy.ndarray
 				The unified timeline spanning from the minimum to the maximum time point in the input timelines.
 			- index1 : list of int
@@ -546,11 +546,16 @@ def extract_neighborhoods_from_pickles(pos):
 	list of dict
 		A list of dictionaries, each containing a neighborhood protocol. Each dictionary has the keys:
 			
-			- 'reference' : str: the reference population ('targets' or 'effectors').
-			- 'neighbor' : str: the neighbor population.
-			- 'type' : str: the type of neighborhood ('circle' or 'contact').
-			- 'distance' : float: the distance parameter for the neighborhood.
-			- 'description' : str: the original neighborhood string.
+			- 'reference' : str
+				The reference population ('targets' or 'effectors').
+			- 'neighbor' : str
+				The neighbor population.
+			- 'type' : str
+				The type of neighborhood ('circle' or 'contact').
+			- 'distance' : float
+				The distance parameter for the neighborhood.
+			- 'description' : str
+				The original neighborhood string.
 
 	Notes
 	-----
