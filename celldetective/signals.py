@@ -33,6 +33,7 @@ import time
 import math
 import pandas as pd
 from pandas.api.types import is_numeric_dtype
+from scipy.stats import median_abs_deviation
 
 abs_path = os.sep.join([os.path.split(os.path.dirname(os.path.realpath(__file__)))[0],'celldetective'])
 
@@ -3002,7 +3003,7 @@ def sliding_msd_drift(x, y, timeline, window, mode='bi', n_points_migration=7,  
 		
 	return s_diffusion, s_velocity
 
-def columnwise_mean(matrix, min_nbr_values = 1):
+def columnwise_mean(matrix, min_nbr_values = 1, projection='mean'):
 	
 	"""
 	Calculate the column-wise mean and standard deviation of non-NaN elements in the input matrix.
@@ -3040,12 +3041,16 @@ def columnwise_mean(matrix, min_nbr_values = 1):
 		values = matrix[:,k]
 		values = values[values==values]
 		if len(values[values==values])>min_nbr_values:
-			mean_line[k] = np.nanmean(values)
-			mean_line_std[k] = np.nanstd(values)
+			if projection=='mean':
+				mean_line[k] = np.nanmean(values)
+				mean_line_std[k] = np.nanstd(values)
+			elif projection=='median':
+				mean_line[k] = np.nanmedian(values)
+				mean_line_std[k] = median_abs_deviation(values, nan_policy='omit')
 	return mean_line, mean_line_std
 
 
-def mean_signal(df, signal_name, class_col, time_col=None, class_value=[0], return_matrix=False, forced_max_duration=None, min_nbr_values=2,conflict_mode='mean'):
+def mean_signal(df, signal_name, class_col, time_col=None, class_value=[0], return_matrix=False, forced_max_duration=None, min_nbr_values=2,conflict_mode='mean', projection='mean'):
 
 	"""
 	Calculate the mean and standard deviation of a specified signal for tracks of a given class in the input DataFrame.
@@ -3135,7 +3140,7 @@ def mean_signal(df, signal_name, class_col, time_col=None, class_value=[0], retu
 		signal_matrix[trackid,timeline_shifted.astype(int)] = signal
 		trackid+=1
 	
-	mean_signal, std_signal = columnwise_mean(signal_matrix, min_nbr_values=min_nbr_values)
+	mean_signal, std_signal = columnwise_mean(signal_matrix, min_nbr_values=min_nbr_values, projection=projection)
 	actual_timeline = np.linspace(-max_duration, max_duration, 2*max_duration+1)
 	if return_matrix:
 		return mean_signal, std_signal, actual_timeline, signal_matrix
