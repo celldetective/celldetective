@@ -283,9 +283,10 @@ class ConfigSignalPlot(QWidget, Styles):
 			self.feature_selected = self.feature_cb.currentText()
 			self.feature_choice_widget.close()
 			self.compute_signal_functions()
-			self.interpret_pos_location()
-			self.plot_window = GenericSignalPlotWidget(parent_window=self, df=self.df, df_pos_info = self.df_pos_info, df_well_info = self.df_well_info, feature_selected=self.feature_selected, title='plot signals')
-			self.plot_window.show()
+			if self.open_widget:
+				self.interpret_pos_location()
+				self.plot_window = GenericSignalPlotWidget(parent_window=self, df=self.df, df_pos_info = self.df_pos_info, df_well_info = self.df_well_info, feature_selected=self.feature_selected, title='plot signals')
+				self.plot_window.show()
 
 	def process_signal(self):
 
@@ -347,7 +348,19 @@ class ConfigSignalPlot(QWidget, Styles):
 
 	def compute_signal_functions(self):
 
-		# REPLACE EVRYTHING WITH MEAN_SIGNAL FUNCTION
+		# Check to move at the beginning
+		self.open_widget = True
+		if len(self.time_columns)==0:
+			msgBox = QMessageBox()
+			msgBox.setIcon(QMessageBox.Warning)
+			msgBox.setText("No synchronizing time is available...")
+			msgBox.setWindowTitle("Warning")
+			msgBox.setStandardButtons(QMessageBox.Ok)
+			returnValue = msgBox.exec()
+			if returnValue == QMessageBox.Ok:
+				pass
+			self.open_widget = False
+			return None
 
 		# Per position signal
 		max_time = int(self.df.FRAME.max()) + 1
