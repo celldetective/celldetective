@@ -3046,7 +3046,7 @@ def columnwise_mean(matrix, min_nbr_values = 1, projection='mean'):
 				mean_line_std[k] = np.nanstd(values)
 			elif projection=='median':
 				mean_line[k] = np.nanmedian(values)
-				mean_line_std[k] = median_abs_deviation(values, nan_policy='omit')
+				mean_line_std[k] = median_abs_deviation(values, center=np.nanmedian, nan_policy='omit')
 	return mean_line, mean_line_std
 
 
