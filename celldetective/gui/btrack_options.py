@@ -379,15 +379,15 @@ class ConfigTracking(QMainWindow, Styles):
 		clean_traj_sublayout.addWidget(self.extrapolate_post_checkbox)
 		clean_traj_sublayout.addWidget(self.extrapolate_pre_checkbox)
 
-		self.interpolate_na_features_checkbox = QCheckBox('Interpolate features of missed detections')
-		self.interpolate_na_features_checkbox.setIcon(icon(MDI6.format_color_fill,color="k"))
+		# self.interpolate_na_features_checkbox = QCheckBox('Interpolate features of missed detections')
+		# self.interpolate_na_features_checkbox.setIcon(icon(MDI6.format_color_fill,color="k"))
 
-		clean_traj_sublayout.addWidget(self.interpolate_na_features_checkbox)
+		# clean_traj_sublayout.addWidget(self.interpolate_na_features_checkbox)
 		clean_traj_sublayout.addStretch()
 
 		self.post_proc_options_to_disable = [self.post_proc_lbl, self.min_tracklength_slider, self.remove_not_in_first_checkbox,
 											self.remove_not_in_last_checkbox, self.interpolate_gaps_checkbox, self.extrapolate_post_checkbox,
-											self.extrapolate_pre_checkbox, self.interpolate_na_features_checkbox]
+											self.extrapolate_pre_checkbox] #, self.interpolate_na_features_checkbox
 
 		layout.addLayout(clean_traj_sublayout)
 
@@ -898,7 +898,7 @@ class ConfigTracking(QMainWindow, Styles):
 									   "interpolate_position_gaps": self.interpolate_gaps_checkbox.isChecked(), 
 									   "extrapolate_tracks_pre": self.extrapolate_pre_checkbox.isChecked(),
 									   "extrapolate_tracks_post": self.extrapolate_post_checkbox.isChecked(),
-									   'interpolate_na': self.interpolate_na_features_checkbox.isChecked()
+									   'interpolate_na': False, #self.interpolate_na_features_checkbox.isChecked()
 									   }
 		else:
 
@@ -1044,7 +1044,7 @@ class ConfigTracking(QMainWindow, Styles):
 					self.uncheck_post_proc()
 					self.ContentsPostProc.hide()
 					for element in [self.remove_not_in_last_checkbox, self.remove_not_in_first_checkbox, self.interpolate_gaps_checkbox, 
-									self.extrapolate_post_checkbox, self.extrapolate_pre_checkbox, self.interpolate_na_features_checkbox]:
+									self.extrapolate_post_checkbox, self.extrapolate_pre_checkbox]: #self.interpolate_na_features_checkbox
 						element.setChecked(False)
 					self.min_tracklength_slider.setValue(0)
 
@@ -1063,8 +1063,8 @@ class ConfigTracking(QMainWindow, Styles):
 						self.extrapolate_pre_checkbox.setChecked(post_processing_options["extrapolate_tracks_pre"])
 					if "extrapolate_tracks_post" in post_processing_options:
 						self.extrapolate_post_checkbox.setChecked(post_processing_options["extrapolate_tracks_post"])
-					if "interpolate_na" in post_processing_options:
-						self.interpolate_na_features_checkbox.setChecked(post_processing_options["interpolate_na"])
+					# if "interpolate_na" in post_processing_options:
+					# 	self.interpolate_na_features_checkbox.setChecked(post_processing_options["interpolate_na"])
 
 	def locate_image(self):
 		
