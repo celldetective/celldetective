@@ -82,7 +82,7 @@ class SegmentationModelLoader(QWidget, Styles):
 
 		self.merge_lbl = QLabel('Merging option: ')
 		self.merge_cb = QComboBox()
-		self.merge_cb.addItems(['OR','AND','XOR'])
+		self.merge_cb.addItems(['OR'])
 		merge_hbox = QHBoxLayout()
 		merge_hbox.addWidget(self.merge_lbl, 33)
 		merge_hbox.addWidget(self.merge_cb, 66)
