@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import QWidget, QGridLayout, QVBoxLayout, QLabel, QLineEdit, QHBoxLayout, QRadioButton, QFileDialog, QPushButton, QMessageBox
+from PyQt5.QtWidgets import QWidget, QGridLayout, QComboBox, QVBoxLayout, QLabel, QLineEdit, QHBoxLayout, QRadioButton, QFileDialog, QPushButton, QMessageBox
 from PyQt5.QtCore import Qt, QSize
 from celldetective.gui.gui_utils import center_window
 from celldetective.gui.layouts import ChannelNormGenerator
@@ -79,13 +79,24 @@ class SegmentationModelLoader(QWidget, Styles):
 		self.layout.addWidget(self.open_dialog_button, 9, 0, 1, 1)
 		self.layout.addWidget(self.file_label, 9, 1, 1, 1)
 
+
+		self.merge_lbl = QLabel('Merging option: ')
+		self.merge_cb = QComboBox()
+		self.merge_cb.addItems(['OR','AND','XOR'])
+		merge_hbox = QHBoxLayout()
+		merge_hbox.addWidget(self.merge_lbl, 33)
+		merge_hbox.addWidget(self.merge_cb, 66)
+		self.layout.addLayout(merge_hbox, 10, 0, 1, 2)
+		self.merge_lbl.hide()
+		self.merge_cb.hide()
+
 		self.upload_button = QPushButton("Upload")
 		self.upload_button.clicked.connect(self.upload_model)
 		self.upload_button.setIcon(icon(MDI6.upload,color="white"))
 		self.upload_button.setIconSize(QSize(25, 25))
 		self.upload_button.setStyleSheet(self.button_style_sheet)
 		self.upload_button.setEnabled(False)
-		self.layout.addWidget(self.upload_button, 10, 0, 1, 1)
+		self.layout.addWidget(self.upload_button, 11, 0, 1, 1)
 		
 		self.base_block_options = [self.calibration_label, self.spatial_calib_le,*self.channel_layout.channel_cbs,*self.channel_layout.channel_labels,*self.channel_layout.normalization_mode_btns, *self.channel_layout.normalization_clip_btns, *self.channel_layout.normalization_min_value_lbl,
 								   *self.channel_layout.normalization_min_value_le, *self.channel_layout.normalization_max_value_lbl,*self.channel_layout.normalization_max_value_le,
@@ -207,41 +218,73 @@ class SegmentationModelLoader(QWidget, Styles):
 			self.file_dialog.setFileMode(QFileDialog.ExistingFile)
 
 		# If accepted check validity of data
-		if self.file_dialog.exec_() == QFileDialog.Accepted:
-			self.filename = self.file_dialog.selectedFiles()[0]
-			if self.seg_mode=="stardist":
-				subfiles = glob(self.filename+"/*")
-				subfiles = [s.replace('\\','/') for s in subfiles]
-				if self.filename+"/thresholds.json" in subfiles:
+		if self.seg_mode!='threshold':
+			if self.file_dialog.exec_() == QFileDialog.Accepted:
+				self.filename = self.file_dialog.selectedFiles()[0]
+				if self.seg_mode=="stardist":
+					subfiles = glob(self.filename+"/*")
+					subfiles = [s.replace('\\','/') for s in subfiles]
+					if self.filename+"/thresholds.json" in subfiles:
+						self.file_label.setText(self.filename.split("/")[-1])
+						self.modelname = self.filename.split("/")[-1]
+						self.destination = os.path.split(os.path.dirname(os.path.realpath(__file__)))[0]+f"/models/{self.target_folder}/"+self.modelname
+						self.folder_dest = self.destination
+					else:
+						msgBox = QMessageBox()
+						msgBox.setIcon(QMessageBox.Warning)
+						msgBox.setText("StarDist model not recognized... Please ensure that it contains a thresholds.json file or that it is a valid StarDist model...")
+						msgBox.setWindowTitle("Warning")
+						msgBox.setStandardButtons(QMessageBox.Ok)
+						returnValue = msgBox.exec()
+						if returnValue == QMessageBox.Ok:
+							return None					
+				
+				if self.seg_mode=="cellpose":
 					self.file_label.setText(self.filename.split("/")[-1])
 					self.modelname = self.filename.split("/")[-1]
-					self.destination = os.path.split(os.path.dirname(os.path.realpath(__file__)))[0]+f"/models/{self.target_folder}/"+self.modelname
-					self.folder_dest = self.destination
+					print(f"Transferring Cellpose model {self.filename}...")
+					self.folder_dest = os.path.split(os.path.dirname(os.path.realpath(__file__)))[0]+f"/models/{self.target_folder}/"+self.modelname
+					self.destination = self.folder_dest+f"/{self.modelname}"
+
+		else:
+			self.filename, _ = QFileDialog.getOpenFileNames(
+														None,
+														"QFileDialog.getOpenFileNames()",
+														"",
+														"Json Configs (*.json)",
+														)
+			if self.filename:
+				n_files = len(self.filename)
+				print(f'You loaded {n_files} threshold configuration files...')
+				for i,filename in enumerate(self.filename):
+					print(f"Config {i}: ",filename,"...")
+
+				if n_files==1:
+					self.merge_cb.hide()
+					self.merge_lbl.hide()
+					self.file_label.setText(self.filename[0].split("/")[-1])
 				else:
 					msgBox = QMessageBox()
 					msgBox.setIcon(QMessageBox.Warning)
-					msgBox.setText("StarDist model not recognized... Please ensure that it contains a thresholds.json file or that it is a valid StarDist model...")
+					msgBox.setText("You selected more than one pipeline. Please set a merging procedure for the resulting masks...")
 					msgBox.setWindowTitle("Warning")
 					msgBox.setStandardButtons(QMessageBox.Ok)
 					returnValue = msgBox.exec()
 					if returnValue == QMessageBox.Ok:
-						return None					
-			
-			if self.seg_mode=="cellpose":
-				self.file_label.setText(self.filename.split("/")[-1])
-				self.modelname = self.filename.split("/")[-1]
-				print(f"Transferring Cellpose model {self.filename}...")
-				self.folder_dest = os.path.split(os.path.dirname(os.path.realpath(__file__)))[0]+f"/models/{self.target_folder}/"+self.modelname
-				self.destination = self.folder_dest+f"/{self.modelname}"
+						pass
 
-			if self.seg_mode=="threshold":
-				self.file_label.setText(self.filename.split("/")[-1])
+					self.merge_cb.show()
+					self.merge_lbl.show()
+					self.file_label.setText(f"{n_files} configs loaded...")
 
 	def show_seg_options(self):
 
 		"""
 		Show the relevant widgets, mask the others.
 		"""
+
+		self.filename = None
+		self.file_label.setText('No file chosen')
 		self.base_block_options = [self.calibration_label, self.spatial_calib_le,*self.channel_layout.channel_cbs,*self.channel_layout.channel_labels,*self.channel_layout.normalization_mode_btns, *self.channel_layout.normalization_clip_btns, *self.channel_layout.normalization_min_value_lbl,
 								   *self.channel_layout.normalization_min_value_le, *self.channel_layout.normalization_max_value_lbl,*self.channel_layout.normalization_max_value_le,
 								   self.channel_layout.add_col_btn]
@@ -250,7 +293,7 @@ class SegmentationModelLoader(QWidget, Styles):
 			self.spatial_calib_le.setToolTip('Cellpose rescales the images such that the cells are 30.0 pixels. You can compute the scale from the training data as\n(pixel calibration [µm] in training images)*(cell diameter [px] in training images)/(30 [px]).\nIf you pass images with a different calibration to the model, they will be rescaled automatically.\nThe rescaling is ignored if you pass a diameter different from 30 px below.')
 			self.channel_layout.channel_labels[0].setText('cyto: ')
 			self.channel_layout.channel_labels[1].setText('nuclei: ')
-			for c in [self.threshold_config_button]:
+			for c in [self.threshold_config_button, self.merge_lbl, self.merge_cb]:
 				c.hide()
 			for c in self.cellpose_options+self.base_block_options:
 				c.show()
@@ -261,7 +304,7 @@ class SegmentationModelLoader(QWidget, Styles):
 			self.channel_layout.channel_labels[1].setText('channel 2: ')
 			for c in self.base_block_options:
 				c.show()
-			for c in self.cellpose_options+[self.threshold_config_button]:
+			for c in self.cellpose_options+[self.threshold_config_button, self.merge_lbl, self.merge_cb]:
 				c.hide()
 			self.unlock_upload()
 		else:
@@ -346,7 +389,10 @@ class SegmentationModelLoader(QWidget, Styles):
 			self.parent_window.init_seg_model_list()
 			self.close()
 		else:
-			if self.mode=="targets":	
+			if not isinstance(self.filename, list):
+				if not self.filename is None:
+					self.filename = [self.filename]
+			if self.mode=="targets":
 				self.parent_window.threshold_config_targets = self.filename
 				self.parent_window.seg_model_list.setCurrentText('Threshold')
 				print('Path to the traditional segmentation pipeline successfully set in celldetective...')
@@ -355,7 +401,7 @@ class SegmentationModelLoader(QWidget, Styles):
 				self.parent_window.threshold_config_effectors = self.filename
 				self.parent_window.seg_model_list.setCurrentText('Threshold')
 				print('Path to the traditional segmentation pipeline successfully set in celldetective...')
-				self.close()	
+				self.close()
 
 	def generate_input_config(self):
 

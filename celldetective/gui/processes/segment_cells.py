@@ -232,6 +232,7 @@ class SegmentCellThresholdProcess(BaseSegmentProcess):
 		self.equalize = False
 
 		# Model
+
 		self.load_threshold_config()
 		self.extract_threshold_parameters()
 		self.detect_channels()
@@ -244,28 +245,41 @@ class SegmentCellThresholdProcess(BaseSegmentProcess):
 
 	def prepare_equalize(self):
 
-		if self.equalize:
-			f_reference = load_frames(self.img_num_channels[:,self.equalize_time], self.file, scale=None, normalize_input=False)
-			f_reference = f_reference[:,:,self.threshold_instructions['target_channel']]
-		else:
-			f_reference = None
+		for i in range(len(self.instructions)):
 
-		self.threshold_instructions.update({'equalize_reference': f_reference})
+			if self.equalize[i]:
+				f_reference = load_frames(self.img_num_channels[:,self.equalize_time[i]], self.file, scale=None, normalize_input=False)
+				f_reference = f_reference[:,:,self.instructions[i]['target_channel']]
+			else:
+				f_reference = None
+
+			self.instructions[i].update({'equalize_reference': f_reference})
 
 	def load_threshold_config(self):
-		
-		if os.path.exists(self.threshold_instructions):
-			with open(self.threshold_instructions, 'r') as f:
-				self.threshold_instructions = json.load(f)
-		else:
-			print('The configuration path is not valid. Abort.')
-			self.abort_process()
+
+		self.instructions = []
+		for inst in self.threshold_instructions:
+			if os.path.exists(inst):
+				with open(inst, 'r') as f:
+					self.instructions.append(json.load(f))
+			else:
+				print('The configuration path is not valid. Abort.')
+				self.abort_process()
 
 	def extract_threshold_parameters(self):
 		
-		self.required_channels = [self.threshold_instructions['target_channel']]
-		if 'equalize_reference' in self.threshold_instructions:
-			self.equalize, self.equalize_time = self.threshold_instructions['equalize_reference']		
+		self.required_channels = []
+		self.equalize = []
+		self.equalize_time = []
+
+		for i in range(len(self.instructions)):
+			ch = [self.instructions[i]['target_channel']]
+			self.required_channels.append(ch)
+
+			if 'equalize_reference' in self.instructions[i]:
+				equalize, equalize_time = self.instructions[i]['equalize_reference']	
+				self.equalize.append(equalize)
+				self.equalize_time.append(equalize_time)
 
 	def write_log(self):
 
@@ -276,12 +290,14 @@ class SegmentCellThresholdProcess(BaseSegmentProcess):
 
 	def detect_channels(self):
 
-		self.channel_indices = _extract_channel_indices_from_config(self.config, self.required_channels)
-		print(f'Required channels: {self.required_channels} located at channel indices {self.channel_indices}.')
+		for i in range(len(self.instructions)):
+			
+			self.channel_indices = _extract_channel_indices_from_config(self.config, self.required_channels[i])
+			print(f'Required channels: {self.required_channels[i]} located at channel indices {self.channel_indices}.')
+			self.instructions[i].update({'target_channel': self.channel_indices[0]})
+			self.instructions[i].update({'channel_names': self.channel_names})
 		
 		self.img_num_channels = _get_img_num_per_channel(np.arange(self.nbr_channels), self.len_movie, self.nbr_channels)
-		self.threshold_instructions.update({'target_channel': self.channel_indices[0]})
-		self.threshold_instructions.update({'channel_names': self.channel_names})
 
 	def parallel_job(self, indices):
 
@@ -290,8 +306,17 @@ class SegmentCellThresholdProcess(BaseSegmentProcess):
 			for t in tqdm(indices,desc="frame"): #for t in tqdm(range(self.len_movie),desc="frame"):
 				
 				# Load channels at time t
-				f = load_frames(self.img_num_channels[:,t], self.file, scale=None, normalize_input=False)
-				mask = segment_frame_from_thresholds(f, **self.threshold_instructions)
+				masks = []
+				for i in range(len(self.instructions)):
+					f = load_frames(self.img_num_channels[:,t], self.file, scale=None, normalize_input=False)
+					mask = segment_frame_from_thresholds(f, **self.instructions[i])
+					print(f'Frame {t}; segment with {self.instructions[i]=}...')
+					masks.append(mask)
+
+				if len(self.instructions)>1:
+					#mask = merge_instance_segmentation(masks, method='OR')
+					pass
+
 				save_tiff_imagej_compatible(os.sep.join([self.pos, self.label_folder, f"{str(t).zfill(4)}.tif"]), mask.astype(np.uint16), axes='YX')
 
 				del f;
