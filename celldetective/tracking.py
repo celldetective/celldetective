@@ -441,9 +441,14 @@ def interpolate_per_track(group_df):
 
 	"""
 
-	interpolated_group = group_df.interpolate(method='linear',limit_direction="both")
+	for c in list(group_df.columns):
+		group_df_new_dtype = group_df[c].infer_objects(copy=False)
+		if group_df_new_dtype.dtype!='O':
+			group_df[c] = group_df_new_dtype.interpolate(method='linear',limit_direction="both")
+	
+	#interpolated_group = group_df.interpolate(method='linear',limit_direction="both")
 
-	return interpolated_group
+	return group_df
 
 def interpolate_nan_properties(trajectories, track_label="TRACK_ID"):
 
