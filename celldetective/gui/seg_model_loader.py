@@ -249,7 +249,7 @@ class SegmentationModelLoader(QWidget, Styles):
 		else:
 			self.filename, _ = QFileDialog.getOpenFileNames(
 														None,
-														"QFileDialog.getOpenFileNames()",
+														"Load threshold configuration(s)...",
 														"",
 														"Json Configs (*.json)",
 														)
