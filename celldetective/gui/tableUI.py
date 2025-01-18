@@ -166,7 +166,7 @@ class DifferentiateColWidget(QWidget, Styles):
 		layout.addLayout(measurement_layout)
 
 		self.window_size_slider = QLabeledSlider()
-		self.window_size_slider.setRange(1,np.nanmax(self.parent_window.data.FRAME.to_numpy()))
+		self.window_size_slider.setRange(1,int(np.nanmax(self.parent_window.data.FRAME.to_numpy())))
 		self.window_size_slider.setValue(3)
 		window_layout = QHBoxLayout()
 		window_layout.addWidget(QLabel('window size: '), 25)

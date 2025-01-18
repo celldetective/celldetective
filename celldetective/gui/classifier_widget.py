@@ -212,6 +212,8 @@ class ClassifierWidget(QWidget, Styles):
 		self.frame_slider.valueChanged.connect(self.set_frame)
 		self.alpha_slider.valueChanged.connect(self.set_transparency)
 
+		self.setAttribute(Qt.WA_DeleteOnClose)
+
 	def activate_prereq_cb(self):
 		if self.prereq_event_check.isChecked():
 			self.prereq_event_cb.setEnabled(True)
@@ -275,6 +277,12 @@ class ClassifierWidget(QWidget, Styles):
 		self.scat_props = self.ax_props.scatter([],[], color="k", alpha=self.currentAlpha)
 		self.propscanvas.canvas.draw_idle()
 		self.propscanvas.canvas.setMinimumHeight(self.screen_height//5)
+
+	def closeEvent(self, event):
+		self.ax_props.cla()
+		self.fig_props.clf()
+		plt.close(self.fig_props)
+		super().closeEvent(event) 
 
 	def update_props_scatter(self, feature_changed=True):
 

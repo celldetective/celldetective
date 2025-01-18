@@ -117,7 +117,10 @@ class ConfigSignalPlot(QWidget, Styles):
 		all_cms = list(colormaps)
 		for cm in all_cms:
 			if hasattr(matplotlib.cm, str(cm).lower()):
-				self.cbs[-1].addColormap(cm.lower())
+				try:
+					self.cbs[-1].addColormap(cm.lower())
+				except:
+					pass
 
 		self.cbs[0].setCurrentIndex(1)
 		self.cbs[0].setCurrentIndex(0)
@@ -138,19 +141,28 @@ class ConfigSignalPlot(QWidget, Styles):
 		self.abs_time_checkbox.stateChanged.connect(self.switch_ref_time_mode)
 
 		select_layout = QHBoxLayout()
+		select_layout.setContentsMargins(20,3,20,3)
 		select_layout.addWidget(QLabel('select cells\nwith query: '), 33)
 		self.query_le = QLineEdit()
 		select_layout.addWidget(self.query_le, 66)
 		main_layout.addLayout(select_layout)
 
 		time_calib_layout = QHBoxLayout()
-		time_calib_layout.setContentsMargins(20,20,20,20)
+		time_calib_layout.setContentsMargins(20,3,20,3)
 		time_calib_layout.addWidget(QLabel('time calibration\n(frame to min)'), 33)
 		self.time_calibration_le = QLineEdit(str(self.FrameToMin).replace('.',','))
 		self.time_calibration_le.setValidator(self.float_validator)
 		time_calib_layout.addWidget(self.time_calibration_le, 66)
 		#time_calib_layout.addWidget(QLabel(' min'))
 		main_layout.addLayout(time_calib_layout)
+
+		pool_layout = QHBoxLayout()
+		pool_layout.setContentsMargins(20,3,20,3)
+		self.pool_option_cb = QComboBox()
+		self.pool_option_cb.addItems(['mean','median'])
+		pool_layout.addWidget(QLabel('pool\nprojection:'), 33)
+		pool_layout.addWidget(self.pool_option_cb, 66)
+		main_layout.addLayout(pool_layout)
 
 		self.submit_btn = QPushButton('Submit')
 		self.submit_btn.setStyleSheet(self.button_style_sheet)
@@ -271,9 +283,10 @@ class ConfigSignalPlot(QWidget, Styles):
 			self.feature_selected = self.feature_cb.currentText()
 			self.feature_choice_widget.close()
 			self.compute_signal_functions()
-			self.interpret_pos_location()
-			self.plot_window = GenericSignalPlotWidget(parent_window=self, df=self.df, df_pos_info = self.df_pos_info, df_well_info = self.df_well_info, feature_selected=self.feature_selected, title='plot signals')
-			self.plot_window.show()
+			if self.open_widget:
+				self.interpret_pos_location()
+				self.plot_window = GenericSignalPlotWidget(parent_window=self, df=self.df, df_pos_info = self.df_pos_info, df_well_info = self.df_well_info, feature_selected=self.feature_selected, title='plot signals')
+				self.plot_window.show()
 
 	def process_signal(self):
 
@@ -335,7 +348,19 @@ class ConfigSignalPlot(QWidget, Styles):
 
 	def compute_signal_functions(self):
 
-		# REPLACE EVRYTHING WITH MEAN_SIGNAL FUNCTION
+		# Check to move at the beginning
+		self.open_widget = True
+		if len(self.time_columns)==0:
+			msgBox = QMessageBox()
+			msgBox.setIcon(QMessageBox.Warning)
+			msgBox.setText("No synchronizing time is available...")
+			msgBox.setWindowTitle("Warning")
+			msgBox.setStandardButtons(QMessageBox.Ok)
+			returnValue = msgBox.exec()
+			if returnValue == QMessageBox.Ok:
+				pass
+			self.open_widget = False
+			return None
 
 		# Per position signal
 		max_time = int(self.df.FRAME.max()) + 1
@@ -346,9 +371,9 @@ class ConfigSignalPlot(QWidget, Styles):
 
 		for block,movie_group in self.df.groupby(['well','position']):
 
-			well_signal_mean, well_std_mean, timeline_all, matrix_all = mean_signal(movie_group, self.feature_selected, class_col, time_col=time_col, class_value=None, return_matrix=True, forced_max_duration=max_time)
-			well_signal_event, well_std_event, timeline_event, matrix_event = mean_signal(movie_group, self.feature_selected, class_col, time_col=time_col, class_value=[0], return_matrix=True, forced_max_duration=max_time)		
-			well_signal_no_event, well_std_no_event, timeline_no_event, matrix_no_event = mean_signal(movie_group, self.feature_selected, class_col, time_col=time_col, class_value=[1], return_matrix=True, forced_max_duration=max_time)
+			well_signal_mean, well_std_mean, timeline_all, matrix_all = mean_signal(movie_group, self.feature_selected, class_col, time_col=time_col, class_value=None, return_matrix=True, forced_max_duration=max_time, projection=self.pool_option_cb.currentText())
+			well_signal_event, well_std_event, timeline_event, matrix_event = mean_signal(movie_group, self.feature_selected, class_col, time_col=time_col, class_value=[0], return_matrix=True, forced_max_duration=max_time, projection=self.pool_option_cb.currentText())		
+			well_signal_no_event, well_std_no_event, timeline_no_event, matrix_no_event = mean_signal(movie_group, self.feature_selected, class_col, time_col=time_col, class_value=[1], return_matrix=True, forced_max_duration=max_time, projection=self.pool_option_cb.currentText())
 			self.mean_plots_timeline = timeline_all
 
 			self.df_pos_info.loc[self.df_pos_info['pos_path'] == block[1], 'signal'] = [
@@ -361,9 +386,9 @@ class ConfigSignalPlot(QWidget, Styles):
 		# Per well
 		for well,well_group in self.df.groupby('well'):
 
-			well_signal_mean, well_std_mean, timeline_all, matrix_all = mean_signal(well_group, self.feature_selected, class_col, time_col=time_col, class_value=None, return_matrix=True, forced_max_duration=max_time)
-			well_signal_event, well_std_event, timeline_event, matrix_event = mean_signal(well_group, self.feature_selected, class_col, time_col=time_col, class_value=[0], return_matrix=True, forced_max_duration=max_time)			
-			well_signal_no_event, well_std_no_event, timeline_no_event, matrix_no_event = mean_signal(well_group, self.feature_selected, class_col, time_col=time_col, class_value=[1], return_matrix=True, forced_max_duration=max_time)
+			well_signal_mean, well_std_mean, timeline_all, matrix_all = mean_signal(well_group, self.feature_selected, class_col, time_col=time_col, class_value=None, return_matrix=True, forced_max_duration=max_time, projection=self.pool_option_cb.currentText())
+			well_signal_event, well_std_event, timeline_event, matrix_event = mean_signal(well_group, self.feature_selected, class_col, time_col=time_col, class_value=[0], return_matrix=True, forced_max_duration=max_time, projection=self.pool_option_cb.currentText())			
+			well_signal_no_event, well_std_no_event, timeline_no_event, matrix_no_event = mean_signal(well_group, self.feature_selected, class_col, time_col=time_col, class_value=[1], return_matrix=True, forced_max_duration=max_time, projection=self.pool_option_cb.currentText())
 			
 			self.df_well_info.loc[self.df_well_info['well_path']==well,'signal'] = [{'mean_all': well_signal_mean, 'std_all': well_std_mean,'matrix_all': matrix_all,'mean_event': well_signal_event, 'std_event': well_std_event,
 																					'matrix_event': matrix_event,'mean_no_event': well_signal_no_event, 'std_no_event': well_std_no_event, 'matrix_no_event': matrix_no_event, 'timeline':  self.mean_plots_timeline}]
@@ -418,23 +443,7 @@ class ConfigSignalPlot(QWidget, Styles):
 					cid+=1
 				except:
 					pass
-		return matrix		
-
-	def col_mean(self, matrix):
-
-		mean_line = np.zeros(matrix.shape[1])
-		mean_line[:] = np.nan
-		std_line = np.copy(mean_line)
-
-		for k in range(matrix.shape[1]):
-			values = matrix[:,k]
-			#values = values[values!=0]
-			if len(values[values==values])>2:
-				mean_line[k] = np.nanmean(values)
-				std_line[k] = np.nanstd(values)
-
-		return mean_line, std_line
-
+		return matrix
 
 	def switch_ref_time_mode(self):
 		if self.abs_time_checkbox.isChecked():
