@@ -8,10 +8,12 @@ from .utils import _estimate_scale_factor, _extract_channel_indices
 from pathlib import Path
 from tqdm import tqdm
 import numpy as np
-from celldetective.io import _view_on_napari, locate_labels, locate_stack, _view_on_napari, _check_label_dims
+from celldetective.io import _view_on_napari, locate_labels, locate_stack, _view_on_napari, _check_label_dims, auto_correct_masks
 from celldetective.filters import * #rework this to give a name
 from celldetective.utils import interpolate_nan_multichannel,_rearrange_multichannel_frame, _fix_no_contrast, zoom_multiframes, _rescale_labels, rename_intensity_column, mask_edges, _prep_stardist_model, _prep_cellpose_model, estimate_unreliable_edge,_get_normalize_kwargs_from_config, _segment_image_with_stardist_model, _segment_image_with_cellpose_model
 from stardist import fill_label_holes
+from stardist.matching import matching
+
 import scipy.ndimage as ndi
 from skimage.segmentation import watershed
 from skimage.feature import peak_local_max
@@ -716,6 +718,51 @@ def train_segmentation_model(config, use_gpu=True):
 	script_path = os.sep.join([abs_path, 'scripts', 'train_segmentation_model.py'])
 	cmd = f'python "{script_path}" --config "{config}" --use_gpu "{use_gpu}"'
 	subprocess.call(cmd, shell=True)
+
+
+def merge_instance_segmentation(labels, iou_matching_threshold=0.05, mode='OR'):
+
+	label_reference = labels[0]
+	for i in range(1,len(labels)):
+
+		label_to_merge = labels[i]
+		pairs = matching(label_reference,label_to_merge, thresh=0.5, criterion='iou', report_matches=True).matched_pairs
+		scores = matching(label_reference,label_to_merge, thresh=0.5, criterion='iou', report_matches=True).matched_scores
+		
+		accepted_pairs = []
+		for k,p in enumerate(pairs):
+			s = scores[k]
+			if s > iou_matching_threshold:
+				accepted_pairs.append(p)
+		
+		merge = np.copy(label_reference)
+
+		for p in accepted_pairs:
+			merge[np.where(merge==p[0])] = 0.
+			cdt1 = label_reference==p[0]
+			cdt2 = label_to_merge==p[1]
+			if mode=='OR':
+				cdt = np.logical_or(cdt1, cdt2)
+			elif mode=='AND':
+				cdt = np.logical_and(cdt1, cdt2)
+			elif mode=='XOR':
+				cdt = np.logical_xor(cdt1,cdt2)
+			loc_i, loc_j = np.where(cdt)
+			merge[loc_i, loc_j] = p[0]
+
+		cells_to_ignore = [p[1] for p in accepted_pairs]
+		for c in cells_to_ignore:
+			label_to_merge[label_to_merge==c] = 0
+
+		label_to_merge[label_to_merge!=0] = label_to_merge[label_to_merge!=0] + int(np.amax(label_reference))
+		merge[label_to_merge!=0] = label_to_merge[label_to_merge!=0]
+
+		label_reference = merge
+
+	merge = auto_correct_masks(merge)
+
+	return merge
+
 
 if __name__ == "__main__":
 	print(segment(None,'test'))

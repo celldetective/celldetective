@@ -4,18 +4,18 @@ import datetime
 import os
 import json
 import numpy as np
-from celldetective.io import extract_position_name, locate_segmentation_model, auto_load_number_of_frames, load_frames, _check_label_dims, _load_frames_to_segment, auto_correct_masks
+from celldetective.io import extract_position_name, locate_segmentation_model, auto_load_number_of_frames, load_frames, _check_label_dims, _load_frames_to_segment
 from celldetective.utils import _rescale_labels, _segment_image_with_stardist_model, _segment_image_with_cellpose_model, _prep_stardist_model, _prep_cellpose_model, _get_normalize_kwargs_from_config, extract_experiment_channels, _estimate_scale_factor, _extract_channel_indices_from_config, ConfigSectionMap, _extract_nbr_channels_from_config, _get_img_num_per_channel
+
 from pathlib import Path, PurePath
 from glob import glob
 from shutil import rmtree
 from tqdm import tqdm
 import numpy as np
 from csbdeep.io import save_tiff_imagej_compatible
-from celldetective.segmentation import segment_frame_from_thresholds
+from celldetective.segmentation import segment_frame_from_thresholds, merge_instance_segmentation
 import gc
 from art import tprint
-from stardist.matching import matching
 
 import concurrent.futures
 
@@ -312,11 +312,11 @@ class SegmentCellThresholdProcess(BaseSegmentProcess):
 				for i in range(len(self.instructions)):
 					f = load_frames(self.img_num_channels[:,t], self.file, scale=None, normalize_input=False)
 					mask = segment_frame_from_thresholds(f, **self.instructions[i])
-					print(f'Frame {t}; segment with {self.instructions[i]=}...')
+					#print(f'Frame {t}; segment with {self.instructions[i]=}...')
 					masks.append(mask)
 
 				if len(self.instructions)>1:
-					mask = self.merge_instance_segmentation(masks, mode='OR')
+					mask = merge_instance_segmentation(masks, mode='OR')
 
 				save_tiff_imagej_compatible(os.sep.join([self.pos, self.label_folder, f"{str(t).zfill(4)}.tif"]), mask.astype(np.uint16), axes='YX')
 
@@ -334,49 +334,6 @@ class SegmentCellThresholdProcess(BaseSegmentProcess):
 			print(e)
 
 		return
-
-	def merge_instance_segmentation(self, labels, iou_matching_threshold=0.05, mode='OR'):
-
-		label_reference = labels[0]
-		for i in range(1,len(labels)):
-
-			label_to_merge = labels[i]
-			pairs = matching(label_reference,label_to_merge, thresh=0.5, criterion='iou', report_matches=True).matched_pairs
-			scores = matching(label_reference,label_to_merge, thresh=0.5, criterion='iou', report_matches=True).matched_scores
-			
-			accepted_pairs = []
-			for k,p in enumerate(pairs):
-				s = scores[k]
-				if s > iou_matching_threshold:
-					accepted_pairs.append(p)
-			
-			merge = np.copy(label_reference)
-
-			for p in accepted_pairs:
-				merge[np.where(merge==p[0])] = 0.
-				cdt1 = label_reference==p[0]
-				cdt2 = label_to_merge==p[1]
-				if mode=='OR':
-					cdt = np.logical_or(cdt1, cdt2)
-				elif mode=='AND':
-					cdt = np.logical_and(cdt1, cdt2)
-				elif mode=='XOR':
-					cdt = np.logical_xor(cdt1,cdt2)
-				loc_i, loc_j = np.where(cdt)
-				merge[loc_i, loc_j] = p[0]
-
-			cells_to_ignore = [p[1] for p in accepted_pairs]
-			for c in cells_to_ignore:
-				label_to_merge[label_to_merge==c] = 0
-
-			label_to_merge[label_to_merge!=0] = label_to_merge[label_to_merge!=0] + int(np.amax(label_reference))
-			merge[label_to_merge!=0] = label_to_merge[label_to_merge!=0]
-
-			label_reference = merge
-
-		merge = auto_correct_masks(merge)
-
-		return merge
 			
 
 	def run(self):
