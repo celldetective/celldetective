@@ -681,11 +681,22 @@ class SignalDetectionModel(object):
 		if 'label' in model_config:
 			self.label = model_config['label']
 
-		self.n_channels = self.model_class.layers[0].input_shape[0][-1]
-		self.model_signal_length = self.model_class.layers[0].input_shape[0][-2]
-		self.n_classes = self.model_class.layers[-1].output_shape[-1]
+		try:
+			self.n_channels = self.model_class.layers[0].input_shape[0][-1]
+			self.model_signal_length = self.model_class.layers[0].input_shape[0][-2]
+			self.n_classes = self.model_class.layers[-1].output_shape[-1]
+			model_class_input_shape = self.model_class.layers[0].input_shape[0]
+			model_reg_input_shape = self.model_reg.layers[0].input_shape[0]
+		except AttributeError:
+			self.n_channels = self.model_class.input_shape[-1] #self.model_class.layers[0].input.shape[0][-1]
+			self.model_signal_length = self.model_class.input_shape[-2] #self.model_class.layers[0].input[0].shape[0][-2]
+			self.n_classes = self.model_class.output_shape[-1] #self.model_class.layers[-1].output[0].shape[-1]
+			model_class_input_shape = self.model_class.input_shape
+			model_reg_input_shape = self.model_reg.input_shape
+		except Exception as e:
+			print(e)		
 
-		assert self.model_class.layers[0].input_shape[0] == self.model_reg.layers[0].input_shape[0], f"mismatch between input shape of classification: {self.model_class.layers[0].input_shape[0]} and regression {self.model_reg.layers[0].input_shape[0]} models... Error."
+		assert model_class_input_shape==model_reg_input_shape, f"mismatch between input shape of classification: {self.model_class.layers[0].input_shape[0]} and regression {self.model_reg.layers[0].input_shape[0]} models... Error."
 
 		return True
 
@@ -1016,8 +1027,15 @@ class SignalDetectionModel(object):
 		# 	plt.plot(self.x[i,:,0])
 		# 	plt.show()
 
-		assert self.x.shape[-1] == self.model_class.layers[0].input_shape[0][-1], f"Shape mismatch between the input shape and the model input shape..."
-		assert self.x.shape[-2] == self.model_class.layers[0].input_shape[0][-2], f"Shape mismatch between the input shape and the model input shape..."
+		try:
+			n_channels = self.model_class.layers[0].input_shape[0][-1]
+			model_signal_length = self.model_class.layers[0].input_shape[0][-2]
+		except AttributeError:
+			n_channels = self.model_class.input_shape[-1]
+			model_signal_length = self.model_class.input_shape[-2]
+
+		assert self.x.shape[-1] == n_channels, f"Shape mismatch between the input shape and the model input shape..."
+		assert self.x.shape[-2] == model_signal_length, f"Shape mismatch between the input shape and the model input shape..."
 
 		self.class_predictions_one_hot = self.model_class.predict(self.x)
 		self.class_predictions = self.class_predictions_one_hot.argmax(axis=1)
@@ -1073,8 +1091,15 @@ class SignalDetectionModel(object):
 												normalization_values=self.normalization_values, normalization_clip=self.normalization_clip,
 												)
 
-		assert self.x.shape[-1] == self.model_reg.layers[0].input_shape[0][-1], f"Shape mismatch between the input shape and the model input shape..."
-		assert self.x.shape[-2] == self.model_reg.layers[0].input_shape[0][-2], f"Shape mismatch between the input shape and the model input shape..."
+		try:
+			n_channels = self.model_reg.layers[0].input_shape[0][-1]
+			model_signal_length = self.model_reg.layers[0].input_shape[0][-2]
+		except AttributeError:
+			n_channels = self.model_reg.input_shape[-1]
+			model_signal_length = self.model_reg.input_shape[-2]
+		
+		assert self.x.shape[-1] == n_channels, f"Shape mismatch between the input shape and the model input shape..."
+		assert self.x.shape[-2] == model_signal_length, f"Shape mismatch between the input shape and the model input shape..."
 
 		if np.any(self.class_predictions==0):
 			self.time_predictions = self.model_reg.predict(self.x[self.class_predictions==0])*self.model_signal_length
