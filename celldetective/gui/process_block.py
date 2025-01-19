@@ -1362,6 +1362,7 @@ class NeighPanel(QFrame, Styles):
 		self.pair_signal_models_list.addItems(signal_models)
 
 	def open_signal_annotator_configuration_ui(self):
+		self.mode = 'pairs'
 		self.ConfigSignalAnnotator = ConfigSignalAnnotator(self)
 		self.ConfigSignalAnnotator.show()
 
