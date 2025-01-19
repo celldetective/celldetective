@@ -1577,7 +1577,7 @@ class SignalAnnotator2(QMainWindow,Styles):
 					self.cell_ax.set_ylim(self.value_magnitude, self.non_log_ymax)					
 
 		if self.reference_track_of_interest is not None and self.neighbor_track_of_interest is not None:
-			t0 = self.df_relative.loc[(self.df_relative['REFERENCE_ID'] == self.reference_track_of_interest)&(self.df_relative['NEIGHBOR_ID'] == self.neighbor_track_of_interest)&(self.df_relative['reference_population'] == self.reference_population)&(self.df_relative['neighbor_population'] == self.neighbor_population), self.pair_time_name].dropna().to_numpy()
+			t0 = self.df_relative.loc[(self.df_relative['REFERENCE_ID'] == self.reference_track_of_interest)&(self.df_relative['NEIGHBOR_ID'] == self.neighbor_track_of_interest)&(self.df_relative['reference_population'] == self.reference_population)&(self.df_relative['neighbor_population'] == self.neighbor_population), self.pair_time_name].dropna().values
 			if t0!=[]:
 				t0=t0[0]
 				ymin,ymax = self.cell_ax.get_ylim()
