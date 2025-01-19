@@ -932,7 +932,7 @@ class CellSizeViewer(StackVisualizer):
 	  with interactive sliders for diameter adjustment and circle display.
 	"""
 
-	def __init__(self, initial_diameter=40, set_radius_in_list=False, diameter_slider_range=(0,200), parent_le=None, parent_list_widget=None, *args, **kwargs):
+	def __init__(self, initial_diameter=40, set_radius_in_list=False, diameter_slider_range=(0,500), parent_le=None, parent_list_widget=None, *args, **kwargs):
 		# Initialize the widget and its attributes
 		
 		super().__init__(*args, **kwargs)
