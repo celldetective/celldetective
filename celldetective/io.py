@@ -400,6 +400,23 @@ def get_experiment_metadata(experiment):
 	metadata = ConfigSectionMap(config, "Metadata")
 	return metadata
 
+def get_experiment_labels(experiment):
+
+	config = get_config(experiment)
+	wells = get_experiment_wells(experiment)
+	nbr_of_wells = len(wells)
+
+	labels = ConfigSectionMap(config, "Labels")
+	for k in list(labels.keys()):
+		values = labels[k].split(',')
+		if nbr_of_wells != len(values):
+			values = [str(s) for s in np.linspace(0, nbr_of_wells - 1, nbr_of_wells)]
+		if np.all([s.isnumeric() for s in values]):
+			values = [float(s) for s in values]
+		labels.update({k: values})
+
+	return labels
+
 
 def get_experiment_concentrations(experiment, dtype=str):
 	
@@ -982,10 +999,8 @@ def load_experiment_tables(experiment, population='targets', well_option='*', po
 	wells = get_experiment_wells(experiment)
 
 	movie_prefix = ConfigSectionMap(config, "MovieSettings")["movie_prefix"]
-	concentrations = get_experiment_concentrations(experiment, dtype=float)
-	cell_types = get_experiment_cell_types(experiment)
-	antibodies = get_experiment_antibodies(experiment)
-	pharmaceutical_agents = get_experiment_pharmaceutical_agents(experiment)
+
+	labels = get_experiment_labels(experiment)
 	metadata = get_experiment_metadata(experiment) # None or dict of metadata
 	well_labels = _extract_labels_from_config(config, len(wells))
 
@@ -1001,13 +1016,7 @@ def load_experiment_tables(experiment, population='targets', well_option='*', po
 
 		well_name, well_number = extract_well_name_and_number(well_path)
 		widx = well_indices[k]
-
 		well_alias = well_labels[widx]
-
-		well_concentration = concentrations[widx]
-		well_antibody = antibodies[widx]
-		well_cell_type = cell_types[widx]
-		well_pharmaceutical_agent = pharmaceutical_agents[widx]
 
 		positions = get_positions_in_well(well_path)
 		if position_indices is not None:
@@ -1037,10 +1046,13 @@ def load_experiment_tables(experiment, population='targets', well_option='*', po
 				df_pos['well_name'] = well_name
 				df_pos['pos_name'] = pos_name
 
-				df_pos['concentration'] = well_concentration
-				df_pos['antibody'] = well_antibody
-				df_pos['cell_type'] = well_cell_type
-				df_pos['pharmaceutical_agent'] = well_pharmaceutical_agent
+				for k in list(labels.keys()):
+					values = labels[k]
+					try:
+						df_pos[k] = values[widx]
+					except Exception as e:
+						print(f"{e=}")
+
 				if metadata is not None:
 					keys = list(metadata.keys())
 					for k in keys:
@@ -1052,10 +1064,6 @@ def load_experiment_tables(experiment, population='targets', well_option='*', po
 				pos_dict = {'pos_path': pos_path, 'pos_index': real_pos_index, 'pos_name': pos_name, 'table_path': table,
 					 'stack_path': stack_path,'well_path': well_path, 'well_index': real_well_index, 'well_name': well_name,
 					 'well_number': well_number, 'well_alias': well_alias}
-				# if metadata is not None:
-				# 	keys = list(metadata.keys())
-				# 	for k in keys:
-				# 		pos_dict.update({k: metadata[k]})
 
 				df_pos_info.append(pos_dict)
 

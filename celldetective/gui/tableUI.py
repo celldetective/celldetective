@@ -874,7 +874,7 @@ class TableUI(QMainWindow, Styles):
 		self.projection_option.setChecked(True)
 		self.projection_option.toggled.connect(self.enable_projection_options)
 		self.projection_op_cb = QComboBox()
-		self.projection_op_cb.addItems(['mean','median','min','max', 'prod', 'sum'])
+		self.projection_op_cb.addItems(['mean','median','min','max','first','last','prod','sum'])
 
 		projection_layout = QHBoxLayout()
 		projection_layout.addWidget(self.projection_option, 33)
@@ -1044,8 +1044,11 @@ class TableUI(QMainWindow, Styles):
 		all_cms = list(colormaps)
 		for cm in all_cms:
 			if hasattr(matplotlib.cm, str(cm).lower()):
-				self.cmap_cb.addColormap(cm.lower())
-		
+				try:
+					self.cmap_cb.addColormap(cm.lower())
+				except:
+					pass
+					
 		hbox = QHBoxLayout()
 		hbox.addWidget(QLabel('colormap: '), 33)
 		hbox.addWidget(self.cmap_cb, 66)
