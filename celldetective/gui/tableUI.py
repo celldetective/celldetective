@@ -215,6 +215,108 @@ class DifferentiateColWidget(QWidget, Styles):
 		self.parent_window.table_view.setModel(self.parent_window.model)
 		self.close()
 
+
+
+class OperationOnColsWidget(QWidget, Styles):
+
+	def __init__(self, parent_window, column1=None, column2=None, operation='divide'):
+
+		super().__init__()
+		self.parent_window = parent_window
+		self.column1 = column1
+		self.column2 = column2
+		self.operation = operation
+
+		self.setWindowTitle(self.operation)
+		# Create the QComboBox and add some items
+		center_window(self)
+		
+		layout = QVBoxLayout(self)
+		layout.setContentsMargins(30,30,30,30)
+
+		self.col1_cb = QComboBox()
+		self.col1_cb.addItems(list(self.parent_window.data.columns))
+		if self.column1 is not None:
+			idx = self.col1_cb.findText(self.column1)
+			self.col1_cb.setCurrentIndex(idx)
+
+		numerator_layout = QHBoxLayout()
+		numerator_layout.addWidget(QLabel('column 1: '), 25)
+		numerator_layout.addWidget(self.col1_cb, 75)
+		layout.addLayout(numerator_layout)
+
+		self.col2_cb = QComboBox()
+		self.col2_cb.addItems(list(self.parent_window.data.columns))
+		if self.column2 is not None:
+			idx = self.col2_cb.findText(self.column2)
+			self.col2_cb.setCurrentIndex(idx)
+
+		denominator_layout = QHBoxLayout()
+		denominator_layout.addWidget(QLabel('column 2: '), 25)
+		denominator_layout.addWidget(self.col2_cb, 75)
+		layout.addLayout(denominator_layout)
+
+		self.submit_btn = QPushButton('Compute')
+		self.submit_btn.setStyleSheet(self.button_style_sheet)
+		self.submit_btn.clicked.connect(self.compute)
+		layout.addWidget(self.submit_btn, 30)
+
+		self.setAttribute(Qt.WA_DeleteOnClose)
+
+	def compute(self):
+
+		test = self._check_cols_before_operation()
+		if not test:
+			msgBox = QMessageBox()
+			msgBox.setIcon(QMessageBox.Warning)
+			msgBox.setText(f"Operation could not be performed, one of the column types is object...")
+			msgBox.setWindowTitle("Warning")
+			msgBox.setStandardButtons(QMessageBox.Ok)
+			returnValue = msgBox.exec()
+			if returnValue == QMessageBox.Ok:
+				return None
+			else:
+				return None
+		else:
+			if self.operation=='divide':
+				name = f"{self.col1_txt}/{self.col2_txt}"
+				with np.errstate(divide='ignore', invalid='ignore'):
+					res = np.true_divide(self.col1, self.col2)
+					res[res == np.inf] = np.nan
+					res[self.col1!=self.col1] = np.nan
+					res[self.col2!=self.col2] = np.nan
+					self.parent_window.data[name] = res
+
+			elif self.operation=='multiply':
+				name = f"{self.col1_txt}*{self.col2_txt}"
+				res = np.multiply(self.col1, self.col2)
+
+			elif self.operation=='add':
+				name = f"{self.col1_txt}+{self.col2_txt}"
+				res = np.add(self.col1, self.col2)
+
+			elif self.operation=='subtract':
+				name = f"{self.col1_txt}-{self.col2_txt}"
+				res = np.subtract(self.col1, self.col2)				
+			
+			self.parent_window.data[name] = res
+			self.parent_window.model = PandasModel(self.parent_window.data)
+			self.parent_window.table_view.setModel(self.parent_window.model)
+			self.close()
+
+	def _check_cols_before_operation(self):
+
+		self.col1_txt = self.col1_cb.currentText()
+		self.col2_txt = self.col2_cb.currentText()
+		
+		self.col1 = self.parent_window.data[self.col1_txt].to_numpy()
+		self.col2 = self.parent_window.data[self.col2_txt].to_numpy()
+
+		test = np.all([self.col1.dtype!='O', self.col2.dtype!='O'])
+
+		return test
+
+
 class CalibrateColWidget(GenericOpColWidget):
 	
 	def __init__(self, *args, **kwargs):
@@ -563,12 +665,34 @@ class TableUI(QMainWindow, Styles):
 		self.log_action = QAction('&Log (decimal)...', self)
 		self.log_action.triggered.connect(self.take_log_of_selected_feature)
 		#self.derivative_action.setShortcut("Ctrl+D")
-		self.mathMenu.addAction(self.log_action)						
+		self.mathMenu.addAction(self.log_action)
 
-		self.onehot_action = QAction('&One hot to categorical...', self)
-		self.onehot_action.triggered.connect(self.transform_one_hot_cols_to_categorical)
-		#self.onehot_action.setShortcut("Ctrl+D")
-		self.mathMenu.addAction(self.onehot_action)		
+
+		self.divide_action = QAction('&Divide...', self)
+		self.divide_action.triggered.connect(self.divide_signals)
+		#self.derivative_action.setShortcut("Ctrl+D")
+		self.mathMenu.addAction(self.divide_action)
+
+		self.multiply_action = QAction('&Multiply...', self)
+		self.multiply_action.triggered.connect(self.multiply_signals)
+		#self.derivative_action.setShortcut("Ctrl+D")
+		self.mathMenu.addAction(self.multiply_action)	
+
+		self.add_action = QAction('&Add...', self)
+		self.add_action.triggered.connect(self.add_signals)
+		#self.derivative_action.setShortcut("Ctrl+D")
+		self.mathMenu.addAction(self.add_action)	
+
+		self.subtract_action = QAction('&Subtract...', self)
+		self.subtract_action.triggered.connect(self.subtract_signals)
+		#self.derivative_action.setShortcut("Ctrl+D")
+		self.mathMenu.addAction(self.subtract_action)	
+
+
+		# self.onehot_action = QAction('&One hot to categorical...', self)
+		# self.onehot_action.triggered.connect(self.transform_one_hot_cols_to_categorical)
+		# #self.onehot_action.setShortcut("Ctrl+D")
+		# self.mathMenu.addAction(self.onehot_action)		
 
 	def collapse_pairs_in_neigh(self):
 
@@ -734,6 +858,96 @@ class TableUI(QMainWindow, Styles):
 			pos_group.to_csv(pos[0]+os.sep.join(['output', 'tables', f'trajectories_{self.population}.csv']), index=False)
 		print("Done...")
 
+	def divide_signals(self):
+
+		x = self.table_view.selectedIndexes()
+		col_idx = np.unique(np.array([l.column() for l in x]))
+		if isinstance(col_idx, (list, np.ndarray)):
+			cols = np.array(list(self.data.columns))
+			if len(col_idx)>0:
+				selected_col1 = str(cols[col_idx[0]])
+				if len(col_idx)>1:
+					selected_col2 = str(cols[col_idx[1]])
+				else:
+					selected_col2 = None
+			else:
+				selected_col1 = None
+				selected_col2 = None
+		else:
+			selected_col1 = None
+			selected_col2 = None
+
+		self.divWidget = OperationOnColsWidget(self, column1=selected_col1, column2=selected_col2, operation='divide')
+		self.divWidget.show()
+
+
+	def multiply_signals(self):
+
+		x = self.table_view.selectedIndexes()
+		col_idx = np.unique(np.array([l.column() for l in x]))
+		if isinstance(col_idx, (list, np.ndarray)):
+			cols = np.array(list(self.data.columns))
+			if len(col_idx)>0:
+				selected_col1 = str(cols[col_idx[0]])
+				if len(col_idx)>1:
+					selected_col2 = str(cols[col_idx[1]])
+				else:
+					selected_col2 = None
+			else:
+				selected_col1 = None
+				selected_col2 = None
+		else:
+			selected_col1 = None
+			selected_col2 = None
+
+		self.mulWidget = OperationOnColsWidget(self, column1=selected_col1, column2=selected_col2, operation='multiply')
+		self.mulWidget.show()
+
+	def add_signals(self):
+
+		x = self.table_view.selectedIndexes()
+		col_idx = np.unique(np.array([l.column() for l in x]))
+		if isinstance(col_idx, (list, np.ndarray)):
+			cols = np.array(list(self.data.columns))
+			if len(col_idx)>0:
+				selected_col1 = str(cols[col_idx[0]])
+				if len(col_idx)>1:
+					selected_col2 = str(cols[col_idx[1]])
+				else:
+					selected_col2 = None
+			else:
+				selected_col1 = None
+				selected_col2 = None
+		else:
+			selected_col1 = None
+			selected_col2 = None
+
+		self.addiWidget = OperationOnColsWidget(self, column1=selected_col1, column2=selected_col2, operation='add')
+		self.addiWidget.show()
+
+	def subtract_signals(self):
+
+		x = self.table_view.selectedIndexes()
+		col_idx = np.unique(np.array([l.column() for l in x]))
+		if isinstance(col_idx, (list, np.ndarray)):
+			cols = np.array(list(self.data.columns))
+			if len(col_idx)>0:
+				selected_col1 = str(cols[col_idx[0]])
+				if len(col_idx)>1:
+					selected_col2 = str(cols[col_idx[1]])
+				else:
+					selected_col2 = None
+			else:
+				selected_col1 = None
+				selected_col2 = None
+		else:
+			selected_col1 = None
+			selected_col2 = None
+
+		self.subWidget = OperationOnColsWidget(self, column1=selected_col1, column2=selected_col2, operation='subtract')
+		self.subWidget.show()
+
+
 	def differenciate_selected_feature(self):
 		
 		# check only one col selected and assert is numerical
@@ -742,9 +956,12 @@ class TableUI(QMainWindow, Styles):
 		
 		x = self.table_view.selectedIndexes()
 		col_idx = np.unique(np.array([l.column() for l in x]))
-		if col_idx!=0:
+		if isinstance(col_idx, (list, np.ndarray)):
 			cols = np.array(list(self.data.columns))
-			selected_col = str(cols[col_idx][0])
+			if len(col_idx)>0:
+				selected_col = str(cols[col_idx[0]])
+			else:
+				selected_col = None
 		else:
 			selected_col = None
 
@@ -759,9 +976,12 @@ class TableUI(QMainWindow, Styles):
 		
 		x = self.table_view.selectedIndexes()
 		col_idx = np.unique(np.array([l.column() for l in x]))
-		if col_idx!=0:
+		if isinstance(col_idx, (list, np.ndarray)):
 			cols = np.array(list(self.data.columns))
-			selected_col = str(cols[col_idx][0])
+			if len(col_idx)>0:
+				selected_col = str(cols[col_idx[0]])
+			else:
+				selected_col = None
 		else:
 			selected_col = None
 
@@ -772,9 +992,12 @@ class TableUI(QMainWindow, Styles):
 		
 		x = self.table_view.selectedIndexes()
 		col_idx = np.unique(np.array([l.column() for l in x]))
-		if col_idx!=0:
+		if isinstance(col_idx, (list, np.ndarray)):
 			cols = np.array(list(self.data.columns))
-			selected_col = str(cols[col_idx][0])
+			if len(col_idx)>0:
+				selected_col = str(cols[col_idx[0]])
+			else:
+				selected_col = None
 		else:
 			selected_col = None
 
@@ -790,9 +1013,12 @@ class TableUI(QMainWindow, Styles):
 		
 		x = self.table_view.selectedIndexes()
 		col_idx = np.unique(np.array([l.column() for l in x]))
-		if col_idx!=0:
+		if isinstance(col_idx, (list, np.ndarray)):
 			cols = np.array(list(self.data.columns))
-			selected_col = str(cols[col_idx][0])
+			if len(col_idx)>0:
+				selected_col = str(cols[col_idx[0]])
+			else:
+				selected_col = None
 		else:
 			selected_col = None
 
@@ -804,11 +1030,14 @@ class TableUI(QMainWindow, Styles):
 
 		x = self.table_view.selectedIndexes()
 		col_idx = np.unique(np.array([l.column() for l in x]))
-		if list(col_idx):
+		if isinstance(col_idx, (list, np.ndarray)):
 			cols = np.array(list(self.data.columns))
-			selected_cols = cols[col_idx]
+			if len(col_idx)>0:
+				selected_col = str(cols[col_idx[0]])
+			else:
+				selected_col = None
 		else:
-			selected_cols = None
+			selected_col = None
 
 		self.mergewidget = MergeOneHotWidget(self, selected_columns=selected_cols)
 		self.mergewidget.show()
