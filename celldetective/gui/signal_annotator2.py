@@ -1578,12 +1578,15 @@ class SignalAnnotator2(QMainWindow,Styles):
 
 		if self.reference_track_of_interest is not None and self.neighbor_track_of_interest is not None:
 			t0 = self.df_relative.loc[(self.df_relative['REFERENCE_ID'] == self.reference_track_of_interest)&(self.df_relative['NEIGHBOR_ID'] == self.neighbor_track_of_interest)&(self.df_relative['reference_population'] == self.reference_population)&(self.df_relative['neighbor_population'] == self.neighbor_population), self.pair_time_name].dropna().values
-			if t0!=[]:
-				t0=t0[0]
-				ymin,ymax = self.cell_ax.get_ylim()
-				self.line_dt.set_xdata([t0, t0])
-				self.line_dt.set_ydata([ymin,ymax])
-
+			try:
+				if t0!=[]:
+					t0=t0[0]
+					ymin,ymax = self.cell_ax.get_ylim()
+					self.line_dt.set_xdata([t0, t0])
+					self.line_dt.set_ydata([ymin,ymax])
+			except Exception as e:
+				print(e)
+			
 		self.cell_ax.legend()
 		self.cell_fcanvas.canvas.draw()
 
