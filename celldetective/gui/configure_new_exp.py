@@ -429,7 +429,7 @@ class ConfigNewExperiment(QMainWindow, Styles):
 		Write all user input parameters to a configuration file associated to an experiment.
 		"""
 
-		config = ConfigParser()
+		config = ConfigParser(interpolation=None)
 
 		# add a new section and some values
 		config.add_section('MovieSettings')

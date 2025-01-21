@@ -1794,7 +1794,7 @@ def ConfigSectionMap(path,section):
 
 	"""
 
-	Config = configparser.ConfigParser()
+	Config = configparser.ConfigParser(interpolation=None)
 	Config.read(path)
 	dict1 = {}
 	try:

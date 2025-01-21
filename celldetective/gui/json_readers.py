@@ -49,7 +49,7 @@ class ConfigEditor(QWidget, Styles):
         file_name = self.config_path
         #self.file_edit.setText(file_name)
 
-        config = configparser.ConfigParser()
+        config = configparser.ConfigParser(interpolation=None)
         config.read(file_name)
 
         # Create a layout for each section of the config file
@@ -93,11 +93,9 @@ class ConfigEditor(QWidget, Styles):
         # Save the configuration to the file
         file_name = self.config_path
             
-        config = configparser.ConfigParser()
+        config = configparser.ConfigParser(interpolation=None)
 
         # Update the values in the config object
-
-
 
         for key, (section, edit_box) in self.sections.items():
             if not config.has_section(section):
