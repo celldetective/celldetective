@@ -1,0 +1,1 @@
+{"channels": ["area"], "model_signal_length": 128, "label": "nucShrink", "normalize": true, "normalization_percentile": [true], "normalization_values": [[0.1, 99.99]], "normalization_clip": [true]}
