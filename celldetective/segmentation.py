@@ -229,7 +229,7 @@ def segment_from_thresholds(stack, target_channel=0, thresholds=None, view_on_na
 	return masks
 
 def segment_frame_from_thresholds(frame, target_channel=0, thresholds=None, equalize_reference=None,
-								  filters=None, marker_min_distance=30, marker_footprint_size=20, marker_footprint=None, feature_queries=None, channel_names=None, do_watershed=True):
+								  filters=None, marker_min_distance=30, marker_footprint_size=20, marker_footprint=None, feature_queries=None, channel_names=None, do_watershed=True, edge_exclusion=True, fill_holes=True):
 	
 	"""
 	Segments objects within a single frame based on intensity thresholds and optional image processing steps.
@@ -269,14 +269,19 @@ def segment_frame_from_thresholds(frame, target_channel=0, thresholds=None, equa
 
 	"""
 
+	if frame.ndim==2:
+		frame = frame[:,:,np.newaxis]
 	img = frame[:,:,target_channel]
 	img = interpolate_nan(img)
 	if equalize_reference is not None:
 		img = match_histograms(img, equalize_reference)
 	img_mc = frame.copy()
 	img = filter_image(img, filters=filters)
-	edge = estimate_unreliable_edge(filters)
-	binary_image = threshold_image(img, thresholds[0], thresholds[1], fill_holes=True, edge_exclusion=edge)
+	if edge_exclusion:
+		edge = estimate_unreliable_edge(filters)
+	else:
+		edge = None
+	binary_image = threshold_image(img, thresholds[0], thresholds[1], fill_holes=fill_holes, edge_exclusion=edge)
 	
 	if do_watershed:
 		coords,distance = identify_markers_from_binary(binary_image, marker_min_distance, footprint_size=marker_footprint_size, footprint=marker_footprint, return_edt=True)

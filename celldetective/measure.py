@@ -6,10 +6,10 @@ from sklearn.metrics import r2_score
 from scipy.optimize import curve_fit
 from scipy import ndimage
 from tqdm import tqdm
-from skimage.measure import regionprops_table
+#from skimage.measure import regionprops_table
 from functools import reduce
 from mahotas.features import haralick
-from scipy.ndimage import zoom
+from scipy.ndimage import zoom, find_objects
 import os
 import subprocess
 from math import ceil
@@ -20,15 +20,131 @@ from skimage.feature import blob_dog, blob_log
 from celldetective.utils import rename_intensity_column, create_patch_mask, remove_redundant_features, \
 	remove_trajectory_measurements, contour_of_instance_segmentation, extract_cols_from_query, step_function, interpolate_nan
 from celldetective.preprocessing import field_correction
-import celldetective.extra_properties as extra_properties
 from celldetective.extra_properties import *
 from inspect import getmembers, isfunction
 from skimage.morphology import disk
 from scipy.signal import find_peaks, peak_widths
 
+from skimage.measure._regionprops import RegionProperties, regionprops, _cached, _props_to_dict
 from celldetective.segmentation import filter_image
 
+
 abs_path = os.sep.join([os.path.split(os.path.dirname(os.path.realpath(__file__)))[0], 'celldetective'])
+
+
+class CustomRegionProps(RegionProperties):
+
+	"""
+	From https://github.com/scikit-image/scikit-image/blob/main/skimage/measure/_regionprops.py with a modification to not mask the intensity image itself before measurements
+	"""
+
+	def __init__(self, *args, **kwargs):
+		super().__init__(*args, **kwargs)
+
+	@property
+	@_cached
+	def image_intensity(self):
+		if self._intensity_image is None:
+			raise AttributeError('No intensity image specified.')
+		image = (
+			self.image
+			if not self._multichannel
+			else np.expand_dims(self.image, self._ndim)
+		)
+		return self._intensity_image[self.slice]
+
+def regionprops(label_image, intensity_image=None,cache=True,*,extra_properties=None,spacing=None,offset=None,):
+
+	"""
+	From https://github.com/scikit-image/scikit-image/blob/main/skimage/measure/_regionprops.py with a modification to use CustomRegionProps
+	"""
+	
+	if label_image.ndim not in (2, 3):
+		raise TypeError('Only 2-D and 3-D images supported.')
+	
+	if not np.issubdtype(label_image.dtype, np.integer):
+		if np.issubdtype(label_image.dtype, bool):
+			raise TypeError(
+				'Non-integer image types are ambiguous: '
+				'use skimage.measure.label to label the connected '
+				'components of label_image, '
+				'or label_image.astype(np.uint8) to interpret '
+				'the True values as a single label.'
+			)
+		else:
+			raise TypeError('Non-integer label_image types are ambiguous')
+	
+	if offset is None:
+		offset_arr = np.zeros((label_image.ndim,), dtype=int)
+	else:
+		offset_arr = np.asarray(offset)
+		if offset_arr.ndim != 1 or offset_arr.size != label_image.ndim:
+			raise ValueError(
+				'Offset should be an array-like of integers '
+				'of shape (label_image.ndim,); '
+				f'{offset} was provided.'
+			)
+	
+	regions = []
+	
+	objects = find_objects(label_image)
+	for i, sl in enumerate(objects):
+		if sl is None:
+			continue
+	
+		label = i + 1
+	
+		props = CustomRegionProps(
+			sl,
+			label,
+			label_image,
+			intensity_image,
+			cache,
+			spacing=spacing,
+			extra_properties=extra_properties,
+			offset=offset_arr,
+		)
+		regions.append(props)
+	
+	return regions
+
+
+def regionprops_table(label_image,intensity_image=None,properties=('label', 'bbox'),*,cache=True,separator='-',extra_properties=None,spacing=None,):
+	
+	"""
+	From https://github.com/scikit-image/scikit-image/blob/main/skimage/measure/_regionprops.py
+	"""
+	regions = regionprops(
+		label_image,
+		intensity_image=intensity_image,
+		cache=cache,
+		extra_properties=extra_properties,
+		spacing=spacing,
+	)
+	if extra_properties is not None:
+		properties = list(properties) + [prop.__name__ for prop in extra_properties]
+	if len(regions) == 0:
+		ndim = label_image.ndim
+		label_image = np.zeros((3,) * ndim, dtype=int)
+		label_image[(1,) * ndim] = 1
+		if intensity_image is not None:
+			intensity_image = np.zeros(
+				label_image.shape + intensity_image.shape[ndim:],
+				dtype=intensity_image.dtype,
+			)
+		regions = regionprops(
+			label_image,
+			intensity_image=intensity_image,
+			cache=cache,
+			extra_properties=extra_properties,
+			spacing=spacing,
+		)
+
+		out_d = _props_to_dict(regions, properties=properties, separator=separator)
+		return {k: v[:0] for k, v in out_d.items()}
+
+	return _props_to_dict(regions, properties=properties, separator=separator)
+
 
 def measure(stack=None, labels=None, trajectories=None, channel_names=None,
 			features=None, intensity_measurement_radii=None, isotropic_operations=['mean'], border_distances=None,
@@ -361,20 +477,22 @@ def measure_features(img, label, features=['area', 'intensity_mean'], channels=N
 				else:
 					corrected_image = field_correction(img[:,:,ind].copy(), threshold_on_std=norm['threshold_on_std'], operation=norm['operation'], model=norm['model'], clip=norm['clip'])
 					img[:, :, ind] = corrected_image
+	
+	import celldetective.extra_properties as extra_props
 
-	extra_props = getmembers(extra_properties, isfunction)
-	extra_props = [extra_props[i][0] for i in range(len(extra_props))]
+	extra = getmembers(extra_props, isfunction)
+	extra = [extra[i][0] for i in range(len(extra))]
 
 	extra_props_list = []
 	feats = features.copy()
 	for f in features:
-		if f in extra_props:
+		if f in extra:
 			feats.remove(f)
-			extra_props_list.append(getattr(extra_properties, f))
+			extra_props_list.append(getattr(extra_props, f))
 
 	# Add intensity nan mean if need to measure mean intensities
 	if measure_mean_intensities:
-		extra_props_list.append(getattr(extra_properties, 'intensity_nanmean'))
+		extra_props_list.append(getattr(extra_props, 'intensity_nanmean'))
 
 	if len(extra_props_list) == 0:
 		extra_props_list = None
@@ -395,8 +513,8 @@ def measure_features(img, label, features=['area', 'intensity_mean'], channels=N
 		intensity_features = list(np.array(features)[np.array(intensity_features_test)])
 		intensity_extra = []
 		for s in intensity_features:
-			if s in extra_props:
-				intensity_extra.append(getattr(extra_properties, s))
+			if s in extra:
+				intensity_extra.append(getattr(extra_props, s))
 				intensity_features.remove(s)
 
 		if len(intensity_features) == 0:
@@ -407,7 +525,7 @@ def measure_features(img, label, features=['area', 'intensity_mean'], channels=N
 
 		new_intensity_features = intensity_features.copy()
 		for int_feat in intensity_features:
-			if int_feat in extra_props:
+			if int_feat in extra:
 				new_intensity_features.remove(int_feat)
 		intensity_features = new_intensity_features
 
@@ -832,16 +950,17 @@ def local_normalisation(image, labels, background_intensity, measurement='intens
 
 def normalise_by_cell(image, labels, distance=5, model='median', operation='subtract', clip=False):
 
+	import celldetective.extra_properties as extra_props
 
 	border = contour_of_instance_segmentation(label=labels, distance=distance * (-1))
 	if model == 'mean':
 		measurement = 'intensity_nanmean'
-		extra_props = [getattr(extra_properties, measurement)]
+		extra_props = [getattr(extra_props, measurement)]
 		background_intensity = regionprops_table(intensity_image=image, label_image=border,
 												 extra_properties=extra_props)
 	elif model == 'median':
 		measurement = 'intensity_median'
-		extra_props = [getattr(extra_properties, measurement)]
+		extra_props = [getattr(extra_props, measurement)]
 		background_intensity = regionprops_table(intensity_image=image, label_image=border,
 												 extra_properties=extra_props)
 
