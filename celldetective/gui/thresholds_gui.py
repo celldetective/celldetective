@@ -861,11 +861,12 @@ class ThresholdConfigWizard(QMainWindow, Styles):
 
 		filters = threshold_instructions['filters']
 		items_to_add = [f[0] + '_filter' for f in filters]
-		self.filters_qlist.list_widget.clear()
-		self.filters_qlist.list_widget.addItems(items_to_add)
+		self.preprocessing.list.list_widget.clear()
+		self.preprocessing.list.list_widget.addItems(items_to_add)
 		self.preprocessing.list.items = filters
 
-		self.apply_filters_btn.click()
+		self.preprocessing.apply_btn.click()
+		#self.apply_filters_btn.click()
 
 		thresholds = threshold_instructions['thresholds']
 		self.threshold_slider.setValue(thresholds)
