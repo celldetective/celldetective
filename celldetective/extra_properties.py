@@ -27,22 +27,91 @@ from scipy.ndimage import distance_transform_edt, center_of_mass
 from scipy.spatial.distance import euclidean
 from celldetective.utils import interpolate_nan, contour_of_instance_segmentation
 
+from celldetective.segmentation import segment_frame_from_thresholds
+
 # Percentiles
 
-def custom_area(regionmask):
-	return np.sum(regionmask)
+def adhesion_threshold_area(regionmask, intensity_image, target_channel='adhesion_channel'):
 
-def intensity_area_under_one(regionmask, intensity_image):
+	instructions = {
+		"thresholds": [
+			0.05357171045135043,
+			2.0
+		],
+		"filters": [
+			[
+				"subtract",
+				1
+			],
+			[
+				"abs",
+				2
+			],
+			[
+				"gauss",
+				1
+			]
+		],
+		"marker_min_distance": 1, #be careful to diminish these!
+		"marker_footprint_size": 1, # same!
+		"feature_queries": [], #no need unless want to remove small unconnected detections
+	}
 	
-	subregion = regionmask[intensity_image<1]
+	lbl = segment_frame_from_thresholds(intensity_image, fill_holes=True, equalize_reference=None, edge_exclusion=False, **instructions)
+	lbl[lbl>0] = 1 # instance to binary
+	lbl[~regionmask] = 0 # make sure we don't measure stuff outside cell
+
+	return np.sum(lbl)
+
+
+def weird_ricm_measurement(regionmask, intensity_image, target_channel='adhesion_channel'):
+	
+	instructions = {
+		"thresholds": [
+			0.05357171045135043,
+			2.0
+		],
+		"filters": [
+			[
+				"subtract",
+				1
+			],
+			[
+				"abs",
+				2
+			],
+			[
+				"gauss",
+				1
+			]
+		],
+		"marker_min_distance": 1,
+		"marker_footprint_size": 1,
+		"feature_queries": [],
+	}
+
+	if intensity_image.ndim==2:
+		intensity_image = intensity_image[:,:,np.newaxis]
+	
+	lbl = segment_frame_from_thresholds(intensity_image, equalize_reference=None, edge_exclusion=False, **instructions)
+	lbl[lbl>0] = 1 # instance to binary
+	lbl[~regionmask] = 0 # make sure we don't measure stuff outside cell
+
+	return np.sum(lbl)
+
+
+def intensity_area_under_one(regionmask, intensity_image, target_channel='adhesion_channel'):
+	
+	subregion = (intensity_image < 1)*regionmask
+
 	if len(subregion)>0:
 		return np.sum(subregion)
 	else:
 		return 0.0
 
-def intensity_fraction_of_area_under_one(regionmask, intensity_image):
-
-	subregion = regionmask[intensity_image<1]
+def intensity_fraction_of_area_under_one(regionmask, intensity_image, target_channel='adhesion_channel'):
+   
+	subregion = (intensity_image < 1)*regionmask
 	area = np.sum(regionmask)
 
 	if len(subregion) > 0:

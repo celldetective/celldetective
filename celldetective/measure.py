@@ -9,7 +9,7 @@ from tqdm import tqdm
 #from skimage.measure import regionprops_table
 from functools import reduce
 from mahotas.features import haralick
-from scipy.ndimage import zoom, find_objects
+from scipy.ndimage import zoom
 import os
 import subprocess
 from math import ceil
@@ -18,132 +18,18 @@ from skimage.draw import disk as dsk
 from skimage.feature import blob_dog, blob_log
 
 from celldetective.utils import rename_intensity_column, create_patch_mask, remove_redundant_features, \
-	remove_trajectory_measurements, contour_of_instance_segmentation, extract_cols_from_query, step_function, interpolate_nan
+	remove_trajectory_measurements, contour_of_instance_segmentation, extract_cols_from_query, step_function, interpolate_nan, _remove_invalid_cols
 from celldetective.preprocessing import field_correction
 from celldetective.extra_properties import *
 from inspect import getmembers, isfunction
 from skimage.morphology import disk
 from scipy.signal import find_peaks, peak_widths
 
-from skimage.measure._regionprops import RegionProperties, regionprops, _cached, _props_to_dict
 from celldetective.segmentation import filter_image
-
+from celldetective.regionprops import regionprops_table
 
 abs_path = os.sep.join([os.path.split(os.path.dirname(os.path.realpath(__file__)))[0], 'celldetective'])
 
-
-class CustomRegionProps(RegionProperties):
-
-	"""
-	From https://github.com/scikit-image/scikit-image/blob/main/skimage/measure/_regionprops.py with a modification to not mask the intensity image itself before measurements
-	"""
-
-	def __init__(self, *args, **kwargs):
-		super().__init__(*args, **kwargs)
-
-	@property
-	@_cached
-	def image_intensity(self):
-		if self._intensity_image is None:
-			raise AttributeError('No intensity image specified.')
-		image = (
-			self.image
-			if not self._multichannel
-			else np.expand_dims(self.image, self._ndim)
-		)
-		return self._intensity_image[self.slice]
-
-def regionprops(label_image, intensity_image=None,cache=True,*,extra_properties=None,spacing=None,offset=None,):
-
-	"""
-	From https://github.com/scikit-image/scikit-image/blob/main/skimage/measure/_regionprops.py with a modification to use CustomRegionProps
-	"""
-	
-	if label_image.ndim not in (2, 3):
-		raise TypeError('Only 2-D and 3-D images supported.')
-	
-	if not np.issubdtype(label_image.dtype, np.integer):
-		if np.issubdtype(label_image.dtype, bool):
-			raise TypeError(
-				'Non-integer image types are ambiguous: '
-				'use skimage.measure.label to label the connected '
-				'components of label_image, '
-				'or label_image.astype(np.uint8) to interpret '
-				'the True values as a single label.'
-			)
-		else:
-			raise TypeError('Non-integer label_image types are ambiguous')
-	
-	if offset is None:
-		offset_arr = np.zeros((label_image.ndim,), dtype=int)
-	else:
-		offset_arr = np.asarray(offset)
-		if offset_arr.ndim != 1 or offset_arr.size != label_image.ndim:
-			raise ValueError(
-				'Offset should be an array-like of integers '
-				'of shape (label_image.ndim,); '
-				f'{offset} was provided.'
-			)
-	
-	regions = []
-	
-	objects = find_objects(label_image)
-	for i, sl in enumerate(objects):
-		if sl is None:
-			continue
-	
-		label = i + 1
-	
-		props = CustomRegionProps(
-			sl,
-			label,
-			label_image,
-			intensity_image,
-			cache,
-			spacing=spacing,
-			extra_properties=extra_properties,
-			offset=offset_arr,
-		)
-		regions.append(props)
-	
-	return regions
-
-
-def regionprops_table(label_image,intensity_image=None,properties=('label', 'bbox'),*,cache=True,separator='-',extra_properties=None,spacing=None,):
-	
-	"""
-	From https://github.com/scikit-image/scikit-image/blob/main/skimage/measure/_regionprops.py
-	"""
-	regions = regionprops(
-		label_image,
-		intensity_image=intensity_image,
-		cache=cache,
-		extra_properties=extra_properties,
-		spacing=spacing,
-	)
-	if extra_properties is not None:
-		properties = list(properties) + [prop.__name__ for prop in extra_properties]
-	if len(regions) == 0:
-		ndim = label_image.ndim
-		label_image = np.zeros((3,) * ndim, dtype=int)
-		label_image[(1,) * ndim] = 1
-		if intensity_image is not None:
-			intensity_image = np.zeros(
-				label_image.shape + intensity_image.shape[ndim:],
-				dtype=intensity_image.dtype,
-			)
-		regions = regionprops(
-			label_image,
-			intensity_image=intensity_image,
-			cache=cache,
-			extra_properties=extra_properties,
-			spacing=spacing,
-		)
-
-		out_d = _props_to_dict(regions, properties=properties, separator=separator)
-		return {k: v[:0] for k, v in out_d.items()}
-
-	return _props_to_dict(regions, properties=properties, separator=separator)
 
 
 def measure(stack=None, labels=None, trajectories=None, channel_names=None,
@@ -328,6 +214,7 @@ def measure(stack=None, labels=None, trajectories=None, channel_names=None,
 		measurements['ID'] = np.arange(len(df))
 
 	measurements = measurements.reset_index(drop=True)
+	measurements = _remove_invalid_cols(measurements)
 
 	return measurements
 
@@ -499,7 +386,7 @@ def measure_features(img, label, features=['area', 'intensity_mean'], channels=N
 	else:
 		extra_props_list = tuple(extra_props_list)
 
-	props = regionprops_table(label, intensity_image=img, properties=feats, extra_properties=extra_props_list)
+	props = regionprops_table(label, intensity_image=img, properties=feats, extra_properties=extra_props_list, channel_names=channels)
 	df_props = pd.DataFrame(props)
 	if spot_detection is not None:
 		if df_spots is not None:
@@ -531,7 +418,7 @@ def measure_features(img, label, features=['area', 'intensity_mean'], channels=N
 
 		if (isinstance(border_dist, int) or isinstance(border_dist, float)):
 			border_label = contour_of_instance_segmentation(label, border_dist)
-			props_border = regionprops_table(border_label, intensity_image=img, properties=intensity_features)
+			props_border = regionprops_table(border_label, intensity_image=img, properties=intensity_features, channel_names=channels)
 			df_props_border = pd.DataFrame(props_border)
 			for c in df_props_border.columns:
 				if 'intensity' in c:
@@ -541,7 +428,7 @@ def measure_features(img, label, features=['area', 'intensity_mean'], channels=N
 			df_props_border_list = []
 			for d in border_dist:
 				border_label = contour_of_instance_segmentation(label, d)
-				props_border = regionprops_table(border_label, intensity_image=img, properties=intensity_features)
+				props_border = regionprops_table(border_label, intensity_image=img, properties=intensity_features, channel_names=channels)
 				df_props_border_d = pd.DataFrame(props_border)
 				for c in df_props_border_d.columns:
 					if 'intensity' in c:
