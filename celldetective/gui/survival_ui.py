@@ -153,7 +153,10 @@ class ConfigSurvival(QWidget, Styles):
 		all_cms = list(colormaps)
 		for cm in all_cms:
 			if hasattr(matplotlib.cm, str(cm).lower()):
-				self.cbs[-1].addColormap(cm.lower())
+				try:
+					self.cbs[-1].addColormap(cm.lower())
+				except:
+					pass
 			#try:
 			# 	self.cbs[-1].addColormap(cm)
 			# except:
