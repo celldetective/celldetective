@@ -1084,9 +1084,11 @@ def mask_edges(binary_mask, border_size):
 	return binary_mask
 
 def demangle_column_name(name):
-	if name.startswith("BACKTICK_QUOTED_STRING_"):
+	if name.startswith("BACKTICK_QUOTED_STRING_") and not '_MINUS_' in name:
 		# Unquote backtick-quoted string.
 		return name[len("BACKTICK_QUOTED_STRING_"):].replace("_DOT_", ".").replace("_SLASH_", "/")
+	elif name.startswith("BACKTICK_QUOTED_STRING_") and '_MINUS_' in name:
+		return name[len("BACKTICK_QUOTED_STRING_"):].replace("_DOT_", ".").replace("_SLASH_", "/").replace('_MINUS_','-')
 	return name
 
 def extract_cols_from_query(query: str):

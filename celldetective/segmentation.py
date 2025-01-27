@@ -272,15 +272,20 @@ def segment_frame_from_thresholds(frame, target_channel=0, thresholds=None, equa
 	if frame.ndim==2:
 		frame = frame[:,:,np.newaxis]
 	img = frame[:,:,target_channel]
-	img = interpolate_nan(img)
+
+	if np.any(img!=img):
+		img = interpolate_nan(img)
+
 	if equalize_reference is not None:
 		img = match_histograms(img, equalize_reference)
+
 	img_mc = frame.copy()
 	img = filter_image(img, filters=filters)
 	if edge_exclusion:
 		edge = estimate_unreliable_edge(filters)
 	else:
 		edge = None
+
 	binary_image = threshold_image(img, thresholds[0], thresholds[1], fill_holes=fill_holes, edge_exclusion=edge)
 	
 	if do_watershed:
