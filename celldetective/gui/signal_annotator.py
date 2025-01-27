@@ -7,7 +7,7 @@ from celldetective.gui.gui_utils import center_window, color_from_state
 from superqt import QLabeledDoubleSlider, QLabeledDoubleRangeSlider, QSearchableComboBox
 from celldetective.utils import extract_experiment_channels, get_software_location, _get_img_num_per_channel
 from celldetective.io import auto_load_number_of_frames, load_frames, \
-	load_napari_data, get_experiment_metadata
+	load_napari_data, get_experiment_metadata, get_experiment_labels
 from celldetective.gui.gui_utils import FigureCanvas, color_from_status, color_from_class, ExportPlotBtn
 import json
 import numpy as np
@@ -779,8 +779,8 @@ class SignalAnnotator(QMainWindow, Styles):
 					self.loc_idx.append(indices[0])
 
 			self.MinMaxScaler = MinMaxScaler()
-			#self.columns_to_rescale = list(self.df_tracks.columns)
-			self.columns_to_rescale = self.df_tracks.select_dtypes(exclude=['object']).columns
+			self.columns_to_rescale = list(self.df_tracks.columns)
+			#self.columns_to_rescale = self.df_tracks.select_dtypes(exclude=['object']).columns
 
 			# is_number = np.vectorize(lambda x: np.issubdtype(x, np.number))
 			# is_number_test = is_number(self.df_tracks.dtypes)
@@ -789,18 +789,25 @@ class SignalAnnotator(QMainWindow, Styles):
 
 			cols_to_remove = ['status', 'status_color', 'class_color', 'TRACK_ID', 'FRAME', 'x_anim', 'y_anim', 't',
 							  'state', 'generation', 'root', 'parent', 'class_id', 'class', 't0', 'POSITION_X',
-							  'POSITION_Y', 'position', 'well', 'well_index', 'well_name', 'pos_name', 'index',
-							  'concentration', 'cell_type', 'antibody', 'pharmaceutical_agent'] + self.class_cols
+							  'POSITION_Y', 'position', 'well', 'well_index', 'well_name', 'pos_name', 'index',] + self.class_cols
+			
 			meta = get_experiment_metadata(self.exp_dir)
 			if meta is not None:
 				keys = list(meta.keys())
 				cols_to_remove.extend(keys)
 
+			labels = get_experiment_labels(self.exp_dir)
+			if labels is not None:
+				keys = list(labels.keys())
+				cols_to_remove.extend(labels)
+
 			cols = np.array(list(self.df_tracks.columns))
 			time_cols = np.array([c.startswith('t_') for c in cols])
 			time_cols = list(cols[time_cols])
 			cols_to_remove += time_cols
-			cols_to_remove.extend(self.df_tracks.select_dtypes(include=['object']).columns)
+			#cols_to_remove.extend(self.df_tracks.select_dtypes(include=['object']).columns)
+
+			print(f"{cols_to_remove=}")
 
 			for tr in cols_to_remove:
 				try:
