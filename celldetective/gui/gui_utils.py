@@ -575,10 +575,10 @@ class FeatureChoice(QWidget, Styles):
 								 "intensity_min",
 								 ]
 
-		extra_props = getmembers(extra_properties, isfunction)
-		extra_props = [extra_props[i][0] for i in range(len(extra_props))]
-		if len(extra_props) > 0:
-			standard_measurements.extend(extra_props)
+		members = getmembers(extra_properties, isfunction)
+		for o in members:
+			if isfunction(o[1]) and o[1].__module__=="celldetective.extra_properties":
+				standard_measurements.append(o[0])
 
 		self.combo_box.addItems(standard_measurements)
 
