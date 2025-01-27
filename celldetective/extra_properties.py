@@ -29,14 +29,13 @@ from celldetective.utils import interpolate_nan, contour_of_instance_segmentatio
 
 from celldetective.segmentation import segment_frame_from_thresholds
 
-# Percentiles
 
-def adhesion_threshold_area(regionmask, intensity_image, target_channel='adhesion_channel'):
+def area_detected_in_ricm(regionmask, intensity_image, target_channel='adhesion_channel'):
 
 	instructions = {
 		"thresholds": [
-			0.05357171045135043,
-			2.0
+			0.02,
+			1000
 		],
 		"filters": [
 			[
@@ -49,27 +48,28 @@ def adhesion_threshold_area(regionmask, intensity_image, target_channel='adhesio
 			],
 			[
 				"gauss",
-				1
+				0.8
 			]
 		],
-		"marker_min_distance": 1, #be careful to diminish these!
-		"marker_footprint_size": 1, # same!
-		"feature_queries": [], #no need unless want to remove small unconnected detections
+		#"marker_min_distance": 1,
+		#"marker_footprint_size": 10,
+		"feature_queries": [
+			"eccentricity > 0.99 or area < 60"
+		],
 	}
 	
-	lbl = segment_frame_from_thresholds(intensity_image, fill_holes=True, equalize_reference=None, edge_exclusion=False, **instructions)
+	lbl = segment_frame_from_thresholds(intensity_image, fill_holes=True, do_watershed=False, equalize_reference=None, edge_exclusion=False, **instructions)
 	lbl[lbl>0] = 1 # instance to binary
 	lbl[~regionmask] = 0 # make sure we don't measure stuff outside cell
 
 	return np.sum(lbl)
 
+def fraction_of_area_detected_in_ricm(regionmask, intensity_image, target_channel='adhesion_channel'):
 
-def weird_ricm_measurement(regionmask, intensity_image, target_channel='adhesion_channel'):
-	
 	instructions = {
 		"thresholds": [
-			0.05357171045135043,
-			2.0
+			0.02,
+			1000
 		],
 		"filters": [
 			[
@@ -82,42 +82,20 @@ def weird_ricm_measurement(regionmask, intensity_image, target_channel='adhesion
 			],
 			[
 				"gauss",
-				1
+				0.8
 			]
 		],
-		"marker_min_distance": 1,
-		"marker_footprint_size": 1,
-		"feature_queries": [],
+		"feature_queries": [
+			"eccentricity > 0.99 or area < 60"
+		],
 	}
-
-	if intensity_image.ndim==2:
-		intensity_image = intensity_image[:,:,np.newaxis]
 	
-	lbl = segment_frame_from_thresholds(intensity_image, equalize_reference=None, edge_exclusion=False, **instructions)
+	lbl = segment_frame_from_thresholds(intensity_image, do_watershed=False, fill_holes=True, equalize_reference=None, edge_exclusion=False, **instructions)
 	lbl[lbl>0] = 1 # instance to binary
 	lbl[~regionmask] = 0 # make sure we don't measure stuff outside cell
-
-	return np.sum(lbl)
-
-
-def intensity_area_under_one(regionmask, intensity_image, target_channel='adhesion_channel'):
 	
-	subregion = (intensity_image < 1)*regionmask
+	return np.sum(lbl) / np.sum(regionmask)
 
-	if len(subregion)>0:
-		return np.sum(subregion)
-	else:
-		return 0.0
-
-def intensity_fraction_of_area_under_one(regionmask, intensity_image, target_channel='adhesion_channel'):
-   
-	subregion = (intensity_image < 1)*regionmask
-	area = np.sum(regionmask)
-
-	if len(subregion) > 0:
-		return float(np.sum(subregion)) / float(area)
-	else:
-		return 0.0
 
 def intensity_percentile_ninety_nine(regionmask, intensity_image):
 	return np.nanpercentile(intensity_image[regionmask],99)
