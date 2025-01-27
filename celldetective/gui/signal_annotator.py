@@ -779,7 +779,8 @@ class SignalAnnotator(QMainWindow, Styles):
 					self.loc_idx.append(indices[0])
 
 			self.MinMaxScaler = MinMaxScaler()
-			self.columns_to_rescale = list(self.df_tracks.columns)
+			#self.columns_to_rescale = list(self.df_tracks.columns)
+			self.columns_to_rescale = self.df_tracks.select_dtypes(exclude=['object']).columns
 
 			# is_number = np.vectorize(lambda x: np.issubdtype(x, np.number))
 			# is_number_test = is_number(self.df_tracks.dtypes)
@@ -799,6 +800,7 @@ class SignalAnnotator(QMainWindow, Styles):
 			time_cols = np.array([c.startswith('t_') for c in cols])
 			time_cols = list(cols[time_cols])
 			cols_to_remove += time_cols
+			cols_to_remove.extend(self.df_tracks.select_dtypes(include=['object']).columns)
 
 			for tr in cols_to_remove:
 				try:
