@@ -86,9 +86,6 @@ def fraction_of_area_detected_in_ricm(regionmask, intensity_image, target_channe
 				0.8
 			]
 		],
-		"feature_queries": [
-			"eccentricity > 0.99 or area < 60"
-		],
 	}
 	
 	lbl = segment_frame_from_thresholds(intensity_image, do_watershed=False, fill_holes=True, equalize_reference=None, edge_exclusion=False, **instructions)
