@@ -181,7 +181,7 @@ class ThresholdConfigWizard(QMainWindow, Styles):
 		self.threshold_slider.setSingleStep(0.00001)
 		self.threshold_slider.setTickInterval(0.00001)
 		self.threshold_slider.setOrientation(1)
-		self.threshold_slider.setDecimals(3)
+		self.threshold_slider.setDecimals(5)
 		self.threshold_slider.setRange(np.amin(self.img[self.img==self.img]), np.amax(self.img[self.img==self.img]))
 		self.threshold_slider.setValue([np.percentile(self.img.flatten(), 90), np.amax(self.img)])
 		self.threshold_slider.valueChanged.connect(self.threshold_changed)
