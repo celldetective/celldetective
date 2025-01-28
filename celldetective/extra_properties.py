@@ -26,43 +26,44 @@ import numpy as np
 from scipy.ndimage import distance_transform_edt, center_of_mass
 from scipy.spatial.distance import euclidean
 from celldetective.utils import interpolate_nan, contour_of_instance_segmentation
-
+import skimage.measure as skm
+from stardist import fill_label_holes
 from celldetective.segmentation import segment_frame_from_thresholds
 
 
-def area_detected_in_ricm(regionmask, intensity_image, target_channel='adhesion_channel'):
+# def area_detected_in_ricm(regionmask, intensity_image, target_channel='adhesion_channel'):
 
-	instructions = {
-		"thresholds": [
-			0.02,
-			1000
-		],
-		"filters": [
-			[
-				"subtract",
-				1
-			],
-			[
-				"abs",
-				2
-			],
-			[
-				"gauss",
-				0.8
-			]
-		],
-		#"marker_min_distance": 1,
-		#"marker_footprint_size": 10,
-		"feature_queries": [
-			"eccentricity > 0.99 or area < 60"
-		],
-	}
+# 	instructions = {
+# 		"thresholds": [
+# 			0.02,
+# 			1000
+# 		],
+# 		"filters": [
+# 			[
+# 				"subtract",
+# 				1
+# 			],
+# 			[
+# 				"abs",
+# 				2
+# 			],
+# 			[
+# 				"gauss",
+# 				0.8
+# 			]
+# 		],
+# 		#"marker_min_distance": 1,
+# 		#"marker_footprint_size": 10,
+# 		"feature_queries": [
+# 			"eccentricity > 0.99 or area < 60"
+# 		],
+# 	}
 	
-	lbl = segment_frame_from_thresholds(intensity_image, fill_holes=True, do_watershed=False, equalize_reference=None, edge_exclusion=False, **instructions)
-	lbl[lbl>0] = 1 # instance to binary
-	lbl[~regionmask] = 0 # make sure we don't measure stuff outside cell
+# 	lbl = segment_frame_from_thresholds(intensity_image, fill_holes=True, do_watershed=False, equalize_reference=None, edge_exclusion=False, **instructions)
+# 	lbl[lbl>0] = 1 # instance to binary
+# 	lbl[~regionmask] = 0 # make sure we don't measure stuff outside cell
 
-	return np.sum(lbl)
+# 	return np.sum(lbl)
 
 def fraction_of_area_detected_in_ricm(regionmask, intensity_image, target_channel='adhesion_channel'):
 
@@ -94,7 +95,18 @@ def fraction_of_area_detected_in_ricm(regionmask, intensity_image, target_channe
 	lbl[lbl>0] = 1 # instance to binary
 	lbl[~regionmask] = 0 # make sure we don't measure stuff outside cell
 	
-	return np.sum(lbl) / np.sum(regionmask)
+	return float(np.sum(lbl)) / float(np.sum(regionmask))
+
+
+def fraction_of_area_dark(regionmask, intensity_image, target_channel='adhesion_channel', fill_holes=True): #, target_channel='adhesion_channel'
+	
+	subregion = (intensity_image < 0.95)*regionmask # under one, under 0.8, under 0.6, whatever value!
+	if fill_holes:
+		subregion = skm.label(subregion, connectivity=2, background=0)
+		subregion = fill_label_holes(subregion)
+		subregion[subregion>0] = 1
+	
+	return float(np.sum(subregion)) / float(np.sum(regionmask))
 
 
 def intensity_percentile_ninety_nine(regionmask, intensity_image):
