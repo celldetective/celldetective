@@ -5,14 +5,14 @@ import numpy as np
 
 def gauss_filter(img, sigma, interpolate=True, *kwargs):
 
-	if interpolate:
+	if np.any(img!=img) and interpolate:
 		img = interpolate_nan(img.astype(float))
 
 	return snd.gaussian_filter(img.astype(float), sigma, *kwargs)
 
 def median_filter(img, size, interpolate=True, *kwargs):
 
-	if interpolate:
+	if np.any(img!=img) and interpolate:
 		img = interpolate_nan(img.astype(float))
 
 	size = int(size)
@@ -20,19 +20,19 @@ def median_filter(img, size, interpolate=True, *kwargs):
 	return snd.median_filter(img, size, *kwargs)
 
 def maximum_filter(img, size, interpolate=True, *kwargs):
-	if interpolate:
+	if np.any(img!=img) and interpolate:
 		img = interpolate_nan(img.astype(float))
 
 	return snd.maximum_filter(img.astype(float), size, *kwargs)
 
 def minimum_filter(img, size, interpolate=True, *kwargs):
-	if interpolate:
+	if np.any(img!=img) and interpolate:
 		img = interpolate_nan(img.astype(float))
 
 	return snd.minimum_filter(img.astype(float), size, *kwargs)
 
 def percentile_filter(img, percentile, size, interpolate=True, *kwargs):
-	if interpolate:
+	if np.any(img!=img) and interpolate:
 		img = interpolate_nan(img.astype(float))
 
 	return snd.percentile_filter(img.astype(float), percentile, size, *kwargs)
@@ -44,7 +44,7 @@ def abs_filter(img, *kwargs):
 	return np.abs(img)
 
 def ln_filter(img, interpolate=True, *kwargs):
-	if interpolate:
+	if np.any(img!=img) and interpolate:
 		img = interpolate_nan(img.astype(float))
 
 	img[np.where(img>0.)] = np.log(img[np.where(img>0.)])
@@ -54,7 +54,7 @@ def ln_filter(img, interpolate=True, *kwargs):
 
 def variance_filter(img, size, interpolate=True):
 
-	if interpolate:
+	if np.any(img!=img) and interpolate:
 		img = interpolate_nan(img.astype(float))
 
 	size = int(size)
@@ -67,7 +67,7 @@ def variance_filter(img, size, interpolate=True):
 
 def std_filter(img, size, interpolate=True):
 
-	if interpolate:
+	if np.any(img!=img) and interpolate:
 		img = interpolate_nan(img.astype(float))
 	
 	size = int(size)
@@ -84,13 +84,13 @@ def std_filter(img, size, interpolate=True):
 	return img
 
 def laplace_filter(img, output=float, interpolate=True, *kwargs):
-	if interpolate:
+	if np.any(img!=img) and interpolate:
 		img = interpolate_nan(img.astype(float))
 	return snd.laplace(img.astype(float), *kwargs)
 
 def dog_filter(img, blob_size=None, sigma_low=1, sigma_high=2, interpolate=True, *kwargs):
 	
-	if interpolate:
+	if np.any(img!=img) and interpolate:
 		img = interpolate_nan(img.astype(float))
 	if blob_size is not None:
 		sigma_low = 1.0 / (1.0 + np.sqrt(2)) * blob_size
@@ -121,7 +121,7 @@ def sauvola_filter(img, *kwargs):
 
 def log_filter(img, blob_size=None, sigma=1, interpolate=True, *kwargs):
 
-	if interpolate:
+	if np.any(img!=img) and interpolate:
 		img = interpolate_nan(img.astype(float))
 	if blob_size is not None:
 		sigma_low = 1.0 / (1.0 + np.sqrt(2)) * blob_size
@@ -131,7 +131,7 @@ def log_filter(img, blob_size=None, sigma=1, interpolate=True, *kwargs):
 
 def tophat_filter(img, size, connectivity=4, interpolate=True, *kwargs):
 	
-	if interpolate:
+	if np.any(img!=img) and interpolate:
 		img = interpolate_nan(img.astype(float))
 	structure = snd.generate_binary_structure(rank=2, connectivity=connectivity)
 	img = snd.white_tophat(img.astype(float), structure=structure, size=size, *kwargs)
