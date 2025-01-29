@@ -1795,6 +1795,21 @@ def ConfigSectionMap(path,section):
 
 	dict1: dictionary
 
+	Examples
+	--------
+	>>> config = "path/to/config_file.ini"
+	>>> section = "Channels"
+	>>> channel_dictionary = ConfigSectionMap(config,section)
+	>>> print(channel_dictionary)
+	# {'brightfield_channel': '0',
+	  'live_nuclei_channel': 'nan',
+	  'dead_nuclei_channel': 'nan',
+	  'effector_fluo_channel': 'nan',
+	  'adhesion_channel': '1',
+	  'fluo_channel_1': 'nan',
+	  'fluo_channel_2': 'nan',
+	  'fitc_channel': '2',
+	  'cy5_channel': '3'}
 	"""
 
 	Config = configparser.ConfigParser(interpolation=None)
