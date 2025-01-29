@@ -94,6 +94,36 @@ def fraction_of_area_detected_in_ricm(regionmask, intensity_image, target_channe
 	
 	return float(np.sum(lbl)) / float(np.sum(regionmask))
 
+def area_detected_in_ricm(regionmask, intensity_image, target_channel='adhesion_channel'):
+
+	instructions = {
+		"thresholds": [
+			0.02,
+			1000
+		],
+		"filters": [
+			[
+				"subtract",
+				1
+			],
+			[
+				"abs",
+				2
+			],
+			[
+				"gauss",
+				0.8
+			]
+		],
+	}
+	
+	lbl = segment_frame_from_thresholds(intensity_image, do_watershed=False, fill_holes=True, equalize_reference=None, edge_exclusion=False, **instructions)
+	lbl[lbl>0] = 1 # instance to binary
+	lbl[~regionmask] = 0 # make sure we don't measure stuff outside cell
+	
+	return float(np.sum(lbl))
+
+
 
 def fraction_of_area_dark(regionmask, intensity_image, target_channel='adhesion_channel', fill_holes=True): #, target_channel='adhesion_channel'
 	
