@@ -31,6 +31,55 @@ from scipy.stats import ks_2samp
 from cliffs_delta import cliffs_delta
 from stardist.models import StarDist2D
 from cellpose.models import CellposeModel
+from pathlib import PosixPath, PurePosixPath
+
+def get_config(experiment):
+
+	"""
+	Retrieves the path to the configuration file for a given experiment.
+
+	Parameters
+	----------
+	experiment : str
+		The file system path to the directory of the experiment project.
+
+	Returns
+	-------
+	str
+		The full path to the configuration file (`config.ini`) within the experiment directory.
+
+	Raises
+	------
+	AssertionError
+		If the `config.ini` file does not exist in the specified experiment directory.
+
+	Notes
+	-----
+	- The function ensures that the provided experiment path ends with the appropriate file separator (`os.sep`) 
+	  before appending `config.ini` to locate the configuration file.
+	- The configuration file is expected to be named `config.ini` and located at the root of the experiment directory.
+
+	Example
+	-------
+	>>> experiment = "/path/to/experiment"
+	>>> config_path = get_config(experiment)
+	>>> print(config_path)
+	'/path/to/experiment/config.ini'
+
+	"""
+
+	if isinstance(experiment, (PosixPath, PurePosixPath)):
+		experiment = str(experiment)
+
+	if not experiment.endswith(os.sep):
+		experiment += os.sep
+
+	config = experiment + 'config.ini'
+	config = rf"{config}"
+
+	assert os.path.exists(config), 'The experiment configuration could not be located...'
+	return config
+
 
 def _remove_invalid_cols(df):
 
@@ -38,8 +87,7 @@ def _remove_invalid_cols(df):
 	Removes invalid columns from a DataFrame.
 
 	This function identifies and removes columns in the DataFrame whose names 
-	start with "Unnamed", which often indicate extraneous or improperly 
-	formatted columns (e.g., leftover columns from improperly read CSV files).
+	start with "Unnamed", or that contain only NaN values.
 
 	Parameters
 	----------
@@ -51,13 +99,6 @@ def _remove_invalid_cols(df):
 	pandas.DataFrame
 		A new DataFrame with the invalid columns removed. If no invalid 
 		columns are found, the original DataFrame is returned unchanged.
-
-	Notes
-	-----
-	- This function does not modify the original DataFrame in place; instead, 
-	  it returns a new DataFrame.
-	- Columns starting with "Unnamed" are commonly introduced when saving 
-	  or loading data files with misaligned headers.
 	"""
 
 	invalid_cols = [c for c in list(df.columns) if c.startswith('Unnamed')]
@@ -66,18 +107,14 @@ def _remove_invalid_cols(df):
 	df = df.dropna(axis=1, how='all')
 	return df
 
-def _extract_coordinates_from_features(features, timepoint):
+def _extract_coordinates_from_features(df, timepoint):
 
 	"""
-	Extracts spatial coordinates and other relevant metadata from a features DataFrame.
-
-	This function processes a DataFrame of features to extract and rename centroid 
-	coordinates, assign a unique identifier to each feature, and add a frame (timepoint) 
-	column. The resulting DataFrame is structured for use in trajectory analysis.
+	Re-format coordinates from a regionprops table to tracking/measurement table format. 
 
 	Parameters
 	----------
-	features : pandas.DataFrame
+	df : pandas.DataFrame
 		A DataFrame containing feature data, including columns for centroids 
 		(`'centroid-1'` and `'centroid-0'`) and feature classes (`'class_id'`).
 	timepoint : int
@@ -104,7 +141,7 @@ def _extract_coordinates_from_features(features, timepoint):
 	  to `'POSITION_Y'`.
 	"""
 
-	coords = features[['centroid-1', 'centroid-0', 'class_id']].copy()
+	coords = df[['centroid-1', 'centroid-0', 'class_id']].copy()
 	coords['ID'] = np.arange(len(coords))
 	coords.rename(columns={'centroid-1': 'POSITION_X', 'centroid-0': 'POSITION_Y'}, inplace=True)
 	coords['FRAME'] = int(timepoint)
@@ -144,10 +181,13 @@ def _mask_intensity_measurements(df, mask_channels):
 	  does not modify the input DataFrame.
 	"""
 
+	if isinstance(mask_channels, str):
+		mask_channels = [mask_channels]
+
 	if mask_channels is not None:
 		
 		cols_to_drop = []
-		columns = df.columns
+		columns = list(df.columns)
 
 		for mc in mask_channels:
 			cols_to_remove = [c for c in columns if mc in c]
@@ -157,7 +197,7 @@ def _mask_intensity_measurements(df, mask_channels):
 			df = df.drop(cols_to_drop, axis=1)
 	return df
 
-def _rearrange_multichannel_frame(frame):
+def _rearrange_multichannel_frame(frame, n_channels=None):
 
 	"""
 	Rearranges the axes of a multi-channel frame to ensure the channel axis is at the end.
@@ -207,7 +247,10 @@ def _rearrange_multichannel_frame(frame):
 
 	if frame.ndim == 3:
 		# Systematically move channel axis to the end
-		channel_axis = np.argmin(frame.shape)
+		if n_channels is not None and n_channels in list(frame.shape):
+			channel_axis = list(frame.shape).index(n_channels)
+		else:
+			channel_axis = np.argmin(frame.shape)
 		frame = np.moveaxis(frame, channel_axis, -1)
 
 	if frame.ndim==2:
@@ -1802,14 +1845,14 @@ def ConfigSectionMap(path,section):
 	>>> channel_dictionary = ConfigSectionMap(config,section)
 	>>> print(channel_dictionary)
 	# {'brightfield_channel': '0',
-	  'live_nuclei_channel': 'nan',
-	  'dead_nuclei_channel': 'nan',
-	  'effector_fluo_channel': 'nan',
-	  'adhesion_channel': '1',
-	  'fluo_channel_1': 'nan',
-	  'fluo_channel_2': 'nan',
-	  'fitc_channel': '2',
-	  'cy5_channel': '3'}
+	#  'live_nuclei_channel': 'nan',
+	#  'dead_nuclei_channel': 'nan',
+	#  'effector_fluo_channel': 'nan',
+	#  'adhesion_channel': '1',
+	#  'fluo_channel_1': 'nan',
+	#  'fluo_channel_2': 'nan',
+	#  'fitc_channel': '2',
+	#  'cy5_channel': '3'}
 	"""
 
 	Config = configparser.ConfigParser(interpolation=None)
@@ -1864,13 +1907,15 @@ def _extract_channel_indices_from_config(config, channels_to_extract):
 
 	Examples
 	--------
-	>>> config = ConfigParser()
-	>>> config.read('example_config.ini')
-	>>> channels_to_extract = ['GFP', 'RFP']
+	>>> config = "path/to/config_file.ini"
+	>>> channels_to_extract = ['adhesion_channel', 'brightfield_channel']
 	>>> channel_indices = _extract_channel_indices_from_config(config, channels_to_extract)
 	>>> print(channel_indices)
-	# [1, 2] or None if an error occurs or the channels are not found.
+	# [1, 0] or None if an error occurs or the channels are not found.
 	"""
+
+	if isinstance(channels_to_extract, str):
+		channels_to_extract = [channels_to_extract]
 
 	channels = []
 	for c in channels_to_extract:
@@ -1888,44 +1933,13 @@ def _extract_channel_indices_from_config(config, channels_to_extract):
 def _extract_nbr_channels_from_config(config, return_names=False):
 
 	"""
-	Extracts the indices of specified channels from a configuration object.
-
-	This function attempts to map required channel names to their respective indices as specified in a
-	configuration file. It supports two versions of configuration parsing: a primary method (V2) and a
-	fallback legacy method. If the required channels are not found using the primary method, the function
-	attempts to find them using the legacy configuration settings.
-
-	Parameters
-	----------
-	config : ConfigParser object
-		The configuration object parsed from a .ini or similar configuration file that includes channel settings.
-	channels_to_extract : list of str
-		A list of channel names for which indices are to be extracted from the configuration settings.
-
-	Returns
-	-------
-	list of int or None
-		A list containing the indices of the specified channels as found in the configuration settings.
-		If a channel cannot be found, None is appended in its place. If an error occurs during the extraction
-		process, the function returns None.
-
-	Notes
-	-----
-	- This function is designed to be flexible, accommodating changes in configuration file structure by
-	  checking multiple sections for the required information.
-	- The configuration file is expected to contain either "Channels" or "MovieSettings" sections with mappings
-	  from channel names to indices.
-	- An error message is printed if a required channel cannot be found, advising the user to check the
-	  configuration file.
 
 	Examples
 	--------
-	>>> config = ConfigParser()
-	>>> config.read('example_config.ini')
-	>>> channels_to_extract = ['GFP', 'RFP']
-	>>> channel_indices = _extract_channel_indices_from_config(config, channels_to_extract)
-	>>> print(channel_indices)
-	# [1, 2] or None if an error occurs or the channels are not found.
+	>>> config = "path/to/config_file.ini"
+	>>> nbr_channels = _extract_channel_indices_from_config(config)
+	>>> print(nbr_channels)
+	# 4
 	"""
 
 	# V2
@@ -2037,15 +2051,25 @@ def _get_img_num_per_channel(channels_indices, len_movie, nbr_channels):
 
 	Examples
 	--------
-	>>> channels_indices = [0, 2, None]  # Indices for channels 1, 3, and a non-existing channel
+	>>> channels_indices = [0]  # Indices for channels 1, 3, and a non-existing channel
 	>>> len_movie = 10  # Total frames for each channel
 	>>> nbr_channels = 3  # Total channels in the movie
 	>>> img_num_per_channel = _get_img_num_per_channel(channels_indices, len_movie, nbr_channels)
 	>>> print(img_num_per_channel)
-	# [[ 0  3  6  9 12 15 18 21 24 27]
-	#  [ 2  5  8 11 14 17 20 23 26 29]
-	#  [-1 -1 -1 -1 -1 -1 -1 -1 -1 -1]]
+	# array([[ 0,  3,  6,  9, 12, 15, 18, 21, 24, 27]])
+
+	>>> channels_indices = [1,2]  # Indices for channels 1, 3, and a non-existing channel
+	>>> len_movie = 10  # Total frames for each channel
+	>>> nbr_channels = 3  # Total channels in the movie
+	>>> img_num_per_channel = _get_img_num_per_channel(channels_indices, len_movie, nbr_channels)
+	>>> print(img_num_per_channel)
+	# array([[ 1,  4,  7, 10, 13, 16, 19, 22, 25, 28],
+    #   [ 2,  5,  8, 11, 14, 17, 20, 23, 26, 29]])
+
 	"""
+
+	if isinstance(channels_indices, (int, np.int_)):
+		channels_indices = [channels_indices]
 
 	len_movie = int(len_movie)
 	nbr_channels = int(nbr_channels)
@@ -2057,7 +2081,8 @@ def _get_img_num_per_channel(channels_indices, len_movie, nbr_channels):
 		else:
 			indices = [-1]*len_movie
 		img_num_all_channels.append(indices)
-	img_num_all_channels = np.array(img_num_all_channels, dtype=int)	
+	img_num_all_channels = np.array(img_num_all_channels, dtype=int)
+
 	return img_num_all_channels
 
 def _extract_labels_from_config(config,number_of_wells):
@@ -2081,6 +2106,9 @@ def _extract_labels_from_config(config,number_of_wells):
 	labels: string of the biological condition for each well
 
 	"""
+
+	# Deprecated, need to read metadata to extract concentration units and discard non essential fields
+
 	
 	try:
 		concentrations = ConfigSectionMap(config,"Labels")["concentrations"].split(",")
@@ -2100,20 +2128,15 @@ def _extract_labels_from_config(config,number_of_wells):
 
 	return(labels)
 
-def extract_experiment_channels(config):
+
+def _extract_channels_from_config(config):
 
 	"""
 	Extracts channel names and their indices from an experiment configuration.
 
-	This function attempts to parse channel information from a given configuration object, supporting
-	both a newer (V2) and a legacy format. It first tries to extract channel names and indices according
-	to the V2 format from the "Channels" section. If no channels are found or if the section does not
-	exist, it falls back to extracting specific channel information from the "MovieSettings" section
-	based on predefined channel names.
-
 	Parameters
 	----------
-	config : ConfigParser object
+	config : path to config file (.ini)
 		The configuration object parsed from an experiment's .ini or similar configuration file.
 
 	Returns
@@ -2123,23 +2146,17 @@ def extract_experiment_channels(config):
 		the names of the channels as specified in the configuration, and `channel_indices` includes their
 		corresponding indices. Both arrays are ordered according to the channel indices.
 
-	Notes
-	-----
-	- The function supports extracting a variety of channel types, including brightfield, live and dead nuclei
-	  channels, effector fluorescence channels, adhesion channels, and generic fluorescence channels.
-	- If channel information cannot be parsed or if required fields are missing, the function returns empty arrays.
-	- This utility is particularly useful for preprocessing steps where specific channels of multi-channel
-	  experimental data are needed for further analysis or model input.
-
 	Examples
 	--------
-	>>> config = ConfigParser()
-	>>> config.read('experiment_config.ini')
-	>>> channel_names, channel_indices = extract_experiment_channels(config)
-	# Extracts and sorts channel information based on indices from the experiment configuration.
+	>>> config = "path/to/config_file.ini"
+	>>> channels, indices = _extract_channels_from_config(config)
+	>>> print(channels)
+	# array(['brightfield_channel', 'adhesion_channel', 'fitc_channel',
+    #    'cy5_channel'], dtype='<U19')
+    >>> print(indices)
+    # array([0, 1, 2, 3])
 	"""
 
-	# V2
 	channel_names = []
 	channel_indices = []
 	try:
@@ -2153,64 +2170,7 @@ def extract_experiment_channels(config):
 				pass
 	except:
 		pass
-
-
-	if not channel_names:
-		# LEGACY
-		# Remap intensities to channel:
-		channel_names = []
-		channel_indices = []
-
-		try:
-			brightfield_channel = int(ConfigSectionMap(config,"MovieSettings")["brightfield_channel"])
-			channel_names.append("brightfield_channel")
-			channel_indices.append(brightfield_channel)
-			#exp_channels.update({"brightfield_channel": brightfield_channel})
-		except:
-			pass
-		try:
-			live_nuclei_channel = int(ConfigSectionMap(config,"MovieSettings")["live_nuclei_channel"])
-			channel_names.append("live_nuclei_channel")
-			channel_indices.append(live_nuclei_channel)
-			#exp_channels.update({"live_nuclei_channel": live_nuclei_channel})
-		except:
-			pass
-		try:
-			dead_nuclei_channel = int(ConfigSectionMap(config,"MovieSettings")["dead_nuclei_channel"])
-			channel_names.append("dead_nuclei_channel")
-			channel_indices.append(dead_nuclei_channel)
-			#exp_channels.update({"dead_nuclei_channel": dead_nuclei_channel})
-		except:
-			pass
-		try:
-			effector_fluo_channel = int(ConfigSectionMap(config,"MovieSettings")["effector_fluo_channel"])
-			channel_names.append("effector_fluo_channel")
-			channel_indices.append(effector_fluo_channel)
-			#exp_channels.update({"effector_fluo_channel": effector_fluo_channel})
-		except:
-			pass
-		try:
-			adhesion_channel = int(ConfigSectionMap(config,"MovieSettings")["adhesion_channel"])
-			channel_names.append("adhesion_channel")
-			channel_indices.append(adhesion_channel)
-			#exp_channels.update({"adhesion_channel": adhesion_channel})
-		except:
-			pass
-		try:
-			fluo_channel_1 = int(ConfigSectionMap(config,"MovieSettings")["fluo_channel_1"])
-			channel_names.append("fluo_channel_1")
-			channel_indices.append(fluo_channel_1)
-			#exp_channels.update({"fluo_channel_1": fluo_channel_1})
-		except:
-			pass
-		try:
-			fluo_channel_2 = int(ConfigSectionMap(config,"MovieSettings")["fluo_channel_2"])
-			channel_names.append("fluo_channel_2")
-			channel_indices.append(fluo_channel_2)
-			#exp_channels.update({"fluo_channel_2": fluo_channel_2})
-		except:
-			pass
-
+	
 	channel_indices = np.array(channel_indices)
 	channel_names = np.array(channel_names)
 	reorder = np.argsort(channel_indices)
@@ -2219,61 +2179,94 @@ def extract_experiment_channels(config):
 
 	return channel_names, channel_indices
 
-def get_software_location():
-	return rf"{os.path.split(os.path.dirname(os.path.realpath(__file__)))[0]}"
 
-def remove_trajectory_measurements(trajectories, column_labels):
+def extract_experiment_channels(experiment):
 
 	"""
-	Filters a DataFrame of trajectory measurements to retain only essential tracking and classification columns.
+	Extracts channel names and their indices from an experiment project.
 
-	Given a DataFrame containing detailed trajectory measurements and metadata for tracked objects, this
-	function reduces the DataFrame to include only a predefined set of essential columns necessary for
-	further analysis or visualization. The set of columns to retain includes basic tracking information,
-	spatial coordinates, classification results, and certain metadata.
+	Parameters
+	----------
+	experiment : str
+		The file system path to the directory of the experiment project.
+
+	Returns
+	-------
+	tuple
+		A tuple containing two numpy arrays: `channel_names` and `channel_indices`. `channel_names` includes
+		the names of the channels as specified in the configuration, and `channel_indices` includes their
+		corresponding indices. Both arrays are ordered according to the channel indices.
+
+	Examples
+	--------
+	>>> experiment = "path/to/my_experiment"
+	>>> channels, indices = extract_experiment_channels(experiment)
+	>>> print(channels)
+	# array(['brightfield_channel', 'adhesion_channel', 'fitc_channel',
+    #    'cy5_channel'], dtype='<U19')
+    >>> print(indices)
+    # array([0, 1, 2, 3])
+	"""
+
+	config = get_config(experiment)
+	return _extract_channels_from_config(config)
+
+
+def get_software_location():
+
+	"""
+	Get the installation folder of celldetective.
+
+	Returns
+	-------
+	str
+		Path to the celldetective installation folder.
+	"""
+
+	return rf"{os.path.split(os.path.dirname(os.path.realpath(__file__)))[0]}"
+
+def remove_trajectory_measurements(trajectories, column_labels={'track': "TRACK_ID", 'time': 'FRAME', 'x': 'POSITION_X', 'y': 'POSITION_Y'}):
+
+	"""
+	Clear a measurement table, while keeping the tracking information.
 
 	Parameters
 	----------
 	trajectories : pandas.DataFrame
-		The DataFrame containing trajectory measurements and metadata for each tracked object.
-	column_labels : dict
-		A dictionary mapping standard column names to their corresponding column names in the `trajectories` DataFrame.
-		Expected keys include 'track', 'time', 'x', 'y', among others.
+		The measurement table where each line is a cell at a timepoint and each column a tracking feature or measurement.
+	column_labels : dict, optional
+		The column labels to use in the output DataFrame. Default is {'track': "TRACK_ID", 'time': 'FRAME', 'x': 'POSITION_X', 'y': 'POSITION_Y'}.
+
 
 	Returns
 	-------
 	pandas.DataFrame
-		A filtered DataFrame containing only the essential columns as defined by `columns_to_keep` and present
-		in `trajectories`.
-
-	Notes
-	-----
-	- The function dynamically adjusts the list of columns to retain based on their presence in the input DataFrame,
-	  ensuring compatibility with DataFrames containing varying sets of measurements.
-	- Essential columns include tracking identifiers, time points, spatial coordinates (both pixel and physical units),
-	  classification labels, state information, lineage metadata, and visualization attributes.
+		A filtered DataFrame containing only the tracking columns.
 
 	Examples
 	--------
-	>>> column_labels = {
-	...     'track': 'TRACK_ID', 'time': 'FRAME', 'x': 'POSITION_X', 'y': 'POSITION_Y'
-	... }
 	>>> trajectories_df = pd.DataFrame({
 	...     'TRACK_ID': [1, 1, 2],
 	...     'FRAME': [0, 1, 0],
 	...     'POSITION_X': [100, 105, 200],
 	...     'POSITION_Y': [150, 155, 250],
-	...     'velocity': [0.5, 0.5, 0.2],  # Additional column to be removed
+	...     'area': [10,100,100],  # Additional column to be removed
 	... })
-	>>> filtered_df = remove_trajectory_measurements(trajectories_df, column_labels)
-	# `filtered_df` will contain only the essential columns as per `column_labels` and predefined essential columns.
+	>>> filtered_df = remove_trajectory_measurements(trajectories_df)
+	>>> print(filtered_df)
+	#   pd.DataFrame({
+	#    'TRACK_ID': [1, 1, 2],
+	#    'FRAME': [0, 1, 0],
+	#    'POSITION_X': [100, 105, 200],
+	#    'POSITION_Y': [150, 155, 250],
+	#    })
 	"""
 
 	tracks = trajectories.copy()
 
 	columns_to_keep = [column_labels['track'], column_labels['time'], column_labels['x'], column_labels['y'],column_labels['x']+'_um', column_labels['y']+'_um', 'class_id', 
 					  't', 'state', 'generation', 'root', 'parent', 'ID', 't0', 'class', 'status', 'class_color', 'status_color', 'class_firstdetection', 't_firstdetection', 'velocity']
-	cols = tracks.columns
+	cols = list(tracks.columns)
 	for c in columns_to_keep:
 		if c not in cols:
 			columns_to_keep.remove(c)

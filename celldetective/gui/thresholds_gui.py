@@ -422,7 +422,7 @@ class ThresholdConfigWizard(QMainWindow, Styles):
 			if len_movie_auto is not None:
 				self.len_movie = len_movie_auto
 			exp_config = self.exp_dir + "config.ini"
-			self.channel_names, self.channels = extract_experiment_channels(exp_config)
+			self.channel_names, self.channels = extract_experiment_channels(self.exp_dir)
 			self.channel_names = np.array(self.channel_names)
 			self.channels = np.array(self.channels)
 			self.nbr_channels = len(self.channels)

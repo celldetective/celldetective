@@ -75,7 +75,7 @@ class MeasurementProcess(Process):
 	def read_measurement_instructions(self):
 
 		print('Looking for measurement instruction file...')
-		instr_path = PurePath(self.expfolder,Path(f"{self.instruction_file}"))
+		instr_path = PurePath(self.exp_dir,Path(f"{self.instruction_file}"))
 		if os.path.exists(instr_path):
 			with open(instr_path, 'r') as f:
 				self.instructions = json.load(f)
@@ -175,14 +175,14 @@ class MeasurementProcess(Process):
 		self.shape_x = int(ConfigSectionMap(self.config,"MovieSettings")["shape_x"])
 		self.shape_y = int(ConfigSectionMap(self.config,"MovieSettings")["shape_y"])
 
-		self.channel_names, self.channel_indices = extract_experiment_channels(self.config)
+		self.channel_names, self.channel_indices = extract_experiment_channels(self.exp_dir)
 		self.nbr_channels = len(self.channel_names)
 
 	def locate_experiment_config(self):
 
 		parent1 = Path(self.pos).parent
-		self.expfolder = parent1.parent
-		self.config = PurePath(self.expfolder,Path("config.ini"))
+		self.exp_dir = parent1.parent
+		self.config = PurePath(self.exp_dir,Path("config.ini"))
 
 		if not os.path.exists(self.config):
 			print('The configuration file for the experiment was not found...')

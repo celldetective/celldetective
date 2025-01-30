@@ -25,7 +25,7 @@ from pathlib import Path, PurePath
 from shutil import copyfile, rmtree
 
 from celldetective.utils import _rearrange_multichannel_frame, _fix_no_contrast, zoom_multiframes,ConfigSectionMap, extract_experiment_channels, _extract_labels_from_config, get_zenodo_files, download_zenodo_file
-from celldetective.utils import interpolate_nan_multichannel, _estimate_scale_factor, _extract_channel_indices_from_config, _extract_channel_indices, _extract_nbr_channels_from_config, _get_img_num_per_channel, normalize_per_channel
+from celldetective.utils import interpolate_nan_multichannel, _estimate_scale_factor, _extract_channel_indices_from_config, _extract_channel_indices, _extract_nbr_channels_from_config, _get_img_num_per_channel, normalize_per_channel, get_config
 
 from stardist import fill_label_holes
 from skimage.transform import resize
@@ -260,49 +260,6 @@ def get_experiment_wells(experiment):
 	wells = natsorted(glob(experiment + "W*" + os.sep))
 	return np.array(wells, dtype=str)
 
-
-def get_config(experiment):
-
-	"""
-	Retrieves the path to the configuration file for a given experiment.
-
-	Parameters
-	----------
-	experiment : str
-		The file system path to the experiment directory.
-
-	Returns
-	-------
-	str
-		The full path to the configuration file (`config.ini`) within the experiment directory.
-
-	Raises
-	------
-	AssertionError
-		If the `config.ini` file does not exist in the specified experiment directory.
-
-	Notes
-	-----
-	- The function ensures that the provided experiment path ends with the appropriate file separator (`os.sep`) 
-	  before appending `config.ini` to locate the configuration file.
-	- The configuration file is expected to be named `config.ini` and located at the root of the experiment directory.
-
-	Example
-	-------
-	>>> experiment = "/path/to/experiment"
-	>>> config_path = get_config(experiment)
-	>>> print(config_path)
-	'/path/to/experiment/config.ini'
-
-	"""
-
-	if not experiment.endswith(os.sep):
-		experiment += os.sep
-
-	config = experiment + 'config.ini'
-	config = rf"{config}"
-	assert os.path.exists(config), 'The experiment configuration could not be located...'
-	return config
 
 
 def get_spatial_calibration(experiment):

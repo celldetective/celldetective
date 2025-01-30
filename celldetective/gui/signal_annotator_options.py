@@ -39,7 +39,7 @@ class ConfigSignalAnnotator(QMainWindow, Styles):
 
 		exp_config = self.exp_dir +"config.ini"
 		#self.config_path = self.exp_dir + self.config_name
-		self.channel_names, self.channels = extract_experiment_channels(exp_config)
+		self.channel_names, self.channels = extract_experiment_channels(self.exp_dir)
 		self.channel_names = np.array(self.channel_names)
 		self.channels = np.array(self.channels)
 		self.log_option = False

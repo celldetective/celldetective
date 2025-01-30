@@ -34,36 +34,18 @@ movie_prefix = ConfigSectionMap(config, "MovieSettings")["movie_prefix"]
 spatial_calibration = float(ConfigSectionMap(config, "MovieSettings")["pxtoum"])
 time_calibration = float(ConfigSectionMap(config, "MovieSettings")["frametomin"])
 len_movie = float(ConfigSectionMap(config, "MovieSettings")["len_movie"])
-channel_names, channel_inneigh_protocoles = extract_experiment_channels(config)
+channel_names, channel_indices = extract_experiment_channels(expfolder)
 nbr_channels = len(channel_names)
 
 # from tracking instructions, fetch btrack config, features, haralick, clean_traj, idea: fetch custom timeline?
 instr_path = PurePath(expfolder, Path(f"{instruction_file}"))
 previous_pair_table_path = pos + os.sep.join(['output', 'tables', 'trajectories_pairs.csv'])
 
-# if os.path.exists(instr_path):
-# 	print(f"Neighborhood instructions has been successfully located.")
-# 	with open(instr_path, 'r') as f:
-# 		instructions = json.load(f)
-# 		print("Reading the following instructions: ", instructions)
-
-# 	if 'distance' in instructions:
-# 		distance = instructions['distance'][0]
-# 	else:
-# 		distance = None
-# else:
-# 	print('No measurement instructions found')
-# 	os.abort()
 
 previous_neighborhoods = []
 associated_reference_population = []
 
-# if distance is None:
-# 	print('No measurement could be performed. Check your inputs.')
-# 	print('Done.')
-# 	os.abort()
-# 	#distance = 0
-# else:
+
 neighborhoods_to_measure = extract_neighborhoods_from_pickles(pos)
 all_df_pairs = []
 if os.path.exists(previous_pair_table_path):

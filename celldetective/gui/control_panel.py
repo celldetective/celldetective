@@ -330,7 +330,7 @@ class ControlPanel(QMainWindow, Styles):
 		self.movie_prefix = ConfigSectionMap(self.exp_config,"MovieSettings")["movie_prefix"]
 
 		# Read channels
-		self.exp_channels, channel_indices = extract_experiment_channels(self.exp_config)
+		self.exp_channels, channel_indices = extract_experiment_channels(self.exp_dir)
 		self.nbr_channels = len(self.exp_channels)
 
 		number_of_wells = len(self.wells)

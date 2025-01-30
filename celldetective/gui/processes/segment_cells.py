@@ -66,13 +66,13 @@ class BaseSegmentProcess(Process):
 		self.len_movie = float(ConfigSectionMap(self.config,"MovieSettings")["len_movie"])
 		self.movie_prefix = ConfigSectionMap(self.config,"MovieSettings")["movie_prefix"]
 		self.nbr_channels = _extract_nbr_channels_from_config(self.config)
-		self.channel_names, self.channel_indices = extract_experiment_channels(self.config)
+		self.channel_names, self.channel_indices = extract_experiment_channels(self.exp_dir)
 
 	def locate_experiment_config(self):
 
 		parent1 = Path(self.pos).parent
-		expfolder = parent1.parent
-		self.config = PurePath(expfolder,Path("config.ini"))
+		self.exp_dir = parent1.parent
+		self.config = PurePath(self.exp_dir,Path("config.ini"))
 
 		if not os.path.exists(self.config):
 			print('The configuration file for the experiment could not be located. Abort.')
