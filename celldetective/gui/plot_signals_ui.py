@@ -164,6 +164,18 @@ class ConfigSignalPlot(QWidget, Styles):
 		pool_layout.addWidget(self.pool_option_cb, 66)
 		main_layout.addLayout(pool_layout)
 
+		n_cells_layout = QHBoxLayout()
+		n_cells_layout.setContentsMargins(20,3,20,3)
+		self.n_cells_slider = QLabeledSlider()
+		self.n_cells_slider.setSingleStep(1)
+		self.n_cells_slider.setOrientation(1)
+		self.n_cells_slider.setRange(1,100)
+		self.n_cells_slider.setValue(2)
+		n_cells_layout.addWidget(QLabel('min # cells\nfor pool:'), 33)
+		n_cells_layout.addWidget(self.n_cells_slider, 66)
+		main_layout.addLayout(n_cells_layout)
+
+
 		self.submit_btn = QPushButton('Submit')
 		self.submit_btn.setStyleSheet(self.button_style_sheet)
 		self.submit_btn.clicked.connect(self.process_signal)
@@ -371,9 +383,9 @@ class ConfigSignalPlot(QWidget, Styles):
 
 		for block,movie_group in self.df.groupby(['well','position']):
 
-			well_signal_mean, well_std_mean, timeline_all, matrix_all = mean_signal(movie_group, self.feature_selected, class_col, time_col=time_col, class_value=None, return_matrix=True, forced_max_duration=max_time, projection=self.pool_option_cb.currentText())
-			well_signal_event, well_std_event, timeline_event, matrix_event = mean_signal(movie_group, self.feature_selected, class_col, time_col=time_col, class_value=[0], return_matrix=True, forced_max_duration=max_time, projection=self.pool_option_cb.currentText())		
-			well_signal_no_event, well_std_no_event, timeline_no_event, matrix_no_event = mean_signal(movie_group, self.feature_selected, class_col, time_col=time_col, class_value=[1], return_matrix=True, forced_max_duration=max_time, projection=self.pool_option_cb.currentText())
+			well_signal_mean, well_std_mean, timeline_all, matrix_all = mean_signal(movie_group, self.feature_selected, class_col, time_col=time_col, class_value=None, return_matrix=True, forced_max_duration=max_time, projection=self.pool_option_cb.currentText(), min_nbr_values=self.n_cells_slider.value())
+			well_signal_event, well_std_event, timeline_event, matrix_event = mean_signal(movie_group, self.feature_selected, class_col, time_col=time_col, class_value=[0], return_matrix=True, forced_max_duration=max_time, projection=self.pool_option_cb.currentText(), min_nbr_values=self.n_cells_slider.value())
+			well_signal_no_event, well_std_no_event, timeline_no_event, matrix_no_event = mean_signal(movie_group, self.feature_selected, class_col, time_col=time_col, class_value=[1], return_matrix=True, forced_max_duration=max_time, projection=self.pool_option_cb.currentText(), min_nbr_values=self.n_cells_slider.value())
 			self.mean_plots_timeline = timeline_all
 
 			self.df_pos_info.loc[self.df_pos_info['pos_path'] == block[1], 'signal'] = [
@@ -386,9 +398,9 @@ class ConfigSignalPlot(QWidget, Styles):
 		# Per well
 		for well,well_group in self.df.groupby('well'):
 
-			well_signal_mean, well_std_mean, timeline_all, matrix_all = mean_signal(well_group, self.feature_selected, class_col, time_col=time_col, class_value=None, return_matrix=True, forced_max_duration=max_time, projection=self.pool_option_cb.currentText())
-			well_signal_event, well_std_event, timeline_event, matrix_event = mean_signal(well_group, self.feature_selected, class_col, time_col=time_col, class_value=[0], return_matrix=True, forced_max_duration=max_time, projection=self.pool_option_cb.currentText())			
-			well_signal_no_event, well_std_no_event, timeline_no_event, matrix_no_event = mean_signal(well_group, self.feature_selected, class_col, time_col=time_col, class_value=[1], return_matrix=True, forced_max_duration=max_time, projection=self.pool_option_cb.currentText())
+			well_signal_mean, well_std_mean, timeline_all, matrix_all = mean_signal(well_group, self.feature_selected, class_col, time_col=time_col, class_value=None, return_matrix=True, forced_max_duration=max_time, projection=self.pool_option_cb.currentText(), min_nbr_values=self.n_cells_slider.value())
+			well_signal_event, well_std_event, timeline_event, matrix_event = mean_signal(well_group, self.feature_selected, class_col, time_col=time_col, class_value=[0], return_matrix=True, forced_max_duration=max_time, projection=self.pool_option_cb.currentText(), min_nbr_values=self.n_cells_slider.value())			
+			well_signal_no_event, well_std_no_event, timeline_no_event, matrix_no_event = mean_signal(well_group, self.feature_selected, class_col, time_col=time_col, class_value=[1], return_matrix=True, forced_max_duration=max_time, projection=self.pool_option_cb.currentText(), min_nbr_values=self.n_cells_slider.value())
 			
 			self.df_well_info.loc[self.df_well_info['well_path']==well,'signal'] = [{'mean_all': well_signal_mean, 'std_all': well_std_mean,'matrix_all': matrix_all,'mean_event': well_signal_event, 'std_event': well_std_event,
 																					'matrix_event': matrix_event,'mean_no_event': well_signal_no_event, 'std_no_event': well_std_no_event, 'matrix_no_event': matrix_no_event, 'timeline':  self.mean_plots_timeline}]
