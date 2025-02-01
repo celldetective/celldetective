@@ -375,6 +375,11 @@ class ConfigSignalPlot(QWidget, Styles):
 			return None
 
 		# Per position signal
+		self.df = self.df.dropna(subset=['FRAME'])
+		if len(self.df)==0:
+			print('Warning... The dataset is empty. Please check your filters. Abort...')
+			return None
+
 		max_time = int(self.df.FRAME.max()) + 1
 		class_col = self.class_columns[self.cbs[1].currentIndex()]
 		time_col = self.time_columns[self.cbs[2].currentIndex()]
