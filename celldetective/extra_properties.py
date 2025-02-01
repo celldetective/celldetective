@@ -124,6 +124,16 @@ def area_detected_in_ricm(regionmask, intensity_image, target_channel='adhesion_
 	return float(np.sum(lbl))
 
 
+def area_dark(regionmask, intensity_image, target_channel='adhesion_channel', fill_holes=True): #, target_channel='adhesion_channel'
+	
+	subregion = (intensity_image < 0.95)*regionmask # under one, under 0.8, under 0.6, whatever value!
+	if fill_holes:
+		subregion = skm.label(subregion, connectivity=2, background=0)
+		subregion = fill_label_holes(subregion)
+		subregion[subregion>0] = 1
+	
+	return float(np.sum(subregion))
+
 
 def fraction_of_area_dark(regionmask, intensity_image, target_channel='adhesion_channel', fill_holes=True): #, target_channel='adhesion_channel'
 	
