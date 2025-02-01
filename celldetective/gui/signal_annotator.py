@@ -2282,12 +2282,23 @@ class MeasureAnnotator(SignalAnnotator):
 							  'state', 'generation', 'root', 'parent', 'class_id', 'class', 't0', 'POSITION_X',
 							  'POSITION_Y', 'position', 'well', 'well_index', 'well_name', 'pos_name', 'index',
 							  'concentration', 'cell_type', 'antibody', 'pharmaceutical_agent', 'ID'] + self.class_cols
-			cols = np.array(list(self.df_tracks.columns))
+
+			meta = get_experiment_metadata(self.exp_dir)
+			if meta is not None:
+				keys = list(meta.keys())
+				cols_to_remove.extend(keys)
+
+			labels = get_experiment_labels(self.exp_dir)
+			if labels is not None:
+				keys = list(labels.keys())
+				cols_to_remove.extend(labels)
+
 			for tr in cols_to_remove:
 				try:
 					self.columns_to_rescale.remove(tr)
 				except:
 					pass
+
 			# print(f'column {tr} could not be found...')
 
 			x = self.df_tracks[self.columns_to_rescale].values
