@@ -1250,124 +1250,97 @@ def rename_intensity_column(df, channels):
 	# Rename the intensity columns in the DataFrame based on the provided channel names.
 
 	"""
-
+		
 	channel_names = np.array(channels)
 	channel_indices = np.arange(len(channel_names),dtype=int)
+	intensity_cols = [s for s in list(df.columns) if 'intensity' in s]
+	
+	to_rename = {}
 
-	if np.any(['intensity' in c for c in list(df.columns)]):
-
-		intensity_indices = [s.startswith('intensity') for s in df.columns]
-		intensity_columns = df.columns[intensity_indices]
-
-		if len(channel_names) >= 1:
-			to_rename = {}
-			for k in range(len(intensity_columns)):
-
-				sections = np.array(re.split('-|_', intensity_columns[k]))
-				test_digit = np.array([s.isdigit() for s in sections])
-				index = int(sections[np.where(test_digit)[0]][-1])
-
-				channel_name = channel_names[np.where(channel_indices==index)[0]][0]
-				new_name = np.delete(sections, np.where(test_digit)[0]) #np.where(test_digit)[0]
-				new_name = '_'.join(list(new_name))
-				new_name = new_name.replace('intensity', channel_name)
-				new_name = new_name.replace('-','_')
-				new_name = new_name.replace('_nanmean','_mean')
-
-				to_rename.update({intensity_columns[k]: new_name})
-
-				if 'centre' in intensity_columns[k]:
-					# sections = np.array(re.split('-|_', intensity_columns[k]))
-					measure = np.array(re.split('-|_', new_name))
-					if sections[-2] == "0":
-						new_name = np.delete(measure, -1)
-						new_name = '_'.join(list(new_name))
-						if 'edge' in intensity_columns[k]:
-							new_name = new_name.replace('centre_of_mass_displacement', "edge_centre_of_mass_displacement_in_px")
-						else:
-							new_name = new_name.replace('centre_of_mass', "centre_of_mass_displacement_in_px")
-						to_rename.update({intensity_columns[k]: new_name.replace('-', '_')})
-					elif sections[-2] == "1":
-						new_name = np.delete(measure, -1)
-						new_name = '_'.join(list(new_name))
-						if 'edge' in intensity_columns[k]:
-							new_name = new_name.replace('centre_of_mass_displacement', "edge_centre_of_mass_orientation")
-						else:
-							new_name = new_name.replace('centre_of_mass', "centre_of_mass_orientation")
-						to_rename.update({intensity_columns[k]: new_name.replace('-', '_')})
-					elif sections[-2] == "2":
-						new_name = np.delete(measure, -1)
-						new_name = '_'.join(list(new_name))
-						if 'edge' in intensity_columns[k]:
-							new_name = new_name.replace('centre_of_mass_displacement', "edge_centre_of_mass_x")
-						else:
-							new_name = new_name.replace('centre_of_mass', "centre_of_mass_x")
-						to_rename.update({intensity_columns[k]: new_name.replace('-', '_')})
-					elif sections[-2] == "3":
-						new_name = np.delete(measure, -1)
-						new_name = '_'.join(list(new_name))
-						if 'edge' in intensity_columns[k]:
-							new_name = new_name.replace('centre_of_mass_displacement', "edge_centre_of_mass_y")
-						else:
-							new_name = new_name.replace('centre_of_mass', "centre_of_mass_y")
-						to_rename.update({intensity_columns[k]: new_name.replace('-', '_')})
-				if 'radial_gradient' in intensity_columns[k]:
-					# sections = np.array(re.split('-|_', intensity_columns[k]))
-					measure = np.array(re.split('-|_', new_name))
-					if sections[-2] == "0":
-						new_name = np.delete(measure, -1)
-						new_name = '_'.join(list(measure))
-						new_name = new_name.replace('radial_gradient', "radial_gradient")
-						to_rename.update({intensity_columns[k]: new_name.replace('-', '_')})
-					elif sections[-2] == "1":
-						new_name = np.delete(measure, -1)
-						new_name = '_'.join(list(measure))
-						new_name = new_name.replace('radial_gradient', "radial_intercept")
-						to_rename.update({intensity_columns[k]: new_name.replace('-', '_')})
+	for k in range(len(intensity_cols)):
+		
+		# identify if digit in section
+		sections = np.array(re.split('-|_', intensity_cols[k]))
+		test_digit = np.array([False for s in sections])
+		for j,s in enumerate(sections):
+			if s.isdigit():
+				if int(s)<len(channel_names):
+					test_digit[j] = True
+		print(f"{test_digit=}")
+			
+		if np.any(test_digit):
+			index = int(sections[np.where(test_digit)[0]][-1])
 		else:
-			to_rename = {}
-			for k in range(len(intensity_columns)):
-				sections = np.array(re.split('_|-', intensity_columns[k]))
-				channel_name = channel_names[0]
-				test_digit = np.array([s.isdigit() for s in sections])
-				new_name = np.delete(sections, np.where(test_digit)[0])
+			print(f'No valid channel index found for {intensity_cols[k]}... Skipping the renaming for {intensity_cols[k]}...')
+			continue
+			
+		channel_name = channel_names[np.where(channel_indices==index)[0]][0]
+		new_name = np.delete(sections, np.where(test_digit)[0]) #np.where(test_digit)[0]
+		new_name = '_'.join(list(new_name))
+		new_name = new_name.replace('intensity', channel_name)
+		new_name = new_name.replace('-','_')
+		new_name = new_name.replace('_nanmean','_mean')
+		
+		to_rename.update({intensity_cols[k]: new_name})
+		
+		if 'centre' in intensity_cols[k]:
+
+			measure = np.array(re.split('-|_', new_name))
+			
+			if sections[-2] == "0":
+				new_name = np.delete(measure, -1)
 				new_name = '_'.join(list(new_name))
-				new_name = new_name.replace('intensity', channel_name)
-				to_rename.update({intensity_columns[k]: new_name.replace('-','_')})
-				if 'centre' in intensity_columns[k]:
-					measure = np.array(re.split('-|_', new_name))
-					if sections[-2] == "0":
-						new_name = np.delete(measure, -1)
-						new_name = '_'.join(list(new_name))
-						if 'edge' in intensity_columns[k]:
-							new_name = new_name.replace('centre_of_mass_displacement', "edge_centre_of_mass_displacement_in_px")
-						else:
-							new_name = new_name.replace('centre_of_mass', "centre_of_mass_displacement_in_px")
-						to_rename.update({intensity_columns[k]: new_name.replace('-', '_')})
-					if sections[-2] == "1":
-						new_name = np.delete(measure, -1)
-						new_name = '_'.join(list(new_name))
-						if 'edge' in intensity_columns[k]:
-							new_name = new_name.replace('centre_of_mass_displacement', "edge_centre_of_mass_orientation")
-						else:
-							new_name = new_name.replace('centre_of_mass', "centre_of_mass_orientation")
-						to_rename.update({intensity_columns[k]: new_name.replace('-', '_')})
-				if 'radial_gradient' in intensity_columns[k]:
-					# sections = np.array(re.split('-|_', intensity_columns[k]))
-					measure = np.array(re.split('-|_', new_name))
-					if sections[-2] == "0":
-						#new_name = np.delete(measure, -1)
-						new_name = '_'.join(list(measure))
-						new_name = new_name.replace('radial_gradient', "radial_gradient")
-						to_rename.update({intensity_columns[k]: new_name.replace('-', '_')})
-					elif sections[-2] == "1":
-						#new_name = np.delete(measure, -1)
-						new_name = '_'.join(list(measure))
-						new_name = new_name.replace('radial_gradient', "radial_intercept")
-						to_rename.update({intensity_columns[k]: new_name.replace('-', '_')})
-
-		df = df.rename(columns=to_rename)
-
+				if 'edge' in intensity_cols[k]:
+					new_name = new_name.replace('centre_of_mass_displacement', "edge_centre_of_mass_displacement_in_px")
+				else:
+					new_name = new_name.replace('centre_of_mass', "centre_of_mass_displacement_in_px")
+				to_rename.update({intensity_cols[k]: new_name.replace('-', '_')})
+			
+			elif sections[-2] == "1":
+				new_name = np.delete(measure, -1)
+				new_name = '_'.join(list(new_name))
+				if 'edge' in intensity_cols[k]:
+					new_name = new_name.replace('centre_of_mass_displacement', "edge_centre_of_mass_orientation")
+				else:
+					new_name = new_name.replace('centre_of_mass', "centre_of_mass_orientation")
+				to_rename.update({intensity_cols[k]: new_name.replace('-', '_')})
+				
+			elif sections[-2] == "2":
+				new_name = np.delete(measure, -1)
+				new_name = '_'.join(list(new_name))
+				if 'edge' in intensity_cols[k]:
+					new_name = new_name.replace('centre_of_mass_displacement', "edge_centre_of_mass_x")
+				else:
+					new_name = new_name.replace('centre_of_mass', "centre_of_mass_x")
+				to_rename.update({intensity_cols[k]: new_name.replace('-', '_')})
+			
+			elif sections[-2] == "3":
+				new_name = np.delete(measure, -1)
+				new_name = '_'.join(list(new_name))
+				if 'edge' in intensity_cols[k]:
+					new_name = new_name.replace('centre_of_mass_displacement', "edge_centre_of_mass_y")
+				else:
+					new_name = new_name.replace('centre_of_mass', "centre_of_mass_y")
+				to_rename.update({intensity_cols[k]: new_name.replace('-', '_')})
+		
+		if 'radial_gradient' in intensity_cols[k]:
+			# sections = np.array(re.split('-|_', intensity_columns[k]))
+			measure = np.array(re.split('-|_', new_name))
+			
+			if sections[-2] == "0":
+				new_name = np.delete(measure, -1)
+				new_name = '_'.join(list(measure))
+				new_name = new_name.replace('radial_gradient', "radial_gradient")
+				to_rename.update({intensity_cols[k]: new_name.replace('-', '_')})
+			
+			elif sections[-2] == "1":
+				new_name = np.delete(measure, -1)
+				new_name = '_'.join(list(measure))
+				new_name = new_name.replace('radial_gradient', "radial_intercept")
+				to_rename.update({intensity_cols[k]: new_name.replace('-', '_')})
+	
+	df = df.rename(columns=to_rename)
+	
 	return df
 
 
@@ -2064,7 +2037,7 @@ def _get_img_num_per_channel(channels_indices, len_movie, nbr_channels):
 	>>> img_num_per_channel = _get_img_num_per_channel(channels_indices, len_movie, nbr_channels)
 	>>> print(img_num_per_channel)
 	# array([[ 1,  4,  7, 10, 13, 16, 19, 22, 25, 28],
-    #   [ 2,  5,  8, 11, 14, 17, 20, 23, 26, 29]])
+	#   [ 2,  5,  8, 11, 14, 17, 20, 23, 26, 29]])
 
 	"""
 
@@ -2152,9 +2125,9 @@ def _extract_channels_from_config(config):
 	>>> channels, indices = _extract_channels_from_config(config)
 	>>> print(channels)
 	# array(['brightfield_channel', 'adhesion_channel', 'fitc_channel',
-    #    'cy5_channel'], dtype='<U19')
-    >>> print(indices)
-    # array([0, 1, 2, 3])
+	#    'cy5_channel'], dtype='<U19')
+	>>> print(indices)
+	# array([0, 1, 2, 3])
 	"""
 
 	channel_names = []
@@ -2203,9 +2176,9 @@ def extract_experiment_channels(experiment):
 	>>> channels, indices = extract_experiment_channels(experiment)
 	>>> print(channels)
 	# array(['brightfield_channel', 'adhesion_channel', 'fitc_channel',
-    #    'cy5_channel'], dtype='<U19')
-    >>> print(indices)
-    # array([0, 1, 2, 3])
+	#    'cy5_channel'], dtype='<U19')
+	>>> print(indices)
+	# array([0, 1, 2, 3])
 	"""
 
 	config = get_config(experiment)
