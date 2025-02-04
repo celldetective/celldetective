@@ -196,7 +196,7 @@ class MeasurementProcess(Process):
 			print('Previous table detected...')
 			self.trajectories = pd.read_csv(self.trajectories)
 			if 'TRACK_ID' not in list(self.trajectories.columns):
-				print('Non-tracked cells detected...')
+				print('Static measurements detected...')
 				self.do_iso_intensities = False
 				self.intensity_measurement_radii = None
 				if self.clear_previous:
@@ -206,7 +206,7 @@ class MeasurementProcess(Process):
 					self.features += ['centroid']
 				self.column_labels.update({'track': 'ID'})
 			else:
-				print('Tracked cells detected...')
+				print('Time series detected...')
 				if self.clear_previous:
 					print('TRACK_ID found... Clear previous measurements...')
 					self.trajectories = remove_trajectory_measurements(self.trajectories, self.column_labels)
