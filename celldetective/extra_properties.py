@@ -198,10 +198,7 @@ def intensity_centre_of_mass_displacement(regionmask, intensity_image):
 
 		geometric_centroid_x = np.sum(xtemp * regionmask) / np.sum(regionmask)
 		geometric_centroid_y = np.sum(ytemp * regionmask) / np.sum(regionmask)
-		try:
-			distance = euclidean(np.array((geometric_centroid_y, geometric_centroid_x)), np.array((centroid_y, centroid_x)))
-		except:
-			distance = np.nan
+		distance = np.sqrt((geometric_centroid_y - centroid_y)**2 + (geometric_centroid_x - centroid_x)**2)
 
 		delta_x = geometric_centroid_x - centroid_x
 		delta_y = geometric_centroid_y - centroid_y
@@ -235,10 +232,7 @@ def intensity_centre_of_mass_displacement_edge(regionmask, intensity_image):
 		geometric_centroid_x = np.sum(xtemp * regionmask) / np.sum(regionmask)
 		geometric_centroid_y = np.sum(ytemp * regionmask) / np.sum(regionmask)
 		
-		try:
-			distance = euclidean(np.array((geometric_centroid_y, geometric_centroid_x)), np.array((centroid_y, centroid_x)))
-		except:
-			distance = np.nan
+		distance = np.sqrt((geometric_centroid_y - centroid_y)**2 + (geometric_centroid_x - centroid_x)**2)
 
 		delta_x = geometric_centroid_x - centroid_x
 		delta_y = geometric_centroid_y - centroid_y
