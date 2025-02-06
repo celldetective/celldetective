@@ -29,6 +29,7 @@ from celldetective.utils import interpolate_nan, contour_of_instance_segmentatio
 import skimage.measure as skm
 from stardist import fill_label_holes
 from celldetective.segmentation import segment_frame_from_thresholds
+from sklearn.metrics import r2_score
 
 
 # def area_detected_in_ricm(regionmask, intensity_image, target_channel='adhesion_channel'):
@@ -245,17 +246,28 @@ def intensity_centre_of_mass_displacement_edge(regionmask, intensity_image):
 
 def intensity_radial_gradient(regionmask, intensity_image):
 
-	try:
-		warnings.filterwarnings('ignore', message="Polyfit may be poorly conditioned")
-		cell_mask = regionmask.copy()
-		intensity = intensity_image.copy()
-		y = intensity[cell_mask].flatten()
-		x = distance_transform_edt(cell_mask)
-		x = x[cell_mask].flatten()
-		params = np.polyfit(x, y, 1)
-		line = np.poly1d(params)
+	"""
+	Determine if intensities are following a linear gradient from center to edge of the cell.
+	"""
+	
+	if np.any(intensity_image!=intensity_image):
+		intensity_image = interpolate_nan(intensity_image.copy())
+	
+	# try:
+	warnings.filterwarnings('ignore', message="Polyfit may be poorly conditioned")
+	
+	# intensities
+	y = intensity_image[regionmask].flatten()
 
-		return line.coefficients[0], line.coefficients[1]
-	except Exception as e:
-		print(e)
-		return np.nan, np.nan
+	# distance to edge
+	x = distance_transform_edt(regionmask.copy())
+	x = x[regionmask].flatten()
+	x = max(x) - x # origin at center of cells
+
+	params = np.polyfit(x, y, 1)
+	line = np.poly1d(params)
+	# coef > 0 --> more signal at edge than center, coef < 0 --> more signal at center than edge
+
+	r2 = r2_score(y, line(x))
+	
+	return line.coefficients[0], line.coefficients[1], r2

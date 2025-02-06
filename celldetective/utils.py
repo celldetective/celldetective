@@ -1129,9 +1129,7 @@ def mask_edges(binary_mask, border_size):
 def demangle_column_name(name):
 	if name.startswith("BACKTICK_QUOTED_STRING_"):
 		# Unquote backtick-quoted string.
-		return name[len("BACKTICK_QUOTED_STRING_"):].replace("_DOT_", ".").replace("_SLASH_", "/").replace('_MINUS_','-').replace('_PLUS_','+').replace('_PERCENT_','%').replace('_STAR_','*').replace('_LPAR_','(').replace('_RPAR_',')')
-	# elif name.startswith("BACKTICK_QUOTED_STRING_") and '_MINUS_' in name:
-	# 	return name[len("BACKTICK_QUOTED_STRING_"):].replace("_DOT_", ".").replace("_SLASH_", "/").replace('_MINUS_','-').replace('_PLUS_','+').replace('_PERCENT_','%')
+		return name[len("BACKTICK_QUOTED_STRING_"):].replace("_DOT_", ".").replace("_SLASH_", "/").replace('_MINUS_','-').replace('_PLUS_','+').replace('_PERCENT_','%').replace('_STAR_','*').replace('_LPAR_','(').replace('_RPAR_',')').replace('_AMPER_','&')
 	return name
 
 def extract_cols_from_query(query: str):
@@ -1339,6 +1337,12 @@ def rename_intensity_column(df, channels):
 				new_name = new_name.replace('radial_gradient', "radial_intercept")
 				to_rename.update({intensity_cols[k]: new_name.replace('-', '_')})
 	
+			elif sections[-2] == "2":
+				new_name = np.delete(measure, -1)
+				new_name = '_'.join(list(measure))
+				new_name = new_name.replace('radial_gradient', "radial_gradient_r2_score")
+				to_rename.update({intensity_cols[k]: new_name.replace('-', '_')})
+
 	df = df.rename(columns=to_rename)
 	
 	return df
