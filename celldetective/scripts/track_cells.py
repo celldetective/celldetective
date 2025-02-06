@@ -72,7 +72,7 @@ len_movie = float(ConfigSectionMap(config,"MovieSettings")["len_movie"])
 shape_x = int(ConfigSectionMap(config,"MovieSettings")["shape_x"])
 shape_y = int(ConfigSectionMap(config,"MovieSettings")["shape_y"])
 
-channel_names, channel_indices = extract_experiment_channels(config)
+channel_names, channel_indices = extract_experiment_channels(expfolder)
 nbr_channels = len(channel_names)
 
 # from tracking instructions, fetch btrack config, features, haralick, clean_traj, idea: fetch custom timeline?

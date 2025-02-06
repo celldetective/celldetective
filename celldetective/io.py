@@ -2509,7 +2509,7 @@ def control_segmentation_napari(position, prefix='Aligned', population="target",
 
 
 		spatial_calibration = float(ConfigSectionMap(config,"MovieSettings")["pxtoum"])
-		channel_names, channel_indices = extract_experiment_channels(config)
+		channel_names, channel_indices = extract_experiment_channels(exp_name)
 
 		annotation_folder = expfolder + os.sep + f'annotations_{population}' + os.sep
 		if not os.path.exists(annotation_folder):
