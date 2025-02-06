@@ -2509,7 +2509,7 @@ def control_segmentation_napari(position, prefix='Aligned', population="target",
 
 
 		spatial_calibration = float(ConfigSectionMap(config,"MovieSettings")["pxtoum"])
-		channel_names, channel_indices = extract_experiment_channels(config)
+		channel_names, channel_indices = extract_experiment_channels(expfolder)
 
 		annotation_folder = expfolder + os.sep + f'annotations_{population}' + os.sep
 		if not os.path.exists(annotation_folder):
@@ -2609,6 +2609,176 @@ def control_segmentation_napari(position, prefix='Aligned', population="target",
 	def export_widget():
 		return export_annotation()
 
+	@magicgui(call_button='segment',model={"choices": get_segmentation_models_list(population) + get_segmentation_models_list("generic")})
+	def segment_frame_widget(model='CP_cyto3'):
+
+		from celldetective.utils import _estimate_scale_factor, _extract_channel_indices, interpolate_nan_multichannel,_rearrange_multichannel_frame, _fix_no_contrast, zoom_multiframes, _rescale_labels, rename_intensity_column, mask_edges, _prep_stardist_model, _prep_cellpose_model, estimate_unreliable_edge,_get_normalize_kwargs_from_config, _segment_image_with_stardist_model, _segment_image_with_cellpose_model
+		print('segmenting!')
+		cellprob_threshold = None
+		flow_threshold = None
+		use_gpu = False
+
+
+		# 1) grab multichannel image or crop to segment
+		
+		parent1 = Path(position).parent
+		expfolder = parent1.parent
+		config = PurePath(expfolder, Path("config.ini"))
+		expfolder = str(expfolder)
+		exp_name = os.path.split(expfolder)[-1]
+
+		spatial_calibration = float(ConfigSectionMap(config,"MovieSettings")["pxtoum"])
+		channels, channel_indices = extract_experiment_channels(expfolder)
+		channels = list(channels)
+
+		annotation_folder = expfolder + os.sep + f'annotations_{population}' + os.sep
+		if not os.path.exists(annotation_folder):
+			os.mkdir(annotation_folder)
+
+		t = viewer.dims.current_step[0]
+
+		# if "Shapes" in viewer.layers:
+		# 	squares = viewer.layers['Shapes'].data
+		# 	test_in_frame = np.array([squares[i][0, 0] == t and len(squares[i]) == 4 for i in range(len(squares))])
+		# 	squares = np.array(squares)
+		# 	squares = squares[test_in_frame]
+		# 	nbr_squares = len(squares)
+		# 	print(f"Found {nbr_squares} ROIs...")
+		# 	if nbr_squares > 0:
+		# 		# deactivate field of view mode
+		# 		fov_export = False
+
+		# 	for k, sq in enumerate(squares):
+		# 		print(f"ROI: {sq}")
+		# 		pad_to_256=False
+
+		# 		xmin = int(sq[0, 1])
+		# 		xmax = int(sq[2, 1])
+		# 		if xmax < xmin:
+		# 			xmax, xmin = xmin, xmax
+		# 		ymin = int(sq[0, 2])
+		# 		ymax = int(sq[1, 2])
+		# 		if ymax < ymin:
+		# 			ymax, ymin = ymin, ymax
+		# 		print(f"{xmin=};{xmax=};{ymin=};{ymax=}")
+		# 		frame = viewer.layers['Image'].data[t][xmin:xmax, ymin:ymax]
+		# 		if frame.shape[1] < 256 or frame.shape[0] < 256:
+		# 			pad_to_256 = True
+		# 			print("Crop too small! Padding with zeros to reach 256*256 pixels...")
+		# 			#continue
+		# 		multichannel = [frame]
+		# 		for i in range(len(channel_indices) - 1):
+		# 			try:
+		# 				frame = viewer.layers[f'Image [{i + 1}]'].data[t][xmin:xmax, ymin:ymax]
+		# 				multichannel.append(frame)
+		# 			except:
+		# 				pass
+		# 		multichannel = np.array(multichannel)
+		# 		lab = labels_layer[xmin:xmax,ymin:ymax].astype(np.int16)
+		# 		if pad_to_256:
+		# 			shape = multichannel.shape
+		# 			pad_length_x = max([0,256 - multichannel.shape[1]])
+		# 			if pad_length_x>0 and pad_length_x%2==1:
+		# 				pad_length_x += 1
+		# 			pad_length_y = max([0,256 - multichannel.shape[2]])
+		# 			if pad_length_y>0 and pad_length_y%2==1:
+		# 				pad_length_y += 1
+		# 			padded_image = np.array([np.pad(im, ((pad_length_x//2,pad_length_x//2), (pad_length_y//2,pad_length_y//2)), mode='constant') for im in multichannel])
+		# 			padded_label = np.pad(lab,((pad_length_x//2,pad_length_x//2), (pad_length_y//2,pad_length_y//2)), mode='constant')
+		# 			lab = padded_label; multichannel = padded_image;
+
+		frame = viewer.layers['Image'].data[t]
+		multichannel = [frame]
+		for i in range(len(channel_indices) - 1):
+			try:
+				frame = viewer.layers[f'Image [{i + 1}]'].data[t]
+				multichannel.append(frame)
+			except:
+				pass
+		multichannel = np.array(multichannel)
+
+		# 2) Prep model
+		model_path = locate_segmentation_model(model)
+		input_config = model_path+'config_input.json'
+		if os.path.exists(input_config):
+			with open(input_config) as config:
+				print("Loading input configuration from 'config_input.json'.")
+				input_config = json.load(config)
+		else:
+			print('Model input configuration could not be located...')
+			return None
+
+		# Disable GPU for now
+		os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
+		
+		required_channels = input_config['channels']
+		channel_intersection = [ch for ch in channels if ch in required_channels]
+		assert len(channel_intersection)>0,'None of the channels required by the model can be found in the images to segment... Abort.'
+
+		channel_indices = _extract_channel_indices(channels, required_channels)
+
+		required_spatial_calibration = input_config['spatial_calibration']
+		model_type = input_config['model_type']
+
+		normalize_kwargs = _get_normalize_kwargs_from_config(input_config)
+
+		if model_type=='cellpose':
+			diameter = input_config['diameter']
+			if cellprob_threshold is None:
+				cellprob_threshold = input_config['cellprob_threshold']
+			if flow_threshold is None:
+				flow_threshold = input_config['flow_threshold']
+
+		scale = _estimate_scale_factor(spatial_calibration, required_spatial_calibration)
+
+		if model_type=='stardist':
+			model, scale_model = _prep_stardist_model(model_name, Path(model_path).parent, use_gpu=use_gpu, scale=scale)
+
+		elif model_type=='cellpose':
+			model, scale_model = _prep_cellpose_model(model_path.split('/')[-2], model_path, use_gpu=use_gpu, n_channels=len(required_channels), scale=scale)
+
+		# segment frame
+		
+		channel_indices = np.array(channel_indices)
+		none_channel_indices = np.where(channel_indices==None)[0]
+		channel_indices[channel_indices==None] = 0
+
+		frame = multichannel
+		frame = _rearrange_multichannel_frame(frame).astype(float)
+
+		frame_to_segment = np.zeros((frame.shape[0], frame.shape[1], len(required_channels))).astype(float)
+		for ch in channel_intersection:
+			idx = required_channels.index(ch)
+			frame_to_segment[:,:,idx] = frame[:,:,channels.index(ch)]
+		frame = frame_to_segment
+		template = frame.copy()
+
+		frame = normalize_multichannel(frame, **normalize_kwargs)
+		
+		if scale_model is not None:
+			frame = zoom_multiframes(frame, scale_model)
+		
+		frame = _fix_no_contrast(frame)
+		frame = interpolate_nan_multichannel(frame)
+		frame[:,:,none_channel_indices] = 0.
+
+		if model_type=="stardist":
+			Y_pred = _segment_image_with_stardist_model(frame, model=model, return_details=False)
+
+		elif model_type=="cellpose":
+			Y_pred = _segment_image_with_cellpose_model(frame, model=model, diameter=diameter, cellprob_threshold=cellprob_threshold, flow_threshold=flow_threshold)
+
+		if Y_pred.shape != stack[0].shape[:2]:
+			Y_pred = _rescale_labels(Y_pred, scale_model)
+		
+		Y_pred = _check_label_dims(Y_pred, template=template)
+
+		viewer.layers['segmentation'].data[t] = Y_pred
+		viewer.layers['segmentation'].refresh()
+
+		print('Done.')
+
+
 	stack, labels = locate_stack_and_labels(position, prefix=prefix, population=population)
 
 	if not population.endswith('s'):
@@ -2620,6 +2790,7 @@ def control_segmentation_napari(position, prefix='Aligned', population="target",
 	viewer.add_image(stack, channel_axis=-1, colormap=["gray"] * stack.shape[-1])
 	viewer.add_labels(labels.astype(int), name='segmentation', opacity=0.4)
 	viewer.window.add_dock_widget(save_widget, area='right')
+	viewer.window.add_dock_widget(segment_frame_widget, area='right')
 	viewer.window.add_dock_widget(export_widget, area='right')
 
 	def lock_controls(layer, widgets=(), locked=True):
