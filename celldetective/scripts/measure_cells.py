@@ -59,7 +59,7 @@ movie_prefix = ConfigSectionMap(config,"MovieSettings")["movie_prefix"]
 spatial_calibration = float(ConfigSectionMap(config,"MovieSettings")["pxtoum"])
 time_calibration = float(ConfigSectionMap(config,"MovieSettings")["frametomin"])
 len_movie = float(ConfigSectionMap(config,"MovieSettings")["len_movie"])
-channel_names, channel_indices = extract_experiment_channels(config)
+channel_names, channel_indices = extract_experiment_channels(expfolder)
 nbr_channels = len(channel_names)
 
 # from tracking instructions, fetch btrack config, features, haralick, clean_traj, idea: fetch custom timeline?

@@ -29,6 +29,7 @@ from celldetective.utils import interpolate_nan, contour_of_instance_segmentatio
 import skimage.measure as skm
 from stardist import fill_label_holes
 from celldetective.segmentation import segment_frame_from_thresholds
+from sklearn.metrics import r2_score
 
 
 # def area_detected_in_ricm(regionmask, intensity_image, target_channel='adhesion_channel'):
@@ -65,7 +66,7 @@ from celldetective.segmentation import segment_frame_from_thresholds
 
 # 	return np.sum(lbl)
 
-def fraction_of_area_detected_in_ricm(regionmask, intensity_image, target_channel='adhesion_channel'):
+def fraction_of_area_detected_in_intensity(regionmask, intensity_image, target_channel='adhesion_channel'):
 
 	instructions = {
 		"thresholds": [
@@ -94,7 +95,7 @@ def fraction_of_area_detected_in_ricm(regionmask, intensity_image, target_channe
 	
 	return float(np.sum(lbl)) / float(np.sum(regionmask))
 
-def area_detected_in_ricm(regionmask, intensity_image, target_channel='adhesion_channel'):
+def area_detected_in_intensity(regionmask, intensity_image, target_channel='adhesion_channel'):
 
 	instructions = {
 		"thresholds": [
@@ -124,7 +125,7 @@ def area_detected_in_ricm(regionmask, intensity_image, target_channel='adhesion_
 	return float(np.sum(lbl))
 
 
-def area_dark(regionmask, intensity_image, target_channel='adhesion_channel', fill_holes=True): #, target_channel='adhesion_channel'
+def area_dark_intensity(regionmask, intensity_image, target_channel='adhesion_channel', fill_holes=True): #, target_channel='adhesion_channel'
 	
 	subregion = (intensity_image < 0.95)*regionmask # under one, under 0.8, under 0.6, whatever value!
 	if fill_holes:
@@ -135,7 +136,7 @@ def area_dark(regionmask, intensity_image, target_channel='adhesion_channel', fi
 	return float(np.sum(subregion))
 
 
-def fraction_of_area_dark(regionmask, intensity_image, target_channel='adhesion_channel', fill_holes=True): #, target_channel='adhesion_channel'
+def fraction_of_area_dark_intensity(regionmask, intensity_image, target_channel='adhesion_channel', fill_holes=True): #, target_channel='adhesion_channel'
 	
 	subregion = (intensity_image < 0.95)*regionmask # under one, under 0.8, under 0.6, whatever value!
 	if fill_holes:
@@ -182,60 +183,49 @@ def intensity_nanmean(regionmask, intensity_image):
 
 def intensity_centre_of_mass_displacement(regionmask, intensity_image):
 
-	intensity_image = interpolate_nan(intensity_image.copy())
+	if np.any(intensity_image!=intensity_image):
+		intensity_image = interpolate_nan(intensity_image.copy())
 
-	y, x = np.mgrid[:regionmask.shape[0], :regionmask.shape[1]]
-	xtemp = x.copy()
-	ytemp = y.copy()
-	intensity_weighted_center = center_of_mass(intensity_image, regionmask)
-	centroid_x = intensity_weighted_center[1]
-	centroid_y = intensity_weighted_center[0]
+	if not np.all(intensity_image.flatten()==0):
+		
+		y, x = np.mgrid[:regionmask.shape[0], :regionmask.shape[1]]
+		xtemp = x.copy()
+		ytemp = y.copy()
 
-	#centroid_x = np.sum(xtemp * intensity_image) / np.sum(intensity_image)
-	geometric_centroid_x = np.sum(xtemp * regionmask) / np.sum(regionmask)
-	geometric_centroid_y = np.sum(ytemp * regionmask) / np.sum(regionmask)
-	try:
-		distance = euclidean(np.array((geometric_centroid_y, geometric_centroid_x)), np.array((centroid_y, centroid_x)))
-	except:
-		distance = np.nan
+		intensity_image[intensity_image<=0.] = 0. #important to clip as negative intensities misbehave with center of mass
+		intensity_weighted_center = center_of_mass(intensity_image*regionmask, regionmask, 1)
+		centroid_x = intensity_weighted_center[1]
+		centroid_y = intensity_weighted_center[0]
 
-	delta_x = geometric_centroid_x - centroid_x
-	delta_y = geometric_centroid_y - centroid_y
-	direction_arctan = np.arctan2(delta_y, delta_x) * 180 / np.pi
-	if direction_arctan < 0:
-		direction_arctan += 360
+		geometric_centroid_x = np.sum(xtemp * regionmask) / np.sum(regionmask)
+		geometric_centroid_y = np.sum(ytemp * regionmask) / np.sum(regionmask)
+		distance = np.sqrt((geometric_centroid_y - centroid_y)**2 + (geometric_centroid_x - centroid_x)**2)
 
-	return distance, direction_arctan, centroid_x - geometric_centroid_x, centroid_y - geometric_centroid_y
+		delta_x = geometric_centroid_x - centroid_x
+		delta_y = geometric_centroid_y - centroid_y
+		direction_arctan = np.arctan2(delta_y, delta_x) * 180 / np.pi
 
-def intensity_radial_gradient(regionmask, intensity_image):
+		return distance, direction_arctan, centroid_x - geometric_centroid_x, centroid_y - geometric_centroid_y
 
-	try:
-		warnings.filterwarnings('ignore', message="Polyfit may be poorly conditioned")
-		cell_mask = regionmask.copy()
-		intensity = intensity_image.copy()
-		y = intensity[cell_mask].flatten()
-		x = distance_transform_edt(cell_mask)
-		x = x[cell_mask].flatten()
-		params = np.polyfit(x, y, 1)
-		line = np.poly1d(params)
-
-		return line.coefficients[0], line.coefficients[1]
-	except Exception as e:
-		print(e)
-		return np.nan, np.nan
+	else:
+		return np.nan, np.nan, np.nan, np.nan
 
 
 def intensity_centre_of_mass_displacement_edge(regionmask, intensity_image):
-	
-	intensity_image = interpolate_nan(intensity_image.copy())
-	edge_mask = contour_of_instance_segmentation(regionmask, 3)
 
-	if np.sum(edge_mask)>0:
+	if np.any(intensity_image!=intensity_image):
+		intensity_image = interpolate_nan(intensity_image.copy())
+
+	edge_mask = contour_of_instance_segmentation(regionmask, 3)
+	
+	if not np.all(intensity_image.flatten()==0) and np.sum(edge_mask)>0:
 		
 		y, x = np.mgrid[:edge_mask.shape[0], :edge_mask.shape[1]]
 		xtemp = x.copy()
 		ytemp = y.copy()
-		intensity_weighted_center = center_of_mass(intensity_image, edge_mask)
+		
+		intensity_image[intensity_image<=0.] = 0. #important to clip as negative intensities misbehave with center of mass
+		intensity_weighted_center = center_of_mass(intensity_image*edge_mask, edge_mask, 1)
 		centroid_x = intensity_weighted_center[1]
 		centroid_y = intensity_weighted_center[0]
 
@@ -243,17 +233,41 @@ def intensity_centre_of_mass_displacement_edge(regionmask, intensity_image):
 		geometric_centroid_x = np.sum(xtemp * regionmask) / np.sum(regionmask)
 		geometric_centroid_y = np.sum(ytemp * regionmask) / np.sum(regionmask)
 		
-		try:
-			distance = euclidean(np.array((geometric_centroid_y, geometric_centroid_x)), np.array((centroid_y, centroid_x)))
-		except:
-			distance = np.nan
+		distance = np.sqrt((geometric_centroid_y - centroid_y)**2 + (geometric_centroid_x - centroid_x)**2)
 
 		delta_x = geometric_centroid_x - centroid_x
 		delta_y = geometric_centroid_y - centroid_y
 		direction_arctan = np.arctan2(delta_y, delta_x) * 180 / np.pi
-		if direction_arctan < 0:
-			direction_arctan += 360
 
 		return distance, direction_arctan, centroid_x - geometric_centroid_x, centroid_y - geometric_centroid_y
 	else:
 		return np.nan, np.nan, np.nan, np.nan
+
+
+def intensity_radial_gradient(regionmask, intensity_image):
+
+	"""
+	Determine if intensities are following a linear gradient from center to edge of the cell.
+	"""
+	
+	if np.any(intensity_image!=intensity_image):
+		intensity_image = interpolate_nan(intensity_image.copy())
+	
+	# try:
+	warnings.filterwarnings('ignore', message="Polyfit may be poorly conditioned")
+	
+	# intensities
+	y = intensity_image[regionmask].flatten()
+
+	# distance to edge
+	x = distance_transform_edt(regionmask.copy())
+	x = x[regionmask].flatten()
+	x = max(x) - x # origin at center of cells
+
+	params = np.polyfit(x, y, 1)
+	line = np.poly1d(params)
+	# coef > 0 --> more signal at edge than center, coef < 0 --> more signal at center than edge
+
+	r2 = r2_score(y, line(x))
+	
+	return line.coefficients[0], line.coefficients[1], r2

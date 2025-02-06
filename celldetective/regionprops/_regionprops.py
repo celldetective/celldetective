@@ -101,12 +101,21 @@ class CustomRegionProps(RegionProperties):
 						arg_dict = dict(inspect.signature(func).parameters)
 						if self.channel_names is not None and 'target_channel' in arg_dict:
 							multichannel_list = [np.nan for i in range(self.image_intensity.shape[-1])]
+							len_output = 1
 							default_channel = arg_dict['target_channel']._default
+							
 							if default_channel in self.channel_names:
+								
 								idx = self.channel_names.index(default_channel)
-								multichannel_list[idx] = func(self.image, self.image_intensity[..., idx])
+								res = func(self.image, self.image_intensity[..., idx])
+								len_output = len(res)
+
+								multichannel_list = [[np.nan]*len_output for c in range(len(self.channel_names))]
+								multichannel_list[idx] = res
+
 							else:
 								print(f'Warning... Channel required by custom measurement ({default_channel}) could not be found in your data...')
+							
 							return np.stack(multichannel_list, axis=-1)
 						else:
 							multichannel_list = [

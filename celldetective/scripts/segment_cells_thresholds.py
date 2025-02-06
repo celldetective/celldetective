@@ -72,7 +72,7 @@ threshold_instructions.update({'target_channel': channel_indices[0]})
 
 movie_prefix = ConfigSectionMap(config,"MovieSettings")["movie_prefix"]
 len_movie = float(ConfigSectionMap(config,"MovieSettings")["len_movie"])
-channel_names, channel_indices = extract_experiment_channels(config)
+channel_names, channel_indices = extract_experiment_channels(expfolder)
 threshold_instructions.update({'channel_names': channel_names})
 
 # Try to find the file

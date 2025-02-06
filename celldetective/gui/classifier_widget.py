@@ -365,7 +365,9 @@ class ClassifierWidget(QWidget, Styles):
 		except Exception as e:
 			msgBox = QMessageBox()
 			msgBox.setIcon(QMessageBox.Warning)
-			msgBox.setText(f"The query could not be understood. No filtering was applied. {e}")
+			link = "https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.query.html"
+			msg = "The query could not be understood. Please write a valid query following <a href='%s'>the documentation</a>. Wrap features in backticks (e.g. `feature` > 1) to facilitate query interpretation. " % link
+			msgBox.setText(msg)
 			msgBox.setWindowTitle("Warning")
 			msgBox.setStandardButtons(QMessageBox.Ok)
 			returnValue = msgBox.exec()

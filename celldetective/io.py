@@ -210,19 +210,23 @@ def collect_experiment_metadata(pos_path=None, well_path=None):
 		pos_name = extract_position_name(pos_path)
 	else:
 		pos_name = 0
-	concentrations = get_experiment_concentrations(experiment, dtype=float)
-	cell_types = get_experiment_cell_types(experiment)
-	antibodies = get_experiment_antibodies(experiment)
-	pharmaceutical_agents = get_experiment_pharmaceutical_agents(experiment)
-	
-	dico = {"pos_path": pos_path, "position": pos_path, "pos_name": pos_name, "well_path": well_path, "well_name": well_name, "well_nbr": well_nbr, "experiment": experiment, "antibody": antibodies[idx], "concentration": concentrations[idx], "cell_type": cell_types[idx], "pharmaceutical_agent": pharmaceutical_agents[idx]}
+
+	dico = {"pos_path": pos_path, "position": pos_path, "pos_name": pos_name, "well_path": well_path, "well_name": well_name, "well_nbr": well_nbr, "experiment": experiment}
 
 	meta = get_experiment_metadata(experiment) # None or dict of metadata
 	if meta is not None:
 		keys = list(meta.keys())
 		for k in keys:
 			dico.update({k: meta[k]})
-	
+
+	labels = get_experiment_labels(experiment)
+	for k in list(labels.keys()):
+		values = labels[k]
+		try:
+			dico.update({k: values[idx]})
+		except Exception as e:
+			print(f"{e=}")
+
 	return dico
 
 
@@ -2498,24 +2502,34 @@ def control_segmentation_napari(position, prefix='Aligned', population="target",
 		config = PurePath(expfolder, Path("config.ini"))
 		expfolder = str(expfolder)
 		exp_name = os.path.split(expfolder)[-1]
-		print(exp_name)
 
 		wells = get_experiment_wells(expfolder)
 		well_idx = list(wells).index(str(parent1)+os.sep)
-		ab = get_experiment_antibodies(expfolder)[well_idx]
-		conc = get_experiment_concentrations(expfolder)[well_idx]
-		ct = get_experiment_cell_types(expfolder)[well_idx]
-		pa = get_experiment_pharmaceutical_agents(expfolder)[well_idx]
 
+		label_info = get_experiment_labels(expfolder)
+		metadata_info = get_experiment_metadata(expfolder)
+
+		info = {}
+		for k in list(label_info.keys()):
+			values = label_info[k]
+			try:
+				info.update({k: values[well_idx]})
+			except Exception as e:
+				print(f"{e=}")
+
+		if metadata_info is not None:
+			keys = list(metadata_info.keys())
+			for k in keys:
+				info.update({k: metadata_info[k]})
 
 		spatial_calibration = float(ConfigSectionMap(config,"MovieSettings")["pxtoum"])
-		channel_names, channel_indices = extract_experiment_channels(config)
+		channel_names, channel_indices = extract_experiment_channels(expfolder)
 
 		annotation_folder = expfolder + os.sep + f'annotations_{population}' + os.sep
 		if not os.path.exists(annotation_folder):
 			os.mkdir(annotation_folder)
 
-		print('exporting!')
+		print('Exporting!')
 		t = viewer.dims.current_step[0]
 		labels_layer = viewer.layers['segmentation'].data[t]  # at current time
 
@@ -2578,10 +2592,13 @@ def control_segmentation_napari(position, prefix='Aligned', population="target",
 
 				save_tiff_imagej_compatible(annotation_folder + f"{exp_name}_{position.split(os.sep)[-2]}_{str(t).zfill(4)}_roi_{xmin}_{xmax}_{ymin}_{ymax}_labelled.tif", lab, axes='YX')
 				save_tiff_imagej_compatible(annotation_folder + f"{exp_name}_{position.split(os.sep)[-2]}_{str(t).zfill(4)}_roi_{xmin}_{xmax}_{ymin}_{ymax}.tif", multichannel, axes='CYX')
-				info = {"spatial_calibration": spatial_calibration, "channels": list(channel_names), 'cell_type': ct, 'antibody': ab, 'concentration': conc, 'pharmaceutical_agent': pa}
+
+				info.update({"spatial_calibration": spatial_calibration, "channels": list(channel_names), 'frame': t})
+
 				info_name = annotation_folder + f"{exp_name}_{position.split(os.sep)[-2]}_{str(t).zfill(4)}_roi_{xmin}_{xmax}_{ymin}_{ymax}.json"
 				with open(info_name, 'w') as f:
 					json.dump(info, f, indent=4)
+
 
 		if fov_export:
 			frame = viewer.layers['Image'].data[t]
@@ -2595,11 +2612,14 @@ def control_segmentation_napari(position, prefix='Aligned', population="target",
 			multichannel = np.array(multichannel)       
 			save_tiff_imagej_compatible(annotation_folder + f"{exp_name}_{position.split(os.sep)[-2]}_{str(t).zfill(4)}_labelled.tif", labels_layer, axes='YX')
 			save_tiff_imagej_compatible(annotation_folder + f"{exp_name}_{position.split(os.sep)[-2]}_{str(t).zfill(4)}.tif", multichannel, axes='CYX')
-			info = {"spatial_calibration": spatial_calibration, "channels": list(channel_names), 'cell_type': ct, 'antibody': ab, 'concentration': conc, 'pharmaceutical_agent': pa}
+
+			info.update({"spatial_calibration": spatial_calibration, "channels": list(channel_names), 'frame': t})
+
 			info_name = annotation_folder + f"{exp_name}_{position.split(os.sep)[-2]}_{str(t).zfill(4)}.json"
 			with open(info_name, 'w') as f:
 				json.dump(info, f, indent=4)
-			print('Done.')
+		
+		print('Done.')
 
 	@magicgui(call_button='Save the modified labels')
 	def save_widget():
