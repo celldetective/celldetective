@@ -210,19 +210,23 @@ def collect_experiment_metadata(pos_path=None, well_path=None):
 		pos_name = extract_position_name(pos_path)
 	else:
 		pos_name = 0
-	concentrations = get_experiment_concentrations(experiment, dtype=float)
-	cell_types = get_experiment_cell_types(experiment)
-	antibodies = get_experiment_antibodies(experiment)
-	pharmaceutical_agents = get_experiment_pharmaceutical_agents(experiment)
-	
-	dico = {"pos_path": pos_path, "position": pos_path, "pos_name": pos_name, "well_path": well_path, "well_name": well_name, "well_nbr": well_nbr, "experiment": experiment, "antibody": antibodies[idx], "concentration": concentrations[idx], "cell_type": cell_types[idx], "pharmaceutical_agent": pharmaceutical_agents[idx]}
+
+	dico = {"pos_path": pos_path, "position": pos_path, "pos_name": pos_name, "well_path": well_path, "well_name": well_name, "well_nbr": well_nbr, "experiment": experiment}
 
 	meta = get_experiment_metadata(experiment) # None or dict of metadata
 	if meta is not None:
 		keys = list(meta.keys())
 		for k in keys:
 			dico.update({k: meta[k]})
-	
+
+	labels = get_experiment_labels(experiment)
+	for k in list(labels.keys()):
+		values = labels[k]
+		try:
+			dico.update({k: values[idx]})
+		except Exception as e:
+			print(f"{e=}")
+
 	return dico
 
 
