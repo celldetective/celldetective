@@ -108,10 +108,17 @@ class CustomRegionProps(RegionProperties):
 								
 								idx = self.channel_names.index(default_channel)
 								res = func(self.image, self.image_intensity[..., idx])
-								len_output = len(res)
+								if isinstance(res, tuple):
+									len_output = len(res)
+								else:
+									len_output = 1
 
-								multichannel_list = [[np.nan]*len_output for c in range(len(self.channel_names))]
-								multichannel_list[idx] = res
+								if len_output > 1:
+									multichannel_list = [[np.nan]*len_output for c in range(len(self.channel_names))]
+									multichannel_list[idx] = res
+								else:
+									multichannel_list = [np.nan for c in range(len(self.channel_names))]
+									multichannel_list[idx] = res
 
 							else:
 								print(f'Warning... Channel required by custom measurement ({default_channel}) could not be found in your data...')

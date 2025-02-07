@@ -1264,7 +1264,6 @@ def rename_intensity_column(df, channels):
 			if s.isdigit():
 				if int(s)<len(channel_names):
 					test_digit[j] = True
-		print(f"{test_digit=}")
 			
 		if np.any(test_digit):
 			index = int(sections[np.where(test_digit)[0]][-1])
@@ -1289,36 +1288,36 @@ def rename_intensity_column(df, channels):
 				new_name = np.delete(measure, -1)
 				new_name = '_'.join(list(new_name))
 				if 'edge' in intensity_cols[k]:
-					new_name = new_name.replace('centre_of_mass_displacement', "edge_centre_of_mass_displacement_in_px")
+					new_name = new_name.replace('center_of_mass_displacement', "edge_center_of_mass_displacement_in_px")
 				else:
-					new_name = new_name.replace('centre_of_mass', "centre_of_mass_displacement_in_px")
+					new_name = new_name.replace('center_of_mass', "center_of_mass_displacement_in_px")
 				to_rename.update({intensity_cols[k]: new_name.replace('-', '_')})
 			
 			elif sections[-2] == "1":
 				new_name = np.delete(measure, -1)
 				new_name = '_'.join(list(new_name))
 				if 'edge' in intensity_cols[k]:
-					new_name = new_name.replace('centre_of_mass_displacement', "edge_centre_of_mass_orientation")
+					new_name = new_name.replace('center_of_mass_displacement', "edge_center_of_mass_orientation")
 				else:
-					new_name = new_name.replace('centre_of_mass', "centre_of_mass_orientation")
+					new_name = new_name.replace('center_of_mass', "center_of_mass_orientation")
 				to_rename.update({intensity_cols[k]: new_name.replace('-', '_')})
 				
 			elif sections[-2] == "2":
 				new_name = np.delete(measure, -1)
 				new_name = '_'.join(list(new_name))
 				if 'edge' in intensity_cols[k]:
-					new_name = new_name.replace('centre_of_mass_displacement', "edge_centre_of_mass_x")
+					new_name = new_name.replace('center_of_mass_displacement', "edge_center_of_mass_x")
 				else:
-					new_name = new_name.replace('centre_of_mass', "centre_of_mass_x")
+					new_name = new_name.replace('center_of_mass', "center_of_mass_x")
 				to_rename.update({intensity_cols[k]: new_name.replace('-', '_')})
 			
 			elif sections[-2] == "3":
 				new_name = np.delete(measure, -1)
 				new_name = '_'.join(list(new_name))
 				if 'edge' in intensity_cols[k]:
-					new_name = new_name.replace('centre_of_mass_displacement', "edge_centre_of_mass_y")
+					new_name = new_name.replace('center_of_mass_displacement', "edge_center_of_mass_y")
 				else:
-					new_name = new_name.replace('centre_of_mass', "centre_of_mass_y")
+					new_name = new_name.replace('center_of_mass', "center_of_mass_y")
 				to_rename.update({intensity_cols[k]: new_name.replace('-', '_')})
 		
 		if 'radial_gradient' in intensity_cols[k]:

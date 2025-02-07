@@ -181,7 +181,7 @@ def intensity_nanmean(regionmask, intensity_image):
 	else:
 		return np.nanmean(intensity_image[regionmask])
 
-def intensity_centre_of_mass_displacement(regionmask, intensity_image):
+def intensity_center_of_mass_displacement(regionmask, intensity_image):
 
 	if np.any(intensity_image!=intensity_image):
 		intensity_image = interpolate_nan(intensity_image.copy())
@@ -211,7 +211,7 @@ def intensity_centre_of_mass_displacement(regionmask, intensity_image):
 		return np.nan, np.nan, np.nan, np.nan
 
 
-def intensity_centre_of_mass_displacement_edge(regionmask, intensity_image):
+def intensity_center_of_mass_displacement_edge(regionmask, intensity_image):
 
 	if np.any(intensity_image!=intensity_image):
 		intensity_image = interpolate_nan(intensity_image.copy())
