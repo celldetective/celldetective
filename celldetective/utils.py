@@ -1264,7 +1264,6 @@ def rename_intensity_column(df, channels):
 			if s.isdigit():
 				if int(s)<len(channel_names):
 					test_digit[j] = True
-		print(f"{test_digit=}")
 			
 		if np.any(test_digit):
 			index = int(sections[np.where(test_digit)[0]][-1])
