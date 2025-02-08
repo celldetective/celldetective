@@ -297,9 +297,12 @@ class ConfigSignalPlot(QWidget, Styles):
 			self.compute_signal_functions()
 			if self.open_widget:
 				self.interpret_pos_location()
-				self.plot_window = GenericSignalPlotWidget(parent_window=self, df=self.df, df_pos_info = self.df_pos_info, df_well_info = self.df_well_info, feature_selected=self.feature_selected, title='plot signals')
-				self.plot_window.show()
-
+				try:
+					self.plot_window = GenericSignalPlotWidget(parent_window=self, df=self.df, df_pos_info = self.df_pos_info, df_well_info = self.df_well_info, feature_selected=self.feature_selected, title='plot signals')
+					self.plot_window.show()
+				except Exception as e:
+					print(f"{e=}")
+		
 	def process_signal(self):
 
 		self.FrameToMin = float(self.time_calibration_le.text().replace(',','.'))
