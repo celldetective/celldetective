@@ -1,6 +1,6 @@
 """
 Copyright © 2022 Laboratoire Adhesion et Inflammation  
-Authored by Rémy Torro, Ksenija Dervanova  
+Authored by R. Torro, K. Dervanova, L. Limozin
 
 This module defines additional measurement functions for use with `regionprops` via `measure_features`.  
 
@@ -148,9 +148,9 @@ def area_detected_in_intensity(regionmask, intensity_image, target_channel='adhe
 	  - Thresholding range: `[0.02, 1000]`
 	  - Filters applied in sequence:
 
-		- `"subtract"` with intensity level `1`
-		- `"abs"` with intensity level `2`
-		- `"gauss"` with sigma `0.8`
+		- `"subtract"` with value `1` (subtract 1 from intensity values)
+		- `"abs"` (take absolute value of intensities)
+		- `"gauss"` with sigma `0.8` (apply Gauss filter with sigma `0.8`)
 
 	- The segmentation includes hole filling.
 	- The detected regions are converted to a binary mask (`lbl > 0`).
