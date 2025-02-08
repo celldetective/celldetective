@@ -482,8 +482,12 @@ class ClassifierWidget(QWidget, Styles):
 
 		if 'custom' in list(self.df.columns):
 			self.df = self.df.drop(['custom'],axis=1)
-
+		
+		self.fig_props.set_size_inches(4,3)
+		self.fig_props.suptitle(self.property_query_le.text(), fontsize=10)
+		self.fig_props.tight_layout()
 		for pos,pos_group in self.df.groupby('position'):
+			self.fig_props.savefig(pos+os.sep.join(['output',f'{self.class_name}.png']), bbox_inches='tight', dpi=300)
 			pos_group.to_csv(pos+os.sep.join(['output', 'tables', f'trajectories_{self.mode}.csv']), index=False)
 
 		self.parent_window.parent_window.update_position_options()
