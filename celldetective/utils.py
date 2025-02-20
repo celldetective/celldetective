@@ -31,7 +31,7 @@ from scipy.stats import ks_2samp
 from cliffs_delta import cliffs_delta
 from stardist.models import StarDist2D
 from cellpose.models import CellposeModel
-from pathlib import PosixPath, PurePosixPath
+from pathlib import PosixPath, PurePosixPath, WindowsPath
 
 def get_config(experiment):
 
@@ -68,7 +68,7 @@ def get_config(experiment):
 
 	"""
 
-	if isinstance(experiment, (PosixPath, PurePosixPath)):
+	if isinstance(experiment, (PosixPath, PurePosixPath, WindowsPath)):
 		experiment = str(experiment)
 
 	if not experiment.endswith(os.sep):

@@ -848,7 +848,7 @@ class ProcessPanel(QFrame, Styles):
 					if os.path.exists(os.sep.join([self.pos, 'output', 'tables', f'trajectories_{self.mode}.csv'])) and not self.parent_window.position_list.isMultipleSelection():
 						msgBox = QMessageBox()
 						msgBox.setIcon(QMessageBox.Question)
-						msgBox.setText("A trajectory set already exists. Previously annotated data for\nthis position will be lost. Do you want to proceed?")
+						msgBox.setText("A measurement table already exists. Previously annotated data for\nthis position will be lost. Do you want to proceed?")
 						msgBox.setWindowTitle("Info")
 						msgBox.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
 						returnValue = msgBox.exec()
