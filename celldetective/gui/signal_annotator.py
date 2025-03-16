@@ -807,8 +807,6 @@ class SignalAnnotator(QMainWindow, Styles):
 			cols_to_remove += time_cols
 			#cols_to_remove.extend(self.df_tracks.select_dtypes(include=['object']).columns)
 
-			print(f"{cols_to_remove=}")
-
 			for tr in cols_to_remove:
 				try:
 					self.columns_to_rescale.remove(tr)
@@ -855,6 +853,16 @@ class SignalAnnotator(QMainWindow, Styles):
 		to_remove = ['TRACK_ID', 'FRAME', 'x_anim', 'y_anim', 't', 'state', 'generation', 'root', 'parent', 'class_id',
 					 'class', 't0', 'POSITION_X', 'POSITION_Y', 'position', 'well', 'well_index', 'well_name',
 					 'pos_name', 'index','class_color','status_color']
+
+		meta = get_experiment_metadata(self.exp_dir)
+		if meta is not None:
+			keys = list(meta.keys())
+			to_remove.extend(keys)
+
+		labels = get_experiment_labels(self.exp_dir)
+		if labels is not None:
+			keys = list(labels.keys())
+			to_remove.extend(labels)
 
 		for c in to_remove:
 			if c in signals:

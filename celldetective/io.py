@@ -1941,10 +1941,10 @@ def relabel_segmentation(labels, df, exclude_nans=True, column_labels={'track': 
 
 	def rewrite_labels(indices):
 
-		all_track_ids = df[column_labels['track']].unique()
+		all_track_ids = df[column_labels['track']].dropna().unique()
 		
 		for t in tqdm(indices):
-
+			
 			f = int(t)
 			cells = df.loc[df[column_labels['frame']] == f, [column_labels['track'], column_labels['label']]].to_numpy()
 			tracks_at_t = list(cells[:,0])
@@ -1974,15 +1974,23 @@ def relabel_segmentation(labels, df, exclude_nans=True, column_labels={'track': 
 				
 				loc_i, loc_j = np.where(labels[f] == identities[k])
 				track_id = tracks_at_t[k]
-				new_labels[f, loc_i, loc_j] = round(track_id)
+
+				if track_id==track_id:
+					new_labels[f, loc_i, loc_j] = round(track_id)
 
 	# Multithreading
-	indices = list(df[column_labels['frame']].unique())
+	indices = list(df[column_labels['frame']].dropna().unique())
 	chunks = np.array_split(indices, n_threads)
 
-	with concurrent.futures.ThreadPoolExecutor() as executor:
-		executor.map(rewrite_labels, chunks)
-	
+	with concurrent.futures.ThreadPoolExecutor(max_workers=threads) as executor:
+		
+		results = executor.map(rewrite_labels, chunks) #list(map(lambda x: executor.submit(self.parallel_job, x), chunks))
+		try:
+			for i,return_value in enumerate(results):
+				print(f"Thread {i} output check: ",return_value)
+		except Exception as e:
+			print("Exception: ", e)
+
 	print("\nDone.")
 
 	return new_labels
@@ -2088,6 +2096,7 @@ def tracks_to_btrack(df, exclude_nans=False):
 	graph = {}
 	if exclude_nans:
 		df.dropna(subset='class_id',inplace=True)
+		df.dropna(subset='TRACK_ID',inplace=True)
 
 	df["z"] = 0.
 	data = df[["TRACK_ID","FRAME","z","POSITION_Y","POSITION_X"]].to_numpy()
