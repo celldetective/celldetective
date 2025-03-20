@@ -128,26 +128,29 @@ For more information about how to get started, please check the [documentation](
 # How to cite?
 
 If you use this software in your research, please cite the
-[Celldetective](https://www.biorxiv.org/content/10.1101/2024.03.15.585250v3)
-paper (currently preprint):
+[Celldetective](https://elifesciences.org/reviewed-preprints/105302)
+paper (currently a reviewed preprint at eLife):
 
 ``` raw
-@article {Torro2024.03.15.585250,
-    author = {Torro, R{\'e}my and D{\'\i}az-Bello, Beatriz and Arawi, Dalia El and Dervanova, Ksenija and Ammer, Lorna and Dupuy, Florian and Chames, Patrick and Sengupta, Kheya and Limozin, Laurent},
-    title = {Celldetective: an AI-enhanced image analysis tool for unraveling dynamic cell interactions},
-    elocation-id = {2024.03.15.585250},
-    year = {2024},
-    doi = {10.1101/2024.03.15.585250},
-    publisher = {Cold Spring Harbor Laboratory},
-    abstract = {A current challenge in bioimaging for immunology and immunotherapy research lies in analyzing multimodal and multidimensional data that capture dynamic interactions between diverse cell populations. Here, we introduce Celldetective, an open-source Python-based software designed for high-performance, end-to-end analysis of image-based in vitro immune and immunotherapy assays. Purpose-built for multicondition, 2D multichannel time-lapse microscopy of mixed cell populations, Celldetective is optimized for the needs of immunology assays. The software seamlessly integrates AI-based segmentation, Bayesian tracking, and automated single-cell event detection, all within an intuitive graphical interface that supports interactive visualization, annotation, and training capabilities. We demonstrate its utility with original data on immune effector cell interactions with an activating surface, mediated by bispecific antibodies, and further showcase its potential for analyzing extensive sets of pairwise interactions in antibody-dependent cell cytotoxicity events.Competing Interest StatementThe authors have declared no competing interest.},
-    URL = {https://www.biorxiv.org/content/early/2024/11/13/2024.03.15.585250},
-    eprint = {https://www.biorxiv.org/content/early/2024/11/13/2024.03.15.585250.full.pdf},
-    journal = {bioRxiv}
+@article{torroCelldetectiveAIenhancedImage2025,
+  title = {Celldetective: An {{AI-enhanced}} Image Analysis Tool for Unraveling Dynamic Cell Interactions},
+  shorttitle = {Celldetective},
+  author = {Torro, Rémy and Díaz-Bello, Beatriz and Arawi, Dalia El and Dervanova, Ksenija and Ammer, Lorna and Dupuy, Florian and Chames, Patrick and Sengupta, Kheya and Limozin, Laurent},
+  date = {2025-03-10},
+  journaltitle = {eLife},
+  volume = {14},
+  publisher = {eLife Sciences Publications Limited},
+  doi = {10.7554/eLife.105302.1},
+  url = {https://elifesciences.org/reviewed-preprints/105302},
+  urldate = {2025-03-20},
+  abstract = {A current challenge in bioimaging for immunology and immunotherapy research lies in analyzing multimodal and multidimensional data that capture dynamic interactions between diverse cell populations. Here, we introduce Celldetective, an open-source Python-based software designed for high-performance, end-to-end analysis of image-based in vitro immune and immunotherapy assays. Purpose-built for multicondition, 2D multichannel time-lapse microscopy of mixed cell populations, Celldetective is optimized for the needs of immunology assays. The software seamlessly integrates AI-based segmentation, Bayesian tracking, and automated single-cell event detection, all within an intuitive graphical interface that supports interactive visualization, annotation, and training capabilities. We demonstrate its utility with original data on immune effector cell interactions with an activating surface, mediated by bispecific antibodies, and further showcase its potential for analyzing extensive sets of pairwise interactions in antibody-dependent cell cytotoxicity events.},
+  langid = {english},
+  file = {/home/torro/Zotero/storage/VFYBBMQF/Torro et al. - 2025 - Celldetective an AI-enhanced image analysis tool .pdf;/home/torro/Zotero/storage/UGMCKKST/105302.html}
 }
 ```
 
 Make sure you to cite the papers of any segmentation model (StarDist,
-Cellpose) or tracker (bTrack) you used through Celldetective.
+Cellpose) or tracker (bTrack, TrackPy) you used through Celldetective.
 
 # Bibliography
 
