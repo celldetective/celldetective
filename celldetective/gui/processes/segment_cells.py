@@ -47,11 +47,7 @@ class BaseSegmentProcess(Process):
 	def write_folders(self):
 
 		self.mode = self.mode.lower()
-
-		if self.mode=="target" or self.mode=="targets":
-			self.label_folder = "labels_targets"
-		elif self.mode=="effector" or self.mode=="effectors":
-			self.label_folder = "labels_effectors"
+		self.label_folder = f"labels_{self.mode}"
 
 		if os.path.exists(self.pos+self.label_folder):
 			print('Erasing the previous labels folder...')

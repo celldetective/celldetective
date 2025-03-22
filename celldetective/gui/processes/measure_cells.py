@@ -166,6 +166,11 @@ class MeasurementProcess(Process):
 			self.table_name = "trajectories_effectors.csv"
 			self.instruction_file = os.sep.join(["configs","measurement_instructions_effectors.json"])
 
+		else:
+			self.label_folder = f"labels_{self.mode}"
+			self.table_name = f"trajectories_{self.mode}.csv"
+			self.instruction_file = os.sep.join(["configs",f"measurement_instructions_{self.mode}.json"])			
+
 	def extract_experiment_parameters(self):
 
 		self.movie_prefix = ConfigSectionMap(self.config,"MovieSettings")["movie_prefix"]

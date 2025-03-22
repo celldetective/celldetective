@@ -51,12 +51,8 @@ class SignalAnnotator(QMainWindow, Styles):
 		self.recently_modified = False
 		self.selection = []
 
-		if self.mode == "targets":
-			self.instructions_path = self.exp_dir + os.sep.join(['configs', 'signal_annotator_config_targets.json'])
-			self.trajectories_path = self.pos + os.sep.join(['output','tables','trajectories_targets.csv'])
-		elif self.mode == "effectors":
-			self.instructions_path = self.exp_dir + os.sep.join(['configs', 'signal_annotator_config_effectors.json'])
-			self.trajectories_path = self.pos + os.sep.join(['output','tables','trajectories_effectors.csv'])
+		self.instructions_path = self.exp_dir + os.sep.join(['configs', f'signal_annotator_config_{self.mode}.json'])
+		self.trajectories_path = self.pos + os.sep.join(['output','tables',f'trajectories_{self.mode}.csv'])
 
 		self.screen_height = self.parent_window.parent_window.parent_window.screen_height
 		self.screen_width = self.parent_window.parent_window.parent_window.screen_width
@@ -787,10 +783,12 @@ class SignalAnnotator(QMainWindow, Styles):
 			# self.columns_to_rescale = [col for t,col in zip(is_number_test,self.df_tracks.columns) if t]
 			# print(self.columns_to_rescale)
 
-			cols_to_remove = ['status', 'status_color', 'class_color', 'TRACK_ID', 'FRAME', 'x_anim', 'y_anim', 't',
+			cols_to_remove = ['group', 'group_color', 'status', 'status_color', 'class_color', 'TRACK_ID', 'FRAME',
+							  'x_anim', 'y_anim', 't','dummy','group_color',
 							  'state', 'generation', 'root', 'parent', 'class_id', 'class', 't0', 'POSITION_X',
-							  'POSITION_Y', 'position', 'well', 'well_index', 'well_name', 'pos_name', 'index',] + self.class_cols
-			
+							  'POSITION_Y', 'position', 'well', 'well_index', 'well_name', 'pos_name', 'index',
+							  'concentration', 'cell_type', 'antibody', 'pharmaceutical_agent', 'ID'] + self.class_cols
+
 			meta = get_experiment_metadata(self.exp_dir)
 			if meta is not None:
 				keys = list(meta.keys())
@@ -852,7 +850,7 @@ class SignalAnnotator(QMainWindow, Styles):
 
 		to_remove = ['TRACK_ID', 'FRAME', 'x_anim', 'y_anim', 't', 'state', 'generation', 'root', 'parent', 'class_id',
 					 'class', 't0', 'POSITION_X', 'POSITION_Y', 'position', 'well', 'well_index', 'well_name',
-					 'pos_name', 'index','class_color','status_color']
+					 'pos_name', 'index','class_color','status_color','dummy','group_color']
 
 		meta = get_experiment_metadata(self.exp_dir)
 		if meta is not None:
@@ -1411,12 +1409,10 @@ class MeasureAnnotator(SignalAnnotator):
 		self.selection = []
 		self.int_validator = QIntValidator()
 		self.current_alpha=0.5
-		if self.mode == "targets":
-			self.instructions_path = self.exp_dir + os.sep.join(['configs','signal_annotator_config_targets.json'])
-			self.trajectories_path = self.pos + os.sep.join(['output','tables','trajectories_targets.csv'])
-		elif self.mode == "effectors":
-			self.instructions_path = self.exp_dir + os.sep.join(['configs','signal_annotator_config_effectors.json'])
-			self.trajectories_path = self.pos + os.sep.join(['output','tables','trajectories_effectors.csv'])
+		self.value_magnitude = 1
+
+		self.instructions_path = self.exp_dir + os.sep.join(['configs',f'signal_annotator_config_{self.mode}.json'])
+		self.trajectories_path = self.pos + os.sep.join(['output','tables',f'trajectories_{self.mode}.csv'])		
 
 		self.screen_height = self.parent_window.parent_window.parent_window.screen_height
 		self.screen_width = self.parent_window.parent_window.parent_window.screen_width
@@ -1523,6 +1519,7 @@ class MeasureAnnotator(SignalAnnotator):
 		current_yvalues = []
 		all_median_values = []
 		labels = []
+		range_values = []
 
 		for i in range(len(self.signal_choice_cb)):
 
@@ -1539,6 +1536,7 @@ class MeasureAnnotator(SignalAnnotator):
 				all_ydata = self.df_tracks.loc[:, signal_choice].to_numpy()
 				ydataNaN = ydata
 				ydata = ydata[ydata == ydata]  # remove nan
+
 				current_ydata = self.df_tracks.loc[
 					(self.df_tracks['FRAME'] == current_frame), signal_choice].to_numpy()
 				current_ydata = current_ydata[current_ydata == current_ydata]
@@ -1546,12 +1544,16 @@ class MeasureAnnotator(SignalAnnotator):
 				yvalues.extend(ydataNaN)
 				current_yvalues.append(current_ydata)
 				all_yvalues.append(all_ydata)
+				range_values.extend(all_ydata)
 				labels.append(signal_choice)
 
 		self.cell_ax.clear()
 
 		if len(yvalues) > 0:
-			self.cell_ax.boxplot(all_yvalues, showfliers=self.show_fliers)
+			try:
+				self.cell_ax.boxplot(all_yvalues, showfliers=self.show_fliers)
+			except Exception as e:
+				print(f"{e=}")
 			ylim = self.cell_ax.get_ylim()
 			self.cell_ax.set_ylim(ylim)
 			x_pos = np.arange(len(all_yvalues)) + 1
@@ -1564,6 +1566,20 @@ class MeasureAnnotator(SignalAnnotator):
 			
 			self.cell_ax.plot(x_pos, yvalues, marker='H', linestyle='None', color=tab10.colors[3], alpha=1)
 
+			range_values = np.array(range_values)
+			if len(range_values[range_values==range_values])>0:
+
+				if len(range_values[range_values>0])>0:
+					self.value_magnitude = np.nanmin(range_values[range_values>0]) - 0.03*(np.nanmax(range_values[range_values>0]) - np.nanmin(range_values[range_values>0]))
+				else:
+					self.value_magnitude = 1
+
+				self.non_log_ymin = np.nanmin(range_values) - 0.03*(np.nanmax(range_values) - np.nanmin(range_values))
+				self.non_log_ymax = np.nanmax(range_values) + 0.03*(np.nanmax(range_values) - np.nanmin(range_values))
+				if self.cell_ax.get_yscale()=='linear':
+					self.cell_ax.set_ylim(self.non_log_ymin, self.non_log_ymax)
+				else:
+					self.cell_ax.set_ylim(self.value_magnitude, self.non_log_ymax)
 
 		else:
 			self.cell_ax.text(0.5, 0.5, "No data available", horizontalalignment='center',
@@ -2286,7 +2302,7 @@ class MeasureAnnotator(SignalAnnotator):
 			# print(self.columns_to_rescale)
 
 			cols_to_remove = ['group', 'group_color', 'status', 'status_color', 'class_color', 'TRACK_ID', 'FRAME',
-							  'x_anim', 'y_anim', 't',
+							  'x_anim', 'y_anim', 't','dummy','group_color',
 							  'state', 'generation', 'root', 'parent', 'class_id', 'class', 't0', 'POSITION_X',
 							  'POSITION_Y', 'position', 'well', 'well_index', 'well_name', 'pos_name', 'index',
 							  'concentration', 'cell_type', 'antibody', 'pharmaceutical_agent', 'ID'] + self.class_cols

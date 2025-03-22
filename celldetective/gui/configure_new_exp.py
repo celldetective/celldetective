@@ -69,12 +69,16 @@ class ConfigNewExperiment(QMainWindow, Styles):
 		self.generate_channel_params_box()
 		self.grid.addLayout(self.channel_grid,30,0,1,3)
 
+		self.generate_population_params_box()
+		self.grid.addLayout(self.population_grid,31,0,1,3)
+
+
 		self.validate_button = QPushButton("Submit")
 		self.validate_button.clicked.connect(self.create_config)
 		self.validate_button.setStyleSheet(self.button_style_sheet)
 		#self.validate_button.setIcon(QIcon_from_svg(abs_path+f"/icons/process.svg", color='white'))
 
-		self.grid.addWidget(self.validate_button, 31, 0, 1, 3, alignment = Qt.AlignBottom)		
+		self.grid.addWidget(self.validate_button, 32, 0, 1, 3, alignment = Qt.AlignBottom)		
 		button_widget.adjustSize()
 
 		self.scroll_area.setAlignment(Qt.AlignCenter)
@@ -323,6 +327,83 @@ class ConfigNewExperiment(QMainWindow, Styles):
 		else:
 			self.sliders[index].setEnabled(False)
 
+	def generate_population_params_box(self):
+
+		"""
+		Parameters related to the movie channels
+		Rewrite all of it
+
+		"""
+
+		self.population_grid = QGridLayout()
+		self.population_grid.setContentsMargins(21,30,20,30)
+
+		pop_lbl = QLabel("CELL POPULATIONS")
+		pop_lbl.setStyleSheet("""
+			font-weight: bold;
+			""")
+		self.population_grid.addWidget(pop_lbl, 0,0,1,3, alignment=Qt.AlignCenter)
+
+
+		self.populations = ['effectors','targets']
+		self.population_checkboxes = [QCheckBox() for i in range(len(self.populations))]
+
+		for i in range(len(self.populations)):
+
+			self.population_checkboxes[i].setText(self.populations[i])
+			self.population_checkboxes[i].setChecked(True)
+			self.population_grid.addWidget(self.population_checkboxes[i], i+1, 0, 1, 1)
+
+		# Add channel button
+		self.addPopBtn = QPushButton('Add a cell population')
+		self.addPopBtn.setIcon(icon(MDI6.plus,color="white"))
+		self.addPopBtn.setIconSize(QSize(25, 25))
+		self.addPopBtn.setStyleSheet(self.button_style_sheet)
+		self.addPopBtn.clicked.connect(self.add_custom_population)
+		self.population_grid.addWidget(self.addPopBtn, 1000, 0, 1, 1)
+
+
+	def add_custom_population(self):
+		self.CustomPopWidget = QWidget()
+		self.CustomPopWidget.setWindowTitle("Define custom population")
+		layout = QVBoxLayout()
+		self.CustomPopWidget.setLayout(layout)
+
+		self.name_le = QLineEdit()
+		self.name_le.setPlaceholderText('name')
+		self.name_le.textChanged.connect(self.check_population_name)
+		hbox = QHBoxLayout()
+		hbox.addWidget(QLabel('population name: '), 33)
+		hbox.addWidget(self.name_le, 66)
+		layout.addLayout(hbox)
+
+		self.addPopBtn = QPushButton('add')
+		self.addPopBtn.setStyleSheet(self.button_style_sheet)
+		self.addPopBtn.setEnabled(False)
+		self.addPopBtn.clicked.connect(self.write_custom_population)
+		layout.addWidget(self.addPopBtn)
+		center_window(self.CustomPopWidget)
+		self.CustomPopWidget.show()
+
+	def check_population_name(self, text):
+		# define all conditions for valid population name (like no space)
+		if len(text)>0 and ' ' not in text:
+			self.addPopBtn.setEnabled(True)
+		else:
+			self.addPopBtn.setEnabled(False)
+
+	def write_custom_population(self):
+
+		self.new_population_name = self.name_le.text()
+		name_map = self.new_population_name
+
+		self.populations.append(self.new_population_name)
+		self.population_checkboxes.append(QCheckBox())
+		self.CustomPopWidget.close()
+
+		self.population_checkboxes[-1].setText(self.populations[-1])
+		self.population_grid.addWidget(self.population_checkboxes[-1], len(self.populations)+1, 0, 1, 1)
+
 	def browse_experiment_folder(self):
 
 		"""
@@ -356,6 +437,17 @@ class ConfigNewExperiment(QMainWindow, Styles):
 			msgBox = QMessageBox()
 			msgBox.setIcon(QMessageBox.Warning)
 			msgBox.setText("Some channel indices are repeated. Please check your configuration.")
+			msgBox.setWindowTitle("Warning")
+			msgBox.setStandardButtons(QMessageBox.Ok)
+			returnValue = msgBox.exec()
+			if returnValue == QMessageBox.Ok:
+				return None
+
+		populations_checked = [self.population_checkboxes[i].isChecked() for i in range(len(self.population_checkboxes))]
+		if not np.any(populations_checked):
+			msgBox = QMessageBox()
+			msgBox.setIcon(QMessageBox.Warning)
+			msgBox.setText("Please set at least one cell population before proceeding...")
 			msgBox.setWindowTitle("Warning")
 			msgBox.setStandardButtons(QMessageBox.Ok)
 			returnValue = msgBox.exec()
@@ -429,7 +521,12 @@ class ConfigNewExperiment(QMainWindow, Styles):
 		Write all user input parameters to a configuration file associated to an experiment.
 		"""
 
+
 		config = ConfigParser(interpolation=None)
+
+		config.add_section('Populations')
+		pops = ','.join([self.populations[i].lower() for i in range(len(self.population_checkboxes)) if self.population_checkboxes[i].isChecked()])
+		config.set('Populations','populations', pops)
 
 		# add a new section and some values
 		config.add_section('MovieSettings')
@@ -455,6 +552,7 @@ class ConfigNewExperiment(QMainWindow, Styles):
 
 		config.add_section('Metadata')
 		config.set('Metadata', 'concentration_units', self.concentration_units)
+
 
 		# save to a file
 		with open('config.ini', 'w') as configfile:

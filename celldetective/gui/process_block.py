@@ -55,8 +55,7 @@ class ProcessPanel(QFrame, Styles):
 		self.exp_dir = self.parent_window.exp_dir
 		self.exp_config = self.parent_window.exp_config
 		self.movie_prefix = self.parent_window.movie_prefix
-		self.threshold_config_targets = None
-		self.threshold_config_effectors = None
+		self.threshold_configs = [None for i in range(len(self.parent_window.populations))]
 		self.wells = np.array(self.parent_window.wells,dtype=str)
 		self.cellpose_calibrated = False
 		self.stardist_calibrated = False
@@ -123,11 +122,10 @@ class ProcessPanel(QFrame, Styles):
 
 	def collapse_advanced(self):
 
-		effector_open = not self.parent_window.ProcessEffectors.ContentsFrame.isHidden()
-		targets_open = not self.parent_window.ProcessTargets.ContentsFrame.isHidden()
+		panels_open = [not p.ContentsFrame.isHidden() for p in self.parent_window.ProcessPopulations]
 		interactions_open = not self.parent_window.NeighPanel.ContentsFrame.isHidden()
 		preprocessing_open = not self.parent_window.PreprocessingPanel.ContentsFrame.isHidden()
-		is_open = np.array([effector_open, targets_open, interactions_open, preprocessing_open])
+		is_open = np.array(panels_open+[interactions_open, preprocessing_open])
 
 		if self.ContentsFrame.isHidden():
 			self.collapse_btn.setIcon(icon(MDI6.chevron_down,color="black"))
@@ -721,10 +719,8 @@ class ProcessPanel(QFrame, Styles):
 		# self.freeze()
 		# QApplication.setOverrideCursor(Qt.WaitCursor)
 
-		if self.mode=="targets":
-			self.threshold_config = self.threshold_config_targets
-		elif self.mode=="effectors":
-			self.threshold_config = self.threshold_config_effectors
+		idx = self.parent_window.populations.index(self.mode)
+		self.threshold_config = self.threshold_configs[idx]
 
 		self.load_available_tables()
 
@@ -1034,11 +1030,10 @@ class NeighPanel(QFrame, Styles):
 
 	def collapse_advanced(self):
 
-		effector_open = not self.parent_window.ProcessEffectors.ContentsFrame.isHidden()
-		targets_open = not self.parent_window.ProcessTargets.ContentsFrame.isHidden()
+		panels_open = [not p.ContentsFrame.isHidden() for p in self.parent_window.ProcessPopulations]
 		interactions_open = not self.parent_window.NeighPanel.ContentsFrame.isHidden()
 		preprocessing_open = not self.parent_window.PreprocessingPanel.ContentsFrame.isHidden()
-		is_open = np.array([effector_open, targets_open, interactions_open, preprocessing_open])
+		is_open = np.array(panels_open+[interactions_open, preprocessing_open])
 
 		if self.ContentsFrame.isHidden():
 			self.collapse_btn.setIcon(icon(MDI6.chevron_down,color="black"))
@@ -1553,12 +1548,11 @@ class PreprocessingPanel(QFrame, Styles):
 
 	def collapse_advanced(self):
 
-		effector_open = not self.parent_window.ProcessEffectors.ContentsFrame.isHidden()
-		targets_open = not self.parent_window.ProcessTargets.ContentsFrame.isHidden()
+		panels_open = [not p.ContentsFrame.isHidden() for p in self.parent_window.ProcessPopulations]
 		interactions_open = not self.parent_window.NeighPanel.ContentsFrame.isHidden()
 		preprocessing_open = not self.parent_window.PreprocessingPanel.ContentsFrame.isHidden()
-		is_open = np.array([effector_open, targets_open, interactions_open, preprocessing_open])
-
+		is_open = np.array(panels_open+[interactions_open, preprocessing_open])
+		
 		if self.ContentsFrame.isHidden():
 			self.collapse_btn.setIcon(icon(MDI6.chevron_down,color="black"))
 			self.collapse_btn.setIconSize(QSize(20, 20))

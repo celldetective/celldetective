@@ -2864,11 +2864,13 @@ def get_zenodo_files(cat=None):
 		categories.append(category)
 	
 	if cat is not None:
-		assert cat in [os.sep.join(['models','segmentation_generic']), os.sep.join(['models','segmentation_targets']), os.sep.join(['models','segmentation_effectors']), \
-						   'demos', os.sep.join(['datasets','signal_annotations']), os.sep.join(['datasets','segmentation_annotations']),  os.sep.join(['models','signal_detection'])]
-		categories = np.array(categories)
-		all_files_short = np.array(all_files_short)
-		return list(all_files_short[np.where(categories==cat)[0]])
+		if cat in [os.sep.join(['models','segmentation_generic']), os.sep.join(['models','segmentation_targets']), os.sep.join(['models','segmentation_effectors']), \
+						   'demos', os.sep.join(['datasets','signal_annotations']), os.sep.join(['datasets','segmentation_annotations']),  os.sep.join(['models','signal_detection'])]:
+			categories = np.array(categories)
+			all_files_short = np.array(all_files_short)
+			return list(all_files_short[np.where(categories==cat)[0]])
+		else:
+			return []
 	else:
 		return all_files_short,categories
 

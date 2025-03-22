@@ -47,12 +47,8 @@ class ConfigMeasurements(QMainWindow, Styles):
 		self.mode = self.parent_window.mode
 		self.exp_dir = self.parent_window.exp_dir
 		self.background_correction = []
-		if self.mode == "targets":
-			self.config_name = "btrack_config_targets.json"
-			self.measure_instructions_path = self.parent_window.exp_dir + "configs/measurement_instructions_targets.json"
-		elif self.mode == "effectors":
-			self.config_name = "btrack_config_effectors.json"
-			self.measure_instructions_path = self.parent_window.exp_dir + "configs/measurement_instructions_effectors.json"
+		self.config_name = f"btrack_config_{self.mode}.json"
+		self.measure_instructions_path = self.parent_window.exp_dir + f"configs/measurement_instructions_{self.mode}.json"
 		self.soft_path = get_software_location()
 		self.clear_previous = False
 

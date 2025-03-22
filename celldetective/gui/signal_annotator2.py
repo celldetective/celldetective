@@ -65,7 +65,7 @@ class SignalAnnotator2(QMainWindow,Styles):
 					 'FRAME', 'x_anim', 'y_anim', 't', 'state', 'generation', 'root', 'parent', 'class_id', 'class',
 					 't0', 'POSITION_X', 'POSITION_Y', 'position', 'well', 'well_index', 'well_name', 'pos_name',
 					 'index', 'relxy', 'tc', 'nk', 'concentration', 'antibody', 'cell_type', 'pharmaceutical_agent',
-					 'reference_population', 'neighbor_population']
+					 'reference_population', 'neighbor_population','dummy']
 		meta = get_experiment_metadata(self.exp_dir)
 		if meta is not None:
 			keys = list(meta.keys())

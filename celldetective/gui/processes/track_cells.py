@@ -147,6 +147,12 @@ class TrackingProcess(Process):
 			self.napari_name = "napari_effector_trajectories.npy"
 			self.table_name = "trajectories_effectors.csv"
 
+		else:
+			self.label_folder = f"labels_{self.mode}"
+			self.instruction_file = os.sep.join(["configs",f"tracking_instructions_{self.mode}.json"])
+			self.napari_name = f"napari_{self.mode}_trajectories.npy"
+			self.table_name = f"trajectories_{self.mode}.csv"			
+
 	def extract_experiment_parameters(self):
 
 		self.movie_prefix = ConfigSectionMap(self.config,"MovieSettings")["movie_prefix"]
