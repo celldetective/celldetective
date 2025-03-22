@@ -92,10 +92,11 @@ class ConfigSignalPlot(QWidget, Styles):
 		main_layout.addWidget(panel_title, alignment=Qt.AlignCenter)
 
 		pops = []
-		for population in ['effectors','targets','pairs']:
+		for population in self.parent_window.parent_window.populations+['pairs']:
 			tables = glob(self.exp_dir+os.sep.join(['W*','*','output','tables',f'trajectories_{population}.csv']))
 			if len(tables)>0:
 				pops.append(population)
+
 
 		labels = [QLabel('population: '), QLabel('class: '), QLabel('time of\ninterest: '), QLabel('cmap: ')]
 		self.cb_options = [pops,[], [], []]

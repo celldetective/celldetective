@@ -91,7 +91,7 @@ class ConfigSurvival(QWidget, Styles):
 
 
 		pops = []
-		for population in ['effectors','targets','pairs']:
+		for population in self.parent_window.parent_window.populations+['pairs']:
 			tables = glob(self.exp_dir+os.sep.join(['W*','*','output','tables',f'trajectories_{population}.csv']))
 			if len(tables)>0:
 				pops.append(population)
