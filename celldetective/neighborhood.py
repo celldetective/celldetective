@@ -435,6 +435,7 @@ def compute_neighborhood_at_position(pos, distance, population=['targets', 'effe
 		df_B = df_B.drop(columns=unwanted)
 
 	df_A, df_B = distance_cut_neighborhood(df_A, df_B, distance, **neighborhood_kwargs)
+
 	if df_A is None or df_B is None or len(df_A)==0:
 		return None
 
@@ -442,6 +443,7 @@ def compute_neighborhood_at_position(pos, distance, population=['targets', 'effe
 
 		if neighborhood_kwargs['mode'] == 'two-pop':
 			neigh_col = f'neighborhood_2_circle_{d}_px'
+
 		elif neighborhood_kwargs['mode'] == 'self':
 			neigh_col = f'neighborhood_self_circle_{d}_px'
 
@@ -464,16 +466,26 @@ def compute_neighborhood_at_position(pos, distance, population=['targets', 'effe
 					df_A = mean_neighborhood_after_event(df_A, neigh_col, event_time_col)
 				print('Done...')
 
-	df_A.to_pickle(path_A.replace('.csv', '.pkl'))
 	if not population[0] == population[1]:
-		# Remove neighborhood column
+		# Remove neighborhood column from neighbor table, rename with actual population name
 		for td, d in zip(theta_dist, distance):
 			if neighborhood_kwargs['mode'] == 'two-pop':
 				neigh_col = f'neighborhood_2_circle_{d}_px'
+				new_neigh_col = neigh_col.replace('_2_',f'_({population[0]}-{population[1]})_')
+				df_A = df_A.rename(columns={neigh_col: new_neigh_col})
 			elif neighborhood_kwargs['mode'] == 'self':
 				neigh_col = f'neighborhood_self_circle_{d}_px'
 			df_B = df_B.drop(columns=[neigh_col])
 		df_B.to_pickle(path_B.replace('.csv', '.pkl'))
+
+	cols_to_rename = [c for c in list(df_A.columns) if c.startswith('intermediate_count_') or c.startswith('inclusive_count_') or c.startswith('exclusive_count_') or c.startswith('mean_count_')]
+	new_col_names = [c.replace('_2_',f'_({population[0]}-{population[1]})_') for c in cols_to_rename]
+	new_name_map = {}
+	for k,c in enumerate(cols_to_rename):
+		new_name_map.update({c: new_col_names[k]})
+	df_A = df_A.rename(columns=new_name_map)
+	
+	df_A.to_pickle(path_A.replace('.csv', '.pkl'))
 
 	unwanted = df_A.columns[df_A.columns.str.startswith('neighborhood_')]
 	df_A2 = df_A.drop(columns=unwanted)

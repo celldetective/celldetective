@@ -91,41 +91,45 @@ class ConfigSurvival(QWidget, Styles):
 
 
 		pops = []
+		self.cols_per_pop = {}
 		for population in self.parent_window.parent_window.populations+['pairs']:
 			tables = glob(self.exp_dir+os.sep.join(['W*','*','output','tables',f'trajectories_{population}.csv']))
 			if len(tables)>0:
 				pops.append(population)
+				cols = extract_cols_from_table_list(tables)
+				self.cols_per_pop.update({population: cols})
 
-		tables_targets = glob(self.exp_dir+os.sep.join(['W*','*','output','tables',f'trajectories_targets.csv']))
-		self.cols_targets = extract_cols_from_table_list(tables_targets)
-		tables_effectors = glob(self.exp_dir+os.sep.join(['W*','*','output','tables',f'trajectories_effectors.csv']))
-		self.cols_effectors = extract_cols_from_table_list(tables_effectors)
+		# tables_targets = glob(self.exp_dir+os.sep.join(['W*','*','output','tables',f'trajectories_targets.csv']))
+		# self.cols_targets = extract_cols_from_table_list(tables_targets)
+		# tables_effectors = glob(self.exp_dir+os.sep.join(['W*','*','output','tables',f'trajectories_effectors.csv']))
+		# self.cols_effectors = extract_cols_from_table_list(tables_effectors)
 
 		# Smart reading of existing neighborhoods (without loading tables in memory)
+		# legacy interpretation of neighborhood cols, need to find something better
 		if 'pairs' in pops and not 'targets' in pops:
 			# must be effector-effector
-			effector_neighs = [c[16:] for c in self.cols_effectors if c.startswith('inclusive_count_neighborhood')]
+			effector_neighs = [c[16:] for c in self.cols_per_pop['effectors'] if c.startswith('inclusive_count_neighborhood')]
 			if len(effector_neighs)>0:
 				pops.pop(pops.index('pairs'))
 				pops.append('effectors-effectors')
 		elif 'pairs' in pops and not 'effectors' in pops:
 			# must be target-target
-			target_neighs = [c for c in self.cols_targets if c.startswith('inclusive_count_neighborhood')]
+			target_neighs = [c for c in self.cols_per_pop['targets'] if c.startswith('inclusive_count_neighborhood')]
 			if len(target_neighs)>0:
 				pops.pop(pops.index('pairs'))
 				pops.append('targets-targets')
 		elif 'pairs' in pops:
 			# either effector-target or target-effector
-			target_neighs_cross = [c for c in self.cols_targets if c.startswith('inclusive_count_neighborhood') and '_2_' in c]
+			target_neighs_cross = [c for c in self.cols_per_pop['targets'] if c.startswith('inclusive_count_neighborhood') and '_2_' in c]
 			if len(target_neighs_cross)>0:
 				pops.append('targets-effectors')
-			effector_neighs_cross = [c for c in self.cols_effectors if c.startswith('inclusive_count_neighborhood') and '_2_' in c]
+			effector_neighs_cross = [c for c in self.cols_per_pop['effectors'] if c.startswith('inclusive_count_neighborhood') and '_2_' in c]
 			if len(effector_neighs_cross)>0:
 				pops.append('effectors-targets')
-			target_neighs = [c for c in self.cols_targets if c.startswith('inclusive_count_neighborhood') and 'self' in c]
+			target_neighs = [c for c in self.cols_per_pop['targets'] if c.startswith('inclusive_count_neighborhood') and 'self' in c]
 			if len(target_neighs)>0:
 				pops.append('targets-targets')
-			effector_neighs = [c for c in self.cols_effectors if c.startswith('inclusive_count_neighborhood') and 'self' in c]
+			effector_neighs = [c for c in self.cols_per_pop['effectors'] if c.startswith('inclusive_count_neighborhood') and 'self' in c]
 			if len(effector_neighs)>0:
 				pops.append('effectors-effectors')
 			pops.pop(pops.index('pairs'))
@@ -217,14 +221,9 @@ class ConfigSurvival(QWidget, Styles):
 
 			self.population_reference = pop_split[0]
 			self.population_neigh = pop_split[1]
-			if self.population_reference=='targets':
-				cols_ref = self.cols_targets
-			else:
-				cols_ref = self.cols_effectors
-			if self.population_neigh=='targets':
-				cols_neigh = self.cols_targets
-			else:
-				cols_neigh = self.cols_effectors
+
+			cols_ref = self.cols_per_pop[self.population_reference]
+			cols_neigh = self.cols_per_pop[self.population_neigh]
 
 			time_cols_ref = np.array([s.startswith('t_') or s=='t0' for s in cols_ref])
 			if len(time_cols_ref)>0:
@@ -247,10 +246,7 @@ class ConfigSurvival(QWidget, Styles):
 			time_columns = time_cols_ref + time_cols_neigh + time_cols_pairs
 
 		else:
-			if self.population=='targets':
-				self.all_columns = self.cols_targets
-			else:
-				self.all_columns = self.cols_effectors
+			self.all_columns = self.cols_per_pop[self.population]
 			time_idx = np.array([s.startswith('t_') or s=='t0' for s in self.all_columns])
 
 			try:
