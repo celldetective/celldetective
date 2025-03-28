@@ -531,7 +531,7 @@ def update_effector_table(df_relative, df_effector):
 			df_effector.loc[df_effector['ID'] == effector, 'group_neighborhood'] = 0
 	return df_effector
 
-def extract_neighborhoods_from_pickles(pos):
+def extract_neighborhoods_from_pickles(pos, populations=['targets','effectors']):
 
 	"""
 	Extract neighborhood protocols from pickle files located at a given position.
@@ -573,29 +573,40 @@ def extract_neighborhoods_from_pickles(pos):
 	
 	"""
 
-	tab_tc = pos + os.sep.join(['output', 'tables', 'trajectories_targets.pkl'])
-	if os.path.exists(tab_tc):
-		df_targets = np.load(tab_tc, allow_pickle=True)
-	else:
-		df_targets = None
-	if os.path.exists(tab_tc.replace('targets','effectors')):
-		df_effectors = np.load(tab_tc.replace('targets','effectors'), allow_pickle=True)
-	else:
-		df_effectors = None
+	neighborhood_protocols = []
 
-	neighborhood_protocols=[]
+	for pop in populations:
+		tab_pop = pos + os.sep.join(['output', 'tables', f'trajectories_{pop}.pkl'])
+		if os.path.exists(tab_pop):
+			df_pop = np.load(tab_pop, allow_pickle=True)
+			for column in list(df_pop.columns):
+				if column.startswith('neighborhood'):
+					neigh_protocol = extract_neighborhood_settings(column, population=pop)
+					neighborhood_protocols.append(neigh_protocol)
 
-	if df_targets is not None:
-		for column in list(df_targets.columns):
-			if column.startswith('neighborhood'):
-				neigh_protocol = extract_neighborhood_settings(column, population='targets')
-				neighborhood_protocols.append(neigh_protocol)
+	# tab_tc = pos + os.sep.join(['output', 'tables', 'trajectories_targets.pkl'])
+	# if os.path.exists(tab_tc):
+	# 	df_targets = np.load(tab_tc, allow_pickle=True)
+	# else:
+	# 	df_targets = None
+	# if os.path.exists(tab_tc.replace('targets','effectors')):
+	# 	df_effectors = np.load(tab_tc.replace('targets','effectors'), allow_pickle=True)
+	# else:
+	# 	df_effectors = None
 
-	if df_effectors is not None:
-		for column in list(df_effectors.columns):
-			if column.startswith('neighborhood'):
-				neigh_protocol = extract_neighborhood_settings(column, population='effectors')
-				neighborhood_protocols.append(neigh_protocol)
+	# neighborhood_protocols=[]
+
+	# if df_targets is not None:
+	# 	for column in list(df_targets.columns):
+	# 		if column.startswith('neighborhood'):
+	# 			neigh_protocol = extract_neighborhood_settings(column, population='targets')
+	# 			neighborhood_protocols.append(neigh_protocol)
+
+	# if df_effectors is not None:
+	# 	for column in list(df_effectors.columns):
+	# 		if column.startswith('neighborhood'):
+	# 			neigh_protocol = extract_neighborhood_settings(column, population='effectors')
+	# 			neighborhood_protocols.append(neigh_protocol)
 
 	return neighborhood_protocols
 
@@ -646,10 +657,18 @@ def extract_neighborhood_settings(neigh_string, population='targets'):
 	"""
 
 	assert neigh_string.startswith('neighborhood')
-	if population=='targets':
-		neighbor_population = 'effectors'
-	elif population=='effectors':
-		neighbor_population = 'targets'
+	print(f"{neigh_string=}")
+
+	if '_(' in neigh_string and ')_' in neigh_string:
+		# determine neigh pop from string
+		neighbor_population = neigh_string.split('_(')[-1].split(')_')[0].split('-')[-1]
+		print(f'{neighbor_population=}')
+	else:
+		# old method
+		if population=='targets':
+			neighbor_population = 'effectors'
+		elif population=='effectors':
+			neighbor_population = 'targets'
 
 	if 'self' in neigh_string:
 		
