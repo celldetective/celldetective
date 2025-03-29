@@ -2823,7 +2823,7 @@ def columnwise_mean(matrix, min_nbr_values = 1, projection='mean'):
 	return mean_line, mean_line_std
 
 
-def mean_signal(df, signal_name, class_col, time_col=None, class_value=[0], return_matrix=False, forced_max_duration=None, min_nbr_values=2,conflict_mode='mean', projection='mean'):
+def mean_signal(df, signal_name, class_col, time_col=None, class_value=[0], return_matrix=False, forced_max_duration=None, min_nbr_values=2,conflict_mode='mean', projection='mean',pairs=False):
 
 	"""
 	Calculate the mean and standard deviation of a specified signal for tracks of a given class in the input DataFrame.
@@ -2878,14 +2878,19 @@ def mean_signal(df, signal_name, class_col, time_col=None, class_value=[0], retu
 	if isinstance(time_col, (int,float)):
 		abs_time = True
 
-	n_tracks = len(df.groupby(['position','TRACK_ID']))
+	if not pairs:
+		groupby_cols = ['position','TRACK_ID']
+	else:
+		groupby_cols = ['position','REFERENCE_ID','NEIGHBOR_ID']
+
+	n_tracks = len(df.groupby(groupby_cols))
 	signal_matrix = np.zeros((n_tracks,int(max_duration)*2 + 1))
 	signal_matrix[:,:] = np.nan
 
-	df = df.sort_values(by=['position','TRACK_ID','FRAME'])
+	df = df.sort_values(by=groupby_cols+['FRAME'])
 
 	trackid=0
-	for track,track_group in df.loc[df[class_col].isin(class_value)].groupby(['position','TRACK_ID']):
+	for track,track_group in df.loc[df[class_col].isin(class_value)].groupby(groupby_cols):
 		cclass = track_group[class_col].to_numpy()[0]
 		if cclass != 0:
 			ref_time = 0

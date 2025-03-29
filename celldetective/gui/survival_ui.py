@@ -333,8 +333,6 @@ class ConfigSurvival(QWidget, Styles):
 
 		"""
 
-		print(f"{self.population=} in load_available_tables_local")
-
 		self.well_option = self.parent_window.parent_window.well_list.getSelectedIndices()
 		self.position_option = self.parent_window.parent_window.position_list.getSelectedIndices()
 
@@ -351,7 +349,6 @@ class ConfigSurvival(QWidget, Styles):
 				return None		
 		else:
 			self.df_well_info = self.df_pos_info.loc[:,['well_path', 'well_index', 'well_name', 'well_number', 'well_alias']].drop_duplicates()
-			#print(f"{self.df_well_info=}")
 
 		if self.population=='pairs':
 			self.df = expand_pair_table(self.df)
