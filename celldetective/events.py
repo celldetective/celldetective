@@ -209,10 +209,7 @@ def compute_survival(df, class_of_interest, t_event, t_reference=None, FrameToMi
 		assert t_reference in cols,"The reference time cannot be found in the dataframe..."
 		first_detections = df.groupby(groupby_cols)[t_reference].max().values
 	
-
-	print(f"{classes=} {event_times=} {max_times=} {first_detections=}")
 	events, survival_times = switch_to_events(classes, event_times, max_times, origin_times=first_detections, left_censored=left_censored, FrameToMin=FrameToMin, cut_observation_time=cut_observation_time)
-	print(f"{events=} {survival_times=}")
 
 	ks = KaplanMeierFitter()
 	if len(events)>0:

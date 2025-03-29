@@ -735,6 +735,8 @@ def expand_pair_table(data):
 	assert 'reference_population' in list(data.columns),"Please provide a valid pair table..."
 	assert 'neighbor_population' in list(data.columns),"Please provide a valid pair table..."
 
+	data.__dict__.update(data.astype({'reference_population': str, 'neighbor_population': str}).__dict__)
+
 	expanded_table = []
 	
 	for neigh, group in data.groupby(['reference_population','neighbor_population']):
