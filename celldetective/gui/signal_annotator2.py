@@ -41,7 +41,7 @@ class SignalAnnotator2(QMainWindow,Styles):
 
 		self.pos = self.parent_window.parent_window.pos
 		self.exp_dir = self.parent_window.exp_dir
-		print(f'{self.pos=} {self.exp_dir=}')
+		self.populations = self.parent_window.parent_window.populations
 
 		self.soft_path = get_software_location()
 		self.recently_modified = False
@@ -87,13 +87,13 @@ class SignalAnnotator2(QMainWindow,Styles):
 		self.load_annotator_config()
 
 		# Locate tracks
-		self.locate_target_tracks()
-		self.locate_effector_tracks()
+		self.locate_all_tracks()
+		#self.locate_effector_tracks()
 
-		self.dataframes = {
-			'targets': self.df_targets,
-			'effectors': self.df_effectors,
-		}
+		# self.dataframes = {
+		# 	'targets': self.df_targets,
+		# 	'effectors': self.df_effectors,
+		# }
 
 		self.neighborhood_cols = []
 		if self.df_targets is not None:
@@ -1048,233 +1048,347 @@ class SignalAnnotator2(QMainWindow,Styles):
 			self.channels = np.array(self.channels)
 			self.nbr_channels = len(self.channels)
 
-	def locate_target_tracks(self):
+	def locate_all_tracks(self):
+		
+		self.dataframes = {}
 
-		population = 'targets'
-		self.target_trajectories_path = self.pos + os.sep.join(['output','tables', f'trajectories_{population}.pkl'])
-		if not os.path.exists(self.target_trajectories_path):
-			self.target_trajectories_path = self.target_trajectories_path.replace('.pkl','.csv')
+		for population in self.populations:
 
-		if not os.path.exists(self.target_trajectories_path):
+			self.target_trajectories_path = self.pos + os.sep.join(['output','tables', f'trajectories_{population}.pkl'])
+			if not os.path.exists(self.target_trajectories_path):
+				self.target_trajectories_path = self.target_trajectories_path.replace('.pkl','.csv')
 
-			msgBox = QMessageBox()
-			msgBox.setIcon(QMessageBox.Warning)
-			msgBox.setText("The target trajectories cannot be detected...")
-			msgBox.setWindowTitle("Warning")
-			msgBox.setStandardButtons(QMessageBox.Ok)
-			returnValue = msgBox.exec()
-			self.df_targets = None
+			if not os.path.exists(self.target_trajectories_path):
 
-		else:
-
-			# Load and prep tracks
-			if self.target_trajectories_path.endswith('.pkl'):
-				self.df_targets = np.load(self.target_trajectories_path, allow_pickle=True)
+				msgBox = QMessageBox()
+				msgBox.setIcon(QMessageBox.Warning)
+				msgBox.setText("The target trajectories cannot be detected...")
+				msgBox.setWindowTitle("Warning")
+				msgBox.setStandardButtons(QMessageBox.Ok)
+				returnValue = msgBox.exec()
+				df_population = None
 			else:
-				self.df_targets = pd.read_csv(self.target_trajectories_path)
-
-			self.df_targets = self.df_targets.sort_values(by=['TRACK_ID', 'FRAME'])
-
-			cols = np.array(self.df_targets.columns)
-			self.target_class_cols = [c for c in list(self.df_targets.columns) if c.startswith('class')]
-
-			try:
-				self.target_class_cols.remove('class_id')
-			except:
-				pass
-			try:
-				self.target_class_cols.remove('class_color')
-			except:
-				pass
-
-			if len(self.target_class_cols)>0:
-
-				self.target_class_name = self.target_class_cols[0]
-				self.target_expected_status = 'status'
-				suffix = self.target_class_name.replace('class','').replace('_','')
-				if suffix!='':
-					self.target_expected_status+='_'+suffix
-					self.target_expected_time = 't_'+suffix
+				# Load and prep tracks
+				if self.target_trajectories_path.endswith('.pkl'):
+					df_population = np.load(self.target_trajectories_path, allow_pickle=True)
 				else:
-					self.target_expected_time = 't0'
-				self.target_time_name = self.target_expected_time
-				self.target_status_name = self.target_expected_status
-			else:
-				self.target_class_name = 'class'
-				self.target_time_name = 't0'
-				self.target_status_name = 'status'
+					df_population = pd.read_csv(self.target_trajectories_path)
 
-			if self.target_time_name in self.df_targets.columns and self.target_class_name in self.df_targets.columns and not self.target_status_name in self.df_targets.columns:
-				# only create the status column if it does not exist to not erase static classification results
-				pass
-				#self.make_target_status_column()
-			elif self.target_time_name in self.df_targets.columns and self.target_class_name in self.df_targets.columns:
-				# all good, do nothing
-				pass
-			else:
-				if not self.target_status_name in self.df_targets.columns:
-					self.df_targets[self.target_status_name] = 0
-					self.df_targets['status_color'] = color_from_status(0)
-					self.df_targets['class_color'] = color_from_class(1)
+				df_population = df_population.sort_values(by=['TRACK_ID', 'FRAME'])
 
-			if not self.target_class_name in self.df_targets.columns:
-				self.df_targets[self.target_class_name] = 1
-			if not self.target_time_name in self.df_targets.columns:
-				self.df_targets[self.target_time_name] = -1
+				cols = np.array(df_population.columns)
+				self.target_class_cols = [c for c in list(df_population.columns) if c.startswith('class')]
 
-			self.df_targets['status_color'] = color_from_status(2) #[color_from_status(i) for i in self.df_targets[self.target_status_name].to_numpy()]
-			self.df_targets['class_color'] = color_from_status(2) #[color_from_class(i) for i in self.df_targets[self.target_class_name].to_numpy()]
-
-			self.df_targets = self.df_targets.dropna(subset=['POSITION_X', 'POSITION_Y'])
-			self.df_targets['x_anim'] = self.df_targets['POSITION_X'] * self.fraction
-			self.df_targets['y_anim'] = self.df_targets['POSITION_Y'] * self.fraction
-			self.df_targets['x_anim'] = self.df_targets['x_anim'].astype(int)
-			self.df_targets['y_anim'] = self.df_targets['y_anim'].astype(int)
-
-			self.extract_scatter_from_target_trajectories()
-			self.target_track_of_interest = self.df_targets['TRACK_ID'].min()
-
-			self.loc_t = []
-			self.loc_idx = []
-			for t in range(len(self.target_tracks)):
-				indices = np.where(self.target_tracks[t]==self.target_track_of_interest)[0]
-				if len(indices)>0:
-					self.loc_t.append(t)
-					self.loc_idx.append(indices[0])
-
-			self.MinMaxScaler_targets = MinMaxScaler()
-			self.target_columns = list(self.df_targets.columns)
-			cols_to_remove = [c for c in self.cols_to_remove if c in self.target_columns] + self.target_class_cols
-			time_cols = [c for c in self.target_columns if c.startswith('t_')]
-			cols_to_remove += time_cols
-			neigh_cols = [c for c in self.target_columns if c.startswith('neighborhood_')]
-			cols_to_remove += neigh_cols
-
-			for col in cols_to_remove:
 				try:
-					self.target_columns.remove(col)
+					self.target_class_cols.remove('class_id')
+				except:
+					pass
+				try:
+					self.target_class_cols.remove('class_color')
 				except:
 					pass
 
-			x = self.df_targets[self.target_columns].values
-			self.MinMaxScaler_targets.fit(x)
+				if len(self.target_class_cols)>0:
 
-	def locate_effector_tracks(self):
-
-		population = 'effectors'
-		self.effector_trajectories_path =  self.pos + os.sep.join(['output','tables',f'trajectories_{population}.pkl'])
-		if not os.path.exists(self.effector_trajectories_path):
-			self.effector_trajectories_path = self.effector_trajectories_path.replace('.pkl','.csv')
-
-		if not os.path.exists(self.effector_trajectories_path):
-
-			msgBox = QMessageBox()
-			msgBox.setIcon(QMessageBox.Warning)
-			msgBox.setText("The effector trajectories cannot be detected...")
-			msgBox.setWindowTitle("Warning")
-			msgBox.setStandardButtons(QMessageBox.Ok)
-			returnValue = msgBox.exec()
-			self.df_effectors = None
-		else:
-			# Load and prep tracks
-			if self.effector_trajectories_path.endswith('.pkl'):
-				self.df_effectors = np.load(self.effector_trajectories_path, allow_pickle=True)
-			else:
-				self.df_effectors = pd.read_csv(self.effector_trajectories_path)
-
-			try:
-				self.df_effectors = self.df_effectors.sort_values(by=['TRACK_ID', 'FRAME'])
-			except:
-				self.df_effectors = self.df_effectors.sort_values(by=['ID', 'FRAME'])
-
-
-			cols = np.array(self.df_effectors.columns)
-			self.effector_class_cols = np.array([c.startswith('class') for c in list(self.df_effectors.columns)])
-			self.effector_class_cols = list(cols[self.effector_class_cols])
-			try:
-				self.effector_class_cols.remove('class_id')
-			except:
-				pass
-			try:
-				self.effector_class_cols.remove('class_color')
-			except:
-				pass
-			if len(self.effector_class_cols)>0:
-				self.effector_class_name = self.effector_class_cols[0]
-				self.effector_expected_status = 'status'
-				suffix = self.effector_class_name.replace('class','').replace('_','')
-				if suffix!='':
-					self.effector_expected_status+='_'+suffix
-					self.effector_expected_time = 't_'+suffix
+					self.target_class_name = self.target_class_cols[0]
+					self.target_expected_status = 'status'
+					suffix = self.target_class_name.replace('class','').replace('_','')
+					if suffix!='':
+						self.target_expected_status+='_'+suffix
+						self.target_expected_time = 't_'+suffix
+					else:
+						self.target_expected_time = 't0'
+					self.target_time_name = self.target_expected_time
+					self.target_status_name = self.target_expected_status
 				else:
-					self.effector_expected_time = 't0'
-				self.effector_time_name = self.effector_expected_time
-				self.effector_status_name = self.effector_expected_status
-			else:
-				self.effector_class_name = 'class'
-				self.effector_time_name = 't0'
-				self.effector_status_name = 'status'
+					self.target_class_name = 'class'
+					self.target_time_name = 't0'
+					self.target_status_name = 'status'
 
-			if self.effector_time_name in self.df_effectors.columns and self.effector_class_name in self.df_effectors.columns and not self.effector_status_name in self.df_effectors.columns:
-				# only create the status column if it does not exist to not erase static classification results
-				pass
-				#self.make_effector_status_column()
-			elif self.effector_time_name in self.df_effectors.columns and self.effector_class_name in self.df_effectors.columns:
-				# all good, do nothing
-				pass
-			else:
-				if not self.effector_status_name in self.df_effectors.columns:
-					self.df_effectors[self.effector_status_name] = 0
-					self.df_effectors['status_color'] = color_from_status(0)
-					self.df_effectors['class_color'] = color_from_class(1)
-
-			if not self.effector_class_name in self.df_effectors.columns:
-				self.df_effectors[self.effector_class_name] = 1
-			if not self.effector_time_name in self.df_effectors.columns:
-				self.df_effectors[self.effector_time_name] = -1
-
-			self.df_effectors['status_color'] = color_from_status(2) #[color_from_status(i) for i in self.df_effectors[self.effector_status_name].to_numpy()]
-			self.df_effectors['class_color'] = color_from_status(2) #[color_from_class(i) for i in self.df_effectors[self.effector_class_name].to_numpy()]
-
-
-			self.df_effectors = self.df_effectors.dropna(subset=['POSITION_X', 'POSITION_Y'])
-			self.df_effectors['x_anim'] = self.df_effectors['POSITION_X'] * self.fraction
-			self.df_effectors['y_anim'] = self.df_effectors['POSITION_Y'] * self.fraction
-			self.df_effectors['x_anim'] = self.df_effectors['x_anim'].astype(int)
-			self.df_effectors['y_anim'] = self.df_effectors['y_anim'].astype(int)
-
-			self.extract_scatter_from_effector_trajectories()
-			try:
-				self.effector_track_of_interest = self.df_effectors['TRACK_ID'].min()
-			except:
-				self.effector_track_of_interest = self.df_effectors['ID'].min()
-
-
-			self.loc_t = []
-			self.loc_idx = []
-			for t in range(len(self.effector_tracks)):
-				indices = np.where(self.effector_tracks[t]==self.effector_track_of_interest)[0]
-				if len(indices)>0:
-					self.loc_t.append(t)
-					self.loc_idx.append(indices[0])
-
-			self.MinMaxScaler_effectors = MinMaxScaler()
-			self.effector_columns = list(self.df_effectors.columns)
-			cols_to_remove = [c for c in self.cols_to_remove if c in self.effector_columns] + self.effector_class_cols
-			time_cols = [c for c in self.effector_columns if c.startswith('t_')]
-			cols_to_remove += time_cols
-			neigh_cols = [c for c in self.effector_columns if c.startswith('neighborhood_')]
-			cols_to_remove += neigh_cols
-
-			for col in cols_to_remove:
-				try:
-					self.effector_columns.remove(col)
-				except:
+				if self.target_time_name in self.df_population.columns and self.target_class_name in df_population.columns and not self.target_status_name in df_population.columns:
+					# only create the status column if it does not exist to not erase static classification results
 					pass
+					#self.make_target_status_column()
+				elif self.target_time_name in df_population.columns and self.target_class_name in df_population.columns:
+					# all good, do nothing
+					pass
+				else:
+					if not self.target_status_name in df_population.columns:
+						df_population[self.target_status_name] = 0
+						df_population['status_color'] = color_from_status(0)
+						df_population['class_color'] = color_from_class(1)
 
-			x = self.df_effectors[self.effector_columns].to_numpy()
-			print(self.effector_columns, x, x.shape)
-			self.MinMaxScaler_effectors.fit(x)
+				if not self.target_class_name in df_population.columns:
+					df_population[self.target_class_name] = 1
+				if not self.target_time_name in df_population.columns:
+					df_population[self.target_time_name] = -1
+
+				df_population['status_color'] = color_from_status(2) #[color_from_status(i) for i in self.df_targets[self.target_status_name].to_numpy()]
+				df_population['class_color'] = color_from_status(2) #[color_from_class(i) for i in self.df_targets[self.target_class_name].to_numpy()]
+
+				df_population = df_population.dropna(subset=['POSITION_X', 'POSITION_Y'])
+				df_population['x_anim'] = df_population['POSITION_X'] * self.fraction
+				df_population['y_anim'] = df_population['POSITION_Y'] * self.fraction
+				df_population['x_anim'] = df_population['x_anim'].astype(int)
+				df_population['y_anim'] = df_population['y_anim'].astype(int)
+
+				self.extract_scatter_from_target_trajectories()
+				self.target_track_of_interest = df_population['TRACK_ID'].min()
+
+				self.loc_t = []
+				self.loc_idx = []
+				for t in range(len(self.target_tracks)):
+					indices = np.where(self.target_tracks[t]==self.target_track_of_interest)[0]
+					if len(indices)>0:
+						self.loc_t.append(t)
+						self.loc_idx.append(indices[0])
+
+				self.MinMaxScaler_targets = MinMaxScaler()
+				self.target_columns = list(df_population.columns)
+				cols_to_remove = [c for c in self.cols_to_remove if c in self.target_columns] + self.target_class_cols
+				time_cols = [c for c in self.target_columns if c.startswith('t_')]
+				cols_to_remove += time_cols
+				neigh_cols = [c for c in self.target_columns if c.startswith('neighborhood_')]
+				cols_to_remove += neigh_cols
+
+				for col in cols_to_remove:
+					try:
+						self.target_columns.remove(col)
+					except:
+						pass
+
+				x = df_population[self.target_columns].values
+				self.MinMaxScaler_targets.fit(x)
+
+			self.dataframes.update({population: df_population})
+
+	# def locate_target_tracks(self):
+
+	# 	population = 'targets'
+	# 	self.target_trajectories_path = self.pos + os.sep.join(['output','tables', f'trajectories_{population}.pkl'])
+	# 	if not os.path.exists(self.target_trajectories_path):
+	# 		self.target_trajectories_path = self.target_trajectories_path.replace('.pkl','.csv')
+
+	# 	if not os.path.exists(self.target_trajectories_path):
+
+	# 		msgBox = QMessageBox()
+	# 		msgBox.setIcon(QMessageBox.Warning)
+	# 		msgBox.setText("The target trajectories cannot be detected...")
+	# 		msgBox.setWindowTitle("Warning")
+	# 		msgBox.setStandardButtons(QMessageBox.Ok)
+	# 		returnValue = msgBox.exec()
+	# 		self.df_targets = None
+
+	# 	else:
+
+	# 		# Load and prep tracks
+	# 		if self.target_trajectories_path.endswith('.pkl'):
+	# 			self.df_targets = np.load(self.target_trajectories_path, allow_pickle=True)
+	# 		else:
+	# 			self.df_targets = pd.read_csv(self.target_trajectories_path)
+
+	# 		self.df_targets = self.df_targets.sort_values(by=['TRACK_ID', 'FRAME'])
+
+	# 		cols = np.array(self.df_targets.columns)
+	# 		self.target_class_cols = [c for c in list(self.df_targets.columns) if c.startswith('class')]
+
+	# 		try:
+	# 			self.target_class_cols.remove('class_id')
+	# 		except:
+	# 			pass
+	# 		try:
+	# 			self.target_class_cols.remove('class_color')
+	# 		except:
+	# 			pass
+
+	# 		if len(self.target_class_cols)>0:
+
+	# 			self.target_class_name = self.target_class_cols[0]
+	# 			self.target_expected_status = 'status'
+	# 			suffix = self.target_class_name.replace('class','').replace('_','')
+	# 			if suffix!='':
+	# 				self.target_expected_status+='_'+suffix
+	# 				self.target_expected_time = 't_'+suffix
+	# 			else:
+	# 				self.target_expected_time = 't0'
+	# 			self.target_time_name = self.target_expected_time
+	# 			self.target_status_name = self.target_expected_status
+	# 		else:
+	# 			self.target_class_name = 'class'
+	# 			self.target_time_name = 't0'
+	# 			self.target_status_name = 'status'
+
+	# 		if self.target_time_name in self.df_targets.columns and self.target_class_name in self.df_targets.columns and not self.target_status_name in self.df_targets.columns:
+	# 			# only create the status column if it does not exist to not erase static classification results
+	# 			pass
+	# 			#self.make_target_status_column()
+	# 		elif self.target_time_name in self.df_targets.columns and self.target_class_name in self.df_targets.columns:
+	# 			# all good, do nothing
+	# 			pass
+	# 		else:
+	# 			if not self.target_status_name in self.df_targets.columns:
+	# 				self.df_targets[self.target_status_name] = 0
+	# 				self.df_targets['status_color'] = color_from_status(0)
+	# 				self.df_targets['class_color'] = color_from_class(1)
+
+	# 		if not self.target_class_name in self.df_targets.columns:
+	# 			self.df_targets[self.target_class_name] = 1
+	# 		if not self.target_time_name in self.df_targets.columns:
+	# 			self.df_targets[self.target_time_name] = -1
+
+	# 		self.df_targets['status_color'] = color_from_status(2) #[color_from_status(i) for i in self.df_targets[self.target_status_name].to_numpy()]
+	# 		self.df_targets['class_color'] = color_from_status(2) #[color_from_class(i) for i in self.df_targets[self.target_class_name].to_numpy()]
+
+	# 		self.df_targets = self.df_targets.dropna(subset=['POSITION_X', 'POSITION_Y'])
+	# 		self.df_targets['x_anim'] = self.df_targets['POSITION_X'] * self.fraction
+	# 		self.df_targets['y_anim'] = self.df_targets['POSITION_Y'] * self.fraction
+	# 		self.df_targets['x_anim'] = self.df_targets['x_anim'].astype(int)
+	# 		self.df_targets['y_anim'] = self.df_targets['y_anim'].astype(int)
+
+	# 		self.extract_scatter_from_target_trajectories()
+	# 		self.target_track_of_interest = self.df_targets['TRACK_ID'].min()
+
+	# 		self.loc_t = []
+	# 		self.loc_idx = []
+	# 		for t in range(len(self.target_tracks)):
+	# 			indices = np.where(self.target_tracks[t]==self.target_track_of_interest)[0]
+	# 			if len(indices)>0:
+	# 				self.loc_t.append(t)
+	# 				self.loc_idx.append(indices[0])
+
+	# 		self.MinMaxScaler_targets = MinMaxScaler()
+	# 		self.target_columns = list(self.df_targets.columns)
+	# 		cols_to_remove = [c for c in self.cols_to_remove if c in self.target_columns] + self.target_class_cols
+	# 		time_cols = [c for c in self.target_columns if c.startswith('t_')]
+	# 		cols_to_remove += time_cols
+	# 		neigh_cols = [c for c in self.target_columns if c.startswith('neighborhood_')]
+	# 		cols_to_remove += neigh_cols
+
+	# 		for col in cols_to_remove:
+	# 			try:
+	# 				self.target_columns.remove(col)
+	# 			except:
+	# 				pass
+
+	# 		x = self.df_targets[self.target_columns].values
+	# 		self.MinMaxScaler_targets.fit(x)
+
+	# def locate_effector_tracks(self):
+
+	# 	population = 'effectors'
+	# 	self.effector_trajectories_path =  self.pos + os.sep.join(['output','tables',f'trajectories_{population}.pkl'])
+	# 	if not os.path.exists(self.effector_trajectories_path):
+	# 		self.effector_trajectories_path = self.effector_trajectories_path.replace('.pkl','.csv')
+
+	# 	if not os.path.exists(self.effector_trajectories_path):
+
+	# 		msgBox = QMessageBox()
+	# 		msgBox.setIcon(QMessageBox.Warning)
+	# 		msgBox.setText("The effector trajectories cannot be detected...")
+	# 		msgBox.setWindowTitle("Warning")
+	# 		msgBox.setStandardButtons(QMessageBox.Ok)
+	# 		returnValue = msgBox.exec()
+	# 		self.df_effectors = None
+	# 	else:
+	# 		# Load and prep tracks
+	# 		if self.effector_trajectories_path.endswith('.pkl'):
+	# 			self.df_effectors = np.load(self.effector_trajectories_path, allow_pickle=True)
+	# 		else:
+	# 			self.df_effectors = pd.read_csv(self.effector_trajectories_path)
+
+	# 		try:
+	# 			self.df_effectors = self.df_effectors.sort_values(by=['TRACK_ID', 'FRAME'])
+	# 		except:
+	# 			self.df_effectors = self.df_effectors.sort_values(by=['ID', 'FRAME'])
+
+
+	# 		cols = np.array(self.df_effectors.columns)
+	# 		self.effector_class_cols = np.array([c.startswith('class') for c in list(self.df_effectors.columns)])
+	# 		self.effector_class_cols = list(cols[self.effector_class_cols])
+	# 		try:
+	# 			self.effector_class_cols.remove('class_id')
+	# 		except:
+	# 			pass
+	# 		try:
+	# 			self.effector_class_cols.remove('class_color')
+	# 		except:
+	# 			pass
+	# 		if len(self.effector_class_cols)>0:
+	# 			self.effector_class_name = self.effector_class_cols[0]
+	# 			self.effector_expected_status = 'status'
+	# 			suffix = self.effector_class_name.replace('class','').replace('_','')
+	# 			if suffix!='':
+	# 				self.effector_expected_status+='_'+suffix
+	# 				self.effector_expected_time = 't_'+suffix
+	# 			else:
+	# 				self.effector_expected_time = 't0'
+	# 			self.effector_time_name = self.effector_expected_time
+	# 			self.effector_status_name = self.effector_expected_status
+	# 		else:
+	# 			self.effector_class_name = 'class'
+	# 			self.effector_time_name = 't0'
+	# 			self.effector_status_name = 'status'
+
+	# 		if self.effector_time_name in self.df_effectors.columns and self.effector_class_name in self.df_effectors.columns and not self.effector_status_name in self.df_effectors.columns:
+	# 			# only create the status column if it does not exist to not erase static classification results
+	# 			pass
+	# 			#self.make_effector_status_column()
+	# 		elif self.effector_time_name in self.df_effectors.columns and self.effector_class_name in self.df_effectors.columns:
+	# 			# all good, do nothing
+	# 			pass
+	# 		else:
+	# 			if not self.effector_status_name in self.df_effectors.columns:
+	# 				self.df_effectors[self.effector_status_name] = 0
+	# 				self.df_effectors['status_color'] = color_from_status(0)
+	# 				self.df_effectors['class_color'] = color_from_class(1)
+
+	# 		if not self.effector_class_name in self.df_effectors.columns:
+	# 			self.df_effectors[self.effector_class_name] = 1
+	# 		if not self.effector_time_name in self.df_effectors.columns:
+	# 			self.df_effectors[self.effector_time_name] = -1
+
+	# 		self.df_effectors['status_color'] = color_from_status(2) #[color_from_status(i) for i in self.df_effectors[self.effector_status_name].to_numpy()]
+	# 		self.df_effectors['class_color'] = color_from_status(2) #[color_from_class(i) for i in self.df_effectors[self.effector_class_name].to_numpy()]
+
+
+	# 		self.df_effectors = self.df_effectors.dropna(subset=['POSITION_X', 'POSITION_Y'])
+	# 		self.df_effectors['x_anim'] = self.df_effectors['POSITION_X'] * self.fraction
+	# 		self.df_effectors['y_anim'] = self.df_effectors['POSITION_Y'] * self.fraction
+	# 		self.df_effectors['x_anim'] = self.df_effectors['x_anim'].astype(int)
+	# 		self.df_effectors['y_anim'] = self.df_effectors['y_anim'].astype(int)
+
+	# 		self.extract_scatter_from_effector_trajectories()
+	# 		try:
+	# 			self.effector_track_of_interest = self.df_effectors['TRACK_ID'].min()
+	# 		except:
+	# 			self.effector_track_of_interest = self.df_effectors['ID'].min()
+
+
+	# 		self.loc_t = []
+	# 		self.loc_idx = []
+	# 		for t in range(len(self.effector_tracks)):
+	# 			indices = np.where(self.effector_tracks[t]==self.effector_track_of_interest)[0]
+	# 			if len(indices)>0:
+	# 				self.loc_t.append(t)
+	# 				self.loc_idx.append(indices[0])
+
+	# 		self.MinMaxScaler_effectors = MinMaxScaler()
+	# 		self.effector_columns = list(self.df_effectors.columns)
+	# 		cols_to_remove = [c for c in self.cols_to_remove if c in self.effector_columns] + self.effector_class_cols
+	# 		time_cols = [c for c in self.effector_columns if c.startswith('t_')]
+	# 		cols_to_remove += time_cols
+	# 		neigh_cols = [c for c in self.effector_columns if c.startswith('neighborhood_')]
+	# 		cols_to_remove += neigh_cols
+
+	# 		for col in cols_to_remove:
+	# 			try:
+	# 				self.effector_columns.remove(col)
+	# 			except:
+	# 				pass
+
+	# 		x = self.df_effectors[self.effector_columns].to_numpy()
+	# 		print(self.effector_columns, x, x.shape)
+	# 		self.MinMaxScaler_effectors.fit(x)
 
 
 	def locate_relative_tracks(self):
