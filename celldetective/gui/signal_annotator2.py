@@ -46,8 +46,8 @@ class SignalAnnotator2(QMainWindow,Styles):
 		self.soft_path = get_software_location()
 		self.recently_modified = False
 		self.n_signals = 3
-		self.target_selection = []
-		self.effector_selection = []
+		# self.target_selection = []
+		# self.effector_selection = []
 		
 		self.reference_selection = []
 		self.neighbor_selection = []
@@ -88,6 +88,8 @@ class SignalAnnotator2(QMainWindow,Styles):
 
 		# Locate tracks
 		self.locate_all_tracks()
+		self.extract_scatter_from_trajectories()
+
 		#self.locate_effector_tracks()
 
 		# self.dataframes = {
@@ -96,12 +98,18 @@ class SignalAnnotator2(QMainWindow,Styles):
 		# }
 
 		self.neighborhood_cols = []
-		if self.df_targets is not None:
-			self.neighborhood_cols.extend(['target_ref_'+c for c in list(self.df_targets.columns) if c.startswith('neighborhood')])
-		if self.df_effectors is not None:
-			print(self.df_effectors.columns)
-			self.neighborhood_cols.extend(['effector_ref_'+c for c in list(self.df_effectors.columns) if c.startswith('neighborhood')])
+
+		for pop in self.dataframes.keys():
+			if self.dataframes[pop] is not None:
+				self.neighborhood_cols.extend([f'{pop}_ref_'+c for c in list(self.dataframes[pop].columns) if c.startswith('neighborhood')])
+
+		# if self.df_targets is not None:
+		# 	self.neighborhood_cols.extend(['target_ref_'+c for c in list(self.df_targets.columns) if c.startswith('neighborhood')])
+		# if self.df_effectors is not None:
+		# 	print(self.df_effectors.columns)
+		# 	self.neighborhood_cols.extend(['effector_ref_'+c for c in list(self.df_effectors.columns) if c.startswith('neighborhood')])
 		print(f"The following neighborhoods were detected: {self.neighborhood_cols=}")
+
 		self.locate_relative_tracks()
 		
 		# Prepare stack
@@ -723,10 +731,7 @@ class SignalAnnotator2(QMainWindow,Styles):
 			df_reference['status_color'] = [color_from_status(i) for i in df_reference[self.reference_status_name].to_numpy()]
 			df_reference['class_color'] = [color_from_class(i) for i in df_reference[self.reference_class_name].to_numpy()]
 
-			if self.reference_population=='targets':
-				self.extract_scatter_from_target_trajectories()
-			else:
-				self.extract_scatter_from_effector_trajectories()
+			self.refresh_scatter_from_trajectories(self.reference_population)
 
 
 	def compute_status_and_colors_neighbor(self):
@@ -767,10 +772,8 @@ class SignalAnnotator2(QMainWindow,Styles):
 			df_neighbors['status_color'] = [color_from_status(i) for i in df_neighbors[self.neighbor_status_name].to_numpy()]
 			df_neighbors['class_color'] = [color_from_class(i) for i in df_neighbors[self.neighbor_class_name].to_numpy()]
 
-			if self.neighbor_population=='targets':
-				self.extract_scatter_from_target_trajectories()
-			else:
-				self.extract_scatter_from_effector_trajectories()
+			self.refresh_scatter_from_trajectories(self.neighbor_population)
+
 
 	def compute_status_and_colors_pair(self):
 
@@ -845,10 +848,10 @@ class SignalAnnotator2(QMainWindow,Styles):
 		if len(self.pair_selection) > 0:
 			self.cancel_pair_selection()
 
-		if self.df_targets is not None:
-			self.target_selection = []
-		if self.df_effectors is not None:
-			self.effector_selection = []
+		# if self.df_targets is not None:
+		# 	self.target_selection = []
+		# if self.df_effectors is not None:
+		# 	self.effector_selection = []
 
 		_, _, neighbor_colors, initial_neighbor_colors = self.get_neighbor_sets()
 		_, _, reference_colors, initial_reference_colors = self.get_reference_sets()
@@ -1012,8 +1015,9 @@ class SignalAnnotator2(QMainWindow,Styles):
 		# but keep reference
 
 		#self.make_status_column()
-		self.extract_scatter_from_target_trajectories()
-		self.extract_scatter_from_effector_trajectories()
+		self.refresh_scatter_from_trajectories(self.reference_population)
+		self.refresh_scatter_from_trajectories(self.neighbor_population)
+
 
 		self.recolor_selection()
 		self.trace_neighbors()
@@ -1105,7 +1109,7 @@ class SignalAnnotator2(QMainWindow,Styles):
 					self.target_time_name = 't0'
 					self.target_status_name = 'status'
 
-				if self.target_time_name in self.df_population.columns and self.target_class_name in df_population.columns and not self.target_status_name in df_population.columns:
+				if self.target_time_name in df_population.columns and self.target_class_name in df_population.columns and not self.target_status_name in df_population.columns:
 					# only create the status column if it does not exist to not erase static classification results
 					pass
 					#self.make_target_status_column()
@@ -1132,13 +1136,16 @@ class SignalAnnotator2(QMainWindow,Styles):
 				df_population['x_anim'] = df_population['x_anim'].astype(int)
 				df_population['y_anim'] = df_population['y_anim'].astype(int)
 
-				self.extract_scatter_from_target_trajectories()
+				#self.reference_positions, self.reference_tracks, self.reference_colors, self.reference_initial_colors = self.extract_scatter_from_trajectories(self.reference_population)
+				#self.extract_scatter_from_target_trajectories()
+
+				tracks = df_population['TRACK_ID'].unique()
 				self.target_track_of_interest = df_population['TRACK_ID'].min()
 
 				self.loc_t = []
 				self.loc_idx = []
-				for t in range(len(self.target_tracks)):
-					indices = np.where(self.target_tracks[t]==self.target_track_of_interest)[0]
+				for t in range(len(tracks)):
+					indices = np.where(tracks[t]==self.target_track_of_interest)[0]
 					if len(indices)>0:
 						self.loc_t.append(t)
 						self.loc_idx.append(indices[0])
@@ -1161,235 +1168,6 @@ class SignalAnnotator2(QMainWindow,Styles):
 				self.MinMaxScaler_targets.fit(x)
 
 			self.dataframes.update({population: df_population})
-
-	# def locate_target_tracks(self):
-
-	# 	population = 'targets'
-	# 	self.target_trajectories_path = self.pos + os.sep.join(['output','tables', f'trajectories_{population}.pkl'])
-	# 	if not os.path.exists(self.target_trajectories_path):
-	# 		self.target_trajectories_path = self.target_trajectories_path.replace('.pkl','.csv')
-
-	# 	if not os.path.exists(self.target_trajectories_path):
-
-	# 		msgBox = QMessageBox()
-	# 		msgBox.setIcon(QMessageBox.Warning)
-	# 		msgBox.setText("The target trajectories cannot be detected...")
-	# 		msgBox.setWindowTitle("Warning")
-	# 		msgBox.setStandardButtons(QMessageBox.Ok)
-	# 		returnValue = msgBox.exec()
-	# 		self.df_targets = None
-
-	# 	else:
-
-	# 		# Load and prep tracks
-	# 		if self.target_trajectories_path.endswith('.pkl'):
-	# 			self.df_targets = np.load(self.target_trajectories_path, allow_pickle=True)
-	# 		else:
-	# 			self.df_targets = pd.read_csv(self.target_trajectories_path)
-
-	# 		self.df_targets = self.df_targets.sort_values(by=['TRACK_ID', 'FRAME'])
-
-	# 		cols = np.array(self.df_targets.columns)
-	# 		self.target_class_cols = [c for c in list(self.df_targets.columns) if c.startswith('class')]
-
-	# 		try:
-	# 			self.target_class_cols.remove('class_id')
-	# 		except:
-	# 			pass
-	# 		try:
-	# 			self.target_class_cols.remove('class_color')
-	# 		except:
-	# 			pass
-
-	# 		if len(self.target_class_cols)>0:
-
-	# 			self.target_class_name = self.target_class_cols[0]
-	# 			self.target_expected_status = 'status'
-	# 			suffix = self.target_class_name.replace('class','').replace('_','')
-	# 			if suffix!='':
-	# 				self.target_expected_status+='_'+suffix
-	# 				self.target_expected_time = 't_'+suffix
-	# 			else:
-	# 				self.target_expected_time = 't0'
-	# 			self.target_time_name = self.target_expected_time
-	# 			self.target_status_name = self.target_expected_status
-	# 		else:
-	# 			self.target_class_name = 'class'
-	# 			self.target_time_name = 't0'
-	# 			self.target_status_name = 'status'
-
-	# 		if self.target_time_name in self.df_targets.columns and self.target_class_name in self.df_targets.columns and not self.target_status_name in self.df_targets.columns:
-	# 			# only create the status column if it does not exist to not erase static classification results
-	# 			pass
-	# 			#self.make_target_status_column()
-	# 		elif self.target_time_name in self.df_targets.columns and self.target_class_name in self.df_targets.columns:
-	# 			# all good, do nothing
-	# 			pass
-	# 		else:
-	# 			if not self.target_status_name in self.df_targets.columns:
-	# 				self.df_targets[self.target_status_name] = 0
-	# 				self.df_targets['status_color'] = color_from_status(0)
-	# 				self.df_targets['class_color'] = color_from_class(1)
-
-	# 		if not self.target_class_name in self.df_targets.columns:
-	# 			self.df_targets[self.target_class_name] = 1
-	# 		if not self.target_time_name in self.df_targets.columns:
-	# 			self.df_targets[self.target_time_name] = -1
-
-	# 		self.df_targets['status_color'] = color_from_status(2) #[color_from_status(i) for i in self.df_targets[self.target_status_name].to_numpy()]
-	# 		self.df_targets['class_color'] = color_from_status(2) #[color_from_class(i) for i in self.df_targets[self.target_class_name].to_numpy()]
-
-	# 		self.df_targets = self.df_targets.dropna(subset=['POSITION_X', 'POSITION_Y'])
-	# 		self.df_targets['x_anim'] = self.df_targets['POSITION_X'] * self.fraction
-	# 		self.df_targets['y_anim'] = self.df_targets['POSITION_Y'] * self.fraction
-	# 		self.df_targets['x_anim'] = self.df_targets['x_anim'].astype(int)
-	# 		self.df_targets['y_anim'] = self.df_targets['y_anim'].astype(int)
-
-	# 		self.extract_scatter_from_target_trajectories()
-	# 		self.target_track_of_interest = self.df_targets['TRACK_ID'].min()
-
-	# 		self.loc_t = []
-	# 		self.loc_idx = []
-	# 		for t in range(len(self.target_tracks)):
-	# 			indices = np.where(self.target_tracks[t]==self.target_track_of_interest)[0]
-	# 			if len(indices)>0:
-	# 				self.loc_t.append(t)
-	# 				self.loc_idx.append(indices[0])
-
-	# 		self.MinMaxScaler_targets = MinMaxScaler()
-	# 		self.target_columns = list(self.df_targets.columns)
-	# 		cols_to_remove = [c for c in self.cols_to_remove if c in self.target_columns] + self.target_class_cols
-	# 		time_cols = [c for c in self.target_columns if c.startswith('t_')]
-	# 		cols_to_remove += time_cols
-	# 		neigh_cols = [c for c in self.target_columns if c.startswith('neighborhood_')]
-	# 		cols_to_remove += neigh_cols
-
-	# 		for col in cols_to_remove:
-	# 			try:
-	# 				self.target_columns.remove(col)
-	# 			except:
-	# 				pass
-
-	# 		x = self.df_targets[self.target_columns].values
-	# 		self.MinMaxScaler_targets.fit(x)
-
-	# def locate_effector_tracks(self):
-
-	# 	population = 'effectors'
-	# 	self.effector_trajectories_path =  self.pos + os.sep.join(['output','tables',f'trajectories_{population}.pkl'])
-	# 	if not os.path.exists(self.effector_trajectories_path):
-	# 		self.effector_trajectories_path = self.effector_trajectories_path.replace('.pkl','.csv')
-
-	# 	if not os.path.exists(self.effector_trajectories_path):
-
-	# 		msgBox = QMessageBox()
-	# 		msgBox.setIcon(QMessageBox.Warning)
-	# 		msgBox.setText("The effector trajectories cannot be detected...")
-	# 		msgBox.setWindowTitle("Warning")
-	# 		msgBox.setStandardButtons(QMessageBox.Ok)
-	# 		returnValue = msgBox.exec()
-	# 		self.df_effectors = None
-	# 	else:
-	# 		# Load and prep tracks
-	# 		if self.effector_trajectories_path.endswith('.pkl'):
-	# 			self.df_effectors = np.load(self.effector_trajectories_path, allow_pickle=True)
-	# 		else:
-	# 			self.df_effectors = pd.read_csv(self.effector_trajectories_path)
-
-	# 		try:
-	# 			self.df_effectors = self.df_effectors.sort_values(by=['TRACK_ID', 'FRAME'])
-	# 		except:
-	# 			self.df_effectors = self.df_effectors.sort_values(by=['ID', 'FRAME'])
-
-
-	# 		cols = np.array(self.df_effectors.columns)
-	# 		self.effector_class_cols = np.array([c.startswith('class') for c in list(self.df_effectors.columns)])
-	# 		self.effector_class_cols = list(cols[self.effector_class_cols])
-	# 		try:
-	# 			self.effector_class_cols.remove('class_id')
-	# 		except:
-	# 			pass
-	# 		try:
-	# 			self.effector_class_cols.remove('class_color')
-	# 		except:
-	# 			pass
-	# 		if len(self.effector_class_cols)>0:
-	# 			self.effector_class_name = self.effector_class_cols[0]
-	# 			self.effector_expected_status = 'status'
-	# 			suffix = self.effector_class_name.replace('class','').replace('_','')
-	# 			if suffix!='':
-	# 				self.effector_expected_status+='_'+suffix
-	# 				self.effector_expected_time = 't_'+suffix
-	# 			else:
-	# 				self.effector_expected_time = 't0'
-	# 			self.effector_time_name = self.effector_expected_time
-	# 			self.effector_status_name = self.effector_expected_status
-	# 		else:
-	# 			self.effector_class_name = 'class'
-	# 			self.effector_time_name = 't0'
-	# 			self.effector_status_name = 'status'
-
-	# 		if self.effector_time_name in self.df_effectors.columns and self.effector_class_name in self.df_effectors.columns and not self.effector_status_name in self.df_effectors.columns:
-	# 			# only create the status column if it does not exist to not erase static classification results
-	# 			pass
-	# 			#self.make_effector_status_column()
-	# 		elif self.effector_time_name in self.df_effectors.columns and self.effector_class_name in self.df_effectors.columns:
-	# 			# all good, do nothing
-	# 			pass
-	# 		else:
-	# 			if not self.effector_status_name in self.df_effectors.columns:
-	# 				self.df_effectors[self.effector_status_name] = 0
-	# 				self.df_effectors['status_color'] = color_from_status(0)
-	# 				self.df_effectors['class_color'] = color_from_class(1)
-
-	# 		if not self.effector_class_name in self.df_effectors.columns:
-	# 			self.df_effectors[self.effector_class_name] = 1
-	# 		if not self.effector_time_name in self.df_effectors.columns:
-	# 			self.df_effectors[self.effector_time_name] = -1
-
-	# 		self.df_effectors['status_color'] = color_from_status(2) #[color_from_status(i) for i in self.df_effectors[self.effector_status_name].to_numpy()]
-	# 		self.df_effectors['class_color'] = color_from_status(2) #[color_from_class(i) for i in self.df_effectors[self.effector_class_name].to_numpy()]
-
-
-	# 		self.df_effectors = self.df_effectors.dropna(subset=['POSITION_X', 'POSITION_Y'])
-	# 		self.df_effectors['x_anim'] = self.df_effectors['POSITION_X'] * self.fraction
-	# 		self.df_effectors['y_anim'] = self.df_effectors['POSITION_Y'] * self.fraction
-	# 		self.df_effectors['x_anim'] = self.df_effectors['x_anim'].astype(int)
-	# 		self.df_effectors['y_anim'] = self.df_effectors['y_anim'].astype(int)
-
-	# 		self.extract_scatter_from_effector_trajectories()
-	# 		try:
-	# 			self.effector_track_of_interest = self.df_effectors['TRACK_ID'].min()
-	# 		except:
-	# 			self.effector_track_of_interest = self.df_effectors['ID'].min()
-
-
-	# 		self.loc_t = []
-	# 		self.loc_idx = []
-	# 		for t in range(len(self.effector_tracks)):
-	# 			indices = np.where(self.effector_tracks[t]==self.effector_track_of_interest)[0]
-	# 			if len(indices)>0:
-	# 				self.loc_t.append(t)
-	# 				self.loc_idx.append(indices[0])
-
-	# 		self.MinMaxScaler_effectors = MinMaxScaler()
-	# 		self.effector_columns = list(self.df_effectors.columns)
-	# 		cols_to_remove = [c for c in self.cols_to_remove if c in self.effector_columns] + self.effector_class_cols
-	# 		time_cols = [c for c in self.effector_columns if c.startswith('t_')]
-	# 		cols_to_remove += time_cols
-	# 		neigh_cols = [c for c in self.effector_columns if c.startswith('neighborhood_')]
-	# 		cols_to_remove += neigh_cols
-
-	# 		for col in cols_to_remove:
-	# 			try:
-	# 				self.effector_columns.remove(col)
-	# 			except:
-	# 				pass
-
-	# 		x = self.df_effectors[self.effector_columns].to_numpy()
-	# 		print(self.effector_columns, x, x.shape)
-	# 		self.MinMaxScaler_effectors.fit(x)
-
 
 	def locate_relative_tracks(self):
 
@@ -1455,9 +1233,25 @@ class SignalAnnotator2(QMainWindow,Styles):
 	def set_reference_and_neighbor_populations(self):
 
 		neigh = self.neighborhood_choice_cb.currentText()
-		self.current_neighborhood = neigh.replace('target_ref_','').replace('effector_ref_','')
-		self.reference_population = ['targets' if 'target' in neigh else 'effectors'][0]
-		self.neighbor_population = self.df_relative.loc[(~self.df_relative['status_'+self.current_neighborhood].isnull())&(self.df_relative['reference_population']==self.reference_population), 'neighbor_population'].values[0]
+		print(f"{neigh=}")
+
+		self.current_neighborhood = neigh #.replace('target_ref_','').replace('effector_ref_','')
+		for pop in self.dataframes.keys():
+			self.current_neighborhood = self.current_neighborhood.replace(f'{pop}_ref_','')
+		
+		self.reference_population = self.neighborhood_choice_cb.currentText().split('_')[0] #['targets' if 'target' in neigh else 'effectors'][0]
+
+		if '_(' in self.current_neighborhood and ')_' in self.current_neighborhood:
+			self.neighbor_population = self.current_neighborhood.split('_(')[-1].split(')_')[0].split('-')[-1]
+			self.reference_population = self.current_neighborhood.split('_(')[-1].split(')_')[0].split('-')[0]			
+		else:
+			if 'self' in self.current_neighborhood:
+				self.neighbor_population = self.reference_population
+
+		print(f"{self.current_neighborhood=} {self.reference_population=} {self.neighbor_population=}")
+
+		# self.neighbor_population = self.df_relative.loc[(~self.df_relative['status_'+self.current_neighborhood].isnull())&(self.df_relative['reference_population']==self.reference_population), 'neighbor_population'].values[0]
+		# print(f"{self.current_neighborhood=} {self.reference_population=} {self.neighbor_population=}")
 		
 		print(f'Current neighborhood: {self.current_neighborhood}')
 		print(f'New reference population: {self.reference_population}')
@@ -1723,48 +1517,42 @@ class SignalAnnotator2(QMainWindow,Styles):
 			self.initial_lines_colors_class.append(self.df_relative.loc[(self.df_relative['FRAME'] == t)&(~self.df_relative['status_'+self.current_neighborhood].isnull())&(self.df_relative['reference_population']==self.reference_population), ['REFERENCE_ID', 'NEIGHBOR_ID','class_color']].to_numpy())
 			self.lines_colors_class.append(self.df_relative.loc[(self.df_relative['FRAME'] == t)&(~self.df_relative['status_'+self.current_neighborhood].isnull())&(self.df_relative['reference_population']==self.reference_population), ['REFERENCE_ID', 'NEIGHBOR_ID','class_color']].to_numpy())
 
-	def extract_scatter_from_target_trajectories(self):
+	def extract_scatter_from_trajectories(self):
 
-		print('extracting scatter from target trajectories...')
+		self.tracks = {}
+		self.positions = {}
+		self.colors = {}
+		self.initial_colors = {}
+			
+		for population in self.dataframes.keys():
+			self.refresh_scatter_from_trajectories(population)
 
-		self.target_positions = []
-		self.target_colors = []
-		self.target_tracks = []
-		self.initial_target_colors = []
+	def refresh_scatter_from_trajectories(self, population):
+		
+		df = self.dataframes[population]
+		positions = []
+		tracks = []
+		colors = []
+		initial_colors = []
 
-		for t in np.arange(self.len_movie):
+		if df is not None:
 
-			if self.df_targets is not None:
-				self.target_positions.append(self.df_targets.loc[self.df_targets['FRAME']==t,['x_anim', 'y_anim']].to_numpy())
-				self.target_colors.append(self.df_targets.loc[self.df_targets['FRAME']==t,['class_color', 'status_color']].to_numpy())
-				self.initial_target_colors.append(
-					self.df_targets.loc[self.df_targets['FRAME'] == t, ['class_color', 'status_color']].to_numpy())
-				try:
-					self.target_tracks.append(self.df_targets.loc[self.df_targets['FRAME']==t, 'TRACK_ID'].to_numpy())
-				except:
-					self.target_tracks.append(
-						self.df_targets.loc[self.df_targets['FRAME'] == t, 'ID'].to_numpy())
+			for t in np.arange(self.len_movie):
 
+					positions.append(df.loc[df['FRAME']==t,['x_anim', 'y_anim']].to_numpy())
+					colors.append(df.loc[df['FRAME']==t,['class_color', 'status_color']].to_numpy())
+					initial_colors.append(
+						df.loc[df['FRAME'] == t, ['class_color', 'status_color']].to_numpy())
+					try:
+						tracks.append(df.loc[df['FRAME']==t, 'TRACK_ID'].to_numpy())
+					except:
+						tracks.append(
+							df.loc[df['FRAME'] == t, 'ID'].to_numpy())
 
-	def extract_scatter_from_effector_trajectories(self):
-
-		self.effector_positions = []
-		self.effector_colors = []
-		self.initial_effector_colors=[]
-		self.effector_tracks = []
-
-		for t in np.arange(self.len_movie):
-
-			if self.df_effectors is not None:
-
-				self.effector_positions.append(self.df_effectors.loc[self.df_effectors['FRAME']==t,['x_anim', 'y_anim']].to_numpy())
-				self.effector_colors.append(self.df_effectors.loc[self.df_effectors['FRAME']==t,['class_color', 'status_color']].to_numpy())
-				self.initial_effector_colors.append(self.df_effectors.loc[self.df_effectors['FRAME'] == t, ['class_color', 'status_color']].to_numpy())
-				try:
-					self.effector_tracks.append(self.df_effectors.loc[self.df_effectors['FRAME']==t, 'TRACK_ID'].to_numpy())
-				except:
-					self.effector_tracks.append(
-						self.df_effectors.loc[self.df_effectors['FRAME'] == t, 'ID'].to_numpy())
+		self.tracks.update({population: tracks})
+		self.positions.update({population: positions})
+		self.colors.update({population: colors})
+		self.initial_colors.update({population: initial_colors})
 
 	def load_annotator_config(self):
 
@@ -1929,19 +1717,19 @@ class SignalAnnotator2(QMainWindow,Styles):
 		self.im = self.ax.imshow(self.stack[0], cmap='gray', vmin=np.nanpercentile(self.stack, 1), vmax=np.nanpercentile(self.stack, 99.99))
 
 
-		if self.df_targets is not None:
-			self.target_status_scatter = self.ax.scatter(self.target_positions[0][:,0], self.target_positions[0][:,1], marker="x", c=self.target_colors[0][:,1], s=50, picker=True, pickradius=10, zorder=10)
-			self.target_class_scatter = self.ax.scatter(self.target_positions[0][:,0], self.target_positions[0][:,1], marker='o', facecolors='none',edgecolors=self.target_colors[0][:,0], s=200, zorder=10)
-		else:
-			self.target_status_scatter = self.ax.scatter([],[], marker="x", s=50, picker=True, pickradius=10)
-			self.target_class_scatter = self.ax.scatter([],[], marker='o', facecolors='none', s=200)
+		self.status_scatter = {}
+		self.class_scatter = {}
 
-		if self.df_effectors is not None:
-			self.effector_status_scatter = self.ax.scatter(self.effector_positions[0][:,0], self.effector_positions[0][:,1], marker="x", c=self.effector_colors[0][:,1], s=50, picker=True, pickradius=10, zorder=10)
-			self.effector_class_scatter = self.ax.scatter(self.effector_positions[0][:,0], self.effector_positions[0][:,1], marker='^', facecolors='none',edgecolors=self.effector_colors[0][:,0], s=200, zorder=10)
-		else:
-			self.effector_status_scatter = self.ax.scatter([], [], marker="x", s=50, picker=True, pickradius=10)
-			self.effector_class_scatter = self.ax.scatter([],[], marker='^', facecolors='none', s=200)
+		for pop in self.dataframes.keys():
+			df = self.dataframes[pop]
+			if df is not None:
+				status_scatter = self.ax.scatter(self.positions[pop][0][:,0], self.positions[pop][0][:,1], marker="x", c=self.colors[pop][0][:,1], s=50, picker=True, pickradius=10, zorder=10)
+				class_scatter = self.ax.scatter(self.positions[pop][0][:,0], self.positions[pop][0][:,1], marker='o', facecolors='none',edgecolors=self.colors[pop][0][:,0], s=200, zorder=10)
+			else:
+				status_scatter = self.ax.scatter([], [], marker="x", s=50, picker=True, pickradius=10)
+				class_scatter = self.ax.scatter([], [], marker='o', facecolors='none', s=200)
+			self.status_scatter.update({pop: status_scatter})
+			self.class_scatter.update({pop: class_scatter})
 
 		self.points=self.ax.scatter([], [], marker="$\Join$", s=100, picker=True, pickradius=10, zorder=10) #picker=True, pickradius=10
 
@@ -2143,24 +1931,26 @@ class SignalAnnotator2(QMainWindow,Styles):
 
 
 	def get_neighbor_sets(self):
+		return self.positions[self.neighbor_population], self.tracks[self.neighbor_population], self.colors[self.neighbor_population], self.initial_colors[self.neighbor_population]
 
-		if self.reference_population != self.neighbor_population:
-			if self.reference_population=='effectors':
-				return self.target_positions, self.target_tracks, self.target_colors, self.initial_target_colors
-			elif self.reference_population=='targets':
-				return self.effector_positions, self.effector_tracks, self.effector_colors, self.initial_effector_colors
-		else:
-			if self.reference_population=='effectors':
-				return self.effector_positions, self.effector_tracks, self.effector_colors, self.initial_effector_colors
-			elif self.reference_population=='targets':
-				return self.target_positions, self.target_tracks, self.target_colors, self.initial_target_colors		
+		# if self.reference_population != self.neighbor_population:
+		# 	if self.reference_population=='effectors':
+		# 		return self.target_positions, self.target_tracks, self.target_colors, self.initial_target_colors
+		# 	elif self.reference_population=='targets':
+		# 		return self.effector_positions, self.effector_tracks, self.effector_colors, self.initial_effector_colors
+		# else:
+		# 	if self.reference_population=='effectors':
+		# 		return self.effector_positions, self.effector_tracks, self.effector_colors, self.initial_effector_colors
+		# 	elif self.reference_population=='targets':
+		# 		return self.target_positions, self.target_tracks, self.target_colors, self.initial_target_colors		
 
 	def get_reference_sets(self):
+		return self.positions[self.reference_population], self.tracks[self.reference_population], self.colors[self.reference_population], self.initial_colors[self.reference_population]
 
-		if self.reference_population == 'effectors':
-			return self.effector_positions, self.effector_tracks, self.effector_colors, self.initial_effector_colors
-		elif self.reference_population == 'targets':
-			return self.target_positions, self.target_tracks, self.target_colors, self.initial_target_colors	
+		# if self.reference_population == 'effectors':
+		# 	return self.effector_positions, self.effector_tracks, self.effector_colors, self.initial_effector_colors
+		# elif self.reference_population == 'targets':
+		# 	return self.target_positions, self.target_tracks, self.target_colors, self.initial_target_colors	
 
 	def trace_neighbors(self):
 
@@ -2272,20 +2062,27 @@ class SignalAnnotator2(QMainWindow,Styles):
 
 		# Identify the nature of the selected object (target/effector/pair)
 		self.pair_selected = False
-		if label == '_child1':
-			self.selected_population = 'targets'
-		elif label == '_child3':
-			self.selected_population = 'effectors'
-		else:
-			number = int(label.split('_child')[1])
-			if number>4:
-				print('A pair is selected...')
-				self.pair_selected = True
 
-		if self.selected_population=='effectors':
-			positions = self.effector_positions
-		elif self.selected_population=='targets':
-			positions = self.target_positions
+		populations = list(self.dataframes.keys())
+		number = int(label.split('_child')[1])
+		if number>len(populations)*2:
+			print('A pair is selected...')
+			self.pair_selected = True
+			self.selected_population = None
+		else:
+			self.selected_population = populations[(number-1)//2]
+
+		# if label == '_child1':
+		# 	self.selected_population = 'targets'
+		# elif label == '_child3':
+		# 	self.selected_population = 'effectors'
+
+		if self.selected_population is not None:
+			positions = self.positions[self.selected_population]
+		# if self.selected_population=='effectors':
+		# 	positions = self.effector_positions
+		# elif self.selected_population=='targets':
+		# 	positions = self.target_positions
 
 		if len(ind)==1:
 			self.index = ind[0]
@@ -2420,24 +2217,17 @@ class SignalAnnotator2(QMainWindow,Styles):
 		self.im.set_array(self.stack[self.framedata])
 		#if self.reference_population=='targets':
 
-		if self.df_effectors is not None:
+		for pop in self.dataframes.keys():
+			df = self.dataframes[pop]
+			if df is not None:
+				self.status_scatter[pop].set_visible(True)
+				self.status_scatter[pop].set_picker(True)
+				self.status_scatter[pop].set_offsets(self.positions[pop][self.framedata])
+				self.status_scatter[pop].set_color(self.colors[pop][self.framedata][:,1])
 
-			self.effector_status_scatter.set_visible(True)
-			self.effector_status_scatter.set_picker(True)
-			self.effector_class_scatter.set_visible(True)
-			self.effector_status_scatter.set_offsets(self.effector_positions[self.framedata])
-			self.effector_status_scatter.set_color(self.effector_colors[self.framedata][:, 1])
-			self.effector_class_scatter.set_offsets(self.effector_positions[self.framedata])
-			self.effector_class_scatter.set_edgecolor(self.effector_colors[self.framedata][:, 0])
-
-		if self.df_targets is not None:
-			self.target_status_scatter.set_visible(True)
-			self.target_status_scatter.set_picker(True)
-			self.target_class_scatter.set_visible(True)
-			self.target_status_scatter.set_offsets(self.target_positions[self.framedata])
-			self.target_status_scatter.set_color(self.target_colors[self.framedata][:, 1])
-			self.target_class_scatter.set_offsets(self.target_positions[self.framedata])
-			self.target_class_scatter.set_edgecolor(self.target_colors[self.framedata][:, 0])
+				self.class_scatter[pop].set_visible(True)
+				self.class_scatter[pop].set_offsets(self.positions[pop][self.framedata])
+				self.class_scatter[pop].set_edgecolor(self.colors[pop][self.framedata][:,0])
 
 		self.lines_list=[]
 
@@ -2466,10 +2256,9 @@ class SignalAnnotator2(QMainWindow,Styles):
 					print(e)
 
 		if self.lines_list!=[]:
-			return [self.im,self.target_status_scatter,self.target_class_scatter,self.effector_status_scatter,self.effector_class_scatter] +self.lines_list + [self.points]
+			return [self.im] + [self.status_scatter[p] for p in self.status_scatter.keys()] + [self.class_scatter[p] for p in self.status_scatter.keys()] + self.lines_list + [self.points]
 		else:
-			return [self.im, self.target_status_scatter, self.target_class_scatter, self.effector_status_scatter,
-					self.effector_class_scatter,]
+			return [self.im,] + [self.status_scatter[p] for p in self.status_scatter.keys()] + [self.class_scatter[p] for p in self.status_scatter.keys()]
 
 	def stop(self):
 		# # On stop we disconnect all of our events.
