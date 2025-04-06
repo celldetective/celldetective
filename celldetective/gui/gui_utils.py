@@ -1185,6 +1185,7 @@ def color_from_state(state, recently_modified=False):
 	unique_values = np.unique(state)
 	color_map={}
 	for value in unique_values:
+
 		if np.isnan(value):
 			value = "nan"
 			color_map[value] = 'k'

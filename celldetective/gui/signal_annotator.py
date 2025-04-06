@@ -1450,6 +1450,7 @@ class MeasureAnnotator(SignalAnnotator):
 		self.setAttribute(Qt.WA_DeleteOnClose)
 		self.previous_index = None
 
+
 	def static_image(self):
 
 		"""
@@ -1708,14 +1709,13 @@ class MeasureAnnotator(SignalAnnotator):
 		self.class_cols = np.array([c.startswith('group') or c.startswith('status') for c in list(self.df_tracks.columns)])
 		self.class_cols = list(cols[self.class_cols])
 
-		try:
-			self.class_cols.remove('group_id')
-		except Exception:
-			pass
-		try:
-			self.class_cols.remove('group_color')
-		except Exception:
-			pass
+		to_remove = ['group_id','group_color','class_id','class_color']
+		for col in to_remove:
+			try:
+				self.class_cols.remove('group_id')
+			except Exception:
+				pass
+
 
 		self.class_choice_cb.addItems(self.class_cols)
 		self.class_choice_cb.currentIndexChanged.connect(self.changed_class)
@@ -2014,8 +2014,10 @@ class MeasureAnnotator(SignalAnnotator):
 		self.class_choice_cb.clear()
 		cols = np.array(self.df_tracks.columns)
 		self.class_cols = np.array([c.startswith('group') for c in list(self.df_tracks.columns)])
+		
 		self.class_cols = list(cols[self.class_cols])
 		self.class_cols.remove('group_color')
+
 		self.class_choice_cb.addItems(self.class_cols)
 		idx = self.class_choice_cb.findText(self.target_class)
 		self.status_name = self.target_class
@@ -2129,6 +2131,7 @@ class MeasureAnnotator(SignalAnnotator):
 		self.fcanvas.canvas.draw()
 
 	def assign_color_state(self, state):
+
 		if np.isnan(state):
 		 	state = "nan"
 		return self.state_color_map[state]
@@ -2163,13 +2166,15 @@ class MeasureAnnotator(SignalAnnotator):
 		else:
 			self.status_name = self.class_choice_cb.currentText()
 
-		print(f'{self.status_name=}')
+		print(f'{self.status_name=} ')
 		if self.status_name not in self.df_tracks.columns:
 			print('not in df, make column')
 			self.make_status_column()
 		else:
+			print(f"{self.status_name=}")
 			all_states = self.df_tracks.loc[:, self.status_name].tolist()
 			all_states = np.array(all_states)
+			print(f"{all_states=}")
 			self.state_color_map = color_from_state(all_states, recently_modified=False)
 			print(f'{self.state_color_map=}')
 			self.df_tracks['group_color'] = self.df_tracks[self.status_name].apply(self.assign_color_state)
@@ -2233,16 +2238,23 @@ class MeasureAnnotator(SignalAnnotator):
 				self.df_tracks = self.df_tracks.sort_values(by=['ID', 'FRAME'])
 
 			cols = np.array(self.df_tracks.columns)
-			self.class_cols = np.array([c.startswith('group') for c in list(self.df_tracks.columns)])
+			self.class_cols = np.array([c.startswith('group') or c.startswith('class') for c in list(self.df_tracks.columns)])
 			self.class_cols = list(cols[self.class_cols])
-			try:
-				self.class_cols.remove('class_id')
-			except:
-				pass
-			try:
-				self.class_cols.remove('group_color')
-			except:
-				pass
+
+			to_remove = ['class_id','group_color','class_color']
+			for col in to_remove:
+				try:
+					self.class_cols.remove(col)
+				except:
+					pass
+			# try:
+			# 	self.class_cols.remove('class_id')
+			# except:
+			# 	pass
+			# try:
+			# 	self.class_cols.remove('group_color')
+			# except:
+			# 	pass
 			if len(self.class_cols) > 0:
 				self.status = self.class_cols[0]
 
@@ -2364,6 +2376,10 @@ class MeasureAnnotator(SignalAnnotator):
 			self.modify()
 
 		self.draw_frame(self.current_frame)
+		self.vmin = self.contrast_slider.value()[0]
+		self.vmax = self.contrast_slider.value()[1]
+		self.im.set_clim(vmin=self.vmin, vmax=self.vmax)
+
 		self.fcanvas.canvas.draw()
 		self.plot_signals()
 
