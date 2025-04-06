@@ -848,11 +848,6 @@ class SignalAnnotator2(QMainWindow,Styles):
 		if len(self.pair_selection) > 0:
 			self.cancel_pair_selection()
 
-		# if self.df_targets is not None:
-		# 	self.target_selection = []
-		# if self.df_effectors is not None:
-		# 	self.effector_selection = []
-
 		_, _, neighbor_colors, initial_neighbor_colors = self.get_neighbor_sets()
 		_, _, reference_colors, initial_reference_colors = self.get_reference_sets()
 
@@ -1186,7 +1181,8 @@ class SignalAnnotator2(QMainWindow,Styles):
 		else:
 			# Load and prep tracks
 			self.df_relative = pd.read_csv(self.relative_trajectories_path)
-			print(self.df_relative.columns)
+			self.df_relative = self.df_relative.astype({"reference_population": str, "neighbor_population": str})
+
 			self.df_relative= self.df_relative.sort_values(by=['REFERENCE_ID','NEIGHBOR_ID','reference_population','neighbor_population','FRAME'])
 			self.relative_cols = np.array(self.df_relative.columns)
 
@@ -1511,11 +1507,15 @@ class SignalAnnotator2(QMainWindow,Styles):
 		for t in np.arange(self.len_movie):
 
 			# Append frame_positions to self.line_positions
-			self.lines_tracks.append(self.df_relative.loc[(self.df_relative['FRAME'] == t)&(~self.df_relative['status_'+self.current_neighborhood].isnull())&(self.df_relative['reference_population']==self.reference_population), ['REFERENCE_ID', 'NEIGHBOR_ID']].to_numpy())
-			self.initial_lines_colors_status.append(self.df_relative.loc[(self.df_relative['FRAME'] == t)&(~self.df_relative['status_'+self.current_neighborhood].isnull())&(self.df_relative['reference_population']==self.reference_population), ['REFERENCE_ID', 'NEIGHBOR_ID','status_color']].to_numpy())
-			self.lines_colors_status.append(self.df_relative.loc[(self.df_relative['FRAME'] == t)&(~self.df_relative['status_'+self.current_neighborhood].isnull())&(self.df_relative['reference_population']==self.reference_population), ['REFERENCE_ID', 'NEIGHBOR_ID','status_color']].to_numpy())
-			self.initial_lines_colors_class.append(self.df_relative.loc[(self.df_relative['FRAME'] == t)&(~self.df_relative['status_'+self.current_neighborhood].isnull())&(self.df_relative['reference_population']==self.reference_population), ['REFERENCE_ID', 'NEIGHBOR_ID','class_color']].to_numpy())
-			self.lines_colors_class.append(self.df_relative.loc[(self.df_relative['FRAME'] == t)&(~self.df_relative['status_'+self.current_neighborhood].isnull())&(self.df_relative['reference_population']==self.reference_population), ['REFERENCE_ID', 'NEIGHBOR_ID','class_color']].to_numpy())
+			neigh_at_time_filter = (self.df_relative['FRAME'] == t)&(~self.df_relative['status_'+self.current_neighborhood].isnull())&(self.df_relative['reference_population']==self.reference_population)
+			data = self.df_relative.loc[neigh_at_time_filter, ['REFERENCE_ID', 'NEIGHBOR_ID','status_color','class_color']].to_numpy()
+			self.lines_tracks.append(data[:,[0,1]])
+			
+			self.initial_lines_colors_status.append(data[:,[0,1,2]])
+			self.lines_colors_status.append(data[:,[0,1,2]])
+			
+			self.initial_lines_colors_class.append(data[:,[0,1,3]])
+			self.lines_colors_class.append(data[:,[0,1,3]])
 
 	def extract_scatter_from_trajectories(self):
 
@@ -1719,14 +1719,19 @@ class SignalAnnotator2(QMainWindow,Styles):
 
 		self.status_scatter = {}
 		self.class_scatter = {}
+		
+		n_pops = len(list(self.dataframes.keys()))
+		markers = ['x','+','*','.','X']
+		while len(markers) < n_pops:
+			markers = markers*2
 
-		for pop in self.dataframes.keys():
+		for i,pop in enumerate(self.dataframes.keys()):
 			df = self.dataframes[pop]
 			if df is not None:
-				status_scatter = self.ax.scatter(self.positions[pop][0][:,0], self.positions[pop][0][:,1], marker="x", c=self.colors[pop][0][:,1], s=50, picker=True, pickradius=10, zorder=10)
+				status_scatter = self.ax.scatter(self.positions[pop][0][:,0], self.positions[pop][0][:,1], c=self.colors[pop][0][:,1], s=50, picker=True, pickradius=10, zorder=10, marker=markers[i]) #marker="x", 
 				class_scatter = self.ax.scatter(self.positions[pop][0][:,0], self.positions[pop][0][:,1], marker='o', facecolors='none',edgecolors=self.colors[pop][0][:,0], s=200, zorder=10)
 			else:
-				status_scatter = self.ax.scatter([], [], marker="x", s=50, picker=True, pickradius=10)
+				status_scatter = self.ax.scatter([], [], s=50, picker=True, pickradius=10, marker=markers[i]) #marker="x", 
 				class_scatter = self.ax.scatter([], [], marker='o', facecolors='none', s=200)
 			self.status_scatter.update({pop: status_scatter})
 			self.class_scatter.update({pop: class_scatter})
@@ -1997,14 +2002,7 @@ class SignalAnnotator2(QMainWindow,Styles):
 				except Exception as e:
 					print(e)
 					pass
-				#colors[t][idx] = 'salmon'
 
-			# for t in range(len(colors)):
-			# 	for idx in range(len(colors[t])):
-			# 		if colors[t][idx].any() != 'salmon':
-			# 			if colors[t][idx].any() != 'magenta':
-			# 				#init_color[t][idx] = colors[t][idx].copy()
-			# 				colors[t][idx] = 'black'
 
 	def recolor_selection(self):
 
@@ -2046,8 +2044,12 @@ class SignalAnnotator2(QMainWindow,Styles):
 
 	def get_neighbors_of_selected_cell(self, selected_cell):
 		
+		print(f"{self.df_relative=} {selected_cell=} {'status_'+self.current_neighborhood=} {self.reference_population=}")
 		self.neighbors = self.df_relative.loc[(self.df_relative['REFERENCE_ID'] == selected_cell)&(~self.df_relative['status_'+self.current_neighborhood].isnull())&(self.df_relative['reference_population']==self.reference_population),'NEIGHBOR_ID']
+		print(f"{self.neighbors=}")
 		self.neighbors = np.unique(self.neighbors)
+		print(f"{self.neighbors=}")
+
 		# if len(self.neighbors)>0:
 		# 	first_neighbor = np.min(self.neighbors)
 		# 	self.neighbor_track_of_interest = first_neighbor
@@ -2064,7 +2066,11 @@ class SignalAnnotator2(QMainWindow,Styles):
 		self.pair_selected = False
 
 		populations = list(self.dataframes.keys())
+		print(f"{populations=}")
+
 		number = int(label.split('_child')[1])
+		print(f"{number=}")
+
 		if number>len(populations)*2:
 			print('A pair is selected...')
 			self.pair_selected = True
@@ -2072,31 +2078,22 @@ class SignalAnnotator2(QMainWindow,Styles):
 		else:
 			self.selected_population = populations[(number-1)//2]
 
-		# if label == '_child1':
-		# 	self.selected_population = 'targets'
-		# elif label == '_child3':
-		# 	self.selected_population = 'effectors'
-
 		if self.selected_population is not None:
 			positions = self.positions[self.selected_population]
-		# if self.selected_population=='effectors':
-		# 	positions = self.effector_positions
-		# elif self.selected_population=='targets':
-		# 	positions = self.target_positions
 
-		if len(ind)==1:
-			self.index = ind[0]
-		elif len(ind)>1:
-			# More than one point in vicinity
-			try:
-				datax,datay = [positions[self.framedata][i,0] for i in ind],[positions[self.framedata][i,1] for i in ind]
-				msx, msy = event.mouseevent.xdata, event.mouseevent.ydata
-				dist = np.sqrt((np.array(datax)-msx)**2+(np.array(datay)-msy)**2)
-				self.index = ind[np.argmin(dist)]
-			except Exception as e:
-				print(f"{e=}")
-		else:
-			self.index = None
+			if len(ind)==1:
+				self.index = ind[0]
+			elif len(ind)>1:
+				# More than one point in vicinity
+				try:
+					datax,datay = [positions[self.framedata][i,0] for i in ind],[positions[self.framedata][i,1] for i in ind]
+					msx, msy = event.mouseevent.xdata, event.mouseevent.ydata
+					dist = np.sqrt((np.array(datax)-msx)**2+(np.array(datay)-msy)**2)
+					self.index = ind[np.argmin(dist)]
+				except Exception as e:
+					print(f"Exception L2090 to find closest marker: {e=}")
+			else:
+				self.index = None
 
 
 	def show_annotation_buttons(self):
@@ -2232,19 +2229,24 @@ class SignalAnnotator2(QMainWindow,Styles):
 		self.lines_list=[]
 
 		for key in self.lines_data:
-			if key==self.framedata:
-				for line in self.lines_data[key]:
-					x_coords, y_coords = line
-					pair=self.line_connections[x_coords[0],x_coords[1],y_coords[0],y_coords[1]]
 
-					this_frame=self.lines_colors_class[self.framedata]
+			if key==self.framedata:
+
+				for line in self.lines_data[key]:
+
+					x_coords, y_coords = line
+					pair = self.line_connections[x_coords[0],x_coords[1],y_coords[0],y_coords[1]]
+					this_frame = self.lines_colors_class[self.framedata]
+					print(f"{pair=} {this_frame=}")
 
 					try:
-						this_pair=this_frame[(this_frame[:, 0] == pair[0][0]) & (this_frame[:, 1] == pair[0][1])]
-						self.lines_plot=self.ax.plot(x_coords, y_coords, alpha=1, linewidth=2,color=this_pair[0][2])
+						this_pair = this_frame[(this_frame[:, 0] == pair[0][0]) & (this_frame[:, 1] == pair[0][1])]
+						print(f'{this_pair=} {x_coords=} {y_coords=}')
+
+						self.lines_plot = self.ax.plot(x_coords, y_coords, alpha=1, linewidth=2, color=this_pair[0][2])
 						self.lines_list.append(self.lines_plot[0])
 					except Exception as e:
-						print(e)
+						print('Exception L2230; ',e)
 						pass
 				# Plot points
 				try:
@@ -2253,7 +2255,7 @@ class SignalAnnotator2(QMainWindow,Styles):
 					colors = [colors_at_this_frame[(colors_at_this_frame[:, 0] == self.connections[point[0],point[1]][0][0]) & (colors_at_this_frame[:, 1] == self.connections[point[0],point[1]][0][1])][0][2] for point in self.points_data[key]]
 					self.points.set_color(colors)
 				except Exception as e:
-					print(e)
+					print('Exception L2239; ',e)
 
 		if self.lines_list!=[]:
 			return [self.im] + [self.status_scatter[p] for p in self.status_scatter.keys()] + [self.class_scatter[p] for p in self.status_scatter.keys()] + self.lines_list + [self.points]
@@ -2337,63 +2339,6 @@ class SignalAnnotator2(QMainWindow,Styles):
 	def hide_target_cell_info(self):
 
 		self.target_cell_info.setText('')
-
-	# def give_effector_cell_information(self):
-	# 	self.effector_cell_info.setSpacing(0)
-	# 	self.effector_cell_info.setContentsMargins(0, 20, 0, 30)
-	# 	self.neigh_eff_combo=QComboBox()
-	# 	#self.neighb_eff_combo.addItems(self.df_relative.loc[(self.df_relative['target']==self.target_track_of_interest),'effecor'])
-	# 	neighs=self.df_relative.loc[(self.df_relative['REFERENCE_ID']==self.target_track_of_interest),'NEIGHBOR_ID'].to_numpy()
-	# 	neighs=np.unique(neighs)
-	# 	for effector in neighs:
-	# 		self.neigh_eff_combo.addItem(str(effector))
-	# 	if self.effector_track_of_interest not in neighs:
-	# 		self.neigh_eff_combo.addItem(str(self.effector_track_of_interest))
-	# 	self.neigh_eff_combo.setCurrentText(str(self.effector_track_of_interest))
-	# 	self.eff_cell_sel=QHBoxLayout()
-	# 	#effector_cell_selected = f"effector cell: {self.effector_track_of_interest}"
-	# 	self.effector_cell_selected = f"effector cell: "
-	# 	self.eff_cell = QLabel(self.effector_cell_selected)
-	# 	# self.eff_cell_sel.removeWidget(self.eff_cell)
-	# 	# self.eff_cell_sel.removeWidget(self.neigh_eff_combo)
-	# 	self.eff_cell_sel.addWidget(self.eff_cell)
-	# 	self.eff_cell_sel.addWidget(self.neigh_eff_combo, alignment=Qt.AlignLeft)
-	# 	try:
-	# 		self.effector_cell_class = f"class: {self.df_effectors.loc[self.df_effectors['TRACK_ID']==self.effector_track_of_interest, self.effector_class_name].to_numpy()[0]}"
-	# 	except:
-	# 		self.effector_cell_class = f"class: {self.df_effectors.loc[self.df_effectors['ID'] == self.effector_track_of_interest, self.effector_class_name].to_numpy()[0]}"
-
-	# 	self.eff_cls = QLabel(self.effector_cell_class)
-	# 	try:
-	# 		self.effector_cell_time = f"time of interest: {self.df_effectors.loc[self.df_effectors['TRACK_ID']==self.effector_track_of_interest, self.effector_time_name].to_numpy()[0]}"
-	# 	except:
-	# 		self.effector_cell_time = f"time of interest: {self.df_effectors.loc[self.df_effectors['ID']==self.effector_track_of_interest, self.effector_time_name].to_numpy()[0]}"
-
-	# 	self.eff_tm=QLabel(self.effector_cell_time)
-	# 	# try:
-	# 	#     self.effector_probabilty = f"probability: {self.df_relative.loc[(self.df_relative['REFERENCE_ID']==self.target_track_of_interest)&(self.df_relative['NEIGHBOR_ID']==self.effector_track_of_interest),'probability'].to_numpy()[0]}"
-	# 	# except:
-	# 	#     self.effector_probabilty=f"probability: 0"
-	# 	# self.eff_prb=QLabel(self.effector_probabilty)
-	# 	#self.effector_cell_info.setText(effector_cell_selected+effector_cell_class+effector_cell_time+effector_probabilty)
-	# 	# self.effector_cell_info.removeWidget(self.eff_cls)
-	# 	# self.effector_cell_info.removeWidget(self.eff_tm)
-	# 	# self.effector_cell_info.removeWidget(self.eff_prb)
-	# 	self.effector_cell_info.addLayout(self.eff_cell_sel)
-	# 	self.effector_cell_info.addWidget(self.eff_cls)
-	# 	self.effector_cell_info.addWidget(self.eff_tm)
-	# 	#self.effector_cell_info.addWidget(self.eff_prb)
-	# 	self.neigh_eff_combo.currentIndexChanged.connect(self.update_effector_info)
-	# 	self.eff_info_to_hide=[self.eff_cell,self.neigh_eff_combo,self.eff_cls,self.eff_tm]#self.eff_prb
-
-
-	# def hide_effector_cell_info(self):
-	# 	self.eff_cls.clear()
-	# 	self.eff_tm.clear()
-	# 	#self.eff_prb.clear()
-
-	# 	for info in self.eff_info_to_hide:
-	# 		info.hide()
 
 
 	def save_trajectories(self):
