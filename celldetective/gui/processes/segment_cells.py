@@ -104,6 +104,7 @@ class SegmentCellDLProcess(BaseSegmentProcess):
 		super().__init__(*args, **kwargs)
 
 		self.check_gpu()
+		print(f"{self.flip=}")
 
 		# Model
 		self.locate_model_path()
@@ -119,6 +120,9 @@ class SegmentCellDLProcess(BaseSegmentProcess):
 	def extract_model_input_parameters(self):
 
 		self.required_channels = self.input_config["channels"]
+		if 'selected_channels' in self.input_config:
+			self.required_channels = self.input_config['selected_channels']
+
 		self.normalize_kwargs = _get_normalize_kwargs_from_config(self.input_config)
 
 		self.model_type = self.input_config['model_type']
@@ -179,7 +183,11 @@ class SegmentCellDLProcess(BaseSegmentProcess):
 			elif self.model_type=='cellpose':
 				model, scale_model = _prep_cellpose_model(self.model_name, self.model_complete_path, use_gpu=self.use_gpu, n_channels=len(self.required_channels), scale=self.scale)
 
-			for t in tqdm(range(self.len_movie),desc="frame"):
+			list_indices = range(self.len_movie)
+			if self.flip:
+				list_indices = reversed(list_indices)
+
+			for t in tqdm(list_indices,desc="frame"):
 				
 				f = _load_frames_to_segment(self.file, self.img_num_channels[:,t], scale_model=scale_model, normalize_kwargs=self.normalize_kwargs)
 
@@ -335,6 +343,9 @@ class SegmentCellThresholdProcess(BaseSegmentProcess):
 	def run(self):
 
 		self.indices = list(range(self.img_num_channels.shape[1]))
+		if self.flip:
+			self.indices = reversed(self.indices)
+		
 		chunks = np.array_split(self.indices, self.n_threads)
 
 		with concurrent.futures.ThreadPoolExecutor(max_workers=self.n_threads) as executor:
