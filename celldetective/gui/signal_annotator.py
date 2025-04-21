@@ -880,7 +880,11 @@ class SignalAnnotator(QMainWindow, Styles):
 			for i in range(len(self.signal_choice_cb)):
 
 				signal_choice = self.signal_choice_cb[i].currentText()
-				self.lines[i].set_label(signal_choice)
+				lbl = signal_choice
+				n_cut = 15
+				if len(lbl)>n_cut:
+					lbl = lbl[:(n_cut-3)]+'...'
+				self.lines[i].set_label(lbl)
 
 				if signal_choice == "--":
 					self.lines[i].set_xdata([])
@@ -912,6 +916,7 @@ class SignalAnnotator(QMainWindow, Styles):
 			self.cell_ax.legend()
 			self.cell_fcanvas.canvas.draw()
 		except Exception as e:
+			print(e)
 			pass
 		
 		if len(range_values)>0:
