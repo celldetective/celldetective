@@ -11,7 +11,14 @@ from fonticon_mdi6 import MDI6
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT
 import matplotlib.pyplot as plt
-import celldetective.extra_properties as extra_properties
+
+try:
+	import celldetective.extra_properties as extra_properties
+	extra_props = True
+except Exception as e:
+	print(f"The module extra_properties seems corrupted: {e}... Skip...")
+	extra_props = False
+
 from inspect import getmembers, isfunction
 from celldetective.filters import *
 from os import sep
@@ -575,10 +582,11 @@ class FeatureChoice(QWidget, Styles):
 								 "intensity_min",
 								 ]
 
-		members = getmembers(extra_properties, isfunction)
-		for o in members:
-			if isfunction(o[1]) and o[1].__module__=="celldetective.extra_properties":
-				standard_measurements.append(o[0])
+		if extra_props:
+			members = getmembers(extra_properties, isfunction)
+			for o in members:
+				if isfunction(o[1]) and o[1].__module__=="celldetective.extra_properties":
+					standard_measurements.append(o[0])
 
 		self.combo_box.addItems(standard_measurements)
 

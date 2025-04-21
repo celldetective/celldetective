@@ -20,7 +20,14 @@ from skimage.feature import blob_dog, blob_log
 from celldetective.utils import rename_intensity_column, create_patch_mask, remove_redundant_features, \
 	remove_trajectory_measurements, contour_of_instance_segmentation, extract_cols_from_query, step_function, interpolate_nan, _remove_invalid_cols
 from celldetective.preprocessing import field_correction
-from celldetective.extra_properties import *
+
+# try:
+# 	from celldetective.extra_properties import *
+# 	extra_props = True
+# except Exception as e:
+# 	print(f"The module extra_properties seems corrupted: {e}... Skip...")
+# 	extra_props = False
+
 from inspect import getmembers, isfunction
 from skimage.morphology import disk
 from scipy.signal import find_peaks, peak_widths
@@ -365,26 +372,35 @@ def measure_features(img, label, features=['area', 'intensity_mean'], channels=N
 					corrected_image = field_correction(img[:,:,ind].copy(), threshold_on_std=norm['threshold_on_std'], operation=norm['operation'], model=norm['model'], clip=norm['clip'])
 					img[:, :, ind] = corrected_image
 	
-	import celldetective.extra_properties as extra_props
+	try:
+		import celldetective.extra_properties as extra_props
+		extraprops = True
+	except Exception as e:
+		print(f"The module extra_properties seems corrupted: {e}... Skip...")
+		extraprops = False
 
-	extra = getmembers(extra_props, isfunction)
-	extra = [extra[i][0] for i in range(len(extra))]
+	if extraprops:
+		extra = getmembers(extra_props, isfunction)
+		extra = [extra[i][0] for i in range(len(extra))]
 
-	extra_props_list = []
-	feats = features.copy()
-	for f in features:
-		if f in extra:
-			feats.remove(f)
-			extra_props_list.append(getattr(extra_props, f))
+		extra_props_list = []
+		feats = features.copy()
+		for f in features:
+			if f in extra:
+				feats.remove(f)
+				extra_props_list.append(getattr(extra_props, f))
 
-	# Add intensity nan mean if need to measure mean intensities
-	if measure_mean_intensities:
-		extra_props_list.append(getattr(extra_props, 'intensity_nanmean'))
+		# Add intensity nan mean if need to measure mean intensities
+		if measure_mean_intensities:
+			extra_props_list.append(getattr(extra_props, 'intensity_nanmean'))
 
-	if len(extra_props_list) == 0:
-		extra_props_list = None
+		if len(extra_props_list) == 0:
+			extra_props_list = None
+		else:
+			extra_props_list = tuple(extra_props_list)
 	else:
-		extra_props_list = tuple(extra_props_list)
+		extra_props_list = []
+		feats = features.copy()
 
 	props = regionprops_table(label, intensity_image=img, properties=feats, extra_properties=extra_props_list, channel_names=channels)
 	df_props = pd.DataFrame(props)
@@ -837,17 +853,32 @@ def local_normalisation(image, labels, background_intensity, measurement='intens
 
 def normalise_by_cell(image, labels, distance=5, model='median', operation='subtract', clip=False):
 
-	import celldetective.extra_properties as extra_props
+	try:
+		import celldetective.extra_properties as extra_props
+		extraprops = True
+	except Exception as e:
+		print(f"The module extra_properties seems corrupted: {e}... Skip...")
+		extraprops = False
 
 	border = contour_of_instance_segmentation(label=labels, distance=distance * (-1))
 	if model == 'mean':
+		
 		measurement = 'intensity_nanmean'
-		extra_props = [getattr(extra_props, measurement)]
+		if extraprops:
+			extra_props = [getattr(extra_props, measurement)]
+		else:
+			extra_props = []
+
 		background_intensity = regionprops_table(intensity_image=image, label_image=border,
 												 extra_properties=extra_props)
 	elif model == 'median':
+		
 		measurement = 'intensity_median'
-		extra_props = [getattr(extra_props, measurement)]
+		if extraprops:
+			extra_props = [getattr(extra_props, measurement)]
+		else:
+			extra_props = []
+
 		background_intensity = regionprops_table(intensity_image=image, label_image=border,
 												 extra_properties=extra_props)
 
