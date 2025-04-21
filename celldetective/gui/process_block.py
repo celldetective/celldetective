@@ -857,6 +857,7 @@ class ProcessPanel(QFrame, Styles):
 							if result == QDialog.Accepted:
 								pass
 							elif result == QDialog.Rejected:
+								self.reset_generalist_setup(0)
 								return None
 							#segment_from_threshold_at_position(self.pos, self.mode, self.threshold_config, threads=self.parent_window.parent_window.n_threads)
 					else:
@@ -871,6 +872,7 @@ class ProcessPanel(QFrame, Styles):
 						if result == QDialog.Accepted:
 							pass
 						elif result == QDialog.Rejected:
+							self.reset_generalist_setup(0)
 							return None
 
 				if self.track_action.isChecked():
