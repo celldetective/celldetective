@@ -2169,25 +2169,22 @@ class MeasureAnnotator(SignalAnnotator):
 		return (self.im, self.status_scatter,self.im_mask,)
 
 	def compute_status_and_colors(self):
-		print('compute status and colors!')
+		
 		if self.class_choice_cb.currentText() == '':
 			self.status_name=self.target_class
 		else:
 			self.status_name = self.class_choice_cb.currentText()
 
-		print(f'{self.status_name=} ')
 		if self.status_name not in self.df_tracks.columns:
-			print('not in df, make column')
+			print('Creating a new status for visualization...')
 			self.make_status_column()
 		else:
-			print(f"{self.status_name=}")
+			print(f'Generating per-state colors for the status "{self.status_name}"...')
 			all_states = self.df_tracks.loc[:, self.status_name].tolist()
 			all_states = np.array(all_states)
-			print(f"{all_states=}")
 			self.state_color_map = color_from_state(all_states, recently_modified=False)
-			print(f'{self.state_color_map=}')
+			print(f'Color mapping for "{self.status_name}": {self.state_color_map}')
 			self.df_tracks['group_color'] = self.df_tracks[self.status_name].apply(self.assign_color_state)
-			print(self.df_tracks['group_color'])
 
 	def del_event_class(self):
 
@@ -2484,7 +2481,6 @@ class MeasureAnnotator(SignalAnnotator):
 		all_states = self.df_tracks.loc[:, self.status_name].tolist()
 		all_states = np.array(all_states)
 		self.state_color_map = color_from_state(all_states, recently_modified=False)
-		print(f'{self.state_color_map=}')
 
 		self.df_tracks['group_color'] = self.df_tracks[self.status_name].apply(self.assign_color_state)
 
