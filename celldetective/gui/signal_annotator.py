@@ -1416,6 +1416,11 @@ class MeasureAnnotator(SignalAnnotator):
 		self.current_alpha=0.5
 		self.value_magnitude = 1
 
+		epsilon = 0.01
+		self.observed_min_intensity = 0
+		self.observed_max_intensity = 0 + epsilon
+
+
 		self.instructions_path = self.exp_dir + os.sep.join(['configs',f'signal_annotator_config_{self.mode}.json'])
 		self.trajectories_path = self.pos + os.sep.join(['output','tables',f'trajectories_{self.mode}.csv'])		
 
@@ -1717,10 +1722,9 @@ class MeasureAnnotator(SignalAnnotator):
 		to_remove = ['group_id','group_color','class_id','class_color']
 		for col in to_remove:
 			try:
-				self.class_cols.remove('group_id')
+				self.class_cols.remove(col)
 			except Exception:
 				pass
-
 
 		self.class_choice_cb.addItems(self.class_cols)
 		self.class_choice_cb.currentIndexChanged.connect(self.changed_class)
@@ -1978,7 +1982,7 @@ class MeasureAnnotator(SignalAnnotator):
 				print(f"Error {e}...")
 
 	def set_next_frame(self):
-
+		
 		self.current_frame = self.current_frame + 1
 		if self.current_frame > self.len_movie - 1:
 			self.current_frame == self.len_movie - 1
@@ -1987,7 +1991,7 @@ class MeasureAnnotator(SignalAnnotator):
 		self.start_btn.setShortcut(QKeySequence("f"))
 
 	def set_previous_frame(self):
-
+		
 		self.current_frame = self.current_frame - 1
 		if self.current_frame < 0:
 			self.current_frame == 0
@@ -2575,13 +2579,26 @@ class MeasureAnnotator(SignalAnnotator):
 		"""
 
 		# self.clear_post_threshold_options()
-
+		self.previous_channel = self.current_channel
 		self.current_channel = self.choose_channel.currentIndex()
 
 		t = int(self.frame_slider.value())
 		idx = t * self.nbr_channels + self.current_channel
 		self.img = load_frames(idx, self.stack_path, normalize_input=False)
+
+		if self.previous_channel != self.current_channel:
+			# reinitialize intensity bounds
+			epsilon = 0.01
+			self.observed_min_intensity = 0
+			self.observed_max_intensity = 0 + epsilon
+
 		if self.img is not None:
+			max_img = np.nanmax(self.img)
+			min_img = np.nanmin(self.img)
+			if max_img > self.observed_max_intensity:
+				self.observed_max_intensity = max_img
+			if min_img < self.observed_min_intensity:
+				self.observed_min_intensity = min_img
 			self.refresh_imshow()
 		# self.redo_histogram()
 		else:
@@ -2595,13 +2612,19 @@ class MeasureAnnotator(SignalAnnotator):
 
 		"""
 
-		self.vmin = np.nanpercentile(self.img.flatten(), 1)
-		self.vmax = np.nanpercentile(self.img.flatten(), 99.)
+		if self.previous_channel != self.current_channel:
 
-		self.contrast_slider.disconnect()
-		self.contrast_slider.setRange(np.nanmin(self.img), np.nanmax(self.img))
-		self.contrast_slider.setValue([self.vmin, self.vmax])
-		self.contrast_slider.valueChanged.connect(self.contrast_slider_action)
+			self.vmin = np.nanpercentile(self.img.flatten(), 1)
+			self.vmax = np.nanpercentile(self.img.flatten(), 99.)
+
+			self.contrast_slider.disconnect()
+			self.contrast_slider.setRange(np.nanmin(self.img), np.nanmax(self.img))
+			self.contrast_slider.setValue([self.vmin, self.vmax])
+			self.contrast_slider.valueChanged.connect(self.contrast_slider_action)
+		else:
+			#self.contrast_slider.disconnect()
+			self.contrast_slider.setRange(self.observed_min_intensity, self.observed_max_intensity)
+			#self.contrast_slider.valueChanged.connect(self.contrast_slider_action)
 
 		self.im.set_data(self.img)
 
