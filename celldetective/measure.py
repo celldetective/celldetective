@@ -34,6 +34,7 @@ from scipy.signal import find_peaks, peak_widths
 
 from celldetective.segmentation import filter_image
 from celldetective.regionprops import regionprops_table
+from celldetective.utils import pretty_table
 
 abs_path = os.sep.join([os.path.split(os.path.dirname(os.path.realpath(__file__)))[0], 'celldetective'])
 
@@ -1281,16 +1282,20 @@ def classify_irreversible_events(data, class_attr, r2_threshold=0.5, percentile_
 			# ambiguity, possible transition, use `unique_state` technique after
 			df.loc[indices, class_attr] = 2
 
-	print("Classes after initial pass: ",df.loc[df['FRAME']==0,class_attr].value_counts())
+	print("Number of cells per class after the initial pass: ")
+	pretty_table(df.loc[df['FRAME']==0,class_attr].value_counts().to_dict())
 
 	df.loc[df[class_attr]!=2, class_attr.replace('class', 't')] = -1
 	# Try to fit time on class 2 cells (ambiguous)
 	df = estimate_time(df, class_attr, model='step_function', class_of_interest=[2], r2_threshold=r2_threshold)
-	print("Classes after fit: ", df.loc[df['FRAME']==0,class_attr].value_counts())
+	
+	print("Number of cells per class after conditional signal fit: ")
+	pretty_table(df.loc[df['FRAME']==0,class_attr].value_counts().to_dict())
 
 	# Revisit class 2 cells to classify as neg/pos with percentile tolerance
 	df.loc[df[class_attr]==2,:] = classify_unique_states(df.loc[df[class_attr]==2,:].copy(), class_attr, percentile_recovery)
-	print("Classes after unique state recovery: ",df.loc[df['FRAME']==0,class_attr].value_counts())
+	print("Number of cells per class after recovery pass (median state): ")
+	pretty_table(df.loc[df['FRAME']==0,class_attr].value_counts().to_dict())
 	
 	return df
 

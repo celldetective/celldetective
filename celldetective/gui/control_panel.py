@@ -4,7 +4,7 @@ from PyQt5.QtCore import Qt, QSize
 from celldetective.gui.gui_utils import center_window, QHSeperationLine, QCheckableComboBox
 from celldetective.utils import _extract_labels_from_config, ConfigSectionMap, extract_experiment_channels, extract_identity_col
 from celldetective.gui import ConfigEditor, ProcessPanel, PreprocessingPanel, AnalysisPanel, NeighPanel
-from celldetective.io import get_experiment_wells, get_config, get_spatial_calibration, get_temporal_calibration, get_experiment_concentrations, get_experiment_cell_types, get_experiment_antibodies, get_experiment_pharmaceutical_agents, get_experiment_populations
+from celldetective.io import extract_position_name, get_experiment_wells, get_config, get_spatial_calibration, get_temporal_calibration, get_experiment_concentrations, get_experiment_cell_types, get_experiment_antibodies, get_experiment_pharmaceutical_agents, get_experiment_populations, extract_well_name_and_number
 from natsort import natsorted
 from glob import glob
 import os
@@ -109,11 +109,9 @@ class ControlPanel(QMainWindow, Styles):
 		self.wells = get_experiment_wells(self.exp_dir) #natsorted(glob(self.exp_dir + "W*" + os.sep))
 		self.positions = []
 		for w in self.wells:
-			w = os.path.split(w[:-1])
-			root = w[0]
-			w = w[1]
-			positions_path = natsorted(glob(os.sep.join([root, w, f"{w[1:]}*{os.sep}"])))
-			self.positions.append([os.path.split(pos[:-1])[1] for pos in positions_path])
+			well_name, well_nbr = extract_well_name_and_number(w)
+			positions_path = natsorted(glob(os.sep.join([w,f"{well_nbr}*", os.sep])))
+			self.positions.append([extract_position_name(pos) for pos in positions_path])
 
 	def generate_header(self):
 		

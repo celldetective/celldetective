@@ -432,7 +432,7 @@ class ClassifierWidget(QWidget, Styles):
 
 		if self.time_corr.isChecked():
 			self.class_name_user = 'class_'+self.name_le.text()
-			print(f'User defined class name: {self.class_name_user}.')
+			print(f'User defined class name: {self.class_name_user}...')
 			if self.class_name_user in self.df.columns:
 
 				msgBox = QMessageBox()
@@ -447,7 +447,6 @@ class ClassifierWidget(QWidget, Styles):
 					return None
 
 			name_map = {self.class_name: self.class_name_user}
-			print(f"{name_map=}")
 			self.df = self.df.drop(list(set(name_map.values()) & set(self.df.columns)), axis=1).rename(columns=name_map)
 			self.df.reset_index(inplace=True, drop=True)
 

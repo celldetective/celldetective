@@ -32,6 +32,7 @@ from cliffs_delta import cliffs_delta
 from stardist.models import StarDist2D
 from cellpose.models import CellposeModel
 from pathlib import PosixPath, PurePosixPath, WindowsPath
+from prettytable import PrettyTable
 
 def get_config(experiment):
 
@@ -3079,3 +3080,10 @@ def test_2samp_generic(data, feature=None, groupby_cols=None, method="ks_2samp",
 	pivot.index.name = None
 
 	return pivot
+
+def pretty_table(dct):
+	table = PrettyTable()
+	for c in dct.keys():
+		table.add_column(str(c), [])
+	table.add_row([dct.get(c, "") for c in dct.keys()])
+	print(table)

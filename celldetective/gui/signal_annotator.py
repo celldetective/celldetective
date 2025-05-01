@@ -25,6 +25,7 @@ import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
 from celldetective.gui import Styles
 from celldetective.measure import contour_of_instance_segmentation
+from celldetective.utils import pretty_table
 
 class SignalAnnotator(QMainWindow, Styles):
 	"""
@@ -2185,7 +2186,8 @@ class MeasureAnnotator(SignalAnnotator):
 			all_states = self.df_tracks.loc[:, self.status_name].tolist()
 			all_states = np.array(all_states)
 			self.state_color_map = color_from_state(all_states, recently_modified=False)
-			print(f'Color mapping for "{self.status_name}": {self.state_color_map}')
+			print(f'Color mapping for "{self.status_name}":')
+			pretty_table(self.state_color_map)
 			self.df_tracks['group_color'] = self.df_tracks[self.status_name].apply(self.assign_color_state)
 
 	def del_event_class(self):
