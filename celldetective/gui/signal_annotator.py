@@ -827,12 +827,14 @@ class SignalAnnotator(QMainWindow, Styles):
 			cclass = group[self.class_name].to_numpy()[0]
 			timeline = group['FRAME'].to_numpy()
 			status = np.zeros_like(timeline)
+			
 			if t0 > 0:
-				status[timeline >= t0] = 1.
-			if cclass == 2:
-				status[:] = 2
+				status[timeline >= t0] = 1.			
+			# if cclass == 2:
+			# 	status[:] = 1.
 			if cclass > 2:
 				status[:] = 42
+
 			status_color = [color_from_status(s) for s in status]
 			class_color = [color_from_class(cclass) for i in range(len(status))]
 
