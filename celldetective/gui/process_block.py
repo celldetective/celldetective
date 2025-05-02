@@ -1019,10 +1019,15 @@ class ProcessPanel(QFrame, Styles):
 		model_complete_path = locate_segmentation_model(self.model_name)
 		input_config_path = model_complete_path+"config_input.json"
 		new_channels = [self.segChannelWidget.channel_cbs[i].currentText() for i in range(len(self.segChannelWidget.channel_cbs))]
+		target_cell_size = None
+		if hasattr(self.segChannelWidget, "size_le"):
+			target_cell_size = float(self.segChannelWidget.size_le.text().replace(',','.'))
+
 		with open(input_config_path) as config_file:
 			input_config = json.load(config_file)
 
-		input_config.update({'selected_channels': new_channels})
+		input_config.update({'selected_channels': new_channels, 'target_cell_size_um': target_cell_size})
+
 		#input_config['channels'] = new_channels
 		with open(input_config_path, 'w') as f:
 			json.dump(input_config, f, indent=4)

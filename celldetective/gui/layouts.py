@@ -1,7 +1,7 @@
 from PyQt5.QtWidgets import QCheckBox, QLineEdit, QWidget, QListWidget, QTabWidget, QHBoxLayout,QMessageBox, QPushButton, QVBoxLayout, QRadioButton, QLabel, QButtonGroup, QSizePolicy, QComboBox,QSpacerItem, QGridLayout
 from celldetective.gui.gui_utils import ThresholdLineEdit, QuickSliderLayout, center_window
 from PyQt5.QtCore import Qt, QSize
-from PyQt5.QtGui import QIntValidator
+from PyQt5.QtGui import QIntValidator, QDoubleValidator
 
 from superqt import QLabeledRangeSlider, QLabeledDoubleSlider, QLabeledSlider, QLabeledDoubleRangeSlider, QSearchableComboBox
 
@@ -29,6 +29,7 @@ class SegModelParamsWidget(QWidget, Styles):
 		self.model_name = model_name
 		self.locate_model_path()
 		self.required_channels = self.input_config["channels"]
+		self.onlyFloat = QDoubleValidator()
 
 		# Setting up references to parent window attributes
 		if hasattr(self.parent_window.parent_window, 'locate_image'):
@@ -69,7 +70,7 @@ class SegModelParamsWidget(QWidget, Styles):
 		# Populate the comboboxes with available channels from the experiment
 		for k in range(self.n_channels):
 			hbox_channel = QHBoxLayout()
-			hbox_channel.addWidget(QLabel(f'channel {k+1}: '))
+			hbox_channel.addWidget(QLabel(f'channel {k+1}: '), 33)
 
 			ch_vbox = QVBoxLayout()
 			ch_vbox.addWidget(QLabel(f'Req: {self.required_channels[k]}'), alignment=Qt.AlignLeft)
@@ -83,8 +84,16 @@ class SegModelParamsWidget(QWidget, Styles):
 			else:
 				self.channel_cbs[k].setCurrentIndex(len(available_channels)-1)
 
-			hbox_channel.addLayout(ch_vbox)
+			hbox_channel.addLayout(ch_vbox, 66)
 			self.layout.addLayout(hbox_channel)
+
+		if 'cell_size_um' in self.input_config:
+			size_hbox = QHBoxLayout()
+			size_hbox.addWidget(QLabel('cell size [µm]: '), 33)
+			self.size_le = QLineEdit(str(self.input_config['cell_size_um']).replace('.',','))
+			self.size_le.setValidator(self.onlyFloat)
+			size_hbox.addWidget(self.size_le, 66)
+			self.layout.addLayout(size_hbox)
 		
 		# Button to apply the StarDist settings
 		self.set_btn = QPushButton('set')

@@ -122,6 +122,12 @@ class SegmentCellDLProcess(BaseSegmentProcess):
 		self.required_channels = self.input_config["channels"]
 		if 'selected_channels' in self.input_config:
 			self.required_channels = self.input_config['selected_channels']
+		
+		self.target_cell_size = None
+		if 'target_cell_size_um' in self.input_config:
+			self.target_cell_size = self.input_config['target_cell_size_um']
+			self.cell_size = self.input_config['cell_size_um']
+			print(f"{self.target_cell_size=} {self.cell_size=}")
 
 		self.normalize_kwargs = _get_normalize_kwargs_from_config(self.input_config)
 
@@ -151,6 +157,14 @@ class SegmentCellDLProcess(BaseSegmentProcess):
 
 		self.scale = _estimate_scale_factor(self.spatial_calibration, self.required_spatial_calibration)
 		print(f"Scale: {self.scale}...")
+		
+		if self.target_cell_size is not None and self.scale is not None:
+			self.scale *= self.cell_size / self.target_cell_size
+		elif self.target_cell_size is not None:
+			if self.target_cell_size != self.cell_size:
+				self.scale = self.cell_size / self.target_cell_size
+
+		print(f"Scale accounting for expected cell size: {self.scale}...")
 
 	def locate_model_path(self):
 
