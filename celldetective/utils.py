@@ -371,7 +371,10 @@ def _prep_stardist_model(model_name, path, use_gpu=False, scale=1):
 	model = StarDist2D(None, name=model_name, basedir=path)
 	model.config.use_gpu = use_gpu
 	model.use_gpu = use_gpu
+
 	scale_model = scale
+
+
 	print(f"StarDist model {model_name} successfully loaded...")
 	return model, scale_model
 
@@ -425,7 +428,10 @@ def _prep_cellpose_model(model_name, path, use_gpu=False, n_channels=2, scale=No
 	else:
 		scale_model = scale * model.diam_mean / model.diam_labels
 
-	print(f"Diam mean: {model.diam_mean}; Diam labels: {model.diam_labels}; Final rescaling: {scale_model}...")
+	print(f'Cell size in model: {model.diam_mean}...')
+	print(f'Cell size in training set: {model.diam_labels}...')
+	print(f"Rescaling factor to apply: {scale_model}...")
+
 	print(f'Cellpose model {model_name} successfully loaded...')
 	return model, scale_model
 
