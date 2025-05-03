@@ -33,7 +33,7 @@ from celldetective.gui.gui_utils import FigureCanvas
 from celldetective.preprocessing import correct_background_model_free, correct_background_model, correct_channel_offset
 from celldetective.utils import _estimate_scale_factor, _extract_channel_indices_from_config, _extract_channel_indices, ConfigSectionMap, _extract_nbr_channels_from_config, _get_img_num_per_channel, normalize_per_channel
 from celldetective.gui.gui_utils import ThresholdLineEdit, QuickSliderLayout, help_generic
-from celldetective.gui.layouts import SegModelParamsWidget, CellposeParamsWidget, StarDistParamsWidget, BackgroundModelFreeCorrectionLayout, ProtocolDesignerLayout, BackgroundFitCorrectionLayout, ChannelOffsetOptionsLayout
+from celldetective.gui.layouts import SignalModelParamsWidget, SegModelParamsWidget, CellposeParamsWidget, StarDistParamsWidget, BackgroundModelFreeCorrectionLayout, ProtocolDesignerLayout, BackgroundFitCorrectionLayout, ChannelOffsetOptionsLayout
 from celldetective.gui import Styles
 from celldetective.utils import get_software_location
 
@@ -60,6 +60,7 @@ class ProcessPanel(QFrame, Styles):
 		self.cellpose_calibrated = False
 		self.stardist_calibrated = False
 		self.segChannelsSet = False
+		self.signalChannelsSet = False
 		self.flipSeg = False
 
 		self.use_gpu = self.parent_window.parent_window.use_gpu
@@ -721,6 +722,9 @@ class ProcessPanel(QFrame, Styles):
 		self.stardist_calibrated = False
 		self.segChannelsSet = False
 
+	def reset_signals(self):
+		self.signalChannelsSet = False
+
 	def process_population(self):
 
 		# if self.parent_window.well_list.currentText().startswith('Multiple'):
@@ -803,6 +807,11 @@ class ProcessPanel(QFrame, Styles):
 
 			self.segChannelWidget = SegModelParamsWidget(self, model_name = self.model_name)
 			self.segChannelWidget.show()
+			return None
+
+		if self.signal_analysis_action.isChecked() and not self.signalChannelsSet:
+			self.signalChannelWidget = SignalModelParamsWidget(self, model_name = self.signal_models_list.currentText())
+			self.signalChannelWidget.show()
 			return None
 
 
@@ -931,6 +940,7 @@ class ProcessPanel(QFrame, Styles):
 				action.setChecked(False)
 
 		self.reset_generalist_setup(0)
+		self.reset_signals()
 
 	def open_napari_tracking(self):
 		print(f'View the tracks before post-processing for position {self.parent_window.pos} in napari...')
@@ -969,6 +979,7 @@ class ProcessPanel(QFrame, Styles):
 		self.position_option = self.parent_window.position_list.getSelectedIndices()
 
 		self.df, self.df_pos_info = load_experiment_tables(self.exp_dir, well_option=self.well_option, position_option=self.position_option, population=self.mode, return_pos_info=True)
+		self.signals = list(self.df.columns)
 		if self.df is None:
 			print('No table could be found...')
 
@@ -1034,6 +1045,24 @@ class ProcessPanel(QFrame, Styles):
 
 		self.segChannelsSet = True
 		self.segChannelWidget.close()
+		self.process_population()
+
+	def set_selected_signals_for_event_detection(self):
+
+		model_complete_path = locate_signal_model(self.signal_models_list.currentText())
+		input_config_path = model_complete_path+"config_input.json"
+		new_channels = [self.signalChannelWidget.channel_cbs[i].currentText() for i in range(len(self.signalChannelWidget.channel_cbs))]
+		with open(input_config_path) as config_file:
+			input_config = json.load(config_file)
+
+		input_config.update({'selected_channels': new_channels})
+
+		#input_config['channels'] = new_channels
+		with open(input_config_path, 'w') as f:
+			json.dump(input_config, f, indent=4)
+
+		self.signalChannelsSet = True
+		self.signalChannelWidget.close()
 		self.process_population()
 
 

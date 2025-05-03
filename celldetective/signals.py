@@ -156,6 +156,10 @@ def analyze_signals(trajectories, model, interpolate_na=True,
 	f = open(model_config_path)
 	config = json.load(f)
 	required_signals = config["channels"]
+	if 'selected_channels' in config:
+		selected_signals = config['selected_channels']
+		if np.any([s=='None' for s in selected_signals]):
+			trajectories['None'] = 0.
 	model_signal_length = config['model_signal_length']
 
 	try:
@@ -264,6 +268,8 @@ def analyze_signals(trajectories, model, interpolate_na=True,
 			plt.pause(3)
 			plt.close()
 
+	if "None" in list(trajectories.columns):
+		trajectories = trajectories.drop(columns=['None'])
 	return trajectories
 
 def analyze_signals_at_position(pos, model, mode, use_gpu=True, return_table=False):
