@@ -124,15 +124,18 @@ if model_type=='cellpose':
 		device = torch.device("cpu")
 	else:
 		print('Using GPU for training...')
-		
+	
+	diam_mean = 30.0
 	logger, log_file = logger_setup()
 	print(f'Pretrained model: ',pretrained)
 	if pretrained is not None:
+		if pretrained.endswith('CP_nuclei'):
+			diam_mean = 17.0
 		pretrained_path = os.sep.join([pretrained,os.path.split(pretrained)[-1]])
 	else:
 		pretrained_path = pretrained
 	
-	model = CellposeModel(gpu=use_gpu, model_type=None, pretrained_model=pretrained_path, diam_mean=30.0, nchan=X_aug[0].shape[0],) 
+	model = CellposeModel(gpu=use_gpu, model_type=None, pretrained_model=pretrained_path, diam_mean=diam_mean, nchan=X_aug[0].shape[0],) 
 	model.train(train_data=X_aug, train_labels=Y_aug, normalize=False, channels=None, batch_size=batch_size,
 				min_train_masks=1,save_path=target_directory+os.sep+model_name,n_epochs=epochs, model_name=model_name, learning_rate=learning_rate, test_data = X_val, test_labels=Y_val)
 
@@ -152,7 +155,7 @@ if model_type=='cellpose':
 	config_inputs = {"channels": target_channels, "diameter": standard_diameter, 'cellprob_threshold': 0., 'flow_threshold': 0.4,
 	'normalization_percentile': normalization_percentile, 'normalization_clip': normalization_clip,
 	'normalization_values': normalization_values, 'model_type': 'cellpose',
-	'spatial_calibration': input_spatial_calibration, 'dataset': {'train': files_train, 'validation': files_val}}
+	'spatial_calibration': input_spatial_calibration, 'cell_size_um': round(diameter*input_spatial_calibration,4), 'dataset': {'train': files_train, 'validation': files_val}}
 	json_input_config = json.dumps(config_inputs, indent=4)
 	with open(os.sep.join([target_directory, model_name, "config_input.json"]), "w") as outfile:
 		outfile.write(json_input_config)
@@ -227,7 +230,7 @@ elif model_type=='stardist':
 
 	config_inputs = {"channels": target_channels, 'normalization_percentile': normalization_percentile,
 	'normalization_clip': normalization_clip, 'normalization_values': normalization_values, 
-	'model_type': 'stardist', 'spatial_calibration': spatial_calibration, 'dataset': {'train': files_train, 'validation': files_val}}
+	'model_type': 'stardist', 'spatial_calibration': spatial_calibration,'cell_size_um': median_size * spatial_calibration, 'dataset': {'train': files_train, 'validation': files_val}}
 
 	json_input_config = json.dumps(config_inputs, indent=4)
 	with open(os.sep.join([target_directory, model_name, "config_input.json"]), "w") as outfile:
