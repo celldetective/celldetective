@@ -428,8 +428,8 @@ def _prep_cellpose_model(model_name, path, use_gpu=False, n_channels=2, scale=No
 	else:
 		scale_model = scale * model.diam_mean / model.diam_labels
 
-	print(f'Cell size in model: {model.diam_mean}...')
-	print(f'Cell size in training set: {model.diam_labels}...')
+	print(f'Cell size in model: {model.diam_mean} pixels...')
+	print(f'Cell size in training set: {model.diam_labels} pixels...')
 	print(f"Rescaling factor to apply: {scale_model}...")
 
 	print(f'Cellpose model {model_name} successfully loaded...')
@@ -1906,7 +1906,7 @@ def _extract_channel_indices_from_config(config, channels_to_extract):
 			c1 = int(ConfigSectionMap(config,"Channels")[c])
 			channels.append(c1)
 		except Exception as e:
-			print(f"Warning... The channel {c} required by the model is not available in your data...")
+			print(f"Warning: The channel {c} required by the model is not available in your data...")
 			channels.append(None)
 	if np.all([c is None for c in channels]):
 		channels = None
