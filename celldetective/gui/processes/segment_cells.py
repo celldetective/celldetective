@@ -104,7 +104,6 @@ class SegmentCellDLProcess(BaseSegmentProcess):
 		super().__init__(*args, **kwargs)
 
 		self.check_gpu()
-		print(f"{self.flip=}")
 
 		# Model
 		self.locate_model_path()
@@ -127,7 +126,6 @@ class SegmentCellDLProcess(BaseSegmentProcess):
 		if 'target_cell_size_um' in self.input_config:
 			self.target_cell_size = self.input_config['target_cell_size_um']
 			self.cell_size = self.input_config['cell_size_um']
-			print(f"{self.target_cell_size=} {self.cell_size=}")
 
 		self.normalize_kwargs = _get_normalize_kwargs_from_config(self.input_config)
 
@@ -157,7 +155,7 @@ class SegmentCellDLProcess(BaseSegmentProcess):
 
 		self.scale = _estimate_scale_factor(self.spatial_calibration, self.required_spatial_calibration)
 		print(f"Scale: {self.scale}...")
-		
+
 		if self.target_cell_size is not None and self.scale is not None:
 			self.scale *= self.cell_size / self.target_cell_size
 		elif self.target_cell_size is not None:
@@ -237,6 +235,7 @@ class SegmentCellDLProcess(BaseSegmentProcess):
 			pass		
 		
 		gc.collect()
+		print("Done.")
 
 		# Send end signal
 		self.queue.put("finished")
@@ -370,6 +369,7 @@ class SegmentCellThresholdProcess(BaseSegmentProcess):
 			except Exception as e:
 				print("Exception: ", e)
 
+		print('Done.')
 		# Send end signal
 		self.queue.put("finished")
 		self.queue.close()

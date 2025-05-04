@@ -2668,8 +2668,8 @@ def control_segmentation_napari(position, prefix='Aligned', population="target",
 
 	stack, labels = locate_stack_and_labels(position, prefix=prefix, population=population)
 	output_folder = position + f'labels_{population}{os.sep}'
+	print(f"Shape of the loaded image stack: {stack.shape}...")
 
-	print(f"{stack.shape}")
 	viewer = napari.Viewer()
 	viewer.add_image(stack, channel_axis=-1, colormap=["gray"] * stack.shape[-1])
 	viewer.add_labels(labels.astype(int), name='segmentation', opacity=0.4)
@@ -2702,6 +2702,8 @@ def control_segmentation_napari(position, prefix='Aligned', population="target",
 		del stack
 		del labels
 		gc.collect()
+
+	print("napari viewer was successfully closed...")
 
 def correct_annotation(filename):
 

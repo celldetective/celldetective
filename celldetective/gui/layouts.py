@@ -143,6 +143,17 @@ class SegModelParamsWidget(QWidget, Styles):
 
 		self.n_channels = len(self.required_channels)
 		self.channel_cbs = [QComboBox() for i in range(self.n_channels)]
+		
+		# Button to view the current stack with a scale bar
+		self.view_diameter_btn = QPushButton()
+		self.view_diameter_btn.setStyleSheet(self.button_select_all)
+		self.view_diameter_btn.setIcon(icon(MDI6.image_check, color="black"))
+		self.view_diameter_btn.setToolTip("View stack.")
+		self.view_diameter_btn.setIconSize(QSize(20, 20))
+		self.view_diameter_btn.clicked.connect(self.view_current_stack_with_scale_bar)
+
+		# Line edit for entering cell diameter
+		self.diameter_le = ThresholdLineEdit(init_value=40, connected_buttons=[self.view_diameter_btn],placeholder='cell diameter in µm', value_type='float')
 
 		available_channels = list(self.attr_parent.exp_channels)+['None']
 		# Populate the comboboxes with available channels from the experiment
@@ -166,18 +177,53 @@ class SegModelParamsWidget(QWidget, Styles):
 			self.layout.addLayout(hbox_channel)
 
 		if 'cell_size_um' in self.input_config:
-			size_hbox = QHBoxLayout()
-			size_hbox.addWidget(QLabel('cell size [µm]: '), 33)
-			self.size_le = QLineEdit(str(self.input_config['cell_size_um']).replace('.',','))
-			self.size_le.setValidator(self.onlyFloat)
-			size_hbox.addWidget(self.size_le, 66)
-			self.layout.addLayout(size_hbox)
+
+			# Layout for diameter input and button
+			hbox = QHBoxLayout()
+			hbox.addWidget(QLabel('cell size [µm]: '), 33)
+			hbox.addWidget(self.diameter_le, 61)
+			hbox.addWidget(self.view_diameter_btn)
+			self.layout.addLayout(hbox)
+
+			self.diameter_le.set_threshold(self.input_config['cell_size_um'])
+
+			# size_hbox = QHBoxLayout()
+			# size_hbox.addWidget(QLabel('cell size [µm]: '), 33)
+			# self.size_le = QLineEdit(str(self.input_config['cell_size_um']).replace('.',','))
+			# self.size_le.setValidator(self.onlyFloat)
+			# size_hbox.addWidget(self.size_le, 66)
+			# self.layout.addLayout(size_hbox)
 		
 		# Button to apply the StarDist settings
 		self.set_btn = QPushButton('set')
 		self.set_btn.setStyleSheet(self.button_style_sheet)
 		self.set_btn.clicked.connect(self.parent_window.set_selected_channels_for_segmentation)
 		self.layout.addWidget(self.set_btn)
+
+	def view_current_stack_with_scale_bar(self):
+
+		"""
+		Displays the current image stack with a scale bar, allowing users to visually estimate cell diameters.
+		"""
+
+		self.attr_parent.locate_image()
+		if self.attr_parent.current_stack is not None:
+			max_size = np.amax([self.attr_parent.shape_x, self.attr_parent.shape_y])
+			self.viewer = CellSizeViewer(
+										  initial_diameter = float(self.diameter_le.text().replace(',', '.')),
+										  parent_le = self.diameter_le,
+										  stack_path=self.attr_parent.current_stack,
+										  window_title=f'Position {self.attr_parent.position_list.currentText()}',
+										  diameter_slider_range=(0,max_size*self.attr_parent.PxToUm),
+										  frame_slider = True,
+										  contrast_slider = True,
+										  channel_cb = True,
+										  channel_names = self.attr_parent.exp_channels,
+										  n_channels = self.attr_parent.nbr_channels,
+										  PxToUm = self.attr_parent.PxToUm,
+										 )
+			self.viewer.show()
+
 
 class StarDistParamsWidget(QWidget, Styles):
 

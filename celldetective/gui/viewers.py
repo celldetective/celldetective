@@ -952,7 +952,7 @@ class CellSizeViewer(StackVisualizer):
 	def generate_circle(self):
 		# Generate the circle for visualization
 
-		self.circ = plt.Circle((self.init_frame.shape[0]//2,self.init_frame.shape[1]//2), self.diameter//2, ec="tab:red",fill=False)
+		self.circ = plt.Circle((self.init_frame.shape[0]//2,self.init_frame.shape[1]//2), self.diameter//2 / self.PxToUm, ec="tab:red",fill=False)
 		self.ax.add_patch(self.circ)
 
 		self.ax.callbacks.connect('xlim_changed',self.on_xlims_or_ylims_change)
@@ -978,7 +978,7 @@ class CellSizeViewer(StackVisualizer):
 		if self.set_radius_in_list:
 			val = int(self.diameter_slider.value()//2)
 		else:
-			val = int(self.diameter_slider.value())
+			val = int(self.diameter_slider.value()) 
 		
 		self.parent_list_widget.addItems([str(val)])
 		self.close()
@@ -1025,9 +1025,8 @@ class CellSizeViewer(StackVisualizer):
 
 	def change_diameter(self, value):
 		# Change the diameter of the circle
-		
 		self.diameter = value
-		self.circ.set_radius(self.diameter//2)
+		self.circ.set_radius(self.diameter//2 / self.PxToUm)
 		self.canvas.canvas.draw_idle()
 
 

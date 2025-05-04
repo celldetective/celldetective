@@ -575,10 +575,12 @@ class ProcessPanel(QFrame, Styles):
 		#QApplication.setOverrideCursor(Qt.WaitCursor)
 		test = self.parent_window.locate_selected_position()
 		if test:
-			print('Memory use: ', dict(psutil.virtual_memory()._asdict()))
+			#print('Memory use: ', dict(psutil.virtual_memory()._asdict()))
+			print(f"Loading images and labels into napari...")
 			try:
 				control_segmentation_napari(self.parent_window.pos, prefix=self.parent_window.movie_prefix, population=self.mode,flush_memory=True)
 			except Exception as e:
+				print(f'Task unsuccessful... Exception {e}...')
 				msgBox = QMessageBox()
 				msgBox.setIcon(QMessageBox.Warning)
 				msgBox.setText(str(e))
@@ -789,7 +791,6 @@ class ProcessPanel(QFrame, Styles):
 			self.model_name = self.seg_models[self.seg_model_list.currentIndex()-1]
 		else:
 			self.model_name = self.seg_models[self.seg_model_list.currentIndex()]
-		print(self.model_name, self.seg_model_list.currentIndex())
 
 		if self.segment_action.isChecked() and self.model_name.startswith('CP') and self.model_name in self.seg_models_generic and not self.cellpose_calibrated:
 
@@ -979,9 +980,11 @@ class ProcessPanel(QFrame, Styles):
 		self.position_option = self.parent_window.position_list.getSelectedIndices()
 
 		self.df, self.df_pos_info = load_experiment_tables(self.exp_dir, well_option=self.well_option, position_option=self.position_option, population=self.mode, return_pos_info=True)
-		self.signals = list(self.df.columns)
+		self.signals = []
+		if self.df is not None:
+			self.signals = list(self.df.columns)
 		if self.df is None:
-			print('No table could be found...')
+			print('No table could be found for the selected position(s)...')
 
 	def set_cellpose_scale(self):
 
@@ -993,7 +996,6 @@ class ProcessPanel(QFrame, Styles):
 		model_complete_path = locate_segmentation_model(self.model_name)
 		input_config_path = model_complete_path+"config_input.json"
 		new_channels = [self.diamWidget.cellpose_channel_cb[i].currentText() for i in range(2)]
-		print(new_channels)
 		with open(input_config_path) as config_file:
 			input_config = json.load(config_file)
 
@@ -1031,8 +1033,8 @@ class ProcessPanel(QFrame, Styles):
 		input_config_path = model_complete_path+"config_input.json"
 		new_channels = [self.segChannelWidget.channel_cbs[i].currentText() for i in range(len(self.segChannelWidget.channel_cbs))]
 		target_cell_size = None
-		if hasattr(self.segChannelWidget, "size_le"):
-			target_cell_size = float(self.segChannelWidget.size_le.text().replace(',','.'))
+		if hasattr(self.segChannelWidget, "diameter_le"):
+			target_cell_size = float(self.segChannelWidget.diameter_le.get_threshold())
 
 		with open(input_config_path) as config_file:
 			input_config = json.load(config_file)
