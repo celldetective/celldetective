@@ -7,7 +7,7 @@ from celldetective.gui import Styles
 from celldetective.gui.gui_utils import center_window
 from superqt import QLabeledDoubleRangeSlider, QSearchableComboBox
 from celldetective.utils import extract_experiment_channels, get_software_location, _get_img_num_per_channel
-from celldetective.io import auto_load_number_of_frames, load_frames, get_experiment_metadata
+from celldetective.io import auto_load_number_of_frames, load_frames, get_experiment_metadata, get_experiment_labels
 from celldetective.gui.gui_utils import FigureCanvas, color_from_status, color_from_class
 import json
 import numpy as np
@@ -61,15 +61,22 @@ class SignalAnnotator2(QMainWindow,Styles):
 		self.neighbor_track_of_interest = None
 		self.value_magnitude = 1
 
-		self.cols_to_remove = ['REFERENCE_ID', 'NEIGHBOR_ID', 'FRAME', 't0_arrival', 'TRACK_ID', 'class_color', 'status_color',
-					 'FRAME', 'x_anim', 'y_anim', 't', 'state', 'generation', 'root', 'parent', 'class_id', 'class',
-					 't0', 'POSITION_X', 'POSITION_Y', 'position', 'well', 'well_index', 'well_name', 'pos_name',
-					 'index', 'relxy', 'tc', 'nk', 'concentration', 'antibody', 'cell_type', 'pharmaceutical_agent',
-					 'reference_population', 'neighbor_population','dummy']
+		self.cols_to_remove = ['group', 'group_color', 'status', 'status_color', 'class_color', 'TRACK_ID', 'FRAME',
+						  'x_anim', 'y_anim', 't','dummy','group_color',
+						  'state', 'generation', 'root', 'parent', 'class_id', 'class', 't0', 'POSITION_X',
+						  'POSITION_Y', 'position', 'well', 'well_index', 'well_name', 'pos_name', 'index',
+						  'concentration', 'cell_type', 'antibody', 'pharmaceutical_agent', 'ID']
+
 		meta = get_experiment_metadata(self.exp_dir)
 		if meta is not None:
 			keys = list(meta.keys())
-			self.cols_to_remove.extend(keys)		
+			self.cols_to_remove.extend(keys)
+
+		labels = get_experiment_labels(self.exp_dir)
+		if labels is not None:
+			keys = list(labels.keys())
+			self.cols_to_remove.extend(labels)
+	
 
 		# Read instructions from target block for now...
 		self.mode = "neighborhood"
@@ -1144,6 +1151,7 @@ class SignalAnnotator2(QMainWindow,Styles):
 					if len(indices)>0:
 						self.loc_t.append(t)
 						self.loc_idx.append(indices[0])
+
 
 				self.MinMaxScaler_targets = MinMaxScaler()
 				self.target_columns = list(df_population.columns)
