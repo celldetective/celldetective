@@ -30,10 +30,7 @@ class ConfigSignalAnnotator(QMainWindow, Styles):
 		self.exp_dir = self.parent_window.exp_dir
 		self.soft_path = get_software_location()
 		
-		if self.mode=="targets":
-			self.instructions_path = self.parent_window.exp_dir + "configs/signal_annotator_config_targets.json"
-		elif self.mode=="effectors":
-			self.instructions_path = self.parent_window.exp_dir + "configs/signal_annotator_config_effectors.json"
+		self.instructions_path = self.parent_window.exp_dir + f"configs/signal_annotator_config_{self.mode}.json"
 		elif self.mode == "pairs":
 			self.instructions_path = self.parent_window.exp_dir + "configs/signal_annotator_config_neighborhood.json"
 
