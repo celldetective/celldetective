@@ -330,7 +330,7 @@ def analyze_signals_at_position(pos, model, mode, use_gpu=True, return_table=Fal
 	else:
 		return None		
 
-def analyze_pair_signals_at_position(pos, model, use_gpu=True):
+def analyze_pair_signals_at_position(pos, model, use_gpu=True, populations=['targets','effectors']):
 	
 
 	pos = pos.replace('\\','/')
@@ -338,13 +338,10 @@ def analyze_pair_signals_at_position(pos, model, use_gpu=True):
 	assert os.path.exists(pos),f'Position {pos} is not a valid path.'
 	if not pos.endswith('/'):
 		pos += '/'
-					
-	df_targets = get_position_pickle(pos, population='targets')
-	df_effectors = get_position_pickle(pos, population='effectors')
-	dataframes = {
-		'targets': df_targets,
-		'effectors': df_effectors,
-	}
+
+	dataframes = {}
+	for pop in populations:
+		dataframes.update({pop: get_position_pickle(pos, population=pop)})
 	df_pairs = get_position_table(pos, population='pairs')
 
 	# Need to identify expected reference / neighbor tables
@@ -360,12 +357,19 @@ def analyze_pair_signals_at_position(pos, model, use_gpu=True):
 	reference_population = model_config_path['reference_population']
 	neighbor_population = model_config_path['neighbor_population']
 
+	if dataframes[reference_population] is None:
+		print(f"No tabulated data can be found for the reference population ({reference_population})... Abort...")
+		return None
+
+	if dataframes[neighbor_population] is None:
+		print(f"No tabulated data can be found for the neighbor population ({neighbor_population})... Abort...")
+		return None
+
 	df = analyze_pair_signals(df_pairs, dataframes[reference_population], dataframes[neighbor_population], model=model)
-	
 	table = pos + os.sep.join(["output","tables",f"trajectories_pairs.csv"])
 	df.to_csv(table, index=False)
 
-	return None		
+	return None
 
 
 def analyze_pair_signals(trajectories_pairs,trajectories_reference,trajectories_neighbors, model, interpolate_na=True, selected_signals=None,

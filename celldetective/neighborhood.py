@@ -1393,9 +1393,9 @@ def extract_neighborhood_in_pair_table(df, distance=None, reference_population="
 				neighbor_population = reference_population
 			else:
 				if reference_population=="effectors":
-					neighbor_population=='targets'
+					neighbor_population='targets'
 				else:
-					neighbor_population=='effectors'
+					neighbor_population='effectors'
 
 	assert "status_"+neigh_col in list(df.columns),"The selected neighborhood does not appear in the data..."
 

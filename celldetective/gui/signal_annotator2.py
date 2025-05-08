@@ -46,9 +46,7 @@ class SignalAnnotator2(QMainWindow,Styles):
 		self.soft_path = get_software_location()
 		self.recently_modified = False
 		self.n_signals = 3
-		# self.target_selection = []
-		# self.effector_selection = []
-		
+
 		self.reference_selection = []
 		self.neighbor_selection = []
 		self.pair_selection = []
@@ -82,11 +80,6 @@ class SignalAnnotator2(QMainWindow,Styles):
 		self.mode = "neighborhood"
 		self.instructions_path = self.exp_dir + os.sep.join(['configs', 'signal_annotator_config_neighborhood.json'])
 
-		# default params
-		self.target_class_name = 'class'
-		self.target_time_name = 't0'
-		self.target_status_name = 'status'
-
 		center_window(self)
 		
 		# Locate stack
@@ -97,25 +90,11 @@ class SignalAnnotator2(QMainWindow,Styles):
 		self.locate_all_tracks()
 		self.extract_scatter_from_trajectories()
 
-		#self.locate_effector_tracks()
-
-		# self.dataframes = {
-		# 	'targets': self.df_targets,
-		# 	'effectors': self.df_effectors,
-		# }
-
 		self.neighborhood_cols = []
-
 		for pop in self.dataframes.keys():
 			if self.dataframes[pop] is not None:
 				self.neighborhood_cols.extend([f'{pop}_ref_'+c for c in list(self.dataframes[pop].columns) if c.startswith('neighborhood')])
-
-		# if self.df_targets is not None:
-		# 	self.neighborhood_cols.extend(['target_ref_'+c for c in list(self.df_targets.columns) if c.startswith('neighborhood')])
-		# if self.df_effectors is not None:
-		# 	print(self.df_effectors.columns)
-		# 	self.neighborhood_cols.extend(['effector_ref_'+c for c in list(self.df_effectors.columns) if c.startswith('neighborhood')])
-		print(f"The following neighborhoods were detected: {self.neighborhood_cols=}")
+		print(f"The following neighborhoods were detected: {self.neighborhood_cols=}...")
 
 		self.locate_relative_tracks()
 		
@@ -434,8 +413,6 @@ class SignalAnnotator2(QMainWindow,Styles):
 
 
 		self.right_panel.addLayout(animation_buttons_box, 5)
-
-
 		self.right_panel.addWidget(self.fcanvas, 90)
 
 		if not self.rgb_mode:
@@ -501,53 +478,6 @@ class SignalAnnotator2(QMainWindow,Styles):
 		self.neighbor_event_choice_cb.addItems(neighbor_class_cols)
 		self.neighbor_event_choice_cb.currentIndexChanged.connect(self.compute_status_and_colors_neighbor)
 
-
-	def del_target_event_class(self):
-
-		msgBox = QMessageBox()
-		msgBox.setIcon(QMessageBox.Warning)
-		msgBox.setText(f"You are about to delete event class {self.target_class_choice_cb.currentText()}. The associated time and\nstatus will also be deleted. Do you still want to proceed?")
-		msgBox.setWindowTitle("Warning")
-		msgBox.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
-		returnValue = msgBox.exec()
-		if returnValue == QMessageBox.No:
-			return None
-		else:
-			class_to_delete = self.target_class_choice_cb.currentText()
-			time_to_delete = class_to_delete.replace('class','t')
-			status_to_delete = class_to_delete.replace('class', 'status')
-			cols_to_delete = [class_to_delete, time_to_delete, status_to_delete]
-			for c in cols_to_delete:
-				try:
-					self.df_targets = self.df_targets.drop([c], axis=1)
-				except Exception as e:
-					print(e)
-			item_idx = self.target_class_choice_cb.findText(class_to_delete)
-			self.target_class_choice_cb.removeItem(item_idx)
-
-	def del_effector_event_class(self):
-
-		msgBox = QMessageBox()
-		msgBox.setIcon(QMessageBox.Warning)
-		msgBox.setText(f"You are about to delete event class {self.effector_class_choice_cb.currentText()}. The associated time and\nstatus will also be deleted. Do you still want to proceed?")
-		msgBox.setWindowTitle("Warning")
-		msgBox.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
-		returnValue = msgBox.exec()
-		if returnValue == QMessageBox.No:
-			return None
-		else:
-			class_to_delete = self.effector_class_choice_cb.currentText()
-			time_to_delete = class_to_delete.replace('class','t')
-			status_to_delete = class_to_delete.replace('class', 'status')
-			cols_to_delete = [class_to_delete, time_to_delete, status_to_delete]
-			for c in cols_to_delete:
-				try:
-					self.df_effectors = self.df_effectors.drop([c], axis=1)
-				except Exception as e:
-					print(e)
-			item_idx = self.effector_class_choice_cb.findText(class_to_delete)
-			self.effector_class_choice_cb.removeItem(item_idx)
-
 	def del_relative_event_class(self):
 
 		msgBox = QMessageBox()
@@ -572,48 +502,23 @@ class SignalAnnotator2(QMainWindow,Styles):
 			self.relative_class_choice_cb.removeItem(item_idx)
 
 	def update_cell_events(self):
-		if 'self' in self.current_neighborhood:
-			try:
-				self.neighbor_event_choice_cb.hide()
-				self.neigh_lab.hide()
-			except:
-				pass
-			self.reference_event_choice_cb.disconnect()
-			self.reference_event_choice_cb.clear()
-			if self.reference_population=='targets':
-				self.reference_event_choice_cb.addItems(self.target_class_cols)
-				self.reference_event_choice_cb.currentIndexChanged.connect(self.compute_status_and_colors_reference)
-			else:
-				self.reference_event_choice_cb.addItems(self.effector_class_cols)
-				self.reference_event_choice_cb.currentIndexChanged.connect(self.compute_status_and_colors_neighbor)
 
-		else:
-			try:
-				self.neighbor_event_choice_cb.show()
-				self.neigh_lab.show()
-			except:
-				pass
-			self.reference_event_choice_cb.disconnect()
-			self.reference_event_choice_cb.clear()
+		try:
+			self.neighbor_event_choice_cb.show()
+			self.neigh_lab.show()
+		except:
+			pass
 
-			if self.reference_population=='targets':
-				self.reference_event_choice_cb.addItems(self.target_class_cols)
-				self.reference_event_choice_cb.currentIndexChanged.connect(self.compute_status_and_colors_reference)
+		self.reference_event_choice_cb.disconnect()
+		self.reference_event_choice_cb.clear()
+		self.reference_event_choice_cb.addItems(self.class_cols_per_pop[self.reference_population])
+		self.reference_event_choice_cb.currentIndexChanged.connect(self.compute_status_and_colors_reference)
 
-			else:
-				self.reference_event_choice_cb.addItems(self.effector_class_cols)
-				self.reference_event_choice_cb.currentIndexChanged.connect(self.compute_status_and_colors_neighbor)
-
+		if not 'self' in self.current_neighborhood:
 			self.neighbor_event_choice_cb.disconnect()
 			self.neighbor_event_choice_cb.clear()
-
-			if self.neighbor_population=='targets':
-				self.neighbor_event_choice_cb.addItems(self.target_class_cols)
-				self.neighbor_event_choice_cb.currentIndexChanged.connect(self.compute_status_and_colors_reference)
-
-			else:
-				self.neighbor_event_choice_cb.addItems(self.effector_class_cols)
-				self.neighbor_event_choice_cb.currentIndexChanged.connect(self.compute_status_and_colors_neighbor)
+			self.neighbor_event_choice_cb.addItems(self.class_cols_per_pop[self.neighbor_population])
+			self.neighbor_event_choice_cb.currentIndexChanged.connect(self.compute_status_and_colors_reference)
 
 
 
@@ -1057,80 +962,83 @@ class SignalAnnotator2(QMainWindow,Styles):
 	def locate_all_tracks(self):
 		
 		self.dataframes = {}
+		self.class_cols_per_pop = {}
+		self.population_columns = {}
+		self.MinMaxScaler_per_pop = {}
 
 		for population in self.populations:
 
-			self.target_trajectories_path = self.pos + os.sep.join(['output','tables', f'trajectories_{population}.pkl'])
-			if not os.path.exists(self.target_trajectories_path):
-				self.target_trajectories_path = self.target_trajectories_path.replace('.pkl','.csv')
+			population_trajectories_path = self.pos + os.sep.join(['output','tables', f'trajectories_{population}.pkl'])
+			if not os.path.exists(population_trajectories_path):
+				population_trajectories_path = population_trajectories_path.replace('.pkl','.csv')
 
-			if not os.path.exists(self.target_trajectories_path):
+			if not os.path.exists(population_trajectories_path):
 
 				msgBox = QMessageBox()
 				msgBox.setIcon(QMessageBox.Warning)
-				msgBox.setText("The target trajectories cannot be detected...")
+				msgBox.setText(f"The trajectories for the {population} population cannot be detected...")
 				msgBox.setWindowTitle("Warning")
 				msgBox.setStandardButtons(QMessageBox.Ok)
 				returnValue = msgBox.exec()
 				df_population = None
 			else:
 				# Load and prep tracks
-				if self.target_trajectories_path.endswith('.pkl'):
-					df_population = np.load(self.target_trajectories_path, allow_pickle=True)
+				if population_trajectories_path.endswith('.pkl'):
+					df_population = np.load(population_trajectories_path, allow_pickle=True)
 				else:
-					df_population = pd.read_csv(self.target_trajectories_path)
+					df_population = pd.read_csv(population_trajectories_path)
 
 				df_population = df_population.sort_values(by=['TRACK_ID', 'FRAME'])
 
 				cols = np.array(df_population.columns)
-				self.target_class_cols = [c for c in list(df_population.columns) if c.startswith('class')]
+				class_cols = [c for c in list(df_population.columns) if c.startswith('class')]
 
 				try:
-					self.target_class_cols.remove('class_id')
+					class_cols.remove('class_id')
 				except:
 					pass
 				try:
-					self.target_class_cols.remove('class_color')
+					class_cols.remove('class_color')
 				except:
 					pass
 
-				if len(self.target_class_cols)>0:
+				if len(class_cols)>0:
 
-					self.target_class_name = self.target_class_cols[0]
-					self.target_expected_status = 'status'
-					suffix = self.target_class_name.replace('class','').replace('_','')
+					pop_class_name = class_cols[0]
+					pop_expected_status = 'status'
+					suffix = pop_class_name.replace('class','').replace('_','')
 					if suffix!='':
-						self.target_expected_status+='_'+suffix
-						self.target_expected_time = 't_'+suffix
+						pop_expected_status+='_'+suffix
+						pop_expected_time = 't_'+suffix
 					else:
-						self.target_expected_time = 't0'
-					self.target_time_name = self.target_expected_time
-					self.target_status_name = self.target_expected_status
+						pop_expected_time = 't0'
+					pop_time_name = pop_expected_time
+					pop_status_name = pop_expected_status
 				else:
-					self.target_class_name = 'class'
-					self.target_time_name = 't0'
-					self.target_status_name = 'status'
+					pop_class_name = 'class'
+					pop_time_name = 't0'
+					pop_status_name = 'status'
 
-				if self.target_time_name in df_population.columns and self.target_class_name in df_population.columns and not self.target_status_name in df_population.columns:
+				if pop_time_name in df_population.columns and pop_class_name in df_population.columns and not pop_status_name in df_population.columns:
 					# only create the status column if it does not exist to not erase static classification results
 					pass
 					#self.make_target_status_column()
-				elif self.target_time_name in df_population.columns and self.target_class_name in df_population.columns:
+				elif pop_time_name in df_population.columns and pop_class_name in df_population.columns:
 					# all good, do nothing
 					pass
 				else:
-					if not self.target_status_name in df_population.columns:
-						df_population[self.target_status_name] = 0
+					if not pop_status_name in df_population.columns:
+						df_population[pop_status_name] = 0
 						df_population['status_color'] = color_from_status(0)
 						df_population['class_color'] = color_from_class(1)
 
-				if not self.target_class_name in df_population.columns:
-					df_population[self.target_class_name] = 1
-				if not self.target_time_name in df_population.columns:
-					df_population[self.target_time_name] = -1
+				if not pop_class_name in df_population.columns:
+					df_population[pop_class_name] = 1
+				if not pop_time_name in df_population.columns:
+					df_population[pop_time_name] = -1
 
-				df_population['status_color'] = color_from_status(2) #[color_from_status(i) for i in self.df_targets[self.target_status_name].to_numpy()]
-				df_population['class_color'] = color_from_status(2) #[color_from_class(i) for i in self.df_targets[self.target_class_name].to_numpy()]
+				df_population['status_color'] = color_from_status(2)
+				df_population['class_color'] = color_from_status(2)
 
 				df_population = df_population.dropna(subset=['POSITION_X', 'POSITION_Y'])
 				df_population['x_anim'] = df_population['POSITION_X'] * self.fraction
@@ -1152,25 +1060,27 @@ class SignalAnnotator2(QMainWindow,Styles):
 						self.loc_t.append(t)
 						self.loc_idx.append(indices[0])
 
-
-				self.MinMaxScaler_targets = MinMaxScaler()
-				self.target_columns = list(df_population.columns)
-				cols_to_remove = [c for c in self.cols_to_remove if c in self.target_columns] + self.target_class_cols
-				time_cols = [c for c in self.target_columns if c.startswith('t_')]
+				minmax = MinMaxScaler()
+				pop_cols = list(df_population.columns)
+				cols_to_remove = [c for c in self.cols_to_remove if c in pop_cols] + class_cols
+				time_cols = [c for c in pop_cols if c.startswith('t_')]
 				cols_to_remove += time_cols
-				neigh_cols = [c for c in self.target_columns if c.startswith('neighborhood_')]
+				neigh_cols = [c for c in pop_cols if c.startswith('neighborhood_')]
 				cols_to_remove += neigh_cols
 
 				for col in cols_to_remove:
 					try:
-						self.target_columns.remove(col)
+						pop_cols.remove(col)
 					except:
 						pass
 
-				x = df_population[self.target_columns].values
-				self.MinMaxScaler_targets.fit(x)
+				x = df_population[pop_cols].values
+				minmax.fit(x)
 
 			self.dataframes.update({population: df_population})
+			self.class_cols_per_pop.update({population: class_cols})
+			self.population_columns.update({population: pop_cols})
+			self.MinMaxScaler_per_pop.update({population: minmax})
 
 	def locate_relative_tracks(self):
 
@@ -1239,11 +1149,11 @@ class SignalAnnotator2(QMainWindow,Styles):
 		neigh = self.neighborhood_choice_cb.currentText()
 		print(f"{neigh=}")
 
-		self.current_neighborhood = neigh #.replace('target_ref_','').replace('effector_ref_','')
+		self.current_neighborhood = neigh
 		for pop in self.dataframes.keys():
 			self.current_neighborhood = self.current_neighborhood.replace(f'{pop}_ref_','')
 		
-		self.reference_population = self.neighborhood_choice_cb.currentText().split('_')[0] #['targets' if 'target' in neigh else 'effectors'][0]
+		self.reference_population = self.neighborhood_choice_cb.currentText().split('_')[0]
 
 		if '_(' in self.current_neighborhood and ')_' in self.current_neighborhood:
 			self.neighbor_population = self.current_neighborhood.split('_(')[-1].split(')_')[0].split('-')[-1]
@@ -1744,7 +1654,7 @@ class SignalAnnotator2(QMainWindow,Styles):
 			self.status_scatter.update({pop: status_scatter})
 			self.class_scatter.update({pop: class_scatter})
 
-		self.points=self.ax.scatter([], [], marker="$\Join$", s=100, picker=True, pickradius=10, zorder=10) #picker=True, pickradius=10
+		self.points=self.ax.scatter([], [], marker="$\\Join$", s=100, picker=True, pickradius=10, zorder=10) #picker=True, pickradius=10
 
 		self.ax.set_xticks([])
 		self.ax.set_yticks([])
@@ -1946,24 +1856,8 @@ class SignalAnnotator2(QMainWindow,Styles):
 	def get_neighbor_sets(self):
 		return self.positions[self.neighbor_population], self.tracks[self.neighbor_population], self.colors[self.neighbor_population], self.initial_colors[self.neighbor_population]
 
-		# if self.reference_population != self.neighbor_population:
-		# 	if self.reference_population=='effectors':
-		# 		return self.target_positions, self.target_tracks, self.target_colors, self.initial_target_colors
-		# 	elif self.reference_population=='targets':
-		# 		return self.effector_positions, self.effector_tracks, self.effector_colors, self.initial_effector_colors
-		# else:
-		# 	if self.reference_population=='effectors':
-		# 		return self.effector_positions, self.effector_tracks, self.effector_colors, self.initial_effector_colors
-		# 	elif self.reference_population=='targets':
-		# 		return self.target_positions, self.target_tracks, self.target_colors, self.initial_target_colors		
-
 	def get_reference_sets(self):
 		return self.positions[self.reference_population], self.tracks[self.reference_population], self.colors[self.reference_population], self.initial_colors[self.reference_population]
-
-		# if self.reference_population == 'effectors':
-		# 	return self.effector_positions, self.effector_tracks, self.effector_colors, self.initial_effector_colors
-		# elif self.reference_population == 'targets':
-		# 	return self.target_positions, self.target_tracks, self.target_colors, self.initial_target_colors	
 
 	def trace_neighbors(self):
 
@@ -2220,7 +2114,6 @@ class SignalAnnotator2(QMainWindow,Styles):
 		self.framedata = framedata
 		self.frame_lbl.setText(f'frame: {self.framedata}')
 		self.im.set_array(self.stack[self.framedata])
-		#if self.reference_population=='targets':
 
 		for pop in self.dataframes.keys():
 			df = self.dataframes[pop]
@@ -2458,39 +2351,34 @@ class SignalAnnotator2(QMainWindow,Styles):
 
 	def normalize_features(self):
 
-		if self.df_effectors is not None:
-			x_effectors = self.df_effectors[self.effector_columns].values
-		if self.df_targets is not None:
-			x_targets = self.df_targets[self.target_columns].values
-		if self.df_relative is not None:
-			x_pairs = self.df_relative[self.pair_columns].values
-
 		if not self.normalized_signals:
+			for pop in self.dataframes.keys():
+				df_pop = self.dataframes[pop]
+				cols = self.population_columns[pop]
+				if df_pop is not None:
+					df_pop[cols] = self.MinMaxScaler_per_pop[pop].transform(df_pop[cols].values)
+					self.dataframes.update({pop: df_pop})
 
-			if self.df_effectors is not None:
-				self.df_effectors[self.effector_columns] = self.MinMaxScaler_effectors.transform(x_effectors)
-			if self.df_targets is not None:
-				self.df_targets[self.target_columns] = self.MinMaxScaler_targets.transform(x_targets)
 			if self.df_relative is not None:
-				self.df_relative[self.pair_columns] = self.MinMaxScaler_pairs.transform(x_pairs)
+				self.df_relative[self.pair_columns] = self.MinMaxScaler_pairs.transform(self.df_relative[self.pair_columns].values)
 
-			self.plot_signals()
 			self.normalized_signals = True
 			self.normalize_features_btn.setIcon(icon(MDI6.arrow_collapse_vertical, color="#1565c0"))
-			self.normalize_features_btn.setIconSize(QSize(25, 25))
 		else:
-
-			if self.df_effectors is not None:
-				self.df_effectors[self.effector_columns] = self.MinMaxScaler_effectors.inverse_transform(x_effectors)
-			if self.df_targets is not None:
-				self.df_targets[self.target_columns] = self.MinMaxScaler_targets.inverse_transform(x_targets)
+			for pop in self.dataframes.keys():
+				df_pop = self.dataframes[pop]
+				cols = self.population_columns[pop]
+				if df_pop is not None:
+					df_pop[cols] = self.MinMaxScaler_per_pop[pop].inverse_transform(df_pop[cols].values)
+					self.dataframes.update({pop: df_pop})
 			if self.df_relative is not None:
-				self.df_relative[self.pair_columns] = self.MinMaxScaler_pairs.inverse_transform(x_pairs)
+				self.df_relative[self.pair_columns] = self.MinMaxScaler_pairs.inverse_transform(self.df_relative[self.pair_columns].values)
 
-			self.plot_signals()
 			self.normalized_signals = False
 			self.normalize_features_btn.setIcon(icon(MDI6.arrow_collapse_vertical, color="black"))
-			self.normalize_features_btn.setIconSize(QSize(25, 25))
+
+		self.plot_signals()
+		self.normalize_features_btn.setIconSize(QSize(25, 25))
 
 	def switch_to_log(self):
 

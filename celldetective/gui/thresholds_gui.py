@@ -56,10 +56,7 @@ class ThresholdConfigWizard(QMainWindow, Styles):
 		self.cell_properties = ['centroid', 'area', 'perimeter', 'eccentricity', 'intensity_mean', 'solidity']
 		self.edge = None
 
-		if self.mode == "targets":
-			self.config_out_name = "threshold_targets.json"
-		elif self.mode == "effectors":
-			self.config_out_name = "threshold_effectors.json"
+		self.config_out_name = f"threshold_{self.mode}.json"
 
 		self.locate_stack()
 		if self.img is not None:
