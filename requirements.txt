@@ -36,3 +36,4 @@ h5py
 cliffs_delta
 requests
 trackpy
+prettyprint

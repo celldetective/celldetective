@@ -757,14 +757,20 @@ class TableUI(QMainWindow, Styles):
 		ref_pop = self.reference_pop_cb.currentText()
 		neighborhood = self.neigh_cb.currentText()
 		status_neigh = 'status_'+neighborhood
+
 		if 'self' in neighborhood:
 			neighbor_pop = ref_pop
-		elif ref_pop=='targets':
-			neighbor_pop = 'effectors'
-		elif ref_pop=='effectors':
-			neighbor_pop = "targets"
 
-		data = extract_neighborhood_in_pair_table(self.data, neighborhood_key=neighborhood, contact_only=self.contact_only_check.isChecked())
+		neigh_col = neighborhood.replace('status_','')
+		if '_(' in neigh_col and ')_' in neigh_col:
+			neighbor_pop = neigh_col.split('_(')[-1].split(')_')[0].split('-')[-1]
+		else:
+			if ref_pop=='targets':
+				neighbor_pop = 'effectors'
+			if ref_pop=='effectors':
+				neighbor_pop = "targets"
+
+		data = extract_neighborhood_in_pair_table(self.data, neighborhood_key=neighborhood, contact_only=self.contact_only_check.isChecked(), reference_population=ref_pop)
 
 		if self.groupby_pair_rb.isChecked():
 			self.groupby_cols = ['position', 'REFERENCE_ID', 'NEIGHBOR_ID']
@@ -774,6 +780,7 @@ class TableUI(QMainWindow, Styles):
 		self.current_data = data
 		skip_projection = False
 		if 'reference_tracked' in list(self.current_data.columns):
+			print(f"{self.current_data['reference_tracked']=} {(self.current_data['reference_tracked']==False)=} {np.all(self.current_data['reference_tracked']==False)=}")
 			if np.all(self.current_data['reference_tracked'].astype(bool)==False):
 				# reference not tracked
 				if self.groupby_reference_rb.isChecked():

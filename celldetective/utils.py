@@ -32,6 +32,7 @@ from cliffs_delta import cliffs_delta
 from stardist.models import StarDist2D
 from cellpose.models import CellposeModel
 from pathlib import PosixPath, PurePosixPath, WindowsPath
+from prettytable import PrettyTable
 
 def get_config(experiment):
 
@@ -370,7 +371,10 @@ def _prep_stardist_model(model_name, path, use_gpu=False, scale=1):
 	model = StarDist2D(None, name=model_name, basedir=path)
 	model.config.use_gpu = use_gpu
 	model.use_gpu = use_gpu
+
 	scale_model = scale
+
+
 	print(f"StarDist model {model_name} successfully loaded...")
 	return model, scale_model
 
@@ -424,7 +428,10 @@ def _prep_cellpose_model(model_name, path, use_gpu=False, n_channels=2, scale=No
 	else:
 		scale_model = scale * model.diam_mean / model.diam_labels
 
-	print(f"Diam mean: {model.diam_mean}; Diam labels: {model.diam_labels}; Final rescaling: {scale_model}...")
+	print(f'Cell size in model: {model.diam_mean} pixels...')
+	print(f'Cell size in training set: {model.diam_labels} pixels...')
+	print(f"Rescaling factor to apply: {scale_model}...")
+
 	print(f'Cellpose model {model_name} successfully loaded...')
 	return model, scale_model
 
@@ -1899,7 +1906,7 @@ def _extract_channel_indices_from_config(config, channels_to_extract):
 			c1 = int(ConfigSectionMap(config,"Channels")[c])
 			channels.append(c1)
 		except Exception as e:
-			print(f"Warning... The channel {c} required by the model is not available in your data...")
+			print(f"Warning: The channel {c} required by the model is not available in your data...")
 			channels.append(None)
 	if np.all([c is None for c in channels]):
 		channels = None
@@ -2864,11 +2871,13 @@ def get_zenodo_files(cat=None):
 		categories.append(category)
 	
 	if cat is not None:
-		assert cat in [os.sep.join(['models','segmentation_generic']), os.sep.join(['models','segmentation_targets']), os.sep.join(['models','segmentation_effectors']), \
-						   'demos', os.sep.join(['datasets','signal_annotations']), os.sep.join(['datasets','segmentation_annotations']),  os.sep.join(['models','signal_detection'])]
-		categories = np.array(categories)
-		all_files_short = np.array(all_files_short)
-		return list(all_files_short[np.where(categories==cat)[0]])
+		if cat in [os.sep.join(['models','segmentation_generic']), os.sep.join(['models','segmentation_targets']), os.sep.join(['models','segmentation_effectors']), \
+						   'demos', os.sep.join(['datasets','signal_annotations']), os.sep.join(['datasets','segmentation_annotations']),  os.sep.join(['models','signal_detection'])]:
+			categories = np.array(categories)
+			all_files_short = np.array(all_files_short)
+			return list(all_files_short[np.where(categories==cat)[0]])
+		else:
+			return []
 	else:
 		return all_files_short,categories
 
@@ -3077,3 +3086,10 @@ def test_2samp_generic(data, feature=None, groupby_cols=None, method="ks_2samp",
 	pivot.index.name = None
 
 	return pivot
+
+def pretty_table(dct):
+	table = PrettyTable()
+	for c in dct.keys():
+		table.add_column(str(c), [])
+	table.add_row([dct.get(c, "") for c in dct.keys()])
+	print(table)

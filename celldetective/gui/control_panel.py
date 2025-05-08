@@ -4,7 +4,7 @@ from PyQt5.QtCore import Qt, QSize
 from celldetective.gui.gui_utils import center_window, QHSeperationLine, QCheckableComboBox
 from celldetective.utils import _extract_labels_from_config, ConfigSectionMap, extract_experiment_channels, extract_identity_col
 from celldetective.gui import ConfigEditor, ProcessPanel, PreprocessingPanel, AnalysisPanel, NeighPanel
-from celldetective.io import get_experiment_wells, get_config, get_spatial_calibration, get_temporal_calibration, get_experiment_concentrations, get_experiment_cell_types, get_experiment_antibodies, get_experiment_pharmaceutical_agents
+from celldetective.io import extract_position_name, get_experiment_wells, get_config, get_spatial_calibration, get_temporal_calibration, get_experiment_concentrations, get_experiment_cell_types, get_experiment_antibodies, get_experiment_pharmaceutical_agents, get_experiment_populations, extract_well_name_and_number
 from natsort import natsorted
 from glob import glob
 import os
@@ -42,8 +42,8 @@ class ControlPanel(QMainWindow, Styles):
 
 		self.to_disable = []
 		self.generate_header()
-		self.ProcessEffectors = ProcessPanel(self,'effectors')
-		self.ProcessTargets = ProcessPanel(self,'targets')
+		self.ProcessPopulations = [ProcessPanel(self, pop) for pop in self.populations]
+
 		self.NeighPanel = NeighPanel(self)
 		self.PreprocessingPanel = PreprocessingPanel(self)
 		
@@ -57,9 +57,10 @@ class ControlPanel(QMainWindow, Styles):
 		self.SurvivalBlock = AnalysisPanel(self,title='Survival')
 
 		grid_process.addWidget(self.PreprocessingPanel)
-		grid_process.addWidget(self.ProcessEffectors)
-		grid_process.addWidget(self.ProcessTargets)
+		for panel in self.ProcessPopulations:
+			grid_process.addWidget(panel)
 		grid_process.addWidget(self.NeighPanel)
+
 		grid_analyze.addWidget(self.SurvivalBlock)
 
 		self.scroll=QScrollArea()
@@ -108,11 +109,9 @@ class ControlPanel(QMainWindow, Styles):
 		self.wells = get_experiment_wells(self.exp_dir) #natsorted(glob(self.exp_dir + "W*" + os.sep))
 		self.positions = []
 		for w in self.wells:
-			w = os.path.split(w[:-1])
-			root = w[0]
-			w = w[1]
-			positions_path = natsorted(glob(os.sep.join([root, w, f"{w[1:]}*{os.sep}"])))
-			self.positions.append([os.path.split(pos[:-1])[1] for pos in positions_path])
+			well_name, well_nbr = extract_well_name_and_number(w)
+			positions_path = natsorted(glob(os.sep.join([w,f"{well_nbr}*", os.sep])))
+			self.positions.append([extract_position_name(pos) for pos in positions_path])
 
 	def generate_header(self):
 		
@@ -321,8 +320,10 @@ class ControlPanel(QMainWindow, Styles):
 		print('Reading experiment configuration...')
 		self.exp_config = get_config(self.exp_dir)
 
+		self.populations = get_experiment_populations(self.exp_dir)
 		self.PxToUm = get_spatial_calibration(self.exp_dir)
 		self.FrameToMin = get_temporal_calibration(self.exp_dir)
+
 
 		self.len_movie = int(ConfigSectionMap(self.exp_config,"MovieSettings")["len_movie"])
 		self.shape_x = int(ConfigSectionMap(self.exp_config,"MovieSettings")["shape_x"])
@@ -350,7 +351,7 @@ class ControlPanel(QMainWindow, Styles):
 		Close child windows if closed.
 		"""
 		
-		for process_block in [self.ProcessTargets, self.ProcessEffectors]:
+		for process_block in self.ProcessPopulations:
 			try:
 				if process_block.SegModelLoader:
 					process_block.SegModelLoader.close()
@@ -483,121 +484,68 @@ class ControlPanel(QMainWindow, Styles):
 	def update_position_options(self):
 		
 		self.pos = self.position_list.currentText()
-		panels = [self.ProcessEffectors, self.ProcessTargets]
 
 		if self.position_list.isMultipleSelection() or not self.position_list.isAnySelected():
 			
-			for p in panels:
+			for p in self.ProcessPopulations:
 				p.check_seg_btn.setEnabled(False)
 				p.check_tracking_result_btn.setEnabled(False)
+				p.view_tab_btn.setEnabled(True)
+				p.signal_analysis_action.setEnabled(True)
+				p.check_seg_btn.setEnabled(False)
+				p.check_tracking_result_btn.setEnabled(False)
+				p.check_measurements_btn.setEnabled(False)
+				p.check_signals_btn.setEnabled(False)
+				p.delete_tracks_btn.hide()
 
-			self.ProcessTargets.view_tab_btn.setEnabled(True)
-			self.ProcessEffectors.view_tab_btn.setEnabled(True)
+
 			self.NeighPanel.view_tab_btn.setEnabled(True)
-			self.ProcessEffectors.signal_analysis_action.setEnabled(True)
-			self.ProcessTargets.signal_analysis_action.setEnabled(True)
-
-			self.ProcessTargets.check_seg_btn.setEnabled(False)
-			self.ProcessEffectors.check_seg_btn.setEnabled(False)
-
-			self.ProcessTargets.check_tracking_result_btn.setEnabled(False)
-			self.ProcessEffectors.check_tracking_result_btn.setEnabled(False)
-
-			self.ProcessEffectors.check_measurements_btn.setEnabled(False)
-			self.ProcessTargets.check_measurements_btn.setEnabled(False)
-			#self.ProcessTargets.signal_analysis_action.setEnabled(False)
-			#self.ProcessEffectors.signal_analysis_action.setEnabled(False)
-
-			self.ProcessTargets.check_signals_btn.setEnabled(False)
-			self.ProcessEffectors.check_signals_btn.setEnabled(False)
 			self.NeighPanel.check_signals_btn.setEnabled(False)
-			self.ProcessTargets.delete_tracks_btn.hide()
-			self.ProcessEffectors.delete_tracks_btn.hide()
-
 			self.view_stack_btn.setEnabled(False)
 
 		elif self.well_list.isMultipleSelection():
 
-			self.ProcessTargets.view_tab_btn.setEnabled(True)
-			self.ProcessEffectors.view_tab_btn.setEnabled(True)	
+			for p in self.ProcessPopulations:
+				p.view_tab_btn.setEnabled(True)
+				p.signal_analysis_action.setEnabled(True)
+				p.delete_tracks_btn.hide()
+
+
 			self.NeighPanel.view_tab_btn.setEnabled(True)
 			self.view_stack_btn.setEnabled(False)
-			self.ProcessEffectors.signal_analysis_action.setEnabled(True)
-			self.ProcessTargets.signal_analysis_action.setEnabled(True)
 			if hasattr(self,'delete_tracks_btn'):
 				self.delete_tracks_btn.hide()
-			self.ProcessTargets.delete_tracks_btn.hide()
-			self.ProcessEffectors.delete_tracks_btn.hide()
 		else:
 
 			if self.well_list.isAnySelected() and self.position_list.isAnySelected():
 
 				self.locate_selected_position()
 				self.view_stack_btn.setEnabled(True)
-				# if os.path.exists(os.sep.join([self.pos,'labels_effectors', os.sep])):
-				self.ProcessEffectors.check_seg_btn.setEnabled(True)
-				# if os.path.exists(os.sep.join([self.pos,'labels_targets', os.sep])):
-				self.ProcessTargets.check_seg_btn.setEnabled(True)
-				
-				# if os.path.exists(os.sep.join([self.pos,'output','tables','napari_target_trajectories.npy'])):
-				# 	self.ProcessTargets.check_tracking_result_btn.setEnabled(True)
-				# else:
-				# 	self.ProcessTargets.check_tracking_result_btn.setEnabled(False)
-				# if os.path.exists(os.sep.join([self.pos,'output','tables','napari_effector_trajectories.npy'])):
-				# 	self.ProcessEffectors.check_tracking_result_btn.setEnabled(True)
-				# else:
-				# 	self.ProcessEffectors.check_tracking_result_btn.setEnabled(False)
+				for i,p in enumerate(self.ProcessPopulations):
+					p.check_seg_btn.setEnabled(True)
+					if os.path.exists(os.sep.join([self.pos,'output','tables',f'trajectories_{self.populations[i]}.csv'])):
+						df = pd.read_csv(os.sep.join([self.pos,'output','tables',f'trajectories_{self.populations[i]}.csv']), nrows=1)
+						id_col = extract_identity_col(df)
+						p.check_measurements_btn.setEnabled(True)
 
-				if os.path.exists(os.sep.join([self.pos,'output','tables','trajectories_effectors.csv'])):
-					df = pd.read_csv(os.sep.join([self.pos,'output','tables','trajectories_effectors.csv']), nrows=1)
-					id_col = extract_identity_col(df)
-					self.ProcessEffectors.check_measurements_btn.setEnabled(True)
-					if id_col=='TRACK_ID':
-						self.ProcessEffectors.check_signals_btn.setEnabled(True)
-						self.ProcessEffectors.delete_tracks_btn.show()
-						self.ProcessEffectors.signal_analysis_action.setEnabled(True)
-						self.ProcessEffectors.check_tracking_result_btn.setEnabled(True)
+						if id_col=='TRACK_ID':
+							p.check_signals_btn.setEnabled(True)
+							p.delete_tracks_btn.show()
+							p.signal_analysis_action.setEnabled(True)
+							p.check_tracking_result_btn.setEnabled(True)
+						else:
+							p.signal_analysis_action.setEnabled(False)
+							p.check_tracking_result_btn.setEnabled(False)			
+
+						p.view_tab_btn.setEnabled(True)
+						p.classify_btn.setEnabled(True)
 					else:
-						self.ProcessEffectors.signal_analysis_action.setEnabled(False)
-						self.ProcessEffectors.check_tracking_result_btn.setEnabled(False)			
-
-					#self.ProcessEffectors.signal_analysis_action.setEnabled(True)
-					self.ProcessEffectors.view_tab_btn.setEnabled(True)
-					self.ProcessEffectors.classify_btn.setEnabled(True)
-				else:
-					self.ProcessEffectors.check_measurements_btn.setEnabled(False)
-					self.ProcessEffectors.check_signals_btn.setEnabled(False)
-					#self.ProcessEffectors.signal_analysis_action.setEnabled(False)
-					self.ProcessEffectors.view_tab_btn.setEnabled(False)
-					self.ProcessEffectors.classify_btn.setEnabled(False)
-					self.ProcessEffectors.delete_tracks_btn.hide()
-					self.ProcessEffectors.signal_analysis_action.setEnabled(False)
-
-				if os.path.exists(os.sep.join([self.pos,'output','tables','trajectories_targets.csv'])):
-					df = pd.read_csv(os.sep.join([self.pos,'output','tables','trajectories_targets.csv']), nrows=1)
-					id_col = extract_identity_col(df)
-					self.ProcessTargets.check_measurements_btn.setEnabled(True)
-					if id_col=='TRACK_ID':
-						self.ProcessTargets.check_signals_btn.setEnabled(True)
-						self.ProcessTargets.signal_analysis_action.setEnabled(True)
-						self.ProcessTargets.check_tracking_result_btn.setEnabled(True)
-						self.ProcessTargets.delete_tracks_btn.show()
-					else:
-						self.ProcessTargets.signal_analysis_action.setEnabled(False)
-						self.ProcessTargets.check_tracking_result_btn.setEnabled(False)
-
-					#self.ProcessTargets.signal_analysis_action.setEnabled(True)
-					self.ProcessTargets.view_tab_btn.setEnabled(True)
-					self.ProcessTargets.classify_btn.setEnabled(True)
-				else:
-					self.ProcessTargets.check_measurements_btn.setEnabled(False)
-					self.ProcessTargets.check_signals_btn.setEnabled(False)
-					#self.ProcessTargets.signal_analysis_action.setEnabled(False)
-					self.ProcessTargets.view_tab_btn.setEnabled(False)
-					self.ProcessTargets.classify_btn.setEnabled(False)
-					self.ProcessTargets.signal_analysis_action.setEnabled(False)				
-					self.ProcessTargets.delete_tracks_btn.hide()
-					self.ProcessTargets.signal_analysis_action.setEnabled(False)
+						p.check_measurements_btn.setEnabled(False)
+						p.check_signals_btn.setEnabled(False)
+						p.view_tab_btn.setEnabled(False)
+						p.classify_btn.setEnabled(False)
+						p.delete_tracks_btn.hide()
+						p.signal_analysis_action.setEnabled(False)
 
 				if os.path.exists(os.sep.join([self.pos,'output','tables','trajectories_pairs.csv'])):
 					self.NeighPanel.view_tab_btn.setEnabled(True)
@@ -605,5 +553,3 @@ class ControlPanel(QMainWindow, Styles):
 				else:
 					self.NeighPanel.view_tab_btn.setEnabled(False)
 					self.NeighPanel.check_signals_btn.setEnabled(False)
-
-

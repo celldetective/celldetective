@@ -6,17 +6,17 @@ First project
 Input
 -----
 
-Celldetective is designed to process multichannel time-lapse microscopy data saved as ``tif`` stacks. These stacks may have the following formats:
+Celldetective is designed to process multichannel time-lapse microscopy data saved as ``tif`` stacks. Lower-dimensional data is also compatible. Notably, Z-stacks are not supported at the moment, although such images can be passed to Celldetective with a trick (see the note below). The files may have the following formats:
 
-- 3D stacks (TXY): Time-series data with spatial dimensions.
-- 4D hyperstacks (TCXY): Time-series data with both channel and spatial dimensions.
+- XY   (2D) frame: single-timepoint & single-channel image.
+- CXY  (3D) stack: single-timepoint & multichannel image.
+- PXY  (3D) stack: multi-position, single-channel & single-timepoint images.
+- TXY  (3D) stack: time-lapse images.
+- PCXY (4D) stack: multi-position, multichannel-channel & single-timepoint images.
+- TCXY (4D) stack: multi-channel time-lapse images.
 
-If your data lacks a time axis but you still wish to use Celldetective for segmentation and measurements, you can substitute the time axis with a tile axis. In this scenario, each stack "frame" represents a different field of view within the well, and you only need to define a single position for the well.
-
-Compatibility with Other Formats:
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-- 2D images (XY) and 3D stacks (CXY) are also supported, provided the channel metadata is properly embedded in the file.
+.. note::
+    A Z-axis can be passed to Celldetective as a substitute to the time-axis, in which case each slice can be segmented and measured independently. There is no compatibility with both Z-stacks and time-lapse data. 
 
 
 Pre-Processing Recommendations
@@ -24,7 +24,7 @@ Pre-Processing Recommendations
 
 Microscopy data acquired through :math:`\mu` Manager [#]_ often interlaces the channel dimension with the time dimension to preserve their separation. Before using these stacks in Celldetective, they must be disentangled to ensure proper functionality of the Celldetective viewers.
 
-Before loading your data into Celldetective, we recommend opening the experimental stacks in **ImageJ** (or a similar tool) to verify that the stack dimensions (time, channels, spatial axes) are correctly set.
+Before loading your data into Celldetective, we recommend opening the raw stacks in **ImageJ** (or a similar tool) to verify that the stack dimensions (time, channels, spatial axes) are correctly set.
 
 For large stacks exceeding 5 GB, we recommend using the **Bio-Formats Exporter** plugin in ImageJ to save the stacks. This format optimizes the data for efficient processing and visualization in Celldetective.
 
@@ -90,6 +90,8 @@ To automatically generate the folder tree for a new experiment in Celldetective,
 
     - Channel names and their order
 
+    - Names of the cell populations to analyze
+
 #. Once you click **Submit**, another dialog window will ask for a brief description of the biological conditions associated with each well.
 
 #. After submitting the information:
@@ -117,6 +119,9 @@ Configuration file example
 .. code-block:: ini
 
    # config.ini
+
+    [Populations]
+    populations = nk,rbc
    
     [MovieSettings]
     pxtoum = 0.3112
@@ -149,10 +154,11 @@ Configuration file example
 Configuration file tags
 ~~~~~~~~~~~~~~~~~~~~~~~
 
-- ``MovieSettings``: Defines image-related parameters such as spatio-temporal calibration, stack length, and filename prefix.
-- ``Channels``: Specifies the order of channels in the stack.
-- ``Labels``: Provides additional descriptive information for each well in the experiment.
-- ``Metadata``: Allows manual addition of extra metadata related to the experiment, which is incorporated into the single-cell data.
+- ``Populations``: defines the names and number of populations to study at single-cell resolution.
+- ``MovieSettings``: defines image-related parameters such as spatio-temporal calibration, stack length, and filename prefix.
+- ``Channels``: specifies the name and order of channels in the stack.
+- ``Labels``: provides additional descriptive information for each well in the experiment. You can add extra-fields with the same comma-separated format. The information will be propagated to the single-cell data in each respective each well. 
+- ``Metadata``: extra information related to the experiment. You can add extra fields which will be propagated to the single-cell data.
 
 Quick acess to the experiment folder
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

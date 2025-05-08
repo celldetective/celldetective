@@ -10,8 +10,8 @@ from superqt.fonticon import icon
 from fonticon_mdi6 import MDI6
 
 from celldetective.gui.about import AboutWidget
-from celldetective.io import correct_annotation
-from celldetective.utils import download_zenodo_file
+from celldetective.io import correct_annotation, extract_well_name_and_number
+from celldetective.utils import download_zenodo_file, pretty_table
 from celldetective.gui.gui_utils import center_window
 from celldetective.gui import Styles, ControlPanel, ConfigNewExperiment
 
@@ -395,11 +395,14 @@ class AppInitWindow(QMainWindow, Styles):
 				print(f"Found {self.number_of_wells} well...")
 			elif self.number_of_wells>1:
 				print(f"Found {self.number_of_wells} wells...")
-			number_pos = []
+
+			number_pos = {}
 			for w in wells:
-				position_folders = glob(os.sep.join([w,f"{w.split(os.sep)[-1][1]}*", os.sep]))
-				number_pos.append(len(position_folders))
-			print(f"Number of positions per well: {number_pos}")
+				well_name, well_nbr = extract_well_name_and_number(w)
+				position_folders = glob(os.sep.join([w,f"{well_nbr}*", os.sep]))
+				number_pos.update({well_name: len(position_folders)})
+			print(f"Number of positions per well:")
+			pretty_table(number_pos)
 			
 			with open(os.sep.join([self.soft_path,'celldetective','recent.txt']), 'a+') as f:
 				f.write(self.exp_dir+'\n')

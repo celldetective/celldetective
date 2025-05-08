@@ -33,7 +33,7 @@ from celldetective.gui.gui_utils import FigureCanvas
 from celldetective.preprocessing import correct_background_model_free, correct_background_model, correct_channel_offset
 from celldetective.utils import _estimate_scale_factor, _extract_channel_indices_from_config, _extract_channel_indices, ConfigSectionMap, _extract_nbr_channels_from_config, _get_img_num_per_channel, normalize_per_channel
 from celldetective.gui.gui_utils import ThresholdLineEdit, QuickSliderLayout, help_generic
-from celldetective.gui.layouts import CellposeParamsWidget, StarDistParamsWidget, BackgroundModelFreeCorrectionLayout, ProtocolDesignerLayout, BackgroundFitCorrectionLayout, ChannelOffsetOptionsLayout
+from celldetective.gui.layouts import SignalModelParamsWidget, SegModelParamsWidget, CellposeParamsWidget, StarDistParamsWidget, BackgroundModelFreeCorrectionLayout, ProtocolDesignerLayout, BackgroundFitCorrectionLayout, ChannelOffsetOptionsLayout
 from celldetective.gui import Styles
 from celldetective.utils import get_software_location
 
@@ -55,11 +55,14 @@ class ProcessPanel(QFrame, Styles):
 		self.exp_dir = self.parent_window.exp_dir
 		self.exp_config = self.parent_window.exp_config
 		self.movie_prefix = self.parent_window.movie_prefix
-		self.threshold_config_targets = None
-		self.threshold_config_effectors = None
+		self.threshold_configs = [None for i in range(len(self.parent_window.populations))]
 		self.wells = np.array(self.parent_window.wells,dtype=str)
 		self.cellpose_calibrated = False
 		self.stardist_calibrated = False
+		self.segChannelsSet = False
+		self.signalChannelsSet = False
+		self.flipSeg = False
+
 		self.use_gpu = self.parent_window.parent_window.use_gpu
 		self.n_threads = self.parent_window.parent_window.n_threads
 
@@ -123,11 +126,10 @@ class ProcessPanel(QFrame, Styles):
 
 	def collapse_advanced(self):
 
-		effector_open = not self.parent_window.ProcessEffectors.ContentsFrame.isHidden()
-		targets_open = not self.parent_window.ProcessTargets.ContentsFrame.isHidden()
+		panels_open = [not p.ContentsFrame.isHidden() for p in self.parent_window.ProcessPopulations]
 		interactions_open = not self.parent_window.NeighPanel.ContentsFrame.isHidden()
 		preprocessing_open = not self.parent_window.PreprocessingPanel.ContentsFrame.isHidden()
-		is_open = np.array([effector_open, targets_open, interactions_open, preprocessing_open])
+		is_open = np.array(panels_open+[interactions_open, preprocessing_open])
 
 		if self.ContentsFrame.isHidden():
 			self.collapse_btn.setIcon(icon(MDI6.chevron_down,color="black"))
@@ -378,6 +380,15 @@ class ProcessPanel(QFrame, Styles):
 		#self.to_disable.append(self.segment_action)
 		grid_segment.addWidget(self.segment_action, 90)
 
+		self.flip_segment_btn = QPushButton()
+		self.flip_segment_btn.setIcon(icon(MDI6.camera_flip_outline,color="black"))
+		self.flip_segment_btn.setIconSize(QSize(20, 20))
+		self.flip_segment_btn.clicked.connect(self.flip_segmentation)
+		self.flip_segment_btn.setStyleSheet(self.button_select_all)
+		self.flip_segment_btn.setToolTip("Flip the order of the frames for segmentation.")
+		grid_segment.addWidget(self.flip_segment_btn, 5)
+
+
 		self.check_seg_btn = QPushButton()
 		self.check_seg_btn.setIcon(icon(MDI6.eye_check_outline,color="black"))
 		self.check_seg_btn.setIconSize(QSize(20, 20))
@@ -429,6 +440,18 @@ class ProcessPanel(QFrame, Styles):
 		seg_option_vbox.addWidget(self.seg_model_list)
 		self.seg_model_list.setEnabled(False)
 		self.grid_contents.addLayout(seg_option_vbox, 2, 0, 1, 4)
+
+	def flip_segmentation(self):
+		if not self.flipSeg:
+			self.flipSeg = True
+			self.flip_segment_btn.setIcon(icon(MDI6.camera_flip,color=self.celldetective_blue))
+			self.flip_segment_btn.setIconSize(QSize(20, 20))
+			self.flip_segment_btn.setToolTip("Unflip the order of the frames for segmentation.")
+		else:
+			self.flipSeg = False
+			self.flip_segment_btn.setIcon(icon(MDI6.camera_flip_outline,color='black'))
+			self.flip_segment_btn.setIconSize(QSize(20, 20))
+			self.flip_segment_btn.setToolTip("Flip the order of the frames for segmentation.")
 
 	def help_segmentation(self):
 
@@ -552,10 +575,12 @@ class ProcessPanel(QFrame, Styles):
 		#QApplication.setOverrideCursor(Qt.WaitCursor)
 		test = self.parent_window.locate_selected_position()
 		if test:
-			print('Memory use: ', dict(psutil.virtual_memory()._asdict()))
+			#print('Memory use: ', dict(psutil.virtual_memory()._asdict()))
+			print(f"Loading images and labels into napari...")
 			try:
 				control_segmentation_napari(self.parent_window.pos, prefix=self.parent_window.movie_prefix, population=self.mode,flush_memory=True)
 			except Exception as e:
+				print(f'Task unsuccessful... Exception {e}...')
 				msgBox = QMessageBox()
 				msgBox.setIcon(QMessageBox.Warning)
 				msgBox.setText(str(e))
@@ -611,7 +636,8 @@ class ProcessPanel(QFrame, Styles):
 	def init_seg_model_list(self):
 
 		self.seg_model_list.clear()
-		self.seg_models = get_segmentation_models_list(mode=self.mode, return_path=False)
+		self.seg_models_specific = get_segmentation_models_list(mode=self.mode, return_path=False)
+		self.seg_models = self.seg_models_specific.copy() #get_segmentation_models_list(mode=self.mode, return_path=False)
 		thresh = 40
 		self.models_truncated = [m[:thresh - 3]+'...' if len(m)>thresh else m for m in self.seg_models]
 		#self.seg_model_list.addItems(models_truncated)
@@ -696,6 +722,10 @@ class ProcessPanel(QFrame, Styles):
 	def reset_generalist_setup(self, index):
 		self.cellpose_calibrated = False
 		self.stardist_calibrated = False
+		self.segChannelsSet = False
+
+	def reset_signals(self):
+		self.signalChannelsSet = False
 
 	def process_population(self):
 
@@ -721,10 +751,8 @@ class ProcessPanel(QFrame, Styles):
 		# self.freeze()
 		# QApplication.setOverrideCursor(Qt.WaitCursor)
 
-		if self.mode=="targets":
-			self.threshold_config = self.threshold_config_targets
-		elif self.mode=="effectors":
-			self.threshold_config = self.threshold_config_effectors
+		idx = self.parent_window.populations.index(self.mode)
+		self.threshold_config = self.threshold_configs[idx]
 
 		self.load_available_tables()
 
@@ -763,7 +791,6 @@ class ProcessPanel(QFrame, Styles):
 			self.model_name = self.seg_models[self.seg_model_list.currentIndex()-1]
 		else:
 			self.model_name = self.seg_models[self.seg_model_list.currentIndex()]
-		print(self.model_name, self.seg_model_list.currentIndex())
 
 		if self.segment_action.isChecked() and self.model_name.startswith('CP') and self.model_name in self.seg_models_generic and not self.cellpose_calibrated:
 
@@ -771,11 +798,23 @@ class ProcessPanel(QFrame, Styles):
 			self.diamWidget.show()
 			return None
 
-		if self.segment_action.isChecked() and self.model_name.startswith('SD') and self.model_name in self.seg_models_generic and not self.stardist_calibrated:
+		elif self.segment_action.isChecked() and self.model_name.startswith('SD') and self.model_name in self.seg_models_generic and not self.stardist_calibrated:
 
 			self.diamWidget = StarDistParamsWidget(self, model_name = self.model_name)
 			self.diamWidget.show()
 			return None
+
+		elif self.segment_action.isChecked() and self.model_name in self.seg_models_specific and not self.segChannelsSet:
+
+			self.segChannelWidget = SegModelParamsWidget(self, model_name = self.model_name)
+			self.segChannelWidget.show()
+			return None
+
+		if self.signal_analysis_action.isChecked() and not self.signalChannelsSet:
+			self.signalChannelWidget = SignalModelParamsWidget(self, model_name = self.signal_models_list.currentText())
+			self.signalChannelWidget.show()
+			return None
+
 
 		self.movie_prefix = self.parent_window.movie_prefix
 
@@ -822,12 +861,13 @@ class ProcessPanel(QFrame, Styles):
 								return None
 						else:
 							print(f"Segmentation from threshold config: {self.threshold_config}")
-							process_args = {"pos": self.pos, "mode": self.mode, "n_threads": self.n_threads, "threshold_instructions": self.threshold_config, "use_gpu": self.use_gpu}
+							process_args = {"pos": self.pos, "mode": self.mode, "n_threads": self.n_threads, "threshold_instructions": self.threshold_config, "use_gpu": self.use_gpu, 'flip': self.flipSeg}
 							self.job = ProgressWindow(SegmentCellThresholdProcess, parent_window=self, title="Segment", process_args = process_args)
 							result = self.job.exec_()
 							if result == QDialog.Accepted:
 								pass
 							elif result == QDialog.Rejected:
+								self.reset_generalist_setup(0)
 								return None
 							#segment_from_threshold_at_position(self.pos, self.mode, self.threshold_config, threads=self.parent_window.parent_window.n_threads)
 					else:
@@ -836,12 +876,13 @@ class ProcessPanel(QFrame, Styles):
 						# 	process = {"output_dir": self.output_dir, "file": self.model_name}
 						# 	self.download_model_job = ProgressWindow(DownloadProcess, parent_window=self, title="Download", process_args = args)
 
-						process_args = {"pos": self.pos, "mode": self.mode, "n_threads": self.n_threads, "model_name": self.model_name, "use_gpu": self.use_gpu}
+						process_args = {"pos": self.pos, "mode": self.mode, "n_threads": self.n_threads, "model_name": self.model_name, "use_gpu": self.use_gpu, 'flip': self.flipSeg}
 						self.job = ProgressWindow(SegmentCellDLProcess, parent_window=self, title="Segment", process_args = process_args)
 						result = self.job.exec_()
 						if result == QDialog.Accepted:
 							pass
 						elif result == QDialog.Rejected:
+							self.reset_generalist_setup(0)
 							return None
 
 				if self.track_action.isChecked():
@@ -900,6 +941,7 @@ class ProcessPanel(QFrame, Styles):
 				action.setChecked(False)
 
 		self.reset_generalist_setup(0)
+		self.reset_signals()
 
 	def open_napari_tracking(self):
 		print(f'View the tracks before post-processing for position {self.parent_window.pos} in napari...')
@@ -938,8 +980,11 @@ class ProcessPanel(QFrame, Styles):
 		self.position_option = self.parent_window.position_list.getSelectedIndices()
 
 		self.df, self.df_pos_info = load_experiment_tables(self.exp_dir, well_option=self.well_option, position_option=self.position_option, population=self.mode, return_pos_info=True)
+		self.signals = []
+		if self.df is not None:
+			self.signals = list(self.df.columns)
 		if self.df is None:
-			print('No table could be found...')
+			print('No table could be found for the selected position(s)...')
 
 	def set_cellpose_scale(self):
 
@@ -951,7 +996,6 @@ class ProcessPanel(QFrame, Styles):
 		model_complete_path = locate_segmentation_model(self.model_name)
 		input_config_path = model_complete_path+"config_input.json"
 		new_channels = [self.diamWidget.cellpose_channel_cb[i].currentText() for i in range(2)]
-		print(new_channels)
 		with open(input_config_path) as config_file:
 			input_config = json.load(config_file)
 
@@ -981,6 +1025,46 @@ class ProcessPanel(QFrame, Styles):
 
 		self.stardist_calibrated = True
 		self.diamWidget.close()
+		self.process_population()
+
+	def set_selected_channels_for_segmentation(self):
+
+		model_complete_path = locate_segmentation_model(self.model_name)
+		input_config_path = model_complete_path+"config_input.json"
+		new_channels = [self.segChannelWidget.channel_cbs[i].currentText() for i in range(len(self.segChannelWidget.channel_cbs))]
+		target_cell_size = None
+		if hasattr(self.segChannelWidget, "diameter_le"):
+			target_cell_size = float(self.segChannelWidget.diameter_le.get_threshold())
+
+		with open(input_config_path) as config_file:
+			input_config = json.load(config_file)
+
+		input_config.update({'selected_channels': new_channels, 'target_cell_size_um': target_cell_size})
+
+		#input_config['channels'] = new_channels
+		with open(input_config_path, 'w') as f:
+			json.dump(input_config, f, indent=4)
+
+		self.segChannelsSet = True
+		self.segChannelWidget.close()
+		self.process_population()
+
+	def set_selected_signals_for_event_detection(self):
+
+		model_complete_path = locate_signal_model(self.signal_models_list.currentText())
+		input_config_path = model_complete_path+"config_input.json"
+		new_channels = [self.signalChannelWidget.channel_cbs[i].currentText() for i in range(len(self.signalChannelWidget.channel_cbs))]
+		with open(input_config_path) as config_file:
+			input_config = json.load(config_file)
+
+		input_config.update({'selected_channels': new_channels})
+
+		#input_config['channels'] = new_channels
+		with open(input_config_path, 'w') as f:
+			json.dump(input_config, f, indent=4)
+
+		self.signalChannelsSet = True
+		self.signalChannelWidget.close()
 		self.process_population()
 
 
@@ -1034,11 +1118,10 @@ class NeighPanel(QFrame, Styles):
 
 	def collapse_advanced(self):
 
-		effector_open = not self.parent_window.ProcessEffectors.ContentsFrame.isHidden()
-		targets_open = not self.parent_window.ProcessTargets.ContentsFrame.isHidden()
+		panels_open = [not p.ContentsFrame.isHidden() for p in self.parent_window.ProcessPopulations]
 		interactions_open = not self.parent_window.NeighPanel.ContentsFrame.isHidden()
 		preprocessing_open = not self.parent_window.PreprocessingPanel.ContentsFrame.isHidden()
-		is_open = np.array([effector_open, targets_open, interactions_open, preprocessing_open])
+		is_open = np.array(panels_open+[interactions_open, preprocessing_open])
 
 		if self.ContentsFrame.isHidden():
 			self.collapse_btn.setIcon(icon(MDI6.chevron_down,color="black"))
@@ -1472,7 +1555,7 @@ class NeighPanel(QFrame, Styles):
 
 				if self.signal_analysis_action.isChecked():
 
-					analyze_pair_signals_at_position(self.pos, self.pair_signal_models_list.currentText(), use_gpu=self.parent_window.parent_window.use_gpu)
+					analyze_pair_signals_at_position(self.pos, self.pair_signal_models_list.currentText(), use_gpu=self.parent_window.parent_window.use_gpu, populations=self.parent_window.populations)
 
 		self.parent_window.update_position_options()
 		print('Done.')
@@ -1553,12 +1636,11 @@ class PreprocessingPanel(QFrame, Styles):
 
 	def collapse_advanced(self):
 
-		effector_open = not self.parent_window.ProcessEffectors.ContentsFrame.isHidden()
-		targets_open = not self.parent_window.ProcessTargets.ContentsFrame.isHidden()
+		panels_open = [not p.ContentsFrame.isHidden() for p in self.parent_window.ProcessPopulations]
 		interactions_open = not self.parent_window.NeighPanel.ContentsFrame.isHidden()
 		preprocessing_open = not self.parent_window.PreprocessingPanel.ContentsFrame.isHidden()
-		is_open = np.array([effector_open, targets_open, interactions_open, preprocessing_open])
-
+		is_open = np.array(panels_open+[interactions_open, preprocessing_open])
+		
 		if self.ContentsFrame.isHidden():
 			self.collapse_btn.setIcon(icon(MDI6.chevron_down,color="black"))
 			self.collapse_btn.setIconSize(QSize(20, 20))

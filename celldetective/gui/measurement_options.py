@@ -47,12 +47,8 @@ class ConfigMeasurements(QMainWindow, Styles):
 		self.mode = self.parent_window.mode
 		self.exp_dir = self.parent_window.exp_dir
 		self.background_correction = []
-		if self.mode == "targets":
-			self.config_name = "btrack_config_targets.json"
-			self.measure_instructions_path = self.parent_window.exp_dir + "configs/measurement_instructions_targets.json"
-		elif self.mode == "effectors":
-			self.config_name = "btrack_config_effectors.json"
-			self.measure_instructions_path = self.parent_window.exp_dir + "configs/measurement_instructions_effectors.json"
+		self.config_name = f"btrack_config_{self.mode}.json"
+		self.measure_instructions_path = self.parent_window.exp_dir + f"configs/measurement_instructions_{self.mode}.json"
 		self.soft_path = get_software_location()
 		self.clear_previous = False
 
@@ -264,12 +260,21 @@ class ConfigMeasurements(QMainWindow, Styles):
 
 		self.features_list = ListWidget(FeatureChoice, initial_features=['area', 'intensity_mean', ])
 
+		self.create_feature_btn = QPushButton("")
+		self.create_feature_btn.setStyleSheet(self.button_select_all)
+		self.create_feature_btn.setIcon(icon(MDI6.file_cog, color="black"))
+		self.create_feature_btn.setToolTip("Create new feature")
+		self.create_feature_btn.setIconSize(QSize(20, 20))
+
 		self.del_feature_btn.clicked.connect(self.features_list.removeSel)
 		self.add_feature_btn.clicked.connect(self.features_list.addItem)
+		self.create_feature_btn.clicked.connect(self.go_to_extraprops)
 
 		feature_layout.addWidget(self.feature_lbl, 90)
 		feature_layout.addWidget(self.del_feature_btn, 5)
 		feature_layout.addWidget(self.add_feature_btn, 5)
+		feature_layout.addWidget(self.create_feature_btn, 5)
+
 		layout.addLayout(feature_layout)
 		layout.addWidget(self.features_list)
 
@@ -425,6 +430,18 @@ class ConfigMeasurements(QMainWindow, Styles):
 
 		self.haralick_normalization_mode_btn.clicked.connect(self.switch_to_absolute_normalization_mode)
 		layout.addLayout(self.haralick_layout)
+
+	def go_to_extraprops(self):
+		
+		path = os.sep.join([self.soft_path,'celldetective',os.sep,'extra_properties.py'])
+		try:
+			Popen(f'explorer {os.path.realpath(path)}')
+		except:
+
+			try:
+				os.system('xdg-open "%s"' % path)
+			except:
+				return None		
 
 	def switch_to_absolute_normalization_mode(self):
 

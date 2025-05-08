@@ -15,7 +15,7 @@ parser = argparse.ArgumentParser(description="Classify and regress the signals b
 								formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 parser.add_argument('-p',"--position", required=True, help="Path to the position")
 parser.add_argument('-m',"--model", required=True, help="Path to the model")
-parser.add_argument("--mode", default="target", choices=["target","effector","targets","effectors"],help="Cell population of interest")
+parser.add_argument("--mode", default="target", help="Cell population of interest")
 parser.add_argument("--use_gpu", default="True", choices=["True","False"],help="use GPU")
 
 args = parser.parse_args()
@@ -36,6 +36,9 @@ if mode.lower()=="target" or mode.lower()=="targets":
 
 elif mode.lower()=="effector" or mode.lower()=="effectors":
 	table_name = "trajectories_effectors.csv"
+else:
+	table_name = f"trajectories_{mode}.csv"
+
 
 # Load trajectories, add centroid if not in trajectory
 trajectories = pos+os.sep.join(['output','tables', table_name])

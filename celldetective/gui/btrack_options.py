@@ -34,12 +34,8 @@ class ConfigTracking(QMainWindow, Styles):
 		self.exp_dir = self.parent_window.exp_dir
 		self.floatValidator = QDoubleValidator()
 
-		if self.mode=="targets":
-			self.config_name = os.sep.join(["configs", "btrack_config_targets.json"])
-			self.track_instructions_write_path = self.parent_window.exp_dir + os.sep.join(["configs","tracking_instructions_targets.json"])
-		elif self.mode=="effectors":
-			self.config_name = os.sep.join(["configs","btrack_config_effectors.json"])
-			self.track_instructions_write_path = self.parent_window.exp_dir + os.sep.join(["configs", "tracking_instructions_effectors.json"])
+		self.config_name = os.sep.join(["configs", f"btrack_config_{self.mode}.json"])
+		self.track_instructions_write_path = self.parent_window.exp_dir + os.sep.join(["configs",f"tracking_instructions_{self.mode}.json"])
 		self.soft_path = get_software_location()
 		
 		exp_config = self.exp_dir +"config.ini"

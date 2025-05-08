@@ -2,6 +2,7 @@ import argparse
 import os
 from celldetective.relative_measurements import measure_pair_signals_at_position, extract_neighborhoods_from_pickles
 from celldetective.utils import ConfigSectionMap, extract_experiment_channels
+from celldetective.io import get_experiment_populations
 
 from pathlib import Path, PurePath
 
@@ -37,6 +38,8 @@ len_movie = float(ConfigSectionMap(config, "MovieSettings")["len_movie"])
 channel_names, channel_indices = extract_experiment_channels(expfolder)
 nbr_channels = len(channel_names)
 
+populations = get_experiment_populations(expfolder, dtype=str)
+
 # from tracking instructions, fetch btrack config, features, haralick, clean_traj, idea: fetch custom timeline?
 instr_path = PurePath(expfolder, Path(f"{instruction_file}"))
 previous_pair_table_path = pos + os.sep.join(['output', 'tables', 'trajectories_pairs.csv'])
@@ -46,7 +49,7 @@ previous_neighborhoods = []
 associated_reference_population = []
 
 
-neighborhoods_to_measure = extract_neighborhoods_from_pickles(pos)
+neighborhoods_to_measure = extract_neighborhoods_from_pickles(pos, populations=populations)
 all_df_pairs = []
 if os.path.exists(previous_pair_table_path):
 	df_0 = pd.read_csv(previous_pair_table_path)

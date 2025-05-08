@@ -25,6 +25,7 @@ import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
 from celldetective.gui import Styles
 from celldetective.measure import contour_of_instance_segmentation
+from celldetective.utils import pretty_table
 
 class SignalAnnotator(QMainWindow, Styles):
 	"""
@@ -51,12 +52,8 @@ class SignalAnnotator(QMainWindow, Styles):
 		self.recently_modified = False
 		self.selection = []
 
-		if self.mode == "targets":
-			self.instructions_path = self.exp_dir + os.sep.join(['configs', 'signal_annotator_config_targets.json'])
-			self.trajectories_path = self.pos + os.sep.join(['output','tables','trajectories_targets.csv'])
-		elif self.mode == "effectors":
-			self.instructions_path = self.exp_dir + os.sep.join(['configs', 'signal_annotator_config_effectors.json'])
-			self.trajectories_path = self.pos + os.sep.join(['output','tables','trajectories_effectors.csv'])
+		self.instructions_path = self.exp_dir + os.sep.join(['configs', f'signal_annotator_config_{self.mode}.json'])
+		self.trajectories_path = self.pos + os.sep.join(['output','tables',f'trajectories_{self.mode}.csv'])
 
 		self.screen_height = self.parent_window.parent_window.parent_window.screen_height
 		self.screen_width = self.parent_window.parent_window.parent_window.screen_width
@@ -787,10 +784,12 @@ class SignalAnnotator(QMainWindow, Styles):
 			# self.columns_to_rescale = [col for t,col in zip(is_number_test,self.df_tracks.columns) if t]
 			# print(self.columns_to_rescale)
 
-			cols_to_remove = ['status', 'status_color', 'class_color', 'TRACK_ID', 'FRAME', 'x_anim', 'y_anim', 't',
+			cols_to_remove = ['group', 'group_color', 'status', 'status_color', 'class_color', 'TRACK_ID', 'FRAME',
+							  'x_anim', 'y_anim', 't','dummy','group_color',
 							  'state', 'generation', 'root', 'parent', 'class_id', 'class', 't0', 'POSITION_X',
-							  'POSITION_Y', 'position', 'well', 'well_index', 'well_name', 'pos_name', 'index',] + self.class_cols
-			
+							  'POSITION_Y', 'position', 'well', 'well_index', 'well_name', 'pos_name', 'index',
+							  'concentration', 'cell_type', 'antibody', 'pharmaceutical_agent', 'ID'] + self.class_cols
+
 			meta = get_experiment_metadata(self.exp_dir)
 			if meta is not None:
 				keys = list(meta.keys())
@@ -829,12 +828,14 @@ class SignalAnnotator(QMainWindow, Styles):
 			cclass = group[self.class_name].to_numpy()[0]
 			timeline = group['FRAME'].to_numpy()
 			status = np.zeros_like(timeline)
+			
 			if t0 > 0:
-				status[timeline >= t0] = 1.
-			if cclass == 2:
-				status[:] = 2
+				status[timeline >= t0] = 1.			
+			# if cclass == 2:
+			# 	status[:] = 1.
 			if cclass > 2:
 				status[:] = 42
+
 			status_color = [color_from_status(s) for s in status]
 			class_color = [color_from_class(cclass) for i in range(len(status))]
 
@@ -852,7 +853,7 @@ class SignalAnnotator(QMainWindow, Styles):
 
 		to_remove = ['TRACK_ID', 'FRAME', 'x_anim', 'y_anim', 't', 'state', 'generation', 'root', 'parent', 'class_id',
 					 'class', 't0', 'POSITION_X', 'POSITION_Y', 'position', 'well', 'well_index', 'well_name',
-					 'pos_name', 'index','class_color','status_color']
+					 'pos_name', 'index','class_color','status_color','dummy','group_color']
 
 		meta = get_experiment_metadata(self.exp_dir)
 		if meta is not None:
@@ -882,7 +883,11 @@ class SignalAnnotator(QMainWindow, Styles):
 			for i in range(len(self.signal_choice_cb)):
 
 				signal_choice = self.signal_choice_cb[i].currentText()
-				self.lines[i].set_label(signal_choice)
+				lbl = signal_choice
+				n_cut = 15
+				if len(lbl)>n_cut:
+					lbl = lbl[:(n_cut-3)]+'...'
+				self.lines[i].set_label(lbl)
 
 				if signal_choice == "--":
 					self.lines[i].set_xdata([])
@@ -914,6 +919,7 @@ class SignalAnnotator(QMainWindow, Styles):
 			self.cell_ax.legend()
 			self.cell_fcanvas.canvas.draw()
 		except Exception as e:
+			print(e)
 			pass
 		
 		if len(range_values)>0:
@@ -1411,12 +1417,15 @@ class MeasureAnnotator(SignalAnnotator):
 		self.selection = []
 		self.int_validator = QIntValidator()
 		self.current_alpha=0.5
-		if self.mode == "targets":
-			self.instructions_path = self.exp_dir + os.sep.join(['configs','signal_annotator_config_targets.json'])
-			self.trajectories_path = self.pos + os.sep.join(['output','tables','trajectories_targets.csv'])
-		elif self.mode == "effectors":
-			self.instructions_path = self.exp_dir + os.sep.join(['configs','signal_annotator_config_effectors.json'])
-			self.trajectories_path = self.pos + os.sep.join(['output','tables','trajectories_effectors.csv'])
+		self.value_magnitude = 1
+
+		epsilon = 0.01
+		self.observed_min_intensity = 0
+		self.observed_max_intensity = 0 + epsilon
+
+
+		self.instructions_path = self.exp_dir + os.sep.join(['configs',f'signal_annotator_config_{self.mode}.json'])
+		self.trajectories_path = self.pos + os.sep.join(['output','tables',f'trajectories_{self.mode}.csv'])		
 
 		self.screen_height = self.parent_window.parent_window.parent_window.screen_height
 		self.screen_width = self.parent_window.parent_window.parent_window.screen_width
@@ -1453,6 +1462,7 @@ class MeasureAnnotator(SignalAnnotator):
 
 		self.setAttribute(Qt.WA_DeleteOnClose)
 		self.previous_index = None
+
 
 	def static_image(self):
 
@@ -1523,6 +1533,7 @@ class MeasureAnnotator(SignalAnnotator):
 		current_yvalues = []
 		all_median_values = []
 		labels = []
+		range_values = []
 
 		for i in range(len(self.signal_choice_cb)):
 
@@ -1539,6 +1550,7 @@ class MeasureAnnotator(SignalAnnotator):
 				all_ydata = self.df_tracks.loc[:, signal_choice].to_numpy()
 				ydataNaN = ydata
 				ydata = ydata[ydata == ydata]  # remove nan
+
 				current_ydata = self.df_tracks.loc[
 					(self.df_tracks['FRAME'] == current_frame), signal_choice].to_numpy()
 				current_ydata = current_ydata[current_ydata == current_ydata]
@@ -1546,12 +1558,16 @@ class MeasureAnnotator(SignalAnnotator):
 				yvalues.extend(ydataNaN)
 				current_yvalues.append(current_ydata)
 				all_yvalues.append(all_ydata)
+				range_values.extend(all_ydata)
 				labels.append(signal_choice)
 
 		self.cell_ax.clear()
 
 		if len(yvalues) > 0:
-			self.cell_ax.boxplot(all_yvalues, showfliers=self.show_fliers)
+			try:
+				self.cell_ax.boxplot(all_yvalues, showfliers=self.show_fliers)
+			except Exception as e:
+				print(f"{e=}")
 			ylim = self.cell_ax.get_ylim()
 			self.cell_ax.set_ylim(ylim)
 			x_pos = np.arange(len(all_yvalues)) + 1
@@ -1564,6 +1580,20 @@ class MeasureAnnotator(SignalAnnotator):
 			
 			self.cell_ax.plot(x_pos, yvalues, marker='H', linestyle='None', color=tab10.colors[3], alpha=1)
 
+			range_values = np.array(range_values)
+			if len(range_values[range_values==range_values])>0:
+
+				if len(range_values[range_values>0])>0:
+					self.value_magnitude = np.nanmin(range_values[range_values>0]) - 0.03*(np.nanmax(range_values[range_values>0]) - np.nanmin(range_values[range_values>0]))
+				else:
+					self.value_magnitude = 1
+
+				self.non_log_ymin = np.nanmin(range_values) - 0.03*(np.nanmax(range_values) - np.nanmin(range_values))
+				self.non_log_ymax = np.nanmax(range_values) + 0.03*(np.nanmax(range_values) - np.nanmin(range_values))
+				if self.cell_ax.get_yscale()=='linear':
+					self.cell_ax.set_ylim(self.non_log_ymin, self.non_log_ymax)
+				else:
+					self.cell_ax.set_ylim(self.value_magnitude, self.non_log_ymax)
 
 		else:
 			self.cell_ax.text(0.5, 0.5, "No data available", horizontalalignment='center',
@@ -1692,14 +1722,12 @@ class MeasureAnnotator(SignalAnnotator):
 		self.class_cols = np.array([c.startswith('group') or c.startswith('status') for c in list(self.df_tracks.columns)])
 		self.class_cols = list(cols[self.class_cols])
 
-		try:
-			self.class_cols.remove('group_id')
-		except Exception:
-			pass
-		try:
-			self.class_cols.remove('group_color')
-		except Exception:
-			pass
+		to_remove = ['group_id','group_color','class_id','class_color']
+		for col in to_remove:
+			try:
+				self.class_cols.remove(col)
+			except Exception:
+				pass
 
 		self.class_choice_cb.addItems(self.class_cols)
 		self.class_choice_cb.currentIndexChanged.connect(self.changed_class)
@@ -1957,7 +1985,7 @@ class MeasureAnnotator(SignalAnnotator):
 				print(f"Error {e}...")
 
 	def set_next_frame(self):
-
+		
 		self.current_frame = self.current_frame + 1
 		if self.current_frame > self.len_movie - 1:
 			self.current_frame == self.len_movie - 1
@@ -1966,7 +1994,7 @@ class MeasureAnnotator(SignalAnnotator):
 		self.start_btn.setShortcut(QKeySequence("f"))
 
 	def set_previous_frame(self):
-
+		
 		self.current_frame = self.current_frame - 1
 		if self.current_frame < 0:
 			self.current_frame == 0
@@ -1998,8 +2026,10 @@ class MeasureAnnotator(SignalAnnotator):
 		self.class_choice_cb.clear()
 		cols = np.array(self.df_tracks.columns)
 		self.class_cols = np.array([c.startswith('group') for c in list(self.df_tracks.columns)])
+		
 		self.class_cols = list(cols[self.class_cols])
 		self.class_cols.remove('group_color')
+
 		self.class_choice_cb.addItems(self.class_cols)
 		idx = self.class_choice_cb.findText(self.target_class)
 		self.status_name = self.target_class
@@ -2113,6 +2143,7 @@ class MeasureAnnotator(SignalAnnotator):
 		self.fcanvas.canvas.draw()
 
 	def assign_color_state(self, state):
+
 		if np.isnan(state):
 		 	state = "nan"
 		return self.state_color_map[state]
@@ -2141,23 +2172,23 @@ class MeasureAnnotator(SignalAnnotator):
 		return (self.im, self.status_scatter,self.im_mask,)
 
 	def compute_status_and_colors(self):
-		print('compute status and colors!')
+		
 		if self.class_choice_cb.currentText() == '':
 			self.status_name=self.target_class
 		else:
 			self.status_name = self.class_choice_cb.currentText()
 
-		print(f'{self.status_name=}')
 		if self.status_name not in self.df_tracks.columns:
-			print('not in df, make column')
+			print('Creating a new status for visualization...')
 			self.make_status_column()
 		else:
+			print(f'Generating per-state colors for the status "{self.status_name}"...')
 			all_states = self.df_tracks.loc[:, self.status_name].tolist()
 			all_states = np.array(all_states)
 			self.state_color_map = color_from_state(all_states, recently_modified=False)
-			print(f'{self.state_color_map=}')
+			print(f'Color mapping for "{self.status_name}":')
+			pretty_table(self.state_color_map)
 			self.df_tracks['group_color'] = self.df_tracks[self.status_name].apply(self.assign_color_state)
-			print(self.df_tracks['group_color'])
 
 	def del_event_class(self):
 
@@ -2217,16 +2248,23 @@ class MeasureAnnotator(SignalAnnotator):
 				self.df_tracks = self.df_tracks.sort_values(by=['ID', 'FRAME'])
 
 			cols = np.array(self.df_tracks.columns)
-			self.class_cols = np.array([c.startswith('group') for c in list(self.df_tracks.columns)])
+			self.class_cols = np.array([c.startswith('group') or c.startswith('class') for c in list(self.df_tracks.columns)])
 			self.class_cols = list(cols[self.class_cols])
-			try:
-				self.class_cols.remove('class_id')
-			except:
-				pass
-			try:
-				self.class_cols.remove('group_color')
-			except:
-				pass
+
+			to_remove = ['class_id','group_color','class_color']
+			for col in to_remove:
+				try:
+					self.class_cols.remove(col)
+				except:
+					pass
+			# try:
+			# 	self.class_cols.remove('class_id')
+			# except:
+			# 	pass
+			# try:
+			# 	self.class_cols.remove('group_color')
+			# except:
+			# 	pass
 			if len(self.class_cols) > 0:
 				self.status = self.class_cols[0]
 
@@ -2286,7 +2324,7 @@ class MeasureAnnotator(SignalAnnotator):
 			# print(self.columns_to_rescale)
 
 			cols_to_remove = ['group', 'group_color', 'status', 'status_color', 'class_color', 'TRACK_ID', 'FRAME',
-							  'x_anim', 'y_anim', 't',
+							  'x_anim', 'y_anim', 't','dummy','group_color',
 							  'state', 'generation', 'root', 'parent', 'class_id', 'class', 't0', 'POSITION_X',
 							  'POSITION_Y', 'position', 'well', 'well_index', 'well_name', 'pos_name', 'index',
 							  'concentration', 'cell_type', 'antibody', 'pharmaceutical_agent', 'ID'] + self.class_cols
@@ -2348,6 +2386,10 @@ class MeasureAnnotator(SignalAnnotator):
 			self.modify()
 
 		self.draw_frame(self.current_frame)
+		self.vmin = self.contrast_slider.value()[0]
+		self.vmax = self.contrast_slider.value()[1]
+		self.im.set_clim(vmin=self.vmin, vmax=self.vmax)
+
 		self.fcanvas.canvas.draw()
 		self.plot_signals()
 
@@ -2443,7 +2485,6 @@ class MeasureAnnotator(SignalAnnotator):
 		all_states = self.df_tracks.loc[:, self.status_name].tolist()
 		all_states = np.array(all_states)
 		self.state_color_map = color_from_state(all_states, recently_modified=False)
-		print(f'{self.state_color_map=}')
 
 		self.df_tracks['group_color'] = self.df_tracks[self.status_name].apply(self.assign_color_state)
 
@@ -2538,13 +2579,26 @@ class MeasureAnnotator(SignalAnnotator):
 		"""
 
 		# self.clear_post_threshold_options()
-
+		self.previous_channel = self.current_channel
 		self.current_channel = self.choose_channel.currentIndex()
 
 		t = int(self.frame_slider.value())
 		idx = t * self.nbr_channels + self.current_channel
 		self.img = load_frames(idx, self.stack_path, normalize_input=False)
+
+		if self.previous_channel != self.current_channel:
+			# reinitialize intensity bounds
+			epsilon = 0.01
+			self.observed_min_intensity = 0
+			self.observed_max_intensity = 0 + epsilon
+
 		if self.img is not None:
+			max_img = np.nanmax(self.img)
+			min_img = np.nanmin(self.img)
+			if max_img > self.observed_max_intensity:
+				self.observed_max_intensity = max_img
+			if min_img < self.observed_min_intensity:
+				self.observed_min_intensity = min_img
 			self.refresh_imshow()
 		# self.redo_histogram()
 		else:
@@ -2558,13 +2612,19 @@ class MeasureAnnotator(SignalAnnotator):
 
 		"""
 
-		self.vmin = np.nanpercentile(self.img.flatten(), 1)
-		self.vmax = np.nanpercentile(self.img.flatten(), 99.)
+		if self.previous_channel != self.current_channel:
 
-		self.contrast_slider.disconnect()
-		self.contrast_slider.setRange(np.nanmin(self.img), np.nanmax(self.img))
-		self.contrast_slider.setValue([self.vmin, self.vmax])
-		self.contrast_slider.valueChanged.connect(self.contrast_slider_action)
+			self.vmin = np.nanpercentile(self.img.flatten(), 1)
+			self.vmax = np.nanpercentile(self.img.flatten(), 99.)
+
+			self.contrast_slider.disconnect()
+			self.contrast_slider.setRange(np.nanmin(self.img), np.nanmax(self.img))
+			self.contrast_slider.setValue([self.vmin, self.vmax])
+			self.contrast_slider.valueChanged.connect(self.contrast_slider_action)
+		else:
+			#self.contrast_slider.disconnect()
+			self.contrast_slider.setRange(self.observed_min_intensity, self.observed_max_intensity)
+			#self.contrast_slider.valueChanged.connect(self.contrast_slider_action)
 
 		self.im.set_data(self.img)
 

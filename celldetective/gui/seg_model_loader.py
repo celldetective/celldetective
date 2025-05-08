@@ -27,10 +27,7 @@ class SegmentationModelLoader(QWidget, Styles):
 		super().__init__()
 		self.parent_window = parent_window
 		self.mode = self.parent_window.mode
-		if self.mode=="targets":
-			self.target_folder = "segmentation_targets"
-		elif self.mode=="effectors":
-			self.target_folder = "segmentation_effectors"
+		self.target_folder = f"segmentation_{self.mode}"
 		self.setWindowTitle('Upload model')
 		self.generate_content()
 		self.setWindowIcon(self.celldetective_icon)
@@ -392,16 +389,11 @@ class SegmentationModelLoader(QWidget, Styles):
 			if not isinstance(self.filename, list):
 				if not self.filename is None:
 					self.filename = [self.filename]
-			if self.mode=="targets":
-				self.parent_window.threshold_config_targets = self.filename
-				self.parent_window.seg_model_list.setCurrentText('Threshold')
-				print('Path to the traditional segmentation pipeline successfully set in celldetective...')
-				self.close()
-			elif self.mode=="effectors":
-				self.parent_window.threshold_config_effectors = self.filename
-				self.parent_window.seg_model_list.setCurrentText('Threshold')
-				print('Path to the traditional segmentation pipeline successfully set in celldetective...')
-				self.close()
+
+			idx = self.parent_window.parent_window.populations.index(self.mode)
+			self.parent_window.threshold_configs[idx] = self.filename
+			self.parent_window.seg_model_list.setCurrentText('Threshold')
+			self.close()
 
 	def generate_input_config(self):
 
