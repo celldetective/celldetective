@@ -92,8 +92,8 @@ class StackVisualizer(QWidget, Styles):
 			self.generate_frame_slider()
 
 		self.canvas.layout.setContentsMargins(15,15,15,30)
-		self.setAttribute(Qt.WA_DeleteOnClose)
-		center_window(self)
+		#self.setAttribute(Qt.WA_DeleteOnClose)
+		#center_window(self)
 
 	def show(self):
 		# Display the widget
@@ -275,10 +275,12 @@ class StackVisualizer(QWidget, Styles):
 		self.im.set_data(self.init_frame)
 		
 		if self.init_contrast:
-			self.im.autoscale()
-			I_min, I_max = self.im.get_clim()
-			self.contrast_slider.setRange(np.nanmin([self.init_frame,self.last_frame]),np.nanmax([self.init_frame,self.last_frame]))
-			self.contrast_slider.setValue((I_min,I_max))
+			imgs = np.array([self.init_frame,self.last_frame])
+			vmin = np.nanpercentile(imgs.flatten(), 1.0)
+			vmax = np.nanpercentile(imgs.flatten(), 99.99)
+			self.contrast_slider.setRange(np.nanmin(imgs),np.nanmax(imgs))
+			self.contrast_slider.setValue((vmin,vmax))
+			self.im.set_clim(vmin,vmax)
 
 		if self.create_contrast_slider:
 			self.change_contrast(self.contrast_slider.value())
@@ -318,13 +320,17 @@ class ThresholdedStackVisualizer(StackVisualizer):
 	  with interactive sliders for threshold and mask opacity adjustment.
 	"""
 
-	def __init__(self, preprocessing=None, parent_le=None, initial_threshold=5, initial_mask_alpha=0.5, *args, **kwargs):
+	def __init__(self, preprocessing=None, parent_le=None, initial_threshold=5, initial_mask_alpha=0.5, show_opacity_slider=True, show_threshold_slider=True, *args, **kwargs):
 		# Initialize the widget and its attributes		
 		super().__init__(*args, **kwargs)
 		self.preprocessing = preprocessing
 		self.thresh = initial_threshold
 		self.mask_alpha = initial_mask_alpha
 		self.parent_le = parent_le
+		self.show_opacity_slider = show_opacity_slider
+		self.show_threshold_slider = show_threshold_slider
+		self.thresholded = False
+
 		self.compute_mask(self.thresh)
 		self.generate_mask_imshow()
 		self.generate_threshold_slider()
@@ -365,7 +371,8 @@ class ThresholdedStackVisualizer(StackVisualizer):
 										)
 		thresh_layout.setContentsMargins(15,0,15,0)
 		self.threshold_slider.valueChanged.connect(self.change_threshold)
-		self.canvas.layout.addLayout(thresh_layout)
+		if self.show_threshold_slider:
+			self.canvas.layout.addLayout(thresh_layout)
 
 	def generate_opacity_slider(self):
 		# Generate the opacity slider for the mask
@@ -379,7 +386,8 @@ class ThresholdedStackVisualizer(StackVisualizer):
 										)
 		opacity_layout.setContentsMargins(15,0,15,0)
 		self.opacity_slider.valueChanged.connect(self.change_mask_opacity)
-		self.canvas.layout.addLayout(opacity_layout)
+		if self.show_opacity_slider:
+			self.canvas.layout.addLayout(opacity_layout)
 
 	def change_mask_opacity(self, value):
 		# Change the opacity of the mask
@@ -396,9 +404,14 @@ class ThresholdedStackVisualizer(StackVisualizer):
 		self.canvas.canvas.draw_idle()
 
 	def change_frame(self, value):
-		# Change the displayed frame and update the threshold		
+		# Change the displayed frame and update the threshold
+		if self.thresholded:
+			self.init_contrast = True
 		super().change_frame(value)
 		self.change_threshold(self.threshold_slider.value())
+		if self.thresholded:
+			self.thresholded = False
+			self.init_contrast = False
 
 	def compute_mask(self, threshold_value):
 		# Compute the mask based on the threshold value
@@ -409,9 +422,23 @@ class ThresholdedStackVisualizer(StackVisualizer):
 	def preprocess_image(self):
 		# Preprocess the image before thresholding		
 		if self.preprocessing is not None:
-
 			assert isinstance(self.preprocessing, list)
-			self.processed_image = filter_image(self.init_frame.copy(),filters=self.preprocessing)
+			self.processed_image = filter_image(self.init_frame.copy().astype(float),filters=self.preprocessing)
+
+	def set_preprocessing(self, activation_protocol):
+
+		self.preprocessing = activation_protocol
+		self.preprocess_image()
+
+		self.im.set_data(self.processed_image)
+		vmin = np.nanpercentile(self.processed_image, 1.0)
+		vmax = np.nanpercentile(self.processed_image, 99.99)
+		self.contrast_slider.setRange(np.nanmin(self.processed_image),
+									  np.nanmax(self.processed_image))
+		self.contrast_slider.setValue((vmin, vmax))
+		self.im.set_clim(vmin,vmax)
+		self.canvas.canvas.draw_idle()
+		self.thresholded = True
 
 
 class CellEdgeVisualizer(StackVisualizer):

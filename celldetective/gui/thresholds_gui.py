@@ -8,6 +8,7 @@ from celldetective.gui.gui_utils import PreprocessingLayout
 from celldetective.utils import get_software_location, extract_experiment_channels, rename_intensity_column, estimate_unreliable_edge
 from celldetective.io import auto_load_number_of_frames, load_frames
 from celldetective.segmentation import threshold_image, identify_markers_from_binary, apply_watershed
+from celldetective.gui.viewers import ThresholdedStackVisualizer
 import scipy.ndimage as ndi
 from PyQt5.QtCore import Qt, QSize
 from glob import glob
@@ -55,9 +56,9 @@ class ThresholdConfigWizard(QMainWindow, Styles):
 		self.onlyInt = QIntValidator()
 		self.cell_properties = ['centroid', 'area', 'perimeter', 'eccentricity', 'intensity_mean', 'solidity']
 		self.edge = None
+		self.filters = []
 
 		self.config_out_name = f"threshold_{self.mode}.json"
-
 		self.locate_stack()
 		if self.img is not None:
 			self.threshold_slider = QLabeledDoubleRangeSlider()
@@ -112,21 +113,6 @@ class ThresholdConfigWizard(QMainWindow, Styles):
 		# Right panel
 		self.right_panel = QVBoxLayout()
 		self.populate_right_panel()
-
-		# threhsold options
-		# self.left_panel.addWidget(self.cell_fcanvas)
-
-		# Animation
-		# self.right_panel.addWidget(self.fcanvas)
-
-		# self.populate_left_panel()
-		# grid.addLayout(self.left_side, 0, 0, 1, 1)
-
-		# self.scroll_area.setAlignment(Qt.AlignCenter)
-		# self.scroll_area.setLayout(self.left_panel)
-		# self.scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-		# self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-		# self.scroll_area.setWidgetResizable(True)
 
 		main_layout.addWidget(self.scroll_area, 35)
 		main_layout.addLayout(self.right_panel, 65)
@@ -345,41 +331,44 @@ class ThresholdConfigWizard(QMainWindow, Styles):
 
 	def populate_right_panel(self):
 
-		self.right_panel.addWidget(self.fcanvas, 70)
+		self.viewer = ThresholdedStackVisualizer(preprocessing=self.filters,show_opacity_slider=False, show_threshold_slider=False, stack_path=self.stack_path, frame_slider=True, contrast_slider=True, channel_cb=True, channel_names=self.channel_names, n_channels=self.nbr_channels, target_channel=0, PxToUm=None)
+		self.right_panel.addWidget(self.viewer.canvas)
 
-		channel_hbox = QHBoxLayout()
-		channel_hbox.setContentsMargins(150, 30, 150, 5)
-		self.channels_cb = QComboBox()
-		self.channels_cb.addItems(self.channel_names)
-		self.channels_cb.currentTextChanged.connect(self.reload_frame)
-		channel_hbox.addWidget(QLabel('channel: '), 10)
-		channel_hbox.addWidget(self.channels_cb, 90)
-		self.right_panel.addLayout(channel_hbox)
-
-		frame_hbox = QHBoxLayout()
-		frame_hbox.setContentsMargins(150, 5, 150, 5)
-		self.frame_slider = QLabeledSlider()
-		self.frame_slider.setSingleStep(1)
-		self.frame_slider.setOrientation(1)
-		self.frame_slider.setRange(0, self.len_movie - 1)
-		self.frame_slider.setValue(0)
-		self.frame_slider.valueChanged.connect(self.reload_frame)
-		frame_hbox.addWidget(QLabel('frame: '), 10)
-		frame_hbox.addWidget(self.frame_slider, 90)
-		self.right_panel.addLayout(frame_hbox)
-
-		contrast_hbox = QHBoxLayout()
-		contrast_hbox.setContentsMargins(150, 5, 150, 5)
-		self.contrast_slider = QLabeledDoubleRangeSlider()
-		self.contrast_slider.setSingleStep(0.00001)
-		self.contrast_slider.setTickInterval(0.00001)
-		self.contrast_slider.setOrientation(1)
-		self.contrast_slider.setRange(np.amin(self.img[self.img==self.img]), np.amax(self.img[self.img==self.img]))
-		self.contrast_slider.setValue([np.percentile(self.img.flatten(), 1), np.percentile(self.img.flatten(), 99.99)])
-		self.contrast_slider.valueChanged.connect(self.contrast_slider_action)
-		contrast_hbox.addWidget(QLabel('contrast: '))
-		contrast_hbox.addWidget(self.contrast_slider, 90)
-		self.right_panel.addLayout(contrast_hbox)
+		# self.right_panel.addWidget(self.fcanvas, 70)
+		#
+		# channel_hbox = QHBoxLayout()
+		# channel_hbox.setContentsMargins(150, 30, 150, 5)
+		# self.channels_cb = QComboBox()
+		# self.channels_cb.addItems(self.channel_names)
+		# self.channels_cb.currentTextChanged.connect(self.reload_frame)
+		# channel_hbox.addWidget(QLabel('channel: '), 10)
+		# channel_hbox.addWidget(self.channels_cb, 90)
+		# self.right_panel.addLayout(channel_hbox)
+		#
+		# frame_hbox = QHBoxLayout()
+		# frame_hbox.setContentsMargins(150, 5, 150, 5)
+		# self.frame_slider = QLabeledSlider()
+		# self.frame_slider.setSingleStep(1)
+		# self.frame_slider.setOrientation(1)
+		# self.frame_slider.setRange(0, self.len_movie - 1)
+		# self.frame_slider.setValue(0)
+		# self.frame_slider.valueChanged.connect(self.reload_frame)
+		# frame_hbox.addWidget(QLabel('frame: '), 10)
+		# frame_hbox.addWidget(self.frame_slider, 90)
+		# self.right_panel.addLayout(frame_hbox)
+		#
+		# contrast_hbox = QHBoxLayout()
+		# contrast_hbox.setContentsMargins(150, 5, 150, 5)
+		# self.contrast_slider = QLabeledDoubleRangeSlider()
+		# self.contrast_slider.setSingleStep(0.00001)
+		# self.contrast_slider.setTickInterval(0.00001)
+		# self.contrast_slider.setOrientation(1)
+		# self.contrast_slider.setRange(np.amin(self.img[self.img==self.img]), np.amax(self.img[self.img==self.img]))
+		# self.contrast_slider.setValue([np.percentile(self.img.flatten(), 1), np.percentile(self.img.flatten(), 99.99)])
+		# self.contrast_slider.valueChanged.connect(self.contrast_slider_action)
+		# contrast_hbox.addWidget(QLabel('contrast: '))
+		# contrast_hbox.addWidget(self.contrast_slider, 90)
+		# self.right_panel.addLayout(contrast_hbox)
 
 	def locate_stack(self):
 
@@ -536,17 +525,17 @@ class ThresholdConfigWizard(QMainWindow, Styles):
 		"""
 
 		self.clear_post_threshold_options()
-
-		self.current_channel = self.channels_cb.currentIndex()
-		t = int(self.frame_slider.value())
-		idx = t * self.nbr_channels + self.current_channel
-		self.img = load_frames(idx, self.stack_path, normalize_input=False)
-		if self.img is not None:
-			self.refresh_imshow()
-			self.update_histogram()
-		# self.redo_histogram()
-		else:
-			print('Frame could not be loaded...')
+		self.viewer.set_preprocessing(self.filters)
+		# self.current_channel = self.channels_cb.currentIndex()
+		# t = int(self.frame_slider.value())
+		# idx = t * self.nbr_channels + self.current_channel
+		# self.img = load_frames(idx, self.stack_path, normalize_input=False)
+		# if self.img is not None:
+		# 	self.refresh_imshow()
+		# 	self.update_histogram()
+		# # self.redo_histogram()
+		# else:
+		# 	print('Frame could not be loaded...')
 
 	# def redo_histogram(self):
 	# 	self.ax_hist.clear()
@@ -575,14 +564,14 @@ class ThresholdConfigWizard(QMainWindow, Styles):
 		self.vmin = np.nanpercentile(self.img.flatten(), 1)
 		self.vmax = np.nanpercentile(self.img.flatten(), 99.)
 
-		self.contrast_slider.disconnect()
-		self.contrast_slider.setRange(np.amin(self.img[self.img==self.img]), np.amax(self.img[self.img==self.img]))
-		self.contrast_slider.setValue([self.vmin, self.vmax])
-		self.contrast_slider.valueChanged.connect(self.contrast_slider_action)
-
-		self.im.set_data(self.img)
-		self.im.set_clim(vmin=self.vmin, vmax=self.vmax)
-		self.fcanvas.canvas.draw_idle()
+		# self.contrast_slider.disconnect()
+		# self.contrast_slider.setRange(np.amin(self.img[self.img==self.img]), np.amax(self.img[self.img==self.img]))
+		# self.contrast_slider.setValue([self.vmin, self.vmax])
+		# self.contrast_slider.valueChanged.connect(self.contrast_slider_action)
+		#
+		# self.im.set_data(self.img)
+		# self.im.set_clim(vmin=self.vmin, vmax=self.vmax)
+		# self.fcanvas.canvas.draw_idle()
 
 	# self.initialize_histogram()
 
@@ -593,11 +582,11 @@ class ThresholdConfigWizard(QMainWindow, Styles):
 
 		"""
 
+		self.filters = self.preprocessing.list.items
 		self.reload_frame()
-		filters = self.preprocessing.list.items
-		self.edge = estimate_unreliable_edge(filters)
-		self.img = filter_image(self.img, filters)
-		self.refresh_imshow()
+		# self.edge = estimate_unreliable_edge(self.filters)
+		# self.img = filter_image(self.img, self.filters)
+		# self.refresh_imshow()
 		self.update_histogram()
 
 	def threshold_changed(self, value):
