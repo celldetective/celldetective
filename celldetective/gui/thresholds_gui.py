@@ -58,12 +58,15 @@ class ThresholdConfigWizard(QMainWindow, Styles):
 		self.edge = None
 		self.filters = []
 
-		self.config_out_name = f"threshold_{self.mode}.json"
 		self.locate_stack()
+		self.generate_viewer()
+		self.img = self.viewer.init_frame
+
+		self.config_out_name = f"threshold_{self.mode}.json"
 		if self.img is not None:
 			self.threshold_slider = QLabeledDoubleRangeSlider()
 			self.initialize_histogram()
-			self.show_image()
+			#self.show_image()
 			self.initalize_props_scatter()
 			self.prep_cell_properties()
 			self.populate_widget()
@@ -245,7 +248,7 @@ class ThresholdConfigWizard(QMainWindow, Styles):
 		self.footprint_slider = QLabeledSlider()
 		self.footprint_slider.setSingleStep(1)
 		self.footprint_slider.setOrientation(1)
-		self.footprint_slider.setRange(1, self.binary.shape[0] // 4)
+		self.footprint_slider.setRange(1, self.img.shape[0] // 4)
 		self.footprint_slider.setValue(self.footprint)
 		self.footprint_slider.valueChanged.connect(self.set_footprint)
 		hbox_footprint.addWidget(self.footprint_slider, 30)
@@ -257,7 +260,7 @@ class ThresholdConfigWizard(QMainWindow, Styles):
 		self.min_dist_slider = QLabeledSlider()
 		self.min_dist_slider.setSingleStep(1)
 		self.min_dist_slider.setOrientation(1)
-		self.min_dist_slider.setRange(0, self.binary.shape[0] // 4)
+		self.min_dist_slider.setRange(0, self.img.shape[0] // 4)
 		self.min_dist_slider.setValue(self.min_dist)
 		self.min_dist_slider.valueChanged.connect(self.set_min_dist)
 		hbox_distance.addWidget(self.min_dist_slider, 30)
@@ -329,46 +332,11 @@ class ThresholdConfigWizard(QMainWindow, Styles):
 
 		self.left_panel.addLayout(properties_box)
 
-	def populate_right_panel(self):
-
+	def generate_viewer(self):
 		self.viewer = ThresholdedStackVisualizer(preprocessing=self.filters,show_opacity_slider=False, show_threshold_slider=False, stack_path=self.stack_path, frame_slider=True, contrast_slider=True, channel_cb=True, channel_names=self.channel_names, n_channels=self.nbr_channels, target_channel=0, PxToUm=None)
-		self.right_panel.addWidget(self.viewer.canvas)
 
-		# self.right_panel.addWidget(self.fcanvas, 70)
-		#
-		# channel_hbox = QHBoxLayout()
-		# channel_hbox.setContentsMargins(150, 30, 150, 5)
-		# self.channels_cb = QComboBox()
-		# self.channels_cb.addItems(self.channel_names)
-		# self.channels_cb.currentTextChanged.connect(self.reload_frame)
-		# channel_hbox.addWidget(QLabel('channel: '), 10)
-		# channel_hbox.addWidget(self.channels_cb, 90)
-		# self.right_panel.addLayout(channel_hbox)
-		#
-		# frame_hbox = QHBoxLayout()
-		# frame_hbox.setContentsMargins(150, 5, 150, 5)
-		# self.frame_slider = QLabeledSlider()
-		# self.frame_slider.setSingleStep(1)
-		# self.frame_slider.setOrientation(1)
-		# self.frame_slider.setRange(0, self.len_movie - 1)
-		# self.frame_slider.setValue(0)
-		# self.frame_slider.valueChanged.connect(self.reload_frame)
-		# frame_hbox.addWidget(QLabel('frame: '), 10)
-		# frame_hbox.addWidget(self.frame_slider, 90)
-		# self.right_panel.addLayout(frame_hbox)
-		#
-		# contrast_hbox = QHBoxLayout()
-		# contrast_hbox.setContentsMargins(150, 5, 150, 5)
-		# self.contrast_slider = QLabeledDoubleRangeSlider()
-		# self.contrast_slider.setSingleStep(0.00001)
-		# self.contrast_slider.setTickInterval(0.00001)
-		# self.contrast_slider.setOrientation(1)
-		# self.contrast_slider.setRange(np.amin(self.img[self.img==self.img]), np.amax(self.img[self.img==self.img]))
-		# self.contrast_slider.setValue([np.percentile(self.img.flatten(), 1), np.percentile(self.img.flatten(), 99.99)])
-		# self.contrast_slider.valueChanged.connect(self.contrast_slider_action)
-		# contrast_hbox.addWidget(QLabel('contrast: '))
-		# contrast_hbox.addWidget(self.contrast_slider, 90)
-		# self.right_panel.addLayout(contrast_hbox)
+	def populate_right_panel(self):
+		self.right_panel.addWidget(self.viewer.canvas)
 
 	def locate_stack(self):
 
@@ -402,47 +370,47 @@ class ThresholdConfigWizard(QMainWindow, Styles):
 			self.close()
 		else:
 			self.stack_path = movies[0]
-			print(f'Attempt to read stack {os.path.split(self.stack_path)[-1]}')
-			self.len_movie = self.parent_window.parent_window.parent_window.len_movie
-			len_movie_auto = auto_load_number_of_frames(self.stack_path)
-			if len_movie_auto is not None:
-				self.len_movie = len_movie_auto
-			exp_config = self.exp_dir + "config.ini"
-			self.channel_names, self.channels = extract_experiment_channels(self.exp_dir)
+			# print(f'Attempt to read stack {os.path.split(self.stack_path)[-1]}')
+			# self.len_movie = self.parent_window.parent_window.parent_window.len_movie
+			# len_movie_auto = auto_load_number_of_frames(self.stack_path)
+			# if len_movie_auto is not None:
+			# 	self.len_movie = len_movie_auto
+			# exp_config = self.exp_dir + "config.ini"
+			self.channel_names, _ = extract_experiment_channels(self.exp_dir)
 			self.channel_names = np.array(self.channel_names)
-			self.channels = np.array(self.channels)
-			self.nbr_channels = len(self.channels)
-			self.current_channel = 0
-			self.img = load_frames(0, self.stack_path, normalize_input=False)
-			print(f'Detected image shape: {self.img.shape}...')
+			# self.channels = np.array(self.channels)
+			self.nbr_channels = len(self.channel_names)
+			# self.current_channel = 0
+			# self.img = load_frames(0, self.stack_path, normalize_input=False)
+			# print(f'Detected image shape: {self.img.shape}...')
 
-	def show_image(self):
-
-		"""
-		Load an image.
-
-		"""
-
-		self.fig, self.ax = plt.subplots(tight_layout=True)
-		self.fcanvas = FigureCanvas(self.fig, interactive=True)
-		self.ax.clear()
-
-		self.im = self.ax.imshow(self.img, cmap='gray', interpolation='none')
-
-		self.binary = threshold_image(self.img, self.threshold_slider.value()[0], self.threshold_slider.value()[1],
-									  foreground_value=1., fill_holes=True, edge_exclusion=None)
-		self.thresholded_image = np.ma.masked_where(self.binary == 0., self.binary)
-		self.image_thresholded = self.ax.imshow(self.thresholded_image, cmap="viridis", alpha=0.5, interpolation='none')
-
-		self.ax.set_xticks([])
-		self.ax.set_yticks([])
-		self.ax.set_aspect('equal')
-
-		self.fig.set_facecolor('none')  # or 'None'
-		self.fig.canvas.setStyleSheet("background-color: black;")
-		self.scat_markers = self.ax.scatter([], [], color="tab:red")
-
-		self.fcanvas.canvas.draw()
+	# def show_image(self):
+	#
+	# 	"""
+	# 	Load an image.
+	#
+	# 	"""
+	#
+	# 	self.fig, self.ax = plt.subplots(tight_layout=True)
+	# 	self.fcanvas = FigureCanvas(self.fig, interactive=True)
+	# 	self.ax.clear()
+	#
+	# 	self.im = self.ax.imshow(self.img, cmap='gray', interpolation='none')
+	#
+	# 	self.binary = threshold_image(self.img, self.threshold_slider.value()[0], self.threshold_slider.value()[1],
+	# 								  foreground_value=1., fill_holes=True, edge_exclusion=None)
+	# 	self.thresholded_image = np.ma.masked_where(self.binary == 0., self.binary)
+	# 	self.image_thresholded = self.ax.imshow(self.thresholded_image, cmap="viridis", alpha=0.5, interpolation='none')
+	#
+	# 	self.ax.set_xticks([])
+	# 	self.ax.set_yticks([])
+	# 	self.ax.set_aspect('equal')
+	#
+	# 	self.fig.set_facecolor('none')  # or 'None'
+	# 	self.fig.canvas.setStyleSheet("background-color: black;")
+	# 	self.scat_markers = self.ax.scatter([], [], color="tab:red")
+	#
+	# 	self.fcanvas.canvas.draw()
 
 	def initalize_props_scatter(self):
 
@@ -459,6 +427,8 @@ class ThresholdConfigWizard(QMainWindow, Styles):
 		self.propscanvas.canvas.setMinimumHeight(self.screen_height // 5)
 
 	def initialize_histogram(self):
+
+		self.img = self.viewer.init_frame
 
 		self.fig_hist, self.ax_hist = plt.subplots(tight_layout=True)
 		self.canvas_hist = FigureCanvas(self.fig_hist, interactive=False)
@@ -526,32 +496,20 @@ class ThresholdConfigWizard(QMainWindow, Styles):
 
 		self.clear_post_threshold_options()
 		self.viewer.set_preprocessing(self.filters)
-		# self.current_channel = self.channels_cb.currentIndex()
-		# t = int(self.frame_slider.value())
-		# idx = t * self.nbr_channels + self.current_channel
-		# self.img = load_frames(idx, self.stack_path, normalize_input=False)
-		# if self.img is not None:
-		# 	self.refresh_imshow()
-		# 	self.update_histogram()
-		# # self.redo_histogram()
-		# else:
-		# 	print('Frame could not be loaded...')
+		self.img = self.viewer.processed_image
+		self.update_histogram()
 
-	# def redo_histogram(self):
-	# 	self.ax_hist.clear()
-	# 	self.canvas_hist.canvas.draw()
-
-	def contrast_slider_action(self):
-
-		"""
-		Recontrast the imshow as the contrast slider is moved.
-		"""
-
-		self.vmin = self.contrast_slider.value()[0]
-		self.vmax = self.contrast_slider.value()[1]
-		self.im.set_clim(vmin=self.vmin, vmax=self.vmax)
-
-		self.fcanvas.canvas.draw_idle()
+	# def contrast_slider_action(self):
+	#
+	# 	"""
+	# 	Recontrast the imshow as the contrast slider is moved.
+	# 	"""
+	#
+	# 	self.vmin = self.contrast_slider.value()[0]
+	# 	self.vmax = self.contrast_slider.value()[1]
+	# 	self.im.set_clim(vmin=self.vmin, vmax=self.vmax)
+	#
+	# 	self.fcanvas.canvas.draw_idle()
 
 	def refresh_imshow(self):
 
@@ -596,6 +554,7 @@ class ThresholdConfigWizard(QMainWindow, Styles):
 		"""
 
 		self.clear_post_threshold_options()
+		self.viewer.change_threshold(value)
 
 		self.thresh_min = value[0]
 		self.thresh_max = value[1]
@@ -603,8 +562,9 @@ class ThresholdConfigWizard(QMainWindow, Styles):
 		self.min_intensity_line.set_data([self.thresh_min, self.thresh_min], [0, ymax])
 		self.max_intensity_line.set_data([self.thresh_max, self.thresh_max], [0, ymax])
 		self.canvas_hist.canvas.draw_idle()
+
 		# update imshow threshold
-		self.update_threshold()
+		#self.update_threshold()
 
 	def switch_to_log(self):
 
@@ -621,20 +581,20 @@ class ThresholdConfigWizard(QMainWindow, Styles):
 		self.ax_hist.set_ylim(0, self.hist_y.max())
 		self.canvas_hist.canvas.draw_idle()
 
-	def update_threshold(self):
-
-		"""
-
-		Threshold and binarize the image based on the min/max threshold values
-		and display on imshow.
-
-		"""
-
-		self.binary = threshold_image(self.img, self.threshold_slider.value()[0], self.threshold_slider.value()[1],
-									  foreground_value=1., fill_holes=True, edge_exclusion=self.edge)
-		self.thresholded_image = np.ma.masked_where(self.binary == 0., self.binary)
-		self.image_thresholded.set_data(self.thresholded_image)
-		self.fcanvas.canvas.draw_idle()
+	# def update_threshold(self):
+	#
+	# 	"""
+	#
+	# 	Threshold and binarize the image based on the min/max threshold values
+	# 	and display on imshow.
+	#
+	# 	"""
+	#
+	# 	self.binary = threshold_image(self.img, self.threshold_slider.value()[0], self.threshold_slider.value()[1],
+	# 								  foreground_value=1., fill_holes=True, edge_exclusion=self.edge)
+	# 	self.thresholded_image = np.ma.masked_where(self.binary == 0., self.binary)
+	# 	self.image_thresholded.set_data(self.thresholded_image)
+	# 	self.fcanvas.canvas.draw_idle()
 
 	def set_footprint(self):
 		self.footprint = self.footprint_slider.value()
@@ -648,6 +608,8 @@ class ThresholdConfigWizard(QMainWindow, Styles):
 
 	def detect_markers(self):
 
+		self.binary = self.viewer.mask
+
 		self.clear_post_threshold_options()
 
 		if self.binary.ndim == 3:
@@ -657,9 +619,9 @@ class ThresholdConfigWizard(QMainWindow, Styles):
 																 footprint_size=self.footprint, footprint=None,
 																 return_edt=True)
 		if len(self.coords) > 0:
-			self.scat_markers.set_offsets(self.coords[:, [1, 0]])
-			self.scat_markers.set_visible(True)
-			self.fcanvas.canvas.draw()
+			self.viewer.scat_markers.set_offsets(self.coords[:, [1, 0]])
+			self.viewer.scat_markers.set_visible(True)
+			self.viewer.canvas.draw()
 			self.scat_props.set_visible(True)
 			self.watershed_btn.setEnabled(True)
 		else:
@@ -672,16 +634,18 @@ class ThresholdConfigWizard(QMainWindow, Styles):
 		else:
 			self.labels,_ = ndi.label(self.binary.astype(int))
 
-		self.current_channel = self.channels_cb.currentIndex()
-		t = int(self.frame_slider.value())
-		idx = t * self.nbr_channels + self.current_channel
-		self.img = load_frames(idx, self.stack_path, normalize_input=False)
-		self.refresh_imshow()
+		self.viewer.change_frame(self.viewer.frame_slider.value())
+		# self.current_channel = self.channels_cb.currentIndex()
+		# t = int(self.frame_slider.value())
+		# idx = t * self.nbr_channels + self.current_channel
+		#
+		# self.img = load_frames(idx, self.stack_path, normalize_input=False)
+		# self.refresh_imshow()
 
-		self.image_thresholded.set_cmap('tab20c')
-		self.image_thresholded.set_data(np.ma.masked_where(self.labels == 0., self.labels))
-		self.image_thresholded.autoscale()
-		self.fcanvas.canvas.draw_idle()
+		self.viewer.im_mask.set_cmap('tab20c')
+		self.viewer.im_mask.set_data(np.ma.masked_where(self.labels == 0., self.labels))
+		self.viewer.im_mask.autoscale()
+		self.viewer.canvas.canvas.draw_idle()
 
 		self.compute_features()
 		for p in self.properties_box_widgets:
@@ -693,7 +657,7 @@ class ThresholdConfigWizard(QMainWindow, Styles):
 	def compute_features(self):
 
 		# Run regionprops to have properties for filtering
-		intensity_image_idx = [self.nbr_channels * self.frame_slider.value()]
+		intensity_image_idx = [self.nbr_channels * self.viewer.frame_slider.value()]
 		for i in range(self.nbr_channels - 1):
 			intensity_image_idx += [intensity_image_idx[-1] + 1]
 
@@ -721,16 +685,16 @@ class ThresholdConfigWizard(QMainWindow, Styles):
 		self.ax_props.set_xlabel(self.features_cb[1].currentText())
 		self.ax_props.set_ylabel(self.features_cb[0].currentText())
 
-		self.scat_markers.set_offsets(self.props[['centroid-1', 'centroid-0']].to_numpy())
-		self.scat_markers.set_color(['k'] * len(self.props))
-		self.scat_markers.set_facecolor([color_from_class(c) for c in self.props['class'].to_numpy()])
+		self.viewer.scat_markers.set_offsets(self.props[['centroid-1', 'centroid-0']].to_numpy())
+		self.viewer.scat_markers.set_color(['k'] * len(self.props))
+		self.viewer.scat_markers.set_facecolor([color_from_class(c) for c in self.props['class'].to_numpy()])
 
 		self.ax_props.set_xlim(0.75 * self.props[self.features_cb[1].currentText()].min(),
 							   1.05 * self.props[self.features_cb[1].currentText()].max())
 		self.ax_props.set_ylim(0.75 * self.props[self.features_cb[0].currentText()].min(),
 							   1.05 * self.props[self.features_cb[0].currentText()].max())
 		self.propscanvas.canvas.draw_idle()
-		self.fcanvas.canvas.draw_idle()
+		self.viewer.canvas.canvas.draw_idle()
 
 	def prep_cell_properties(self):
 
@@ -781,26 +745,27 @@ class ThresholdConfigWizard(QMainWindow, Styles):
 
 		self.property_query_le.setText('')
 
-		self.binary = threshold_image(self.img, self.threshold_slider.value()[0], self.threshold_slider.value()[1],
-									  foreground_value=1., fill_holes=True, edge_exclusion=self.edge)
-		self.thresholded_image = np.ma.masked_where(self.binary == 0., self.binary)
+		self.viewer.change_threshold(self.threshold_slider.value())
+		# self.binary = threshold_image(self.img, self.threshold_slider.value()[0], self.threshold_slider.value()[1],
+		# 							  foreground_value=1., fill_holes=True, edge_exclusion=self.edge)
+		# self.thresholded_image = np.ma.masked_where(self.binary == 0., self.binary)
 
-		self.scat_markers.set_color('tab:red')
-		self.scat_markers.set_visible(False)
-		self.image_thresholded.set_data(self.thresholded_image)
-		self.image_thresholded.set_cmap('viridis')
-		self.image_thresholded.autoscale()
+		self.viewer.scat_markers.set_color('tab:red')
+		self.viewer.scat_markers.set_visible(False)
+		# self.image_thresholded.set_data(self.thresholded_image)
+		# self.image_thresholded.set_cmap('viridis')
+		# self.image_thresholded.autoscale()
 
 	def write_instructions(self):
 
 		instructions = {
-			"target_channel": self.channels_cb.currentText(),  # for now index but would be more universal to use name
+			"target_channel": self.viewer.channels_cb.currentText(),  # for now index but would be more universal to use name
 			"thresholds": self.threshold_slider.value(),
 			"filters": self.preprocessing.list.items,
 			"marker_min_distance": self.min_dist,
 			"marker_footprint_size": self.footprint,
 			"feature_queries": [self.property_query_le.text()],
-			"equalize_reference": [self.equalize_option, self.frame_slider.value()],
+			"equalize_reference": [self.equalize_option, self.viewer.frame_slider.value()],
 			"do_watershed": self.marker_option.isChecked(),
 		}
 
@@ -877,428 +842,428 @@ class ThresholdConfigWizard(QMainWindow, Styles):
 			else:
 				self.all_objects_option.click()
 
-
-class ThresholdNormalisation(ThresholdConfigWizard):
-	def __init__(self, min_threshold, current_channel, parent_window=None):
-		QMainWindow.__init__(self)
-		self.parent_window = parent_window
-		self.screen_height = self.parent_window.parent_window.parent_window.parent_window.screen_height
-		self.screen_width = self.parent_window.parent_window.parent_window.parent_window.screen_width
-		self.setMaximumWidth(int(self.screen_width // 3))
-		self.setMinimumHeight(int(0.8 * self.screen_height))
-		self.setWindowTitle("Normalisation threshold preview")
-		center_window(self)
-		self.img = None
-		self.min_threshold = min_threshold
-		self.current_channel = current_channel
-		self.mode = self.parent_window.mode
-		self.pos = self.parent_window.parent_window.parent_window.pos
-		self.exp_dir = self.parent_window.parent_window.exp_dir
-		self.soft_path = get_software_location()
-		self.auto_close = False
-
-		self.locate_stack()
-		if not self.auto_close:
-			if self.img is not None:
-				self.test_frame = np.squeeze(self.img)
-				self.frame = std_filter(gauss_filter(self.test_frame, 2), 4)
-				self.threshold_slider = QLabeledDoubleSlider()
-				self.threshold_slider.setOrientation(1)
-				self.initialize_histogram()
-				self.show_threshold_image()
-				self.populate_norm_widget()
-				self.threshold_changed(self.threshold_slider.value())
-				self.setAttribute(Qt.WA_DeleteOnClose)
-		else:
-			self.close()
-
-	def show_threshold_image(self):
-		if self.test_frame is not None:
-			self.fig, self.ax = plt.subplots()
-			self.fcanvas = FigureCanvas(self.fig, title="Normalisation: control threshold", interactive=True)
-			self.ax.clear()
-			self.im = self.ax.imshow(self.frame, cmap='gray')
-			self.binary = threshold_image(self.test_frame, float(self.min_threshold), self.test_frame.max(),
-										  foreground_value=255., fill_holes=False)
-			self.thresholded_image = np.ma.masked_where(self.binary == 0., self.binary)
-
-			self.image_thresholded = self.ax.imshow(self.thresholded_image, cmap="viridis", alpha=0.5,
-													interpolation='none')
-			self.fcanvas.setMinimumSize(int(self.screen_height * 0.25), int(self.screen_width * 0.25))
-			self.ax.set_xticks([])
-			self.ax.set_yticks([])
-			self.fig.set_facecolor('none')  # or 'None'
-			self.fig.canvas.setStyleSheet("background-color: transparent;")
-			self.fcanvas.canvas.draw()
-
-	def populate_norm_widget(self):
-		"""
-		Create the multibox design.
-
-		"""
-		self.button_widget = QWidget()
-		layout = QVBoxLayout()
-		self.button_widget.setLayout(layout)
-		self.setCentralWidget(self.button_widget)
-		threshold_slider_layout = QHBoxLayout()
-		threshold_label = QLabel("Threshold: ")
-		# self.threshold_slider = QLabeledDoubleSlider()
-		threshold_slider_layout.addWidget(threshold_label)
-		threshold_slider_layout.addWidget(self.threshold_slider)
-		histogram = self.initialize_histogram()
-		self.threshold_slider.valueChanged.connect(self.threshold_changed)
-		contrast_slider_layout = QHBoxLayout()
-		self.contrast_slider = QLabeledDoubleRangeSlider()
-		self.contrast_slider.setSingleStep(0.00001)
-		self.contrast_slider.setTickInterval(0.00001)
-		self.contrast_slider.setOrientation(1)
-		self.contrast_slider.setRange(np.amin(self.frame[self.frame==self.frame]), np.amax(self.frame[self.frame==self.frame]))
-		self.contrast_slider.setValue(
-			[np.percentile(self.frame.flatten(), 1), np.percentile(self.frame.flatten(), 99.99)])
-		self.contrast_slider.valueChanged.connect(self.contrast_slider_action)
-		contrast_label = QLabel("Contrast: ")
-		contrast_slider_layout.addWidget(contrast_label)
-		contrast_slider_layout.addWidget(self.contrast_slider)
-
-		self.submit_threshold_btn = QPushButton('Submit')
-		self.submit_threshold_btn.setStyleSheet(self.button_style_sheet_2)
-		self.submit_threshold_btn.clicked.connect(self.get_threshold)
-		self.ylog_check = QPushButton("")
-		self.ylog_check.setIcon(icon(MDI6.math_log, color="black"))
-		self.ylog_check.setStyleSheet(self.button_select_all)
-		self.ylog_check.clicked.connect(self.switch_to_log)
-		self.ylog_check.setMaximumWidth(30)
-		log_button = QHBoxLayout()
-		log_button.addStretch(1)
-		log_button.addWidget(self.ylog_check)
-		log_button.addSpacing(25)
-		layout.addWidget(self.fcanvas)
-		layout.addLayout(log_button)
-		layout.addWidget(histogram)
-		layout.addLayout(threshold_slider_layout)
-		layout.addLayout(contrast_slider_layout)
-		layout.addWidget(self.submit_threshold_btn)
-
-		self.setCentralWidget(self.button_widget)
-		self.show()
-
-		QApplication.processEvents()
-
-	def initialize_histogram(self):
-
-		self.fig_hist, self.ax_hist = plt.subplots(tight_layout=True)
-		self.canvas_hist = FigureCanvas(self.fig_hist, interactive=False)
-		self.fig_hist.set_facecolor('none')
-		self.fig_hist.canvas.setStyleSheet("background-color: transparent;")
-
-		self.ax_hist.patch.set_facecolor('none')
-		self.hist_y, x, _ = self.ax_hist.hist(self.frame.flatten(), density=True, bins=300, color="k")
-		self.ax_hist.set_xlabel('intensity [a.u.]')
-		self.ax_hist.spines['top'].set_visible(False)
-		self.ax_hist.spines['right'].set_visible(False)
-		self.ax_hist.set_xlim(np.amin(self.frame[self.frame==self.frame]), np.amax(self.frame[self.frame==self.frame]))
-		self.ax_hist.set_ylim(0, self.hist_y.max())
-		self.threshold_slider.setSingleStep(0.001)
-		self.threshold_slider.setTickInterval(0.001)
-		self.threshold_slider.setRange(np.amin(self.frame[self.frame==self.frame]), np.amax(self.frame[self.frame==self.frame]))
-		self.threshold_slider.setValue(np.percentile(self.frame,90))
-		self.add_hist_threshold()
-
-		self.canvas_hist.canvas.draw_idle()
-		self.canvas_hist.canvas.setMinimumHeight(int(self.screen_height // 6))
-		return self.canvas_hist
-
-	def clear_post_threshold_options(self):
-
-		self.binary = threshold_image(self.test_frame, self.threshold_slider.value(), self.test_frame.max(),
-									  foreground_value=255., fill_holes=False)
-		self.thresholded_image = np.ma.masked_where(self.binary == 0., self.binary)
-
-		self.image_thresholded.set_data(self.thresholded_image)
-		self.image_thresholded.set_cmap('viridis')
-		self.image_thresholded.autoscale()
-
-	def add_hist_threshold(self):
-
-		ymin, ymax = self.ax_hist.get_ylim()
-		self.min_intensity_line, = self.ax_hist.plot(
-			[self.threshold_slider.value(), self.threshold_slider.value()], [0, ymax], c="tab:purple")
-
-	def threshold_changed(self, value):
-
-		"""
-		Move the threshold values on histogram, when slider is moved.
-		"""
-
-		self.clear_post_threshold_options()
-
-		self.thresh_min = value
-		ymin, ymax = self.ax_hist.get_ylim()
-		self.min_intensity_line.set_data([self.thresh_min, self.thresh_min], [0, ymax])
-		self.canvas_hist.canvas.draw_idle()
-		self.update_threshold()
-
-	def update_threshold(self):
-
-		"""
-
-		Threshold and binarize the image based on the min/max threshold values
-		and display on imshow.
-
-		"""
-
-		self.binary = threshold_image(self.frame, self.threshold_slider.value(), self.test_frame.max(),
-									  foreground_value=255., fill_holes=False)
-		self.thresholded_image = np.ma.masked_where(self.binary == 0., self.binary)
-		self.image_thresholded.set_data(self.thresholded_image)
-		self.fcanvas.canvas.draw_idle()
-
-	def locate_stack(self):
-
-		"""
-		Locate the target movie.
-
-		"""
-
-		if isinstance(self.pos, str):
-			movies = glob(self.pos + f"movie/{self.parent_window.parent_window.parent_window.movie_prefix}*.tif")
-		else:
-			msgBox = QMessageBox()
-			msgBox.setIcon(QMessageBox.Warning)
-			msgBox.setText("Please select a unique position before launching the wizard...")
-			msgBox.setWindowTitle("Warning")
-			msgBox.setStandardButtons(QMessageBox.Ok)
-			returnValue = msgBox.exec()
-			if returnValue == QMessageBox.Ok:
-				self.img = None
-				self.auto_close = True
-				return None
-
-		if len(movies) == 0:
-			msgBox = QMessageBox()
-			msgBox.setIcon(QMessageBox.Warning)
-			msgBox.setText(
-				"No movies are detected in the experiment folder. Cannot load an image to check normalisation.")
-			msgBox.setWindowTitle("Warning")
-			msgBox.setStandardButtons(QMessageBox.Ok)
-			returnValue = msgBox.exec()
-			if returnValue == QMessageBox.Yes:
-				self.auto_close = True
-				return None
-		else:
-			self.stack_path = movies[0]
-			self.len_movie = self.parent_window.parent_window.parent_window.len_movie
-			len_movie_auto = auto_load_number_of_frames(self.stack_path)
-			if len_movie_auto is not None:
-				self.len_movie = len_movie_auto
-			exp_config = self.exp_dir + "config.ini"
-			self.channel_names, self.channels = extract_experiment_channels(self.exp_dir)
-			self.channel_names = np.array(self.channel_names)
-			self.channels = np.array(self.channels)
-			self.nbr_channels = len(self.channels)
-			t = 1
-			idx = t * self.nbr_channels + self.current_channel
-			self.img = load_frames(idx, self.stack_path, normalize_input=False)
-			print(self.img.shape)
-			print(f'{self.stack_path} successfully located.')
-
-	def get_threshold(self):
-		self.parent_window.tab2_txt_threshold.setText(str(self.threshold_slider.value()))
-		self.close()
-
-
-# class ThresholdSpot(ThresholdConfigWizard):
-# 	def __init__(self, current_channel, img, mask, parent_window=None):
+#
+# class ThresholdNormalisation(ThresholdConfigWizard):
+# 	def __init__(self, min_threshold, current_channel, parent_window=None):
 # 		QMainWindow.__init__(self)
 # 		self.parent_window = parent_window
 # 		self.screen_height = self.parent_window.parent_window.parent_window.parent_window.screen_height
 # 		self.screen_width = self.parent_window.parent_window.parent_window.parent_window.screen_width
+# 		self.setMaximumWidth(int(self.screen_width // 3))
 # 		self.setMinimumHeight(int(0.8 * self.screen_height))
-# 		self.setWindowTitle("Spot threshold preview")
+# 		self.setWindowTitle("Normalisation threshold preview")
 # 		center_window(self)
-# 		self.img = img
+# 		self.img = None
+# 		self.min_threshold = min_threshold
 # 		self.current_channel = current_channel
 # 		self.mode = self.parent_window.mode
 # 		self.pos = self.parent_window.parent_window.parent_window.pos
 # 		self.exp_dir = self.parent_window.parent_window.exp_dir
-# 		self.onlyFloat = QDoubleValidator()
-# 		self.onlyInt = QIntValidator()
 # 		self.soft_path = get_software_location()
 # 		self.auto_close = False
-
-# 		if self.img is not None:
-# 			print(self.img.shape)
-# 			#self.test_frame = self.img
-# 			self.frame = self.img
-# 			self.test_mask = mask
-# 			self.populate_all()
-# 			self.setAttribute(Qt.WA_DeleteOnClose)
-# 		if self.auto_close:
+#
+# 		self.locate_stack()
+# 		if not self.auto_close:
+# 			if self.img is not None:
+# 				self.test_frame = np.squeeze(self.img)
+# 				self.frame = std_filter(gauss_filter(self.test_frame, 2), 4)
+# 				self.threshold_slider = QLabeledDoubleSlider()
+# 				self.threshold_slider.setOrientation(1)
+# 				self.initialize_histogram()
+# 				self.show_threshold_image()
+# 				self.populate_norm_widget()
+# 				self.threshold_changed(self.threshold_slider.value())
+# 				self.setAttribute(Qt.WA_DeleteOnClose)
+# 		else:
 # 			self.close()
-
-# 	def populate_left_panel(self):
-
-# 		self.left_layout = QVBoxLayout()
-# 		diameter_layout=QHBoxLayout()
-# 		self.diameter_lbl = QLabel('Spot diameter: ')
-# 		self.diameter_value = QLineEdit()
-# 		self.diameter_value.setText(self.parent_window.diameter_value.text())
-# 		self.diameter_value.setValidator(self.onlyFloat)
-# 		diameter_layout.addWidget(self.diameter_lbl, alignment=Qt.AlignCenter)
-# 		diameter_layout.addWidget(self.diameter_value, alignment=Qt.AlignCenter)
-# 		self.left_layout.addLayout(diameter_layout)
-# 		threshold_layout=QHBoxLayout()
-# 		self.threshold_lbl = QLabel('Spot threshold: ')
-# 		self.threshold_value = QLineEdit()
-# 		self.threshold_value.setValidator(self.onlyFloat)
-# 		self.threshold_value.setText(self.parent_window.threshold_value.text())
-# 		threshold_layout.addWidget(self.threshold_lbl, alignment=Qt.AlignCenter)
-# 		threshold_layout.addWidget(self.threshold_value, alignment=Qt.AlignCenter)
-# 		self.left_layout.addLayout(threshold_layout)
-# 		self.left_panel.addLayout(self.left_layout)
-
-# 	def enable_preview(self):
-
-# 		diam = self.diameter_value.text().replace(',','').replace('.','')
-# 		thresh = self.threshold_value.text().replace(',','').replace('.','')
-# 		if diam.isnumeric() and thresh.isnumeric():
-# 			self.preview_button.setEnabled(True)
-# 		else:
-# 			self.preview_button.setEnabled(False)
-
-# 	def draw_spot_preview(self):
-
-# 		try:
-# 			diameter_value = float(self.parent_window.diameter_value.text().replace(',','.'))
-# 		except:
-# 			print('Diameter could not be converted to float... Abort.')
-# 			self.auto_close = True
-# 			return None
-
-# 		try:
-# 			threshold_value = float(self.parent_window.threshold_value.text().replace(',','.'))
-# 		except:
-# 			print('Threshold could not be converted to float... Abort.')
-# 			self.auto_close = True
-# 			return None
-
-# 		lbl = self.test_mask
-# 		blobs = self.blob_preview(image=self.img[:, :, self.current_channel], label=lbl, threshold=threshold_value,
-# 								  diameter=diameter_value)
-# 		mask = np.array([lbl[int(y), int(x)] != 0 for y, x, r in blobs])
-# 		if np.any(mask):
-# 			blobs_filtered = blobs[mask]
-# 		else:
-# 			blobs_filtered=[]
-
-# 		self.fig_contour, self.ax_contour = plt.subplots(figsize=(4, 6))
-# 		self.fcanvas = FigureCanvas(self.fig_contour, title="Blob measurement", interactive=True)
-# 		self.ax_contour.clear()
-# 		self.im = self.ax_contour.imshow(self.img[:, :, self.current_channel], cmap='gray')
-# 		self.circles = [Circle((x, y), r, color='red', fill=False, alpha=0.3) for y, x, r in blobs_filtered]
-# 		for circle in self.circles:
-# 			self.ax_contour.add_artist(circle)
-# 		self.ax_contour.set_xticks([])
-# 		self.ax_contour.set_yticks([])
-# 		self.fig_contour.set_facecolor('none')  # or 'None'
-# 		self.fig_contour.canvas.setStyleSheet("background-color: transparent;")
-# 		self.fcanvas.canvas.draw()
-
-# 	def populate_all(self):
+#
+# 	def show_threshold_image(self):
+# 		if self.test_frame is not None:
+# 			self.fig, self.ax = plt.subplots()
+# 			self.fcanvas = FigureCanvas(self.fig, title="Normalisation: control threshold", interactive=True)
+# 			self.ax.clear()
+# 			self.im = self.ax.imshow(self.frame, cmap='gray')
+# 			self.binary = threshold_image(self.test_frame, float(self.min_threshold), self.test_frame.max(),
+# 										  foreground_value=255., fill_holes=False)
+# 			self.thresholded_image = np.ma.masked_where(self.binary == 0., self.binary)
+#
+# 			self.image_thresholded = self.ax.imshow(self.thresholded_image, cmap="viridis", alpha=0.5,
+# 													interpolation='none')
+# 			self.fcanvas.setMinimumSize(int(self.screen_height * 0.25), int(self.screen_width * 0.25))
+# 			self.ax.set_xticks([])
+# 			self.ax.set_yticks([])
+# 			self.fig.set_facecolor('none')  # or 'None'
+# 			self.fig.canvas.setStyleSheet("background-color: transparent;")
+# 			self.fcanvas.canvas.draw()
+#
+# 	def populate_norm_widget(self):
+# 		"""
+# 		Create the multibox design.
+#
+# 		"""
 # 		self.button_widget = QWidget()
-# 		main_layout = QVBoxLayout()
-# 		self.button_widget.setLayout(main_layout)
-# 		self.right_panel = QVBoxLayout()
-# 		self.left_panel = QVBoxLayout()
-# 		self.left_panel.setContentsMargins(30, 30, 30, 30)
-# 		self.populate_left_panel()
-# 		self.draw_spot_preview()
+# 		layout = QVBoxLayout()
+# 		self.button_widget.setLayout(layout)
 # 		self.setCentralWidget(self.button_widget)
+# 		threshold_slider_layout = QHBoxLayout()
+# 		threshold_label = QLabel("Threshold: ")
+# 		# self.threshold_slider = QLabeledDoubleSlider()
+# 		threshold_slider_layout.addWidget(threshold_label)
+# 		threshold_slider_layout.addWidget(self.threshold_slider)
+# 		histogram = self.initialize_histogram()
+# 		self.threshold_slider.valueChanged.connect(self.threshold_changed)
 # 		contrast_slider_layout = QHBoxLayout()
 # 		self.contrast_slider = QLabeledDoubleRangeSlider()
 # 		self.contrast_slider.setSingleStep(0.00001)
 # 		self.contrast_slider.setTickInterval(0.00001)
 # 		self.contrast_slider.setOrientation(1)
-# 		selection = self.frame[:, :, self.current_channel]
-# 		self.contrast_slider.setRange(np.amin(selection[selection==selection]), np.amax(selection[selection==selection]))
+# 		self.contrast_slider.setRange(np.amin(self.frame[self.frame==self.frame]), np.amax(self.frame[self.frame==self.frame]))
 # 		self.contrast_slider.setValue(
-# 			[np.percentile(self.frame[:, :, self.current_channel].flatten(), 1), np.percentile(self.frame[:, :, self.current_channel].flatten(), 99.99)])
+# 			[np.percentile(self.frame.flatten(), 1), np.percentile(self.frame.flatten(), 99.99)])
 # 		self.contrast_slider.valueChanged.connect(self.contrast_slider_action)
 # 		contrast_label = QLabel("Contrast: ")
 # 		contrast_slider_layout.addWidget(contrast_label)
 # 		contrast_slider_layout.addWidget(self.contrast_slider)
-# 		self.preview_button=QPushButton("Preview")
-# 		self.preview_button.clicked.connect(self.update_spots)
-# 		self.preview_button.setStyleSheet(self.button_style_sheet_2)
-# 		self.apply_changes=QPushButton("Apply")
-# 		self.apply_changes.setStyleSheet(self.button_style_sheet)
-# 		self.apply_changes.clicked.connect(self.apply)
-
-# 		self.diameter_value.textChanged.connect(self.enable_preview)
-# 		self.threshold_value.textChanged.connect(self.enable_preview)
-
-# 		self.right_panel.addWidget(self.fcanvas.canvas)
-# 		self.right_panel.addWidget(self.fcanvas.toolbar)
-
-# 		main_layout.addLayout(self.right_panel)
-# 		main_layout.addLayout(self.left_panel)
-# 		main_layout.addLayout(contrast_slider_layout)
-# 		main_layout.addWidget(self.preview_button)
-# 		main_layout.addWidget(self.apply_changes)
+#
+# 		self.submit_threshold_btn = QPushButton('Submit')
+# 		self.submit_threshold_btn.setStyleSheet(self.button_style_sheet_2)
+# 		self.submit_threshold_btn.clicked.connect(self.get_threshold)
+# 		self.ylog_check = QPushButton("")
+# 		self.ylog_check.setIcon(icon(MDI6.math_log, color="black"))
+# 		self.ylog_check.setStyleSheet(self.button_select_all)
+# 		self.ylog_check.clicked.connect(self.switch_to_log)
+# 		self.ylog_check.setMaximumWidth(30)
+# 		log_button = QHBoxLayout()
+# 		log_button.addStretch(1)
+# 		log_button.addWidget(self.ylog_check)
+# 		log_button.addSpacing(25)
+# 		layout.addWidget(self.fcanvas)
+# 		layout.addLayout(log_button)
+# 		layout.addWidget(histogram)
+# 		layout.addLayout(threshold_slider_layout)
+# 		layout.addLayout(contrast_slider_layout)
+# 		layout.addWidget(self.submit_threshold_btn)
+#
+# 		self.setCentralWidget(self.button_widget)
 # 		self.show()
-
-# 	def blob_preview(self, image, label, threshold, diameter):
-# 		removed_background = image.copy()
-# 		dilated_image = ndimage.grey_dilation(label, footprint=disk(10))
-# 		removed_background[np.where(dilated_image == 0)] = 0
-# 		min_sigma = (1 / (1 + math.sqrt(2))) * diameter
-# 		max_sigma = math.sqrt(2) * min_sigma
-# 		blobs = skimage.feature.blob_dog(removed_background, threshold=threshold, min_sigma=min_sigma,
-# 										 max_sigma=max_sigma, overlap=0.75)
-# 		return blobs
-
-# 	def update_spots(self):
-
-# 		try:
-# 			diameter_value = float(self.diameter_value.text().replace(',','.'))
-# 		except:
-# 			print('Diameter could not be converted to float... Abort.')
-# 			return None
-
-# 		try:
-# 			threshold_value = float(self.threshold_value.text().replace(',','.'))
-# 		except:
-# 			print('Threshold could not be converted to float... Abort.')
-# 			return None
-# 		xlim = self.ax_contour.get_xlim()
-# 		ylim = self.ax_contour.get_ylim()
-# 		contrast_levels = self.contrast_slider.value()
-# 		blobs = self.blob_preview(image=self.frame[:, :, self.current_channel], label=self.test_mask,
-# 								  threshold=threshold_value,
-# 								  diameter=diameter_value)
-# 		mask = np.array([self.test_mask[int(y), int(x)] != 0 for y, x, r in blobs])
-# 		if np.any(mask):
-# 			blobs_filtered = blobs[mask]
+#
+# 		QApplication.processEvents()
+#
+# 	def initialize_histogram(self):
+#
+# 		self.fig_hist, self.ax_hist = plt.subplots(tight_layout=True)
+# 		self.canvas_hist = FigureCanvas(self.fig_hist, interactive=False)
+# 		self.fig_hist.set_facecolor('none')
+# 		self.fig_hist.canvas.setStyleSheet("background-color: transparent;")
+#
+# 		self.ax_hist.patch.set_facecolor('none')
+# 		self.hist_y, x, _ = self.ax_hist.hist(self.frame.flatten(), density=True, bins=300, color="k")
+# 		self.ax_hist.set_xlabel('intensity [a.u.]')
+# 		self.ax_hist.spines['top'].set_visible(False)
+# 		self.ax_hist.spines['right'].set_visible(False)
+# 		self.ax_hist.set_xlim(np.amin(self.frame[self.frame==self.frame]), np.amax(self.frame[self.frame==self.frame]))
+# 		self.ax_hist.set_ylim(0, self.hist_y.max())
+# 		self.threshold_slider.setSingleStep(0.001)
+# 		self.threshold_slider.setTickInterval(0.001)
+# 		self.threshold_slider.setRange(np.amin(self.frame[self.frame==self.frame]), np.amax(self.frame[self.frame==self.frame]))
+# 		self.threshold_slider.setValue(np.percentile(self.frame,90))
+# 		self.add_hist_threshold()
+#
+# 		self.canvas_hist.canvas.draw_idle()
+# 		self.canvas_hist.canvas.setMinimumHeight(int(self.screen_height // 6))
+# 		return self.canvas_hist
+#
+# 	def clear_post_threshold_options(self):
+#
+# 		self.binary = threshold_image(self.test_frame, self.threshold_slider.value(), self.test_frame.max(),
+# 									  foreground_value=255., fill_holes=False)
+# 		self.thresholded_image = np.ma.masked_where(self.binary == 0., self.binary)
+#
+# 		self.image_thresholded.set_data(self.thresholded_image)
+# 		self.image_thresholded.set_cmap('viridis')
+# 		self.image_thresholded.autoscale()
+#
+# 	def add_hist_threshold(self):
+#
+# 		ymin, ymax = self.ax_hist.get_ylim()
+# 		self.min_intensity_line, = self.ax_hist.plot(
+# 			[self.threshold_slider.value(), self.threshold_slider.value()], [0, ymax], c="tab:purple")
+#
+# 	def threshold_changed(self, value):
+#
+# 		"""
+# 		Move the threshold values on histogram, when slider is moved.
+# 		"""
+#
+# 		self.clear_post_threshold_options()
+#
+# 		self.thresh_min = value
+# 		ymin, ymax = self.ax_hist.get_ylim()
+# 		self.min_intensity_line.set_data([self.thresh_min, self.thresh_min], [0, ymax])
+# 		self.canvas_hist.canvas.draw_idle()
+# 		self.update_threshold()
+#
+# 	def update_threshold(self):
+#
+# 		"""
+#
+# 		Threshold and binarize the image based on the min/max threshold values
+# 		and display on imshow.
+#
+# 		"""
+#
+# 		self.binary = threshold_image(self.frame, self.threshold_slider.value(), self.test_frame.max(),
+# 									  foreground_value=255., fill_holes=False)
+# 		self.thresholded_image = np.ma.masked_where(self.binary == 0., self.binary)
+# 		self.image_thresholded.set_data(self.thresholded_image)
+# 		self.fcanvas.canvas.draw_idle()
+#
+# 	def locate_stack(self):
+#
+# 		"""
+# 		Locate the target movie.
+#
+# 		"""
+#
+# 		if isinstance(self.pos, str):
+# 			movies = glob(self.pos + f"movie/{self.parent_window.parent_window.parent_window.movie_prefix}*.tif")
 # 		else:
-# 			blobs_filtered = []
-# 		self.ax_contour.clear()
-# 		self.im = self.ax_contour.imshow(self.frame[:, :, self.current_channel], cmap='gray')
-# 		self.ax_contour.set_xticks([])
-# 		self.ax_contour.set_yticks([])
-# 		self.circles = [Circle((x, y), r, color='red', fill=False, alpha=0.3) for y, x, r in blobs_filtered]
-# 		for circle in self.circles:
-# 			self.ax_contour.add_artist(circle)
-# 		self.ax_contour.set_xlim(xlim)
-# 		self.ax_contour.set_ylim(ylim)
-
-# 		self.im.set_data(self.frame[:, :, self.current_channel])
-# 		self.fig_contour.canvas.draw()
-# 		self.contrast_slider.setValue(contrast_levels)
-
-
-
-
-# 	def apply(self):
-# 		self.parent_window.threshold_value.setText(self.threshold_value.text())
-# 		self.parent_window.diameter_value.setText(self.diameter_value.text())
+# 			msgBox = QMessageBox()
+# 			msgBox.setIcon(QMessageBox.Warning)
+# 			msgBox.setText("Please select a unique position before launching the wizard...")
+# 			msgBox.setWindowTitle("Warning")
+# 			msgBox.setStandardButtons(QMessageBox.Ok)
+# 			returnValue = msgBox.exec()
+# 			if returnValue == QMessageBox.Ok:
+# 				self.img = None
+# 				self.auto_close = True
+# 				return None
+#
+# 		if len(movies) == 0:
+# 			msgBox = QMessageBox()
+# 			msgBox.setIcon(QMessageBox.Warning)
+# 			msgBox.setText(
+# 				"No movies are detected in the experiment folder. Cannot load an image to check normalisation.")
+# 			msgBox.setWindowTitle("Warning")
+# 			msgBox.setStandardButtons(QMessageBox.Ok)
+# 			returnValue = msgBox.exec()
+# 			if returnValue == QMessageBox.Yes:
+# 				self.auto_close = True
+# 				return None
+# 		else:
+# 			self.stack_path = movies[0]
+# 			self.len_movie = self.parent_window.parent_window.parent_window.len_movie
+# 			len_movie_auto = auto_load_number_of_frames(self.stack_path)
+# 			if len_movie_auto is not None:
+# 				self.len_movie = len_movie_auto
+# 			exp_config = self.exp_dir + "config.ini"
+# 			self.channel_names, self.channels = extract_experiment_channels(self.exp_dir)
+# 			self.channel_names = np.array(self.channel_names)
+# 			self.channels = np.array(self.channels)
+# 			self.nbr_channels = len(self.channels)
+# 			t = 1
+# 			idx = t * self.nbr_channels + self.current_channel
+# 			self.img = load_frames(idx, self.stack_path, normalize_input=False)
+# 			print(self.img.shape)
+# 			print(f'{self.stack_path} successfully located.')
+#
+# 	def get_threshold(self):
+# 		self.parent_window.tab2_txt_threshold.setText(str(self.threshold_slider.value()))
 # 		self.close()
+#
+#
+# # class ThresholdSpot(ThresholdConfigWizard):
+# # 	def __init__(self, current_channel, img, mask, parent_window=None):
+# # 		QMainWindow.__init__(self)
+# # 		self.parent_window = parent_window
+# # 		self.screen_height = self.parent_window.parent_window.parent_window.parent_window.screen_height
+# # 		self.screen_width = self.parent_window.parent_window.parent_window.parent_window.screen_width
+# # 		self.setMinimumHeight(int(0.8 * self.screen_height))
+# # 		self.setWindowTitle("Spot threshold preview")
+# # 		center_window(self)
+# # 		self.img = img
+# # 		self.current_channel = current_channel
+# # 		self.mode = self.parent_window.mode
+# # 		self.pos = self.parent_window.parent_window.parent_window.pos
+# # 		self.exp_dir = self.parent_window.parent_window.exp_dir
+# # 		self.onlyFloat = QDoubleValidator()
+# # 		self.onlyInt = QIntValidator()
+# # 		self.soft_path = get_software_location()
+# # 		self.auto_close = False
+#
+# # 		if self.img is not None:
+# # 			print(self.img.shape)
+# # 			#self.test_frame = self.img
+# # 			self.frame = self.img
+# # 			self.test_mask = mask
+# # 			self.populate_all()
+# # 			self.setAttribute(Qt.WA_DeleteOnClose)
+# # 		if self.auto_close:
+# # 			self.close()
+#
+# # 	def populate_left_panel(self):
+#
+# # 		self.left_layout = QVBoxLayout()
+# # 		diameter_layout=QHBoxLayout()
+# # 		self.diameter_lbl = QLabel('Spot diameter: ')
+# # 		self.diameter_value = QLineEdit()
+# # 		self.diameter_value.setText(self.parent_window.diameter_value.text())
+# # 		self.diameter_value.setValidator(self.onlyFloat)
+# # 		diameter_layout.addWidget(self.diameter_lbl, alignment=Qt.AlignCenter)
+# # 		diameter_layout.addWidget(self.diameter_value, alignment=Qt.AlignCenter)
+# # 		self.left_layout.addLayout(diameter_layout)
+# # 		threshold_layout=QHBoxLayout()
+# # 		self.threshold_lbl = QLabel('Spot threshold: ')
+# # 		self.threshold_value = QLineEdit()
+# # 		self.threshold_value.setValidator(self.onlyFloat)
+# # 		self.threshold_value.setText(self.parent_window.threshold_value.text())
+# # 		threshold_layout.addWidget(self.threshold_lbl, alignment=Qt.AlignCenter)
+# # 		threshold_layout.addWidget(self.threshold_value, alignment=Qt.AlignCenter)
+# # 		self.left_layout.addLayout(threshold_layout)
+# # 		self.left_panel.addLayout(self.left_layout)
+#
+# # 	def enable_preview(self):
+#
+# # 		diam = self.diameter_value.text().replace(',','').replace('.','')
+# # 		thresh = self.threshold_value.text().replace(',','').replace('.','')
+# # 		if diam.isnumeric() and thresh.isnumeric():
+# # 			self.preview_button.setEnabled(True)
+# # 		else:
+# # 			self.preview_button.setEnabled(False)
+#
+# # 	def draw_spot_preview(self):
+#
+# # 		try:
+# # 			diameter_value = float(self.parent_window.diameter_value.text().replace(',','.'))
+# # 		except:
+# # 			print('Diameter could not be converted to float... Abort.')
+# # 			self.auto_close = True
+# # 			return None
+#
+# # 		try:
+# # 			threshold_value = float(self.parent_window.threshold_value.text().replace(',','.'))
+# # 		except:
+# # 			print('Threshold could not be converted to float... Abort.')
+# # 			self.auto_close = True
+# # 			return None
+#
+# # 		lbl = self.test_mask
+# # 		blobs = self.blob_preview(image=self.img[:, :, self.current_channel], label=lbl, threshold=threshold_value,
+# # 								  diameter=diameter_value)
+# # 		mask = np.array([lbl[int(y), int(x)] != 0 for y, x, r in blobs])
+# # 		if np.any(mask):
+# # 			blobs_filtered = blobs[mask]
+# # 		else:
+# # 			blobs_filtered=[]
+#
+# # 		self.fig_contour, self.ax_contour = plt.subplots(figsize=(4, 6))
+# # 		self.fcanvas = FigureCanvas(self.fig_contour, title="Blob measurement", interactive=True)
+# # 		self.ax_contour.clear()
+# # 		self.im = self.ax_contour.imshow(self.img[:, :, self.current_channel], cmap='gray')
+# # 		self.circles = [Circle((x, y), r, color='red', fill=False, alpha=0.3) for y, x, r in blobs_filtered]
+# # 		for circle in self.circles:
+# # 			self.ax_contour.add_artist(circle)
+# # 		self.ax_contour.set_xticks([])
+# # 		self.ax_contour.set_yticks([])
+# # 		self.fig_contour.set_facecolor('none')  # or 'None'
+# # 		self.fig_contour.canvas.setStyleSheet("background-color: transparent;")
+# # 		self.fcanvas.canvas.draw()
+#
+# # 	def populate_all(self):
+# # 		self.button_widget = QWidget()
+# # 		main_layout = QVBoxLayout()
+# # 		self.button_widget.setLayout(main_layout)
+# # 		self.right_panel = QVBoxLayout()
+# # 		self.left_panel = QVBoxLayout()
+# # 		self.left_panel.setContentsMargins(30, 30, 30, 30)
+# # 		self.populate_left_panel()
+# # 		self.draw_spot_preview()
+# # 		self.setCentralWidget(self.button_widget)
+# # 		contrast_slider_layout = QHBoxLayout()
+# # 		self.contrast_slider = QLabeledDoubleRangeSlider()
+# # 		self.contrast_slider.setSingleStep(0.00001)
+# # 		self.contrast_slider.setTickInterval(0.00001)
+# # 		self.contrast_slider.setOrientation(1)
+# # 		selection = self.frame[:, :, self.current_channel]
+# # 		self.contrast_slider.setRange(np.amin(selection[selection==selection]), np.amax(selection[selection==selection]))
+# # 		self.contrast_slider.setValue(
+# # 			[np.percentile(self.frame[:, :, self.current_channel].flatten(), 1), np.percentile(self.frame[:, :, self.current_channel].flatten(), 99.99)])
+# # 		self.contrast_slider.valueChanged.connect(self.contrast_slider_action)
+# # 		contrast_label = QLabel("Contrast: ")
+# # 		contrast_slider_layout.addWidget(contrast_label)
+# # 		contrast_slider_layout.addWidget(self.contrast_slider)
+# # 		self.preview_button=QPushButton("Preview")
+# # 		self.preview_button.clicked.connect(self.update_spots)
+# # 		self.preview_button.setStyleSheet(self.button_style_sheet_2)
+# # 		self.apply_changes=QPushButton("Apply")
+# # 		self.apply_changes.setStyleSheet(self.button_style_sheet)
+# # 		self.apply_changes.clicked.connect(self.apply)
+#
+# # 		self.diameter_value.textChanged.connect(self.enable_preview)
+# # 		self.threshold_value.textChanged.connect(self.enable_preview)
+#
+# # 		self.right_panel.addWidget(self.fcanvas.canvas)
+# # 		self.right_panel.addWidget(self.fcanvas.toolbar)
+#
+# # 		main_layout.addLayout(self.right_panel)
+# # 		main_layout.addLayout(self.left_panel)
+# # 		main_layout.addLayout(contrast_slider_layout)
+# # 		main_layout.addWidget(self.preview_button)
+# # 		main_layout.addWidget(self.apply_changes)
+# # 		self.show()
+#
+# # 	def blob_preview(self, image, label, threshold, diameter):
+# # 		removed_background = image.copy()
+# # 		dilated_image = ndimage.grey_dilation(label, footprint=disk(10))
+# # 		removed_background[np.where(dilated_image == 0)] = 0
+# # 		min_sigma = (1 / (1 + math.sqrt(2))) * diameter
+# # 		max_sigma = math.sqrt(2) * min_sigma
+# # 		blobs = skimage.feature.blob_dog(removed_background, threshold=threshold, min_sigma=min_sigma,
+# # 										 max_sigma=max_sigma, overlap=0.75)
+# # 		return blobs
+#
+# # 	def update_spots(self):
+#
+# # 		try:
+# # 			diameter_value = float(self.diameter_value.text().replace(',','.'))
+# # 		except:
+# # 			print('Diameter could not be converted to float... Abort.')
+# # 			return None
+#
+# # 		try:
+# # 			threshold_value = float(self.threshold_value.text().replace(',','.'))
+# # 		except:
+# # 			print('Threshold could not be converted to float... Abort.')
+# # 			return None
+# # 		xlim = self.ax_contour.get_xlim()
+# # 		ylim = self.ax_contour.get_ylim()
+# # 		contrast_levels = self.contrast_slider.value()
+# # 		blobs = self.blob_preview(image=self.frame[:, :, self.current_channel], label=self.test_mask,
+# # 								  threshold=threshold_value,
+# # 								  diameter=diameter_value)
+# # 		mask = np.array([self.test_mask[int(y), int(x)] != 0 for y, x, r in blobs])
+# # 		if np.any(mask):
+# # 			blobs_filtered = blobs[mask]
+# # 		else:
+# # 			blobs_filtered = []
+# # 		self.ax_contour.clear()
+# # 		self.im = self.ax_contour.imshow(self.frame[:, :, self.current_channel], cmap='gray')
+# # 		self.ax_contour.set_xticks([])
+# # 		self.ax_contour.set_yticks([])
+# # 		self.circles = [Circle((x, y), r, color='red', fill=False, alpha=0.3) for y, x, r in blobs_filtered]
+# # 		for circle in self.circles:
+# # 			self.ax_contour.add_artist(circle)
+# # 		self.ax_contour.set_xlim(xlim)
+# # 		self.ax_contour.set_ylim(ylim)
+#
+# # 		self.im.set_data(self.frame[:, :, self.current_channel])
+# # 		self.fig_contour.canvas.draw()
+# # 		self.contrast_slider.setValue(contrast_levels)
+#
+#
+#
+#
+# # 	def apply(self):
+# # 		self.parent_window.threshold_value.setText(self.threshold_value.text())
+# # 		self.parent_window.diameter_value.setText(self.diameter_value.text())
+# # 		self.close()

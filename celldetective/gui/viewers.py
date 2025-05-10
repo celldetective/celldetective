@@ -333,6 +333,7 @@ class ThresholdedStackVisualizer(StackVisualizer):
 
 		self.compute_mask(self.thresh)
 		self.generate_mask_imshow()
+		self.generate_scatter()
 		self.generate_threshold_slider()
 		self.generate_opacity_slider()
 		if isinstance(self.parent_le, QLineEdit):
@@ -358,6 +359,9 @@ class ThresholdedStackVisualizer(StackVisualizer):
 		# Generate the mask imshow		
 		self.im_mask = self.ax.imshow(np.ma.masked_where(self.mask==0, self.mask), alpha=self.mask_alpha, interpolation='none')
 		self.canvas.canvas.draw()
+
+	def generate_scatter(self):
+		self.scat_markers = self.ax.scatter([], [], color="tab:red")
 
 	def generate_threshold_slider(self):
 		# Generate the threshold slider
@@ -417,7 +421,10 @@ class ThresholdedStackVisualizer(StackVisualizer):
 		# Compute the mask based on the threshold value
 		self.preprocess_image()
 		edge = estimate_unreliable_edge(self.preprocessing)
-		self.mask = threshold_image(self.processed_image, threshold_value, np.inf, foreground_value=1, edge_exclusion=edge).astype(int)
+		if isinstance(threshold_value, (list,np.ndarray,tuple)):
+			self.mask = threshold_image(self.processed_image, threshold_value[0], threshold_value[1], foreground_value=1, edge_exclusion=edge).astype(int)
+		else:
+			self.mask = threshold_image(self.processed_image, threshold_value, np.inf, foreground_value=1, edge_exclusion=edge).astype(int)
 
 	def preprocess_image(self):
 		# Preprocess the image before thresholding		
