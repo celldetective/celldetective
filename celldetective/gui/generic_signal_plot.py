@@ -225,7 +225,7 @@ class GenericSignalPlotWidget(QWidget, Styles):
 										slider_initial_value=self.alpha_setting,
 										slider_range=(0,1),
 										decimal_option=True,
-										precision=1.0E-05,
+										precision=5,
 										)
 		self.alpha_slider.valueChanged.connect(self.submit_alpha)
 		self.cell_lines_alpha_wdg.setLayout(alpha_hbox)

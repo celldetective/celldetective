@@ -3312,7 +3312,7 @@ def normalize_multichannel(multichannel_frame, percentiles=None,
 
 	return np.moveaxis(mf_new,0,-1)
 
-def load_frames(img_nums, stack_path, scale=None, normalize_input=True, dtype=float, normalize_kwargs={"percentiles": (0.,99.99)}):
+def load_frames(img_nums, stack_path, scale=None, normalize_input=True, dtype=np.float64, normalize_kwargs={"percentiles": (0.,99.99)}):
 
 	"""
 	Loads and optionally normalizes and rescales specified frames from a stack located at a given path.

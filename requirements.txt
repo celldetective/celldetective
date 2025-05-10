@@ -37,3 +37,6 @@ cliffs_delta
 requests
 trackpy
 prettyprint
+pandas
+matplotlib
+

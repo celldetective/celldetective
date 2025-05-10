@@ -34,6 +34,18 @@ from cellpose.models import CellposeModel
 from pathlib import PosixPath, PurePosixPath, WindowsPath
 from prettytable import PrettyTable
 
+
+def is_integer_array(arr):
+
+	# Mask out NaNs
+	non_nan_values = arr[arr==arr].flatten()
+	test = np.all(np.mod(non_nan_values, 1) == 0)
+
+	if test:
+		return True
+	else:
+		return False
+
 def get_config(experiment):
 
 	"""

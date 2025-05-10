@@ -422,7 +422,7 @@ class QuickSliderLayout(QHBoxLayout):
 		The slider widget that allows the user to select a value.
 	"""
 
-	def __init__(self, label=None, slider=None, layout_ratio=(0.25,0.75), slider_initial_value=1, slider_range=(0,1), slider_tooltip=None, decimal_option=True, precision=1.0E-03, *args):
+	def __init__(self, label=None, slider=None, layout_ratio=(0.25,0.75), slider_initial_value=1, slider_range=(0,1), slider_tooltip=None, decimal_option=True, precision=3, *args):
 		super().__init__(*args)
 
 		if label is not None and isinstance(label,str):
@@ -432,8 +432,9 @@ class QuickSliderLayout(QHBoxLayout):
 		self.slider = slider
 		self.slider.setOrientation(1)
 		if decimal_option:
-			self.slider.setSingleStep(precision)
-			self.slider.setTickInterval(precision)
+			self.slider.setSingleStep(1.0*(10**(-precision)))
+			self.slider.setTickInterval(1.0*(10**(-precision)))
+			self.slider.setDecimals(precision)
 		else:
 			self.slider.setSingleStep(1)
 			self.slider.setTickInterval(1)
