@@ -29,7 +29,7 @@ from celldetective.utils import interpolate_nan_multichannel, _estimate_scale_fa
 
 from stardist import fill_label_holes
 from skimage.transform import resize
-
+import re
 
 def extract_experiment_from_well(well_path):
 
