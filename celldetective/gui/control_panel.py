@@ -1,7 +1,7 @@
 from PyQt5.QtWidgets import QMainWindow, QPushButton, QHBoxLayout, QLabel, QWidget, QGridLayout, QFrame, \
 	QTabWidget, QVBoxLayout, QMessageBox, QScrollArea, QDesktopWidget
 from PyQt5.QtCore import Qt, QSize
-from celldetective.gui.gui_utils import center_window, QHSeperationLine, QCheckableComboBox
+from celldetective.gui.gui_utils import center_window, QHSeperationLine, QCheckableComboBox, generic_message
 from celldetective.utils import _extract_labels_from_config, ConfigSectionMap, extract_experiment_channels, extract_identity_col
 from celldetective.gui import ConfigEditor, ProcessPanel, PreprocessingPanel, AnalysisPanel, NeighPanel
 from celldetective.io import extract_position_name, get_experiment_wells, get_config, get_spatial_calibration, get_temporal_calibration, get_experiment_concentrations, get_experiment_cell_types, get_experiment_antibodies, get_experiment_pharmaceutical_agents, get_experiment_populations, extract_well_name_and_number
@@ -273,15 +273,9 @@ class ControlPanel(QMainWindow, Styles):
 		movies = glob(self.pos + os.sep.join(['movie', f"{self.movie_prefix}*.tif"]))
 
 		if len(movies) == 0:
-			msgBox = QMessageBox()
-			msgBox.setIcon(QMessageBox.Warning)
-			msgBox.setText("Please select a position containing a movie...")
-			msgBox.setWindowTitle("Warning")
-			msgBox.setStandardButtons(QMessageBox.Ok)
-			returnValue = msgBox.exec()
-			if returnValue == QMessageBox.Ok:
-				self.current_stack = None
-				return None
+			generic_message("Please select a position containing a movie...")
+			self.current_stack = None
+			return None
 		else:
 			self.current_stack = movies[0]
 
@@ -437,14 +431,8 @@ class ControlPanel(QMainWindow, Styles):
 		"""
 
 		if self.well_list.isMultipleSelection():
-			msgBox = QMessageBox()
-			msgBox.setIcon(QMessageBox.Critical)
-			msgBox.setText("Please select a single well...")
-			msgBox.setWindowTitle("Error")
-			msgBox.setStandardButtons(QMessageBox.Ok)
-			returnValue = msgBox.exec()
-			if returnValue == QMessageBox.Ok:
-				return False
+			generic_message("Please select a single well...")
+			return False
 		else:
 			self.well_index = self.well_list.getSelectedIndices() #[self.well_list.currentIndex()]
 
@@ -452,14 +440,8 @@ class ControlPanel(QMainWindow, Styles):
 
 			pos = self.positions[w_idx]
 			if not self.position_list.isSingleSelection():
-				msgBox = QMessageBox()
-				msgBox.setIcon(QMessageBox.Critical)
-				msgBox.setText("Please select a single position...")
-				msgBox.setWindowTitle("Error")
-				msgBox.setStandardButtons(QMessageBox.Ok)
-				returnValue = msgBox.exec()
-				if returnValue == QMessageBox.Ok:
-					return False
+				generic_message("Please select a single position...")
+				return False
 			else:
 				pos_indices = self.position_list.getSelectedIndices()
 

@@ -1,7 +1,7 @@
 from PyQt5.QtWidgets import QDialog, QMainWindow, QApplication,QRadioButton, QMessageBox, QScrollArea, QComboBox, QFrame, QFileDialog, QGridLayout, QLineEdit, QVBoxLayout, QWidget, QLabel, QHBoxLayout, QPushButton
 from PyQt5.QtCore import Qt, QSize
 from PyQt5.QtGui import QDoubleValidator, QIntValidator, QIcon
-from celldetective.gui.gui_utils import center_window
+from celldetective.gui.gui_utils import center_window, generic_message
 from celldetective.gui.layouts import ChannelNormGenerator
 
 from superqt import QLabeledDoubleSlider,QLabeledSlider
@@ -587,14 +587,8 @@ class ConfigSegmentationModelTraining(QMainWindow, Styles):
 		try:
 			lr = float(self.lr_le.text().replace(',','.'))
 		except:
-			msgBox = QMessageBox()
-			msgBox.setIcon(QMessageBox.Warning)
-			msgBox.setText("Invalid value encountered for the learning rate.")
-			msgBox.setWindowTitle("Warning")
-			msgBox.setStandardButtons(QMessageBox.Ok)
-			returnValue = msgBox.exec()
-			if returnValue == QMessageBox.Ok:
-				return None			
+			generic_message('Invalid value encountered for the learning rate.')
+			return None
 		
 		bs = int(self.bs_le.text())
 		epochs = self.epochs_slider.value()

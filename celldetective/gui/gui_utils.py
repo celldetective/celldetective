@@ -25,6 +25,21 @@ from os import sep
 import json
 
 
+def generic_message(message, msg_type="warning"):
+	
+	print(message)
+	message_box = QMessageBox()
+	if msg_type=="warning":
+		message_box.setIcon(QMessageBox.Warning)
+	elif msg_type=="info":
+		message_box.setIcon(QMessageBox.Information)
+	elif msg_type=="critical":
+		message_box.setIcon(QMessageBox.Critical)
+	message_box.setText(message)
+	message_box.setWindowTitle(msg_type)
+	message_box.setStandardButtons(QMessageBox.Ok)
+	_ = message_box.exec()
+
 class PreprocessingLayout(QVBoxLayout, Styles):
 
 	"""

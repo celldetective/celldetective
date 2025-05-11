@@ -16,7 +16,7 @@ from superqt import QLabeledSlider, QLabeledDoubleRangeSlider
 from superqt.fonticon import icon
 
 from celldetective.gui import Styles
-from celldetective.gui.gui_utils import PreprocessingLayout
+from celldetective.gui.gui_utils import PreprocessingLayout, generic_message
 from celldetective.gui.gui_utils import center_window, FigureCanvas, color_from_class, help_generic
 from celldetective.gui.viewers import ThresholdedStackVisualizer
 from celldetective.io import load_frames
@@ -351,24 +351,13 @@ class ThresholdConfigWizard(QMainWindow, Styles):
             movies = glob(self.pos + f"movie/{self.parent_window.parent_window.parent_window.movie_prefix}*.tif")
 
         else:
-            message_box = QMessageBox()
-            message_box.setIcon(QMessageBox.Warning)
-            message_box.setText("Please select a unique position before launching the wizard...")
-            message_box.setWindowTitle("Warning")
-            message_box.setStandardButtons(QMessageBox.Ok)
-            _ = message_box.exec()
+            generic_message('Please select a unique position before launching the wizard...')
             self.img = None
             self.close()
             return None
 
         if len(movies) == 0:
-            message_box = QMessageBox()
-            message_box.setIcon(QMessageBox.Warning)
-            message_box.setText(
-                "No movies are detected in the experiment folder. Cannot load an image to test Haralick.")
-            message_box.setWindowTitle("Warning")
-            message_box.setStandardButtons(QMessageBox.Ok)
-            _ = message_box.exec()
+            generic_message('No movies are detected in the experiment folder. Cannot load an image to test Haralick.')
             self.img = None
             self.close()
         else:
@@ -615,16 +604,8 @@ class ThresholdConfigWizard(QMainWindow, Styles):
                 print(self.selection)
                 self.props.loc[self.selection, 'class'] = 0
             except Exception as e:
-                print(e)
-                print(self.props.columns)
-                message_box = QMessageBox()
-                message_box.setIcon(QMessageBox.Warning)
-                message_box.setText(f"The query could not be understood. No filtering was applied. {e}")
-                message_box.setWindowTitle("Warning")
-                message_box.setStandardButtons(QMessageBox.Ok)
-                return_value = message_box.exec()
-                if return_value == QMessageBox.Ok:
-                    return None
+                generic_message(f"The query could not be understood. No filtering was applied. {e}")
+                return None
 
         self.update_props_scatter()
 
