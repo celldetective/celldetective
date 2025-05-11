@@ -444,18 +444,20 @@ class CellposeParamsWidget(QWidget, Styles):
 
 		self.attr_parent.locate_image()
 		if self.attr_parent.current_stack is not None:
+			max_size = np.amax([self.attr_parent.shape_x, self.attr_parent.shape_y])
 			self.viewer = CellSizeViewer(
-										  initial_diameter = float(self.diameter_le.text().replace(',', '.')),
-										  parent_le = self.diameter_le,
-										  stack_path=self.attr_parent.current_stack,
-										  window_title=f'Position {self.attr_parent.position_list.currentText()}',
-										  frame_slider = True,
-										  contrast_slider = True,
-										  channel_cb = True,
-										  channel_names = self.attr_parent.exp_channels,
-										  n_channels = self.attr_parent.nbr_channels,
-										  PxToUm = 1,
-										 )
+										initial_diameter = float(self.diameter_le.text().replace(',', '.')),
+										parent_le = self.diameter_le,
+										stack_path=self.attr_parent.current_stack,
+										window_title=f'Position {self.attr_parent.position_list.currentText()}',
+										diameter_slider_range=(0, max_size),
+										frame_slider = True,
+										contrast_slider = True,
+										channel_cb = True,
+										channel_names = self.attr_parent.exp_channels,
+										n_channels = self.attr_parent.nbr_channels,
+										PxToUm = 1,
+										)
 			self.viewer.show()
 
 class ChannelNormGenerator(QVBoxLayout, Styles):
