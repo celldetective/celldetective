@@ -1,3 +1,5 @@
+import os
+
 import numpy as np
 from PyQt5.QtWidgets import QGridLayout, QApplication, QMessageBox, QFrame, QSizePolicy, QWidget, QLineEdit, QListWidget, QVBoxLayout, QComboBox, \
 	QPushButton, QLabel, QHBoxLayout, QCheckBox, QFileDialog, QToolButton, QMenu, QStylePainter, QStyleOptionComboBox, QStyle
@@ -11,6 +13,8 @@ from fonticon_mdi6 import MDI6
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT
 import matplotlib.pyplot as plt
+
+from celldetective.utils import get_software_location
 
 try:
 	import celldetective.extra_properties as extra_properties

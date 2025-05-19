@@ -185,7 +185,7 @@ class ConfigNewExperiment(QMainWindow, Styles):
 		self.movie_prefix_field.setText("")
 		self.ms_grid.addWidget(self.movie_prefix_field, 12, 0, 1, 3)
 
-		self.ms_grid.addWidget(QLabel("X shape in pixels:"), 13, 0, 1, 3)
+		self.ms_grid.addWidget(QLabel("Image width:"), 13, 0, 1, 3)
 		self.shape_x_field = QLineEdit()
 		self.shape_x_field.setValidator(onlyInt)
 		self.shape_x_field.setAlignment(Qt.AlignLeft)	
@@ -194,7 +194,7 @@ class ConfigNewExperiment(QMainWindow, Styles):
 		self.shape_x_field.setText("2048")
 		self.ms_grid.addWidget(self.shape_x_field, 14, 0, 1, 3)
 
-		self.ms_grid.addWidget(QLabel("Y shape in pixels:"), 15, 0, 1, 3)
+		self.ms_grid.addWidget(QLabel("Image height:"), 15, 0, 1, 3)
 		self.shape_y_field = QLineEdit()
 		self.shape_y_field.setValidator(onlyInt)
 		self.shape_y_field.setAlignment(Qt.AlignLeft)	
