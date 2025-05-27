@@ -96,12 +96,12 @@ class ProcessPanel(QFrame, Styles):
 		#self.grid.addWidget(self.help_pop_btn, 0, 0, 1, 3, alignment=Qt.AlignRight)
 
 
-		self.select_all_btn = QPushButton()
-		self.select_all_btn.setIcon(icon(MDI6.checkbox_blank_outline,color="black"))
-		self.select_all_btn.setIconSize(QSize(20, 20))
-		self.all_ticked = False
-		self.select_all_btn.clicked.connect(self.tick_all_actions)
-		self.select_all_btn.setStyleSheet(self.button_select_all)
+		# self.select_all_btn = QPushButton()
+		# self.select_all_btn.setIcon(icon(MDI6.checkbox_blank_outline,color="black"))
+		# self.select_all_btn.setIconSize(QSize(20, 20))
+		# self.all_ticked = False
+		# self.select_all_btn.clicked.connect(self.tick_all_actions)
+		# self.select_all_btn.setStyleSheet(self.button_select_all)
 		#self.grid.addWidget(self.select_all_btn, 0, 0, 1, 4, alignment=Qt.AlignLeft)
 		#self.to_disable.append(self.all_tc_actions)
 
@@ -111,7 +111,7 @@ class ProcessPanel(QFrame, Styles):
 		self.collapse_btn.setStyleSheet(self.button_select_all)
 		#self.grid.addWidget(self.collapse_btn, 0, 0, 1, 4, alignment=Qt.AlignRight)
 
-		title_hbox.addWidget(self.select_all_btn, 5)
+		title_hbox.addWidget(QLabel(), 5) #self.select_all_btn
 		title_hbox.addWidget(QLabel(), 85, alignment=Qt.AlignCenter)
 		title_hbox.addWidget(self.help_pop_btn, 5)
 		title_hbox.addWidget(self.collapse_btn, 5)
@@ -654,22 +654,22 @@ class ProcessPanel(QFrame, Styles):
 
 		self.seg_model_list.insertSeparator(len(self.models_truncated))
 
-	def tick_all_actions(self):
-		self.switch_all_ticks_option()
-		if self.all_ticked:
-			self.select_all_btn.setIcon(icon(MDI6.checkbox_outline,color="black"))
-			self.select_all_btn.setIconSize(QSize(20, 20))
-			self.segment_action.setChecked(True)
-		else:
-			self.select_all_btn.setIcon(icon(MDI6.checkbox_blank_outline,color="black"))
-			self.select_all_btn.setIconSize(QSize(20, 20))
-			self.segment_action.setChecked(False)
+	# def tick_all_actions(self):
+	# 	self.switch_all_ticks_option()
+	# 	if self.all_ticked:
+	# 		self.select_all_btn.setIcon(icon(MDI6.checkbox_outline,color="black"))
+	# 		self.select_all_btn.setIconSize(QSize(20, 20))
+	# 		self.segment_action.setChecked(True)
+	# 	else:
+	# 		self.select_all_btn.setIcon(icon(MDI6.checkbox_blank_outline,color="black"))
+	# 		self.select_all_btn.setIconSize(QSize(20, 20))
+	# 		self.segment_action.setChecked(False)
 
-	def switch_all_ticks_option(self):
-		if self.all_ticked == True:
-			self.all_ticked = False
-		else:
-			self.all_ticked = True
+	# def switch_all_ticks_option(self):
+	# 	if self.all_ticked == True:
+	# 		self.all_ticked = False
+	# 	else:
+	# 		self.all_ticked = True
 
 	def upload_segmentation_model(self):
 		print('Load a segmentation model or pipeline...')
@@ -1612,13 +1612,13 @@ class PreprocessingPanel(QFrame, Styles):
 
 		self.grid.addWidget(panel_title, 0, 0, 1, 4, alignment=Qt.AlignCenter)
 
-		self.select_all_btn = QPushButton()
-		self.select_all_btn.setIcon(icon(MDI6.checkbox_blank_outline,color="black"))
-		self.select_all_btn.setIconSize(QSize(20, 20))
-		self.all_ticked = False
-		#self.select_all_btn.clicked.connect(self.tick_all_actions)
-		self.select_all_btn.setStyleSheet(self.button_select_all)
-		self.grid.addWidget(self.select_all_btn, 0, 0, 1, 4, alignment=Qt.AlignLeft)
+		# self.select_all_btn = QPushButton()
+		# self.select_all_btn.setIcon(icon(MDI6.checkbox_blank_outline,color="black"))
+		# self.select_all_btn.setIconSize(QSize(20, 20))
+		# self.all_ticked = False
+		# #self.select_all_btn.clicked.connect(self.tick_all_actions)
+		# self.select_all_btn.setStyleSheet(self.button_select_all)
+		# self.grid.addWidget(self.select_all_btn, 0, 0, 1, 4, alignment=Qt.AlignLeft)
 		#self.to_disable.append(self.all_tc_actions)
 
 		self.collapse_btn = QPushButton()
