@@ -2,7 +2,7 @@
 Copright © 2023 Laboratoire Adhesion et Inflammation, Authored by Remy Torro.
 """
 
-from PyQt5.QtWidgets import QMainWindow, QComboBox, QLabel, QRadioButton, QLineEdit, QApplication, QPushButton, QScrollArea, QWidget, QVBoxLayout, QHBoxLayout
+from PyQt5.QtWidgets import QComboBox, QLabel, QRadioButton, QLineEdit, QApplication, QPushButton, QScrollArea, QVBoxLayout, QHBoxLayout
 from PyQt5.QtCore import Qt, QSize
 from celldetective.gui.gui_utils import center_window, QHSeperationLine
 from superqt import QLabeledDoubleSlider, QLabeledSlider
@@ -12,9 +12,9 @@ import numpy as np
 from superqt.fonticon import icon
 from fonticon_mdi6 import MDI6
 import os
-from celldetective.gui import Styles
+from celldetective.gui import CelldetectiveWidget, CelldetectiveMainWindow
 
-class ConfigSignalAnnotator(QMainWindow, Styles):
+class ConfigSignalAnnotator(CelldetectiveMainWindow):
 	
 	"""
 	UI to set normalization and animation parameters for the annotator tool. 
@@ -58,7 +58,7 @@ class ConfigSignalAnnotator(QMainWindow, Styles):
 		"""
 
 		self.scroll_area = QScrollArea(self)
-		self.button_widget = QWidget()
+		self.button_widget = CelldetectiveWidget()
 
 		self.main_layout = QVBoxLayout()
 		self.main_layout.setContentsMargins(30,30,30,30)

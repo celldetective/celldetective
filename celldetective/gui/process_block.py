@@ -1,5 +1,5 @@
 from PyQt5.QtWidgets import QDialog, QFrame, QGridLayout, QComboBox, QListWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout, QCheckBox, \
-	QMessageBox, QWidget
+	QMessageBox
 from PyQt5.QtCore import Qt, QSize
 from superqt.fonticon import icon
 from fonticon_mdi6 import MDI6
@@ -11,13 +11,12 @@ from celldetective.gui.signal_annotator import MeasureAnnotator
 from celldetective.gui.signal_annotator2 import SignalAnnotator2
 from celldetective.io import get_segmentation_models_list, control_segmentation_napari, get_signal_models_list, \
 	control_tracks, load_experiment_tables, get_pair_signal_models_list
-from celldetective.io import locate_segmentation_model, extract_position_name, fix_missing_labels, auto_load_number_of_frames, load_frames, locate_signal_model
-from celldetective.gui import SegmentationModelLoader, ClassifierWidget, ConfigNeighborhoods, ConfigSegmentationModelTraining, ConfigTracking, SignalAnnotator, ConfigSignalModelTraining, ConfigMeasurements, ConfigSignalAnnotator, TableUI
+from celldetective.io import locate_segmentation_model, extract_position_name, fix_missing_labels, locate_signal_model
+from celldetective.gui import SegmentationModelLoader, ClassifierWidget, ConfigNeighborhoods, \
+	ConfigSegmentationModelTraining, ConfigTracking, SignalAnnotator, ConfigSignalModelTraining, ConfigMeasurements, \
+	ConfigSignalAnnotator, TableUI, CelldetectiveWidget
 from celldetective.gui.gui_utils import QHSeperationLine
 from celldetective.relative_measurements import rel_measure_at_position
-from celldetective.segmentation import segment_at_position, segment_from_threshold_at_position
-from celldetective.tracking import track_at_position
-from celldetective.measure import measure_at_position
 from celldetective.signals import analyze_signals_at_position, analyze_pair_signals_at_position
 from celldetective.utils import extract_experiment_channels
 import numpy as np
@@ -28,12 +27,9 @@ import pandas as pd
 from celldetective.gui.gui_utils import center_window
 from tifffile import imwrite
 import json
-import psutil
 from celldetective.neighborhood import compute_neighborhood_at_position, compute_contact_neighborhood_at_position
-from celldetective.gui.gui_utils import FigureCanvas
 from celldetective.preprocessing import correct_background_model_free, correct_background_model, correct_channel_offset
-from celldetective.utils import _estimate_scale_factor, _extract_channel_indices_from_config, _extract_channel_indices, ConfigSectionMap, _extract_nbr_channels_from_config, _get_img_num_per_channel, normalize_per_channel
-from celldetective.gui.gui_utils import ThresholdLineEdit, QuickSliderLayout, help_generic
+from celldetective.gui.gui_utils import help_generic
 from celldetective.gui.layouts import SignalModelParamsWidget, SegModelParamsWidget, CellposeParamsWidget, StarDistParamsWidget, BackgroundModelFreeCorrectionLayout, ProtocolDesignerLayout, BackgroundFitCorrectionLayout, ChannelOffsetOptionsLayout
 from celldetective.gui import Styles
 from celldetective.utils import get_software_location
@@ -42,9 +38,6 @@ from celldetective.gui.workers import ProgressWindow
 from celldetective.gui.processes.segment_cells import SegmentCellThresholdProcess, SegmentCellDLProcess
 from celldetective.gui.processes.track_cells import TrackingProcess
 from celldetective.gui.processes.measure_cells import MeasurementProcess
-
-import time
-import asyncio
 
 class ProcessPanel(QFrame, Styles):
 	def __init__(self, parent_window, mode):
@@ -97,12 +90,12 @@ class ProcessPanel(QFrame, Styles):
 		#self.grid.addWidget(self.help_pop_btn, 0, 0, 1, 3, alignment=Qt.AlignRight)
 
 
-		self.select_all_btn = QPushButton()
-		self.select_all_btn.setIcon(icon(MDI6.checkbox_blank_outline,color="black"))
-		self.select_all_btn.setIconSize(QSize(20, 20))
-		self.all_ticked = False
-		self.select_all_btn.clicked.connect(self.tick_all_actions)
-		self.select_all_btn.setStyleSheet(self.button_select_all)
+		# self.select_all_btn = QPushButton()
+		# self.select_all_btn.setIcon(icon(MDI6.checkbox_blank_outline,color="black"))
+		# self.select_all_btn.setIconSize(QSize(20, 20))
+		# self.all_ticked = False
+		# self.select_all_btn.clicked.connect(self.tick_all_actions)
+		# self.select_all_btn.setStyleSheet(self.button_select_all)
 		#self.grid.addWidget(self.select_all_btn, 0, 0, 1, 4, alignment=Qt.AlignLeft)
 		#self.to_disable.append(self.all_tc_actions)
 
@@ -112,7 +105,7 @@ class ProcessPanel(QFrame, Styles):
 		self.collapse_btn.setStyleSheet(self.button_select_all)
 		#self.grid.addWidget(self.collapse_btn, 0, 0, 1, 4, alignment=Qt.AlignRight)
 
-		title_hbox.addWidget(self.select_all_btn, 5)
+		title_hbox.addWidget(QLabel(), 5) #self.select_all_btn
 		title_hbox.addWidget(QLabel(), 85, alignment=Qt.AlignCenter)
 		title_hbox.addWidget(self.help_pop_btn, 5)
 		title_hbox.addWidget(self.collapse_btn, 5)
@@ -460,7 +453,7 @@ class ProcessPanel(QFrame, Styles):
 		Widget with different decision helper decision trees.
 		"""
 
-		self.help_w = QWidget()
+		self.help_w = CelldetectiveWidget()
 		self.help_w.setWindowTitle('Helper')
 		layout = QVBoxLayout()
 		seg_strategy_btn = QPushButton('A guide to choose a segmentation strategy.')
@@ -655,22 +648,22 @@ class ProcessPanel(QFrame, Styles):
 
 		self.seg_model_list.insertSeparator(len(self.models_truncated))
 
-	def tick_all_actions(self):
-		self.switch_all_ticks_option()
-		if self.all_ticked:
-			self.select_all_btn.setIcon(icon(MDI6.checkbox_outline,color="black"))
-			self.select_all_btn.setIconSize(QSize(20, 20))
-			self.segment_action.setChecked(True)
-		else:
-			self.select_all_btn.setIcon(icon(MDI6.checkbox_blank_outline,color="black"))
-			self.select_all_btn.setIconSize(QSize(20, 20))
-			self.segment_action.setChecked(False)
+	# def tick_all_actions(self):
+	# 	self.switch_all_ticks_option()
+	# 	if self.all_ticked:
+	# 		self.select_all_btn.setIcon(icon(MDI6.checkbox_outline,color="black"))
+	# 		self.select_all_btn.setIconSize(QSize(20, 20))
+	# 		self.segment_action.setChecked(True)
+	# 	else:
+	# 		self.select_all_btn.setIcon(icon(MDI6.checkbox_blank_outline,color="black"))
+	# 		self.select_all_btn.setIconSize(QSize(20, 20))
+	# 		self.segment_action.setChecked(False)
 
-	def switch_all_ticks_option(self):
-		if self.all_ticked == True:
-			self.all_ticked = False
-		else:
-			self.all_ticked = True
+	# def switch_all_ticks_option(self):
+	# 	if self.all_ticked == True:
+	# 		self.all_ticked = False
+	# 	else:
+	# 		self.all_ticked = True
 
 	def upload_segmentation_model(self):
 		print('Load a segmentation model or pipeline...')
@@ -771,6 +764,8 @@ class ProcessPanel(QFrame, Styles):
 			else:
 				print('erase tabs!')
 				tabs = [pos+os.sep.join(['output', 'tables', f'trajectories_{self.mode}.csv']) for pos in self.df_pos_info['pos_path'].unique()]
+				#tabs += [pos+os.sep.join(['output', 'tables', f'trajectories_pairs.csv']) for pos in self.df_pos_info['pos_path'].unique()]
+				tabs += [pos+os.sep.join(['output', 'tables', f'napari_{self.mode}_trajectories.npy']) for pos in self.df_pos_info['pos_path'].unique()]
 				for t in tabs:
 					if os.path.exists(t.replace('.csv','.pkl')):
 						os.remove(t.replace('.csv','.pkl'))
@@ -1620,13 +1615,13 @@ class PreprocessingPanel(QFrame, Styles):
 
 		self.grid.addWidget(panel_title, 0, 0, 1, 4, alignment=Qt.AlignCenter)
 
-		self.select_all_btn = QPushButton()
-		self.select_all_btn.setIcon(icon(MDI6.checkbox_blank_outline,color="black"))
-		self.select_all_btn.setIconSize(QSize(20, 20))
-		self.all_ticked = False
-		#self.select_all_btn.clicked.connect(self.tick_all_actions)
-		self.select_all_btn.setStyleSheet(self.button_select_all)
-		self.grid.addWidget(self.select_all_btn, 0, 0, 1, 4, alignment=Qt.AlignLeft)
+		# self.select_all_btn = QPushButton()
+		# self.select_all_btn.setIcon(icon(MDI6.checkbox_blank_outline,color="black"))
+		# self.select_all_btn.setIconSize(QSize(20, 20))
+		# self.all_ticked = False
+		# #self.select_all_btn.clicked.connect(self.tick_all_actions)
+		# self.select_all_btn.setStyleSheet(self.button_select_all)
+		# self.grid.addWidget(self.select_all_btn, 0, 0, 1, 4, alignment=Qt.AlignLeft)
 		#self.to_disable.append(self.all_tc_actions)
 
 		self.collapse_btn = QPushButton()

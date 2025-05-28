@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import QApplication, QComboBox, QFrame, QCheckBox, QVBoxLayout, QWidget, QLabel, QHBoxLayout, QPushButton
+from PyQt5.QtWidgets import QApplication, QComboBox, QFrame, QCheckBox, QVBoxLayout, QLabel, QHBoxLayout, QPushButton
 from PyQt5.QtCore import Qt, QSize
 from PyQt5.QtGui import QIcon
 from celldetective.gui.gui_utils import center_window, ListWidget, DistanceChoice
@@ -10,9 +10,10 @@ import os
 from glob import glob
 import pandas as pd
 from celldetective.gui.viewers import CellSizeViewer, CellEdgeVisualizer
-from celldetective.gui import Styles
+from celldetective.gui import Styles, CelldetectiveWidget
 
-class ConfigNeighborhoods(QWidget, Styles):
+
+class ConfigNeighborhoods(CelldetectiveWidget):
 	
 	"""
 	Widget to configure neighborhood measurements.
@@ -24,7 +25,6 @@ class ConfigNeighborhoods(QWidget, Styles):
 		super().__init__(*args, **kwargs)
 		self.parent_window = parent_window
 		self.attr_parent = self.parent_window.parent_window
-		self.setWindowIcon(QIcon(os.sep.join(['celldetective','icons','logo.png'])))
 
 		self.neighborhood_type = neighborhood_type
 		self.neighborhood_parameter_name = neighborhood_parameter_name
@@ -43,7 +43,6 @@ class ConfigNeighborhoods(QWidget, Styles):
 		self.generate_main_layout()
 		self.load_previous_neighborhood_instructions()
 		center_window(self)
-		self.setAttribute(Qt.WA_DeleteOnClose)
 
 	def generate_main_layout(self):
 

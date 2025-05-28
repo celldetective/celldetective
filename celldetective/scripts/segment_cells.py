@@ -183,12 +183,6 @@ with concurrent.futures.ThreadPoolExecutor() as executor:
 		print("Exception: ", e)
 
 print('Done.')
-
-try:
-	del model
-except:
-	pass
-
 gc.collect()
 
 

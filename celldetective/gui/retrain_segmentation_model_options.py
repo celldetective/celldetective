@@ -1,7 +1,7 @@
-from PyQt5.QtWidgets import QDialog, QMainWindow, QApplication,QRadioButton, QMessageBox, QScrollArea, QComboBox, QFrame, QFileDialog, QGridLayout, QLineEdit, QVBoxLayout, QWidget, QLabel, QHBoxLayout, QPushButton
+from PyQt5.QtWidgets import QApplication,QRadioButton, QScrollArea, QComboBox, QFrame, QFileDialog, QGridLayout, QLineEdit, QVBoxLayout, QLabel, QHBoxLayout, QPushButton
 from PyQt5.QtCore import Qt, QSize
-from PyQt5.QtGui import QDoubleValidator, QIntValidator, QIcon
-from celldetective.gui.gui_utils import center_window
+from PyQt5.QtGui import QDoubleValidator, QIntValidator
+from celldetective.gui.gui_utils import center_window, generic_message
 from celldetective.gui.layouts import ChannelNormGenerator
 
 from superqt import QLabeledDoubleSlider,QLabeledSlider
@@ -16,11 +16,10 @@ import json
 import os
 from glob import glob
 from datetime import datetime
-from celldetective.gui import Styles
-from celldetective.gui.processes.train_segmentation_model import TrainSegModelProcess
-from celldetective.gui.workers import ProgressWindow
+from celldetective.gui import CelldetectiveMainWindow, CelldetectiveWidget
 
-class ConfigSegmentationModelTraining(QMainWindow, Styles):
+
+class ConfigSegmentationModelTraining(CelldetectiveMainWindow):
 	
 	"""
 	UI to set segmentation model training instructions.
@@ -33,7 +32,6 @@ class ConfigSegmentationModelTraining(QMainWindow, Styles):
 		self.parent_window = parent_window
 		self.use_gpu = self.parent_window.use_gpu
 		self.setWindowTitle("Train segmentation model")
-		self.setWindowIcon(QIcon(os.sep.join(['celldetective','icons','mexican-hat.png'])))
 		self.mode = self.parent_window.mode
 		self.exp_dir = self.parent_window.exp_dir
 		self.soft_path = get_software_location()
@@ -62,7 +60,7 @@ class ConfigSegmentationModelTraining(QMainWindow, Styles):
 		
 		# Create button widget and layout
 		self.scroll_area = QScrollArea(self)
-		self.button_widget = QWidget()
+		self.button_widget = CelldetectiveWidget()
 		self.main_layout = QVBoxLayout()
 		self.button_widget.setLayout(self.main_layout)
 		self.main_layout.setContentsMargins(30,30,30,30)
@@ -587,14 +585,8 @@ class ConfigSegmentationModelTraining(QMainWindow, Styles):
 		try:
 			lr = float(self.lr_le.text().replace(',','.'))
 		except:
-			msgBox = QMessageBox()
-			msgBox.setIcon(QMessageBox.Warning)
-			msgBox.setText("Invalid value encountered for the learning rate.")
-			msgBox.setWindowTitle("Warning")
-			msgBox.setStandardButtons(QMessageBox.Ok)
-			returnValue = msgBox.exec()
-			if returnValue == QMessageBox.Ok:
-				return None			
+			generic_message('Invalid value encountered for the learning rate.')
+			return None
 		
 		bs = int(self.bs_le.text())
 		epochs = self.epochs_slider.value()

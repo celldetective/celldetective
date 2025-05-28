@@ -1,7 +1,6 @@
-from PyQt5.QtWidgets import QMainWindow, QApplication, QMessageBox, QHBoxLayout, QFileDialog, QVBoxLayout, QScrollArea, QCheckBox, QGridLayout, QLabel, QLineEdit, QPushButton, QWidget
+from PyQt5.QtWidgets import QApplication, QMessageBox, QHBoxLayout, QFileDialog, QVBoxLayout, QScrollArea, QCheckBox, QGridLayout, QLabel, QLineEdit, QPushButton
 from PyQt5.QtGui import QIntValidator, QDoubleValidator
 from celldetective.gui.gui_utils import center_window, help_generic
-from celldetective.gui.styles import Styles
 from celldetective.utils import get_software_location
 import json
 
@@ -13,9 +12,10 @@ from configparser import ConfigParser
 import os
 from functools import partial
 import numpy as np
-from celldetective.gui import Styles
+from celldetective.gui import CelldetectiveMainWindow, CelldetectiveWidget
 
-class ConfigNewExperiment(QMainWindow, Styles):
+
+class ConfigNewExperiment(CelldetectiveMainWindow):
 
 	def __init__(self, parent_window=None):
 		
@@ -34,7 +34,7 @@ class ConfigNewExperiment(QMainWindow, Styles):
 		
 		# Create button widget and layout
 		self.scroll_area = QScrollArea(self)
-		button_widget = QWidget()
+		button_widget = CelldetectiveWidget()
 		self.grid = QGridLayout()
 		button_widget.setLayout(self.grid)
 
@@ -185,7 +185,7 @@ class ConfigNewExperiment(QMainWindow, Styles):
 		self.movie_prefix_field.setText("")
 		self.ms_grid.addWidget(self.movie_prefix_field, 12, 0, 1, 3)
 
-		self.ms_grid.addWidget(QLabel("X shape in pixels:"), 13, 0, 1, 3)
+		self.ms_grid.addWidget(QLabel("Image width:"), 13, 0, 1, 3)
 		self.shape_x_field = QLineEdit()
 		self.shape_x_field.setValidator(onlyInt)
 		self.shape_x_field.setAlignment(Qt.AlignLeft)	
@@ -194,7 +194,7 @@ class ConfigNewExperiment(QMainWindow, Styles):
 		self.shape_x_field.setText("2048")
 		self.ms_grid.addWidget(self.shape_x_field, 14, 0, 1, 3)
 
-		self.ms_grid.addWidget(QLabel("Y shape in pixels:"), 15, 0, 1, 3)
+		self.ms_grid.addWidget(QLabel("Image height:"), 15, 0, 1, 3)
 		self.shape_y_field = QLineEdit()
 		self.shape_y_field.setValidator(onlyInt)
 		self.shape_y_field.setAlignment(Qt.AlignLeft)	
@@ -275,7 +275,7 @@ class ConfigNewExperiment(QMainWindow, Styles):
 
 	def add_custom_channel(self):
 
-		self.CustomChannelWidget = QWidget()
+		self.CustomChannelWidget = CelldetectiveWidget()
 		self.CustomChannelWidget.setWindowTitle("Custom channel")
 		layout = QVBoxLayout()
 		self.CustomChannelWidget.setLayout(layout)
@@ -364,7 +364,7 @@ class ConfigNewExperiment(QMainWindow, Styles):
 
 
 	def add_custom_population(self):
-		self.CustomPopWidget = QWidget()
+		self.CustomPopWidget = CelldetectiveWidget()
 		self.CustomPopWidget.setWindowTitle("Define custom population")
 		layout = QVBoxLayout()
 		self.CustomPopWidget.setLayout(layout)
@@ -562,7 +562,7 @@ class ConfigNewExperiment(QMainWindow, Styles):
 		print(f'New experiment successfully configured in folder {self.directory}...')
 		self.close()
 
-class SetupConditionLabels(QWidget, Styles):
+class SetupConditionLabels(CelldetectiveWidget):
 	def __init__(self, parent_window, n_wells):
 		super().__init__()
 		self.parent_window = parent_window

@@ -1,5 +1,5 @@
-from PyQt5.QtWidgets import QMainWindow, QComboBox, QLabel, QRadioButton, QLineEdit, QFileDialog, QApplication, \
-	QPushButton, QWidget, QVBoxLayout, QHBoxLayout, QMessageBox, QShortcut, QLineEdit, QSlider, QCheckBox
+from PyQt5.QtWidgets import QComboBox, QLabel, QRadioButton, QLineEdit, QFileDialog, QApplication, \
+	QPushButton, QVBoxLayout, QHBoxLayout, QMessageBox, QShortcut, QLineEdit, QSlider, QCheckBox
 from PyQt5.QtCore import Qt, QSize
 from PyQt5.QtGui import QKeySequence, QIntValidator
 
@@ -23,11 +23,11 @@ from matplotlib.animation import FuncAnimation
 from matplotlib.cm import tab10
 import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
-from celldetective.gui import Styles
+from celldetective.gui import Styles, CelldetectiveWidget, CelldetectiveMainWindow
 from celldetective.measure import contour_of_instance_segmentation
 from celldetective.utils import pretty_table
 
-class SignalAnnotator(QMainWindow, Styles):
+class SignalAnnotator(CelldetectiveMainWindow):
 	"""
 	UI to set tracking parameters for bTrack.
 
@@ -39,7 +39,6 @@ class SignalAnnotator(QMainWindow, Styles):
 		
 		center_window(self)
 		self.proceed = True
-		self.setAttribute(Qt.WA_DeleteOnClose)
 
 		self.parent_window = parent_window
 		self.setWindowTitle("Signal annotator")
@@ -96,7 +95,7 @@ class SignalAnnotator(QMainWindow, Styles):
 
 		"""
 
-		self.button_widget = QWidget()
+		self.button_widget = CelldetectiveWidget()
 		main_layout = QHBoxLayout()
 		self.button_widget.setLayout(main_layout)
 
@@ -391,7 +390,7 @@ class SignalAnnotator(QMainWindow, Styles):
 	def create_new_event_class(self):
 
 		# display qwidget to name the event
-		self.newClassWidget = QWidget()
+		self.newClassWidget = CelldetectiveWidget()
 		self.newClassWidget.setWindowTitle('Create new event class')
 
 		layout = QVBoxLayout()
@@ -1405,7 +1404,7 @@ class MeasureAnnotator(SignalAnnotator):
 
 	def __init__(self, parent_window=None):
 
-		QMainWindow.__init__(self)
+		SignalAnnotator.__init__(self)
 		self.parent_window = parent_window
 		self.setWindowTitle("Signal annotator")
 		self.mode = self.parent_window.mode
@@ -1699,7 +1698,7 @@ class MeasureAnnotator(SignalAnnotator):
 
 		"""
 
-		self.button_widget = QWidget()
+		self.button_widget = CelldetectiveWidget()
 		main_layout = QHBoxLayout()
 		self.button_widget.setLayout(main_layout)
 
@@ -2076,7 +2075,7 @@ class MeasureAnnotator(SignalAnnotator):
 	def create_new_event_class(self):
 
 		# display qwidget to name the event
-		self.newClassWidget = QWidget()
+		self.newClassWidget = CelldetectiveWidget()
 		self.newClassWidget.setWindowTitle('Create new characteristic group')
 
 		layout = QVBoxLayout()

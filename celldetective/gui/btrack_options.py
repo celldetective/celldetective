@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import QRadioButton, QButtonGroup, QMainWindow, QApplication, QMessageBox, QScrollArea, QComboBox, QFrame, QCheckBox, QFileDialog, QGridLayout, QTextEdit, QLineEdit, QVBoxLayout, QWidget, QLabel, QHBoxLayout, QPushButton
+from PyQt5.QtWidgets import QRadioButton, QButtonGroup, QApplication, QMessageBox, QScrollArea, QComboBox, QFrame, QCheckBox, QFileDialog, QGridLayout, QTextEdit, QLineEdit, QVBoxLayout, QLabel, QHBoxLayout, QPushButton
 from PyQt5.QtCore import Qt, QSize
 from PyQt5.QtGui import QDoubleValidator
 
@@ -16,9 +16,10 @@ import os
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from glob import glob
-from celldetective.gui import Styles
+from celldetective.gui import CelldetectiveWidget, CelldetectiveMainWindow
 
-class ConfigTracking(QMainWindow, Styles):
+
+class ConfigTracking(CelldetectiveMainWindow):
 	
 	"""
 	UI to set tracking parameters for bTrack.
@@ -62,7 +63,7 @@ class ConfigTracking(QMainWindow, Styles):
 		
 		# Create button widget and layout
 		self.scroll_area = QScrollArea(self)
-		self.button_widget = QWidget()
+		self.button_widget = CelldetectiveWidget()
 		main_layout = QVBoxLayout()
 		self.button_widget.setLayout(main_layout)
 		main_layout.setContentsMargins(30,30,30,30)

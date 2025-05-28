@@ -396,7 +396,7 @@ def measure_pair_signals_at_position(pos, neighborhood_protocol, velocity_kwargs
 		return df_pairs
 
 	except KeyError:
-		print(f"Neighborhood {description} not found in data frame. Measurements for this neighborhood will not be calculated")
+		print(f"Neighborhood not found in data frame. Measurements for this neighborhood will not be calculated")
 
 
 def timeline_matching(timeline1, timeline2):

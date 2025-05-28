@@ -1,9 +1,9 @@
-from PyQt5.QtWidgets import QMessageBox, QComboBox, \
-	QCheckBox, QLineEdit, QVBoxLayout, QWidget, QLabel, QHBoxLayout, QPushButton
+from PyQt5.QtWidgets import QComboBox, \
+	QCheckBox, QLineEdit, QVBoxLayout, QLabel, QHBoxLayout, QPushButton
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QIcon, QDoubleValidator
+from PyQt5.QtGui import QDoubleValidator
 
-from celldetective.gui.gui_utils import center_window
+from celldetective.gui.gui_utils import center_window, generic_message
 from celldetective.gui.generic_signal_plot import GenericSignalPlotWidget
 from superqt import QLabeledSlider, QColormapComboBox, QSearchableComboBox
 from celldetective.utils import get_software_location, _extract_labels_from_config, extract_cols_from_table_list
@@ -16,14 +16,14 @@ plt.rcParams['svg.fonttype'] = 'none'
 from glob import glob
 from natsort import natsorted
 import math
-from celldetective.gui import Styles
+from celldetective.gui import CelldetectiveWidget
 from matplotlib import colormaps
 import matplotlib.cm
 from celldetective.relative_measurements import expand_pair_table
 from celldetective.neighborhood import extract_neighborhood_in_pair_table
 
 
-class ConfigSignalPlot(QWidget, Styles):
+class ConfigSignalPlot(CelldetectiveWidget):
 	
 	"""
 	UI to set survival instructions.
@@ -35,7 +35,6 @@ class ConfigSignalPlot(QWidget, Styles):
 		super().__init__()
 		self.parent_window = parent_window
 		self.setWindowTitle("Configure signal plot")
-		self.setWindowIcon(QIcon(os.sep.join(['celldetective','icons','mexican-hat.png'])))
 		self.exp_dir = self.parent_window.exp_dir
 		self.soft_path = get_software_location()		
 		self.exp_config = self.exp_dir +"config.ini"
@@ -59,7 +58,6 @@ class ConfigSignalPlot(QWidget, Styles):
 
 		if self.auto_close:
 			self.close()
-		self.setAttribute(Qt.WA_DeleteOnClose)
 
 	def interpret_pos_location(self):
 		
@@ -293,7 +291,7 @@ class ConfigSignalPlot(QWidget, Styles):
 		is_number = np.vectorize(lambda x: np.issubdtype(x, np.number))
 		feats = cols[is_number(self.df.dtypes)]
 
-		self.feature_choice_widget = QWidget()
+		self.feature_choice_widget = CelldetectiveWidget()
 		self.feature_choice_widget.setWindowTitle("Select numeric feature")
 		layout = QVBoxLayout()
 		self.feature_choice_widget.setLayout(layout)
@@ -316,7 +314,7 @@ class ConfigSignalPlot(QWidget, Styles):
 		is_number = np.vectorize(lambda x: np.issubdtype(x, np.number))
 		feats = cols[is_number(self.df.dtypes)]
 
-		self.feature_choice_widget = QWidget()
+		self.feature_choice_widget = CelldetectiveWidget()
 		self.feature_choice_widget.setWindowTitle("Select numeric feature")
 		layout = QVBoxLayout()
 		self.feature_choice_widget.setLayout(layout)
@@ -376,14 +374,8 @@ class ConfigSignalPlot(QWidget, Styles):
 		if self.df is not None:
 
 			if class_col not in list(self.df.columns):
-				msgBox = QMessageBox()
-				msgBox.setIcon(QMessageBox.Warning)
-				msgBox.setText("The class of interest could not be found in the data. Abort.")
-				msgBox.setWindowTitle("Warning")
-				msgBox.setStandardButtons(QMessageBox.Ok)
-				returnValue = msgBox.exec()
-				if returnValue == QMessageBox.Ok:
-					return None
+				generic_message("The class of interest could not be found in the data. Abort.")
+				return None
 			else:
 				self.ask_for_features()
 		else:
@@ -408,20 +400,10 @@ class ConfigSignalPlot(QWidget, Styles):
 			self.df = extract_neighborhood_in_pair_table(self.df, reference_population=self.population_reference, neighbor_population=self.population_neigh, neighborhood_key=self.neighborhood_keys[0], contact_only=True)
 
 		if self.df is None:
-			
 			print('No table could be found...')
-			msgBox = QMessageBox()
-			msgBox.setIcon(QMessageBox.Warning)
-			msgBox.setText("No table could be found to compute survival...")
-			msgBox.setWindowTitle("Warning")
-			msgBox.setStandardButtons(QMessageBox.Ok)
-			returnValue = msgBox.exec()
-			if returnValue == QMessageBox.Ok:
-				self.close()
-				return None
-			else:
-				self.close()
-				return None
+			generic_message("No table could be found to compute survival...")
+			self.close()
+			return None
 		else:
 			self.df_well_info = self.df_pos_info.loc[:,['well_path', 'well_index', 'well_name', 'well_number', 'well_alias']].drop_duplicates()
 
@@ -430,14 +412,7 @@ class ConfigSignalPlot(QWidget, Styles):
 		# Check to move at the beginning
 		self.open_widget = True
 		if len(self.time_columns)==0:
-			msgBox = QMessageBox()
-			msgBox.setIcon(QMessageBox.Warning)
-			msgBox.setText("No synchronizing time is available...")
-			msgBox.setWindowTitle("Warning")
-			msgBox.setStandardButtons(QMessageBox.Ok)
-			returnValue = msgBox.exec()
-			if returnValue == QMessageBox.Ok:
-				pass
+			generic_message("No synchronizing time is available...")
 			self.open_widget = False
 			return None
 

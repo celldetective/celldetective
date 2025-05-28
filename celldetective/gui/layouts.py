@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import QCheckBox, QLineEdit, QWidget, QListWidget, QTabWidget, QHBoxLayout,QMessageBox, QPushButton, QVBoxLayout, QRadioButton, QLabel, QButtonGroup, QSizePolicy, QComboBox,QSpacerItem, QGridLayout
+from PyQt5.QtWidgets import QCheckBox, QLineEdit, QListWidget, QTabWidget, QHBoxLayout,QMessageBox, QPushButton, QVBoxLayout, QRadioButton, QLabel, QButtonGroup, QSizePolicy, QComboBox,QSpacerItem, QGridLayout
 from celldetective.gui.gui_utils import ThresholdLineEdit, QuickSliderLayout, center_window
 from PyQt5.QtCore import Qt, QSize
 from PyQt5.QtGui import QIntValidator, QDoubleValidator
@@ -9,7 +9,7 @@ from superqt.fonticon import icon
 from fonticon_mdi6 import MDI6
 from celldetective.utils import _extract_channel_indices_from_config
 from celldetective.gui.viewers import ThresholdedStackVisualizer, CellEdgeVisualizer, StackVisualizer, CellSizeViewer, ChannelOffsetViewer
-from celldetective.gui import Styles
+from celldetective.gui import Styles, CelldetectiveWidget
 from celldetective.preprocessing import correct_background_model, correct_background_model_free, estimate_background_per_condition
 from functools import partial
 from glob import glob
@@ -20,7 +20,7 @@ from celldetective.io import locate_segmentation_model, locate_signal_model
 import json
 
 
-class SignalModelParamsWidget(QWidget, Styles):
+class SignalModelParamsWidget(CelldetectiveWidget):
 	
 	def __init__(self, parent_window=None, model_name=None, *args, **kwargs):
 		
@@ -97,7 +97,7 @@ class SignalModelParamsWidget(QWidget, Styles):
 
 
 
-class SegModelParamsWidget(QWidget, Styles):
+class SegModelParamsWidget(CelldetectiveWidget):
 	
 	def __init__(self, parent_window=None, model_name='SD_versatile_fluo', *args, **kwargs):
 		
@@ -225,7 +225,7 @@ class SegModelParamsWidget(QWidget, Styles):
 			self.viewer.show()
 
 
-class StarDistParamsWidget(QWidget, Styles):
+class StarDistParamsWidget(CelldetectiveWidget):
 
 	"""
 	A widget to configure parameters for StarDist segmentation.
@@ -309,7 +309,7 @@ class StarDistParamsWidget(QWidget, Styles):
 		self.layout.addWidget(self.set_stardist_scale_btn)
 
 
-class CellposeParamsWidget(QWidget, Styles):
+class CellposeParamsWidget(CelldetectiveWidget):
 
 	"""
 	A widget to configure parameters for Cellpose segmentation, allowing users to set the cell diameter, 
@@ -1074,7 +1074,7 @@ class ProtocolDesignerLayout(QVBoxLayout, Styles):
 		self.tabs.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 		
 		for k in range(len(self.tab_layouts)):
-			wg = QWidget()
+			wg = CelldetectiveWidget()
 			self.tab_layouts[k].parent_window = self
 			wg.setLayout(self.tab_layouts[k])
 			self.tabs.addTab(wg, self.tab_names[k])

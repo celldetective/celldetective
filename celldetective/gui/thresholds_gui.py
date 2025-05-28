@@ -8,7 +8,7 @@ import pandas as pd
 import scipy.ndimage as ndi
 from PyQt5.QtCore import Qt, QSize
 from PyQt5.QtGui import QDoubleValidator, QIntValidator
-from PyQt5.QtWidgets import QAction, QMenu, QMainWindow, QMessageBox, QLabel, QWidget, QFileDialog, QHBoxLayout, \
+from PyQt5.QtWidgets import QAction, QMenu, QMessageBox, QLabel, QFileDialog, QHBoxLayout, \
     QGridLayout, QLineEdit, QScrollArea, QVBoxLayout, QComboBox, QPushButton, QApplication, QRadioButton, QButtonGroup
 from fonticon_mdi6 import MDI6
 from skimage.measure import regionprops_table
@@ -16,7 +16,8 @@ from superqt import QLabeledSlider, QLabeledDoubleRangeSlider
 from superqt.fonticon import icon
 
 from celldetective.gui import Styles
-from celldetective.gui.gui_utils import PreprocessingLayout
+from celldetective.gui import CelldetectiveMainWindow, CelldetectiveWidget
+from celldetective.gui.gui_utils import PreprocessingLayout, generic_message
 from celldetective.gui.gui_utils import center_window, FigureCanvas, color_from_class, help_generic
 from celldetective.gui.viewers import ThresholdedStackVisualizer
 from celldetective.io import load_frames
@@ -24,7 +25,7 @@ from celldetective.segmentation import identify_markers_from_binary, apply_water
 from celldetective.utils import get_software_location, extract_experiment_channels, rename_intensity_column
 
 
-class ThresholdConfigWizard(QMainWindow, Styles):
+class ThresholdConfigWizard(CelldetectiveMainWindow):
     """
 	UI to create a threshold pipeline for segmentation.
 
@@ -40,7 +41,7 @@ class ThresholdConfigWizard(QMainWindow, Styles):
         self.setMinimumHeight(int(0.8 * self.screen_height))
         self.setWindowTitle("Threshold configuration wizard")
         center_window(self)
-        self.setWindowIcon(self.celldetective_icon)
+
         self._createActions()
         self._createMenuBar()
 
@@ -95,14 +96,14 @@ class ThresholdConfigWizard(QMainWindow, Styles):
 		Create the multibox design.
 
 		"""
-        self.button_widget = QWidget()
+        self.button_widget = CelldetectiveWidget()
         main_layout = QHBoxLayout()
         self.button_widget.setLayout(main_layout)
 
         main_layout.setContentsMargins(30, 30, 30, 30)
 
         self.scroll_area = QScrollArea()
-        self.scroll_container = QWidget()
+        self.scroll_container = CelldetectiveWidget()
         self.scroll_area.setWidgetResizable(True)
         self.scroll_area.setWidget(self.scroll_container)
 
@@ -351,24 +352,13 @@ class ThresholdConfigWizard(QMainWindow, Styles):
             movies = glob(self.pos + f"movie/{self.parent_window.parent_window.parent_window.movie_prefix}*.tif")
 
         else:
-            message_box = QMessageBox()
-            message_box.setIcon(QMessageBox.Warning)
-            message_box.setText("Please select a unique position before launching the wizard...")
-            message_box.setWindowTitle("Warning")
-            message_box.setStandardButtons(QMessageBox.Ok)
-            _ = message_box.exec()
+            generic_message('Please select a unique position before launching the wizard...')
             self.img = None
             self.close()
             return None
 
         if len(movies) == 0:
-            message_box = QMessageBox()
-            message_box.setIcon(QMessageBox.Warning)
-            message_box.setText(
-                "No movies are detected in the experiment folder. Cannot load an image to test Haralick.")
-            message_box.setWindowTitle("Warning")
-            message_box.setStandardButtons(QMessageBox.Ok)
-            _ = message_box.exec()
+            generic_message('No movies are detected in the experiment folder. Cannot load an image to test Haralick.')
             self.img = None
             self.close()
         else:
@@ -615,16 +605,8 @@ class ThresholdConfigWizard(QMainWindow, Styles):
                 print(self.selection)
                 self.props.loc[self.selection, 'class'] = 0
             except Exception as e:
-                print(e)
-                print(self.props.columns)
-                message_box = QMessageBox()
-                message_box.setIcon(QMessageBox.Warning)
-                message_box.setText(f"The query could not be understood. No filtering was applied. {e}")
-                message_box.setWindowTitle("Warning")
-                message_box.setStandardButtons(QMessageBox.Ok)
-                return_value = message_box.exec()
-                if return_value == QMessageBox.Ok:
-                    return None
+                generic_message(f"The query could not be understood. No filtering was applied. {e}")
+                return None
 
         self.update_props_scatter()
 

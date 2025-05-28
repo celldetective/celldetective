@@ -219,7 +219,7 @@ def measure(stack=None, labels=None, trajectories=None, channel_names=None,
 		measurements = measurements.sort_values(by=[column_labels['track'],column_labels['time']])
 		measurements = measurements.dropna(subset=[column_labels['track']])
 	else:
-		measurements['ID'] = np.arange(len(df))
+		measurements['ID'] = np.arange(len(measurements))
 
 	measurements = measurements.reset_index(drop=True)
 	measurements = _remove_invalid_cols(measurements)

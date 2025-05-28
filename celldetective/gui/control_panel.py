@@ -1,7 +1,9 @@
-from PyQt5.QtWidgets import QMainWindow, QPushButton, QHBoxLayout, QLabel, QWidget, QGridLayout, QFrame, \
+from PyQt5.QtWidgets import QPushButton, QHBoxLayout, QLabel, QGridLayout, QFrame, \
 	QTabWidget, QVBoxLayout, QMessageBox, QScrollArea, QDesktopWidget
+from celldetective.gui import CelldetectiveMainWindow, CelldetectiveWidget
+
 from PyQt5.QtCore import Qt, QSize
-from celldetective.gui.gui_utils import center_window, QHSeperationLine, QCheckableComboBox
+from celldetective.gui.gui_utils import center_window, QHSeperationLine, QCheckableComboBox, generic_message
 from celldetective.utils import _extract_labels_from_config, ConfigSectionMap, extract_experiment_channels, extract_identity_col
 from celldetective.gui import ConfigEditor, ProcessPanel, PreprocessingPanel, AnalysisPanel, NeighPanel
 from celldetective.io import extract_position_name, get_experiment_wells, get_config, get_spatial_calibration, get_temporal_calibration, get_experiment_concentrations, get_experiment_cell_types, get_experiment_antibodies, get_experiment_pharmaceutical_agents, get_experiment_populations, extract_well_name_and_number
@@ -19,7 +21,7 @@ from celldetective.gui import Styles
 import pandas as pd
 
 
-class ControlPanel(QMainWindow, Styles):
+class ControlPanel(CelldetectiveMainWindow):
 
 	def __init__(self, parent_window=None, exp_dir=""):
 		
@@ -29,13 +31,12 @@ class ControlPanel(QMainWindow, Styles):
 		if not self.exp_dir.endswith(os.sep):
 			self.exp_dir = self.exp_dir+os.sep
 		self.setWindowTitle("celldetective")
-		self.setWindowIcon(self.celldetective_icon)
 		self.parent_window = parent_window
 
 		self.init_wells_and_positions()
 		self.load_configuration()
 
-		self.w = QWidget()
+		self.w = CelldetectiveWidget()
 		self.grid = QGridLayout(self.w)
 		self.grid.setSpacing(5)
 		self.grid.setContentsMargins(10,10,10,10) #left top right bottom
@@ -93,7 +94,6 @@ class ControlPanel(QMainWindow, Styles):
 		self.screen_width = desktop.screenGeometry().width()
 		self.scroll.setMinimumWidth(440)
 		
-		self.setAttribute(Qt.WA_DeleteOnClose)
 		center_window(self)
 
 
@@ -273,15 +273,9 @@ class ControlPanel(QMainWindow, Styles):
 		movies = glob(self.pos + os.sep.join(['movie', f"{self.movie_prefix}*.tif"]))
 
 		if len(movies) == 0:
-			msgBox = QMessageBox()
-			msgBox.setIcon(QMessageBox.Warning)
-			msgBox.setText("Please select a position containing a movie...")
-			msgBox.setWindowTitle("Warning")
-			msgBox.setStandardButtons(QMessageBox.Ok)
-			returnValue = msgBox.exec()
-			if returnValue == QMessageBox.Ok:
-				self.current_stack = None
-				return None
+			generic_message("Please select a position containing a movie...")
+			self.current_stack = None
+			return None
 		else:
 			self.current_stack = movies[0]
 
@@ -437,14 +431,8 @@ class ControlPanel(QMainWindow, Styles):
 		"""
 
 		if self.well_list.isMultipleSelection():
-			msgBox = QMessageBox()
-			msgBox.setIcon(QMessageBox.Critical)
-			msgBox.setText("Please select a single well...")
-			msgBox.setWindowTitle("Error")
-			msgBox.setStandardButtons(QMessageBox.Ok)
-			returnValue = msgBox.exec()
-			if returnValue == QMessageBox.Ok:
-				return False
+			generic_message("Please select a single well...")
+			return False
 		else:
 			self.well_index = self.well_list.getSelectedIndices() #[self.well_list.currentIndex()]
 
@@ -452,14 +440,8 @@ class ControlPanel(QMainWindow, Styles):
 
 			pos = self.positions[w_idx]
 			if not self.position_list.isSingleSelection():
-				msgBox = QMessageBox()
-				msgBox.setIcon(QMessageBox.Critical)
-				msgBox.setText("Please select a single position...")
-				msgBox.setWindowTitle("Error")
-				msgBox.setStandardButtons(QMessageBox.Ok)
-				returnValue = msgBox.exec()
-				if returnValue == QMessageBox.Ok:
-					return False
+				generic_message("Please select a single position...")
+				return False
 			else:
 				pos_indices = self.position_list.getSelectedIndices()
 

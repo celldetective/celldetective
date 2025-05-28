@@ -1,29 +1,27 @@
-import os
-
-from PyQt5.QtWidgets import QApplication, QMainWindow
-from PyQt5.QtWidgets import QFileDialog, QDialog, QWidget, QVBoxLayout, QCheckBox, QHBoxLayout, QLabel, QLineEdit, QPushButton, QMessageBox, QMenu, QAction
-from PyQt5.QtCore import Qt, QUrl
-from PyQt5.QtGui import QIcon, QDesktopServices, QIntValidator
-
-from glob import glob
-from superqt.fonticon import icon
-from fonticon_mdi6 import MDI6
-
-from celldetective.gui.about import AboutWidget
-from celldetective.io import correct_annotation, extract_well_name_and_number
-from celldetective.utils import download_zenodo_file, pretty_table
-from celldetective.gui.gui_utils import center_window
-from celldetective.gui import Styles, ControlPanel, ConfigNewExperiment
-
 import gc
-from subprocess import check_output, Popen
-from psutil import cpu_count
 import json
+import os
+from glob import glob
+from subprocess import Popen, check_output
 
+from PyQt5.QtCore import QUrl, Qt
+from PyQt5.QtGui import QDesktopServices, QIntValidator
+from PyQt5.QtWidgets import QAction, QApplication, QCheckBox, QDialog, QFileDialog, QHBoxLayout, QLabel, QLineEdit, \
+	QMenu, QPushButton, QVBoxLayout
+from fonticon_mdi6 import MDI6
+from psutil import cpu_count
+from superqt.fonticon import icon
+
+from celldetective.gui import ConfigNewExperiment, ControlPanel, CelldetectiveMainWindow, CelldetectiveWidget
+from celldetective.gui.about import AboutWidget
+from celldetective.gui.gui_utils import center_window, generic_message
 from celldetective.gui.processes.downloader import DownloadProcess
 from celldetective.gui.workers import ProgressWindow
+from celldetective.io import correct_annotation, extract_well_name_and_number
+from celldetective.utils import download_zenodo_file, pretty_table
 
-class AppInitWindow(QMainWindow, Styles):
+
+class AppInitWindow(CelldetectiveMainWindow):
 
 	"""
 	Initial window to set the experiment folder or create a new one.
@@ -36,7 +34,7 @@ class AppInitWindow(QMainWindow, Styles):
 		self.parent_window = parent_window
 		self.setWindowTitle("celldetective")
 
-		self.n_threads = min([1,cpu_count()])
+		self.n_threads = min([1, cpu_count()])
 
 		try:
 			check_output('nvidia-smi')
@@ -48,7 +46,6 @@ class AppInitWindow(QMainWindow, Styles):
 
 		self.soft_path = software_location
 		self.onlyInt = QIntValidator()
-		self.setWindowIcon(QIcon(os.sep.join([self.soft_path,'celldetective','icons','logo.png'])))
 
 		self._createActions()
 		self._createMenuBar()
@@ -58,9 +55,9 @@ class AppInitWindow(QMainWindow, Styles):
 		self.geometry = self.screen.availableGeometry()
 		self.screen_width, self.screen_height = self.geometry.getRect()[-2:]
 
-		central_widget = QWidget()
+		central_widget = CelldetectiveWidget()
 		self.vertical_layout = QVBoxLayout(central_widget)
-		self.vertical_layout.setContentsMargins(15,15,15,15)
+		self.vertical_layout.setContentsMargins(15, 15, 15, 15)
 		self.vertical_layout.addWidget(QLabel("Experiment folder:"))
 		self.create_locate_exp_hbox()
 		self.create_buttons_hbox()
@@ -79,7 +76,7 @@ class AppInitWindow(QMainWindow, Styles):
 	def create_locate_exp_hbox(self):
 
 		self.locate_exp_layout = QHBoxLayout()
-		self.locate_exp_layout.setContentsMargins(0,5,0,0)
+		self.locate_exp_layout.setContentsMargins(0, 5, 0, 0)
 		self.experiment_path_selection = QLineEdit()
 		self.experiment_path_selection.setAlignment(Qt.AlignLeft)	
 		self.experiment_path_selection.setEnabled(True)
@@ -266,7 +263,7 @@ class AppInitWindow(QMainWindow, Styles):
 		
 		print('setting memory and threads')
 
-		self.ThreadsWidget = QWidget()
+		self.ThreadsWidget = CelldetectiveWidget()
 		self.ThreadsWidget.setWindowTitle("Threads")
 		layout = QVBoxLayout()
 		self.ThreadsWidget.setLayout(layout)
@@ -382,14 +379,8 @@ class AppInitWindow(QMainWindow, Styles):
 		wells = glob(os.sep.join([self.exp_dir,"W*"]))
 		self.number_of_wells = len(wells)
 		if self.number_of_wells==0:
-			msgBox = QMessageBox()
-			msgBox.setIcon(QMessageBox.Critical)
-			msgBox.setText("No well was found in the experiment folder.\nPlease respect the W*/ nomenclature...")
-			msgBox.setWindowTitle("Error")
-			msgBox.setStandardButtons(QMessageBox.Ok)
-			returnValue = msgBox.exec()
-			if returnValue == QMessageBox.Ok:
-				return None
+			generic_message("No well was found in the experiment folder.\nPlease respect the W*/ nomenclature...", msg_type="critical")
+			return None
 		else:
 			if self.number_of_wells==1:
 				print(f"Found {self.number_of_wells} well...")
@@ -426,12 +417,6 @@ class AppInitWindow(QMainWindow, Styles):
 		else:
 			return None
 		if not os.path.exists(os.sep.join([self.foldername,"config.ini"])):
-			msgBox = QMessageBox()
-			msgBox.setIcon(QMessageBox.Warning)
-			msgBox.setText("No configuration can be found in the selected folder...")
-			msgBox.setWindowTitle("Warning")
-			msgBox.setStandardButtons(QMessageBox.Ok)
-			returnValue = msgBox.exec()
-			if returnValue == QMessageBox.Ok:
-				self.experiment_path_selection.setText('')
-				return None
+			generic_message("No configuration can be found in the selected folder...", msg_type="warning")
+			self.experiment_path_selection.setText('')
+			return None

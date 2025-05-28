@@ -1,9 +1,9 @@
-from PyQt5.QtWidgets import QMainWindow, QComboBox, QLabel, QRadioButton, QLineEdit, QFileDialog, QApplication, \
-	QPushButton, QWidget, QVBoxLayout, QHBoxLayout, QMessageBox, QShortcut, QLineEdit, \
+from PyQt5.QtWidgets import QComboBox, QLabel, QRadioButton, QLineEdit, QFileDialog, QApplication, \
+	QPushButton, QVBoxLayout, QHBoxLayout, QMessageBox, QShortcut, QLineEdit, \
 	QButtonGroup
 from PyQt5.QtCore import Qt, QSize
 from PyQt5.QtGui import QKeySequence
-from celldetective.gui import Styles
+from celldetective.gui import Styles, CelldetectiveMainWindow, CelldetectiveWidget
 from celldetective.gui.gui_utils import center_window
 from superqt import QLabeledDoubleRangeSlider, QSearchableComboBox
 from celldetective.utils import extract_experiment_channels, get_software_location, _get_img_num_per_channel
@@ -26,7 +26,7 @@ from sklearn.preprocessing import MinMaxScaler
 from functools import partial
 from pandas.api.types import is_numeric_dtype
 
-class SignalAnnotator2(QMainWindow,Styles):
+class SignalAnnotator2(CelldetectiveMainWindow):
 
 	"""
 	UI to set tracking parameters for bTrack.
@@ -126,8 +126,6 @@ class SignalAnnotator2(QMainWindow,Styles):
 
 		#self.cell_fcanvas.setMinimumHeight(int(0.3*self.screen_height))
 
-		self.setAttribute(Qt.WA_DeleteOnClose)
-
 	def resizeEvent(self, event):
 
 		super().resizeEvent(event)
@@ -143,7 +141,7 @@ class SignalAnnotator2(QMainWindow,Styles):
 
 		"""
 
-		self.button_widget = QWidget()
+		self.button_widget = CelldetectiveWidget()
 		main_layout = QHBoxLayout()
 		main_layout.setSpacing(30)
 
@@ -525,7 +523,7 @@ class SignalAnnotator2(QMainWindow,Styles):
 	def create_new_relative_event_class(self):
 
 		# display qwidget to name the event
-		self.newClassWidget = QWidget()
+		self.newClassWidget = CelldetectiveWidget()
 		self.newClassWidget.setWindowTitle('Create new event class')
 
 		layout = QVBoxLayout()

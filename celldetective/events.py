@@ -52,7 +52,7 @@ def switch_to_events(classes, event_times, max_times, origin_times=None, left_ce
 	>>> event_times = [5, 10, 15]
 	>>> max_times = [20, 20, 20]
 	>>> origin_times = [0, 0, 5]
-	>>> events, survival_times = switch_to_events_v2(classes, event_times, max_times, origin_times, FrameToMin=0.5)
+	>>> events, survival_times = switch_to_events(classes, event_times, max_times, origin_times, FrameToMin=0.5)
 	# This would process the events considering left censorship and convert survival times to minutes.
 	
 	"""
@@ -189,6 +189,7 @@ def compute_survival(df, class_of_interest, t_event, t_reference=None, FrameToMi
 	assert class_of_interest in cols,"The requested class cannot be found in the dataframe..."
 	assert t_event in cols,"The event time cannot be found in the dataframe..."
 	left_censored = False
+	first_detections = None
 
 	if not pairs:
 		groupby_cols = ['position','TRACK_ID']

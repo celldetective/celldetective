@@ -1,7 +1,7 @@
-from PyQt5.QtWidgets import QMessageBox, QComboBox, QLineEdit, QVBoxLayout, QWidget, QLabel, QHBoxLayout, QPushButton
+from PyQt5.QtWidgets import QMessageBox, QComboBox, QLineEdit, QVBoxLayout, QLabel, QHBoxLayout, QPushButton
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QDoubleValidator
-from celldetective.gui.gui_utils import center_window
+from celldetective.gui.gui_utils import center_window, generic_message
 from superqt import QColormapComboBox
 from celldetective.gui.generic_signal_plot import SurvivalPlotWidget
 from celldetective.utils import get_software_location, _extract_labels_from_config, extract_cols_from_table_list
@@ -11,14 +11,14 @@ import os
 import matplotlib.pyplot as plt
 plt.rcParams['svg.fonttype'] = 'none'
 from glob import glob
-from celldetective.gui import Styles
+from celldetective.gui import Styles, CelldetectiveWidget
 from matplotlib import colormaps
 from celldetective.events import compute_survival
 from celldetective.relative_measurements import expand_pair_table
 import matplotlib.cm
 from celldetective.neighborhood import extract_neighborhood_in_pair_table
 
-class ConfigSurvival(QWidget, Styles):
+class ConfigSurvival(CelldetectiveWidget):
 	
 	"""
 	UI to set survival instructions.
@@ -30,7 +30,6 @@ class ConfigSurvival(QWidget, Styles):
 		super().__init__()
 		self.parent_window = parent_window
 		self.setWindowTitle("Configure survival")
-		self.setWindowIcon(self.celldetective_icon)
 
 		self.exp_dir = self.parent_window.exp_dir
 		self.soft_path = get_software_location()		
@@ -53,8 +52,6 @@ class ConfigSurvival(QWidget, Styles):
 		self.populate_widget()
 		if self.auto_close:
 			self.close()
-		
-		self.setAttribute(Qt.WA_DeleteOnClose)
 
 	def interpret_pos_location(self):
 		
@@ -304,27 +301,15 @@ class ConfigSurvival(QWidget, Styles):
 			if self.class_of_interest in list(self.df.columns) and self.cbs[2].currentText() in list(self.df.columns):
 				self.compute_survival_functions()
 			else:
-				msgBox = QMessageBox()
-				msgBox.setIcon(QMessageBox.Warning)
-				msgBox.setText("The class and/or event time of interest is not found in the dataframe...")
-				msgBox.setWindowTitle("Warning")
-				msgBox.setStandardButtons(QMessageBox.Ok)
-				returnValue = msgBox.exec()
-				if returnValue == QMessageBox.Ok:
-					return None
+				generic_message("The class and/or event time of interest is not found in the dataframe...")
+				return None
 
 			if 'survival_fit' in list(self.df_pos_info.columns):
 				self.plot_window = SurvivalPlotWidget(parent_window=self, df=self.df, df_pos_info = self.df_pos_info, df_well_info = self.df_well_info, title='plot survivals')
 				self.plot_window.show()
 			else:
-				msgBox = QMessageBox()
-				msgBox.setIcon(QMessageBox.Warning)
-				msgBox.setText("No survival function was successfully computed...\nCheck your parameter choice.")
-				msgBox.setWindowTitle("Warning")
-				msgBox.setStandardButtons(QMessageBox.Ok)
-				returnValue = msgBox.exec()
-				if returnValue == QMessageBox.Ok:
-					return None	
+				generic_message("No survival function was successfully computed...\nCheck your parameter choice.")
+				return None
 
 	def load_available_tables_local(self):
 
@@ -339,14 +324,8 @@ class ConfigSurvival(QWidget, Styles):
 		self.df, self.df_pos_info = load_experiment_tables(self.exp_dir, well_option=self.well_option, position_option=self.position_option, population=self.population, return_pos_info=True)
 
 		if self.df is None:
-			msgBox = QMessageBox()
-			msgBox.setIcon(QMessageBox.Warning)
-			msgBox.setText("No table could be found.. Abort.")
-			msgBox.setWindowTitle("Warning")
-			msgBox.setStandardButtons(QMessageBox.Ok)
-			returnValue = msgBox.exec()
-			if returnValue == QMessageBox.Ok:
-				return None		
+			generic_message("No table could be found.. Abort.")
+			return None
 		else:
 			self.df_well_info = self.df_pos_info.loc[:,['well_path', 'well_index', 'well_name', 'well_number', 'well_alias']].drop_duplicates()
 
