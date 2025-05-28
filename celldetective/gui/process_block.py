@@ -10,15 +10,12 @@ from celldetective.gui.signal_annotator import MeasureAnnotator
 from celldetective.gui.signal_annotator2 import SignalAnnotator2
 from celldetective.io import get_segmentation_models_list, control_segmentation_napari, get_signal_models_list, \
 	control_tracks, load_experiment_tables, get_pair_signal_models_list
-from celldetective.io import locate_segmentation_model, extract_position_name, fix_missing_labels, auto_load_number_of_frames, load_frames, locate_signal_model
+from celldetective.io import locate_segmentation_model, extract_position_name, fix_missing_labels, locate_signal_model
 from celldetective.gui import SegmentationModelLoader, ClassifierWidget, ConfigNeighborhoods, \
 	ConfigSegmentationModelTraining, ConfigTracking, SignalAnnotator, ConfigSignalModelTraining, ConfigMeasurements, \
 	ConfigSignalAnnotator, TableUI, CelldetectiveWidget
 from celldetective.gui.gui_utils import QHSeperationLine
 from celldetective.relative_measurements import rel_measure_at_position
-from celldetective.segmentation import segment_at_position, segment_from_threshold_at_position
-from celldetective.tracking import track_at_position
-from celldetective.measure import measure_at_position
 from celldetective.signals import analyze_signals_at_position, analyze_pair_signals_at_position
 from celldetective.utils import extract_experiment_channels
 import numpy as np
@@ -29,12 +26,9 @@ import pandas as pd
 from celldetective.gui.gui_utils import center_window
 from tifffile import imwrite
 import json
-import psutil
 from celldetective.neighborhood import compute_neighborhood_at_position, compute_contact_neighborhood_at_position
-from celldetective.gui.gui_utils import FigureCanvas
 from celldetective.preprocessing import correct_background_model_free, correct_background_model, correct_channel_offset
-from celldetective.utils import _estimate_scale_factor, _extract_channel_indices_from_config, _extract_channel_indices, ConfigSectionMap, _extract_nbr_channels_from_config, _get_img_num_per_channel, normalize_per_channel
-from celldetective.gui.gui_utils import ThresholdLineEdit, QuickSliderLayout, help_generic
+from celldetective.gui.gui_utils import help_generic
 from celldetective.gui.layouts import SignalModelParamsWidget, SegModelParamsWidget, CellposeParamsWidget, StarDistParamsWidget, BackgroundModelFreeCorrectionLayout, ProtocolDesignerLayout, BackgroundFitCorrectionLayout, ChannelOffsetOptionsLayout
 from celldetective.gui import Styles
 from celldetective.utils import get_software_location
@@ -43,9 +37,6 @@ from celldetective.gui.workers import ProgressWindow
 from celldetective.gui.processes.segment_cells import SegmentCellThresholdProcess, SegmentCellDLProcess
 from celldetective.gui.processes.track_cells import TrackingProcess
 from celldetective.gui.processes.measure_cells import MeasurementProcess
-
-import time
-import asyncio
 
 class ProcessPanel(QFrame, Styles):
 	def __init__(self, parent_window, mode):
