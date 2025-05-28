@@ -1,5 +1,7 @@
-from PyQt5.QtWidgets import QMainWindow, QPushButton, QHBoxLayout, QLabel, QWidget, QGridLayout, QFrame, \
+from PyQt5.QtWidgets import QPushButton, QHBoxLayout, QLabel, QGridLayout, QFrame, \
 	QTabWidget, QVBoxLayout, QMessageBox, QScrollArea, QDesktopWidget
+from celldetective.gui import CelldetectiveMainWindow, CelldetectiveWidget
+
 from PyQt5.QtCore import Qt, QSize
 from celldetective.gui.gui_utils import center_window, QHSeperationLine, QCheckableComboBox, generic_message
 from celldetective.utils import _extract_labels_from_config, ConfigSectionMap, extract_experiment_channels, extract_identity_col
@@ -19,7 +21,7 @@ from celldetective.gui import Styles
 import pandas as pd
 
 
-class ControlPanel(QMainWindow, Styles):
+class ControlPanel(CelldetectiveMainWindow):
 
 	def __init__(self, parent_window=None, exp_dir=""):
 		
@@ -29,13 +31,12 @@ class ControlPanel(QMainWindow, Styles):
 		if not self.exp_dir.endswith(os.sep):
 			self.exp_dir = self.exp_dir+os.sep
 		self.setWindowTitle("celldetective")
-		self.setWindowIcon(self.celldetective_icon)
 		self.parent_window = parent_window
 
 		self.init_wells_and_positions()
 		self.load_configuration()
 
-		self.w = QWidget()
+		self.w = CelldetectiveWidget()
 		self.grid = QGridLayout(self.w)
 		self.grid.setSpacing(5)
 		self.grid.setContentsMargins(10,10,10,10) #left top right bottom
@@ -93,7 +94,6 @@ class ControlPanel(QMainWindow, Styles):
 		self.screen_width = desktop.screenGeometry().width()
 		self.scroll.setMinimumWidth(440)
 		
-		self.setAttribute(Qt.WA_DeleteOnClose)
 		center_window(self)
 
 

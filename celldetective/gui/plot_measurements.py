@@ -1,10 +1,10 @@
 from PyQt5.QtWidgets import QMessageBox, QScrollArea, QButtonGroup, QComboBox, \
-    QCheckBox, QVBoxLayout, QWidget, QLabel, QHBoxLayout, QPushButton, \
+    QCheckBox, QVBoxLayout, QLabel, QHBoxLayout, QPushButton, \
     QRadioButton, QSizePolicy
 from PyQt5.QtCore import Qt, QRect
-from PyQt5.QtGui import QIcon, QDoubleValidator
+from PyQt5.QtGui import QDoubleValidator
 
-from celldetective.gui import Styles
+from celldetective.gui import CelldetectiveWidget
 from celldetective.gui.gui_utils import center_window, FigureCanvas
 
 from superqt.fonticon import icon
@@ -12,7 +12,6 @@ from fonticon_mdi6 import MDI6
 from celldetective.utils import get_software_location, _extract_labels_from_config
 from celldetective.io import load_experiment_tables, get_experiment_antibodies, get_experiment_cell_types, get_experiment_concentrations, \
     get_positions_in_well, get_experiment_wells
-from celldetective.signals import mean_signal
 import numpy as np
 import json
 import os
@@ -26,7 +25,7 @@ import math
 import seaborn as sns
 
 
-class ConfigMeasurementsPlot(QWidget,Styles):
+class ConfigMeasurementsPlot(CelldetectiveWidget):
     """
     UI to set survival instructions.
 
@@ -37,7 +36,6 @@ class ConfigMeasurementsPlot(QWidget,Styles):
         super().__init__()
         self.parent_window = parent_window
         self.setWindowTitle("Configure signal plot")
-        self.setWindowIcon(QIcon(os.sep.join(['celldetective', 'icons', 'mexican-hat.png'])))
         self.exp_dir = self.parent_window.exp_dir
         self.soft_path = get_software_location()
         self.exp_config = self.exp_dir + "config.ini"
@@ -227,7 +225,7 @@ class ConfigMeasurementsPlot(QWidget,Styles):
         is_number = np.vectorize(lambda x: np.issubdtype(x, np.number))
         feats = cols[is_number(self.df.dtypes)]
 
-        self.feature_choice_widget = QWidget()
+        self.feature_choice_widget = CelldetectiveWidget()
         self.feature_choice_widget.setWindowTitle("Select numeric feature")
         layout = QVBoxLayout()
         self.feature_choice_widget.setLayout(layout)
@@ -250,7 +248,7 @@ class ConfigMeasurementsPlot(QWidget,Styles):
         is_number = np.vectorize(lambda x: np.issubdtype(x, np.number))
         feats = cols[is_number(self.df.dtypes)]
 
-        self.feature_choice_widget = QWidget()
+        self.feature_choice_widget = CelldetectiveWidget()
         self.feature_choice_widget.setWindowTitle("Select numeric feature")
         layout = QVBoxLayout()
         self.feature_choice_widget.setLayout(layout)
@@ -299,7 +297,7 @@ class ConfigMeasurementsPlot(QWidget,Styles):
             # prepare survival
 
             # plot survival
-            self.survivalWidget = QWidget()
+            self.survivalWidget = CelldetectiveWidget()
             self.scroll = QScrollArea()
             self.survivalWidget.setMinimumHeight(int(0.8 * self.screen_height))
             self.survivalWidget.setWindowTitle('signals')
@@ -500,7 +498,7 @@ class ConfigMeasurementsPlot(QWidget,Styles):
                 if name + ':' in lbl:
                     self.usable_well_labels.append(lbl)
 
-        self.line_choice_widget = QWidget()
+        self.line_choice_widget = CelldetectiveWidget()
         self.line_check_vbox = QVBoxLayout()
         self.line_choice_widget.setLayout(self.line_check_vbox)
         if len(self.well_indices) > 1:

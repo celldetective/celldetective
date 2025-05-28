@@ -1,8 +1,8 @@
-from PyQt5.QtWidgets import QWidget, QGridLayout, QComboBox, QVBoxLayout, QLabel, QLineEdit, QHBoxLayout, QRadioButton, QFileDialog, QPushButton, QMessageBox
+from PyQt5.QtWidgets import QGridLayout, QComboBox, QVBoxLayout, QLabel, QLineEdit, QHBoxLayout, QRadioButton, QFileDialog, QPushButton, QMessageBox
 from PyQt5.QtCore import Qt, QSize
 from celldetective.gui.gui_utils import center_window, generic_message
 from celldetective.gui.layouts import ChannelNormGenerator
-from celldetective.gui import ThresholdConfigWizard
+from celldetective.gui import ThresholdConfigWizard, CelldetectiveWidget
 from PyQt5.QtGui import QDoubleValidator
 from superqt.fonticon import icon
 from fonticon_mdi6 import MDI6
@@ -16,7 +16,7 @@ import gc
 from cellpose.models import CellposeModel
 
 
-class SegmentationModelLoader(QWidget, Styles):
+class SegmentationModelLoader(CelldetectiveWidget):
 	
 	"""
 	Upload a segmentation model or define a Threshold pipeline.
@@ -30,9 +30,7 @@ class SegmentationModelLoader(QWidget, Styles):
 		self.target_folder = f"segmentation_{self.mode}"
 		self.setWindowTitle('Upload model')
 		self.generate_content()
-		self.setWindowIcon(self.celldetective_icon)
 		center_window(self)
-		self.setAttribute(Qt.WA_DeleteOnClose)
 
 	def generate_content(self):
 

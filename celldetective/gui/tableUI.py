@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import QRadioButton, QButtonGroup, QMainWindow, QTableView, QAction, QMenu,QFileDialog, QLineEdit, QHBoxLayout, QWidget, QPushButton, QVBoxLayout, QComboBox, QLabel, QCheckBox, QMessageBox
+from PyQt5.QtWidgets import QRadioButton, QButtonGroup, QTableView, QAction, QMenu,QFileDialog, QLineEdit, QHBoxLayout, QPushButton, QVBoxLayout, QComboBox, QLabel, QCheckBox, QMessageBox
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QBrush, QColor, QDoubleValidator
 import pandas as pd
@@ -12,7 +12,7 @@ import numpy as np
 import seaborn as sns
 import matplotlib.cm as mcm
 import os
-from celldetective.gui import Styles
+from celldetective.gui import CelldetectiveWidget, CelldetectiveMainWindow
 from superqt import QColormapComboBox, QLabeledSlider, QSearchableComboBox
 from superqt.fonticon import icon
 from fonticon_mdi6 import MDI6
@@ -22,12 +22,13 @@ from matplotlib import colormaps
 import matplotlib.cm
 
 
-class QueryWidget(QWidget):
+class QueryWidget(CelldetectiveWidget):
 
 	def __init__(self, parent_window):
 
 		super().__init__()
 		self.parent_window = parent_window
+
 		self.setWindowTitle("Filter table")
 		# Create the QComboBox and add some items
 
@@ -39,7 +40,6 @@ class QueryWidget(QWidget):
 		self.submit_btn = QPushButton('submit')
 		self.submit_btn.clicked.connect(self.filter_table)
 		layout.addWidget(self.submit_btn, 30)
-		self.setAttribute(Qt.WA_DeleteOnClose)
 		center_window(self)
 
 	def filter_table(self):
@@ -54,7 +54,7 @@ class QueryWidget(QWidget):
 			return None
 
 
-class MergeOneHotWidget(QWidget, Styles):
+class MergeOneHotWidget(CelldetectiveWidget):
 
 	def __init__(self, parent_window, selected_columns=None):
 
@@ -139,7 +139,7 @@ class MergeOneHotWidget(QWidget, Styles):
 			self.submit_btn.setEnabled(True)
 
 
-class DifferentiateColWidget(QWidget, Styles):
+class DifferentiateColWidget(CelldetectiveWidget):
 
 	def __init__(self, parent_window, column=None):
 
@@ -217,7 +217,7 @@ class DifferentiateColWidget(QWidget, Styles):
 
 
 
-class OperationOnColsWidget(QWidget, Styles):
+class OperationOnColsWidget(CelldetectiveWidget):
 
 	def __init__(self, parent_window, column1=None, column2=None, operation='divide'):
 
@@ -394,7 +394,7 @@ class LogColWidget(GenericOpColWidget):
 		self.parent_window.data['log10('+self.measurements_cb.currentText()+')'] = safe_log(self.parent_window.data[self.measurements_cb.currentText()].values)
 
 
-class RenameColWidget(QWidget):
+class RenameColWidget(CelldetectiveWidget):
 
 	def __init__(self, parent_window, column=None):
 
@@ -429,11 +429,11 @@ class RenameColWidget(QWidget):
 		self.parent_window.table_view.setModel(self.parent_window.model)
 		self.close()
 
-class PivotTableUI(QWidget):
+class PivotTableUI(CelldetectiveWidget):
 
 	def __init__(self, data, title="", mode=None, *args, **kwargs):
 
-		QWidget.__init__(self, *args, **kwargs)
+		CelldetectiveWidget.__init__(self, *args, **kwargs)
 		
 		self.data = data
 		self.title = title
@@ -535,11 +535,11 @@ class PivotTableUI(QWidget):
 		"""
 		self.information_label.setText(html_caption)
 
-class TableUI(QMainWindow, Styles):
+class TableUI(CelldetectiveMainWindow):
 
 	def __init__(self, data, title, population='targets',plot_mode="plot_track_signals", save_inplace_option=False, collapse_tracks_option=True, *args, **kwargs):
 
-		QMainWindow.__init__(self, *args, **kwargs)
+		CelldetectiveMainWindow.__init__(self, *args, **kwargs)
 
 		self.setWindowTitle(title)
 		self.setGeometry(100,100,1000,400)
@@ -574,7 +574,6 @@ class TableUI(QMainWindow, Styles):
 		self.model = PandasModel(data)
 		self.table_view.setModel(self.model)
 		self.table_view.resizeColumnsToContents()
-		self.setAttribute(Qt.WA_DeleteOnClose)
 
 	def resizeEvent(self, event):
 
@@ -696,7 +695,7 @@ class TableUI(QMainWindow, Styles):
 
 	def collapse_pairs_in_neigh(self):
 
-		self.selectNeighWidget = QWidget()
+		self.selectNeighWidget = CelldetectiveWidget()
 		self.selectNeighWidget.setMinimumWidth(480)
 		self.selectNeighWidget.setWindowTitle('Set neighborhood of interest')
 		
@@ -1037,14 +1036,11 @@ class TableUI(QMainWindow, Styles):
 
 		x = self.table_view.selectedIndexes()
 		col_idx = np.unique(np.array([l.column() for l in x]))
+		selected_cols = None
 		if isinstance(col_idx, (list, np.ndarray)):
 			cols = np.array(list(self.data.columns))
 			if len(col_idx)>0:
 				selected_col = str(cols[col_idx[0]])
-			else:
-				selected_col = None
-		else:
-			selected_col = None
 
 		self.mergewidget = MergeOneHotWidget(self, selected_columns=selected_cols)
 		self.mergewidget.show()
@@ -1098,7 +1094,7 @@ class TableUI(QMainWindow, Styles):
 		
 		self.current_data = self.data
 
-		self.projectionWidget = QWidget()
+		self.projectionWidget = CelldetectiveWidget()
 		self.projectionWidget.setMinimumWidth(500)
 		self.projectionWidget.setWindowTitle('Set projection mode')
 		
@@ -1198,7 +1194,7 @@ class TableUI(QMainWindow, Styles):
 
 	def set_1D_plot_params(self):
 
-		self.plot1Dparams = QWidget()
+		self.plot1Dparams = CelldetectiveWidget()
 		self.plot1Dparams.setWindowTitle('Set 1D plot parameters')
 		
 		layout = QVBoxLayout()

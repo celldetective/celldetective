@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import QMainWindow, QApplication, QDialog, QMessageBox, QScrollArea, QComboBox, QFrame, QCheckBox, QFileDialog, QGridLayout, QLineEdit, QVBoxLayout, QWidget, QLabel, QHBoxLayout, QPushButton
+from PyQt5.QtWidgets import QApplication, QDialog, QMessageBox, QScrollArea, QComboBox, QFrame, QCheckBox, QFileDialog, QGridLayout, QLineEdit, QVBoxLayout, QLabel, QHBoxLayout, QPushButton
 from PyQt5.QtCore import Qt, QSize
 from PyQt5.QtGui import QDoubleValidator, QIntValidator, QIcon
 from celldetective.gui.gui_utils import center_window
@@ -14,12 +14,12 @@ import json
 import os
 from glob import glob
 from datetime import datetime
-from celldetective.gui import Styles
+from celldetective.gui import CelldetectiveMainWindow, CelldetectiveWidget
 from pandas.api.types import is_numeric_dtype
 from celldetective.gui.processes.train_signal_model import TrainSignalModelProcess
 from celldetective.gui.workers import ProgressWindow
 
-class ConfigSignalModelTraining(QMainWindow, Styles):
+class ConfigSignalModelTraining(CelldetectiveMainWindow):
 	
 	"""
 	UI to set measurement instructions.
@@ -31,7 +31,6 @@ class ConfigSignalModelTraining(QMainWindow, Styles):
 		super().__init__()
 		self.parent_window = parent_window
 		self.setWindowTitle("Train signal model")
-		self.setWindowIcon(QIcon(os.sep.join(['celldetective','icons','mexican-hat.png'])))
 		self.mode = self.parent_window.mode
 		self.exp_dir = self.parent_window.exp_dir
 		self.soft_path = get_software_location()
@@ -69,7 +68,7 @@ class ConfigSignalModelTraining(QMainWindow, Styles):
 		
 		# Create button widget and layout
 		self.scroll_area = QScrollArea(self)
-		self.button_widget = QWidget()
+		self.button_widget = CelldetectiveWidget()
 		self.main_layout = QVBoxLayout()
 		self.button_widget.setLayout(self.main_layout)
 		self.main_layout.setContentsMargins(30,30,30,30)

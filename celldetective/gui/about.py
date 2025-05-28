@@ -1,12 +1,14 @@
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel
+from PyQt5.QtWidgets import QVBoxLayout, QLabel
 from PyQt5.QtGui import QPixmap
 from PyQt5.QtCore import Qt
+
+from celldetective.gui import CelldetectiveWidget
 from celldetective.utils import get_software_location
 import os
 from celldetective.gui.gui_utils import center_window
 from celldetective._version import __version__
 
-class AboutWidget(QWidget):
+class AboutWidget(CelldetectiveWidget):
 
 	def __init__(self):
 

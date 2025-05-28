@@ -11,11 +11,11 @@ from natsort import natsorted
 from glob import glob
 import os
 
-from PyQt5.QtWidgets import QWidget, QHBoxLayout, QPushButton, QLabel, QComboBox, QLineEdit, QListWidget, QShortcut
+from PyQt5.QtWidgets import QHBoxLayout, QPushButton, QLabel, QComboBox, QLineEdit, QListWidget, QShortcut
 from PyQt5.QtCore import Qt, QSize
 from PyQt5.QtGui import QKeySequence, QDoubleValidator
 from celldetective.gui.gui_utils import FigureCanvas, center_window, QuickSliderLayout, QHSeperationLine, ThresholdLineEdit, PreprocessingLayout2
-from celldetective.gui import Styles
+from celldetective.gui import Styles, CelldetectiveWidget
 from superqt import QLabeledDoubleSlider, QLabeledSlider, QLabeledDoubleRangeSlider
 from superqt.fonticon import icon
 from fonticon_mdi6 import MDI6
@@ -24,7 +24,7 @@ import gc
 from celldetective.utils import mask_edges
 from scipy.ndimage import shift
 
-class StackVisualizer(QWidget, Styles):
+class StackVisualizer(CelldetectiveWidget):
 
 	"""
 	A widget for visualizing image stacks with interactive sliders and channel selection.
@@ -92,7 +92,6 @@ class StackVisualizer(QWidget, Styles):
 			self.generate_frame_slider()
 
 		self.canvas.layout.setContentsMargins(15,15,15,30)
-		#self.setAttribute(Qt.WA_DeleteOnClose)
 		#center_window(self)
 
 	def show(self):

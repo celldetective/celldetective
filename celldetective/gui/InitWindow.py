@@ -5,14 +5,14 @@ from glob import glob
 from subprocess import Popen, check_output
 
 from PyQt5.QtCore import QUrl, Qt
-from PyQt5.QtGui import QDesktopServices, QIcon, QIntValidator
+from PyQt5.QtGui import QDesktopServices, QIntValidator
 from PyQt5.QtWidgets import QAction, QApplication, QCheckBox, QDialog, QFileDialog, QHBoxLayout, QLabel, QLineEdit, \
-	QMainWindow, QMenu, QPushButton, QVBoxLayout, QWidget
+	QMenu, QPushButton, QVBoxLayout
 from fonticon_mdi6 import MDI6
 from psutil import cpu_count
 from superqt.fonticon import icon
 
-from celldetective.gui import ConfigNewExperiment, ControlPanel, Styles
+from celldetective.gui import ConfigNewExperiment, ControlPanel, CelldetectiveMainWindow, CelldetectiveWidget
 from celldetective.gui.about import AboutWidget
 from celldetective.gui.gui_utils import center_window, generic_message
 from celldetective.gui.processes.downloader import DownloadProcess
@@ -21,7 +21,7 @@ from celldetective.io import correct_annotation, extract_well_name_and_number
 from celldetective.utils import download_zenodo_file, pretty_table
 
 
-class AppInitWindow(QMainWindow, Styles):
+class AppInitWindow(CelldetectiveMainWindow):
 
 	"""
 	Initial window to set the experiment folder or create a new one.
@@ -46,7 +46,6 @@ class AppInitWindow(QMainWindow, Styles):
 
 		self.soft_path = software_location
 		self.onlyInt = QIntValidator()
-		self.setWindowIcon(QIcon(os.sep.join([self.soft_path, 'celldetective', 'icons', 'logo.png'])))
 
 		self._createActions()
 		self._createMenuBar()
@@ -56,7 +55,7 @@ class AppInitWindow(QMainWindow, Styles):
 		self.geometry = self.screen.availableGeometry()
 		self.screen_width, self.screen_height = self.geometry.getRect()[-2:]
 
-		central_widget = QWidget()
+		central_widget = CelldetectiveWidget()
 		self.vertical_layout = QVBoxLayout(central_widget)
 		self.vertical_layout.setContentsMargins(15, 15, 15, 15)
 		self.vertical_layout.addWidget(QLabel("Experiment folder:"))
@@ -264,7 +263,7 @@ class AppInitWindow(QMainWindow, Styles):
 		
 		print('setting memory and threads')
 
-		self.ThreadsWidget = QWidget()
+		self.ThreadsWidget = CelldetectiveWidget()
 		self.ThreadsWidget.setWindowTitle("Threads")
 		layout = QVBoxLayout()
 		self.ThreadsWidget.setLayout(layout)

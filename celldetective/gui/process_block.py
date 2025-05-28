@@ -1,5 +1,5 @@
 from PyQt5.QtWidgets import QDialog, QFrame, QGridLayout, QComboBox, QListWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout, QCheckBox, \
-	QMessageBox, QWidget
+	QMessageBox
 from PyQt5.QtCore import Qt, QSize
 from superqt.fonticon import icon
 from fonticon_mdi6 import MDI6
@@ -11,7 +11,9 @@ from celldetective.gui.signal_annotator2 import SignalAnnotator2
 from celldetective.io import get_segmentation_models_list, control_segmentation_napari, get_signal_models_list, \
 	control_tracks, load_experiment_tables, get_pair_signal_models_list
 from celldetective.io import locate_segmentation_model, extract_position_name, fix_missing_labels, auto_load_number_of_frames, load_frames, locate_signal_model
-from celldetective.gui import SegmentationModelLoader, ClassifierWidget, ConfigNeighborhoods, ConfigSegmentationModelTraining, ConfigTracking, SignalAnnotator, ConfigSignalModelTraining, ConfigMeasurements, ConfigSignalAnnotator, TableUI
+from celldetective.gui import SegmentationModelLoader, ClassifierWidget, ConfigNeighborhoods, \
+	ConfigSegmentationModelTraining, ConfigTracking, SignalAnnotator, ConfigSignalModelTraining, ConfigMeasurements, \
+	ConfigSignalAnnotator, TableUI, CelldetectiveWidget
 from celldetective.gui.gui_utils import QHSeperationLine
 from celldetective.relative_measurements import rel_measure_at_position
 from celldetective.segmentation import segment_at_position, segment_from_threshold_at_position
@@ -459,7 +461,7 @@ class ProcessPanel(QFrame, Styles):
 		Widget with different decision helper decision trees.
 		"""
 
-		self.help_w = QWidget()
+		self.help_w = CelldetectiveWidget()
 		self.help_w.setWindowTitle('Helper')
 		layout = QVBoxLayout()
 		seg_strategy_btn = QPushButton('A guide to choose a segmentation strategy.')
@@ -770,6 +772,8 @@ class ProcessPanel(QFrame, Styles):
 			else:
 				print('erase tabs!')
 				tabs = [pos+os.sep.join(['output', 'tables', f'trajectories_{self.mode}.csv']) for pos in self.df_pos_info['pos_path'].unique()]
+				#tabs += [pos+os.sep.join(['output', 'tables', f'trajectories_pairs.csv']) for pos in self.df_pos_info['pos_path'].unique()]
+				tabs += [pos+os.sep.join(['output', 'tables', f'napari_{self.mode}_trajectories.npy']) for pos in self.df_pos_info['pos_path'].unique()]
 				for t in tabs:
 					if os.path.exists(t.replace('.csv','.pkl')):
 						os.remove(t.replace('.csv','.pkl'))
@@ -1567,12 +1571,12 @@ class NeighPanel(QFrame, Styles):
 			self.SignalAnnotator2 = SignalAnnotator2(self)
 			self.SignalAnnotator2.show()
 
-	def check_measurements2(self):
-
-		test = self.parent_window.locate_selected_position()
-		if test:
-			self.MeasurementAnnotator2 = MeasureAnnotator2(self)
-			self.MeasurementAnnotator2.show()
+#	def check_measurements2(self):
+#
+#		test = self.parent_window.locate_selected_position()
+#		if test:
+#			self.MeasurementAnnotator2 = MeasureAnnotator2(self)
+#			self.MeasurementAnnotator2.show()
 
 
 

@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import QMessageBox, QComboBox, QLineEdit, QVBoxLayout, QWidget, QLabel, QHBoxLayout, QPushButton
+from PyQt5.QtWidgets import QMessageBox, QComboBox, QLineEdit, QVBoxLayout, QLabel, QHBoxLayout, QPushButton
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QDoubleValidator
 from celldetective.gui.gui_utils import center_window, generic_message
@@ -11,14 +11,14 @@ import os
 import matplotlib.pyplot as plt
 plt.rcParams['svg.fonttype'] = 'none'
 from glob import glob
-from celldetective.gui import Styles
+from celldetective.gui import Styles, CelldetectiveWidget
 from matplotlib import colormaps
 from celldetective.events import compute_survival
 from celldetective.relative_measurements import expand_pair_table
 import matplotlib.cm
 from celldetective.neighborhood import extract_neighborhood_in_pair_table
 
-class ConfigSurvival(QWidget, Styles):
+class ConfigSurvival(CelldetectiveWidget):
 	
 	"""
 	UI to set survival instructions.
@@ -30,7 +30,6 @@ class ConfigSurvival(QWidget, Styles):
 		super().__init__()
 		self.parent_window = parent_window
 		self.setWindowTitle("Configure survival")
-		self.setWindowIcon(self.celldetective_icon)
 
 		self.exp_dir = self.parent_window.exp_dir
 		self.soft_path = get_software_location()		
@@ -53,8 +52,6 @@ class ConfigSurvival(QWidget, Styles):
 		self.populate_widget()
 		if self.auto_close:
 			self.close()
-		
-		self.setAttribute(Qt.WA_DeleteOnClose)
 
 	def interpret_pos_location(self):
 		
