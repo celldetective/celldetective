@@ -1,7 +1,7 @@
-from PyQt5.QtWidgets import QMessageBox, QComboBox, \
-	QCheckBox, QLineEdit, QVBoxLayout, QWidget, QLabel, QHBoxLayout, QPushButton
+from PyQt5.QtWidgets import QComboBox, \
+	QCheckBox, QLineEdit, QVBoxLayout, QLabel, QHBoxLayout, QPushButton
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QIcon, QDoubleValidator
+from PyQt5.QtGui import QDoubleValidator
 
 from celldetective.gui.gui_utils import center_window, generic_message
 from celldetective.gui.generic_signal_plot import GenericSignalPlotWidget
@@ -16,14 +16,14 @@ plt.rcParams['svg.fonttype'] = 'none'
 from glob import glob
 from natsort import natsorted
 import math
-from celldetective.gui import Styles
+from celldetective.gui import CelldetectiveWidget
 from matplotlib import colormaps
 import matplotlib.cm
 from celldetective.relative_measurements import expand_pair_table
 from celldetective.neighborhood import extract_neighborhood_in_pair_table
 
 
-class ConfigSignalPlot(QWidget, Styles):
+class ConfigSignalPlot(CelldetectiveWidget):
 	
 	"""
 	UI to set survival instructions.
@@ -35,7 +35,6 @@ class ConfigSignalPlot(QWidget, Styles):
 		super().__init__()
 		self.parent_window = parent_window
 		self.setWindowTitle("Configure signal plot")
-		self.setWindowIcon(QIcon(os.sep.join(['celldetective','icons','mexican-hat.png'])))
 		self.exp_dir = self.parent_window.exp_dir
 		self.soft_path = get_software_location()		
 		self.exp_config = self.exp_dir +"config.ini"
@@ -59,7 +58,6 @@ class ConfigSignalPlot(QWidget, Styles):
 
 		if self.auto_close:
 			self.close()
-		self.setAttribute(Qt.WA_DeleteOnClose)
 
 	def interpret_pos_location(self):
 		
@@ -293,7 +291,7 @@ class ConfigSignalPlot(QWidget, Styles):
 		is_number = np.vectorize(lambda x: np.issubdtype(x, np.number))
 		feats = cols[is_number(self.df.dtypes)]
 
-		self.feature_choice_widget = QWidget()
+		self.feature_choice_widget = CelldetectiveWidget()
 		self.feature_choice_widget.setWindowTitle("Select numeric feature")
 		layout = QVBoxLayout()
 		self.feature_choice_widget.setLayout(layout)
@@ -316,7 +314,7 @@ class ConfigSignalPlot(QWidget, Styles):
 		is_number = np.vectorize(lambda x: np.issubdtype(x, np.number))
 		feats = cols[is_number(self.df.dtypes)]
 
-		self.feature_choice_widget = QWidget()
+		self.feature_choice_widget = CelldetectiveWidget()
 		self.feature_choice_widget.setWindowTitle("Select numeric feature")
 		layout = QVBoxLayout()
 		self.feature_choice_widget.setLayout(layout)

@@ -1,12 +1,11 @@
 import os
 
-import numpy as np
-from PyQt5.QtWidgets import QGridLayout, QApplication, QMessageBox, QFrame, QSizePolicy, QWidget, QLineEdit, QListWidget, QVBoxLayout, QComboBox, \
+from PyQt5.QtWidgets import QGridLayout, QApplication, QMessageBox, QFrame, QSizePolicy, QLineEdit, QListWidget, QVBoxLayout, QComboBox, \
 	QPushButton, QLabel, QHBoxLayout, QCheckBox, QFileDialog, QToolButton, QMenu, QStylePainter, QStyleOptionComboBox, QStyle
 from PyQt5.QtCore import Qt, QSize, QAbstractTableModel, QEvent, pyqtSignal
 from PyQt5.QtGui import QDoubleValidator, QIntValidator, QStandardItemModel, QPalette
 
-from celldetective.gui import Styles
+from celldetective.gui import Styles, CelldetectiveWidget
 from superqt.fonticon import icon
 from fonticon_mdi6 import MDI6
 
@@ -354,7 +353,7 @@ class PandasModel(QAbstractTableModel):
 		self.dataChanged.emit(ix, ix, (Qt.BackgroundRole,))
 
 
-class GenericOpColWidget(QWidget, Styles):
+class GenericOpColWidget(CelldetectiveWidget):
 
 	def __init__(self, parent_window, column=None, title=''):
 
@@ -573,7 +572,7 @@ class QHSeperationLine(QFrame):
 		self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Minimum)
 
 
-class FeatureChoice(QWidget, Styles):
+class FeatureChoice(CelldetectiveWidget):
 
 	def __init__(self, parent_window):
 		super().__init__()
@@ -627,7 +626,7 @@ class FeatureChoice(QWidget, Styles):
 		self.close()
 
 
-class FilterChoice(QWidget, Styles):
+class FilterChoice(CelldetectiveWidget):
 
 	def __init__(self, parent_window):
 
@@ -735,7 +734,7 @@ class FilterChoice(QWidget, Styles):
 				self.arguments_labels[i].setText('')
 
 
-class OperationChoice(QWidget):
+class OperationChoice(CelldetectiveWidget):
 	"""
 	Mini window to select an operation from numpy to apply on the ROI.
 
@@ -766,7 +765,7 @@ class OperationChoice(QWidget):
 		self.close()
 
 
-class GeometryChoice(QWidget):
+class GeometryChoice(CelldetectiveWidget):
 
 	def __init__(self, parent_window):
 
@@ -830,7 +829,7 @@ class GeometryChoice(QWidget):
 		self.close()
 
 
-class DistanceChoice(QWidget):
+class DistanceChoice(CelldetectiveWidget):
 
 	def __init__(self, parent_window):
 		super().__init__()
@@ -864,7 +863,7 @@ class DistanceChoice(QWidget):
 		self.close()
 
 
-class ListWidget(QWidget):
+class ListWidget(CelldetectiveWidget):
 
 	"""
 	A customizable widget for displaying and managing a list of items, with the 
@@ -991,7 +990,7 @@ class ListWidget(QWidget):
 				del self.items[idx]
 
 
-class FigureCanvas(QWidget):
+class FigureCanvas(CelldetectiveWidget):
 	"""
 	Generic figure canvas.
 	"""
@@ -1248,7 +1247,7 @@ def color_from_class(cclass, recently_modified=False):
 			return 'k'
 
 
-class ChannelChoice(QWidget):
+class ChannelChoice(CelldetectiveWidget):
 
 	def __init__(self, parent_window):
 		super().__init__()

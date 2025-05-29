@@ -1,4 +1,5 @@
 from .styles import Styles
+from .base_components import CelldetectiveWidget, CelldetectiveMainWindow
 from .btrack_options import ConfigTracking
 from .json_readers import ConfigEditor
 from .tableUI import TableUI

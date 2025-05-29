@@ -39,4 +39,5 @@ trackpy
 prettyprint
 pandas
 matplotlib
+prettytable
 

@@ -123,7 +123,7 @@ class SegmentCellDLProcess(BaseSegmentProcess):
 			self.required_channels = self.input_config['selected_channels']
 		
 		self.target_cell_size = None
-		if 'target_cell_size_um' in self.input_config:
+		if 'target_cell_size_um' in self.input_config and 'cell_size_um' in self.input_config:
 			self.target_cell_size = self.input_config['target_cell_size_um']
 			self.cell_size = self.input_config['cell_size_um']
 

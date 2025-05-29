@@ -1,8 +1,9 @@
+from subprocess import Popen
 
-from PyQt5.QtWidgets import QMainWindow, QApplication, QMessageBox, QScrollArea, QComboBox, QFrame, QCheckBox, \
-	QGridLayout, QLineEdit, QVBoxLayout, QWidget, QLabel, QHBoxLayout, QPushButton
+from PyQt5.QtWidgets import QApplication, QMessageBox, QScrollArea, QComboBox, QFrame, QCheckBox, \
+	QGridLayout, QLineEdit, QVBoxLayout, QLabel, QHBoxLayout, QPushButton
 from PyQt5.QtCore import Qt, QSize
-from PyQt5.QtGui import QIcon, QDoubleValidator, QIntValidator
+from PyQt5.QtGui import QDoubleValidator, QIntValidator
 
 from celldetective.gui.gui_utils import center_window, FeatureChoice, ListWidget, QHSeperationLine, FigureCanvas, \
 	GeometryChoice, OperationChoice
@@ -10,12 +11,10 @@ from superqt import QLabeledDoubleSlider
 from superqt.fonticon import icon
 from fonticon_mdi6 import MDI6
 
-#from celldetective.gui.thresholds_gui import ThresholdSpot
 from celldetective.utils import extract_experiment_channels, get_software_location
 from celldetective.io import load_frames, auto_load_number_of_frames
 from celldetective.measure import compute_haralick_features
 import numpy as np
-from tifffile import imread
 import json
 import os
 import matplotlib.pyplot as plt
@@ -27,11 +26,11 @@ from pathlib import Path
 
 from celldetective.gui.viewers import CellEdgeVisualizer, SpotDetectionVisualizer
 from celldetective.gui.layouts import ProtocolDesignerLayout, BackgroundFitCorrectionLayout, LocalCorrectionLayout
-from celldetective.gui.gui_utils import ThresholdLineEdit, PreprocessingLayout2
-from celldetective.gui import Styles
+from celldetective.gui.gui_utils import PreprocessingLayout2
+from celldetective.gui import CelldetectiveMainWindow, CelldetectiveWidget
 
 
-class ConfigMeasurements(QMainWindow, Styles):
+class ConfigMeasurements(CelldetectiveMainWindow):
 	"""
 	UI to set measurement instructions.
 
@@ -43,7 +42,6 @@ class ConfigMeasurements(QMainWindow, Styles):
 
 		self.parent_window = parent_window
 		self.setWindowTitle("Configure measurements")
-		self.setWindowIcon(QIcon(os.sep.join(['celldetective', 'icons', 'mexican-hat.png'])))
 		self.mode = self.parent_window.mode
 		self.exp_dir = self.parent_window.exp_dir
 		self.background_correction = []
@@ -79,7 +77,7 @@ class ConfigMeasurements(QMainWindow, Styles):
 
 		# Create button widget and layout
 		self.scroll_area = QScrollArea(self)
-		self.button_widget = QWidget()
+		self.button_widget = CelldetectiveWidget()
 		main_layout = QVBoxLayout()
 		self.button_widget.setLayout(main_layout)
 		main_layout.setContentsMargins(30, 30, 30, 30)

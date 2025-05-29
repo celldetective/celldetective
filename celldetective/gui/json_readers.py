@@ -1,10 +1,11 @@
 import configparser
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QScrollArea, QLabel, QHBoxLayout, QLineEdit, QPushButton
+from PyQt5.QtWidgets import QVBoxLayout, QScrollArea, QLabel, QHBoxLayout, QLineEdit, QPushButton
 from PyQt5.QtCore import Qt
 import configparser
-from celldetective.gui import Styles
+from celldetective.gui import CelldetectiveWidget
 
-class ConfigEditor(QWidget, Styles):
+
+class ConfigEditor(CelldetectiveWidget):
     
     def __init__(self, parent_window):
 
@@ -27,7 +28,7 @@ class ConfigEditor(QWidget, Styles):
         # Create a scroll area to contain the main layout
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        scroll_content = QWidget()
+        scroll_content = CelldetectiveWidget()
         self.scroll_layout = QVBoxLayout(scroll_content)
         scroll_content.setLayout(self.scroll_layout)
         scroll.setWidget(scroll_content)

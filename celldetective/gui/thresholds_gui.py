@@ -8,7 +8,7 @@ import pandas as pd
 import scipy.ndimage as ndi
 from PyQt5.QtCore import Qt, QSize
 from PyQt5.QtGui import QDoubleValidator, QIntValidator
-from PyQt5.QtWidgets import QAction, QMenu, QMainWindow, QMessageBox, QLabel, QWidget, QFileDialog, QHBoxLayout, \
+from PyQt5.QtWidgets import QAction, QMenu, QMessageBox, QLabel, QFileDialog, QHBoxLayout, \
     QGridLayout, QLineEdit, QScrollArea, QVBoxLayout, QComboBox, QPushButton, QApplication, QRadioButton, QButtonGroup
 from fonticon_mdi6 import MDI6
 from skimage.measure import regionprops_table
@@ -16,6 +16,7 @@ from superqt import QLabeledSlider, QLabeledDoubleRangeSlider
 from superqt.fonticon import icon
 
 from celldetective.gui import Styles
+from celldetective.gui import CelldetectiveMainWindow, CelldetectiveWidget
 from celldetective.gui.gui_utils import PreprocessingLayout, generic_message
 from celldetective.gui.gui_utils import center_window, FigureCanvas, color_from_class, help_generic
 from celldetective.gui.viewers import ThresholdedStackVisualizer
@@ -24,7 +25,7 @@ from celldetective.segmentation import identify_markers_from_binary, apply_water
 from celldetective.utils import get_software_location, extract_experiment_channels, rename_intensity_column
 
 
-class ThresholdConfigWizard(QMainWindow, Styles):
+class ThresholdConfigWizard(CelldetectiveMainWindow):
     """
 	UI to create a threshold pipeline for segmentation.
 
@@ -40,7 +41,7 @@ class ThresholdConfigWizard(QMainWindow, Styles):
         self.setMinimumHeight(int(0.8 * self.screen_height))
         self.setWindowTitle("Threshold configuration wizard")
         center_window(self)
-        self.setWindowIcon(self.celldetective_icon)
+
         self._createActions()
         self._createMenuBar()
 
@@ -95,14 +96,14 @@ class ThresholdConfigWizard(QMainWindow, Styles):
 		Create the multibox design.
 
 		"""
-        self.button_widget = QWidget()
+        self.button_widget = CelldetectiveWidget()
         main_layout = QHBoxLayout()
         self.button_widget.setLayout(main_layout)
 
         main_layout.setContentsMargins(30, 30, 30, 30)
 
         self.scroll_area = QScrollArea()
-        self.scroll_container = QWidget()
+        self.scroll_container = CelldetectiveWidget()
         self.scroll_area.setWidgetResizable(True)
         self.scroll_area.setWidget(self.scroll_container)
 

@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import QWidget, QLineEdit, QMessageBox, QHBoxLayout, QVBoxLayout, QPushButton, QLabel, \
+from PyQt5.QtWidgets import QLineEdit, QMessageBox, QHBoxLayout, QVBoxLayout, QPushButton, QLabel, \
 	QCheckBox, QRadioButton, QButtonGroup, QComboBox
 from PyQt5.QtCore import Qt, QSize
 from superqt import QLabeledSlider,QLabeledDoubleSlider, QSearchableComboBox
@@ -12,10 +12,11 @@ import json
 
 from celldetective.gui.gui_utils import FigureCanvas, center_window, color_from_status, help_generic
 from celldetective.gui import Styles
+from celldetective.gui.base_components import  CelldetectiveWidget
 from celldetective.utils import get_software_location
 from celldetective.measure import classify_cells_from_query, interpret_track_classification
 
-class ClassifierWidget(QWidget, Styles):
+class ClassifierWidget(CelldetectiveWidget):
 
 	def __init__(self, parent_window):
 
@@ -212,7 +213,6 @@ class ClassifierWidget(QWidget, Styles):
 		self.frame_slider.valueChanged.connect(self.set_frame)
 		self.alpha_slider.valueChanged.connect(self.set_transparency)
 
-		self.setAttribute(Qt.WA_DeleteOnClose)
 
 	def activate_prereq_cb(self):
 		if self.prereq_event_check.isChecked():

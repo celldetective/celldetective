@@ -1,5 +1,5 @@
 from PyQt5.QtWidgets import QMessageBox,QGridLayout, QButtonGroup, \
-	QCheckBox, QLineEdit, QVBoxLayout, QWidget, QLabel, QHBoxLayout, QPushButton, \
+	QCheckBox, QLineEdit, QVBoxLayout, QLabel, QHBoxLayout, QPushButton, \
 	QRadioButton
 from PyQt5.QtCore import Qt, QSize
 from PyQt5.QtGui import QDoubleValidator
@@ -18,13 +18,13 @@ import matplotlib.pyplot as plt
 plt.rcParams['svg.fonttype'] = 'none'
 from glob import glob
 from matplotlib.cm import tab10
-from celldetective.gui import Styles
+from celldetective.gui import CelldetectiveWidget
 import matplotlib.cm as mcm
 import pandas as pd
 
 from lifelines.utils import qth_survival_times
 
-class GenericSignalPlotWidget(QWidget, Styles):
+class GenericSignalPlotWidget(CelldetectiveWidget):
 
 	def __init__(self, df = None, df_pos_info = None, df_well_info = None, feature_selected = None, parent_window=None, title='plot', *args, **kwargs):
 		
@@ -33,7 +33,6 @@ class GenericSignalPlotWidget(QWidget, Styles):
 
 		self.parent_window = parent_window
 		self.setWindowTitle(title)
-		self.setWindowIcon(self.celldetective_icon)
 
 		self.show_ci = False
 		self.legend_visible = True
@@ -60,8 +59,6 @@ class GenericSignalPlotWidget(QWidget, Styles):
 
 		self.fig.tight_layout()
 		self.setLayout(self.layout)
-		self.setAttribute(Qt.WA_DeleteOnClose)
-
 
 	def populate_widget(self):
 
@@ -170,7 +167,7 @@ class GenericSignalPlotWidget(QWidget, Styles):
 		self.ci_btn.clicked.connect(self.switch_ci)
 		self.cell_lines_btn.clicked.connect(self.switch_cell_lines)
 
-		self.class_selection_widget = QWidget()
+		self.class_selection_widget = CelldetectiveWidget()
 
 		self.class_selection_lbl = QLabel('class of interest:')
 		class_hbox = QHBoxLayout()
@@ -197,7 +194,7 @@ class GenericSignalPlotWidget(QWidget, Styles):
 		self.layout.addWidget(self.class_selection_widget) #Layout(class_hbox)
 
 		# Rescale 
-		self.rescale_widget = QWidget()
+		self.rescale_widget = CelldetectiveWidget()
 
 		scale_hbox = QHBoxLayout()
 		self.rescale_widget.setLayout(scale_hbox)
@@ -216,7 +213,7 @@ class GenericSignalPlotWidget(QWidget, Styles):
 
 
 		# Rescale 
-		self.cell_lines_alpha_wdg = QWidget()
+		self.cell_lines_alpha_wdg = CelldetectiveWidget()
 		alpha_hbox = QHBoxLayout()
 
 		self.alpha_slider = QLabeledDoubleSlider()
@@ -343,7 +340,7 @@ class GenericSignalPlotWidget(QWidget, Styles):
 		thresh = 20
 		self.well_name_truncated = [w[:thresh - 3]+'...' if len(w)>thresh else w for w in self.usable_well_labels]
 
-		self.line_choice_widget = QWidget()
+		self.line_choice_widget = CelldetectiveWidget()
 		self.line_check_vbox = QGridLayout()
 		self.line_choice_widget.setLayout(self.line_check_vbox)
 
@@ -828,7 +825,7 @@ class SurvivalPlotWidget(GenericSignalPlotWidget):
 
 	def set_table_options(self):
 
-		self.config_table_wg = QWidget()
+		self.config_table_wg = CelldetectiveWidget()
 		self.config_table_wg.setMinimumWidth(480)
 		self.config_table_wg.setWindowTitle('Survival data')
 		
