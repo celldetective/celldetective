@@ -1611,7 +1611,11 @@ class SignalAnnotator2(CelldetectiveMainWindow):
 		# 			  "Are you sure you want to exit ?",
 		# 			  QMessageBox.Yes| QMessageBox.No,
 		# 			  )
-		del self.stack
+		try:
+			del self.stack
+		except:
+			pass
+		
 		gc.collect()
 
 	def looped_animation(self):
@@ -1644,7 +1648,7 @@ class SignalAnnotator2(CelldetectiveMainWindow):
 		for i,pop in enumerate(self.dataframes.keys()):
 			df = self.dataframes[pop]
 			if df is not None:
-				status_scatter = self.ax.scatter(self.positions[pop][0][:,0], self.positions[pop][0][:,1], c=self.colors[pop][0][:,1], s=50, picker=True, pickradius=10, zorder=10, marker=markers[i]) #marker="x", 
+				status_scatter = self.ax.scatter(self.positions[pop][0][:,0], self.positions[pop][0][:,1], c=self.colors[pop][0][:,1], s=50, picker=True, pickradius=150, zorder=10, marker=markers[i]) #marker="x",
 				class_scatter = self.ax.scatter(self.positions[pop][0][:,0], self.positions[pop][0][:,1], marker='o', facecolors='none',edgecolors=self.colors[pop][0][:,0], s=200, zorder=10)
 			else:
 				status_scatter = self.ax.scatter([], [], s=50, picker=True, pickradius=10, marker=markers[i]) #marker="x", 
