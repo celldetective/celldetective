@@ -1,5 +1,5 @@
 from multiprocessing import Queue
-from PyQt5.QtWidgets import QDialog, QPushButton, QVBoxLayout, QHBoxLayout, QLabel, QProgressBar
+from PyQt5.QtWidgets import QPushButton, QVBoxLayout, QHBoxLayout, QLabel, QProgressBar
 from PyQt5.QtCore import QRunnable, QObject, pyqtSignal, QThreadPool, QSize, Qt
 
 from celldetective.gui.base_components import CelldetectiveDialog

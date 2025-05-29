@@ -9,11 +9,10 @@ import numpy as np
 import pandas as pd
 from art import tprint
 
-from celldetective.neighborhood import set_live_status, contact_neighborhood, compute_attention_weight, \
+from celldetective.neighborhood import set_live_status, compute_attention_weight, \
     compute_neighborhood_metrics, mean_neighborhood_after_event, \
-    mean_neighborhood_before_event
+    mean_neighborhood_before_event, _compute_mask_contact_dist_map, _fill_contact_neighborhood_at_t
 from celldetective.utils import extract_identity_col
-from scipy.spatial.distance import cdist
 
 
 class NeighborhoodProcess(Process):
@@ -38,9 +37,7 @@ class NeighborhoodProcess(Process):
     def mask_contact_neighborhood(self, setA, setB, labelsA, labelsB, distance, mode='two-pop', status=None,
                                   not_status_option=None, compute_cum_sum=True,
                                   attention_weight=True, symmetrize=True, include_dead_weight=True,
-                                  column_labels={'track': "TRACK_ID", 'time': 'FRAME', 'x': 'POSITION_X',
-                                                 'y': 'POSITION_Y',
-                                                 'mask_id': 'class_id'}):
+                                  column_labels={'track': "TRACK_ID", 'time': 'FRAME', 'x': 'POSITION_X','y': 'POSITION_Y','mask_id': 'class_id'}):
 
         if setA is not None and setB is not None:
             setA, setB, status = set_live_status(setA, setB, status, not_status_option)
@@ -72,11 +69,13 @@ class NeighborhoodProcess(Process):
 
         for d in distance:
             # loop over each provided distance
-
             if mode == 'two-pop':
                 neigh_col = f'neighborhood_2_contact_{d}_px'
             elif mode == 'self':
                 neigh_col = f'neighborhood_self_contact_{d}_px'
+            else:
+                print("Please provide a valid mode between `two-pop` and `self`...")
+                return None
 
             setA[neigh_col] = np.nan
             setA[neigh_col] = setA[neigh_col].astype(object)
@@ -89,181 +88,27 @@ class NeighborhoodProcess(Process):
                 np.concatenate([setA[cl[0]['time']].to_numpy(), setB[cl[1]['time']].to_numpy()])).astype(
                 int)
 
-
+            self.sum_done = 0
+            self.t0 = time.time()
 
             for t in tqdm(timeline):
 
-                index_A = list(setA.loc[setA[cl[0]['time']] == t].index)
-                dataA = setA.loc[setA[cl[0]['time']] == t, [cl[0]['x'], cl[0]['y'], cl[0]['track'], cl[0]['mask_id'],
-                                                            status[0]]].to_numpy()
-                coordinates_A = dataA[:, [0, 1]];
-                ids_A = dataA[:, 2];
-                mask_ids_A = dataA[:, 3];
-                status_A = dataA[:, 4];
+                setA_t = setA.loc[setA[cl[0]['time']] == t,:]
+                setB_t = setB.loc[setB[cl[1]['time']] == t,:]
 
-                index_B = list(setB.loc[setB[cl[1]['time']] == t].index)
-                dataB = setB.loc[setB[cl[1]['time']] == t, [cl[1]['x'], cl[1]['y'], cl[1]['track'], cl[1]['mask_id'],
-                                                            status[1]]].to_numpy()
-                coordinates_B = dataB[:, [0, 1]];
-                ids_B = dataB[:, 2];
-                mask_ids_B = dataB[:, 3];
-                status_B = dataB[:, 4]
-
-                if len(coordinates_A) > 0 and len(coordinates_B) > 0:
-
-                    # compute distance matrix
-                    dist_map = cdist(coordinates_A, coordinates_B, metric="euclidean")
-                    intersection_map = np.zeros_like(dist_map).astype(float)
-
-                    # Do the mask contact computation
-                    lblA = labelsA[t]
-                    lblA = np.where(np.isin(lblA, mask_ids_A), lblA, 0.)
-
-                    lblB = labelsB[t]
-                    if lblB is not None:
-                        lblB = np.where(np.isin(lblB, mask_ids_B), lblB, 0.)
-
-                    contact_pairs = contact_neighborhood(lblA, labelsB=lblB, border=d, connectivity=2)
-
-                    # Put infinite distance to all non-contact pairs (something like this)
-                    plot_map = False
-                    flatA = lblA.flatten()
-                    if lblB is not None:
-                        flatB = lblB.flatten()
-
-                    if len(contact_pairs) > 0:
-                        mask = np.ones_like(dist_map).astype(bool)
-
-                        indices_to_keep = []
-                        for cp in contact_pairs:
-
-                            cp = np.abs(cp)
-                            mask_A, mask_B = cp
-                            idx_A = np.where(mask_ids_A == int(mask_A))[0][0]
-                            idx_B = np.where(mask_ids_B == int(mask_B))[0][0]
-
-                            intersection = 0
-                            if lblB is not None:
-                                intersection = len(flatA[(flatA == int(mask_A)) & (flatB == int(mask_B))])
-
-                            indices_to_keep.append([idx_A, idx_B, intersection])
-                            print(f'Ref cell #{ids_A[idx_A]} matched with neigh. cell #{ids_B[idx_B]}...')
-                            print(f'Computed intersection: {intersection} px...')
-
-                        if len(indices_to_keep) > 0:
-                            indices_to_keep = np.array(indices_to_keep)
-                            mask[indices_to_keep[:, 0], indices_to_keep[:, 1]] = False
-                            if mode == 'self':
-                                mask[indices_to_keep[:, 1], indices_to_keep[:, 0]] = False
-                            dist_map[mask] = 1.0E06
-                            intersection_map[indices_to_keep[:, 0], indices_to_keep[:, 1]] = indices_to_keep[:, 2]
-                            plot_map = True
-                        else:
-                            dist_map[:, :] = 1.0E06
-                    else:
-                        dist_map[:, :] = 1.0E06
+                if len(setA_t) > 0 and len(setB_t) > 0:
+                    dist_map, intersection_map = _compute_mask_contact_dist_map(setA_t, setB_t, labelsA[t], labelsB[t], distance=d, mode=mode, column_labelsA=cl[0], column_labelsB=cl[1])
 
                     d_filter = 1.0E05
                     if attention_weight:
-                        weights, closest_A = compute_attention_weight(dist_map, d_filter, status_A, ids_A, axis=1,
-                                                                      include_dead_weight=include_dead_weight)
+                        status_A = setA_t[status[0]].to_numpy()
+                        ids_A = setA_t[cl[0]["track"]].to_numpy()
+                        weights, closest_A = compute_attention_weight(dist_map, d_filter, status_A, ids_A, axis=1, include_dead_weight=include_dead_weight)
+                    else:
+                        weights = None
+                        closest_A = None
 
-                    # Target centric
-                    for k in range(dist_map.shape[0]):
-
-                        col = dist_map[k, :]
-                        col_inter = intersection_map[k, :]
-                        col[col == 0.] = 1.0E06
-
-                        neighs_B = np.array([ids_B[i] for i in np.where((col <= d_filter))[0]])
-                        status_neigh_B = np.array([status_B[i] for i in np.where((col <= d_filter))[0]])
-                        dist_B = [round(col[i], 2) for i in np.where((col <= d_filter))[0]]
-                        intersect_B = [round(col_inter[i], 2) for i in np.where((col <= d_filter))[0]]
-
-                        if len(dist_B) > 0:
-                            closest_B_cell = neighs_B[np.argmin(dist_B)]
-
-                        if symmetrize and attention_weight:
-                            n_neighs = float(len(neighs_B))
-                            if not include_dead_weight:
-                                n_neighs_alive = len(np.where(status_neigh_B == 1)[0])
-                                neigh_count = n_neighs_alive
-                            else:
-                                neigh_count = n_neighs
-                            if neigh_count > 0:
-                                weight_A = 1. / neigh_count
-                            else:
-                                weight_A = np.nan
-
-                            if not include_dead_weight and status_A[k] == 0:
-                                weight_A = 0
-
-                        neighs = []
-                        setA.at[index_A[k], neigh_col] = []
-                        for n in range(len(neighs_B)):
-
-                            # index in setB
-                            n_index = np.where(ids_B == neighs_B[n])[0][0]
-                            # Assess if neigh B is closest to A
-                            if attention_weight:
-                                if closest_A[n_index] == ids_A[k]:
-                                    closest = True
-                                else:
-                                    closest = False
-
-                            if symmetrize:
-                                # Load neighborhood previous data
-                                sym_neigh = setB.loc[index_B[n_index], neigh_col]
-                                if neighs_B[n] == closest_B_cell:
-                                    closest_b = True
-                                else:
-                                    closest_b = False
-                                if isinstance(sym_neigh, list):
-                                    sym_neigh.append({'id': ids_A[k], 'distance': dist_B[n], 'status': status_A[k],
-                                                      'intersection': intersect_B[n]})
-                                else:
-                                    sym_neigh = [{'id': ids_A[k], 'distance': dist_B[n], 'status': status_A[k],
-                                                  'intersection': intersect_B[n]}]
-                                if attention_weight:
-                                    sym_neigh[-1].update({'weight': weight_A, 'closest': closest_b})
-
-                            # Write the minimum info about neighborhing cell B
-                            neigh_dico = {'id': neighs_B[n], 'distance': dist_B[n], 'status': status_neigh_B[n],
-                                          'intersection': intersect_B[n]}
-                            if attention_weight:
-                                neigh_dico.update({'weight': weights[n_index], 'closest': closest})
-
-                            if compute_cum_sum:
-                                # Compute the integrated presence of the neighboring cell B
-                                assert cl[1][
-                                           'track'] == 'TRACK_ID', 'The set B does not seem to contain tracked data. The cumulative time will be meaningless.'
-                                past_neighs = [[ll['id'] for ll in l] if len(l) > 0 else [None] for l in setA.loc[
-                                    (setA[cl[0]['track']] == ids_A[k]) & (
-                                                setA[cl[0]['time']] <= t), neigh_col].to_numpy()]
-                                past_neighs = [item for sublist in past_neighs for item in sublist]
-
-                                if attention_weight:
-                                    past_weights = [[ll['weight'] for ll in l] if len(l) > 0 else [None] for l in
-                                                    setA.loc[
-                                                        (setA[cl[0]['track']] == ids_A[k]) & (
-                                                                setA[cl[0]['time']] <= t), neigh_col].to_numpy()]
-                                    past_weights = [item for sublist in past_weights for item in sublist]
-
-                                cum_sum = len(np.where(past_neighs == neighs_B[n])[0])
-                                neigh_dico.update({'cumulated_presence': cum_sum + 1})
-
-                                if attention_weight:
-                                    cum_sum_weighted = np.sum(
-                                        [w if l == neighs_B[n] else 0 for l, w in zip(past_neighs, past_weights)])
-                                    neigh_dico.update(
-                                        {'cumulated_presence_weighted': cum_sum_weighted + weights[n_index]})
-
-                            if symmetrize:
-                                setB.at[index_B[n_index], neigh_col] = sym_neigh
-
-                            neighs.append(neigh_dico)
-
-                        setA.at[index_A[k], neigh_col] = neighs
+                    _fill_contact_neighborhood_at_t(t, setA, setB, dist_map, intersection_map=intersection_map, attention_weight=attention_weight, include_dead_weight=include_dead_weight, symmetrize=symmetrize, compute_cum_sum=compute_cum_sum, weights=weights, closest_A=closest_A, neigh_col=neigh_col, column_labelsA=cl[0], column_labelsB=cl[1], statusA=status[0], statusB=status[1], d_filter=d_filter)
 
                 self.sum_done += 1 / len(timeline) * 100
                 mean_exec_per_step = (time.time() - self.t0) / (self.sum_done * len(timeline)/ 100 + 1)
@@ -272,8 +117,6 @@ class NeighborhoodProcess(Process):
                 self.queue.put([self.sum_done, pred_time])
 
         return setA, setB
-
-
 
     def compute_contact_neighborhood_at_position(self, pos, distance, population=['targets', 'effectors'], theta_dist=None,
                                                  img_shape=(2048, 2048), return_tables=False, clear_neigh=False,
@@ -376,6 +219,9 @@ class NeighborhoodProcess(Process):
                 neigh_col = f'neighborhood_2_contact_{d}_px'
             elif neighborhood_kwargs['mode'] == 'self':
                 neigh_col = f'neighborhood_self_contact_{d}_px'
+            else:
+                print('Invalid mode...')
+                return None
 
             df_A.loc[df_A['class_id'].isnull(), neigh_col] = np.nan
 
@@ -404,6 +250,9 @@ class NeighborhoodProcess(Process):
                     df_A = df_A.rename(columns={neigh_col: new_neigh_col})
                 elif neighborhood_kwargs['mode'] == 'self':
                     neigh_col = f'neighborhood_self_contact_{d}_px'
+                else:
+                    print("Invalid mode...")
+                    return None
                 df_B = df_B.drop(columns=[neigh_col])
             df_B.to_pickle(path_B.replace('.csv', '.pkl'))
 
