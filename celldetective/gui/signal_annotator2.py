@@ -63,7 +63,7 @@ class SignalAnnotator2(CelldetectiveMainWindow):
 						  'x_anim', 'y_anim', 't','dummy','group_color',
 						  'state', 'generation', 'root', 'parent', 'class_id', 'class', 't0', 'POSITION_X',
 						  'POSITION_Y', 'position', 'well', 'well_index', 'well_name', 'pos_name', 'index',
-						  'concentration', 'cell_type', 'antibody', 'pharmaceutical_agent', 'ID']
+						  'concentration', 'cell_type', 'antibody', 'pharmaceutical_agent', 'ID', "REFERENCE_ID", "NEIGHBOR_ID", "reference_population", "neighbor_population"]
 
 		meta = get_experiment_metadata(self.exp_dir)
 		if meta is not None:
@@ -1215,7 +1215,7 @@ class SignalAnnotator2(CelldetectiveMainWindow):
 				status[:] = 2
 			if cclass>2:
 				status[:] = 42
-			print(t0, status)
+			#print(t0, status)
 			status_color = [color_from_status(s) for s in status]
 			class_color = [color_from_class(cclass) for i in range(len(status))]
 
@@ -1368,8 +1368,7 @@ class SignalAnnotator2(CelldetectiveMainWindow):
 				range_values.extend(df_neighbor.loc[:,signal_txt].values)
 
 			elif option==2 and self.reference_track_of_interest is not None and self.neighbor_track_of_interest is not None and signal_txt!='--' and signal_txt!='':
-
-				self.lines[i].set_label(f'pair '+signal_txt)								
+				self.lines[i].set_label(f'pair '+signal_txt)
 				signal = self.df_relative.loc[(self.df_relative['REFERENCE_ID']==self.reference_track_of_interest)&(self.df_relative['NEIGHBOR_ID']==self.neighbor_track_of_interest)&(self.df_relative['reference_population']==self.reference_population)&(self.df_relative['neighbor_population']==self.neighbor_population), signal_txt].to_numpy()
 				timeline = self.df_relative.loc[(self.df_relative['REFERENCE_ID']==self.reference_track_of_interest)&(self.df_relative['NEIGHBOR_ID']==self.neighbor_track_of_interest)&(self.df_relative['reference_population']==self.reference_population)&(self.df_relative['neighbor_population']==self.neighbor_population), 'FRAME'].to_numpy()
 				range_values.extend(self.df_relative.loc[(self.df_relative['reference_population']==self.reference_population)&(self.df_relative['neighbor_population']==self.neighbor_population), signal_txt].values)
@@ -1711,7 +1710,7 @@ class SignalAnnotator2(CelldetectiveMainWindow):
 	def on_scatter_pick(self, event):
 		
 		self.identify_closest_marker(event)
-		print(self.pair_selected, self.reference_selection)
+		#print(self.pair_selected, self.reference_selection)
 
 		_, tracks, _, _ = self.get_reference_sets()
 
@@ -1776,7 +1775,7 @@ class SignalAnnotator2(CelldetectiveMainWindow):
 
 			print('You selected a pair...')
 			artist = event.artist
-			print(self.index)
+			#print(self.index)
 
 			if self.index is not None and len(self.pair_selection)==0:
 
@@ -1948,11 +1947,11 @@ class SignalAnnotator2(CelldetectiveMainWindow):
 
 	def get_neighbors_of_selected_cell(self, selected_cell):
 		
-		print(f"{self.df_relative=} {selected_cell=} {'status_'+self.current_neighborhood=} {self.reference_population=}")
+		#print(f"{self.df_relative=} {selected_cell=} {'status_'+self.current_neighborhood=} {self.reference_population=}")
 		self.neighbors = self.df_relative.loc[(self.df_relative['REFERENCE_ID'] == selected_cell)&(~self.df_relative['status_'+self.current_neighborhood].isnull())&(self.df_relative['reference_population']==self.reference_population),'NEIGHBOR_ID']
-		print(f"{self.neighbors=}")
+		#print(f"{self.neighbors=}")
 		self.neighbors = np.unique(self.neighbors)
-		print(f"{self.neighbors=}")
+		#print(f"{self.neighbors=}")
 
 		# if len(self.neighbors)>0:
 		# 	first_neighbor = np.min(self.neighbors)
@@ -1964,16 +1963,16 @@ class SignalAnnotator2(CelldetectiveMainWindow):
 		
 		ind = event.ind
 		label = event.artist.get_label()
-		print(f'{label=}')
+		#print(f'{label=}')
 
 		# Identify the nature of the selected object (target/effector/pair)
 		self.pair_selected = False
 
 		populations = list(self.dataframes.keys())
-		print(f"{populations=}")
+		#print(f"{populations=}")
 
 		number = int(label.split('_child')[1])
-		print(f"{number=}")
+		#print(f"{number=}")
 
 		if number>len(populations)*2:
 			print('A pair is selected...')
@@ -2140,11 +2139,11 @@ class SignalAnnotator2(CelldetectiveMainWindow):
 					x_coords, y_coords = line
 					pair = self.line_connections[x_coords[0],x_coords[1],y_coords[0],y_coords[1]]
 					this_frame = self.lines_colors_class[self.framedata]
-					print(f"{pair=} {this_frame=}")
+					#print(f"{pair=} {this_frame=}")
 
 					try:
 						this_pair = this_frame[(this_frame[:, 0] == pair[0][0]) & (this_frame[:, 1] == pair[0][1])]
-						print(f'{this_pair=} {x_coords=} {y_coords=}')
+						#print(f'{this_pair=} {x_coords=} {y_coords=}')
 
 						self.lines_plot = self.ax.plot(x_coords, y_coords, alpha=1, linewidth=2, color=this_pair[0][2])
 						self.lines_list.append(self.lines_plot[0])
