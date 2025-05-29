@@ -1510,55 +1510,33 @@ class NeighPanel(QFrame, Styles):
 
 			for pos_idx in pos_indices:
 
-				self.pos_name = natsorted(glob(well+f"{os.path.split(well)[-1].replace('W','').replace(os.sep,'')}*{os.sep}"))[pos_idx]
-				print(f"Position {self.pos_name}...\nLoading stack movie...")
+				self.pos = natsorted(glob(well+f"{os.path.split(well)[-1].replace('W','').replace(os.sep,'')}*{os.sep}"))[pos_idx]
+				self.pos_name = extract_position_name(self.pos)
+				print(f"Position {self.pos}...\nLoading stack movie...")
 
-				if not os.path.exists(self.pos_name + 'output' + os.sep):
-					os.mkdir(self.pos_name + 'output' + os.sep)
-				if not os.path.exists(self.pos_name + os.sep.join(['output','tables'])+os.sep):
-					os.mkdir(self.pos_name + os.sep.join(['output','tables'])+os.sep)
+				if not os.path.exists(self.pos + 'output' + os.sep):
+					os.mkdir(self.pos + 'output' + os.sep)
+				if not os.path.exists(self.pos + os.sep.join(['output','tables'])+os.sep):
+					os.mkdir(self.pos + os.sep.join(['output','tables'])+os.sep)
 
 				if self.neigh_action.isChecked():
 					for protocol in self.protocols:
 
-						if protocol['neighborhood_type']=='distance_threshold':
+						process_args = {"pos": self.pos, "pos_name": self.pos_name,"protocol": protocol,"img_shape": (self.parent_window.shape_x,self.parent_window.shape_y)} #"n_threads": self.n_threads
+						self.job = ProgressWindow(NeighborhoodProcess, parent_window=self, title="Neighborhood",
+												  process_args=process_args)
+						result = self.job.exec_()
+						if result == QDialog.Accepted:
+							pass
+						elif result == QDialog.Rejected:
+							return None
 
-							process_args = {"pos": self.pos_name, "protocol": protocol,"img_shape": (self.parent_window.shape_x,self.parent_window.shape_y)} #"n_threads": self.n_threads
-							self.job = ProgressWindow(NeighborhoodProcess, parent_window=self, title="Neighborhood",
-													  process_args=process_args)
-							result = self.job.exec_()
-							if result == QDialog.Accepted:
-								pass
-							elif result == QDialog.Rejected:
-								return None
-
-						elif protocol['neighborhood_type']=='mask_contact':
-
-							process_args = {"pos": self.pos_name, "protocol": protocol,"img_shape": (self.parent_window.shape_x,self.parent_window.shape_y)} #"n_threads": self.n_threads
-							self.job = ProgressWindow(NeighborhoodProcess, parent_window=self, title="Neighborhood",
-													  process_args=process_args)
-							result = self.job.exec_()
-							if result == QDialog.Accepted:
-								pass
-							elif result == QDialog.Rejected:
-								return None
-
-							# compute_contact_neighborhood_at_position(self.pos_name,
-							# 							protocol['distance'],
-							# 							population=protocol['population'],
-							# 							theta_dist=None,
-							# 							img_shape=(self.parent_window.shape_x,self.parent_window.shape_y),
-							# 							return_tables=False,
-							# 							clear_neigh=protocol['clear_neigh'],
-							# 							event_time_col=protocol['event_time_col'],
-							# 							neighborhood_kwargs=protocol['neighborhood_kwargs'],
-							# 							)
 				if self.measure_pairs_action.isChecked():
-					rel_measure_at_position(self.pos_name)
+					rel_measure_at_position(self.pos)
 
 				if self.signal_analysis_action.isChecked():
 
-					analyze_pair_signals_at_position(self.pos_name, self.pair_signal_models_list.currentText(), use_gpu=self.parent_window.parent_window.use_gpu, populations=self.parent_window.populations)
+					analyze_pair_signals_at_position(self.pos, self.pair_signal_models_list.currentText(), use_gpu=self.parent_window.parent_window.use_gpu, populations=self.parent_window.populations)
 
 		self.parent_window.update_position_options()
 		print('Done.')

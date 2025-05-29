@@ -1406,7 +1406,7 @@ class SignalAnnotator2(CelldetectiveMainWindow):
 			except Exception as e:
 				print(e)
 			
-		self.cell_ax.legend()
+		self.cell_ax.legend(fontsize=8)
 		self.cell_fcanvas.canvas.draw()
 
 
@@ -1701,7 +1701,7 @@ class SignalAnnotator2(CelldetectiveMainWindow):
 		self.line_dt, = self.cell_ax.plot([-1,-1],[min_val,max_val],c="k",linestyle="--")
 
 		self.cell_ax.set_xlim(0,self.len_movie)
-		self.cell_ax.legend()
+		self.cell_ax.legend(fontsize=8)
 		self.cell_fcanvas.canvas.draw()
 
 		#self.plot_signals()

@@ -113,7 +113,6 @@ class NeighborhoodProcess(Process):
                 self.sum_done += 1 / len(timeline) * 100
                 mean_exec_per_step = (time.time() - self.t0) / (self.sum_done * len(timeline)/ 100 + 1)
                 pred_time = (len(timeline) - (self.sum_done * len(timeline) / 100 + 1)) * mean_exec_per_step
-                print(f"{self.sum_done=} {pred_time=}")
                 self.queue.put([self.sum_done, pred_time])
 
         return setA, setB
