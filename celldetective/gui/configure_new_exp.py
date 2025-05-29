@@ -135,7 +135,7 @@ class ConfigNewExperiment(QMainWindow, Styles):
 
 		self.SliderWells = QLabeledSlider(Qt.Horizontal, self)
 		self.SliderWells.setMinimum(1)
-		self.SliderWells.setMaximum(32)
+		self.SliderWells.setMaximum(512)
 		self.ms_grid.addWidget(self.SliderWells, 2, 0, 1, 3, alignment=Qt.AlignTop)
 
 		self.number_of_positions = QLabel("Number of positions per well:")
@@ -143,7 +143,7 @@ class ConfigNewExperiment(QMainWindow, Styles):
 
 		self.SliderPos = QLabeledSlider(Qt.Horizontal, self)
 		self.SliderPos.setMinimum(1)
-		self.SliderPos.setMaximum(50)
+		self.SliderPos.setMaximum(512)
 
 		self.ms_grid.addWidget(self.SliderPos, 4, 0, 1, 3)
 
@@ -172,7 +172,7 @@ class ConfigNewExperiment(QMainWindow, Styles):
 		self.ms_grid.addWidget(self.movie_length,9, 0, 1, 3)
 		self.MovieLengthSlider = QLabeledSlider(Qt.Horizontal, self)
 		self.MovieLengthSlider.setMinimum(2)
-		self.MovieLengthSlider.setMaximum(128)
+		#self.MovieLengthSlider.setMaximum(128)
 		self.ms_grid.addWidget(self.MovieLengthSlider, 10, 0, 1, 3)
 
 		self.prefix_lbl = QLabel("Prefix for the movies:")
