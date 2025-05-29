@@ -9,6 +9,108 @@ from celldetective.io import locate_labels, get_position_pickle, get_position_ta
 
 abs_path = os.sep.join([os.path.split(os.path.dirname(os.path.realpath(__file__)))[0], 'celldetective'])
 
+def _fill_distance_neighborhood_at_t(time_index, setA, setB, dist_map, attention_weight=None, include_dead_weight=False, symmetrize=False, compute_cum_sum=False,
+							   weights=None, closest_A=None, neigh_col="", column_labelsA=None, column_labelsB=None, statusA=None, statusB=None, distance=10):
+
+	index_A = list(setA.loc[setA[column_labelsA['time']] == time_index].index)
+	index_B = list(setB.loc[setB[column_labelsB['time']] == time_index].index)
+
+	dataA = setA.loc[setA[column_labelsA['time']] == time_index, [column_labelsA['x'], column_labelsA['y'], column_labelsA['track'],statusA]].to_numpy()
+
+	ids_A = dataA[:, 2]
+	status_A = dataA[:, 3]
+
+	dataB = setB.loc[setB[column_labelsB['time']] == time_index, [column_labelsB['x'], column_labelsB['y'], column_labelsB['track'],statusB]].to_numpy()
+	ids_B = dataB[:, 2]
+	status_B = dataB[:, 3]
+
+	for k in range(dist_map.shape[0]):
+		
+		col = dist_map[k, :]
+		col[col == 0.] = 1.0E06
+		
+		neighs_B = np.array([ids_B[i] for i in np.where((col <= distance))[0]])
+		status_neigh_B = np.array([status_B[i] for i in np.where((col <= distance))[0]])
+		dist_B = [round(col[i], 2) for i in np.where((col <= distance))[0]]
+		if len(dist_B) > 0:
+			closest_B_cell = neighs_B[np.argmin(dist_B)]
+		
+		if symmetrize and attention_weight:
+			n_neighs = float(len(neighs_B))
+			if not include_dead_weight:
+				n_neighs_alive = len(np.where(status_neigh_B == 1)[0])
+				neigh_count = n_neighs_alive
+			else:
+				neigh_count = n_neighs
+			if neigh_count > 0:
+				weight_A = 1. / neigh_count
+			else:
+				weight_A = np.nan
+			
+			if not include_dead_weight and status_A[k] == 0:
+				weight_A = 0
+		
+		neighs = []
+		setA.at[index_A[k], neigh_col] = []
+		for n in range(len(neighs_B)):
+			
+			# index in setB
+			n_index = np.where(ids_B == neighs_B[n])[0][0]
+			# Assess if neigh B is closest to A
+			if attention_weight:
+				if closest_A[n_index] == ids_A[k]:
+					closest = True
+				else:
+					closest = False
+			
+			if symmetrize:
+				# Load neighborhood previous data
+				sym_neigh = setB.loc[index_B[n_index], neigh_col]
+				if neighs_B[n] == closest_B_cell:
+					closest_b = True
+				else:
+					closest_b = False
+				if isinstance(sym_neigh, list):
+					sym_neigh.append({'id': ids_A[k], 'distance': dist_B[n], 'status': status_A[k]})
+				else:
+					sym_neigh = [{'id': ids_A[k], 'distance': dist_B[n], 'status': status_A[k]}]
+				if attention_weight:
+					sym_neigh[-1].update({'weight': weight_A, 'closest': closest_b})
+			
+			# Write the minimum info about neighborhing cell B
+			neigh_dico = {'id': neighs_B[n], 'distance': dist_B[n], 'status': status_neigh_B[n]}
+			if attention_weight:
+				neigh_dico.update({'weight': weights[n_index], 'closest': closest})
+			
+			if compute_cum_sum:
+				# Compute the integrated presence of the neighboring cell B
+				assert column_labelsB[
+						   'track'] == 'TRACK_ID', 'The set B does not seem to contain tracked data. The cumulative time will be meaningless.'
+				past_neighs = [[ll['id'] for ll in l] if len(l) > 0 else [None] for l in setA.loc[
+					(setA[column_labelsA['track']] == ids_A[k]) & (setA[column_labelsA['time']] <= time_index), neigh_col].to_numpy()]
+				past_neighs = [item for sublist in past_neighs for item in sublist]
+				
+				if attention_weight:
+					past_weights = [[ll['weight'] for ll in l] if len(l) > 0 else [None] for l in setA.loc[
+						(setA[column_labelsA['track']] == ids_A[k]) & (
+								setA[column_labelsA['time']] <= time_index), neigh_col].to_numpy()]
+					past_weights = [item for sublist in past_weights for item in sublist]
+				
+				cum_sum = len(np.where(past_neighs == neighs_B[n])[0])
+				neigh_dico.update({'cumulated_presence': cum_sum + 1})
+				
+				if attention_weight:
+					cum_sum_weighted = np.sum(
+						[w if l == neighs_B[n] else 0 for l, w in zip(past_neighs, past_weights)])
+					neigh_dico.update({'cumulated_presence_weighted': cum_sum_weighted + weights[n_index]})
+			
+			if symmetrize:
+				setB.at[index_B[n_index], neigh_col] = sym_neigh
+			
+			neighs.append(neigh_dico)
+		
+		setA.at[index_A[k], neigh_col] = neighs
+
 def _fill_contact_neighborhood_at_t(time_index, setA, setB, dist_map, intersection_map=None, attention_weight=None, include_dead_weight=False, symmetrize=False, compute_cum_sum=False,
 							   weights=None, closest_A=None, neigh_col="", column_labelsA=None, column_labelsB=None, statusA=None, statusB=None, d_filter=10):
 
@@ -18,16 +120,12 @@ def _fill_contact_neighborhood_at_t(time_index, setA, setB, dist_map, intersecti
 	dataA = setA.loc[setA[column_labelsA['time']] == time_index, [column_labelsA['x'], column_labelsA['y'], column_labelsA['track'], column_labelsA['mask_id'],
 	statusA]].to_numpy()
 
-	coordinates_A = dataA[:, [0, 1]]
 	ids_A = dataA[:, 2]
-	mask_ids_A = dataA[:, 3]
 	status_A = dataA[:, 4]
 
 	dataB = setB.loc[setB[column_labelsB['time']] == time_index, [column_labelsB['x'], column_labelsB['y'], column_labelsB['track'], column_labelsB['mask_id'],
 	statusB]].to_numpy()
-	coordinates_B = dataB[:, [0, 1]]
 	ids_B = dataB[:, 2]
-	mask_ids_B = dataB[:, 3]
 	status_B = dataB[:, 4]
 
 	for k in range(dist_map.shape[0]):
@@ -129,12 +227,12 @@ def _fill_contact_neighborhood_at_t(time_index, setA, setB, dist_map, intersecti
 
 def _compute_mask_contact_dist_map(setA, setB, labelsA, labelsB=None, distance=10, mode="self", column_labelsA=None, column_labelsB=None):
 
-	coordinates_A = setA[:, [column_labelsA['x'], column_labelsA['y']]].to_numpy()
-	coordinates_B = setB[:, [column_labelsB['x'], column_labelsB['y']]].to_numpy()
-	ids_A = setA[:, column_labelsA["track"]].to_numpy()
-	ids_B = setB[:, column_labelsB["track"]].to_numpy()
-	mask_ids_A = setA[:, column_labelsA["mask_id"]].to_numpy()
-	mask_ids_B = setB[:, column_labelsB["mask_id"]].to_numpy()
+	coordinates_A = setA.loc[:, [column_labelsA['x'], column_labelsA['y']]].to_numpy()
+	coordinates_B = setB.loc[:, [column_labelsB['x'], column_labelsB['y']]].to_numpy()
+	ids_A = setA.loc[:, column_labelsA["track"]].to_numpy()
+	ids_B = setB.loc[:, column_labelsB["track"]].to_numpy()
+	mask_ids_A = setA.loc[:, column_labelsA["mask_id"]].to_numpy()
+	mask_ids_B = setB.loc[:, column_labelsB["mask_id"]].to_numpy()
 
 	# compute distance matrix
 	dist_map = cdist(coordinates_A, coordinates_B, metric="euclidean")
@@ -379,15 +477,12 @@ def distance_cut_neighborhood(setA, setB, distance, mode='two-pop', status=None,
 			int)
 		for t in tqdm(timeline):
 
-			index_A = list(setA.loc[setA[cl[0]['time']] == t].index)
 			coordinates_A = setA.loc[setA[cl[0]['time']] == t, [cl[0]['x'], cl[0]['y']]].to_numpy()
 			ids_A = setA.loc[setA[cl[0]['time']] == t, cl[0]['track']].to_numpy()
 			status_A = setA.loc[setA[cl[0]['time']] == t, status[0]].to_numpy()
 
-			index_B = list(setB.loc[setB[cl[1]['time']] == t].index)
 			coordinates_B = setB.loc[setB[cl[1]['time']] == t, [cl[1]['x'], cl[1]['y']]].to_numpy()
 			ids_B = setB.loc[setB[cl[1]['time']] == t, cl[1]['track']].to_numpy()
-			status_B = setB.loc[setB[cl[1]['time']] == t, status[1]].to_numpy()
 
 			if len(ids_A) > 0 and len(ids_B) > 0:
 
@@ -395,96 +490,14 @@ def distance_cut_neighborhood(setA, setB, distance, mode='two-pop', status=None,
 				dist_map = cdist(coordinates_A, coordinates_B, metric="euclidean")
 
 				if attention_weight:
-					weights, closest_A = compute_attention_weight(dist_map, d, status_A, ids_A, axis=1,
-																  include_dead_weight=include_dead_weight)
+					weights, closest_A = compute_attention_weight(dist_map, d, status_A, ids_A, axis=1, include_dead_weight=include_dead_weight)
 
-				# Target centric
-				for k in range(dist_map.shape[0]):
-
-					col = dist_map[k, :]
-					col[col == 0.] = 1.0E06
-
-					neighs_B = np.array([ids_B[i] for i in np.where((col <= d))[0]])
-					status_neigh_B = np.array([status_B[i] for i in np.where((col <= d))[0]])
-					dist_B = [round(col[i], 2) for i in np.where((col <= d))[0]]
-					if len(dist_B) > 0:
-						closest_B_cell = neighs_B[np.argmin(dist_B)]
-
-					if symmetrize and attention_weight:
-						n_neighs = float(len(neighs_B))
-						if not include_dead_weight:
-							n_neighs_alive = len(np.where(status_neigh_B == 1)[0])
-							neigh_count = n_neighs_alive
-						else:
-							neigh_count = n_neighs
-						if neigh_count > 0:
-							weight_A = 1. / neigh_count
-						else:
-							weight_A = np.nan
-
-						if not include_dead_weight and status_A[k] == 0:
-							weight_A = 0
-
-					neighs = []
-					setA.at[index_A[k], neigh_col] = []
-					for n in range(len(neighs_B)):
-
-						# index in setB
-						n_index = np.where(ids_B == neighs_B[n])[0][0]
-						# Assess if neigh B is closest to A
-						if attention_weight:
-							if closest_A[n_index] == ids_A[k]:
-								closest = True
-							else:
-								closest = False
-
-						if symmetrize:
-							# Load neighborhood previous data
-							sym_neigh = setB.loc[index_B[n_index], neigh_col]
-							if neighs_B[n] == closest_B_cell:
-								closest_b = True
-							else:
-								closest_b = False
-							if isinstance(sym_neigh, list):
-								sym_neigh.append({'id': ids_A[k], 'distance': dist_B[n], 'status': status_A[k]})
-							else:
-								sym_neigh = [{'id': ids_A[k], 'distance': dist_B[n], 'status': status_A[k]}]
-							if attention_weight:
-								sym_neigh[-1].update({'weight': weight_A, 'closest': closest_b})
-
-						# Write the minimum info about neighborhing cell B
-						neigh_dico = {'id': neighs_B[n], 'distance': dist_B[n], 'status': status_neigh_B[n]}
-						if attention_weight:
-							neigh_dico.update({'weight': weights[n_index], 'closest': closest})
-
-						if compute_cum_sum:
-							# Compute the integrated presence of the neighboring cell B
-							assert cl[1][
-									   'track'] == 'TRACK_ID', 'The set B does not seem to contain tracked data. The cumulative time will be meaningless.'
-							past_neighs = [[ll['id'] for ll in l] if len(l) > 0 else [None] for l in setA.loc[
-								(setA[cl[0]['track']] == ids_A[k]) & (setA[cl[0]['time']] <= t), neigh_col].to_numpy()]
-							past_neighs = [item for sublist in past_neighs for item in sublist]
-
-							if attention_weight:
-								past_weights = [[ll['weight'] for ll in l] if len(l) > 0 else [None] for l in setA.loc[
-									(setA[cl[0]['track']] == ids_A[k]) & (
-												setA[cl[0]['time']] <= t), neigh_col].to_numpy()]
-								past_weights = [item for sublist in past_weights for item in sublist]
-
-							cum_sum = len(np.where(past_neighs == neighs_B[n])[0])
-							neigh_dico.update({'cumulated_presence': cum_sum + 1})
-
-							if attention_weight:
-								cum_sum_weighted = np.sum(
-									[w if l == neighs_B[n] else 0 for l, w in zip(past_neighs, past_weights)])
-								neigh_dico.update({'cumulated_presence_weighted': cum_sum_weighted + weights[n_index]})
-
-						if symmetrize:
-							setB.at[index_B[n_index], neigh_col] = sym_neigh
-
-						neighs.append(neigh_dico)
-
-					setA.at[index_A[k], neigh_col] = neighs
+				_fill_distance_neighborhood_at_t(t, setA, setB, dist_map,
+												attention_weight=attention_weight,
+												include_dead_weight=include_dead_weight, symmetrize=symmetrize,
+												compute_cum_sum=compute_cum_sum, weights=weights, closest_A=closest_A,
+												neigh_col=neigh_col, column_labelsA=cl[0], column_labelsB=cl[1],
+												statusA=status[0], statusB=status[1], distance=d)
 
 	return setA, setB
 
