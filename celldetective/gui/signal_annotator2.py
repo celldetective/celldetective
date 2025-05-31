@@ -1342,11 +1342,18 @@ class SignalAnnotator2(CelldetectiveMainWindow):
 			signal = []; timeline = [];
 			signal_txt = self.signal_choices[i].currentText()
 			option = self.signal_pop_button_groups[i].checkedId()
+			
+			n_cut = 25
+			if len(signal_txt) > n_cut:
+				signal_txt_to_show = signal_txt[:(n_cut - 3)] + '...'
+			else:
+				signal_txt_to_show = signal_txt
 
 			if option==0 and self.reference_track_of_interest is not None and signal_txt!='--' and signal_txt!='':
 				
 				df_reference = self.dataframes[self.reference_population]
-				self.lines[i].set_label(f'reference ({self.reference_population}) '+ signal_txt)
+				
+				self.lines[i].set_label(f'reference ({self.reference_population}) '+ signal_txt_to_show)
 
 				signal = df_reference.loc[df_reference['TRACK_ID']==self.reference_track_of_interest, signal_txt].to_numpy()
 				timeline = df_reference.loc[df_reference['TRACK_ID']==self.reference_track_of_interest, 'FRAME'].to_numpy()
@@ -1355,14 +1362,14 @@ class SignalAnnotator2(CelldetectiveMainWindow):
 			elif option==1 and self.neighbor_track_of_interest is not None and signal_txt!='--' and signal_txt!='':
 				
 				df_neighbor = self.dataframes[self.neighbor_population]
-				self.lines[i].set_label(f'neighbor ({self.neighbor_population}) '+ signal_txt)				
+				self.lines[i].set_label(f'neighbor ({self.neighbor_population}) '+ signal_txt_to_show)
 
 				signal = df_neighbor.loc[df_neighbor['TRACK_ID']==self.neighbor_track_of_interest, signal_txt].to_numpy()
 				timeline = df_neighbor.loc[df_neighbor['TRACK_ID']==self.neighbor_track_of_interest, 'FRAME'].to_numpy()
 				range_values.extend(df_neighbor.loc[:,signal_txt].values)
 
 			elif option==2 and self.reference_track_of_interest is not None and self.neighbor_track_of_interest is not None and signal_txt!='--' and signal_txt!='':
-				self.lines[i].set_label(f'pair '+signal_txt)
+				self.lines[i].set_label(f'pair '+signal_txt_to_show)
 				signal = self.df_relative.loc[(self.df_relative['REFERENCE_ID']==self.reference_track_of_interest)&(self.df_relative['NEIGHBOR_ID']==self.neighbor_track_of_interest)&(self.df_relative['reference_population']==self.reference_population)&(self.df_relative['neighbor_population']==self.neighbor_population), signal_txt].to_numpy()
 				timeline = self.df_relative.loc[(self.df_relative['REFERENCE_ID']==self.reference_track_of_interest)&(self.df_relative['NEIGHBOR_ID']==self.neighbor_track_of_interest)&(self.df_relative['reference_population']==self.reference_population)&(self.df_relative['neighbor_population']==self.neighbor_population), 'FRAME'].to_numpy()
 				range_values.extend(self.df_relative.loc[(self.df_relative['reference_population']==self.reference_population)&(self.df_relative['neighbor_population']==self.neighbor_population), signal_txt].values)
@@ -1694,6 +1701,7 @@ class SignalAnnotator2(CelldetectiveMainWindow):
 
 		self.lines = [self.cell_ax.plot([np.linspace(0,self.len_movie-1,self.len_movie)],[np.zeros((self.len_movie))])[0] for i in range(len(self.signal_choices))]
 		for i in range(len(self.lines)):
+			
 			self.lines[i].set_label(f'signal {i}')
 
 		min_val,max_val = self.cell_ax.get_ylim()
