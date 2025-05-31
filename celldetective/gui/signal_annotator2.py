@@ -857,15 +857,15 @@ class SignalAnnotator2(CelldetectiveMainWindow):
 		# Plot the new time
 		t0 = -1
 		if self.event_btn.isChecked():
-			try:
-				cclass = 0
-				t0 = float(self.time_of_interest_le.text().replace(',', '.'))
-				self.line_dt.set_xdata([t0, t0])
-				self.cell_fcanvas.canvas.draw_idle()
-			except Exception as e:
-				print(e)
-				t0 = -1
-				cclass = 2
+			# try:
+			cclass = 0
+			t0 = float(self.time_of_interest_le.text().replace(',', '.'))
+			self.line_dt.set_xdata([t0, t0])
+			self.cell_fcanvas.canvas.draw_idle()
+			# except Exception as e:
+			# 	print(e)
+			# 	t0 = -1
+			# 	cclass = 2
 
 		elif self.no_event_btn.isChecked():
 			cclass = 1
@@ -922,7 +922,6 @@ class SignalAnnotator2(CelldetectiveMainWindow):
 		#self.make_status_column()
 		self.refresh_scatter_from_trajectories(self.reference_population)
 		self.refresh_scatter_from_trajectories(self.neighbor_population)
-
 
 		self.recolor_selection()
 		self.trace_neighbors()
@@ -1398,14 +1397,11 @@ class SignalAnnotator2(CelldetectiveMainWindow):
 
 		if self.reference_track_of_interest is not None and self.neighbor_track_of_interest is not None:
 			t0 = self.df_relative.loc[(self.df_relative['REFERENCE_ID'] == self.reference_track_of_interest)&(self.df_relative['NEIGHBOR_ID'] == self.neighbor_track_of_interest)&(self.df_relative['reference_population'] == self.reference_population)&(self.df_relative['neighbor_population'] == self.neighbor_population), self.pair_time_name].dropna().values
-			try:
-				if t0!=[]:
-					t0=t0[0]
-					ymin,ymax = self.cell_ax.get_ylim()
-					self.line_dt.set_xdata([t0, t0])
-					self.line_dt.set_ydata([ymin,ymax])
-			except Exception as e:
-				print(e)
+			if len(t0)>0:
+				t0=t0[0]
+				ymin,ymax = self.cell_ax.get_ylim()
+				self.line_dt.set_xdata([t0, t0])
+				self.line_dt.set_ydata([ymin,ymax])
 			
 		self.cell_ax.legend(fontsize=8)
 		self.cell_fcanvas.canvas.draw()
@@ -1781,12 +1777,15 @@ class SignalAnnotator2(CelldetectiveMainWindow):
 
 			print('You selected a pair...')
 			artist = event.artist
-			#print(self.index)
 
 			if self.index is not None and len(self.pair_selection)==0:
 
-				selected_point = artist.get_offsets()[self.index]
-
+				try:
+					selected_point = artist.get_offsets()[self.index]
+				except Exception as e:
+					print(f"L1788 {e}")
+					return
+				
 				if len(self.pair_selection) == 0 and ((selected_point[0],selected_point[1]) in self.connections.keys()):
 
 					connect = self.connections[(selected_point[0], selected_point[1])]
