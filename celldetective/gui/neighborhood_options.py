@@ -1,6 +1,5 @@
 from PyQt5.QtWidgets import QApplication, QComboBox, QFrame, QCheckBox, QVBoxLayout, QLabel, QHBoxLayout, QPushButton
 from PyQt5.QtCore import Qt, QSize
-from PyQt5.QtGui import QIcon
 from celldetective.gui.gui_utils import center_window, ListWidget, DistanceChoice
 from superqt.fonticon import icon
 from fonticon_mdi6 import MDI6
@@ -10,7 +9,7 @@ import os
 from glob import glob
 import pandas as pd
 from celldetective.gui.viewers import CellSizeViewer, CellEdgeVisualizer
-from celldetective.gui import Styles, CelldetectiveWidget
+from celldetective.gui import CelldetectiveWidget
 
 
 class ConfigNeighborhoods(CelldetectiveWidget):
@@ -139,7 +138,7 @@ class ConfigNeighborhoods(CelldetectiveWidget):
 
 		layout.addLayout(list_header_layout)
 
-		self.measurements_list = ListWidget(DistanceChoice, initial_features=["60"], dtype=int)
+		self.measurements_list = ListWidget(DistanceChoice, initial_features=[], dtype=int)
 		self.measurements_list.setToolTip('Neighborhoods to compute.')
 		layout.addWidget(self.measurements_list)
 
@@ -314,15 +313,14 @@ class ConfigNeighborhoods(CelldetectiveWidget):
 		population = self.neighbor_population_cb.currentText()
 		class_cols, status_cols, group_cols, time_cols = self.locate_population_specific_columns(population)
 		self.neighbor_population_status_cb.clear()
-		self.neighbor_population_status_cb.addItems(['--','class', 'status']+class_cols+status_cols+group_cols)
+		self.neighbor_population_status_cb.addItems(list(np.unique(['--','class', 'status']+class_cols+status_cols+group_cols)))
 
 	def fill_cbs_of_reference_population(self):
 
 		population = self.reference_population_cb.currentText()
 		class_cols, status_cols, group_cols, time_cols = self.locate_population_specific_columns(population)
-		self.reference_population_status_cb.clear()
-		self.reference_population_status_cb.addItems(['--','class', 'status']+class_cols+status_cols+group_cols)
-		self.event_time_cb.addItems(['--', 't0']+time_cols)
+		self.event_time_cb.clear()
+		self.event_time_cb.addItems(list(np.unique(['--', 't0']+time_cols)))
 
 	def switch_not_reference(self):
 		

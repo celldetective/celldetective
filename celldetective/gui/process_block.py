@@ -1539,6 +1539,10 @@ class NeighPanel(QFrame, Styles):
 					analyze_pair_signals_at_position(self.pos, self.pair_signal_models_list.currentText(), use_gpu=self.parent_window.parent_window.use_gpu, populations=self.parent_window.populations)
 
 		self.parent_window.update_position_options()
+		for action in [self.neigh_action, self.measure_pairs_action, self.signal_analysis_action]:
+			if action.isChecked():
+				action.setChecked(False)
+
 		print('Done.')
 
 	def check_signals2(self):
