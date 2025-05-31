@@ -63,7 +63,7 @@ class SignalAnnotator2(CelldetectiveMainWindow):
 						  'x_anim', 'y_anim', 't','dummy','group_color',
 						  'state', 'generation', 'root', 'parent', 'class_id', 'class', 't0', 'POSITION_X',
 						  'POSITION_Y', 'position', 'well', 'well_index', 'well_name', 'pos_name', 'index',
-						  'concentration', 'cell_type', 'antibody', 'pharmaceutical_agent', 'ID']
+						  'concentration', 'cell_type', 'antibody', 'pharmaceutical_agent', 'ID', "REFERENCE_ID", "NEIGHBOR_ID", "reference_population", "neighbor_population"]
 
 		meta = get_experiment_metadata(self.exp_dir)
 		if meta is not None:
@@ -229,11 +229,11 @@ class SignalAnnotator2(CelldetectiveMainWindow):
 		reference_layout.addLayout(self.cell_events_hbox)
 
 		neighbor_layout = QVBoxLayout()
-		neighbor_layout.addWidget(self.neighbor_cell_info)
+		neighbor_layout.addWidget(self.neighbor_cell_info, alignment=Qt.AlignRight)
 		neighbor_layout.addLayout(self.neigh_cell_events_hbox)
 
 		self.cell_info_hbox.addLayout(reference_layout, 33)
-		self.cell_info_hbox.addWidget(self.pair_info, 33)
+		self.cell_info_hbox.addWidget(self.pair_info, 33, alignment=Qt.AlignCenter)
 		self.cell_info_hbox.addLayout(neighbor_layout, 33)
 
 		self.left_panel.addLayout(self.cell_info_hbox)
@@ -434,6 +434,7 @@ class SignalAnnotator2(CelldetectiveMainWindow):
 		main_layout.addLayout(self.right_panel, 65)
 		self.button_widget.adjustSize()
 		self.compute_status_and_colors_reference()
+		self.compute_status_and_colors_neighbor()
 
 		self.extract_relevant_events()
 
@@ -641,9 +642,18 @@ class SignalAnnotator2(CelldetectiveMainWindow):
 			df_reference['status_color'] = [color_from_status(i) for i in df_reference[self.reference_status_name].to_numpy()]
 			df_reference['class_color'] = [color_from_class(i) for i in df_reference[self.reference_class_name].to_numpy()]
 
-			self.refresh_scatter_from_trajectories(self.reference_population)
-
-
+			self.refresh_scatter_from_trajectories(self.reference_population, clear_selection=False)
+			
+			if self.reference_track_of_interest is not None:
+				t_reference = df_reference.loc[
+					df_reference['TRACK_ID'] == self.reference_track_of_interest, self.reference_time_name].values
+				if len(t_reference) > 0:
+					t_reference = t_reference[0]
+					ymin, ymax = self.cell_ax.get_ylim()
+					self.line_dt_reference.set_xdata([t_reference, t_reference])
+					self.line_dt_reference.set_ydata([ymin,ymax])
+					self.cell_fcanvas.canvas.draw()
+		
 	def compute_status_and_colors_neighbor(self):
 
 		df_neighbors = self.dataframes[self.neighbor_population]
@@ -759,7 +769,7 @@ class SignalAnnotator2(CelldetectiveMainWindow):
 			self.cancel_pair_selection()
 
 		_, _, neighbor_colors, initial_neighbor_colors = self.get_neighbor_sets()
-		_, _, reference_colors, initial_reference_colors = self.get_reference_sets()
+		_, _, _, reference_colors, initial_reference_colors = self.get_reference_sets()
 
 		for k, (t,idx) in enumerate(zip(self.neighbor_loc_t, self.neighbor_loc_idx)):
 			neighbor_colors[t][idx,0] = initial_neighbor_colors[k][0]
@@ -844,8 +854,17 @@ class SignalAnnotator2(CelldetectiveMainWindow):
 			if option!=0:
 				self.lines[i].set_xdata([])
 				self.lines[i].set_ydata([])
+				
 				self.line_dt.set_xdata([])
 				self.line_dt.set_ydata([])
+				
+				if self.reference_track_of_interest is None:
+					self.line_dt_reference.set_xdata([])
+					self.line_dt_reference.set_ydata([])
+				
+				self.line_dt_neighbor.set_xdata([])
+				self.line_dt_neighbor.set_ydata([])
+				
 				self.lines[i].set_label('')
 
 		self.correct_btn.setEnabled(False)
@@ -857,15 +876,15 @@ class SignalAnnotator2(CelldetectiveMainWindow):
 		# Plot the new time
 		t0 = -1
 		if self.event_btn.isChecked():
-			try:
-				cclass = 0
-				t0 = float(self.time_of_interest_le.text().replace(',', '.'))
-				self.line_dt.set_xdata([t0, t0])
-				self.cell_fcanvas.canvas.draw_idle()
-			except Exception as e:
-				print(e)
-				t0 = -1
-				cclass = 2
+			# try:
+			cclass = 0
+			t0 = float(self.time_of_interest_le.text().replace(',', '.'))
+			self.line_dt.set_xdata([t0, t0])
+			self.cell_fcanvas.canvas.draw_idle()
+			# except Exception as e:
+			# 	print(e)
+			# 	t0 = -1
+			# 	cclass = 2
 
 		elif self.no_event_btn.isChecked():
 			cclass = 1
@@ -922,7 +941,6 @@ class SignalAnnotator2(CelldetectiveMainWindow):
 		#self.make_status_column()
 		self.refresh_scatter_from_trajectories(self.reference_population)
 		self.refresh_scatter_from_trajectories(self.neighbor_population)
-
 
 		self.recolor_selection()
 		self.trace_neighbors()
@@ -1145,7 +1163,6 @@ class SignalAnnotator2(CelldetectiveMainWindow):
 	def set_reference_and_neighbor_populations(self):
 
 		neigh = self.neighborhood_choice_cb.currentText()
-		print(f"{neigh=}")
 
 		self.current_neighborhood = neigh
 		for pop in self.dataframes.keys():
@@ -1160,11 +1177,7 @@ class SignalAnnotator2(CelldetectiveMainWindow):
 			if 'self' in self.current_neighborhood:
 				self.neighbor_population = self.reference_population
 
-		print(f"{self.current_neighborhood=} {self.reference_population=} {self.neighbor_population=}")
 
-		# self.neighbor_population = self.df_relative.loc[(~self.df_relative['status_'+self.current_neighborhood].isnull())&(self.df_relative['reference_population']==self.reference_population), 'neighbor_population'].values[0]
-		# print(f"{self.current_neighborhood=} {self.reference_population=} {self.neighbor_population=}")
-		
 		print(f'Current neighborhood: {self.current_neighborhood}')
 		print(f'New reference population: {self.reference_population}')
 		print(f'New neighbor population: {self.neighbor_population}')
@@ -1215,7 +1228,6 @@ class SignalAnnotator2(CelldetectiveMainWindow):
 				status[:] = 2
 			if cclass>2:
 				status[:] = 42
-			print(t0, status)
 			status_color = [color_from_status(s) for s in status]
 			class_color = [color_from_class(cclass) for i in range(len(status))]
 
@@ -1334,8 +1346,16 @@ class SignalAnnotator2(CelldetectiveMainWindow):
 				self.lines[i].set_xdata([])
 				self.lines[i].set_ydata([])
 				self.lines[i].set_label('')
+				
 				self.line_dt.set_xdata([])
 				self.line_dt.set_ydata([])
+				
+				self.line_dt_reference.set_xdata([])
+				self.line_dt_reference.set_ydata([])
+
+				self.line_dt_neighbor.set_xdata([])
+				self.line_dt_neighbor.set_ydata([])
+				
 			self.cell_fcanvas.canvas.draw()
 			return None
 		else:
@@ -1348,11 +1368,18 @@ class SignalAnnotator2(CelldetectiveMainWindow):
 			signal = []; timeline = [];
 			signal_txt = self.signal_choices[i].currentText()
 			option = self.signal_pop_button_groups[i].checkedId()
+			
+			n_cut = 25
+			if len(signal_txt) > n_cut:
+				signal_txt_to_show = signal_txt[:(n_cut - 3)] + '...'
+			else:
+				signal_txt_to_show = signal_txt
 
 			if option==0 and self.reference_track_of_interest is not None and signal_txt!='--' and signal_txt!='':
 				
 				df_reference = self.dataframes[self.reference_population]
-				self.lines[i].set_label(f'reference ({self.reference_population}) '+ signal_txt)
+				
+				self.lines[i].set_label(f'reference ({self.reference_population}) '+ signal_txt_to_show)
 
 				signal = df_reference.loc[df_reference['TRACK_ID']==self.reference_track_of_interest, signal_txt].to_numpy()
 				timeline = df_reference.loc[df_reference['TRACK_ID']==self.reference_track_of_interest, 'FRAME'].to_numpy()
@@ -1361,15 +1388,14 @@ class SignalAnnotator2(CelldetectiveMainWindow):
 			elif option==1 and self.neighbor_track_of_interest is not None and signal_txt!='--' and signal_txt!='':
 				
 				df_neighbor = self.dataframes[self.neighbor_population]
-				self.lines[i].set_label(f'neighbor ({self.neighbor_population}) '+ signal_txt)				
+				self.lines[i].set_label(f'neighbor ({self.neighbor_population}) '+ signal_txt_to_show)
 
 				signal = df_neighbor.loc[df_neighbor['TRACK_ID']==self.neighbor_track_of_interest, signal_txt].to_numpy()
 				timeline = df_neighbor.loc[df_neighbor['TRACK_ID']==self.neighbor_track_of_interest, 'FRAME'].to_numpy()
 				range_values.extend(df_neighbor.loc[:,signal_txt].values)
 
 			elif option==2 and self.reference_track_of_interest is not None and self.neighbor_track_of_interest is not None and signal_txt!='--' and signal_txt!='':
-
-				self.lines[i].set_label(f'pair '+signal_txt)								
+				self.lines[i].set_label(f'pair '+signal_txt_to_show)
 				signal = self.df_relative.loc[(self.df_relative['REFERENCE_ID']==self.reference_track_of_interest)&(self.df_relative['NEIGHBOR_ID']==self.neighbor_track_of_interest)&(self.df_relative['reference_population']==self.reference_population)&(self.df_relative['neighbor_population']==self.neighbor_population), signal_txt].to_numpy()
 				timeline = self.df_relative.loc[(self.df_relative['REFERENCE_ID']==self.reference_track_of_interest)&(self.df_relative['NEIGHBOR_ID']==self.neighbor_track_of_interest)&(self.df_relative['reference_population']==self.reference_population)&(self.df_relative['neighbor_population']==self.neighbor_population), 'FRAME'].to_numpy()
 				range_values.extend(self.df_relative.loc[(self.df_relative['reference_population']==self.reference_population)&(self.df_relative['neighbor_population']==self.neighbor_population), signal_txt].values)
@@ -1380,7 +1406,7 @@ class SignalAnnotator2(CelldetectiveMainWindow):
 			self.lines[i].set_xdata(timeline)
 			self.lines[i].set_ydata(signal)
 			self.lines[i].set_color(tab10(i / float(self.n_signals)))
-
+		
 		#self.configure_ylims()
 		if len(range_values)>0:
 			range_values = np.array(range_values)
@@ -1396,18 +1422,36 @@ class SignalAnnotator2(CelldetectiveMainWindow):
 				else:
 					self.cell_ax.set_ylim(self.value_magnitude, self.non_log_ymax)					
 
+		df_reference = self.dataframes[self.reference_population]
+		t_reference = df_reference.loc[df_reference['TRACK_ID']==self.reference_track_of_interest, self.reference_time_name].values
+
+		if len(t_reference)>0:
+			t_reference=t_reference[0]
+			ymin,ymax = self.cell_ax.get_ylim()
+			self.line_dt_reference.set_xdata([t_reference, t_reference])
+			self.line_dt_reference.set_ydata([ymin,ymax])
+
+
 		if self.reference_track_of_interest is not None and self.neighbor_track_of_interest is not None:
 			t0 = self.df_relative.loc[(self.df_relative['REFERENCE_ID'] == self.reference_track_of_interest)&(self.df_relative['NEIGHBOR_ID'] == self.neighbor_track_of_interest)&(self.df_relative['reference_population'] == self.reference_population)&(self.df_relative['neighbor_population'] == self.neighbor_population), self.pair_time_name].dropna().values
-			try:
-				if t0!=[]:
-					t0=t0[0]
-					ymin,ymax = self.cell_ax.get_ylim()
-					self.line_dt.set_xdata([t0, t0])
-					self.line_dt.set_ydata([ymin,ymax])
-			except Exception as e:
-				print(e)
 			
-		self.cell_ax.legend()
+			df_neighbor = self.dataframes[self.neighbor_population]
+			t_neighbor = df_neighbor.loc[
+				df_neighbor['TRACK_ID'] == self.neighbor_track_of_interest, self.neighbor_time_name].values
+			
+			if len(t0)>0:
+				t0=t0[0]
+				ymin,ymax = self.cell_ax.get_ylim()
+				self.line_dt.set_xdata([t0, t0])
+				self.line_dt.set_ydata([ymin,ymax])
+
+			if len(t_neighbor)>0:
+				t_neighbor=t_neighbor[0]
+				ymin,ymax = self.cell_ax.get_ylim()
+				self.line_dt_neighbor.set_xdata([t_neighbor, t_neighbor])
+				self.line_dt_neighbor.set_ydata([ymin,ymax])
+			
+		self.cell_ax.legend(fontsize=8)
 		self.cell_fcanvas.canvas.draw()
 
 
@@ -1439,15 +1483,17 @@ class SignalAnnotator2(CelldetectiveMainWindow):
 		self.positions = {}
 		self.colors = {}
 		self.initial_colors = {}
+		self.timeline = {}
 			
 		for population in self.dataframes.keys():
 			self.refresh_scatter_from_trajectories(population)
 
-	def refresh_scatter_from_trajectories(self, population):
+	def refresh_scatter_from_trajectories(self, population, clear_selection=True):
 		
 		df = self.dataframes[population]
 		positions = []
 		tracks = []
+		timeline = []
 		colors = []
 		initial_colors = []
 
@@ -1455,21 +1501,29 @@ class SignalAnnotator2(CelldetectiveMainWindow):
 
 			for t in np.arange(self.len_movie):
 
-					positions.append(df.loc[df['FRAME']==t,['x_anim', 'y_anim']].to_numpy())
-					colors.append(df.loc[df['FRAME']==t,['class_color', 'status_color']].to_numpy())
-					initial_colors.append(
-						df.loc[df['FRAME'] == t, ['class_color', 'status_color']].to_numpy())
-					try:
-						tracks.append(df.loc[df['FRAME']==t, 'TRACK_ID'].to_numpy())
-					except:
-						tracks.append(
-							df.loc[df['FRAME'] == t, 'ID'].to_numpy())
+				positions.append(df.loc[df['FRAME']==t,['x_anim', 'y_anim']].to_numpy())
+				colors.append(df.loc[df['FRAME']==t,['class_color', 'status_color']].to_numpy())
+				initial_colors.append(
+					df.loc[df['FRAME'] == t, ['class_color', 'status_color']].to_numpy())
+				try:
+					tracks.append(df.loc[df['FRAME']==t, 'TRACK_ID'].to_numpy())
+					timeline.append(t)
+				except:
+					tracks.append(
+						df.loc[df['FRAME'] == t, 'ID'].to_numpy())
+					timeline.append(t)
 
 		self.tracks.update({population: tracks})
+		self.timeline.update({population: timeline})
 		self.positions.update({population: positions})
 		self.colors.update({population: colors})
 		self.initial_colors.update({population: initial_colors})
-
+		
+		if self.reference_track_of_interest is not None:
+			#self.recolor_selection()
+			#self.trace_neighbors()
+			self.highlight_the_pair()
+	
 	def load_annotator_config(self):
 
 		"""
@@ -1611,7 +1665,11 @@ class SignalAnnotator2(CelldetectiveMainWindow):
 		# 			  "Are you sure you want to exit ?",
 		# 			  QMessageBox.Yes| QMessageBox.No,
 		# 			  )
-		del self.stack
+		try:
+			del self.stack
+		except:
+			pass
+		
 		gc.collect()
 
 	def looped_animation(self):
@@ -1644,7 +1702,7 @@ class SignalAnnotator2(CelldetectiveMainWindow):
 		for i,pop in enumerate(self.dataframes.keys()):
 			df = self.dataframes[pop]
 			if df is not None:
-				status_scatter = self.ax.scatter(self.positions[pop][0][:,0], self.positions[pop][0][:,1], c=self.colors[pop][0][:,1], s=50, picker=True, pickradius=10, zorder=10, marker=markers[i]) #marker="x", 
+				status_scatter = self.ax.scatter(self.positions[pop][0][:,0], self.positions[pop][0][:,1], c=self.colors[pop][0][:,1], s=50, picker=True, pickradius=150, zorder=10, marker=markers[i]) #marker="x",
 				class_scatter = self.ax.scatter(self.positions[pop][0][:,0], self.positions[pop][0][:,1], marker='o', facecolors='none',edgecolors=self.colors[pop][0][:,0], s=200, zorder=10)
 			else:
 				status_scatter = self.ax.scatter([], [], s=50, picker=True, pickradius=10, marker=markers[i]) #marker="x", 
@@ -1692,13 +1750,17 @@ class SignalAnnotator2(CelldetectiveMainWindow):
 
 		self.lines = [self.cell_ax.plot([np.linspace(0,self.len_movie-1,self.len_movie)],[np.zeros((self.len_movie))])[0] for i in range(len(self.signal_choices))]
 		for i in range(len(self.lines)):
+			
 			self.lines[i].set_label(f'signal {i}')
 
 		min_val,max_val = self.cell_ax.get_ylim()
 		self.line_dt, = self.cell_ax.plot([-1,-1],[min_val,max_val],c="k",linestyle="--")
+		self.line_dt_reference, = self.cell_ax.plot([-1,-1],[min_val,max_val],c="tab:blue",linestyle="--")
+		self.line_dt_neighbor, = self.cell_ax.plot([-1,-1],[min_val,max_val],c="tab:red",linestyle="--")
+
 
 		self.cell_ax.set_xlim(0,self.len_movie)
-		self.cell_ax.legend()
+		self.cell_ax.legend(fontsize=8)
 		self.cell_fcanvas.canvas.draw()
 
 		#self.plot_signals()
@@ -1707,9 +1769,8 @@ class SignalAnnotator2(CelldetectiveMainWindow):
 	def on_scatter_pick(self, event):
 		
 		self.identify_closest_marker(event)
-		print(self.pair_selected, self.reference_selection)
 
-		_, tracks, _, _ = self.get_reference_sets()
+		_, tracks, _, _, _ = self.get_reference_sets()
 
 		if self.selected_population == self.reference_population:
 
@@ -1772,12 +1833,15 @@ class SignalAnnotator2(CelldetectiveMainWindow):
 
 			print('You selected a pair...')
 			artist = event.artist
-			print(self.index)
 
 			if self.index is not None and len(self.pair_selection)==0:
 
-				selected_point = artist.get_offsets()[self.index]
-
+				try:
+					selected_point = artist.get_offsets()[self.index]
+				except Exception as e:
+					print(f"L1788 {e}")
+					return
+				
 				if len(self.pair_selection) == 0 and ((selected_point[0],selected_point[1]) in self.connections.keys()):
 
 					connect = self.connections[(selected_point[0], selected_point[1])]
@@ -1855,7 +1919,7 @@ class SignalAnnotator2(CelldetectiveMainWindow):
 		return self.positions[self.neighbor_population], self.tracks[self.neighbor_population], self.colors[self.neighbor_population], self.initial_colors[self.neighbor_population]
 
 	def get_reference_sets(self):
-		return self.positions[self.reference_population], self.tracks[self.reference_population], self.colors[self.reference_population], self.initial_colors[self.reference_population]
+		return self.positions[self.reference_population], self.tracks[self.reference_population], self.timeline[self.reference_population], self.colors[self.reference_population], self.initial_colors[self.reference_population]
 
 	def trace_neighbors(self):
 
@@ -1865,7 +1929,8 @@ class SignalAnnotator2(CelldetectiveMainWindow):
 		self.line_connections={}
 
 		positions, tracks, colors, _ = self.get_neighbor_sets()
-
+		_, tracks_reference, _, _, _ = self.get_reference_sets()
+		
 		# Look for neighbors
 		for neigh in self.neighbors:
 
@@ -1874,39 +1939,39 @@ class SignalAnnotator2(CelldetectiveMainWindow):
 
 			for t in range(len(tracks)):
 				indices = np.where(tracks[t]==neigh)[0]
-				if len(indices)>0:
+				indices_reference = np.where(tracks_reference[t]==self.reference_track_of_interest)[0]
+				if len(indices)>0 and len(indices_reference)>0:
 					self.neighbor_loc_t.append(t)
 					self.neighbor_loc_idx.append(indices[0])
-
+			
 			self.neighbor_previous_color = []
 			for t, idx in zip(self.neighbor_loc_t, self.neighbor_loc_idx):
-
-				try:
+				
+				t_ref_idx = np.where(self.reference_timeline == t)[0]
+				if t_ref_idx:
+					t_ref_idx = t_ref_idx[0]
 
 					neigh_x = positions[t][idx, 0]
 					neigh_y = positions[t][idx, 1]
-					x_m_point = (self.reference_x[t] + neigh_x) / 2
-					y_m_point = (self.reference_y[t] + neigh_y) / 2
-
+					x_m_point = (self.reference_x[t_ref_idx] + neigh_x) / 2
+					y_m_point = (self.reference_y[t_ref_idx] + neigh_y) / 2
+	
 					if t not in self.lines_data.keys():
-						self.lines_data[t]=[([self.reference_x[t], neigh_x], [self.reference_y[t], neigh_y])]
+						self.lines_data[t]=[([self.reference_x[t_ref_idx], neigh_x], [self.reference_y[t_ref_idx], neigh_y])]
 						self.points_data[t]=[(x_m_point, y_m_point)]
 					else:
-						self.lines_data[t].append(([self.reference_x[t], neigh_x], [self.reference_y[t], neigh_y]))
+						self.lines_data[t].append(([self.reference_x[t_ref_idx], neigh_x], [self.reference_y[t_ref_idx], neigh_y]))
 						self.points_data[t].append((x_m_point, y_m_point))
-
+	
 					self.connections[(x_m_point, y_m_point)] = [(self.reference_track_of_interest, neigh)]
-					self.line_connections[(self.reference_x[t], neigh_x, self.reference_y[t], neigh_y)]=[(self.reference_track_of_interest, neigh)]
-
+					self.line_connections[(self.reference_x[t_ref_idx], neigh_x, self.reference_y[t_ref_idx], neigh_y)]=[(self.reference_track_of_interest, neigh)]
+	
 					self.neighbor_previous_color.append(colors[t][idx].copy())
-				except Exception as e:
-					print(e)
-					pass
 
 
 	def recolor_selection(self):
 
-		positions, tracks, colors, init_colors = self.get_reference_sets()
+		positions, tracks, timelines, colors, init_colors = self.get_reference_sets()
 		
 		self.reference_loc_t = []
 		self.reference_loc_idx = []
@@ -1927,13 +1992,16 @@ class SignalAnnotator2(CelldetectiveMainWindow):
 		self.reference_not_picked_initial_colors=[]
 		self.reference_x = []
 		self.reference_y = []
+		self.reference_timeline = []
 
 		# Recolor selected cell
 		for t,idx in zip(self.reference_loc_t,self.reference_loc_idx):
 			self.reference_x.append(positions[t][idx, 0])
 			self.reference_y.append(positions[t][idx, 1])
+			self.reference_timeline.append(timelines[t])
 			self.reference_previous_color.append(colors[t][idx].copy())
 			colors[t][idx] = 'lime'
+		self.reference_timeline = np.array(self.reference_timeline)
 
 		# Recolor all other cells in black
 		for t, idx in zip(self.reference_loc_t_not_picked, self.reference_loc_idx_not_picked):
@@ -1944,11 +2012,8 @@ class SignalAnnotator2(CelldetectiveMainWindow):
 
 	def get_neighbors_of_selected_cell(self, selected_cell):
 		
-		print(f"{self.df_relative=} {selected_cell=} {'status_'+self.current_neighborhood=} {self.reference_population=}")
 		self.neighbors = self.df_relative.loc[(self.df_relative['REFERENCE_ID'] == selected_cell)&(~self.df_relative['status_'+self.current_neighborhood].isnull())&(self.df_relative['reference_population']==self.reference_population),'NEIGHBOR_ID']
-		print(f"{self.neighbors=}")
 		self.neighbors = np.unique(self.neighbors)
-		print(f"{self.neighbors=}")
 
 		# if len(self.neighbors)>0:
 		# 	first_neighbor = np.min(self.neighbors)
@@ -1960,16 +2025,13 @@ class SignalAnnotator2(CelldetectiveMainWindow):
 		
 		ind = event.ind
 		label = event.artist.get_label()
-		print(f'{label=}')
 
 		# Identify the nature of the selected object (target/effector/pair)
 		self.pair_selected = False
 
 		populations = list(self.dataframes.keys())
-		print(f"{populations=}")
 
 		number = int(label.split('_child')[1])
-		print(f"{number=}")
 
 		if number>len(populations)*2:
 			print('A pair is selected...')
@@ -2136,25 +2198,17 @@ class SignalAnnotator2(CelldetectiveMainWindow):
 					x_coords, y_coords = line
 					pair = self.line_connections[x_coords[0],x_coords[1],y_coords[0],y_coords[1]]
 					this_frame = self.lines_colors_class[self.framedata]
-					print(f"{pair=} {this_frame=}")
 
-					try:
-						this_pair = this_frame[(this_frame[:, 0] == pair[0][0]) & (this_frame[:, 1] == pair[0][1])]
-						print(f'{this_pair=} {x_coords=} {y_coords=}')
-
-						self.lines_plot = self.ax.plot(x_coords, y_coords, alpha=1, linewidth=2, color=this_pair[0][2])
+					this_pair = this_frame[(this_frame[:, 0] == pair[0][0]) & (this_frame[:, 1] == pair[0][1])]
+					if len(this_pair)>0:
+						c = this_pair[0][2]
+						self.lines_plot = self.ax.plot(x_coords, y_coords, alpha=1, linewidth=2, color=c)
 						self.lines_list.append(self.lines_plot[0])
-					except Exception as e:
-						print('Exception L2230; ',e)
-						pass
-				# Plot points
-				try:
-					self.points.set_offsets(self.points_data[key])
-					colors_at_this_frame = self.lines_colors_status[self.framedata]
-					colors = [colors_at_this_frame[(colors_at_this_frame[:, 0] == self.connections[point[0],point[1]][0][0]) & (colors_at_this_frame[:, 1] == self.connections[point[0],point[1]][0][1])][0][2] for point in self.points_data[key]]
-					self.points.set_color(colors)
-				except Exception as e:
-					print('Exception L2239; ',e)
+
+						self.points.set_offsets(self.points_data[key])
+						colors_at_this_frame = self.lines_colors_status[self.framedata]
+						colors = [colors_at_this_frame[(colors_at_this_frame[:, 0] == self.connections[point[0],point[1]][0][0]) & (colors_at_this_frame[:, 1] == self.connections[point[0],point[1]][0][1])][0][2] for point in self.points_data[key]]
+						self.points.set_color(colors)
 
 		if self.lines_list!=[]:
 			return [self.im] + [self.status_scatter[p] for p in self.status_scatter.keys()] + [self.class_scatter[p] for p in self.status_scatter.keys()] + self.lines_list + [self.points]

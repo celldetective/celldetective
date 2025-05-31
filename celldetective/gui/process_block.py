@@ -6,6 +6,7 @@ from fonticon_mdi6 import MDI6
 import gc
 from PyQt5.QtGui import QDoubleValidator, QIntValidator
 
+from celldetective.gui.processes.compute_neighborhood import NeighborhoodProcess
 from celldetective.gui.signal_annotator import MeasureAnnotator
 from celldetective.gui.signal_annotator2 import SignalAnnotator2
 from celldetective.io import get_segmentation_models_list, control_segmentation_napari, get_signal_models_list, \
@@ -1510,6 +1511,7 @@ class NeighPanel(QFrame, Styles):
 			for pos_idx in pos_indices:
 
 				self.pos = natsorted(glob(well+f"{os.path.split(well)[-1].replace('W','').replace(os.sep,'')}*{os.sep}"))[pos_idx]
+				self.pos_name = extract_position_name(self.pos)
 				print(f"Position {self.pos}...\nLoading stack movie...")
 
 				if not os.path.exists(self.pos + 'output' + os.sep):
@@ -1520,31 +1522,15 @@ class NeighPanel(QFrame, Styles):
 				if self.neigh_action.isChecked():
 					for protocol in self.protocols:
 
-						if protocol['neighborhood_type']=='distance_threshold':
+						process_args = {"pos": self.pos, "pos_name": self.pos_name,"protocol": protocol,"img_shape": (self.parent_window.shape_x,self.parent_window.shape_y)} #"n_threads": self.n_threads
+						self.job = ProgressWindow(NeighborhoodProcess, parent_window=self, title="Neighborhood",
+												  process_args=process_args)
+						result = self.job.exec_()
+						if result == QDialog.Accepted:
+							pass
+						elif result == QDialog.Rejected:
+							return None
 
-							compute_neighborhood_at_position(self.pos,
-															protocol['distance'],
-															population=protocol['population'],
-															theta_dist=None,
-															img_shape=(self.parent_window.shape_x,self.parent_window.shape_y),
-															return_tables=False,
-															clear_neigh=protocol['clear_neigh'],
-															event_time_col=protocol['event_time_col'],
-															neighborhood_kwargs=protocol['neighborhood_kwargs'],
-															)
-
-						elif protocol['neighborhood_type']=='mask_contact':
-
-							compute_contact_neighborhood_at_position(self.pos,
-														protocol['distance'],
-														population=protocol['population'],
-														theta_dist=None,
-														img_shape=(self.parent_window.shape_x,self.parent_window.shape_y),
-														return_tables=False,
-														clear_neigh=protocol['clear_neigh'],
-														event_time_col=protocol['event_time_col'],
-														neighborhood_kwargs=protocol['neighborhood_kwargs'],
-														)
 				if self.measure_pairs_action.isChecked():
 					rel_measure_at_position(self.pos)
 
@@ -1562,12 +1548,12 @@ class NeighPanel(QFrame, Styles):
 			self.SignalAnnotator2 = SignalAnnotator2(self)
 			self.SignalAnnotator2.show()
 
-#	def check_measurements2(self):
-#
-#		test = self.parent_window.locate_selected_position()
-#		if test:
-#			self.MeasurementAnnotator2 = MeasureAnnotator2(self)
-#			self.MeasurementAnnotator2.show()
+	# def check_measurements2(self):
+	#
+	# 	test = self.parent_window.locate_selected_position()
+	# 	if test:
+	# 		self.MeasurementAnnotator2 = MeasureAnnotator2(self)
+	# 		self.MeasurementAnnotator2.show()
 
 
 

@@ -883,7 +883,7 @@ class SignalAnnotator(CelldetectiveMainWindow):
 
 				signal_choice = self.signal_choice_cb[i].currentText()
 				lbl = signal_choice
-				n_cut = 15
+				n_cut = 35
 				if len(lbl)>n_cut:
 					lbl = lbl[:(n_cut-3)]+'...'
 				self.lines[i].set_label(lbl)
@@ -915,7 +915,7 @@ class SignalAnnotator(CelldetectiveMainWindow):
 			self.line_dt.set_xdata([t0, t0])
 			self.line_dt.set_ydata([min_val, max_val])
 
-			self.cell_ax.legend()
+			self.cell_ax.legend(fontsize=8)
 			self.cell_fcanvas.canvas.draw()
 		except Exception as e:
 			print(e)
@@ -1106,7 +1106,7 @@ class SignalAnnotator(CelldetectiveMainWindow):
 		self.line_dt, = self.cell_ax.plot([-1, -1], [min_val, max_val], c="k", linestyle="--")
 
 		self.cell_ax.set_xlim(0, self.len_movie)
-		self.cell_ax.legend()
+		self.cell_ax.legend(fontsize=8)
 		self.cell_fcanvas.canvas.draw()
 
 		self.plot_signals()
