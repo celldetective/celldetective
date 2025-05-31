@@ -434,6 +434,7 @@ class SignalAnnotator2(CelldetectiveMainWindow):
 		main_layout.addLayout(self.right_panel, 65)
 		self.button_widget.adjustSize()
 		self.compute_status_and_colors_reference()
+		self.compute_status_and_colors_neighbor()
 
 		self.extract_relevant_events()
 
@@ -641,9 +642,18 @@ class SignalAnnotator2(CelldetectiveMainWindow):
 			df_reference['status_color'] = [color_from_status(i) for i in df_reference[self.reference_status_name].to_numpy()]
 			df_reference['class_color'] = [color_from_class(i) for i in df_reference[self.reference_class_name].to_numpy()]
 
-			self.refresh_scatter_from_trajectories(self.reference_population)
-
-
+			self.refresh_scatter_from_trajectories(self.reference_population, clear_selection=False)
+			
+			if self.reference_track_of_interest is not None:
+				t_reference = df_reference.loc[
+					df_reference['TRACK_ID'] == self.reference_track_of_interest, self.reference_time_name].values
+				if len(t_reference) > 0:
+					t_reference = t_reference[0]
+					ymin, ymax = self.cell_ax.get_ylim()
+					self.line_dt_reference.set_xdata([t_reference, t_reference])
+					self.line_dt_reference.set_ydata([ymin,ymax])
+					self.cell_fcanvas.canvas.draw()
+		
 	def compute_status_and_colors_neighbor(self):
 
 		df_neighbors = self.dataframes[self.neighbor_population]
@@ -844,8 +854,17 @@ class SignalAnnotator2(CelldetectiveMainWindow):
 			if option!=0:
 				self.lines[i].set_xdata([])
 				self.lines[i].set_ydata([])
+				
 				self.line_dt.set_xdata([])
 				self.line_dt.set_ydata([])
+				
+				if self.reference_track_of_interest is None:
+					self.line_dt_reference.set_xdata([])
+					self.line_dt_reference.set_ydata([])
+				
+				self.line_dt_neighbor.set_xdata([])
+				self.line_dt_neighbor.set_ydata([])
+				
 				self.lines[i].set_label('')
 
 		self.correct_btn.setEnabled(False)
@@ -1327,8 +1346,16 @@ class SignalAnnotator2(CelldetectiveMainWindow):
 				self.lines[i].set_xdata([])
 				self.lines[i].set_ydata([])
 				self.lines[i].set_label('')
+				
 				self.line_dt.set_xdata([])
 				self.line_dt.set_ydata([])
+				
+				self.line_dt_reference.set_xdata([])
+				self.line_dt_reference.set_ydata([])
+
+				self.line_dt_neighbor.set_xdata([])
+				self.line_dt_neighbor.set_ydata([])
+				
 			self.cell_fcanvas.canvas.draw()
 			return None
 		else:
@@ -1379,7 +1406,7 @@ class SignalAnnotator2(CelldetectiveMainWindow):
 			self.lines[i].set_xdata(timeline)
 			self.lines[i].set_ydata(signal)
 			self.lines[i].set_color(tab10(i / float(self.n_signals)))
-
+		
 		#self.configure_ylims()
 		if len(range_values)>0:
 			range_values = np.array(range_values)
@@ -1395,13 +1422,34 @@ class SignalAnnotator2(CelldetectiveMainWindow):
 				else:
 					self.cell_ax.set_ylim(self.value_magnitude, self.non_log_ymax)					
 
+		df_reference = self.dataframes[self.reference_population]
+		t_reference = df_reference.loc[df_reference['TRACK_ID']==self.reference_track_of_interest, self.reference_time_name].values
+
+		if len(t_reference)>0:
+			t_reference=t_reference[0]
+			ymin,ymax = self.cell_ax.get_ylim()
+			self.line_dt_reference.set_xdata([t_reference, t_reference])
+			self.line_dt_reference.set_ydata([ymin,ymax])
+
+
 		if self.reference_track_of_interest is not None and self.neighbor_track_of_interest is not None:
 			t0 = self.df_relative.loc[(self.df_relative['REFERENCE_ID'] == self.reference_track_of_interest)&(self.df_relative['NEIGHBOR_ID'] == self.neighbor_track_of_interest)&(self.df_relative['reference_population'] == self.reference_population)&(self.df_relative['neighbor_population'] == self.neighbor_population), self.pair_time_name].dropna().values
+			
+			df_neighbor = self.dataframes[self.neighbor_population]
+			t_neighbor = df_neighbor.loc[
+				df_neighbor['TRACK_ID'] == self.neighbor_track_of_interest, self.neighbor_time_name].values
+			
 			if len(t0)>0:
 				t0=t0[0]
 				ymin,ymax = self.cell_ax.get_ylim()
 				self.line_dt.set_xdata([t0, t0])
 				self.line_dt.set_ydata([ymin,ymax])
+
+			if len(t_neighbor)>0:
+				t_neighbor=t_neighbor[0]
+				ymin,ymax = self.cell_ax.get_ylim()
+				self.line_dt_neighbor.set_xdata([t_neighbor, t_neighbor])
+				self.line_dt_neighbor.set_ydata([ymin,ymax])
 			
 		self.cell_ax.legend(fontsize=8)
 		self.cell_fcanvas.canvas.draw()
@@ -1440,7 +1488,7 @@ class SignalAnnotator2(CelldetectiveMainWindow):
 		for population in self.dataframes.keys():
 			self.refresh_scatter_from_trajectories(population)
 
-	def refresh_scatter_from_trajectories(self, population):
+	def refresh_scatter_from_trajectories(self, population, clear_selection=True):
 		
 		df = self.dataframes[population]
 		positions = []
@@ -1453,24 +1501,29 @@ class SignalAnnotator2(CelldetectiveMainWindow):
 
 			for t in np.arange(self.len_movie):
 
-					positions.append(df.loc[df['FRAME']==t,['x_anim', 'y_anim']].to_numpy())
-					colors.append(df.loc[df['FRAME']==t,['class_color', 'status_color']].to_numpy())
-					initial_colors.append(
-						df.loc[df['FRAME'] == t, ['class_color', 'status_color']].to_numpy())
-					try:
-						tracks.append(df.loc[df['FRAME']==t, 'TRACK_ID'].to_numpy())
-						timeline.append(t)
-					except:
-						tracks.append(
-							df.loc[df['FRAME'] == t, 'ID'].to_numpy())
-						timeline.append(t)
+				positions.append(df.loc[df['FRAME']==t,['x_anim', 'y_anim']].to_numpy())
+				colors.append(df.loc[df['FRAME']==t,['class_color', 'status_color']].to_numpy())
+				initial_colors.append(
+					df.loc[df['FRAME'] == t, ['class_color', 'status_color']].to_numpy())
+				try:
+					tracks.append(df.loc[df['FRAME']==t, 'TRACK_ID'].to_numpy())
+					timeline.append(t)
+				except:
+					tracks.append(
+						df.loc[df['FRAME'] == t, 'ID'].to_numpy())
+					timeline.append(t)
 
 		self.tracks.update({population: tracks})
 		self.timeline.update({population: timeline})
 		self.positions.update({population: positions})
 		self.colors.update({population: colors})
 		self.initial_colors.update({population: initial_colors})
-
+		
+		if self.reference_track_of_interest is not None:
+			#self.recolor_selection()
+			#self.trace_neighbors()
+			self.highlight_the_pair()
+	
 	def load_annotator_config(self):
 
 		"""
@@ -1702,6 +1755,9 @@ class SignalAnnotator2(CelldetectiveMainWindow):
 
 		min_val,max_val = self.cell_ax.get_ylim()
 		self.line_dt, = self.cell_ax.plot([-1,-1],[min_val,max_val],c="k",linestyle="--")
+		self.line_dt_reference, = self.cell_ax.plot([-1,-1],[min_val,max_val],c="tab:blue",linestyle="--")
+		self.line_dt_neighbor, = self.cell_ax.plot([-1,-1],[min_val,max_val],c="tab:red",linestyle="--")
+
 
 		self.cell_ax.set_xlim(0,self.len_movie)
 		self.cell_ax.legend(fontsize=8)
