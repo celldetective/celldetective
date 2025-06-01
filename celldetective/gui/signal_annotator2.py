@@ -419,7 +419,7 @@ class SignalAnnotator2(CelldetectiveMainWindow):
 			self.contrast_slider = QLabeledDoubleRangeSlider()
 			# self.contrast_slider.setSingleStep(0.001)
 			# self.contrast_slider.setTickInterval(0.001)
-			self.contrast_slider.setOrientation(1)
+			self.contrast_slider.setOrientation(Qt.Horizontal)
 			print('range: ', [np.nanpercentile(self.stack.flatten(), 0.001), np.nanpercentile(self.stack.flatten(), 99.999)])
 			self.contrast_slider.setRange(
 				*[np.nanpercentile(self.stack, 0.001), np.nanpercentile(self.stack, 99.999)])

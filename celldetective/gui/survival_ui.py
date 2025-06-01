@@ -99,51 +99,16 @@ class ConfigSurvival(CelldetectiveWidget):
 				neigh_cols = [c for c in cols if c.startswith('inclusive_count_neighborhood')]
 				neigh_pairs = [c.split('_(')[-1].split(')_')[0].split('-') for c in neigh_cols]
 				neigh_pairs = ['-'.join(c) for c in neigh_pairs]
+				for k in range(len(neigh_pairs)):
+					if "_self_" in neigh_pairs[k]:
+						neigh_pairs[k] = '-'.join([population, population])
 				pops.extend(neigh_pairs)
 
 				self.cols_per_pop.update({population: cols})
 
-		# tables_targets = glob(self.exp_dir+os.sep.join(['W*','*','output','tables',f'trajectories_targets.csv']))
-		# self.cols_targets = extract_cols_from_table_list(tables_targets)
-		# tables_effectors = glob(self.exp_dir+os.sep.join(['W*','*','output','tables',f'trajectories_effectors.csv']))
-		# self.cols_effectors = extract_cols_from_table_list(tables_effectors)
-
-		# Smart reading of existing neighborhoods (without loading tables in memory)
-		# legacy interpretation of neighborhood cols, need to find something better
-		# if 'pairs' in pops and not 'targets' in pops:
-		# 	# must be effector-effector
-		# 	effector_neighs = [c[16:] for c in self.cols_per_pop['effectors'] if c.startswith('inclusive_count_neighborhood')]
-		# 	if len(effector_neighs)>0:
-		# 		pops.pop(pops.index('pairs'))
-		# 		pops.append('effectors-effectors')
-		# elif 'pairs' in pops and not 'effectors' in pops:
-		# 	# must be target-target
-		# 	target_neighs = [c for c in self.cols_per_pop['targets'] if c.startswith('inclusive_count_neighborhood')]
-		# 	if len(target_neighs)>0:
-		# 		pops.pop(pops.index('pairs'))
-		# 		pops.append('targets-targets')
-		# elif 'pairs' in pops:
-		# 	# either effector-target or target-effector
-		# 	target_neighs_cross = [c for c in self.cols_per_pop['targets'] if c.startswith('inclusive_count_neighborhood') and '_2_' in c]
-		# 	if len(target_neighs_cross)>0:
-		# 		pops.append('targets-effectors')
-		# 	effector_neighs_cross = [c for c in self.cols_per_pop['effectors'] if c.startswith('inclusive_count_neighborhood') and '_2_' in c]
-		# 	if len(effector_neighs_cross)>0:
-		# 		pops.append('effectors-targets')
-		# 	target_neighs = [c for c in self.cols_per_pop['targets'] if c.startswith('inclusive_count_neighborhood') and 'self' in c]
-		# 	if len(target_neighs)>0:
-		# 		pops.append('targets-targets')
-		# 	effector_neighs = [c for c in self.cols_per_pop['effectors'] if c.startswith('inclusive_count_neighborhood') and 'self' in c]
-		# 	if len(effector_neighs)>0:
-		# 		pops.append('effectors-effectors')
-		# 	pops.pop(pops.index('pairs'))
-		# else:
-		# 	pass
-
-
 		labels = [QLabel('population: '), QLabel('time of\nreference: '), QLabel('time of\ninterest: '), QLabel('cmap: ')] #QLabel('class: '),
 		self.cb_options = [pops, ['0'], [], []] #['class'],
-		self.cbs = [QComboBox() for i in range(len(labels))]
+		self.cbs = [QComboBox() for _ in range(len(labels))]
 
 		self.cbs[-1] = QColormapComboBox()
 		self.cbs[0].currentIndexChanged.connect(self.set_classes_and_times)
@@ -163,12 +128,8 @@ class ConfigSurvival(CelldetectiveWidget):
 			if hasattr(matplotlib.cm, str(cm).lower()):
 				try:
 					self.cbs[-1].addColormap(cm.lower())
-				except:
+				except Exception as _:
 					pass
-			#try:
-			# 	self.cbs[-1].addColormap(cm)
-			# except:
-			# 	pass
 
 		main_layout.addLayout(choice_layout)
 

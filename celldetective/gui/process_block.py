@@ -27,7 +27,6 @@ import pandas as pd
 from celldetective.gui.gui_utils import center_window
 from tifffile import imwrite
 import json
-from celldetective.neighborhood import compute_neighborhood_at_position, compute_contact_neighborhood_at_position
 from celldetective.preprocessing import correct_background_model_free, correct_background_model, correct_channel_offset
 from celldetective.gui.gui_utils import help_generic
 from celldetective.gui.layouts import SignalModelParamsWidget, SegModelParamsWidget, CellposeParamsWidget, StarDistParamsWidget, BackgroundModelFreeCorrectionLayout, ProtocolDesignerLayout, BackgroundFitCorrectionLayout, ChannelOffsetOptionsLayout
@@ -40,6 +39,7 @@ from celldetective.gui.processes.track_cells import TrackingProcess
 from celldetective.gui.processes.measure_cells import MeasurementProcess
 
 class ProcessPanel(QFrame, Styles):
+	
 	def __init__(self, parent_window, mode):
 
 		super().__init__()
@@ -49,8 +49,8 @@ class ProcessPanel(QFrame, Styles):
 		self.exp_dir = self.parent_window.exp_dir
 		self.exp_config = self.parent_window.exp_config
 		self.movie_prefix = self.parent_window.movie_prefix
-		self.threshold_configs = [None for i in range(len(self.parent_window.populations))]
-		self.wells = np.array(self.parent_window.wells,dtype=str)
+		self.threshold_configs = [None for _ in range(len(self.parent_window.populations))]
+		self.wells = np.array(self.parent_window.wells, dtype=str)
 		self.cellpose_calibrated = False
 		self.stardist_calibrated = False
 		self.segChannelsSet = False
@@ -62,7 +62,7 @@ class ProcessPanel(QFrame, Styles):
 
 		self.setFrameStyle(QFrame.StyledPanel | QFrame.Raised)
 		self.grid = QGridLayout(self)
-		self.grid.setContentsMargins(5,5,5,5)
+		self.grid.setContentsMargins(5, 5, 5, 5)
 		self.generate_header()
 
 	def generate_header(self):
@@ -82,13 +82,12 @@ class ProcessPanel(QFrame, Styles):
 		self.grid.addWidget(panel_title, 0, 0, 1, 4, alignment=Qt.AlignCenter)
 
 		self.help_pop_btn = QPushButton()
-		self.help_pop_btn.setIcon(icon(MDI6.help_circle,color=self.help_color))
+		self.help_pop_btn.setIcon(icon(MDI6.help_circle, color=self.help_color))
 		self.help_pop_btn.setIconSize(QSize(20, 20))
 		self.help_pop_btn.clicked.connect(self.help_population)
 		self.help_pop_btn.setStyleSheet(self.button_select_all)
 		self.help_pop_btn.setToolTip("Help.")
-		#self.grid.addWidget(self.help_pop_btn, 0, 0, 1, 3, alignment=Qt.AlignRight)
-
+		self.grid.addWidget(self.help_pop_btn, 0, 0, 1, 3, alignment=Qt.AlignRight)
 
 		# self.select_all_btn = QPushButton()
 		# self.select_all_btn.setIcon(icon(MDI6.checkbox_blank_outline,color="black"))
@@ -100,7 +99,7 @@ class ProcessPanel(QFrame, Styles):
 		#self.to_disable.append(self.all_tc_actions)
 
 		self.collapse_btn = QPushButton()
-		self.collapse_btn.setIcon(icon(MDI6.chevron_down,color="black"))
+		self.collapse_btn.setIcon(icon(MDI6.chevron_down, color="black"))
 		self.collapse_btn.setIconSize(QSize(25, 25))
 		self.collapse_btn.setStyleSheet(self.button_select_all)
 		#self.grid.addWidget(self.collapse_btn, 0, 0, 1, 4, alignment=Qt.AlignRight)
@@ -110,7 +109,7 @@ class ProcessPanel(QFrame, Styles):
 		title_hbox.addWidget(self.help_pop_btn, 5)
 		title_hbox.addWidget(self.collapse_btn, 5)
 
-		self.grid.addLayout(title_hbox, 0,0,1,4)
+		self.grid.addLayout(title_hbox, 0, 0, 1, 4)
 		self.populate_contents()
 
 		self.grid.addWidget(self.ContentsFrame, 1, 0, 1, 4, alignment=Qt.AlignTop)
@@ -126,13 +125,13 @@ class ProcessPanel(QFrame, Styles):
 		is_open = np.array(panels_open+[interactions_open, preprocessing_open])
 
 		if self.ContentsFrame.isHidden():
-			self.collapse_btn.setIcon(icon(MDI6.chevron_down,color="black"))
+			self.collapse_btn.setIcon(icon(MDI6.chevron_down, color="black"))
 			self.collapse_btn.setIconSize(QSize(20, 20))
 			if len(is_open[is_open])==0:
 				self.parent_window.scroll.setMinimumHeight(int(550))
 				self.parent_window.adjustSize()
 		else:
-			self.collapse_btn.setIcon(icon(MDI6.chevron_up,color="black"))
+			self.collapse_btn.setIcon(icon(MDI6.chevron_up, color="black"))
 			self.collapse_btn.setIconSize(QSize(20, 20))
 			self.parent_window.scroll.setMinimumHeight(min(int(930), int(0.9*self.parent_window.screen_height)))
 
@@ -348,14 +347,14 @@ class ProcessPanel(QFrame, Styles):
 		if returnValue == QMessageBox.No:
 			return None
 		elif returnValue == QMessageBox.Yes:
-			if os.path.exists(os.sep.join([self.parent_window.pos,'output','tables',f'trajectories_{self.mode}.csv'])):
-				os.remove(os.sep.join([self.parent_window.pos,'output','tables',f'trajectories_{self.mode}.csv']))
-			if os.path.exists(os.sep.join([self.parent_window.pos,'output','tables',f'trajectories_{self.mode}.pkl'])):
-				os.remove(os.sep.join([self.parent_window.pos,'output','tables',f'trajectories_{self.mode}.pkl']))
-			if os.path.exists(os.sep.join([self.parent_window.pos,'output','tables',f'napari_{self.mode[:-1]}_trajectories.npy'])):
-				os.remove(os.sep.join([self.parent_window.pos,'output','tables',f'napari_{self.mode[:-1]}_trajectories.npy']))
-			if os.path.exists(os.sep.join([self.parent_window.pos,'output','tables',f'trajectories_pairs.csv'])):
-				os.remove(os.sep.join([self.parent_window.pos,'output','tables',f'trajectories_pairs.csv']))
+			if os.path.exists(os.sep.join([self.parent_window.pos, 'output', 'tables', f'trajectories_{self.mode}.csv'])):
+				os.remove(os.sep.join([self.parent_window.pos, 'output', 'tables', f'trajectories_{self.mode}.csv']))
+			if os.path.exists(os.sep.join([self.parent_window.pos, 'output', 'tables', f'trajectories_{self.mode}.pkl'])):
+				os.remove(os.sep.join([self.parent_window.pos, 'output', 'tables', f'trajectories_{self.mode}.pkl']))
+			if os.path.exists(os.sep.join([self.parent_window.pos, 'output', 'tables', f'napari_{self.mode[:-1]}_trajectories.npy'])):
+				os.remove(os.sep.join([self.parent_window.pos, 'output', 'tables', f'napari_{self.mode[:-1]}_trajectories.npy']))
+			if os.path.exists(os.sep.join([self.parent_window.pos, 'output', 'tables', f'trajectories_pairs.csv'])):
+				os.remove(os.sep.join([self.parent_window.pos, 'output', 'tables', f'trajectories_pairs.csv']))
 			self.parent_window.update_position_options()
 		else:
 			return None
@@ -580,7 +579,7 @@ class ProcessPanel(QFrame, Styles):
 				msgBox.setText(str(e))
 				msgBox.setWindowTitle("Warning")
 				msgBox.setStandardButtons(QMessageBox.Ok)
-				returnValue = msgBox.exec()
+				_ = msgBox.exec()
 
 				msgBox = QMessageBox()
 				msgBox.setIcon(QMessageBox.Question)
@@ -1551,14 +1550,6 @@ class NeighPanel(QFrame, Styles):
 		if test:
 			self.SignalAnnotator2 = SignalAnnotator2(self)
 			self.SignalAnnotator2.show()
-
-	# def check_measurements2(self):
-	#
-	# 	test = self.parent_window.locate_selected_position()
-	# 	if test:
-	# 		self.MeasurementAnnotator2 = MeasureAnnotator2(self)
-	# 		self.MeasurementAnnotator2.show()
-
 
 
 class PreprocessingPanel(QFrame, Styles):

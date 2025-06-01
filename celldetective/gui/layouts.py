@@ -412,7 +412,7 @@ class CellposeParamsWidget(CelldetectiveWidget):
 		
 		# Flow threshold slider
 		self.flow_slider = QLabeledDoubleSlider()
-		self.flow_slider.setOrientation(1)
+		self.flow_slider.setOrientation(Qt.Horizontal)
 		self.flow_slider.setRange(-6,6)
 		self.flow_slider.setValue(0.4)
 		hbox = QHBoxLayout()
@@ -422,7 +422,7 @@ class CellposeParamsWidget(CelldetectiveWidget):
 
 		# Cell probability threshold slider
 		self.cellprob_slider = QLabeledDoubleSlider()
-		self.cellprob_slider.setOrientation(1)
+		self.cellprob_slider.setOrientation(Qt.Horizontal)
 		self.cellprob_slider.setRange(-6,6)
 		self.cellprob_slider.setValue(0.)
 		hbox = QHBoxLayout()

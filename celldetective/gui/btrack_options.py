@@ -3,7 +3,7 @@ from PyQt5.QtCore import Qt, QSize
 from PyQt5.QtGui import QDoubleValidator
 
 from celldetective.gui.gui_utils import center_window, FeatureChoice, ListWidget, QHSeperationLine, FigureCanvas, help_generic
-from superqt import QLabeledDoubleSlider,QLabeledSlider
+from superqt import QLabeledDoubleSlider, QLabeledSlider
 from superqt.fonticon import icon
 from fonticon_mdi6 import MDI6
 from celldetective.utils import extract_experiment_channels, get_software_location
@@ -36,10 +36,9 @@ class ConfigTracking(CelldetectiveMainWindow):
 		self.floatValidator = QDoubleValidator()
 
 		self.config_name = os.sep.join(["configs", f"btrack_config_{self.mode}.json"])
-		self.track_instructions_write_path = self.parent_window.exp_dir + os.sep.join(["configs",f"tracking_instructions_{self.mode}.json"])
+		self.track_instructions_write_path = self.parent_window.exp_dir + os.sep.join(["configs", f"tracking_instructions_{self.mode}.json"])
 		self.soft_path = get_software_location()
 		
-		exp_config = self.exp_dir +"config.ini"
 		self.config_path = self.exp_dir + self.config_name
 		self.channel_names, self.channels = extract_experiment_channels(self.exp_dir)
 		self.channel_names = np.array(self.channel_names)
@@ -66,7 +65,7 @@ class ConfigTracking(CelldetectiveMainWindow):
 		self.button_widget = CelldetectiveWidget()
 		main_layout = QVBoxLayout()
 		self.button_widget.setLayout(main_layout)
-		main_layout.setContentsMargins(30,30,30,30)
+		main_layout.setContentsMargins(30, 30, 30, 30)
 
 		# First collapsable Frame CONFIG
 
@@ -83,7 +82,7 @@ class ConfigTracking(CelldetectiveMainWindow):
 		self.populate_config_frame()
 
 		tracker_hbox = QHBoxLayout()
-		tracker_hbox.setContentsMargins(15,15,15,15)
+		tracker_hbox.setContentsMargins(15, 15, 15, 15)
 		tracker_hbox.addWidget(self.btrack_option, 50, alignment=Qt.AlignCenter)
 		tracker_hbox.addWidget(self.trackpy_option, 50, alignment=Qt.AlignCenter)
 		main_layout.addLayout(tracker_hbox)
@@ -146,7 +145,6 @@ class ConfigTracking(CelldetectiveMainWindow):
 			#self.scroll_area.setMinimumHeight(self.minimum_height)
 			#self.adjustSize()
 
-
 	def populate_post_proc_frame(self):
 
 		"""
@@ -169,13 +167,13 @@ class ConfigTracking(CelldetectiveMainWindow):
 		title_hbox = QHBoxLayout()
 
 		self.collapse_post_proc_btn = QPushButton()
-		self.collapse_post_proc_btn.setIcon(icon(MDI6.chevron_down,color="black"))
+		self.collapse_post_proc_btn.setIcon(icon(MDI6.chevron_down, color="black"))
 		self.collapse_post_proc_btn.setIconSize(QSize(20, 20))
 		self.collapse_post_proc_btn.setStyleSheet(self.button_select_all)
 		#grid.addWidget(self.collapse_post_proc_btn, 0, 0, 1, 4, alignment=Qt.AlignRight)
 
 		self.help_post_btn = QPushButton()
-		self.help_post_btn.setIcon(icon(MDI6.help_circle,color=self.help_color))
+		self.help_post_btn.setIcon(icon(MDI6.help_circle, color=self.help_color))
 		self.help_post_btn.setIconSize(QSize(20, 20))
 		self.help_post_btn.clicked.connect(self.help_post)
 		self.help_post_btn.setStyleSheet(self.button_select_all)
@@ -185,7 +183,7 @@ class ConfigTracking(CelldetectiveMainWindow):
 		title_hbox.addWidget(QLabel(), 85, alignment=Qt.AlignCenter)
 		title_hbox.addWidget(self.help_post_btn, 5)
 		title_hbox.addWidget(self.collapse_post_proc_btn, 5)
-		grid.addLayout(title_hbox, 0,0,1,4)
+		grid.addLayout(title_hbox, 0, 0, 1, 4)
 
 		self.generate_post_proc_panel_contents()
 		grid.addWidget(self.ContentsPostProc, 1, 0, 1, 4, alignment=Qt.AlignTop)
@@ -202,13 +200,13 @@ class ConfigTracking(CelldetectiveMainWindow):
 		is_open = np.array([features_open, config_open, post_open])
 
 		if self.ContentsPostProc.isHidden():
-			self.collapse_post_proc_btn.setIcon(icon(MDI6.chevron_down,color="black"))
+			self.collapse_post_proc_btn.setIcon(icon(MDI6.chevron_down, color="black"))
 			self.collapse_post_proc_btn.setIconSize(QSize(20, 20))
 			if len(is_open[is_open])==0:
 				self.scroll_area.setMinimumHeight(int(self.minimum_height))
 				self.adjustSize()
 		else:
-			self.collapse_post_proc_btn.setIcon(icon(MDI6.chevron_up,color="black"))
+			self.collapse_post_proc_btn.setIcon(icon(MDI6.chevron_up, color="black"))
 			self.collapse_post_proc_btn.setIconSize(QSize(20, 20))
 			self.scroll_area.setMinimumHeight(min(int(930), int(0.9*self.screen_height)))
 
@@ -219,7 +217,7 @@ class ConfigTracking(CelldetectiveMainWindow):
 		Helper for track post-processing strategy.
 		"""
 
-		dict_path = os.sep.join([get_software_location(),'celldetective','gui','help','track-postprocessing.json'])
+		dict_path = os.sep.join([get_software_location(), 'celldetective', 'gui', 'help', 'track-postprocessing.json'])
 
 		with open(dict_path) as f:
 			d = json.load(f)
@@ -243,7 +241,7 @@ class ConfigTracking(CelldetectiveMainWindow):
 		Helper for track post-processing strategy.
 		"""
 
-		dict_path = os.sep.join([get_software_location(),'celldetective','gui','help','feature-btrack.json'])
+		dict_path = os.sep.join([get_software_location(), 'celldetective', 'gui', 'help', 'feature-btrack.json'])
 
 		with open(dict_path) as f:
 			d = json.load(f)
@@ -297,7 +295,7 @@ class ConfigTracking(CelldetectiveMainWindow):
 		title_hbox.addWidget(QLabel(), 85, alignment=Qt.AlignCenter)
 		title_hbox.addWidget(self.help_feature_btn, 5)
 		title_hbox.addWidget(self.collapse_features_btn, 5)
-		grid.addLayout(title_hbox, 0,0,1,4)		
+		grid.addLayout(title_hbox, 0, 0, 1, 4)
 
 		self.generate_feature_panel_contents()
 		grid.addWidget(self.ContentsFeatures, 1, 0, 1, 4, alignment=Qt.AlignTop)
@@ -318,13 +316,13 @@ class ConfigTracking(CelldetectiveMainWindow):
 		is_open = np.array([features_open, config_open, post_open])
 
 		if self.ContentsFeatures.isHidden():
-			self.collapse_features_btn.setIcon(icon(MDI6.chevron_down,color="black"))
+			self.collapse_features_btn.setIcon(icon(MDI6.chevron_down, color="black"))
 			self.collapse_features_btn.setIconSize(QSize(20, 20))
 			if len(is_open[is_open])==0:
 				self.scroll_area.setMinimumHeight(int(self.minimum_height))
 				self.adjustSize()
 		else:
-			self.collapse_features_btn.setIcon(icon(MDI6.chevron_up,color="black"))
+			self.collapse_features_btn.setIcon(icon(MDI6.chevron_up, color="black"))
 			self.collapse_features_btn.setIconSize(QSize(20, 20))
 			self.scroll_area.setMinimumHeight(min(int(930), int(0.9*self.screen_height)))
 
@@ -348,7 +346,7 @@ class ConfigTracking(CelldetectiveMainWindow):
 		self.min_tracklength_slider.setSingleStep(1)
 		self.min_tracklength_slider.setTickInterval(1)
 		self.min_tracklength_slider.setSingleStep(1)
-		self.min_tracklength_slider.setOrientation(1)
+		self.min_tracklength_slider.setOrientation(Qt.Horizontal)
 		self.min_tracklength_slider.setRange(0,self.parent_window.parent_window.len_movie)
 		self.min_tracklength_slider.setValue(0)
 		tracklength_layout.addWidget(QLabel('Min. tracklength: '),40)
@@ -387,7 +385,6 @@ class ConfigTracking(CelldetectiveMainWindow):
 											self.extrapolate_pre_checkbox] #, self.interpolate_na_features_checkbox
 
 		layout.addLayout(clean_traj_sublayout)
-
 
 	def generate_feature_panel_contents(self):
 		
@@ -453,10 +450,9 @@ class ConfigTracking(CelldetectiveMainWindow):
 
 		# Slider to set vmin & vmax
 		self.haralick_scale_slider = QLabeledDoubleSlider()
-		self.haralick_scale_slider.setSingleStep(0.05)
 		self.haralick_scale_slider.setTickInterval(0.05)
 		self.haralick_scale_slider.setSingleStep(1)
-		self.haralick_scale_slider.setOrientation(1)
+		self.haralick_scale_slider.setOrientation(Qt.Horizontal)
 		self.haralick_scale_slider.setRange(0,1)
 		self.haralick_scale_slider.setValue(0.5)
 		self.haralick_scale_lbl = QLabel('Scale: ')
@@ -668,7 +664,7 @@ class ConfigTracking(CelldetectiveMainWindow):
 		self.memory_slider.setSingleStep(1)
 		self.memory_slider.setTickInterval(1)
 		self.memory_slider.setSingleStep(1)
-		self.memory_slider.setOrientation(1)
+		self.memory_slider.setOrientation(Qt.Horizontal)
 		self.memory_slider.setRange(0,self.parent_window.parent_window.len_movie)
 		self.memory_slider.setValue(0)
 		memory_layout.addWidget(self.memory_lbl, 30)
@@ -742,7 +738,7 @@ class ConfigTracking(CelldetectiveMainWindow):
 				copyfile(self.filename, self.config_path)
 			self.load_cell_config()
 		except Exception as e:
-			print(e, modelpath)
+			print(e)
 			return None
 
 	def reset_btrack_config(self):
@@ -991,7 +987,7 @@ class ConfigTracking(CelldetectiveMainWindow):
 				if 'search_range' in tracking_instructions:
 					search_range = tracking_instructions['search_range']
 					if search_range is not None:
-						self.search_range_le.setText(str(search_range).replace('.',','))				
+						self.search_range_le.setText(str(search_range).replace('.', ','))
 				if 'memory' in tracking_instructions:
 					memory = tracking_instructions['memory']
 					if memory is not None:
@@ -1069,7 +1065,7 @@ class ConfigTracking(CelldetectiveMainWindow):
 		Load the first frame of the first movie found in the experiment folder as a sample.
 		"""
 
-		movies = glob(self.parent_window.parent_window.exp_dir + os.sep.join(["*","*","movie",self.parent_window.parent_window.movie_prefix+"*.tif"]))
+		movies = glob(self.parent_window.parent_window.exp_dir + os.sep.join(["*", "*", "movie", self.parent_window.parent_window.movie_prefix+"*.tif"]))
 		if len(movies)==0:
 			msgBox = QMessageBox()
 			msgBox.setIcon(QMessageBox.Warning)
@@ -1084,7 +1080,6 @@ class ConfigTracking(CelldetectiveMainWindow):
 			stack0 = movies[0]
 			n_channels = len(self.channels)
 			self.test_frame = load_frames(np.arange(n_channels), stack0, scale=None, normalize_input=False)
-
 
 	def control_haralick_digitalization(self):
 

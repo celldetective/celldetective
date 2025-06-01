@@ -337,7 +337,7 @@ class ConfigMeasurements(CelldetectiveMainWindow):
 		self.haralick_scale_slider.setSingleStep(0.05)
 		self.haralick_scale_slider.setTickInterval(0.05)
 		self.haralick_scale_slider.setSingleStep(1)
-		self.haralick_scale_slider.setOrientation(1)
+		self.haralick_scale_slider.setOrientation(Qt.Horizontal)
 		self.haralick_scale_slider.setRange(0, 1)
 		self.haralick_scale_slider.setValue(0.5)
 		self.haralick_scale_lbl = QLabel('Scale: ')

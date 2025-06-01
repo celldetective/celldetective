@@ -143,7 +143,7 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
         # self.abs_time_checkbox = QCheckBox('absolute time')
         # self.frame_slider = QLabeledSlider()
         # self.frame_slider.setSingleStep(1)
-        # self.frame_slider.setOrientation(1)
+        # self.frame_slider.setOrientation(Qt.Horizontal)
         # self.frame_slider.setRange(0,self.parent.parent.len_movie)
         # self.frame_slider.setValue(0)
         # self.frame_slider.setEnabled(False)

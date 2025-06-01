@@ -15,7 +15,6 @@ from skimage.measure import regionprops_table
 from superqt import QLabeledSlider, QLabeledDoubleRangeSlider
 from superqt.fonticon import icon
 
-from celldetective.gui import Styles
 from celldetective.gui import CelldetectiveMainWindow, CelldetectiveWidget
 from celldetective.gui.gui_utils import PreprocessingLayout, generic_message
 from celldetective.gui.gui_utils import center_window, FigureCanvas, color_from_class, help_generic
@@ -165,7 +164,7 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
         # Slider to set vmin & vmax
         self.threshold_slider.setSingleStep(0.00001)
         self.threshold_slider.setTickInterval(0.00001)
-        self.threshold_slider.setOrientation(1)
+        self.threshold_slider.setOrientation(Qt.Horizontal)
         self.threshold_slider.setDecimals(5)
         self.threshold_slider.setRange(np.amin(self.img[self.img == self.img]), np.amax(self.img[self.img == self.img]))
         self.threshold_slider.setValue([np.percentile(self.img.flatten(), 90), np.amax(self.img)])
@@ -246,7 +245,7 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
         hbox_footprint.addWidget(QLabel('Footprint: '), 20)
         self.footprint_slider = QLabeledSlider()
         self.footprint_slider.setSingleStep(1)
-        self.footprint_slider.setOrientation(1)
+        self.footprint_slider.setOrientation(Qt.Horizontal)
         self.footprint_slider.setRange(1, self.img.shape[0] // 4)
         self.footprint_slider.setValue(self.footprint)
         self.footprint_slider.valueChanged.connect(self.set_footprint)
@@ -258,7 +257,7 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
         hbox_distance.addWidget(QLabel('Min distance: '), 20)
         self.min_dist_slider = QLabeledSlider()
         self.min_dist_slider.setSingleStep(1)
-        self.min_dist_slider.setOrientation(1)
+        self.min_dist_slider.setOrientation(Qt.Horizontal)
         self.min_dist_slider.setRange(0, self.img.shape[0] // 4)
         self.min_dist_slider.setValue(self.min_dist)
         self.min_dist_slider.valueChanged.connect(self.set_min_dist)

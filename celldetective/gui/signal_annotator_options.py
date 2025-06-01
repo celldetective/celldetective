@@ -148,7 +148,7 @@ class ConfigSignalAnnotator(CelldetectiveMainWindow):
 		self.fraction_slider.setSingleStep(0.05)
 		self.fraction_slider.setTickInterval(0.05)
 		self.fraction_slider.setSingleStep(1)
-		self.fraction_slider.setOrientation(1)
+		self.fraction_slider.setOrientation(Qt.Horizontal)
 		self.fraction_slider.setRange(0.1,1)
 		self.fraction_slider.setValue(0.25)
 
@@ -163,7 +163,7 @@ class ConfigSignalAnnotator(CelldetectiveMainWindow):
 		self.interval_slider.setSingleStep(1)
 		self.interval_slider.setTickInterval(1)
 		self.interval_slider.setSingleStep(1)
-		self.interval_slider.setOrientation(1)
+		self.interval_slider.setOrientation(Qt.Horizontal)
 		self.interval_slider.setRange(1,1000)
 		self.interval_slider.setValue(1)
 		hbox_interval.addWidget(self.interval_slider, 80)

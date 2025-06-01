@@ -326,7 +326,7 @@ class SignalAnnotator(CelldetectiveMainWindow):
 			self.contrast_slider = QLabeledDoubleRangeSlider()
 			self.contrast_slider.setSingleStep(0.001)
 			self.contrast_slider.setTickInterval(0.001)
-			self.contrast_slider.setOrientation(1)
+			self.contrast_slider.setOrientation(Qt.Horizontal)
 			self.contrast_slider.setRange(
 				*[np.nanpercentile(self.stack, 0.001), np.nanpercentile(self.stack, 99.999)])
 			self.contrast_slider.setValue(
@@ -341,7 +341,7 @@ class SignalAnnotator(CelldetectiveMainWindow):
 		# self.interval_slider = QLabeledSlider()
 		# self.interval_slider.setSingleStep(1)
 		# self.interval_slider.setTickInterval(1)
-		# self.interval_slider.setOrientation(1)
+		# self.interval_slider.setOrientation(Qt.Horizontal)
 		# self.interval_slider.setRange(1, 10000)
 		# self.interval_slider.setValue(self.speed)
 		# self.interval_slider.valueChanged.connect(self.interval_slider_action)
@@ -1913,7 +1913,7 @@ class MeasureAnnotator(SignalAnnotator):
 
 		self.contrast_slider.setSingleStep(0.001)
 		self.contrast_slider.setTickInterval(0.001)
-		self.contrast_slider.setOrientation(1)
+		self.contrast_slider.setOrientation(Qt.Horizontal)
 		self.contrast_slider.setRange(
 			*[np.nanpercentile(self.img, 0.001), np.nanpercentile(self.img, 99.999)])
 		self.contrast_slider.setValue(
@@ -1924,7 +1924,7 @@ class MeasureAnnotator(SignalAnnotator):
 		self.right_panel.addLayout(contrast_hbox, 5)
 		self.alpha_slider = QLabeledDoubleSlider()
 		self.alpha_slider.setSingleStep(0.001)
-		self.alpha_slider.setOrientation(1)
+		self.alpha_slider.setOrientation(Qt.Horizontal)
 		self.alpha_slider.setRange(0, 1)
 		self.alpha_slider.setValue(self.current_alpha)
 		self.alpha_slider.setDecimals(3)

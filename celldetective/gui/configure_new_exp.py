@@ -38,7 +38,7 @@ class ConfigNewExperiment(CelldetectiveMainWindow):
 		self.grid = QGridLayout()
 		button_widget.setLayout(self.grid)
 
-		self.grid.setContentsMargins(30,30,30,30)
+		self.grid.setContentsMargins(30, 30, 30, 30)
 		self.grid.addWidget(QLabel("Folder:"), 0, 0, 1, 3)
 		self.supFolder = QLineEdit()
 		self.supFolder.setAlignment(Qt.AlignLeft)	
@@ -64,14 +64,13 @@ class ConfigNewExperiment(CelldetectiveMainWindow):
 		self.grid.addWidget(self.expName, 3, 0, 1, 3)
 
 		self.generate_movie_settings()
-		self.grid.addLayout(self.ms_grid,29,0,1,3)
+		self.grid.addLayout(self.ms_grid, 29, 0, 1, 3)
 
 		self.generate_channel_params_box()
-		self.grid.addLayout(self.channel_grid,30,0,1,3)
+		self.grid.addLayout(self.channel_grid, 30, 0, 1, 3)
 
 		self.generate_population_params_box()
-		self.grid.addLayout(self.population_grid,31,0,1,3)
-
+		self.grid.addLayout(self.population_grid, 31, 0, 1, 3)
 
 		self.validate_button = QPushButton("Submit")
 		self.validate_button.clicked.connect(self.create_config)
@@ -131,7 +130,6 @@ class ConfigNewExperiment(CelldetectiveMainWindow):
 		self.help_btn.setStyleSheet(self.button_select_all)
 		self.help_btn.setToolTip("Help.")
 		self.ms_grid.addWidget(self.help_btn, 1, 0, 1, 3, alignment=Qt.AlignRight)
-
 
 		self.SliderWells = QLabeledSlider(Qt.Horizontal, self)
 		self.SliderWells.setMinimum(1)

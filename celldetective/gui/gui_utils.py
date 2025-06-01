@@ -448,7 +448,7 @@ class QuickSliderLayout(QHBoxLayout):
 			self.addWidget(self.qlabel, int(100*layout_ratio[0]))
 
 		self.slider = slider
-		self.slider.setOrientation(1)
+		self.slider.setOrientation(Qt.Horizontal)
 		if decimal_option:
 			self.slider.setSingleStep(1.0*(10**(-precision)))
 			self.slider.setTickInterval(1.0*(10**(-precision)))

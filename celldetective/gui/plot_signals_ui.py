@@ -103,6 +103,9 @@ class ConfigSignalPlot(CelldetectiveWidget):
 				neigh_cols = [c for c in cols if c.startswith('inclusive_count_neighborhood')]
 				neigh_pairs = [c.split('_(')[-1].split(')_')[0].split('-') for c in neigh_cols]
 				neigh_pairs = ['-'.join(c) for c in neigh_pairs]
+				for k in range(len(neigh_pairs)):
+					if "_self_" in neigh_pairs[k]:
+						neigh_pairs[k] = '-'.join([population, population])
 				pops.extend(neigh_pairs)
 
 				self.cols_per_pop.update({population: cols})
@@ -145,7 +148,7 @@ class ConfigSignalPlot(CelldetectiveWidget):
 		self.abs_time_checkbox = QCheckBox('absolute time')
 		self.frame_slider = QLabeledSlider()
 		self.frame_slider.setSingleStep(1)
-		self.frame_slider.setOrientation(1)
+		self.frame_slider.setOrientation(Qt.Horizontal)
 		self.frame_slider.setRange(0,self.parent_window.parent_window.len_movie)
 		self.frame_slider.setValue(0)
 		self.frame_slider.setEnabled(False)
@@ -185,7 +188,7 @@ class ConfigSignalPlot(CelldetectiveWidget):
 		n_cells_layout.setContentsMargins(20,3,20,3)
 		self.n_cells_slider = QLabeledSlider()
 		self.n_cells_slider.setSingleStep(1)
-		self.n_cells_slider.setOrientation(1)
+		self.n_cells_slider.setOrientation(Qt.Horizontal)
 		self.n_cells_slider.setRange(1,100)
 		self.n_cells_slider.setValue(2)
 		n_cells_layout.addWidget(QLabel('min # cells\nfor pool:'), 33)
@@ -254,7 +257,7 @@ class ConfigSignalPlot(CelldetectiveWidget):
 			self.all_columns = extract_cols_from_table_list(tables)
 
 			class_idx = np.array([s.startswith('class_') for s in self.all_columns])
-			time_idx = np.array([s.startswith('t_') for s in self.all_columns])
+			time_idx = np.array([s.startswith('t_') or s.startswith('t0_') for s in self.all_columns])
 			
 			try:
 				class_columns = list(self.all_columns[class_idx])
@@ -271,7 +274,7 @@ class ConfigSignalPlot(CelldetectiveWidget):
 
 		self.class_columns = np.unique(class_columns)
 		self.time_columns = np.unique(time_columns)
-		thresh = 18
+		thresh = 30
 		self.class_truncated = [w[:thresh - 3]+'...' if len(w)>thresh else w for w in self.class_columns]
 		self.time_truncated = [w[:thresh - 3]+'...' if len(w)>thresh else w for w in self.time_columns]
 	

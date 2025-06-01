@@ -1,10 +1,10 @@
 from PyQt5.QtWidgets import QPushButton, QHBoxLayout, QLabel, QGridLayout, QFrame, \
-	QTabWidget, QVBoxLayout, QMessageBox, QScrollArea, QDesktopWidget
+	QTabWidget, QVBoxLayout, QScrollArea, QDesktopWidget
 from celldetective.gui import CelldetectiveMainWindow, CelldetectiveWidget
 
 from PyQt5.QtCore import Qt, QSize
 from celldetective.gui.gui_utils import center_window, QHSeperationLine, QCheckableComboBox, generic_message
-from celldetective.utils import _extract_labels_from_config, ConfigSectionMap, extract_experiment_channels, extract_identity_col
+from celldetective.utils import _extract_labels_from_config, ConfigSectionMap, extract_identity_col
 from celldetective.gui import ConfigEditor, ProcessPanel, PreprocessingPanel, AnalysisPanel, NeighPanel
 from celldetective.io import extract_position_name, get_experiment_wells, get_config, get_spatial_calibration, get_temporal_calibration, get_experiment_concentrations, get_experiment_cell_types, get_experiment_antibodies, get_experiment_pharmaceutical_agents, get_experiment_populations, extract_well_name_and_number
 from natsort import natsorted
@@ -17,7 +17,6 @@ import gc
 import subprocess
 from celldetective.gui.viewers import StackVisualizer
 from celldetective.utils import extract_experiment_channels
-from celldetective.gui import Styles
 import pandas as pd
 
 
@@ -39,7 +38,7 @@ class ControlPanel(CelldetectiveMainWindow):
 		self.w = CelldetectiveWidget()
 		self.grid = QGridLayout(self.w)
 		self.grid.setSpacing(5)
-		self.grid.setContentsMargins(10,10,10,10) #left top right bottom
+		self.grid.setContentsMargins(10, 10, 10, 10)  # left top right bottom
 
 		self.to_disable = []
 		self.generate_header()
