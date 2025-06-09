@@ -1383,13 +1383,21 @@ class BackgroundModelFreeCorrectionLayout(QGridLayout, Styles):
 		coef_nbr_layout.addWidget(self.nbr_coef_le, 75)
 		self.addLayout(coef_nbr_layout, 7,0,1,3)
 
+		offset_layout = QHBoxLayout()
+		offset_layout.addWidget(QLabel("Offset: "), 25)
+		self.camera_offset_le = QLineEdit("0")
+		self.camera_offset_le.setPlaceholderText('camera black level')
+		self.camera_offset_le.setValidator(QDoubleValidator())
+		offset_layout.addWidget(self.camera_offset_le, 75)
+		self.addLayout(offset_layout, 8, 0, 1, 3)
+
 		self.operation_layout = OperationLayout()
-		self.addLayout(self.operation_layout, 8, 0, 1, 3)
+		self.addLayout(self.operation_layout, 9, 0, 1, 3)
 
 		correction_layout = QHBoxLayout()
 		correction_layout.addWidget(self.add_correction_btn, 95)
 		correction_layout.addWidget(self.corrected_stack_viewer_btn, 5)
-		self.addLayout(correction_layout, 9, 0, 1, 3)
+		self.addLayout(correction_layout, 10, 0, 1, 3)
 
 		# verticalSpacer = QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
 		# self.addItem(verticalSpacer, 5, 0, 1, 3)
@@ -1431,6 +1439,11 @@ class BackgroundModelFreeCorrectionLayout(QGridLayout, Styles):
 			clip = True
 		else:
 			clip = False
+		
+		if self.camera_offset_le.text()=="":
+			offset = None
+		else:
+			offset = float(self.camera_offset_le.text().replace(",","."))
 
 		self.instructions = {
 					  "target_channel": self.channels_cb.currentText(),
@@ -1442,7 +1455,8 @@ class BackgroundModelFreeCorrectionLayout(QGridLayout, Styles):
 					  "opt_coef_range": opt_coef_range,
 					  "opt_coef_nbr": opt_coef_nbr,
 					  "operation": operation,
-					  "clip": clip
+					  "clip": clip,
+					  "offset": offset
 					 }
 
 	def set_target_channel(self):

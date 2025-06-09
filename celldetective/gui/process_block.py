@@ -1650,7 +1650,6 @@ class PreprocessingPanel(QFrame, Styles):
 		self.help_background_btn.setToolTip("Help.")
 
 		self.protocol_layout.title_layout.addWidget(self.help_background_btn, 5, alignment=Qt.AlignRight)
-
 		
 		self.channel_offset_correction_layout = QVBoxLayout()
 

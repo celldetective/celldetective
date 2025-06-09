@@ -14,7 +14,7 @@ from lmfit import Parameters, Model
 import tifffile.tifffile as tiff
 from scipy.ndimage import shift
 
-def estimate_background_per_condition(experiment, threshold_on_std=1, well_option='*', target_channel="channel_name", frame_range=[0,5], mode="timeseries", activation_protocol=[['gauss',2],['std',4]], show_progress_per_pos=False, show_progress_per_well=True):
+def estimate_background_per_condition(experiment, threshold_on_std=1, well_option='*', target_channel="channel_name", frame_range=[0,5], mode="timeseries", activation_protocol=[['gauss',2],['std',4]], show_progress_per_pos=False, show_progress_per_well=True, offset=None):
 	
 	"""
 	Estimate the background for each condition in an experiment.
@@ -149,6 +149,9 @@ def estimate_background_per_condition(experiment, threshold_on_std=1, well_optio
 
 		try:
 			background = np.nanmedian(frame_mean_per_position,axis=0)
+			if offset is not None:
+				#print("The offset is applied to background...")
+				background -= offset
 			backgrounds.append({"bg": background, "well": well_path})
 			print(f"Background successfully computed for well {well_name}...")
 		except Exception as e:
@@ -170,6 +173,7 @@ def correct_background_model_free(
 					   opt_coef_nbr = 100,
 					   operation = 'divide',
 					   clip = False,
+					   offset = None,
 					   show_progress_per_well = True,
 					   show_progress_per_pos = False,
 					   export = False,
@@ -259,7 +263,7 @@ def correct_background_model_free(
 		well_name, _ = extract_well_name_and_number(well_path)
 
 		try:
-			background = estimate_background_per_condition(experiment, threshold_on_std=threshold_on_std, well_option=int(well_indices[k]), target_channel=target_channel, frame_range=frame_range, mode=mode, show_progress_per_pos=True, show_progress_per_well=False, activation_protocol=activation_protocol)
+			background = estimate_background_per_condition(experiment, threshold_on_std=threshold_on_std, well_option=int(well_indices[k]), target_channel=target_channel, frame_range=frame_range, mode=mode, show_progress_per_pos=True, show_progress_per_well=False, activation_protocol=activation_protocol, offset=offset)
 			background = background[0]
 			background = background['bg']
 		except Exception as e:
@@ -283,18 +287,19 @@ def correct_background_model_free(
 
 				corrected_stack = apply_background_to_stack(stack_path, 
 															background,
-															target_channel_index=channel_indices[0],
-															nbr_channels=nbr_channels,
-															stack_length=len_movie,
-															threshold_on_std=threshold_on_std,
-															optimize_option=optimize_option,
-															opt_coef_range=opt_coef_range,
-															opt_coef_nbr=opt_coef_nbr,
-															operation=operation,
-															clip=clip,
-															export=export,
-															activation_protocol=activation_protocol,
-															prefix=export_prefix,
+															target_channel_index = channel_indices[0],
+															nbr_channels = nbr_channels,
+															stack_length = len_movie,
+															threshold_on_std = threshold_on_std,
+															optimize_option = optimize_option,
+															opt_coef_range = opt_coef_range,
+															opt_coef_nbr = opt_coef_nbr,
+															operation = operation,
+															clip = clip,
+															offset = offset,
+															export = export,
+															activation_protocol = activation_protocol,
+															prefix = export_prefix,
 														  )
 				print('Correction successful.')
 				if return_stacks:
@@ -310,7 +315,7 @@ def correct_background_model_free(
 
 
 
-def apply_background_to_stack(stack_path, background, target_channel_index=0, nbr_channels=1, stack_length=45,activation_protocol=[['gauss',2],['std',4]], threshold_on_std=1, optimize_option=True, opt_coef_range=(0.95,1.05), opt_coef_nbr=100, operation='divide', clip=False, export=False, prefix="Corrected"):
+def apply_background_to_stack(stack_path, background, target_channel_index=0, nbr_channels=1, stack_length=45, offset = None, activation_protocol=[['gauss',2],['std',4]], threshold_on_std=1, optimize_option=True, opt_coef_range=(0.95,1.05), opt_coef_nbr=100, operation='divide', clip=False, export=False, prefix="Corrected"):
 
 	"""
 	Apply background correction to an image stack.
@@ -385,11 +390,14 @@ def apply_background_to_stack(stack_path, background, target_channel_index=0, nb
 		
 		frames = load_frames(list(np.arange(i,(i+nbr_channels))), stack_path, normalize_input=False).astype(float)
 		target_img = frames[:,:,target_channel_index].copy()
-
+		if offset is not None:
+			#print(f"The offset is applied to image...")
+			target_img -= offset
+		
 		if optimize_option:
 			
 			target_copy = target_img.copy()
-
+			
 			std_frame = filter_image(target_copy.copy(),filters=activation_protocol)
 			edge = estimate_unreliable_edge(activation_protocol)
 			mask = threshold_image(std_frame, threshold_on_std, np.inf, foreground_value=1, edge_exclusion=edge)
