@@ -200,14 +200,20 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
         class_idx = np.array([s.startswith('class_') for s in self.all_columns])
         group_idx = np.array([s.startswith('group_') for s in self.all_columns])
 
+        print(f'{class_idx=} {group_idx=} {self.all_columns=}')
         # time_idx = np.array([s.startswith('t_') for s in self.all_columns])
-
         try:
-            class_columns = list(self.all_columns[class_idx])
-            group_columns = list(self.all_columns[group_idx])
+            if len(class_idx)>0:
+                class_columns = list(self.all_columns[class_idx])
+            else:
+                class_columns = []
+            if len(group_idx)>0:
+                group_columns = list(self.all_columns[group_idx])
+            else:
+                group_columns = []
         # time_columns = list(self.all_columns[time_idx])
-        except:
-            print('columns not found')
+        except Exception as e:
+            print(f'L210 columns not found {e}')
             self.auto_close = True
             return None
 
