@@ -44,57 +44,57 @@ def test_app(app, qtbot):
 	app.control_panel.viewer.close()
 
 	# Expand process block
-	qtbot.mouseClick(app.control_panel.ProcessEffectors.collapse_btn, QtCore.Qt.LeftButton)
+	qtbot.mouseClick(app.control_panel.ProcessPopulations[0].collapse_btn, QtCore.Qt.LeftButton)
 
 	# Use Threshold Config Wizard
-	qtbot.mouseClick(app.control_panel.ProcessEffectors.upload_model_btn, QtCore.Qt.LeftButton)
+	qtbot.mouseClick(app.control_panel.ProcessPopulations[0].upload_model_btn, QtCore.Qt.LeftButton)
 	qtbot.wait(1000)
-	qtbot.mouseClick(app.control_panel.ProcessEffectors.SegModelLoader.threshold_config_button, QtCore.Qt.LeftButton)
-	app.control_panel.ProcessEffectors.SegModelLoader.ThreshWizard.close()
-	app.control_panel.ProcessEffectors.SegModelLoader.close()
+	qtbot.mouseClick(app.control_panel.ProcessPopulations[0].SegModelLoader.threshold_config_button, QtCore.Qt.LeftButton)
+	app.control_panel.ProcessPopulations[0].SegModelLoader.ThreshWizard.close()
+	app.control_panel.ProcessPopulations[0].SegModelLoader.close()
 
 	# Check segmentation with napari
 	#qtbot.mouseClick(app.control_panel.ProcessEffectors.check_seg_btn, QtCore.Qt.LeftButton)
 	# close napari?
 
 	# Train model
-	qtbot.mouseClick(app.control_panel.ProcessEffectors.train_btn, QtCore.Qt.LeftButton)
+	qtbot.mouseClick(app.control_panel.ProcessPopulations[0].train_btn, QtCore.Qt.LeftButton)
 	qtbot.wait(1000)
-	app.control_panel.ProcessEffectors.ConfigSegmentationTrain.close()
+	app.control_panel.ProcessPopulations[0].ConfigSegmentationTrain.close()
 
 	# Config tracking
-	qtbot.mouseClick(app.control_panel.ProcessEffectors.track_config_btn, QtCore.Qt.LeftButton)
+	qtbot.mouseClick(app.control_panel.ProcessPopulations[0].track_config_btn, QtCore.Qt.LeftButton)
 	qtbot.wait(1000)
-	app.control_panel.ProcessEffectors.ConfigTracking.close()
+	app.control_panel.ProcessPopulations[0].ConfigTracking.close()
 
 	# Config measurements
-	qtbot.mouseClick(app.control_panel.ProcessEffectors.measurements_config_btn, QtCore.Qt.LeftButton)
+	qtbot.mouseClick(app.control_panel.ProcessPopulations[0].measurements_config_btn, QtCore.Qt.LeftButton)
 	qtbot.wait(1000)
-	app.control_panel.ProcessEffectors.ConfigMeasurements.close()
+	app.control_panel.ProcessPopulations[0].ConfigMeasurements.close()
 
 	# Classifier widget
-	qtbot.mouseClick(app.control_panel.ProcessEffectors.classify_btn, QtCore.Qt.LeftButton)
+	qtbot.mouseClick(app.control_panel.ProcessPopulations[0].classify_btn, QtCore.Qt.LeftButton)
 	qtbot.wait(1000)
-	app.control_panel.ProcessEffectors.ClassifierWidget.close()
+	app.control_panel.ProcessPopulations[0].ClassifierWidget.close()
 
 	# Config signal annotator
-	qtbot.mouseClick(app.control_panel.ProcessEffectors.config_signal_annotator_btn, QtCore.Qt.LeftButton)
-	qtbot.mouseClick(app.control_panel.ProcessEffectors.ConfigSignalAnnotator.rgb_btn, QtCore.Qt.LeftButton)
+	qtbot.mouseClick(app.control_panel.ProcessPopulations[0].config_signal_annotator_btn, QtCore.Qt.LeftButton)
+	qtbot.mouseClick(app.control_panel.ProcessPopulations[0].ConfigSignalAnnotator.rgb_btn, QtCore.Qt.LeftButton)
 	qtbot.wait(1000)
-	app.control_panel.ProcessEffectors.ConfigSignalAnnotator.close()
+	app.control_panel.ProcessPopulations[0].ConfigSignalAnnotator.close()
 
 	# Signal annotator widget
-	qtbot.mouseClick(app.control_panel.ProcessEffectors.check_signals_btn, QtCore.Qt.LeftButton)
+	qtbot.mouseClick(app.control_panel.ProcessPopulations[0].check_signals_btn, QtCore.Qt.LeftButton)
 	qtbot.wait(1000)
-	app.control_panel.ProcessEffectors.SignalAnnotator.close()
+	app.control_panel.ProcessPopulations[0].SignalAnnotator.close()
 
 	# Table widget
-	qtbot.mouseClick(app.control_panel.ProcessEffectors.view_tab_btn, QtCore.Qt.LeftButton)
+	qtbot.mouseClick(app.control_panel.ProcessPopulations[0].view_tab_btn, QtCore.Qt.LeftButton)
 	qtbot.wait(1000)
-	app.control_panel.ProcessEffectors.tab_ui.close()
+	app.control_panel.ProcessPopulations[0].tab_ui.close()
 
 	#qtbot.mouseClick(app.control_panel.PreprocessingPanel.fit_correction_layout.add_correction_btn, QtCore.Qt.LeftButton)
-	qtbot.mouseClick(app.control_panel.ProcessEffectors.collapse_btn, QtCore.Qt.LeftButton)
+	qtbot.mouseClick(app.control_panel.ProcessPopulations[0].collapse_btn, QtCore.Qt.LeftButton)
 
 
 
