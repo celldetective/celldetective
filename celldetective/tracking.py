@@ -1002,11 +1002,12 @@ def write_first_detection_class(df, img_shape=None, edge_threshold=20, column_la
 		positions_x = track_group[column_labels['x']].values
 		positions_y = track_group[column_labels['y']].values
 		dt = 1
-		
+
 		# Initialize
 		cclass = 2; t_first = np.nan;
 
 		if np.any(detection==detection):
+
 			t_first = timeline[detection==detection][0]
 			x_first = positions_x[detection==detection][0]; y_first = positions_y[detection==detection][0];
 
@@ -1015,13 +1016,17 @@ def write_first_detection_class(df, img_shape=None, edge_threshold=20, column_la
 				edge_test = (x_first < edge_threshold) or (y_first < edge_threshold) or (y_first > (img_shape[0] - edge_threshold)) or (x_first > (img_shape[1] - edge_threshold))
 
 			cclass = 0
-			if t_first<=0 or edge_test:
+			if t_first<=0:
 				t_first = -1
 				cclass = 2
 			else:
 				t_first =  float(t_first) - float(dt)
 				if t_first==0:
 					t_first += 0.01
+
+			if edge_test:
+				cclass = 2
+				# switch to class 2 but keep time/status information
 		else:
 			t_first = -1
 			cclass = 2

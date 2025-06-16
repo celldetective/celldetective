@@ -1,7 +1,7 @@
-from PyQt5.QtWidgets import QMessageBox, QComboBox, QLineEdit, QVBoxLayout, QWidget, QLabel, QHBoxLayout, QPushButton
+from PyQt5.QtWidgets import QMessageBox, QComboBox, QLineEdit, QVBoxLayout, QLabel, QHBoxLayout, QPushButton
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QDoubleValidator
-from celldetective.gui.gui_utils import center_window
+from celldetective.gui.gui_utils import center_window, generic_message
 from superqt import QColormapComboBox
 from celldetective.gui.generic_signal_plot import SurvivalPlotWidget
 from celldetective.utils import get_software_location, _extract_labels_from_config, extract_cols_from_table_list
@@ -11,14 +11,14 @@ import os
 import matplotlib.pyplot as plt
 plt.rcParams['svg.fonttype'] = 'none'
 from glob import glob
-from celldetective.gui import Styles
+from celldetective.gui import Styles, CelldetectiveWidget
 from matplotlib import colormaps
 from celldetective.events import compute_survival
 from celldetective.relative_measurements import expand_pair_table
 import matplotlib.cm
 from celldetective.neighborhood import extract_neighborhood_in_pair_table
 
-class ConfigSurvival(QWidget, Styles):
+class ConfigSurvival(CelldetectiveWidget):
 	
 	"""
 	UI to set survival instructions.
@@ -30,7 +30,6 @@ class ConfigSurvival(QWidget, Styles):
 		super().__init__()
 		self.parent_window = parent_window
 		self.setWindowTitle("Configure survival")
-		self.setWindowIcon(self.celldetective_icon)
 
 		self.exp_dir = self.parent_window.exp_dir
 		self.soft_path = get_software_location()		
@@ -53,8 +52,6 @@ class ConfigSurvival(QWidget, Styles):
 		self.populate_widget()
 		if self.auto_close:
 			self.close()
-		
-		self.setAttribute(Qt.WA_DeleteOnClose)
 
 	def interpret_pos_location(self):
 		
@@ -91,51 +88,27 @@ class ConfigSurvival(QWidget, Styles):
 
 
 		pops = []
-		for population in ['effectors','targets','pairs']:
+		self.cols_per_pop = {}
+		for population in self.parent_window.parent_window.populations:
 			tables = glob(self.exp_dir+os.sep.join(['W*','*','output','tables',f'trajectories_{population}.csv']))
 			if len(tables)>0:
 				pops.append(population)
+				cols = extract_cols_from_table_list(tables)
+				
+				# check for neighbor pairs
+				neigh_cols = [c for c in cols if c.startswith('inclusive_count_neighborhood')]
+				neigh_pairs = [c.split('_(')[-1].split(')_')[0].split('-') for c in neigh_cols]
+				neigh_pairs = ['-'.join(c) for c in neigh_pairs]
+				for k in range(len(neigh_pairs)):
+					if "_self_" in neigh_pairs[k]:
+						neigh_pairs[k] = '-'.join([population, population])
+				pops.extend(neigh_pairs)
 
-		tables_targets = glob(self.exp_dir+os.sep.join(['W*','*','output','tables',f'trajectories_targets.csv']))
-		self.cols_targets = extract_cols_from_table_list(tables_targets)
-		tables_effectors = glob(self.exp_dir+os.sep.join(['W*','*','output','tables',f'trajectories_effectors.csv']))
-		self.cols_effectors = extract_cols_from_table_list(tables_effectors)
-
-		# Smart reading of existing neighborhoods (without loading tables in memory)
-		if 'pairs' in pops and not 'targets' in pops:
-			# must be effector-effector
-			effector_neighs = [c[16:] for c in self.cols_effectors if c.startswith('inclusive_count_neighborhood')]
-			if len(effector_neighs)>0:
-				pops.pop(pops.index('pairs'))
-				pops.append('effectors-effectors')
-		elif 'pairs' in pops and not 'effectors' in pops:
-			# must be target-target
-			target_neighs = [c for c in self.cols_targets if c.startswith('inclusive_count_neighborhood')]
-			if len(target_neighs)>0:
-				pops.pop(pops.index('pairs'))
-				pops.append('targets-targets')
-		elif 'pairs' in pops:
-			# either effector-target or target-effector
-			target_neighs_cross = [c for c in self.cols_targets if c.startswith('inclusive_count_neighborhood') and '_2_' in c]
-			if len(target_neighs_cross)>0:
-				pops.append('targets-effectors')
-			effector_neighs_cross = [c for c in self.cols_effectors if c.startswith('inclusive_count_neighborhood') and '_2_' in c]
-			if len(effector_neighs_cross)>0:
-				pops.append('effectors-targets')
-			target_neighs = [c for c in self.cols_targets if c.startswith('inclusive_count_neighborhood') and 'self' in c]
-			if len(target_neighs)>0:
-				pops.append('targets-targets')
-			effector_neighs = [c for c in self.cols_effectors if c.startswith('inclusive_count_neighborhood') and 'self' in c]
-			if len(effector_neighs)>0:
-				pops.append('effectors-effectors')
-			pops.pop(pops.index('pairs'))
-		else:
-			pass
-
+				self.cols_per_pop.update({population: cols})
 
 		labels = [QLabel('population: '), QLabel('time of\nreference: '), QLabel('time of\ninterest: '), QLabel('cmap: ')] #QLabel('class: '),
 		self.cb_options = [pops, ['0'], [], []] #['class'],
-		self.cbs = [QComboBox() for i in range(len(labels))]
+		self.cbs = [QComboBox() for _ in range(len(labels))]
 
 		self.cbs[-1] = QColormapComboBox()
 		self.cbs[0].currentIndexChanged.connect(self.set_classes_and_times)
@@ -155,12 +128,8 @@ class ConfigSurvival(QWidget, Styles):
 			if hasattr(matplotlib.cm, str(cm).lower()):
 				try:
 					self.cbs[-1].addColormap(cm.lower())
-				except:
+				except Exception as _:
 					pass
-			#try:
-			# 	self.cbs[-1].addColormap(cm)
-			# except:
-			# 	pass
 
 		main_layout.addLayout(choice_layout)
 
@@ -213,18 +182,16 @@ class ConfigSurvival(QWidget, Styles):
 
 			self.population = 'pairs'
 			tables_pairs = glob(self.exp_dir+os.sep.join(['W*','*','output','tables',f'trajectories_pairs.csv']))
+			if not tables_pairs:
+				print('No pair table found... please compute the pair measurements...')
+				return None
 			self.cols_pairs = extract_cols_from_table_list(tables_pairs)
 
 			self.population_reference = pop_split[0]
 			self.population_neigh = pop_split[1]
-			if self.population_reference=='targets':
-				cols_ref = self.cols_targets
-			else:
-				cols_ref = self.cols_effectors
-			if self.population_neigh=='targets':
-				cols_neigh = self.cols_targets
-			else:
-				cols_neigh = self.cols_effectors
+
+			cols_ref = self.cols_per_pop[self.population_reference]
+			cols_neigh = self.cols_per_pop[self.population_neigh]
 
 			time_cols_ref = np.array([s.startswith('t_') or s=='t0' for s in cols_ref])
 			if len(time_cols_ref)>0:
@@ -237,9 +204,11 @@ class ConfigSurvival(QWidget, Styles):
 				time_cols_neigh = ['neighbor_'+t for t in time_cols_neigh]
 
 			if self.population_reference!=self.population_neigh:
-				self.neighborhood_keys = [c[16:] for c in cols_ref if c.startswith('inclusive_count_neighborhood') and '_2_' in c]
+				self.neighborhood_keys = [c[16:] for c in cols_ref if c.startswith('inclusive_count_neighborhood') and str(self.population_neigh) in c]
 			else:
-				self.neighborhood_keys = [c[16:] for c in cols_ref if c.startswith('inclusive_count_neighborhood') and 'self' in c]
+				self.neighborhood_keys = [c[16:] for c in cols_ref if c.startswith('inclusive_count_neighborhood') and str(self.population_neigh) not in c]
+
+			print(f"{self.neighborhood_keys=}")
 
 			time_idx = np.array([s.startswith('t_') or s.startswith('t0') for s in self.cols_pairs])
 			time_cols_pairs = list(self.cols_pairs[time_idx])
@@ -247,10 +216,7 @@ class ConfigSurvival(QWidget, Styles):
 			time_columns = time_cols_ref + time_cols_neigh + time_cols_pairs
 
 		else:
-			if self.population=='targets':
-				self.all_columns = self.cols_targets
-			else:
-				self.all_columns = self.cols_effectors
+			self.all_columns = self.cols_per_pop[self.population]
 			time_idx = np.array([s.startswith('t_') or s=='t0' for s in self.all_columns])
 
 			try:
@@ -274,6 +240,8 @@ class ConfigSurvival(QWidget, Styles):
 		self.time_of_interest = self.cbs[2].currentText()
 		if self.time_of_interest=="t0":
 			self.class_of_interest = "class"
+		elif self.time_of_interest.startswith('t0'):
+			self.class_of_interest = self.time_of_interest.replace('t0_','class_')
 		else:
 			self.class_of_interest = self.time_of_interest.replace('t_','class_')
 
@@ -290,29 +258,19 @@ class ConfigSurvival(QWidget, Styles):
 				print(e, ' The query is misunderstood and will not be applied...')
 			
 			self.interpret_pos_location()
+
 			if self.class_of_interest in list(self.df.columns) and self.cbs[2].currentText() in list(self.df.columns):
 				self.compute_survival_functions()
 			else:
-				msgBox = QMessageBox()
-				msgBox.setIcon(QMessageBox.Warning)
-				msgBox.setText("The class and/or event time of interest is not found in the dataframe...")
-				msgBox.setWindowTitle("Warning")
-				msgBox.setStandardButtons(QMessageBox.Ok)
-				returnValue = msgBox.exec()
-				if returnValue == QMessageBox.Ok:
-					return None
+				generic_message("The class and/or event time of interest is not found in the dataframe...")
+				return None
+
 			if 'survival_fit' in list(self.df_pos_info.columns):
 				self.plot_window = SurvivalPlotWidget(parent_window=self, df=self.df, df_pos_info = self.df_pos_info, df_well_info = self.df_well_info, title='plot survivals')
 				self.plot_window.show()
 			else:
-				msgBox = QMessageBox()
-				msgBox.setIcon(QMessageBox.Warning)
-				msgBox.setText("No survival function was successfully computed...\nCheck your parameter choice.")
-				msgBox.setWindowTitle("Warning")
-				msgBox.setStandardButtons(QMessageBox.Ok)
-				returnValue = msgBox.exec()
-				if returnValue == QMessageBox.Ok:
-					return None	
+				generic_message("No survival function was successfully computed...\nCheck your parameter choice.")
+				return None
 
 	def load_available_tables_local(self):
 
@@ -327,32 +285,26 @@ class ConfigSurvival(QWidget, Styles):
 		self.df, self.df_pos_info = load_experiment_tables(self.exp_dir, well_option=self.well_option, position_option=self.position_option, population=self.population, return_pos_info=True)
 
 		if self.df is None:
-			msgBox = QMessageBox()
-			msgBox.setIcon(QMessageBox.Warning)
-			msgBox.setText("No table could be found.. Abort.")
-			msgBox.setWindowTitle("Warning")
-			msgBox.setStandardButtons(QMessageBox.Ok)
-			returnValue = msgBox.exec()
-			if returnValue == QMessageBox.Ok:
-				return None		
+			generic_message("No table could be found.. Abort.")
+			return None
 		else:
 			self.df_well_info = self.df_pos_info.loc[:,['well_path', 'well_index', 'well_name', 'well_number', 'well_alias']].drop_duplicates()
-			#print(f"{self.df_well_info=}")
 
 		if self.population=='pairs':
 			self.df = expand_pair_table(self.df)
 			self.df = extract_neighborhood_in_pair_table(self.df, reference_population=self.population_reference, neighbor_population=self.population_neigh, neighborhood_key=self.neighborhood_keys[0], contact_only=True)
 
-
 	def compute_survival_functions(self):
 
 		cut_observation_time = None
 		try:
-			cut_observation_time = float(self.query_time_cut.text().replace(',','.')) / self.FrameToMin
-			if not 0<cut_observation_time<=(self.df['FRAME'].max()):
-				print('Invalid cut time (larger than movie length)... Not applied.')
-				cut_observation_time = None		
+			if self.query_time_cut.text()!='':
+				cut_observation_time = float(self.query_time_cut.text().replace(',','.')) / self.FrameToMin
+				if not 0<cut_observation_time<=(self.df['FRAME'].max()):
+					print('Invalid cut time (larger than movie length)... Not applied.')
+					cut_observation_time = None		
 		except Exception as e:
+			print(f"{e=}")
 			pass
 
 		pairs = False
@@ -361,7 +313,9 @@ class ConfigSurvival(QWidget, Styles):
 
 		# Per position survival
 		for block,movie_group in self.df.groupby(['well','position']):
+			print(f"{block=}")
 			ks = compute_survival(movie_group, self.class_of_interest, self.cbs[2].currentText(), t_reference=self.cbs[1].currentText(), FrameToMin=self.FrameToMin, cut_observation_time=cut_observation_time, pairs=pairs)
+			print(f"{ks=}")
 			if ks is not None:
 				self.df_pos_info.loc[self.df_pos_info['pos_path']==block[1],'survival_fit'] = ks
 

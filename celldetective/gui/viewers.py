@@ -3,7 +3,7 @@ from celldetective.io import auto_load_number_of_frames, load_frames
 from celldetective.filters import *
 from celldetective.segmentation import filter_image, threshold_image
 from celldetective.measure import contour_of_instance_segmentation, extract_blobs_in_image
-from celldetective.utils import _get_img_num_per_channel, estimate_unreliable_edge
+from celldetective.utils import _get_img_num_per_channel, estimate_unreliable_edge, is_integer_array
 from tifffile import imread
 import matplotlib.pyplot as plt 
 from pathlib import Path
@@ -11,11 +11,11 @@ from natsort import natsorted
 from glob import glob
 import os
 
-from PyQt5.QtWidgets import QWidget, QHBoxLayout, QPushButton, QLabel, QComboBox, QLineEdit, QListWidget, QShortcut
+from PyQt5.QtWidgets import QHBoxLayout, QPushButton, QLabel, QComboBox, QLineEdit, QListWidget, QShortcut
 from PyQt5.QtCore import Qt, QSize
 from PyQt5.QtGui import QKeySequence, QDoubleValidator
 from celldetective.gui.gui_utils import FigureCanvas, center_window, QuickSliderLayout, QHSeperationLine, ThresholdLineEdit, PreprocessingLayout2
-from celldetective.gui import Styles
+from celldetective.gui import Styles, CelldetectiveWidget
 from superqt import QLabeledDoubleSlider, QLabeledSlider, QLabeledDoubleRangeSlider
 from superqt.fonticon import icon
 from fonticon_mdi6 import MDI6
@@ -24,7 +24,7 @@ import gc
 from celldetective.utils import mask_edges
 from scipy.ndimage import shift
 
-class StackVisualizer(QWidget, Styles):
+class StackVisualizer(CelldetectiveWidget):
 
 	"""
 	A widget for visualizing image stacks with interactive sliders and channel selection.
@@ -92,8 +92,7 @@ class StackVisualizer(QWidget, Styles):
 			self.generate_frame_slider()
 
 		self.canvas.layout.setContentsMargins(15,15,15,30)
-		self.setAttribute(Qt.WA_DeleteOnClose)
-		center_window(self)
+		#center_window(self)
 
 	def show(self):
 		# Display the widget
@@ -135,6 +134,7 @@ class StackVisualizer(QWidget, Styles):
 		self.last_frame = load_frames(self.img_num_per_channel[self.target_channel, self.stack_length-1], 
 									  self.stack_path,
 									  normalize_input=False).astype(float)[:,:,0]
+
 
 	def generate_figure_canvas(self):
 		# Generate the figure canvas for displaying images
@@ -187,6 +187,16 @@ class StackVisualizer(QWidget, Styles):
 		channel_layout.addWidget(self.channels_cb, 75)
 		self.canvas.layout.addLayout(channel_layout)
 
+	def set_contrast_decimals(self):
+		if is_integer_array(self.init_frame):
+			self.contrast_slider.setDecimals(0)
+			self.contrast_slider.setSingleStep(1.0)
+			self.contrast_slider.setTickInterval(1.0)
+		else:
+			self.contrast_slider.setDecimals(3)
+			self.contrast_slider.setSingleStep(1.0E-03)
+			self.contrast_slider.setTickInterval(1.0E-03)
+
 	def generate_contrast_slider(self):
 		# Generate the contrast slider if enabled
 		
@@ -197,14 +207,14 @@ class StackVisualizer(QWidget, Styles):
 											slider_initial_value=[np.nanpercentile(self.init_frame, 0.1),np.nanpercentile(self.init_frame, 99.99)],
 											slider_range=(np.nanmin(self.init_frame),np.nanmax(self.init_frame)),
 											decimal_option=True,
-											precision=1.0E-05,
+											precision=2,
 											)
+		self.set_contrast_decimals()
+
 		contrast_layout.setContentsMargins(15,0,15,0)
 		self.im.set_clim(vmin=np.nanpercentile(self.init_frame, 0.1),vmax=np.nanpercentile(self.init_frame, 99.99))
 		self.contrast_slider.valueChanged.connect(self.change_contrast)
 		self.canvas.layout.addLayout(contrast_layout)
-
-
 
 	def generate_frame_slider(self):
 		# Generate the frame slider if enabled
@@ -250,6 +260,8 @@ class StackVisualizer(QWidget, Styles):
 		self.channel_trigger = False
 		self.init_contrast = False
 
+		self.set_contrast_decimals()
+
 	def change_frame_from_channel_switch(self, value):
 		
 		self.channel_trigger = True
@@ -275,15 +287,17 @@ class StackVisualizer(QWidget, Styles):
 		self.im.set_data(self.init_frame)
 		
 		if self.init_contrast:
-			self.im.autoscale()
-			I_min, I_max = self.im.get_clim()
-			self.contrast_slider.setRange(np.nanmin([self.init_frame,self.last_frame]),np.nanmax([self.init_frame,self.last_frame]))
-			self.contrast_slider.setValue((I_min,I_max))
+			imgs = np.array([self.init_frame,self.last_frame])
+			vmin = np.nanpercentile(imgs.flatten(), 1.0)
+			vmax = np.nanpercentile(imgs.flatten(), 99.99)
+			self.contrast_slider.setRange(np.nanmin(imgs),np.nanmax(imgs))
+			self.contrast_slider.setValue((vmin,vmax))
+			self.im.set_clim(vmin,vmax)
 
 		if self.create_contrast_slider:
 			self.change_contrast(self.contrast_slider.value())
 
-	
+
 	def closeEvent(self, event):
 		# Event handler for closing the widget
 		self.canvas.close()	
@@ -318,16 +332,27 @@ class ThresholdedStackVisualizer(StackVisualizer):
 	  with interactive sliders for threshold and mask opacity adjustment.
 	"""
 
-	def __init__(self, preprocessing=None, parent_le=None, initial_threshold=5, initial_mask_alpha=0.5, *args, **kwargs):
+	def __init__(self, preprocessing=None, parent_le=None, initial_threshold=5, initial_mask_alpha=0.5, show_opacity_slider=True, show_threshold_slider=True, *args, **kwargs):
 		# Initialize the widget and its attributes		
 		super().__init__(*args, **kwargs)
 		self.preprocessing = preprocessing
 		self.thresh = initial_threshold
 		self.mask_alpha = initial_mask_alpha
 		self.parent_le = parent_le
-		self.compute_mask(self.thresh)
-		self.generate_mask_imshow()
+		self.show_opacity_slider = show_opacity_slider
+		self.show_threshold_slider = show_threshold_slider
+		self.thresholded = False
+		self.mask = np.zeros_like(self.init_frame)
+		self.thresh_min = 0.0
+		self.thresh_max = 30.0
+
 		self.generate_threshold_slider()
+
+		if self.thresh is not None:
+			self.compute_mask(self.thresh)
+
+		self.generate_mask_imshow()
+		self.generate_scatter()
 		self.generate_opacity_slider()
 		if isinstance(self.parent_le, QLineEdit):
 			self.generate_apply_btn()
@@ -349,23 +374,32 @@ class ThresholdedStackVisualizer(StackVisualizer):
 		self.close()
 
 	def generate_mask_imshow(self):
-		# Generate the mask imshow		
+		# Generate the mask imshow
+
 		self.im_mask = self.ax.imshow(np.ma.masked_where(self.mask==0, self.mask), alpha=self.mask_alpha, interpolation='none')
 		self.canvas.canvas.draw()
+
+	def generate_scatter(self):
+		self.scat_markers = self.ax.scatter([], [], color="tab:red")
 
 	def generate_threshold_slider(self):
 		# Generate the threshold slider
 		self.threshold_slider = QLabeledDoubleSlider()
+		if self.thresh is None:
+			init_value = 1.0E5
+		else:
+			init_value = self.thresh
 		thresh_layout = QuickSliderLayout(label='Threshold: ',
 										slider=self.threshold_slider,
-										slider_initial_value=self.thresh,
-										slider_range=(0,30),
+										slider_initial_value=init_value,
+										slider_range=(self.thresh_min,np.amax([self.thresh_max, init_value])),
 										decimal_option=True,
-										precision=1.0E-05,
+										precision=4,
 										)
 		thresh_layout.setContentsMargins(15,0,15,0)
 		self.threshold_slider.valueChanged.connect(self.change_threshold)
-		self.canvas.layout.addLayout(thresh_layout)
+		if self.show_threshold_slider:
+			self.canvas.layout.addLayout(thresh_layout)
 
 	def generate_opacity_slider(self):
 		# Generate the opacity slider for the mask
@@ -375,11 +409,12 @@ class ThresholdedStackVisualizer(StackVisualizer):
 										slider_initial_value=0.5,
 										slider_range=(0,1),
 										decimal_option=True,
-										precision=1.0E-03
+										precision=3,
 										)
 		opacity_layout.setContentsMargins(15,0,15,0)
 		self.opacity_slider.valueChanged.connect(self.change_mask_opacity)
-		self.canvas.layout.addLayout(opacity_layout)
+		if self.show_opacity_slider:
+			self.canvas.layout.addLayout(opacity_layout)
 
 	def change_mask_opacity(self, value):
 		# Change the opacity of the mask
@@ -390,28 +425,61 @@ class ThresholdedStackVisualizer(StackVisualizer):
 	def change_threshold(self, value):
 		# Change the threshold value		
 		self.thresh = value
-		self.compute_mask(self.thresh)
-		mask = np.ma.masked_where(self.mask == 0, self.mask)
-		self.im_mask.set_data(mask)
-		self.canvas.canvas.draw_idle()
+		if self.thresh is not None:
+			self.compute_mask(self.thresh)
+			mask = np.ma.masked_where(self.mask == 0, self.mask)
+			self.im_mask.set_data(mask)
+			self.canvas.canvas.draw_idle()
 
 	def change_frame(self, value):
-		# Change the displayed frame and update the threshold		
+		# Change the displayed frame and update the threshold
+		if self.thresholded:
+			self.init_contrast = True
 		super().change_frame(value)
 		self.change_threshold(self.threshold_slider.value())
+		if self.thresholded:
+			self.thresholded = False
+			self.init_contrast = False
 
 	def compute_mask(self, threshold_value):
 		# Compute the mask based on the threshold value
 		self.preprocess_image()
 		edge = estimate_unreliable_edge(self.preprocessing)
-		self.mask = threshold_image(self.processed_image, threshold_value, np.inf, foreground_value=1, edge_exclusion=edge).astype(int)
+		if isinstance(threshold_value, (list,np.ndarray,tuple)):
+			self.mask = threshold_image(self.processed_image, threshold_value[0], threshold_value[1], foreground_value=1, fill_holes=True, edge_exclusion=edge).astype(int)
+		else:
+			self.mask = threshold_image(self.processed_image, threshold_value, np.inf, foreground_value=1, fill_holes=True, edge_exclusion=edge).astype(int)
 
 	def preprocess_image(self):
 		# Preprocess the image before thresholding		
 		if self.preprocessing is not None:
 
 			assert isinstance(self.preprocessing, list)
-			self.processed_image = filter_image(self.init_frame.copy(),filters=self.preprocessing)
+			self.processed_image = filter_image(self.init_frame.copy().astype(float),filters=self.preprocessing)
+			min_ = np.amin(self.processed_image)
+			max_ = np.amax(self.processed_image)
+
+			if min_ < self.thresh_min:
+				self.thresh_min = min_
+			if max_ > self.thresh_max:
+				self.thresh_max = max_
+
+			self.threshold_slider.setRange(self.thresh_min, self.thresh_max)
+
+	def set_preprocessing(self, activation_protocol):
+
+		self.preprocessing = activation_protocol
+		self.preprocess_image()
+
+		self.im.set_data(self.processed_image)
+		vmin = np.nanpercentile(self.processed_image, 1.0)
+		vmax = np.nanpercentile(self.processed_image, 99.99)
+		self.contrast_slider.setRange(np.nanmin(self.processed_image),
+									  np.nanmax(self.processed_image))
+		self.contrast_slider.setValue((vmin, vmax))
+		self.im.set_clim(vmin,vmax)
+		self.canvas.canvas.draw_idle()
+		self.thresholded = True
 
 
 class CellEdgeVisualizer(StackVisualizer):
@@ -578,7 +646,7 @@ class CellEdgeVisualizer(StackVisualizer):
 										slider_initial_value=0.5,
 										slider_range=(0,1),
 										decimal_option=True,
-										precision=1.0E-03
+										precision=3,
 										)
 		opacity_layout.setContentsMargins(15,0,15,0)
 		self.opacity_slider.valueChanged.connect(self.change_mask_opacity)
@@ -952,7 +1020,7 @@ class CellSizeViewer(StackVisualizer):
 	def generate_circle(self):
 		# Generate the circle for visualization
 
-		self.circ = plt.Circle((self.init_frame.shape[0]//2,self.init_frame.shape[1]//2), self.diameter//2, ec="tab:red",fill=False)
+		self.circ = plt.Circle((self.init_frame.shape[0]//2,self.init_frame.shape[1]//2), self.diameter//2 / self.PxToUm, ec="tab:red",fill=False)
 		self.ax.add_patch(self.circ)
 
 		self.ax.callbacks.connect('xlim_changed',self.on_xlims_or_ylims_change)
@@ -978,7 +1046,7 @@ class CellSizeViewer(StackVisualizer):
 		if self.set_radius_in_list:
 			val = int(self.diameter_slider.value()//2)
 		else:
-			val = int(self.diameter_slider.value())
+			val = int(self.diameter_slider.value()) 
 		
 		self.parent_list_widget.addItems([str(val)])
 		self.close()
@@ -1017,7 +1085,7 @@ class CellSizeViewer(StackVisualizer):
 										slider_initial_value=self.diameter,
 										slider_range=self.diameter_slider_range,
 										decimal_option=True,
-										precision=1.0E-05,
+										precision=5,
 										)
 		diameter_layout.setContentsMargins(15,0,15,0)
 		self.diameter_slider.valueChanged.connect(self.change_diameter)
@@ -1025,9 +1093,8 @@ class CellSizeViewer(StackVisualizer):
 
 	def change_diameter(self, value):
 		# Change the diameter of the circle
-		
 		self.diameter = value
-		self.circ.set_radius(self.diameter//2)
+		self.circ.set_radius(self.diameter//2 / self.PxToUm)
 		self.canvas.canvas.draw_idle()
 
 
@@ -1080,7 +1147,7 @@ class ChannelOffsetViewer(StackVisualizer):
 											slider_initial_value=0.5,
 											slider_range=(0,1.0),
 											decimal_option=True,
-											precision=1.0E-05,
+											precision=5,
 											)
 		alpha_layout.setContentsMargins(15,0,15,0)
 		self.overlay_alpha_slider.valueChanged.connect(self.change_alpha_overlay)
@@ -1097,7 +1164,7 @@ class ChannelOffsetViewer(StackVisualizer):
 											slider_initial_value=[np.nanpercentile(self.overlay_init_frame, 0.1),np.nanpercentile(self.overlay_init_frame, 99.99)],
 											slider_range=(np.nanmin(self.overlay_init_frame),np.nanmax(self.overlay_init_frame)),
 											decimal_option=True,
-											precision=1.0E-05,
+											precision=5,
 											)
 		contrast_layout.setContentsMargins(15,0,15,0)
 		self.im_overlay.set_clim(vmin=np.nanpercentile(self.overlay_init_frame, 0.1),vmax=np.nanpercentile(self.overlay_init_frame, 99.99))

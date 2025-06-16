@@ -1,9 +1,9 @@
-from PyQt5.QtWidgets import QMessageBox, QComboBox, \
-	QCheckBox, QLineEdit, QVBoxLayout, QWidget, QLabel, QHBoxLayout, QPushButton
+from PyQt5.QtWidgets import QComboBox, \
+	QCheckBox, QLineEdit, QVBoxLayout, QLabel, QHBoxLayout, QPushButton
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QIcon, QDoubleValidator
+from PyQt5.QtGui import QDoubleValidator
 
-from celldetective.gui.gui_utils import center_window
+from celldetective.gui.gui_utils import center_window, generic_message
 from celldetective.gui.generic_signal_plot import GenericSignalPlotWidget
 from superqt import QLabeledSlider, QColormapComboBox, QSearchableComboBox
 from celldetective.utils import get_software_location, _extract_labels_from_config, extract_cols_from_table_list
@@ -16,12 +16,14 @@ plt.rcParams['svg.fonttype'] = 'none'
 from glob import glob
 from natsort import natsorted
 import math
-from celldetective.gui import Styles
+from celldetective.gui import CelldetectiveWidget
 from matplotlib import colormaps
 import matplotlib.cm
+from celldetective.relative_measurements import expand_pair_table
+from celldetective.neighborhood import extract_neighborhood_in_pair_table
 
 
-class ConfigSignalPlot(QWidget, Styles):
+class ConfigSignalPlot(CelldetectiveWidget):
 	
 	"""
 	UI to set survival instructions.
@@ -33,7 +35,6 @@ class ConfigSignalPlot(QWidget, Styles):
 		super().__init__()
 		self.parent_window = parent_window
 		self.setWindowTitle("Configure signal plot")
-		self.setWindowIcon(QIcon(os.sep.join(['celldetective','icons','mexican-hat.png'])))
 		self.exp_dir = self.parent_window.exp_dir
 		self.soft_path = get_software_location()		
 		self.exp_config = self.exp_dir +"config.ini"
@@ -57,7 +58,6 @@ class ConfigSignalPlot(QWidget, Styles):
 
 		if self.auto_close:
 			self.close()
-		self.setAttribute(Qt.WA_DeleteOnClose)
 
 	def interpret_pos_location(self):
 		
@@ -92,10 +92,30 @@ class ConfigSignalPlot(QWidget, Styles):
 		main_layout.addWidget(panel_title, alignment=Qt.AlignCenter)
 
 		pops = []
-		for population in ['effectors','targets','pairs']:
+		self.cols_per_pop = {}
+		for population in self.parent_window.parent_window.populations:
 			tables = glob(self.exp_dir+os.sep.join(['W*','*','output','tables',f'trajectories_{population}.csv']))
 			if len(tables)>0:
 				pops.append(population)
+				cols = extract_cols_from_table_list(tables)
+				
+				# check for neighbor pairs
+				neigh_cols = [c for c in cols if c.startswith('inclusive_count_neighborhood')]
+				neigh_pairs = [c.split('_(')[-1].split(')_')[0].split('-') for c in neigh_cols]
+				neigh_pairs = ['-'.join(c) for c in neigh_pairs]
+				for k in range(len(neigh_pairs)):
+					if "_self_" in neigh_pairs[k]:
+						neigh_pairs[k] = '-'.join([population, population])
+				pops.extend(neigh_pairs)
+
+				self.cols_per_pop.update({population: cols})
+
+		# pops = []
+		# for population in self.parent_window.parent_window.populations+['pairs']:
+		# 	tables = glob(self.exp_dir+os.sep.join(['W*','*','output','tables',f'trajectories_{population}.csv']))
+		# 	if len(tables)>0:
+		# 		pops.append(population)
+
 
 		labels = [QLabel('population: '), QLabel('class: '), QLabel('time of\ninterest: '), QLabel('cmap: ')]
 		self.cb_options = [pops,[], [], []]
@@ -128,7 +148,7 @@ class ConfigSignalPlot(QWidget, Styles):
 		self.abs_time_checkbox = QCheckBox('absolute time')
 		self.frame_slider = QLabeledSlider()
 		self.frame_slider.setSingleStep(1)
-		self.frame_slider.setOrientation(1)
+		self.frame_slider.setOrientation(Qt.Horizontal)
 		self.frame_slider.setRange(0,self.parent_window.parent_window.len_movie)
 		self.frame_slider.setValue(0)
 		self.frame_slider.setEnabled(False)
@@ -168,7 +188,7 @@ class ConfigSignalPlot(QWidget, Styles):
 		n_cells_layout.setContentsMargins(20,3,20,3)
 		self.n_cells_slider = QLabeledSlider()
 		self.n_cells_slider.setSingleStep(1)
-		self.n_cells_slider.setOrientation(1)
+		self.n_cells_slider.setOrientation(Qt.Horizontal)
 		self.n_cells_slider.setRange(1,100)
 		self.n_cells_slider.setValue(2)
 		n_cells_layout.addWidget(QLabel('min # cells\nfor pool:'), 33)
@@ -188,35 +208,83 @@ class ConfigSignalPlot(QWidget, Styles):
 		# self.show()
 
 	def set_classes_and_times(self):
-
+		
 		# Look for all classes and times
-		population = self.cbs[0].currentText()
-		tables = natsorted(glob(self.exp_dir+os.sep.join(['W*','*','output','tables',f'trajectories_{population}.csv'])))
-		
-		self.all_columns = extract_cols_from_table_list(tables)
+		self.neighborhood_keys = None
+		self.population = self.cbs[0].currentText()
+		pop_split = self.population.split('-')
 
-		class_idx = np.array([s.startswith('class_') for s in self.all_columns])
-		time_idx = np.array([s.startswith('t_') for s in self.all_columns])
-		
-		try:
-			class_columns = list(self.all_columns[class_idx])
-			time_columns = list(self.all_columns[time_idx])
-		except:
-			print('columns not found')
-			self.auto_close = True
-			return None
-		
-		if 'class' in self.all_columns:
-			class_columns.append("class")
-		if 't0' in self.all_columns:
-			time_columns.append('t0')
-		
+		if len(pop_split)==2:
+
+			self.population = 'pairs'
+			tables_pairs = glob(self.exp_dir+os.sep.join(['W*','*','output','tables',f'trajectories_pairs.csv']))
+			if not tables_pairs:
+				print('No pair table found... please compute the pair measurements...')
+				return None
+			self.cols_pairs = extract_cols_from_table_list(tables_pairs)
+
+			self.population_reference = pop_split[0]
+			self.population_neigh = pop_split[1]
+
+			cols_ref = self.cols_per_pop[self.population_reference]
+			cols_neigh = self.cols_per_pop[self.population_neigh]
+
+			time_cols_ref = np.array([s.startswith('t_') or s=='t0' for s in cols_ref])
+			if len(time_cols_ref)>0:
+				time_cols_ref = list(cols_ref[time_cols_ref])
+				time_cols_ref = ['reference_'+t for t in time_cols_ref]
+
+			time_cols_neigh = np.array([s.startswith('t_') or s=='t0' for s in cols_neigh])
+			if len(time_cols_neigh)>0:
+				time_cols_neigh = list(cols_neigh[time_cols_neigh])
+				time_cols_neigh = ['neighbor_'+t for t in time_cols_neigh]
+
+			if self.population_reference!=self.population_neigh:
+				self.neighborhood_keys = [c[16:] for c in cols_ref if c.startswith('inclusive_count_neighborhood') and str(self.population_neigh) in c]
+			else:
+				self.neighborhood_keys = [c[16:] for c in cols_ref if c.startswith('inclusive_count_neighborhood') and str(self.population_neigh) not in c]
+
+			time_idx = np.array([s.startswith('t_') or s.startswith('t0') for s in self.cols_pairs])
+			time_cols_pairs = list(self.cols_pairs[time_idx])
+			time_columns = time_cols_ref + time_cols_neigh + time_cols_pairs
+
+			class_cols_ref = [c.replace('reference_t_','reference_class_') for c in time_cols_ref]
+			class_cols_neigh = [c.replace('neighbor_t_','neighbor_class_') for c in time_cols_neigh]
+			class_cols_pairs = [c.replace('t_','class_') for c in time_cols_neigh if c.startswith('t_')]
+			class_columns = class_cols_ref + class_cols_neigh + class_cols_pairs
+		else:
+			tables = natsorted(glob(self.exp_dir+os.sep.join(['W*','*','output','tables',f'trajectories_{self.population}.csv'])))
+			self.all_columns = extract_cols_from_table_list(tables)
+
+			class_idx = np.array([s.startswith('class_') for s in self.all_columns])
+			time_idx = np.array([s.startswith('t_') or s.startswith('t0_') for s in self.all_columns])
+			print(f'{class_idx=} {time_idx=} {self.all_columns=}')
+
+			try:
+				if len(class_idx)>0:
+					class_columns = list(self.all_columns[class_idx])
+				else:
+					class_columns = []
+				if len(time_idx)>0:
+					time_columns = list(self.all_columns[time_idx])
+				else:
+					time_columns = []
+			except Exception as e:
+				print(f'L266 columns not found {e}')
+				self.auto_close = True
+				return None
+			
+			if 'class' in self.all_columns:
+				class_columns.append("class")
+			if 't0' in self.all_columns:
+				time_columns.append('t0')
+
 		self.class_columns = np.unique(class_columns)
 		self.time_columns = np.unique(time_columns)
-		thresh = 18
+		thresh = 30
 		self.class_truncated = [w[:thresh - 3]+'...' if len(w)>thresh else w for w in self.class_columns]
 		self.time_truncated = [w[:thresh - 3]+'...' if len(w)>thresh else w for w in self.time_columns]
-
+	
 		self.cbs[2].clear()
 		self.cbs[2].addItems(self.time_truncated)
 		for i in range(len(self.time_columns)):
@@ -233,7 +301,7 @@ class ConfigSignalPlot(QWidget, Styles):
 		is_number = np.vectorize(lambda x: np.issubdtype(x, np.number))
 		feats = cols[is_number(self.df.dtypes)]
 
-		self.feature_choice_widget = QWidget()
+		self.feature_choice_widget = CelldetectiveWidget()
 		self.feature_choice_widget.setWindowTitle("Select numeric feature")
 		layout = QVBoxLayout()
 		self.feature_choice_widget.setLayout(layout)
@@ -256,7 +324,7 @@ class ConfigSignalPlot(QWidget, Styles):
 		is_number = np.vectorize(lambda x: np.issubdtype(x, np.number))
 		feats = cols[is_number(self.df.dtypes)]
 
-		self.feature_choice_widget = QWidget()
+		self.feature_choice_widget = CelldetectiveWidget()
 		self.feature_choice_widget.setWindowTitle("Select numeric feature")
 		layout = QVBoxLayout()
 		self.feature_choice_widget.setLayout(layout)
@@ -316,14 +384,8 @@ class ConfigSignalPlot(QWidget, Styles):
 		if self.df is not None:
 
 			if class_col not in list(self.df.columns):
-				msgBox = QMessageBox()
-				msgBox.setIcon(QMessageBox.Warning)
-				msgBox.setText("The class of interest could not be found in the data. Abort.")
-				msgBox.setWindowTitle("Warning")
-				msgBox.setStandardButtons(QMessageBox.Ok)
-				returnValue = msgBox.exec()
-				if returnValue == QMessageBox.Ok:
-					return None
+				generic_message("The class of interest could not be found in the data. Abort.")
+				return None
 			else:
 				self.ask_for_features()
 		else:
@@ -341,23 +403,17 @@ class ConfigSignalPlot(QWidget, Styles):
 		self.well_option = self.parent_window.parent_window.well_list.getSelectedIndices()		
 		self.position_option = self.parent_window.parent_window.position_list.getSelectedIndices()
 
-		self.df, self.df_pos_info = load_experiment_tables(self.exp_dir, well_option=self.well_option, position_option=self.position_option, population=self.cbs[0].currentText(), return_pos_info=True)
+		self.df, self.df_pos_info = load_experiment_tables(self.exp_dir, well_option=self.well_option, position_option=self.position_option, population=self.population, return_pos_info=True)
+
+		if self.population=='pairs':
+			self.df = expand_pair_table(self.df)
+			self.df = extract_neighborhood_in_pair_table(self.df, reference_population=self.population_reference, neighbor_population=self.population_neigh, neighborhood_key=self.neighborhood_keys[0], contact_only=True)
 
 		if self.df is None:
-			
 			print('No table could be found...')
-			msgBox = QMessageBox()
-			msgBox.setIcon(QMessageBox.Warning)
-			msgBox.setText("No table could be found to compute survival...")
-			msgBox.setWindowTitle("Warning")
-			msgBox.setStandardButtons(QMessageBox.Ok)
-			returnValue = msgBox.exec()
-			if returnValue == QMessageBox.Ok:
-				self.close()
-				return None
-			else:
-				self.close()
-				return None
+			generic_message("No table could be found to compute survival...")
+			self.close()
+			return None
 		else:
 			self.df_well_info = self.df_pos_info.loc[:,['well_path', 'well_index', 'well_name', 'well_number', 'well_alias']].drop_duplicates()
 
@@ -366,14 +422,7 @@ class ConfigSignalPlot(QWidget, Styles):
 		# Check to move at the beginning
 		self.open_widget = True
 		if len(self.time_columns)==0:
-			msgBox = QMessageBox()
-			msgBox.setIcon(QMessageBox.Warning)
-			msgBox.setText("No synchronizing time is available...")
-			msgBox.setWindowTitle("Warning")
-			msgBox.setStandardButtons(QMessageBox.Ok)
-			returnValue = msgBox.exec()
-			if returnValue == QMessageBox.Ok:
-				pass
+			generic_message("No synchronizing time is available...")
 			self.open_widget = False
 			return None
 
@@ -383,6 +432,10 @@ class ConfigSignalPlot(QWidget, Styles):
 			print('Warning... The dataset is empty. Please check your filters. Abort...')
 			return None
 
+		pairs=False
+		if self.population=='pairs':
+			pairs=True
+
 		max_time = int(self.df.FRAME.max()) + 1
 		class_col = self.class_columns[self.cbs[1].currentIndex()]
 		time_col = self.time_columns[self.cbs[2].currentIndex()]
@@ -391,9 +444,9 @@ class ConfigSignalPlot(QWidget, Styles):
 
 		for block,movie_group in self.df.groupby(['well','position']):
 
-			well_signal_mean, well_std_mean, timeline_all, matrix_all = mean_signal(movie_group, self.feature_selected, class_col, time_col=time_col, class_value=None, return_matrix=True, forced_max_duration=max_time, projection=self.pool_option_cb.currentText(), min_nbr_values=self.n_cells_slider.value())
-			well_signal_event, well_std_event, timeline_event, matrix_event = mean_signal(movie_group, self.feature_selected, class_col, time_col=time_col, class_value=[0], return_matrix=True, forced_max_duration=max_time, projection=self.pool_option_cb.currentText(), min_nbr_values=self.n_cells_slider.value())
-			well_signal_no_event, well_std_no_event, timeline_no_event, matrix_no_event = mean_signal(movie_group, self.feature_selected, class_col, time_col=time_col, class_value=[1], return_matrix=True, forced_max_duration=max_time, projection=self.pool_option_cb.currentText(), min_nbr_values=self.n_cells_slider.value())
+			well_signal_mean, well_std_mean, timeline_all, matrix_all = mean_signal(movie_group, self.feature_selected, class_col, time_col=time_col, class_value=None, return_matrix=True, forced_max_duration=max_time, projection=self.pool_option_cb.currentText(), min_nbr_values=self.n_cells_slider.value(),pairs=pairs)
+			well_signal_event, well_std_event, timeline_event, matrix_event = mean_signal(movie_group, self.feature_selected, class_col, time_col=time_col, class_value=[0], return_matrix=True, forced_max_duration=max_time, projection=self.pool_option_cb.currentText(), min_nbr_values=self.n_cells_slider.value(),pairs=pairs)
+			well_signal_no_event, well_std_no_event, timeline_no_event, matrix_no_event = mean_signal(movie_group, self.feature_selected, class_col, time_col=time_col, class_value=[1], return_matrix=True, forced_max_duration=max_time, projection=self.pool_option_cb.currentText(), min_nbr_values=self.n_cells_slider.value(),pairs=pairs)
 			self.mean_plots_timeline = timeline_all
 
 			self.df_pos_info.loc[self.df_pos_info['pos_path'] == block[1], 'signal'] = [
@@ -406,9 +459,9 @@ class ConfigSignalPlot(QWidget, Styles):
 		# Per well
 		for well,well_group in self.df.groupby('well'):
 
-			well_signal_mean, well_std_mean, timeline_all, matrix_all = mean_signal(well_group, self.feature_selected, class_col, time_col=time_col, class_value=None, return_matrix=True, forced_max_duration=max_time, projection=self.pool_option_cb.currentText(), min_nbr_values=self.n_cells_slider.value())
-			well_signal_event, well_std_event, timeline_event, matrix_event = mean_signal(well_group, self.feature_selected, class_col, time_col=time_col, class_value=[0], return_matrix=True, forced_max_duration=max_time, projection=self.pool_option_cb.currentText(), min_nbr_values=self.n_cells_slider.value())			
-			well_signal_no_event, well_std_no_event, timeline_no_event, matrix_no_event = mean_signal(well_group, self.feature_selected, class_col, time_col=time_col, class_value=[1], return_matrix=True, forced_max_duration=max_time, projection=self.pool_option_cb.currentText(), min_nbr_values=self.n_cells_slider.value())
+			well_signal_mean, well_std_mean, timeline_all, matrix_all = mean_signal(well_group, self.feature_selected, class_col, time_col=time_col, class_value=None, return_matrix=True, forced_max_duration=max_time, projection=self.pool_option_cb.currentText(), min_nbr_values=self.n_cells_slider.value(),pairs=pairs)
+			well_signal_event, well_std_event, timeline_event, matrix_event = mean_signal(well_group, self.feature_selected, class_col, time_col=time_col, class_value=[0], return_matrix=True, forced_max_duration=max_time, projection=self.pool_option_cb.currentText(), min_nbr_values=self.n_cells_slider.value(),pairs=pairs)			
+			well_signal_no_event, well_std_no_event, timeline_no_event, matrix_no_event = mean_signal(well_group, self.feature_selected, class_col, time_col=time_col, class_value=[1], return_matrix=True, forced_max_duration=max_time, projection=self.pool_option_cb.currentText(), min_nbr_values=self.n_cells_slider.value(),pairs=pairs)
 			
 			self.df_well_info.loc[self.df_well_info['well_path']==well,'signal'] = [{'mean_all': well_signal_mean, 'std_all': well_std_mean,'matrix_all': matrix_all,'mean_event': well_signal_event, 'std_event': well_std_event,
 																					'matrix_event': matrix_event,'mean_no_event': well_signal_no_event, 'std_no_event': well_std_no_event, 'matrix_no_event': matrix_no_event, 'timeline':  self.mean_plots_timeline}]

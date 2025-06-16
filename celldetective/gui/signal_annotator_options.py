@@ -2,7 +2,7 @@
 Copright © 2023 Laboratoire Adhesion et Inflammation, Authored by Remy Torro.
 """
 
-from PyQt5.QtWidgets import QMainWindow, QComboBox, QLabel, QRadioButton, QLineEdit, QApplication, QPushButton, QScrollArea, QWidget, QVBoxLayout, QHBoxLayout
+from PyQt5.QtWidgets import QComboBox, QLabel, QRadioButton, QLineEdit, QApplication, QPushButton, QScrollArea, QVBoxLayout, QHBoxLayout
 from PyQt5.QtCore import Qt, QSize
 from celldetective.gui.gui_utils import center_window, QHSeperationLine
 from superqt import QLabeledDoubleSlider, QLabeledSlider
@@ -12,9 +12,9 @@ import numpy as np
 from superqt.fonticon import icon
 from fonticon_mdi6 import MDI6
 import os
-from celldetective.gui import Styles
+from celldetective.gui import CelldetectiveWidget, CelldetectiveMainWindow
 
-class ConfigSignalAnnotator(QMainWindow, Styles):
+class ConfigSignalAnnotator(CelldetectiveMainWindow):
 	
 	"""
 	UI to set normalization and animation parameters for the annotator tool. 
@@ -30,11 +30,8 @@ class ConfigSignalAnnotator(QMainWindow, Styles):
 		self.exp_dir = self.parent_window.exp_dir
 		self.soft_path = get_software_location()
 		
-		if self.mode=="targets":
-			self.instructions_path = self.parent_window.exp_dir + "configs/signal_annotator_config_targets.json"
-		elif self.mode=="effectors":
-			self.instructions_path = self.parent_window.exp_dir + "configs/signal_annotator_config_effectors.json"
-		elif self.mode == "pairs":
+		self.instructions_path = self.parent_window.exp_dir + f"configs/signal_annotator_config_{self.mode}.json"
+		if self.mode == "pairs":
 			self.instructions_path = self.parent_window.exp_dir + "configs/signal_annotator_config_neighborhood.json"
 
 		exp_config = self.exp_dir +"config.ini"
@@ -61,7 +58,7 @@ class ConfigSignalAnnotator(QMainWindow, Styles):
 		"""
 
 		self.scroll_area = QScrollArea(self)
-		self.button_widget = QWidget()
+		self.button_widget = CelldetectiveWidget()
 
 		self.main_layout = QVBoxLayout()
 		self.main_layout.setContentsMargins(30,30,30,30)
@@ -151,7 +148,7 @@ class ConfigSignalAnnotator(QMainWindow, Styles):
 		self.fraction_slider.setSingleStep(0.05)
 		self.fraction_slider.setTickInterval(0.05)
 		self.fraction_slider.setSingleStep(1)
-		self.fraction_slider.setOrientation(1)
+		self.fraction_slider.setOrientation(Qt.Horizontal)
 		self.fraction_slider.setRange(0.1,1)
 		self.fraction_slider.setValue(0.25)
 
@@ -166,7 +163,7 @@ class ConfigSignalAnnotator(QMainWindow, Styles):
 		self.interval_slider.setSingleStep(1)
 		self.interval_slider.setTickInterval(1)
 		self.interval_slider.setSingleStep(1)
-		self.interval_slider.setOrientation(1)
+		self.interval_slider.setOrientation(Qt.Horizontal)
 		self.interval_slider.setRange(1,1000)
 		self.interval_slider.setValue(1)
 		hbox_interval.addWidget(self.interval_slider, 80)

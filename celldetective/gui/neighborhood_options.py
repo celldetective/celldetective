@@ -1,6 +1,5 @@
-from PyQt5.QtWidgets import QApplication, QComboBox, QFrame, QCheckBox, QVBoxLayout, QWidget, QLabel, QHBoxLayout, QPushButton
+from PyQt5.QtWidgets import QApplication, QComboBox, QFrame, QCheckBox, QVBoxLayout, QLabel, QHBoxLayout, QPushButton
 from PyQt5.QtCore import Qt, QSize
-from PyQt5.QtGui import QIcon
 from celldetective.gui.gui_utils import center_window, ListWidget, DistanceChoice
 from superqt.fonticon import icon
 from fonticon_mdi6 import MDI6
@@ -10,9 +9,10 @@ import os
 from glob import glob
 import pandas as pd
 from celldetective.gui.viewers import CellSizeViewer, CellEdgeVisualizer
-from celldetective.gui import Styles
+from celldetective.gui import CelldetectiveWidget
 
-class ConfigNeighborhoods(QWidget, Styles):
+
+class ConfigNeighborhoods(CelldetectiveWidget):
 	
 	"""
 	Widget to configure neighborhood measurements.
@@ -24,7 +24,6 @@ class ConfigNeighborhoods(QWidget, Styles):
 		super().__init__(*args, **kwargs)
 		self.parent_window = parent_window
 		self.attr_parent = self.parent_window.parent_window
-		self.setWindowIcon(QIcon(os.sep.join(['celldetective','icons','logo.png'])))
 
 		self.neighborhood_type = neighborhood_type
 		self.neighborhood_parameter_name = neighborhood_parameter_name
@@ -43,7 +42,6 @@ class ConfigNeighborhoods(QWidget, Styles):
 		self.generate_main_layout()
 		self.load_previous_neighborhood_instructions()
 		center_window(self)
-		self.setAttribute(Qt.WA_DeleteOnClose)
 
 	def generate_main_layout(self):
 
@@ -140,7 +138,7 @@ class ConfigNeighborhoods(QWidget, Styles):
 
 		layout.addLayout(list_header_layout)
 
-		self.measurements_list = ListWidget(DistanceChoice, initial_features=["60"], dtype=int)
+		self.measurements_list = ListWidget(DistanceChoice, initial_features=[], dtype=int)
 		self.measurements_list.setToolTip('Neighborhoods to compute.')
 		layout.addWidget(self.measurements_list)
 
@@ -211,7 +209,7 @@ class ConfigNeighborhoods(QWidget, Styles):
 		population_layout = QHBoxLayout()
 		population_layout.addWidget(QLabel('population: '),30)
 		self.reference_population_cb = QComboBox()
-		self.reference_population_cb.addItems(['targets','effectors'])
+		self.reference_population_cb.addItems(self.parent_window.parent_window.populations)
 		self.reference_population_cb.setToolTip('Select a reference population.')
 		population_layout.addWidget(self.reference_population_cb,70)
 		layout.addLayout(population_layout)
@@ -271,7 +269,7 @@ class ConfigNeighborhoods(QWidget, Styles):
 		population_layout = QHBoxLayout()
 		population_layout.addWidget(QLabel('population: '),30)
 		self.neighbor_population_cb = QComboBox()
-		self.neighbor_population_cb.addItems(['targets','effectors'])
+		self.neighbor_population_cb.addItems(self.parent_window.parent_window.populations)
 		self.neighbor_population_cb.setToolTip('Select a neighbor population.')
 		population_layout.addWidget(self.neighbor_population_cb,70)
 		layout.addLayout(population_layout)
@@ -315,15 +313,14 @@ class ConfigNeighborhoods(QWidget, Styles):
 		population = self.neighbor_population_cb.currentText()
 		class_cols, status_cols, group_cols, time_cols = self.locate_population_specific_columns(population)
 		self.neighbor_population_status_cb.clear()
-		self.neighbor_population_status_cb.addItems(['--','class', 'status']+class_cols+status_cols+group_cols)
+		self.neighbor_population_status_cb.addItems(list(np.unique(['--','class', 'status']+class_cols+status_cols+group_cols)))
 
 	def fill_cbs_of_reference_population(self):
 
 		population = self.reference_population_cb.currentText()
 		class_cols, status_cols, group_cols, time_cols = self.locate_population_specific_columns(population)
-		self.reference_population_status_cb.clear()
-		self.reference_population_status_cb.addItems(['--','class', 'status']+class_cols+status_cols+group_cols)
-		self.event_time_cb.addItems(['--', 't0']+time_cols)
+		self.event_time_cb.clear()
+		self.event_time_cb.addItems(list(np.unique(['--', 't0']+time_cols)))
 
 	def switch_not_reference(self):
 		

@@ -1,8 +1,8 @@
-from PyQt5.QtWidgets import QWidget, QGridLayout, QComboBox, QVBoxLayout, QLabel, QLineEdit, QHBoxLayout, QRadioButton, QFileDialog, QPushButton, QMessageBox
+from PyQt5.QtWidgets import QGridLayout, QComboBox, QVBoxLayout, QLabel, QLineEdit, QHBoxLayout, QRadioButton, QFileDialog, QPushButton, QMessageBox
 from PyQt5.QtCore import Qt, QSize
-from celldetective.gui.gui_utils import center_window
+from celldetective.gui.gui_utils import center_window, generic_message
 from celldetective.gui.layouts import ChannelNormGenerator
-from celldetective.gui import ThresholdConfigWizard
+from celldetective.gui import ThresholdConfigWizard, CelldetectiveWidget
 from PyQt5.QtGui import QDoubleValidator
 from superqt.fonticon import icon
 from fonticon_mdi6 import MDI6
@@ -16,7 +16,7 @@ import gc
 from cellpose.models import CellposeModel
 
 
-class SegmentationModelLoader(QWidget, Styles):
+class SegmentationModelLoader(CelldetectiveWidget):
 	
 	"""
 	Upload a segmentation model or define a Threshold pipeline.
@@ -27,15 +27,10 @@ class SegmentationModelLoader(QWidget, Styles):
 		super().__init__()
 		self.parent_window = parent_window
 		self.mode = self.parent_window.mode
-		if self.mode=="targets":
-			self.target_folder = "segmentation_targets"
-		elif self.mode=="effectors":
-			self.target_folder = "segmentation_effectors"
+		self.target_folder = f"segmentation_{self.mode}"
 		self.setWindowTitle('Upload model')
 		self.generate_content()
-		self.setWindowIcon(self.celldetective_icon)
 		center_window(self)
-		self.setAttribute(Qt.WA_DeleteOnClose)
 
 	def generate_content(self):
 
@@ -230,14 +225,9 @@ class SegmentationModelLoader(QWidget, Styles):
 						self.destination = os.path.split(os.path.dirname(os.path.realpath(__file__)))[0]+f"/models/{self.target_folder}/"+self.modelname
 						self.folder_dest = self.destination
 					else:
-						msgBox = QMessageBox()
-						msgBox.setIcon(QMessageBox.Warning)
-						msgBox.setText("StarDist model not recognized... Please ensure that it contains a thresholds.json file or that it is a valid StarDist model...")
-						msgBox.setWindowTitle("Warning")
-						msgBox.setStandardButtons(QMessageBox.Ok)
-						returnValue = msgBox.exec()
-						if returnValue == QMessageBox.Ok:
-							return None					
+						generic_message(
+							"StarDist model not recognized... Please ensure that it contains a thresholds.json file or that it is a valid StarDist model...")
+						return None
 				
 				if self.seg_mode=="cellpose":
 					self.file_label.setText(self.filename.split("/")[-1])
@@ -264,15 +254,8 @@ class SegmentationModelLoader(QWidget, Styles):
 					self.merge_lbl.hide()
 					self.file_label.setText(self.filename[0].split("/")[-1])
 				else:
-					msgBox = QMessageBox()
-					msgBox.setIcon(QMessageBox.Warning)
-					msgBox.setText("You selected more than one pipeline. Please set a merging procedure for the resulting masks...")
-					msgBox.setWindowTitle("Warning")
-					msgBox.setStandardButtons(QMessageBox.Ok)
-					returnValue = msgBox.exec()
-					if returnValue == QMessageBox.Ok:
-						pass
-
+					generic_message(
+						"You selected more than one pipeline. Please set a merging procedure for the resulting masks...")
 					self.merge_cb.show()
 					self.merge_lbl.show()
 					self.file_label.setText(f"{n_files} configs loaded...")
@@ -327,14 +310,8 @@ class SegmentationModelLoader(QWidget, Styles):
 			channels.append(self.channel_layout.channel_cbs[i].currentText())
 
 		if self.file_label.text()=='No file chosen':
-			msgBox = QMessageBox()
-			msgBox.setIcon(QMessageBox.Warning)
-			msgBox.setText("Please select a model first.")
-			msgBox.setWindowTitle("Warning")
-			msgBox.setStandardButtons(QMessageBox.Ok)
-			returnValue = msgBox.exec()
-			if returnValue == QMessageBox.Ok:
-				return None
+			generic_message('Please select a model first...')
+			return None
 
 		if not self.threshold_button.isChecked():
 			
@@ -343,14 +320,8 @@ class SegmentationModelLoader(QWidget, Styles):
 				try:
 					shutil.copytree(self.filename, self.destination)
 				except FileExistsError:
-					msgBox = QMessageBox()
-					msgBox.setIcon(QMessageBox.Warning)
-					msgBox.setText("A model with the same name already exists in the models folder. Please rename it.")
-					msgBox.setWindowTitle("Warning")
-					msgBox.setStandardButtons(QMessageBox.Ok)
-					returnValue = msgBox.exec()
-					if returnValue == QMessageBox.Ok:
-						return None
+					generic_message("A model with the same name already exists in the models folder. Please rename it.")
+					return None
 
 			elif self.cellpose_button.isChecked():
 
@@ -359,15 +330,8 @@ class SegmentationModelLoader(QWidget, Styles):
 						os.mkdir(self.folder_dest)
 					shutil.copy(self.filename, self.destination)
 				except FileExistsError:
-					msgBox = QMessageBox()
-					msgBox.setIcon(QMessageBox.Warning)
-					msgBox.setText("A model with the same name already exists in the models folder. Please rename it.")
-					msgBox.setWindowTitle("Warning")
-					msgBox.setStandardButtons(QMessageBox.Ok)
-					returnValue = msgBox.exec()
-					if returnValue == QMessageBox.Ok:
-						return None
-				
+					generic_message("A model with the same name already exists in the models folder. Please rename it.")
+					return None
 				try:
 					model = CellposeModel(pretrained_model=self.destination, model_type=None, nchan=len(channels))
 					self.scale_model = model.diam_mean
@@ -392,16 +356,11 @@ class SegmentationModelLoader(QWidget, Styles):
 			if not isinstance(self.filename, list):
 				if not self.filename is None:
 					self.filename = [self.filename]
-			if self.mode=="targets":
-				self.parent_window.threshold_config_targets = self.filename
-				self.parent_window.seg_model_list.setCurrentText('Threshold')
-				print('Path to the traditional segmentation pipeline successfully set in celldetective...')
-				self.close()
-			elif self.mode=="effectors":
-				self.parent_window.threshold_config_effectors = self.filename
-				self.parent_window.seg_model_list.setCurrentText('Threshold')
-				print('Path to the traditional segmentation pipeline successfully set in celldetective...')
-				self.close()
+
+			idx = self.parent_window.parent_window.populations.index(self.mode)
+			self.parent_window.threshold_configs[idx] = self.filename
+			self.parent_window.seg_model_list.setCurrentText('Threshold')
+			self.close()
 
 	def generate_input_config(self):
 

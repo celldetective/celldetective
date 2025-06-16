@@ -245,6 +245,138 @@ def fraction_of_area_dark_intensity(regionmask, intensity_image, target_channel=
 	return float(np.sum(subregion)) / float(np.sum(regionmask))
 
 
+def area_dark_intensity_nintyfive(regionmask, intensity_image, target_channel='adhesion_channel', fill_holes=True): #, target_channel='adhesion_channel'
+	
+	subregion = (intensity_image < 0.95)*regionmask # under one, under 0.8, under 0.6, whatever value!
+	if fill_holes:
+		subregion = skm.label(subregion, connectivity=2, background=0)
+		subregion = fill_label_holes(subregion)
+		subregion[subregion>0] = 1
+	
+	return float(np.sum(subregion))
+
+def area_dark_intensity_ninty(regionmask, intensity_image, target_channel='adhesion_channel', fill_holes=True): #, target_channel='adhesion_channel'
+	
+	subregion = (intensity_image < 0.90)*regionmask # under one, under 0.8, under 0.6, whatever value!
+	if fill_holes:
+		subregion = skm.label(subregion, connectivity=2, background=0)
+		subregion = fill_label_holes(subregion)
+		subregion[subregion>0] = 1
+	
+	return float(np.sum(subregion))
+
+def mean_dark_intensity_nintyfive(regionmask, intensity_image, target_channel='adhesion_channel', fill_holes=True):
+    """
+    Calculate the mean intensity in a dark subregion below 95, handling NaN values.
+    
+    """
+    subregion = (intensity_image < 0.95) * regionmask
+    
+    if fill_holes:
+        subregion = skm.label(subregion, connectivity=2, background=0)
+        subregion = fill_label_holes(subregion)
+        subregion[subregion > 0] = 1
+    
+    
+    masked_intensity = intensity_image[subregion == 1]
+    
+    return float(np.nanmean(masked_intensity))
+
+
+def mean_dark_intensity_nintyfive_fillhole_false(regionmask, intensity_image, target_channel='adhesion_channel'):
+    """
+    Calculate the mean intensity in a dark subregion below 95, handling NaN values.
+    """
+    subregion = (intensity_image < 0.95) * regionmask  # Select dark regions within the mask
+
+    masked_intensity = intensity_image[subregion == 1]  # Extract pixel values from the selected region
+
+    return float(np.nanmean(masked_intensity))  # Compute mean, ignoring NaNs
+
+def mean_dark_intensity_ninty_fillhole_false(regionmask, intensity_image, target_channel='adhesion_channel'):
+    """
+    Calculate the mean intensity in a dark subregion, handling NaN values.
+    """
+    subregion = (intensity_image < 0.90) * regionmask  # Select dark regions within the mask
+
+    masked_intensity = intensity_image[subregion == 1]  # Extract pixel values from the selected region
+
+    return float(np.nanmean(masked_intensity))  # Compute mean, ignoring NaNs
+
+
+def mean_dark_intensity_ninty(regionmask, intensity_image, target_channel='adhesion_channel', fill_holes=True):
+    """
+    Calculate the mean intensity in a dark subregion below 90, handling NaN values.
+    
+    """
+    subregion = (intensity_image < 0.90) * regionmask
+    
+    if fill_holes:
+        subregion = skm.label(subregion, connectivity=2, background=0)
+        subregion = fill_label_holes(subregion)
+        subregion[subregion > 0] = 1
+    
+    
+    masked_intensity = intensity_image[subregion == 1]
+    
+    return float(np.nanmean(masked_intensity))
+
+def mean_dark_intensity_eight_five(regionmask, intensity_image, target_channel='adhesion_channel', fill_holes=True):
+    """
+    Calculate the mean intensity in a dark subregion below 85, handling NaN values.
+    
+    """
+    subregion = (intensity_image < 0.85) * regionmask
+    
+    if fill_holes:
+        subregion = skm.label(subregion, connectivity=2, background=0)
+        subregion = fill_label_holes(subregion)
+        subregion[subregion > 0] = 1
+    
+    
+    masked_intensity = intensity_image[subregion == 1]
+    
+    return float(np.nanmean(masked_intensity))
+
+
+def mean_dark_intensity_eight_five_fillhole_false(regionmask, intensity_image, target_channel='adhesion_channel'):
+
+    subregion = (intensity_image < 0.85) * regionmask  # Select dark regions within the mask
+
+    masked_intensity = intensity_image[subregion == 1]  # Extract pixel values from the selected region
+
+    return float(np.nanmean(masked_intensity))  # Compute mean, ignoring NaNs
+
+def percentile_zero_one_dark_intensity_ninty(regionmask, intensity_image, target_channel='adhesion_channel'):
+
+    subregion = (intensity_image < 0.95) * regionmask
+    return float(np.nanpercentile(intensity_image[subregion],0.1))
+
+
+def percentile_one_dark_intensity_ninty(regionmask, intensity_image, target_channel='adhesion_channel'):
+
+    subregion = (intensity_image < 0.95) * regionmask
+    return float(np.nanpercentile(intensity_image[subregion],1))
+
+
+def percentile_five_dark_intensity_ninty(regionmask, intensity_image, target_channel='adhesion_channel'):
+
+    subregion = (intensity_image < 0.95) * regionmask
+    return float(np.nanpercentile(intensity_image[subregion],5))
+
+
+def percentile_ten_dark_intensity_ninty(regionmask, intensity_image, target_channel='adhesion_channel'):
+
+    subregion = (intensity_image < 0.95) * regionmask
+    return float(np.nanpercentile(intensity_image[subregion],10))
+
+
+def percentile_ninty_five_dark_intensity_ninty(regionmask, intensity_image, target_channel='adhesion_channel'):
+
+    subregion = (intensity_image < 0.95) * regionmask
+    return float(np.nanpercentile(intensity_image[subregion],95))
+   
+
 def intensity_percentile_ninety_nine(regionmask, intensity_image):
 	return np.nanpercentile(intensity_image[regionmask],99)
 

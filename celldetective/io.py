@@ -29,7 +29,7 @@ from celldetective.utils import interpolate_nan_multichannel, _estimate_scale_fa
 
 from stardist import fill_label_holes
 from skimage.transform import resize
-
+import re
 
 def extract_experiment_from_well(well_path):
 
@@ -594,6 +594,17 @@ def get_experiment_pharmaceutical_agents(experiment, dtype=str):
 		pharmaceutical_agents = [str(s) for s in np.linspace(0, nbr_of_wells - 1, nbr_of_wells)]
 
 	return np.array([dtype(c) for c in pharmaceutical_agents])
+
+
+def get_experiment_populations(experiment, dtype=str):
+
+	config = get_config(experiment)
+	populations_str = ConfigSectionMap(config, "Populations")
+	if populations_str is not None:
+		populations = populations_str['populations'].split(',')
+	else:
+		populations = ['effectors','targets']
+	return list([dtype(c) for c in populations])
 
 
 def interpret_wells_and_positions(experiment, well_option, position_option):
@@ -1165,6 +1176,9 @@ def locate_labels(position, population='target', frames=None):
 		label_path = natsorted(glob(position + os.sep.join(["labels_targets", "*.tif"])))
 	elif population.lower() == "effector" or population.lower() == "effectors":
 		label_path = natsorted(glob(position + os.sep.join(["labels_effectors", "*.tif"])))
+	else:
+		label_path = natsorted(glob(position + os.sep.join([f"labels_{population}", "*.tif"])))
+
 
 	label_names = [os.path.split(lbl)[-1] for lbl in label_path]
 
@@ -1242,6 +1256,9 @@ def fix_missing_labels(position, population='target', prefix='Aligned'):
 	elif population.lower() == "effector" or population.lower() == "effectors":
 		label_path = natsorted(glob(position + os.sep.join(["labels_effectors", "*.tif"])))
 		path = position + os.sep + "labels_effectors"
+	else:
+		label_path = natsorted(glob(position + os.sep.join([f"labels_{population}", "*.tif"])))
+		path = position + os.sep + f"labels_{population}"		
 
 	if label_path!=[]:
 		#path = os.path.split(label_path[0])[0]
@@ -1348,6 +1365,9 @@ def load_tracking_data(position, prefix="Aligned", population="target"):
 		trajectories = pd.read_csv(position + os.sep.join(['output', 'tables', 'trajectories_targets.csv']))
 	elif population.lower() == "effector" or population.lower() == "effectors":
 		trajectories = pd.read_csv(position + os.sep.join(['output', 'tables', 'trajectories_effectors.csv']))
+	else:
+		trajectories = pd.read_csv(position + os.sep.join(['output', 'tables', f'trajectories_{population}.csv']))
+
 
 	stack, labels = locate_stack_and_labels(position, prefix=prefix, population=population)
 
@@ -2354,6 +2374,11 @@ def load_napari_data(position, prefix="Aligned", population="target", return_sta
 			napari_data = np.load(position+os.sep.join(['output', 'tables', 'napari_effector_trajectories.npy']), allow_pickle=True)
 		else:
 			napari_data = None
+	else:
+		if os.path.exists(position+os.sep.join(['output', 'tables', f'napari_{population}_trajectories.npy'])):
+			napari_data = np.load(position+os.sep.join(['output', 'tables', f'napari_{population}_trajectories.npy']), allow_pickle=True)
+		else:
+			napari_data = None	
 
 	if napari_data is not None:
 		data = napari_data.item()['data']
@@ -2493,6 +2518,9 @@ def control_segmentation_napari(position, prefix='Aligned', population="target",
 
 	def export_labels():
 		labels_layer = viewer.layers['segmentation'].data
+		if not os.path.exists(output_folder):
+			os.mkdir(output_folder)
+
 		for t, im in enumerate(tqdm(labels_layer)):
 
 			try:
@@ -2639,12 +2667,9 @@ def control_segmentation_napari(position, prefix='Aligned', population="target",
 		return export_annotation()
 
 	stack, labels = locate_stack_and_labels(position, prefix=prefix, population=population)
-
-	if not population.endswith('s'):
-		population += 's'
 	output_folder = position + f'labels_{population}{os.sep}'
+	print(f"Shape of the loaded image stack: {stack.shape}...")
 
-	print(f"{stack.shape}")
 	viewer = napari.Viewer()
 	viewer.add_image(stack, channel_axis=-1, colormap=["gray"] * stack.shape[-1])
 	viewer.add_labels(labels.astype(int), name='segmentation', opacity=0.4)
@@ -2677,6 +2702,8 @@ def control_segmentation_napari(position, prefix='Aligned', population="target",
 		del stack
 		del labels
 		gc.collect()
+
+	print("napari viewer was successfully closed...")
 
 def correct_annotation(filename):
 
@@ -2827,21 +2854,31 @@ def control_tracking_table(position, calibration=1, prefix="Aligned", population
 
 
 def get_segmentation_models_list(mode='targets', return_path=False):
-	if mode == 'targets':
-		modelpath = os.sep.join(
+
+	modelpath = os.sep.join(
 			[os.path.split(os.path.dirname(os.path.realpath(__file__)))[0], "celldetective", "models",
-			 "segmentation_targets", os.sep])
-		repository_models = get_zenodo_files(cat=os.sep.join(["models", "segmentation_targets"]))
-	elif mode == 'effectors':
-		modelpath = os.sep.join(
-			[os.path.split(os.path.dirname(os.path.realpath(__file__)))[0], "celldetective", "models",
-			 "segmentation_effectors", os.sep])
-		repository_models = get_zenodo_files(cat=os.sep.join(["models", "segmentation_effectors"]))
-	elif mode == 'generic':
-		modelpath = os.sep.join(
-			[os.path.split(os.path.dirname(os.path.realpath(__file__)))[0], "celldetective", "models",
-			 "segmentation_generic", os.sep])
-		repository_models = get_zenodo_files(cat=os.sep.join(["models", "segmentation_generic"]))
+			 f"segmentation_{mode}", os.sep])
+	if not os.path.exists(modelpath):
+		os.mkdir(modelpath)
+		repository_models = []
+	else:
+		repository_models = get_zenodo_files(cat=os.sep.join(["models", f"segmentation_{mode}"]))
+
+	# if mode == 'targets':
+	# 	modelpath = os.sep.join(
+	# 		[os.path.split(os.path.dirname(os.path.realpath(__file__)))[0], "celldetective", "models",
+	# 		 "segmentation_targets", os.sep])
+	# 	repository_models = get_zenodo_files(cat=os.sep.join(["models", "segmentation_targets"]))
+	# elif mode == 'effectors':
+	# 	modelpath = os.sep.join(
+	# 		[os.path.split(os.path.dirname(os.path.realpath(__file__)))[0], "celldetective", "models",
+	# 		 "segmentation_effectors", os.sep])
+	# 	repository_models = get_zenodo_files(cat=os.sep.join(["models", "segmentation_effectors"]))
+	# elif mode == 'generic':
+	# 	modelpath = os.sep.join(
+	# 		[os.path.split(os.path.dirname(os.path.realpath(__file__)))[0], "celldetective", "models",
+	# 		 "segmentation_generic", os.sep])
+	# 	repository_models = get_zenodo_files(cat=os.sep.join(["models", "segmentation_generic"]))
 
 	available_models = natsorted(glob(modelpath + '*/'))
 	available_models = [m.replace('\\', '/').split('/')[-2] for m in available_models]
@@ -3275,7 +3312,7 @@ def normalize_multichannel(multichannel_frame, percentiles=None,
 
 	return np.moveaxis(mf_new,0,-1)
 
-def load_frames(img_nums, stack_path, scale=None, normalize_input=True, dtype=float, normalize_kwargs={"percentiles": (0.,99.99)}):
+def load_frames(img_nums, stack_path, scale=None, normalize_input=True, dtype=np.float64, normalize_kwargs={"percentiles": (0.,99.99)}):
 
 	"""
 	Loads and optionally normalizes and rescales specified frames from a stack located at a given path.

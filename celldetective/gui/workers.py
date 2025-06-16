@@ -1,18 +1,24 @@
 from multiprocessing import Queue
-from PyQt5.QtWidgets import QDialog, QPushButton, QVBoxLayout, QHBoxLayout, QWidget, QLabel, QProgressBar
+from PyQt5.QtWidgets import QPushButton, QVBoxLayout, QHBoxLayout, QLabel, QProgressBar
 from PyQt5.QtCore import QRunnable, QObject, pyqtSignal, QThreadPool, QSize, Qt
+
+from celldetective.gui.base_components import CelldetectiveDialog
 from celldetective.gui.gui_utils import center_window
+from celldetective.gui import Styles
 import time
 import math
 
-class ProgressWindow(QDialog):
+class ProgressWindow(CelldetectiveDialog):
 
 	def __init__(self, process=None, parent_window=None, title="", position_info=True, process_args=None):
-		QDialog.__init__(self)
+
+		super().__init__()
+		#QDialog.__init__(self)
 
 		self.setWindowTitle(f'{title} Progress')
 		self.__process = process
 		self.parent_window = parent_window
+
 		self.position_info = position_info
 		if self.position_info:
 			self.pos_name = self.parent_window.pos_name

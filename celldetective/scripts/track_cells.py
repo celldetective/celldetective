@@ -6,7 +6,9 @@ import argparse
 import datetime
 import os
 import json
-from celldetective.io import auto_load_number_of_frames, interpret_tracking_configuration, extract_position_name
+from celldetective.io import _load_frames_to_measure, auto_load_number_of_frames, interpret_tracking_configuration, \
+	extract_position_name, \
+	locate_labels
 from celldetective.utils import _mask_intensity_measurements, extract_experiment_channels, ConfigSectionMap, _get_img_num_per_channel, extract_experiment_channels
 from celldetective.measure import drop_tonal_features, measure_features
 from celldetective.tracking import track

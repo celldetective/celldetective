@@ -1,7 +1,6 @@
-from PyQt5.QtWidgets import QMainWindow, QApplication, QMessageBox, QHBoxLayout, QFileDialog, QVBoxLayout, QScrollArea, QCheckBox, QGridLayout, QLabel, QLineEdit, QPushButton, QWidget
+from PyQt5.QtWidgets import QApplication, QMessageBox, QHBoxLayout, QFileDialog, QVBoxLayout, QScrollArea, QCheckBox, QGridLayout, QLabel, QLineEdit, QPushButton
 from PyQt5.QtGui import QIntValidator, QDoubleValidator
 from celldetective.gui.gui_utils import center_window, help_generic
-from celldetective.gui.styles import Styles
 from celldetective.utils import get_software_location
 import json
 
@@ -13,9 +12,10 @@ from configparser import ConfigParser
 import os
 from functools import partial
 import numpy as np
-from celldetective.gui import Styles
+from celldetective.gui import CelldetectiveMainWindow, CelldetectiveWidget
 
-class ConfigNewExperiment(QMainWindow, Styles):
+
+class ConfigNewExperiment(CelldetectiveMainWindow):
 
 	def __init__(self, parent_window=None):
 		
@@ -34,11 +34,11 @@ class ConfigNewExperiment(QMainWindow, Styles):
 		
 		# Create button widget and layout
 		self.scroll_area = QScrollArea(self)
-		button_widget = QWidget()
+		button_widget = CelldetectiveWidget()
 		self.grid = QGridLayout()
 		button_widget.setLayout(self.grid)
 
-		self.grid.setContentsMargins(30,30,30,30)
+		self.grid.setContentsMargins(30, 30, 30, 30)
 		self.grid.addWidget(QLabel("Folder:"), 0, 0, 1, 3)
 		self.supFolder = QLineEdit()
 		self.supFolder.setAlignment(Qt.AlignLeft)	
@@ -64,17 +64,20 @@ class ConfigNewExperiment(QMainWindow, Styles):
 		self.grid.addWidget(self.expName, 3, 0, 1, 3)
 
 		self.generate_movie_settings()
-		self.grid.addLayout(self.ms_grid,29,0,1,3)
+		self.grid.addLayout(self.ms_grid, 29, 0, 1, 3)
 
 		self.generate_channel_params_box()
-		self.grid.addLayout(self.channel_grid,30,0,1,3)
+		self.grid.addLayout(self.channel_grid, 30, 0, 1, 3)
+
+		self.generate_population_params_box()
+		self.grid.addLayout(self.population_grid, 31, 0, 1, 3)
 
 		self.validate_button = QPushButton("Submit")
 		self.validate_button.clicked.connect(self.create_config)
 		self.validate_button.setStyleSheet(self.button_style_sheet)
 		#self.validate_button.setIcon(QIcon_from_svg(abs_path+f"/icons/process.svg", color='white'))
 
-		self.grid.addWidget(self.validate_button, 31, 0, 1, 3, alignment = Qt.AlignBottom)		
+		self.grid.addWidget(self.validate_button, 32, 0, 1, 3, alignment = Qt.AlignBottom)		
 		button_widget.adjustSize()
 
 		self.scroll_area.setAlignment(Qt.AlignCenter)
@@ -128,10 +131,9 @@ class ConfigNewExperiment(QMainWindow, Styles):
 		self.help_btn.setToolTip("Help.")
 		self.ms_grid.addWidget(self.help_btn, 1, 0, 1, 3, alignment=Qt.AlignRight)
 
-
 		self.SliderWells = QLabeledSlider(Qt.Horizontal, self)
 		self.SliderWells.setMinimum(1)
-		self.SliderWells.setMaximum(32)
+		self.SliderWells.setMaximum(512)
 		self.ms_grid.addWidget(self.SliderWells, 2, 0, 1, 3, alignment=Qt.AlignTop)
 
 		self.number_of_positions = QLabel("Number of positions per well:")
@@ -139,7 +141,7 @@ class ConfigNewExperiment(QMainWindow, Styles):
 
 		self.SliderPos = QLabeledSlider(Qt.Horizontal, self)
 		self.SliderPos.setMinimum(1)
-		self.SliderPos.setMaximum(50)
+		self.SliderPos.setMaximum(512)
 
 		self.ms_grid.addWidget(self.SliderPos, 4, 0, 1, 3)
 
@@ -168,7 +170,7 @@ class ConfigNewExperiment(QMainWindow, Styles):
 		self.ms_grid.addWidget(self.movie_length,9, 0, 1, 3)
 		self.MovieLengthSlider = QLabeledSlider(Qt.Horizontal, self)
 		self.MovieLengthSlider.setMinimum(2)
-		self.MovieLengthSlider.setMaximum(128)
+		#self.MovieLengthSlider.setMaximum(128)
 		self.ms_grid.addWidget(self.MovieLengthSlider, 10, 0, 1, 3)
 
 		self.prefix_lbl = QLabel("Prefix for the movies:")
@@ -181,7 +183,7 @@ class ConfigNewExperiment(QMainWindow, Styles):
 		self.movie_prefix_field.setText("")
 		self.ms_grid.addWidget(self.movie_prefix_field, 12, 0, 1, 3)
 
-		self.ms_grid.addWidget(QLabel("X shape in pixels:"), 13, 0, 1, 3)
+		self.ms_grid.addWidget(QLabel("Image width:"), 13, 0, 1, 3)
 		self.shape_x_field = QLineEdit()
 		self.shape_x_field.setValidator(onlyInt)
 		self.shape_x_field.setAlignment(Qt.AlignLeft)	
@@ -190,7 +192,7 @@ class ConfigNewExperiment(QMainWindow, Styles):
 		self.shape_x_field.setText("2048")
 		self.ms_grid.addWidget(self.shape_x_field, 14, 0, 1, 3)
 
-		self.ms_grid.addWidget(QLabel("Y shape in pixels:"), 15, 0, 1, 3)
+		self.ms_grid.addWidget(QLabel("Image height:"), 15, 0, 1, 3)
 		self.shape_y_field = QLineEdit()
 		self.shape_y_field.setValidator(onlyInt)
 		self.shape_y_field.setAlignment(Qt.AlignLeft)	
@@ -271,7 +273,7 @@ class ConfigNewExperiment(QMainWindow, Styles):
 
 	def add_custom_channel(self):
 
-		self.CustomChannelWidget = QWidget()
+		self.CustomChannelWidget = CelldetectiveWidget()
 		self.CustomChannelWidget.setWindowTitle("Custom channel")
 		layout = QVBoxLayout()
 		self.CustomChannelWidget.setLayout(layout)
@@ -323,6 +325,83 @@ class ConfigNewExperiment(QMainWindow, Styles):
 		else:
 			self.sliders[index].setEnabled(False)
 
+	def generate_population_params_box(self):
+
+		"""
+		Parameters related to the movie channels
+		Rewrite all of it
+
+		"""
+
+		self.population_grid = QGridLayout()
+		self.population_grid.setContentsMargins(21,30,20,30)
+
+		pop_lbl = QLabel("CELL POPULATIONS")
+		pop_lbl.setStyleSheet("""
+			font-weight: bold;
+			""")
+		self.population_grid.addWidget(pop_lbl, 0,0,1,3, alignment=Qt.AlignCenter)
+
+
+		self.populations = ['effectors','targets']
+		self.population_checkboxes = [QCheckBox() for i in range(len(self.populations))]
+
+		for i in range(len(self.populations)):
+
+			self.population_checkboxes[i].setText(self.populations[i])
+			self.population_checkboxes[i].setChecked(True)
+			self.population_grid.addWidget(self.population_checkboxes[i], i+1, 0, 1, 1)
+
+		# Add channel button
+		self.addPopBtn = QPushButton('Add a cell population')
+		self.addPopBtn.setIcon(icon(MDI6.plus,color="white"))
+		self.addPopBtn.setIconSize(QSize(25, 25))
+		self.addPopBtn.setStyleSheet(self.button_style_sheet)
+		self.addPopBtn.clicked.connect(self.add_custom_population)
+		self.population_grid.addWidget(self.addPopBtn, 1000, 0, 1, 1)
+
+
+	def add_custom_population(self):
+		self.CustomPopWidget = CelldetectiveWidget()
+		self.CustomPopWidget.setWindowTitle("Define custom population")
+		layout = QVBoxLayout()
+		self.CustomPopWidget.setLayout(layout)
+
+		self.name_le = QLineEdit()
+		self.name_le.setPlaceholderText('name')
+		self.name_le.textChanged.connect(self.check_population_name)
+		hbox = QHBoxLayout()
+		hbox.addWidget(QLabel('population name: '), 33)
+		hbox.addWidget(self.name_le, 66)
+		layout.addLayout(hbox)
+
+		self.addPopBtn = QPushButton('add')
+		self.addPopBtn.setStyleSheet(self.button_style_sheet)
+		self.addPopBtn.setEnabled(False)
+		self.addPopBtn.clicked.connect(self.write_custom_population)
+		layout.addWidget(self.addPopBtn)
+		center_window(self.CustomPopWidget)
+		self.CustomPopWidget.show()
+
+	def check_population_name(self, text):
+		# define all conditions for valid population name (like no space)
+		if len(text)>0 and ' ' not in text:
+			self.addPopBtn.setEnabled(True)
+		else:
+			self.addPopBtn.setEnabled(False)
+
+	def write_custom_population(self):
+
+		self.new_population_name = self.name_le.text()
+		name_map = self.new_population_name
+
+		self.populations.append(self.new_population_name)
+		self.population_checkboxes.append(QCheckBox())
+		self.CustomPopWidget.close()
+
+		self.population_checkboxes[-1].setText(self.populations[-1])
+		self.population_grid.addWidget(self.population_checkboxes[-1], len(self.populations)+1, 0, 1, 1)
+
 	def browse_experiment_folder(self):
 
 		"""
@@ -356,6 +435,17 @@ class ConfigNewExperiment(QMainWindow, Styles):
 			msgBox = QMessageBox()
 			msgBox.setIcon(QMessageBox.Warning)
 			msgBox.setText("Some channel indices are repeated. Please check your configuration.")
+			msgBox.setWindowTitle("Warning")
+			msgBox.setStandardButtons(QMessageBox.Ok)
+			returnValue = msgBox.exec()
+			if returnValue == QMessageBox.Ok:
+				return None
+
+		populations_checked = [self.population_checkboxes[i].isChecked() for i in range(len(self.population_checkboxes))]
+		if not np.any(populations_checked):
+			msgBox = QMessageBox()
+			msgBox.setIcon(QMessageBox.Warning)
+			msgBox.setText("Please set at least one cell population before proceeding...")
 			msgBox.setWindowTitle("Warning")
 			msgBox.setStandardButtons(QMessageBox.Ok)
 			returnValue = msgBox.exec()
@@ -429,7 +519,12 @@ class ConfigNewExperiment(QMainWindow, Styles):
 		Write all user input parameters to a configuration file associated to an experiment.
 		"""
 
+
 		config = ConfigParser(interpolation=None)
+
+		config.add_section('Populations')
+		pops = ','.join([self.populations[i].lower() for i in range(len(self.population_checkboxes)) if self.population_checkboxes[i].isChecked()])
+		config.set('Populations','populations', pops)
 
 		# add a new section and some values
 		config.add_section('MovieSettings')
@@ -456,6 +551,7 @@ class ConfigNewExperiment(QMainWindow, Styles):
 		config.add_section('Metadata')
 		config.set('Metadata', 'concentration_units', self.concentration_units)
 
+
 		# save to a file
 		with open('config.ini', 'w') as configfile:
 			config.write(configfile)
@@ -464,7 +560,7 @@ class ConfigNewExperiment(QMainWindow, Styles):
 		print(f'New experiment successfully configured in folder {self.directory}...')
 		self.close()
 
-class SetupConditionLabels(QWidget, Styles):
+class SetupConditionLabels(CelldetectiveWidget):
 	def __init__(self, parent_window, n_wells):
 		super().__init__()
 		self.parent_window = parent_window

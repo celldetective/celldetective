@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import QMainWindow, QApplication, QDialog, QMessageBox, QScrollArea, QComboBox, QFrame, QCheckBox, QFileDialog, QGridLayout, QLineEdit, QVBoxLayout, QWidget, QLabel, QHBoxLayout, QPushButton
+from PyQt5.QtWidgets import QApplication, QDialog, QMessageBox, QScrollArea, QComboBox, QFrame, QCheckBox, QFileDialog, QGridLayout, QLineEdit, QVBoxLayout, QLabel, QHBoxLayout, QPushButton
 from PyQt5.QtCore import Qt, QSize
 from PyQt5.QtGui import QDoubleValidator, QIntValidator, QIcon
 from celldetective.gui.gui_utils import center_window
@@ -14,12 +14,12 @@ import json
 import os
 from glob import glob
 from datetime import datetime
-from celldetective.gui import Styles
+from celldetective.gui import CelldetectiveMainWindow, CelldetectiveWidget
 from pandas.api.types import is_numeric_dtype
 from celldetective.gui.processes.train_signal_model import TrainSignalModelProcess
 from celldetective.gui.workers import ProgressWindow
 
-class ConfigSignalModelTraining(QMainWindow, Styles):
+class ConfigSignalModelTraining(CelldetectiveMainWindow):
 	
 	"""
 	UI to set measurement instructions.
@@ -31,7 +31,6 @@ class ConfigSignalModelTraining(QMainWindow, Styles):
 		super().__init__()
 		self.parent_window = parent_window
 		self.setWindowTitle("Train signal model")
-		self.setWindowIcon(QIcon(os.sep.join(['celldetective','icons','mexican-hat.png'])))
 		self.mode = self.parent_window.mode
 		self.exp_dir = self.parent_window.exp_dir
 		self.soft_path = get_software_location()
@@ -69,7 +68,7 @@ class ConfigSignalModelTraining(QMainWindow, Styles):
 		
 		# Create button widget and layout
 		self.scroll_area = QScrollArea(self)
-		self.button_widget = QWidget()
+		self.button_widget = CelldetectiveWidget()
 		self.main_layout = QVBoxLayout()
 		self.button_widget.setLayout(self.main_layout)
 		self.main_layout.setContentsMargins(30,30,30,30)
@@ -156,7 +155,7 @@ class ConfigSignalModelTraining(QMainWindow, Styles):
 		self.epochs_slider.setRange(1,3000)
 		self.epochs_slider.setSingleStep(1)
 		self.epochs_slider.setTickInterval(1)		
-		self.epochs_slider.setOrientation(1)
+		self.epochs_slider.setOrientation(Qt.Horizontal)
 		self.epochs_slider.setValue(300)
 		epochs_layout.addWidget(self.epochs_slider, 70)
 		layout.addLayout(epochs_layout)
@@ -243,7 +242,7 @@ class ConfigSignalModelTraining(QMainWindow, Styles):
 		self.augmentation_slider = QLabeledDoubleSlider()
 		self.augmentation_slider.setSingleStep(0.01)
 		self.augmentation_slider.setTickInterval(0.01)		
-		self.augmentation_slider.setOrientation(1)
+		self.augmentation_slider.setOrientation(Qt.Horizontal)
 		self.augmentation_slider.setRange(1, 5)
 		self.augmentation_slider.setValue(2)
 
@@ -255,7 +254,7 @@ class ConfigSignalModelTraining(QMainWindow, Styles):
 		self.validation_slider = QLabeledDoubleSlider()
 		self.validation_slider.setSingleStep(0.01)
 		self.validation_slider.setTickInterval(0.01)		
-		self.validation_slider.setOrientation(1)
+		self.validation_slider.setOrientation(Qt.Horizontal)
 		self.validation_slider.setRange(0,0.9)
 		self.validation_slider.setValue(0.25)		
 		validation_split_layout.addWidget(self.validation_slider, 70)
@@ -332,7 +331,7 @@ class ConfigSignalModelTraining(QMainWindow, Styles):
 		self.model_length_slider.setSingleStep(1)
 		self.model_length_slider.setTickInterval(1)
 		self.model_length_slider.setSingleStep(1)
-		self.model_length_slider.setOrientation(1)
+		self.model_length_slider.setOrientation(Qt.Horizontal)
 		self.model_length_slider.setRange(0,1024)
 		self.model_length_slider.setValue(128)		
 		model_length_layout.addWidget(self.model_length_slider, 70)
@@ -341,25 +340,22 @@ class ConfigSignalModelTraining(QMainWindow, Styles):
 	def neighborhood_changed(self):
 
 		neigh = self.neighborhood_choice_cb.currentText()
-		self.current_neighborhood = neigh.replace('target_ref_','').replace('effector_ref_','')
-		self.reference_population = ['targets' if 'target' in neigh else 'effectors'][0]
-		if 'target' in neigh:
-			if 'self' in neigh:
-				self.neighbor_population = 'targets'
-			else:
-				self.neighbor_population = 'effectors'
+		self.current_neighborhood = neigh
+		for pop in self.dataframes.keys():
+			self.current_neighborhood = self.current_neighborhood.replace(f'{pop}_ref_', '')
+
+		self.reference_population = self.neighborhood_choice_cb.currentText().split('_')[0]
+		if '_(' in self.current_neighborhood and ')_' in self.current_neighborhood:
+			self.neighbor_population = self.current_neighborhood.split('_(')[-1].split(')_')[0].split('-')[-1]
+			self.reference_population = self.current_neighborhood.split('_(')[-1].split(')_')[0].split('-')[0]
 		else:
-			if 'self' in neigh:
-				self.neighbor_population = 'effectors'
-			else:
-				self.neighbor_population = 'targets'
-		
+			if 'self' in self.current_neighborhood:
+				self.neighbor_population = self.reference_population
+
 		print(f'Current neighborhood: {self.current_neighborhood}')
 		print(f'New reference population: {self.reference_population}')
 		print(f'New neighbor population: {self.neighbor_population}')
 
-		# reload reference signals / neighbor signals / pair signals
-		# fill the channel cbs
 		self.df_reference = self.dataframes[self.reference_population]
 		self.df_neighbor = self.dataframes[self.neighbor_population]
 		self.df_pairs = load_experiment_tables(self.parent_window.exp_dir, population='pairs', load_pickle=False)
@@ -374,45 +370,50 @@ class ConfigSignalModelTraining(QMainWindow, Styles):
 		self.signals = ['--'] + num_cols_pairs + num_cols_reference + num_cols_neighbor
 
 		for cb in self.ch_norm.channel_cbs:
-			# try:
-			# 	cb.disconnect()
-			# except:
-			# 	pass
 			cb.clear()
 			cb.addItems(self.signals)
 
 	def fill_available_neighborhoods(self):
-		
-		df_targets = load_experiment_tables(self.parent_window.exp_dir, population='targets', load_pickle=True)
-		df_effectors = load_experiment_tables(self.parent_window.exp_dir, population='effectors', load_pickle=True)
 
-		self.dataframes = {
-			'targets': df_targets,
-			'effectors': df_effectors,
-		}
-
+		self.dataframes = {}
 		self.neighborhood_cols = []
-		self.reference_populations = []
-		self.neighbor_populations = []
-		if df_targets is not None:
-			self.neighborhood_cols.extend(['target_ref_'+c for c in list(df_targets.columns) if c.startswith('neighborhood')])
-			self.reference_populations.extend(['targets' for c in list(df_targets.columns) if c.startswith('neighborhood')])
-			for c in list(df_targets.columns):
-				if c.startswith('neighborhood') and '_2_' in c:
-					self.neighbor_populations.append('effectors')
-				elif c.startswith('neighborhood') and 'self' in c:
-					self.neighbor_populations.append('targets')
-		
-		if df_effectors is not None:
-			self.neighborhood_cols.extend(['effector_ref_'+c for c in list(df_effectors.columns) if c.startswith('neighborhood')])
-			self.reference_populations.extend(['effectors' for c in list(df_effectors.columns) if c.startswith('neighborhood')])
-			for c in list(df_effectors.columns):
-				if c.startswith('neighborhood') and '_2_' in c:
-					self.neighbor_populations.append('targets')
-				elif c.startswith('neighborhood') and 'self' in c:
-					self.neighbor_populations.append('effectors')
+		for population in self.parent_window.parent_window.populations:
+			df_pop = load_experiment_tables(self.parent_window.exp_dir, population=pop, load_pickle=True)
+			self.dataframes.update({pop: df_pop})
+			if df_pop is not None:
+				self.neighborhood_cols.extend(
+					[f'{pop}_ref_' + c for c in list(df_pop.columns) if c.startswith('neighborhood')])
 
-		print(f"The following neighborhoods were detected: {self.neighborhood_cols=} {self.reference_populations=} {self.neighbor_populations=}")
+		# df_targets = load_experiment_tables(self.parent_window.exp_dir, population='targets', load_pickle=True)
+		# df_effectors = load_experiment_tables(self.parent_window.exp_dir, population='effectors', load_pickle=True)
+		#
+		# self.dataframes = {
+		# 	'targets': df_targets,
+		# 	'effectors': df_effectors,
+		# }
+		#
+		# self.neighborhood_cols = []
+		# self.reference_populations = []
+		# self.neighbor_populations = []
+		# if df_targets is not None:
+		# 	self.neighborhood_cols.extend(['target_ref_'+c for c in list(df_targets.columns) if c.startswith('neighborhood')])
+		# 	self.reference_populations.extend(['targets' for c in list(df_targets.columns) if c.startswith('neighborhood')])
+		# 	for c in list(df_targets.columns):
+		# 		if c.startswith('neighborhood') and '_2_' in c:
+		# 			self.neighbor_populations.append('effectors')
+		# 		elif c.startswith('neighborhood') and 'self' in c:
+		# 			self.neighbor_populations.append('targets')
+		#
+		# if df_effectors is not None:
+		# 	self.neighborhood_cols.extend(['effector_ref_'+c for c in list(df_effectors.columns) if c.startswith('neighborhood')])
+		# 	self.reference_populations.extend(['effectors' for c in list(df_effectors.columns) if c.startswith('neighborhood')])
+		# 	for c in list(df_effectors.columns):
+		# 		if c.startswith('neighborhood') and '_2_' in c:
+		# 			self.neighbor_populations.append('targets')
+		# 		elif c.startswith('neighborhood') and 'self' in c:
+		# 			self.neighbor_populations.append('effectors')
+		#
+		# print(f"The following neighborhoods were detected: {self.neighborhood_cols=} {self.reference_populations=} {self.neighbor_populations=}")
 
 		self.neighborhood_choice_cb.addItems(self.neighborhood_cols)
 

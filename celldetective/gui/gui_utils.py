@@ -1,22 +1,47 @@
-import numpy as np
-from PyQt5.QtWidgets import QGridLayout, QApplication, QMessageBox, QFrame, QSizePolicy, QWidget, QLineEdit, QListWidget, QVBoxLayout, QComboBox, \
+import os
+
+from PyQt5.QtWidgets import QGridLayout, QApplication, QMessageBox, QFrame, QSizePolicy, QLineEdit, QListWidget, QVBoxLayout, QComboBox, \
 	QPushButton, QLabel, QHBoxLayout, QCheckBox, QFileDialog, QToolButton, QMenu, QStylePainter, QStyleOptionComboBox, QStyle
 from PyQt5.QtCore import Qt, QSize, QAbstractTableModel, QEvent, pyqtSignal
 from PyQt5.QtGui import QDoubleValidator, QIntValidator, QStandardItemModel, QPalette
 
-from celldetective.gui import Styles
+from celldetective.gui import Styles, CelldetectiveWidget
 from superqt.fonticon import icon
 from fonticon_mdi6 import MDI6
 
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT
 import matplotlib.pyplot as plt
-import celldetective.extra_properties as extra_properties
+
+from celldetective.utils import get_software_location
+
+try:
+	import celldetective.extra_properties as extra_properties
+	extra_props = True
+except Exception as e:
+	print(f"The module extra_properties seems corrupted: {e}... Skip...")
+	extra_props = False
+
 from inspect import getmembers, isfunction
 from celldetective.filters import *
 from os import sep
 import json
 
+
+def generic_message(message, msg_type="warning"):
+	
+	print(message)
+	message_box = QMessageBox()
+	if msg_type=="warning":
+		message_box.setIcon(QMessageBox.Warning)
+	elif msg_type=="info":
+		message_box.setIcon(QMessageBox.Information)
+	elif msg_type=="critical":
+		message_box.setIcon(QMessageBox.Critical)
+	message_box.setText(message)
+	message_box.setWindowTitle(msg_type)
+	message_box.setStandardButtons(QMessageBox.Ok)
+	_ = message_box.exec()
 
 class PreprocessingLayout(QVBoxLayout, Styles):
 
@@ -328,7 +353,7 @@ class PandasModel(QAbstractTableModel):
 		self.dataChanged.emit(ix, ix, (Qt.BackgroundRole,))
 
 
-class GenericOpColWidget(QWidget, Styles):
+class GenericOpColWidget(CelldetectiveWidget):
 
 	def __init__(self, parent_window, column=None, title=''):
 
@@ -415,7 +440,7 @@ class QuickSliderLayout(QHBoxLayout):
 		The slider widget that allows the user to select a value.
 	"""
 
-	def __init__(self, label=None, slider=None, layout_ratio=(0.25,0.75), slider_initial_value=1, slider_range=(0,1), slider_tooltip=None, decimal_option=True, precision=1.0E-03, *args):
+	def __init__(self, label=None, slider=None, layout_ratio=(0.25,0.75), slider_initial_value=1, slider_range=(0,1), slider_tooltip=None, decimal_option=True, precision=3, *args):
 		super().__init__(*args)
 
 		if label is not None and isinstance(label,str):
@@ -423,10 +448,11 @@ class QuickSliderLayout(QHBoxLayout):
 			self.addWidget(self.qlabel, int(100*layout_ratio[0]))
 
 		self.slider = slider
-		self.slider.setOrientation(1)
+		self.slider.setOrientation(Qt.Horizontal)
 		if decimal_option:
-			self.slider.setSingleStep(precision)
-			self.slider.setTickInterval(precision)
+			self.slider.setSingleStep(1.0*(10**(-precision)))
+			self.slider.setTickInterval(1.0*(10**(-precision)))
+			self.slider.setDecimals(precision)
 		else:
 			self.slider.setSingleStep(1)
 			self.slider.setTickInterval(1)
@@ -546,7 +572,7 @@ class QHSeperationLine(QFrame):
 		self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Minimum)
 
 
-class FeatureChoice(QWidget, Styles):
+class FeatureChoice(CelldetectiveWidget):
 
 	def __init__(self, parent_window):
 		super().__init__()
@@ -575,10 +601,11 @@ class FeatureChoice(QWidget, Styles):
 								 "intensity_min",
 								 ]
 
-		members = getmembers(extra_properties, isfunction)
-		for o in members:
-			if isfunction(o[1]) and o[1].__module__=="celldetective.extra_properties":
-				standard_measurements.append(o[0])
+		if extra_props:
+			members = getmembers(extra_properties, isfunction)
+			for o in members:
+				if isfunction(o[1]) and o[1].__module__=="celldetective.extra_properties":
+					standard_measurements.append(o[0])
 
 		self.combo_box.addItems(standard_measurements)
 
@@ -599,7 +626,7 @@ class FeatureChoice(QWidget, Styles):
 		self.close()
 
 
-class FilterChoice(QWidget, Styles):
+class FilterChoice(CelldetectiveWidget):
 
 	def __init__(self, parent_window):
 
@@ -707,7 +734,7 @@ class FilterChoice(QWidget, Styles):
 				self.arguments_labels[i].setText('')
 
 
-class OperationChoice(QWidget):
+class OperationChoice(CelldetectiveWidget):
 	"""
 	Mini window to select an operation from numpy to apply on the ROI.
 
@@ -738,7 +765,7 @@ class OperationChoice(QWidget):
 		self.close()
 
 
-class GeometryChoice(QWidget):
+class GeometryChoice(CelldetectiveWidget):
 
 	def __init__(self, parent_window):
 
@@ -802,7 +829,7 @@ class GeometryChoice(QWidget):
 		self.close()
 
 
-class DistanceChoice(QWidget):
+class DistanceChoice(CelldetectiveWidget):
 
 	def __init__(self, parent_window):
 		super().__init__()
@@ -836,7 +863,7 @@ class DistanceChoice(QWidget):
 		self.close()
 
 
-class ListWidget(QWidget):
+class ListWidget(CelldetectiveWidget):
 
 	"""
 	A customizable widget for displaying and managing a list of items, with the 
@@ -963,7 +990,7 @@ class ListWidget(QWidget):
 				del self.items[idx]
 
 
-class FigureCanvas(QWidget):
+class FigureCanvas(CelldetectiveWidget):
 	"""
 	Generic figure canvas.
 	"""
@@ -1185,6 +1212,7 @@ def color_from_state(state, recently_modified=False):
 	unique_values = np.unique(state)
 	color_map={}
 	for value in unique_values:
+
 		if np.isnan(value):
 			value = "nan"
 			color_map[value] = 'k'
@@ -1219,7 +1247,7 @@ def color_from_class(cclass, recently_modified=False):
 			return 'k'
 
 
-class ChannelChoice(QWidget):
+class ChannelChoice(CelldetectiveWidget):
 
 	def __init__(self, parent_window):
 		super().__init__()

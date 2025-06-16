@@ -1,11 +1,14 @@
 from PyQt5.QtWidgets import QFrame, QLabel, QPushButton, QVBoxLayout, \
-    QSpacerItem, QSizePolicy
+	QSpacerItem, QSizePolicy
 from PyQt5.QtCore import Qt, QSize
 from PyQt5.QtGui import QIcon
-from celldetective.gui.plot_measurements import ConfigMeasurementsPlot
 from celldetective.gui import ConfigSurvival, ConfigSignalPlot
 import os
 from celldetective.gui import Styles
+from glob import glob
+
+from celldetective.gui.gui_utils import generic_message
+
 
 class AnalysisPanel(QFrame, Styles):
 	def __init__(self, parent_window, title=None):
@@ -14,10 +17,11 @@ class AnalysisPanel(QFrame, Styles):
 		self.parent_window = parent_window
 		self.title = title
 		if self.title is None:
-			self.title=''
+			self.title = ''
 		self.exp_channels = self.parent_window.exp_channels
 		self.exp_dir = self.parent_window.exp_dir
 		self.soft_path = self.parent_window.parent_window.soft_path
+		self.pop_exists = False
 
 		self.setFrameStyle(QFrame.StyledPanel | QFrame.Raised)
 		self.grid = QVBoxLayout(self)
@@ -40,7 +44,7 @@ class AnalysisPanel(QFrame, Styles):
 		self.grid.addWidget(panel_title, alignment=Qt.AlignCenter)
 
 		self.survival_btn = QPushButton("plot survival")
-		self.survival_btn.setIcon(QIcon(QIcon(os.sep.join([self.soft_path,'celldetective','icons','survival2.png']))))
+		self.survival_btn.setIcon(QIcon(QIcon(os.sep.join([self.soft_path, 'celldetective', 'icons', 'survival2.png']))))
 		self.survival_btn.setStyleSheet(self.button_style_sheet_2)
 		self.survival_btn.setIconSize(QSize(35, 35))
 		self.survival_btn.clicked.connect(self.configure_survival)
@@ -55,27 +59,38 @@ class AnalysisPanel(QFrame, Styles):
 		self.grid.addWidget(signal_lbl, alignment=Qt.AlignCenter)
 
 		self.plot_signal_btn = QPushButton("plot signals")
-		self.plot_signal_btn.setIcon(QIcon(QIcon(os.sep.join([self.soft_path,'celldetective','icons','signals_icon.png']))))
+		self.plot_signal_btn.setIcon(QIcon(QIcon(os.sep.join([self.soft_path, 'celldetective', 'icons', 'signals_icon.png']))))
 		self.plot_signal_btn.setStyleSheet(self.button_style_sheet_2)
 		self.plot_signal_btn.setIconSize(QSize(35, 35))
 		self.plot_signal_btn.clicked.connect(self.configure_plot_signals)
 		self.grid.addWidget(self.plot_signal_btn)
 
-		verticalSpacer = QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
-		self.grid.addItem(verticalSpacer)
+		vertical_spacer = QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
+		self.grid.addItem(vertical_spacer)
 
+	def check_for_tables(self):
+		
+		for population in self.parent_window.populations:
+			tables = glob(self.exp_dir + os.sep.join(['W*', '*', 'output', 'tables', f'trajectories_{population}.csv']))
+			if len(tables) > 0:
+				self.pop_exists = True
+	
 	def configure_survival(self):
-		print('survival analysis starting!!!')
-		self.configSurvival = ConfigSurvival(self)
-		self.configSurvival.show()
+		
+		self.check_for_tables()
+		if self.pop_exists:
+			self.configSurvival = ConfigSurvival(self)
+			self.configSurvival.show()
+		else:
+			generic_message("No population table could be found... Abort...")
+			return None
 
 	def configure_plot_signals(self):
-		print('Configure a signal collapse representation...')
-		self.ConfigSignalPlot = ConfigSignalPlot(self)
-		self.ConfigSignalPlot.show()
-
-	def configure_plot_measurements(self):
-
-		print('plot measurements analysis starting!!!')
-		self.ConfigMeasurementsPlot_wg = ConfigMeasurementsPlot(self)
-		self.ConfigMeasurementsPlot_wg.show()
+		
+		self.check_for_tables()
+		if self.pop_exists:
+			self.ConfigSignalPlot = ConfigSignalPlot(self)
+			self.ConfigSignalPlot.show()
+		else:
+			generic_message("No population table could be found... Abort...")
+			return None
