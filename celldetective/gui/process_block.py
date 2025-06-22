@@ -611,8 +611,8 @@ class ProcessPanel(QFrame, Styles):
 
 		test = self.parent_window.locate_selected_position()
 		if test:
-			self.MeasureAnnotator = MeasureAnnotator(self)
-			self.MeasureAnnotator.show()
+			self.measure_annotator = MeasureAnnotator(self)
+			self.measure_annotator.show()
 
 	def enable_segmentation_model_list(self):
 		if self.segment_action.isChecked():

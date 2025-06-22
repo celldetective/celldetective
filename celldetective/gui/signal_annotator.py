@@ -1400,12 +1400,14 @@ class SignalAnnotator(CelldetectiveMainWindow):
 		#self.cell_ax.autoscale()
 		self.cell_fcanvas.canvas.draw_idle()
 
-class MeasureAnnotator(SignalAnnotator):
+class MeasureAnnotator(CelldetectiveMainWindow):
 
 	def __init__(self, parent_window=None):
-
-		SignalAnnotator.__init__(self)
+		
+		super().__init__()
+		
 		self.parent_window = parent_window
+
 		self.setWindowTitle("Signal annotator")
 		self.mode = self.parent_window.mode
 		self.pos = self.parent_window.parent_window.pos
@@ -1461,8 +1463,7 @@ class MeasureAnnotator(SignalAnnotator):
 
 		self.setAttribute(Qt.WA_DeleteOnClose)
 		self.previous_index = None
-
-
+	
 	def static_image(self):
 
 		"""
@@ -2647,3 +2648,108 @@ class MeasureAnnotator(SignalAnnotator):
 		self.correct_btn.click()
 		self.del_cell_btn.click()
 		self.correct_btn.click()
+
+	def generate_signal_choices(self):
+
+		self.signal_choice_cb = [QSearchableComboBox() for i in range(self.n_signals)]
+		self.signal_choice_label = [QLabel(f'signal {i + 1}: ') for i in range(self.n_signals)]
+		# self.log_btns = [QPushButton() for i in range(self.n_signals)]
+
+		signals = list(self.df_tracks.columns)
+
+		to_remove = ['TRACK_ID', 'FRAME', 'x_anim', 'y_anim', 't', 'state', 'generation', 'root', 'parent', 'class_id',
+					 'class', 't0', 'POSITION_X', 'POSITION_Y', 'position', 'well', 'well_index', 'well_name',
+					 'pos_name', 'index','class_color','status_color','dummy','group_color']
+
+		meta = get_experiment_metadata(self.exp_dir)
+		if meta is not None:
+			keys = list(meta.keys())
+			to_remove.extend(keys)
+
+		labels = get_experiment_labels(self.exp_dir)
+		if labels is not None:
+			keys = list(labels.keys())
+			to_remove.extend(labels)
+
+		for c in to_remove:
+			if c in signals:
+				signals.remove(c)
+
+		for i in range(len(self.signal_choice_cb)):
+			self.signal_choice_cb[i].addItems(['--'] + signals)
+			self.signal_choice_cb[i].setCurrentIndex(i + 1)
+			self.signal_choice_cb[i].currentIndexChanged.connect(self.plot_signals)
+	def shortcut_no_event(self):
+		self.correct_btn.click()
+		self.no_event_btn.click()
+		self.correct_btn.click()
+	
+	def normalize_features(self):
+
+		x = self.df_tracks[self.columns_to_rescale].values
+
+		if not self.normalized_signals:
+			x = self.MinMaxScaler.transform(x)
+			self.df_tracks[self.columns_to_rescale] = x
+			self.plot_signals()
+			self.normalized_signals = True
+			self.normalize_features_btn.setIcon(icon(MDI6.arrow_collapse_vertical, color="#1565c0"))
+			self.normalize_features_btn.setIconSize(QSize(25, 25))
+		else:
+			x = self.MinMaxScaler.inverse_transform(x)
+			self.df_tracks[self.columns_to_rescale] = x
+			self.plot_signals()
+			self.normalized_signals = False
+			self.normalize_features_btn.setIcon(icon(MDI6.arrow_collapse_vertical, color="black"))
+			self.normalize_features_btn.setIconSize(QSize(25, 25))
+			
+	def switch_to_log(self):
+
+		"""
+		Better would be to create a log(quantity) and plot it...
+		"""
+
+		try:
+			if self.cell_ax.get_yscale()=='linear':
+				ymin,ymax = self.cell_ax.get_ylim()
+				self.cell_ax.set_yscale('log')
+				self.log_btn.setIcon(icon(MDI6.math_log,color="#1565c0"))
+				self.cell_ax.set_ylim(self.value_magnitude, ymax)
+			else:
+				self.cell_ax.set_yscale('linear')
+				self.log_btn.setIcon(icon(MDI6.math_log,color="black"))
+		except Exception as e:
+			print(e)
+
+		#self.cell_ax.autoscale()
+		self.cell_fcanvas.canvas.draw_idle()
+
+	def start(self):
+		'''
+		Starts interactive animation. Adds the draw frame command to the GUI
+		handler, calls show to start the event loop.
+		'''
+		self.start_btn.setShortcut(QKeySequence(""))
+
+		self.last_frame_btn.setEnabled(True)
+		self.last_frame_btn.clicked.connect(self.set_last_frame)
+
+		self.first_frame_btn.setEnabled(True)
+		self.first_frame_btn.clicked.connect(self.set_first_frame)
+
+		self.start_btn.hide()
+		self.stop_btn.show()
+
+		self.anim.event_source.start()
+		self.stop_btn.clicked.connect(self.stop)
+		
+	def contrast_slider_action(self):
+
+		"""
+		Recontrast the imshow as the contrast slider is moved.
+		"""
+
+		self.vmin = self.contrast_slider.value()[0]
+		self.vmax = self.contrast_slider.value()[1]
+		self.im.set_clim(vmin=self.vmin, vmax=self.vmax)
+		self.fcanvas.canvas.draw_idle()
