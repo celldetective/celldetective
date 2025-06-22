@@ -258,12 +258,19 @@ class ConfigSignalPlot(CelldetectiveWidget):
 
 			class_idx = np.array([s.startswith('class_') for s in self.all_columns])
 			time_idx = np.array([s.startswith('t_') or s.startswith('t0_') for s in self.all_columns])
-			
+			print(f'{class_idx=} {time_idx=} {self.all_columns=}')
+
 			try:
-				class_columns = list(self.all_columns[class_idx])
-				time_columns = list(self.all_columns[time_idx])
-			except:
-				print('columns not found')
+				if len(class_idx)>0:
+					class_columns = list(self.all_columns[class_idx])
+				else:
+					class_columns = []
+				if len(time_idx)>0:
+					time_columns = list(self.all_columns[time_idx])
+				else:
+					time_columns = []
+			except Exception as e:
+				print(f'L266 columns not found {e}')
 				self.auto_close = True
 				return None
 			
