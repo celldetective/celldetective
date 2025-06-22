@@ -558,6 +558,10 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
 			time_cols = np.array([c.startswith('t_') for c in cols])
 			time_cols = list(cols[time_cols])
 			cols_to_remove += time_cols
+			
+			status_cols = np.array([c.startswith('status_') for c in cols])
+			status_cols = list(cols[status_cols])
+			cols_to_remove += status_cols
 
 			for tr in cols_to_remove:
 				try:

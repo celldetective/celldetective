@@ -58,6 +58,10 @@ class SignalAnnotator(BaseAnnotator):
 			self.looped_animation()
 			self.init_event_buttons()
 			self.populate_window()
+			
+			self.outliers_check.hide()
+			if hasattr(self, "contrast_slider"):
+				self.im.set_clim(self.contrast_slider.value()[0], self.contrast_slider.value()[1])
 
 	def init_event_buttons(self):
 	
@@ -199,44 +203,6 @@ class SignalAnnotator(BaseAnnotator):
 
 		QApplication.processEvents()
 
-	# def create_new_event_class(self):
-	#
-	# 	# display qwidget to name the event
-	# 	self.newClassWidget = CelldetectiveWidget()
-	# 	self.newClassWidget.setWindowTitle('Create new event class')
-	#
-	# 	layout = QVBoxLayout()
-	# 	self.newClassWidget.setLayout(layout)
-	# 	name_hbox = QHBoxLayout()
-	# 	name_hbox.addWidget(QLabel('event name: '), 25)
-	# 	self.class_name_le = QLineEdit('event')
-	# 	name_hbox.addWidget(self.class_name_le, 75)
-	# 	layout.addLayout(name_hbox)
-	#
-	# 	class_labels = ['event', 'no event', 'else']
-	# 	layout.addWidget(QLabel('prefill: '))
-	# 	radio_box = QHBoxLayout()
-	# 	self.class_option_rb = [QRadioButton() for i in range(3)]
-	# 	for i, c in enumerate(self.class_option_rb):
-	# 		if i == 0:
-	# 			c.setChecked(True)
-	# 		c.setText(class_labels[i])
-	# 		radio_box.addWidget(c, 33, alignment=Qt.AlignCenter)
-	# 	layout.addLayout(radio_box)
-	#
-	# 	btn_hbox = QHBoxLayout()
-	# 	submit_btn = QPushButton('submit')
-	# 	cancel_btn = QPushButton('cancel')
-	# 	btn_hbox.addWidget(cancel_btn, 50)
-	# 	btn_hbox.addWidget(submit_btn, 50)
-	# 	layout.addLayout(btn_hbox)
-	#
-	# 	submit_btn.clicked.connect(self.write_new_event_class)
-	# 	cancel_btn.clicked.connect(self.close_without_new_class)
-	#
-	# 	self.newClassWidget.show()
-	# 	center_window(self.newClassWidget)
-
 	def write_new_event_class(self):
 
 		if self.class_name_le.text() == '':
@@ -326,7 +292,6 @@ class SignalAnnotator(BaseAnnotator):
 			self.select_single_cell(self.selection[0][0], self.selection[0][1])
 
 		self.fcanvas.canvas.draw()
-
 
 	def cancel_selection(self):
 		
@@ -704,33 +669,6 @@ class SignalAnnotator(BaseAnnotator):
 		self.fig.canvas.mpl_connect('pick_event', self.on_scatter_pick)
 		self.fcanvas.canvas.draw()
 
-	# def on_scatter_pick(self, event):
-	#
-	# 	self.event = event
-	#
-	# 	self.correct_btn.disconnect()
-	# 	self.correct_btn.clicked.connect(self.show_annotation_buttons)
-	#
-	# 	ind = event.ind
-	#
-	# 	if len(ind) > 1:
-	# 		# More than one point in vicinity
-	# 		datax, datay = [self.positions[self.framedata][i, 0] for i in ind], [self.positions[self.framedata][i, 1]
-	# 																			 for i in ind]
-	# 		msx, msy = event.mouseevent.xdata, event.mouseevent.ydata
-	# 		dist = np.sqrt((np.array(datax) - msx) ** 2 + (np.array(datay) - msy) ** 2)
-	# 		ind = [ind[np.argmin(dist)]]
-	#
-	# 	if len(ind) > 0 and (len(self.selection) == 0):
-	#
-	# 		self.selection.append([ind[0],self.framedata])
-	# 		self.select_single_cell(ind[0], self.framedata)
-	#
-	# 	elif len(ind) > 0 and len(self.selection) == 1:
-	# 		self.cancel_btn.click()
-	# 	else:
-	# 		pass
-
 	def select_single_cell(self, index, timepoint):
 
 		self.correct_btn.setEnabled(True)
@@ -928,6 +866,9 @@ class MeasureAnnotator(BaseAnnotator):
 			self.changed_class()
 	
 			self.previous_index = None
+			if hasattr(self, "contrast_slider"):
+				self.im.set_clim(self.contrast_slider.value()[0], self.contrast_slider.value()[1])
+
 		else:
 			self.close()
 	
