@@ -189,7 +189,8 @@ def track(labels, configuration=None, stack=None, spatial_calibration=1, feature
 
 	if clean_trajectories_kwargs is not None:
 		df = clean_trajectories(df.copy(),**clean_trajectories_kwargs)
-
+	
+	df.loc[df["status_firstdetection"].isna(), "status_firstdetection"] = 0
 	df['ID'] = np.arange(len(df)).astype(int)
 
 	invalid_cols = [c for c in list(df.columns) if c.startswith('Unnamed')]
@@ -1002,7 +1003,10 @@ def write_first_detection_class(df, img_shape=None, edge_threshold=20, column_la
 		positions_x = track_group[column_labels['x']].values
 		positions_y = track_group[column_labels['y']].values
 		dt = 1
-
+		
+		timeline = track_group['FRAME'].to_numpy()
+		status = np.ones_like(timeline)
+		
 		# Initialize
 		cclass = 2; t_first = np.nan;
 
@@ -1023,16 +1027,18 @@ def write_first_detection_class(df, img_shape=None, edge_threshold=20, column_la
 				t_first =  float(t_first) - float(dt)
 				if t_first==0:
 					t_first += 0.01
-
+			
 			if edge_test:
 				cclass = 2
 				# switch to class 2 but keep time/status information
 		else:
 			t_first = -1
 			cclass = 2
-
+		
+		status[timeline < t_first] = 0.
 		df.loc[indices, 'class_firstdetection'] = cclass
 		df.loc[indices, 't_firstdetection'] = t_first
+		df.loc[indices, 'status_firstdetection'] = status
 
 	return df
 

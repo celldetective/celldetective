@@ -1210,9 +1210,8 @@ def color_from_state(state, recently_modified=False):
 	"""
 
 	unique_values = np.unique(state)
-	color_map={}
+	color_map = {}
 	for value in unique_values:
-
 		if np.isnan(value):
 			value = "nan"
 			color_map[value] = 'k'
@@ -1220,8 +1219,10 @@ def color_from_state(state, recently_modified=False):
 			color_map[value] = 'tab:blue'
 		elif value==1:
 			color_map[value] = 'tab:red'
+		elif value==99:
+			color_map[value] = 'k'
 		else:
-			color_map[value] = plt.cm.tab10(value)
+			color_map[value] = plt.cm.tab20(value/20.0)
 
 	return color_map
 

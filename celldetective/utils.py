@@ -2260,7 +2260,7 @@ def remove_trajectory_measurements(trajectories, column_labels={'track': "TRACK_
 	tracks = trajectories.copy()
 
 	columns_to_keep = [column_labels['track'], column_labels['time'], column_labels['x'], column_labels['y'],column_labels['x']+'_um', column_labels['y']+'_um', 'class_id', 
-					  't', 'state', 'generation', 'root', 'parent', 'ID', 't0', 'class', 'status', 'class_color', 'status_color', 'class_firstdetection', 't_firstdetection', 'velocity']
+					  't', 'state', 'generation', 'root', 'parent', 'ID', 't0', 'class', 'status', 'class_color', 'status_color', 'class_firstdetection', 't_firstdetection', 'status_firstdetection','velocity']
 	cols = list(tracks.columns)
 	for c in columns_to_keep:
 		if c not in cols:

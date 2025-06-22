@@ -768,8 +768,10 @@ class ProcessPanel(QFrame, Styles):
 				for t in tabs:
 					if os.path.exists(t.replace('.csv','.pkl')):
 						os.remove(t.replace('.csv','.pkl'))
-					os.remove(t)				
-
+					try:
+						os.remove(t)
+					except:
+						pass
 		loop_iter=0
 
 		if self.parent_window.position_list.isMultipleSelection():
