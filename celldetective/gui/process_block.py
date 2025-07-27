@@ -81,13 +81,13 @@ class ProcessPanel(QFrame, Styles):
 		title_hbox = QHBoxLayout()
 		self.grid.addWidget(panel_title, 0, 0, 1, 4, alignment=Qt.AlignCenter)
 
-		self.help_pop_btn = QPushButton()
-		self.help_pop_btn.setIcon(icon(MDI6.help_circle, color=self.help_color))
-		self.help_pop_btn.setIconSize(QSize(20, 20))
-		self.help_pop_btn.clicked.connect(self.help_population)
-		self.help_pop_btn.setStyleSheet(self.button_select_all)
-		self.help_pop_btn.setToolTip("Help.")
-		self.grid.addWidget(self.help_pop_btn, 0, 0, 1, 3, alignment=Qt.AlignRight)
+		# self.help_pop_btn = QPushButton()
+		# self.help_pop_btn.setIcon(icon(MDI6.help_circle, color=self.help_color))
+		# self.help_pop_btn.setIconSize(QSize(20, 20))
+		# self.help_pop_btn.clicked.connect(self.help_population)
+		# self.help_pop_btn.setStyleSheet(self.button_select_all)
+		# self.help_pop_btn.setToolTip("Help.")
+		# self.grid.addWidget(self.help_pop_btn, 0, 0, 1, 3, alignment=Qt.AlignRight)
 
 		# self.select_all_btn = QPushButton()
 		# self.select_all_btn.setIcon(icon(MDI6.checkbox_blank_outline,color="black"))
@@ -106,7 +106,7 @@ class ProcessPanel(QFrame, Styles):
 
 		title_hbox.addWidget(QLabel(), 5) #self.select_all_btn
 		title_hbox.addWidget(QLabel(), 85, alignment=Qt.AlignCenter)
-		title_hbox.addWidget(self.help_pop_btn, 5)
+		# title_hbox.addWidget(self.help_pop_btn, 5)
 		title_hbox.addWidget(self.collapse_btn, 5)
 
 		self.grid.addLayout(title_hbox, 0, 0, 1, 4)
@@ -136,29 +136,29 @@ class ProcessPanel(QFrame, Styles):
 			self.parent_window.scroll.setMinimumHeight(min(int(930), int(0.9*self.parent_window.screen_height)))
 
 
-	def help_population(self):
+	# def help_population(self):
 
-		"""
-		Helper to choose a proper cell population structure.
-		"""
+	# 	"""
+	# 	Helper to choose a proper cell population structure.
+	# 	"""
 
-		dict_path = os.sep.join([get_software_location(),'celldetective','gui','help','cell-populations.json'])
+	# 	dict_path = os.sep.join([get_software_location(),'celldetective','gui','help','cell-populations.json'])
 
-		with open(dict_path) as f:
-			d = json.load(f)
+	# 	with open(dict_path) as f:
+	# 		d = json.load(f)
 
-		suggestion = help_generic(d)
-		if isinstance(suggestion, str):
-			print(f"{suggestion=}")
-			msgBox = QMessageBox()
-			msgBox.setIcon(QMessageBox.Information)
-			msgBox.setTextFormat(Qt.RichText)
-			msgBox.setText(suggestion)
-			msgBox.setWindowTitle("Info")
-			msgBox.setStandardButtons(QMessageBox.Ok)
-			returnValue = msgBox.exec()
-			if returnValue == QMessageBox.Ok:
-				return None			
+	# 	suggestion = help_generic(d)
+	# 	if isinstance(suggestion, str):
+	# 		print(f"{suggestion=}")
+	# 		msgBox = QMessageBox()
+	# 		msgBox.setIcon(QMessageBox.Information)
+	# 		msgBox.setTextFormat(Qt.RichText)
+	# 		msgBox.setText(suggestion)
+	# 		msgBox.setWindowTitle("Info")
+	# 		msgBox.setStandardButtons(QMessageBox.Ok)
+	# 		returnValue = msgBox.exec()
+	# 		if returnValue == QMessageBox.Ok:
+	# 			return None			
 
 	def populate_contents(self):
 		self.ContentsFrame = QFrame()
