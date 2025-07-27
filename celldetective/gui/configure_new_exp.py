@@ -169,7 +169,7 @@ class ConfigNewExperiment(CelldetectiveMainWindow):
 		self.movie_length.setToolTip('Optional: depending on how the movies are encoded, the automatic extraction of the number of frames can be difficult.\nThe software will then rely on this value.')
 		self.ms_grid.addWidget(self.movie_length,9, 0, 1, 3)
 		self.MovieLengthSlider = QLabeledSlider(Qt.Horizontal, self)
-		self.MovieLengthSlider.setMinimum(2)
+		self.MovieLengthSlider.setMinimum(1)
 		#self.MovieLengthSlider.setMaximum(128)
 		self.ms_grid.addWidget(self.MovieLengthSlider, 10, 0, 1, 3)
 
