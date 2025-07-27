@@ -44,7 +44,7 @@ jobs:
           python -m unittest
       - name: Test GUI
         run: |
-          python -m pytest tests/test_qt.py
+          python -m pytest tests/gui/
   Windows:
     name: Test Windows
     runs-on: ${{ matrix.os }}
@@ -79,4 +79,4 @@ jobs:
           python -m unittest
       - name: Test GUI
         run: |
-          python -m pytest tests/test_qt.py
+          python -m pytest tests/gui/

@@ -7,6 +7,7 @@ import os
 from PyQt5 import QtWidgets
 from unittest.mock import patch
 import shutil
+from pathlib import Path
 
 abs_path = os.sep.join([os.path.split(os.path.dirname(os.path.realpath(__file__)))[0]])
 print(abs_path)
@@ -23,23 +24,24 @@ def test_new_project(app, qtbot):
 	# qtbot.wait(1000)
 	interaction_time = 500
 	test_directory = os.path.dirname(os.path.abspath(__file__))
+	parent_directory = str(Path(test_directory).parent)
 
 	# Patch QFileDialog.getExistingDirectory to return test_directory
-	with patch('PyQt5.QtWidgets.QFileDialog.getExistingDirectory', return_value=test_directory):
+	with patch('PyQt5.QtWidgets.QFileDialog.getExistingDirectory', return_value=parent_directory):
 		
-		if os.path.exists(os.sep.join([test_directory, "ExperimentTest"])):
-			shutil.rmtree(os.sep.join([test_directory, "ExperimentTest"]))
+		if os.path.exists(os.sep.join([parent_directory, "ExperimentTest"])):
+			shutil.rmtree(os.sep.join([parent_directory, "ExperimentTest"]))
 		
 		app.newExpAction.trigger()
-		qtbot.wait(interaction_time)
+		qtbot.wait(interaction_time*3)
 
 		app.new_exp_window.expName.setText('ExperimentTest')
 		qtbot.wait(interaction_time)
 
-		app.new_exp_window.SliderWells.setValue(1)
+		app.new_exp_window.SliderWells.setValue(10)
 		qtbot.wait(interaction_time)
 
-		app.new_exp_window.SliderPos.setValue(1)
+		app.new_exp_window.SliderPos.setValue(3)
 		qtbot.wait(interaction_time)
 
 		app.new_exp_window.MovieLengthSlider.setValue(1)
@@ -112,20 +114,25 @@ def test_new_project(app, qtbot):
 		qtbot.mouseClick(app.new_exp_window.w.submit_btn, QtCore.Qt.LeftButton)
 		qtbot.wait(interaction_time)
 		
-		shutil.copy(os.sep.join([test_directory, "assets", "sample.tif"]), os.sep.join([test_directory, "ExperimentTest", "W1", "100", "movie", "sample.tif"]))
+		shutil.copy(os.sep.join([parent_directory, "assets", "sample.tif"]), os.sep.join([parent_directory, "ExperimentTest", "W1", "100", "movie", "sample.tif"]))
 		qtbot.wait(interaction_time)
 
 		qtbot.mouseClick(app.validate_button, QtCore.Qt.LeftButton)
 		qtbot.mouseClick(app.control_panel.view_stack_btn, QtCore.Qt.LeftButton)
+		qtbot.wait(interaction_time)
 		
-		qtbot.wait(10000)
+		app.control_panel.viewer.channels_cb.setCurrentIndex(1)
+		qtbot.wait(interaction_time*2)
+		
+		app.control_panel.viewer.contrast_slider.setValue([200,300])
+		qtbot.wait(interaction_time*2)
 
-		shutil.rmtree(os.sep.join([test_directory, "ExperimentTest"]))
+		shutil.rmtree(os.sep.join([parent_directory, "ExperimentTest"]))
 
 # def test_lauch_app(app, qtbot):
+# 	app.show()
 # 	qtbot.wait(1000)
-# 	print('Launch successfull...')
-
+#
 # def test_open_project(app, qtbot):
 # 	app.experiment_path_selection.setText(abs_path + os.sep + 'examples/demo')
 # 	qtbot.mouseClick(app.validate_button, QtCore.Qt.LeftButton)

@@ -83,7 +83,10 @@ class AppInitWindow(CelldetectiveMainWindow):
 		self.experiment_path_selection.setDragEnabled(True)
 		self.experiment_path_selection.setFixedWidth(430)
 		self.experiment_path_selection.textChanged[str].connect(self.check_path_and_enable_opening)
-		self.foldername = os.getcwd()
+		try:
+			self.foldername = os.getcwd()
+		except FileNotFoundError as e:
+			self.foldername = ""
 		self.experiment_path_selection.setPlaceholderText('/path/to/experiment/folder/')
 		self.locate_exp_layout.addWidget(self.experiment_path_selection, 90)
 
