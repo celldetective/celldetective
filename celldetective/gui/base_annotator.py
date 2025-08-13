@@ -470,6 +470,7 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
 			# Load and prep tracks
 			self.df_tracks = pd.read_csv(self.trajectories_path)
 			self.df_tracks = self.df_tracks.sort_values(by=['TRACK_ID', 'FRAME'])
+			self.df_tracks.replace([np.inf, -np.inf], np.nan, inplace=True)
 
 			cols = np.array(self.df_tracks.columns)
 			self.class_cols = np.array([c.startswith('class') for c in list(self.df_tracks.columns)])
