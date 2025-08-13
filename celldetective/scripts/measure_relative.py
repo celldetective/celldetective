@@ -79,9 +79,14 @@ if len(all_df_pairs)>1:
 		df_pairs = pd.merge(df_pairs.round(decimals=6), all_df_pairs[i].round(decimals=6), how="outer", on=cols)
 elif len(all_df_pairs)==1:
 	df_pairs = all_df_pairs[0]
+else:
+	df_pairs = None
+	print('No dataframe could be computed for the pairs...')
 
-print('Writing table...')
-df_pairs = df_pairs.sort_values(by=['reference_population', 'neighbor_population', 'REFERENCE_ID', 'NEIGHBOR_ID', 'FRAME'])
-df_pairs.to_csv(previous_pair_table_path, index=False)
-print('Done.')
-
+if df_pairs is not None:
+	print('Writing table...')
+	if "reference_population" in list(df_pairs.columns) and "neighbor_population" in list(df_pairs.columns):
+		df_pairs = df_pairs.sort_values(by=['reference_population', 'neighbor_population', 'REFERENCE_ID', 'NEIGHBOR_ID', 'FRAME'])
+	df_pairs.to_csv(previous_pair_table_path, index=False)
+	print('Done.')
+	
