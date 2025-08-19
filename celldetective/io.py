@@ -2727,6 +2727,12 @@ def correct_annotation(filename):
 	def save_widget():
 		return export_labels()
 
+	if filename.endswith("_labelled.tif"):
+		filename = filename.replace("_labelled.tif",".tif")
+	if filename.endswith(".json"):
+		filename = filename.replace('.json',".tif")
+	assert os.path.exists(filename),f"Image {filename} does not seem to exist..."
+	
 	img = imread(filename.replace('\\','/'))
 	if img.ndim==3:
 		img = np.moveaxis(img, 0, -1)
