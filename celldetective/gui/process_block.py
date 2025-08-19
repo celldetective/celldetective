@@ -15,6 +15,7 @@ from celldetective.io import locate_segmentation_model, extract_position_name, f
 from celldetective.gui import SegmentationModelLoader, ClassifierWidget, ConfigNeighborhoods, \
 	ConfigSegmentationModelTraining, ConfigTracking, SignalAnnotator, ConfigSignalModelTraining, ConfigMeasurements, \
 	ConfigSignalAnnotator, TableUI, CelldetectiveWidget
+from celldetective.gui.settings._settings_segmentation import ConfigSegmentation
 from celldetective.gui.gui_utils import QHSeperationLine
 from celldetective.relative_measurements import rel_measure_at_position
 from celldetective.signals import analyze_signals_at_position, analyze_pair_signals_at_position
@@ -381,6 +382,14 @@ class ProcessPanel(QFrame, Styles):
 		self.flip_segment_btn.setToolTip("Flip the order of the frames for segmentation.")
 		grid_segment.addWidget(self.flip_segment_btn, 5)
 
+		self.segmentation_config_btn = QPushButton()
+		self.segmentation_config_btn.setIcon(icon(MDI6.cog_outline,color="black"))
+		self.segmentation_config_btn.setIconSize(QSize(20, 20))
+		self.segmentation_config_btn.setToolTip("Configure segmentation.")
+		self.segmentation_config_btn.setStyleSheet(self.button_select_all)
+		self.segmentation_config_btn.clicked.connect(self.open_segmentation_configuration_ui)
+		grid_segment.addWidget(self.segmentation_config_btn, 5)
+
 
 		self.check_seg_btn = QPushButton()
 		self.check_seg_btn.setIcon(icon(MDI6.eye_check_outline,color="black"))
@@ -688,6 +697,11 @@ class ProcessPanel(QFrame, Styles):
 		print('Set the measurements to be performed...')
 		self.ConfigMeasurements = ConfigMeasurements(self)
 		self.ConfigMeasurements.show()
+		
+	def open_segmentation_configuration_ui(self):
+		print('Set the segmentation settings to be performed...')
+		self.config_segmentation = ConfigSegmentation(self)
+		self.config_segmentation.show()
 
 	def open_classifier_ui(self):
 
