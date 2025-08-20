@@ -39,10 +39,23 @@ class BaseSegmentProcess(Process):
 		print(f"Position: {extract_position_name(self.pos)}...")
 		print("Configuration file: ",self.config)
 		print(f"Population: {self.mode}...")
-
+		self.instruction_file = os.sep.join(["configs", f"segmentation_instructions_{self.mode}.json"])
+		
+		self.read_instructions()
 		self.extract_experiment_parameters()
 		self.detect_movie_length()
 		self.write_folders()
+	
+	def read_instructions(self):
+		print('Looking for instruction file...')
+		instr_path = PurePath(self.exp_dir,Path(f"{self.instruction_file}"))
+		if os.path.exists(instr_path):
+			with open(instr_path, 'r') as f:
+				_instructions = json.load(f)
+				print(f"Measurement instruction file successfully loaded...")
+				print(f"Instructions: {_instructions}...")
+			self.flip = _instructions.get("flip", False)
+
 
 	def write_folders(self):
 
@@ -357,7 +370,7 @@ class SegmentCellThresholdProcess(BaseSegmentProcess):
 
 		self.indices = list(range(self.img_num_channels.shape[1]))
 		if self.flip:
-			self.indices = reversed(self.indices)
+			self.indices = np.array(list(reversed(self.indices)))
 		
 		chunks = np.array_split(self.indices, self.n_threads)
 

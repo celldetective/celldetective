@@ -15,7 +15,7 @@ from celldetective.io import locate_segmentation_model, extract_position_name, f
 from celldetective.gui import SegmentationModelLoader, ClassifierWidget, ConfigNeighborhoods, \
 	ConfigSegmentationModelTraining, ConfigTracking, SignalAnnotator, ConfigSignalModelTraining, ConfigMeasurements, \
 	ConfigSignalAnnotator, TableUI, CelldetectiveWidget
-from celldetective.gui.settings._settings_segmentation import ConfigSegmentation
+from celldetective.gui.settings._settings_segmentation import SettingsSegmentation
 from celldetective.gui.gui_utils import QHSeperationLine
 from celldetective.relative_measurements import rel_measure_at_position
 from celldetective.signals import analyze_signals_at_position, analyze_pair_signals_at_position
@@ -700,7 +700,7 @@ class ProcessPanel(QFrame, Styles):
 		
 	def open_segmentation_configuration_ui(self):
 		print('Set the segmentation settings to be performed...')
-		self.config_segmentation = ConfigSegmentation(self)
+		self.config_segmentation = SettingsSegmentation(self)
 		self.config_segmentation.show()
 
 	def open_classifier_ui(self):
@@ -872,7 +872,7 @@ class ProcessPanel(QFrame, Styles):
 								return None
 						else:
 							print(f"Segmentation from threshold config: {self.threshold_config}")
-							process_args = {"pos": self.pos, "mode": self.mode, "n_threads": self.n_threads, "threshold_instructions": self.threshold_config, "use_gpu": self.use_gpu, 'flip': self.flipSeg}
+							process_args = {"pos": self.pos, "mode": self.mode, "n_threads": self.n_threads, "threshold_instructions": self.threshold_config, "use_gpu": self.use_gpu}
 							self.job = ProgressWindow(SegmentCellThresholdProcess, parent_window=self, title="Segment", process_args = process_args)
 							result = self.job.exec_()
 							if result == QDialog.Accepted:
@@ -887,7 +887,7 @@ class ProcessPanel(QFrame, Styles):
 						# 	process = {"output_dir": self.output_dir, "file": self.model_name}
 						# 	self.download_model_job = ProgressWindow(DownloadProcess, parent_window=self, title="Download", process_args = args)
 
-						process_args = {"pos": self.pos, "mode": self.mode, "n_threads": self.n_threads, "model_name": self.model_name, "use_gpu": self.use_gpu, 'flip': self.flipSeg}
+						process_args = {"pos": self.pos, "mode": self.mode, "n_threads": self.n_threads, "model_name": self.model_name, "use_gpu": self.use_gpu}
 						self.job = ProgressWindow(SegmentCellDLProcess, parent_window=self, title="Segment", process_args = process_args)
 						result = self.job.exec_()
 						if result == QDialog.Accepted:
