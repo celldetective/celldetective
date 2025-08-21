@@ -1,8 +1,7 @@
-from PyQt5.QtWidgets import QRadioButton, QButtonGroup, QApplication, QMessageBox, QScrollArea, QComboBox, QFrame, QCheckBox, QFileDialog, QGridLayout, QTextEdit, QLineEdit, QVBoxLayout, QLabel, QHBoxLayout, QPushButton
+from PyQt5.QtWidgets import QRadioButton, QButtonGroup, QMessageBox, QComboBox, QFrame, QCheckBox, QFileDialog, QGridLayout, QTextEdit, QLineEdit, QVBoxLayout, QLabel, QHBoxLayout, QPushButton
 from PyQt5.QtCore import Qt, QSize
-from PyQt5.QtGui import QDoubleValidator
 
-from celldetective.gui.gui_utils import center_window, FeatureChoice, ListWidget, QHSeperationLine, FigureCanvas, help_generic
+from celldetective.gui.gui_utils import FeatureChoice, ListWidget, QHSeperationLine, FigureCanvas, help_generic
 from superqt import QLabeledDoubleSlider, QLabeledSlider
 from superqt.fonticon import icon
 from fonticon_mdi6 import MDI6
@@ -16,10 +15,10 @@ import os
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from glob import glob
-from celldetective.gui import CelldetectiveWidget, CelldetectiveMainWindow
+from celldetective.gui.settings._settings_base import CelldetectiveSettingsPanel
 
 
-class ConfigTracking(CelldetectiveMainWindow):
+class SettingsTracking(CelldetectiveSettingsPanel):
 	
 	"""
 	UI to set tracking parameters for bTrack.
@@ -28,46 +27,50 @@ class ConfigTracking(CelldetectiveMainWindow):
 
 	def __init__(self, parent_window=None):
 		
-		super().__init__()
 		self.parent_window = parent_window
-		self.setWindowTitle("Configure tracking")
 		self.mode = self.parent_window.mode
 		self.exp_dir = self.parent_window.exp_dir
-		self.floatValidator = QDoubleValidator()
 
 		self.config_name = os.sep.join(["configs", f"btrack_config_{self.mode}.json"])
 		self.track_instructions_write_path = self.parent_window.exp_dir + os.sep.join(["configs", f"tracking_instructions_{self.mode}.json"])
-		self.soft_path = get_software_location()
 		
 		self.config_path = self.exp_dir + self.config_name
 		self.channel_names, self.channels = extract_experiment_channels(self.exp_dir)
 		self.channel_names = np.array(self.channel_names)
 		self.channels = np.array(self.channels)
-		self.screen_height = self.parent_window.parent_window.parent_window.screen_height
 
-		center_window(self)
-		self.setMinimumWidth(540)
-		self.minimum_height = 300
-		# self.setMinimumHeight(int(0.3*self.screen_height))
-		# self.setMaximumHeight(int(0.8*self.screen_height))
-		self.populate_widget()
-		self.load_previous_tracking_instructions()
+		super().__init__(title="Configure tracking")
 
-	def populate_widget(self):
+		self._add_to_layout()
+		self._load_previous_instructions()
+
+		self._adjustSize()
+		self.resize(int(self.width()), int(self._screen_height * 0.55))
+	
+	
+	def _add_to_layout(self):
+		
+		tracker_hbox = QHBoxLayout()
+		tracker_hbox.setContentsMargins(15, 15, 15, 15)
+		tracker_hbox.addWidget(self.btrack_option, 50, alignment=Qt.AlignCenter)
+		tracker_hbox.addWidget(self.trackpy_option, 50, alignment=Qt.AlignCenter)
+		
+		self._layout.addLayout(tracker_hbox)
+		self._layout.addWidget(self.config_frame)
+		self._layout.addWidget(self.features_frame)
+		self._layout.addWidget(self.config_trackpy_frame)
+		self._layout.addWidget(self.post_proc_frame)
+		self._layout.addWidget(self.submit_btn)
+
+
+	def _create_widgets(self):
 
 		"""
 		Create the multibox design with collapsable frames.
 
 		"""
 		
-		# Create button widget and layout
-		self.scroll_area = QScrollArea(self)
-		self.button_widget = CelldetectiveWidget()
-		main_layout = QVBoxLayout()
-		self.button_widget.setLayout(main_layout)
-		main_layout.setContentsMargins(30, 30, 30, 30)
-
-		# First collapsable Frame CONFIG
+		super()._create_widgets()
 
 		self.btrack_option = QRadioButton('bTrack')
 		self.btrack_option.setChecked(True)
@@ -81,54 +84,23 @@ class ConfigTracking(CelldetectiveMainWindow):
 		self.config_frame.setFrameStyle(QFrame.StyledPanel | QFrame.Raised)
 		self.populate_config_frame()
 
-		tracker_hbox = QHBoxLayout()
-		tracker_hbox.setContentsMargins(15, 15, 15, 15)
-		tracker_hbox.addWidget(self.btrack_option, 50, alignment=Qt.AlignCenter)
-		tracker_hbox.addWidget(self.trackpy_option, 50, alignment=Qt.AlignCenter)
-		main_layout.addLayout(tracker_hbox)
-
-		main_layout.addWidget(self.config_frame)
-
 		# Second collapsable frame FEATURES
 		self.features_frame = QFrame()
 		self.features_frame.setFrameStyle(QFrame.StyledPanel | QFrame.Raised)
 		self.populate_features_frame()
-		main_layout.addWidget(self.features_frame)
 
 		self.config_trackpy_frame = QFrame()
 		self.config_trackpy_frame.setFrameStyle(QFrame.StyledPanel | QFrame.Raised)
 		self.populate_config_trackpy_frame()
-		main_layout.addWidget(self.config_trackpy_frame)
 		self.config_trackpy_frame.hide()
 
 		# Third collapsable frame POST-PROCESSING
 		self.post_proc_frame = QFrame()
 		self.post_proc_frame.setFrameStyle(QFrame.StyledPanel | QFrame.Raised)
 		self.populate_post_proc_frame()
-		main_layout.addWidget(self.post_proc_frame)
-
-		self.submit_btn = QPushButton('Save')
-		self.submit_btn.setStyleSheet(self.parent_window.parent_window.parent_window.button_style_sheet)
-		self.submit_btn.clicked.connect(self.write_instructions)
-		main_layout.addWidget(self.submit_btn)
-
-		#self.populate_left_panel()
-		#grid.addLayout(self.left_side, 0, 0, 1, 1)
-		self.button_widget.adjustSize()
-
-		self.scroll_area.setAlignment(Qt.AlignCenter)
-		self.scroll_area.setWidget(self.button_widget)
-		self.scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-		self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-		self.scroll_area.setWidgetResizable(True)
-		self.setCentralWidget(self.scroll_area)
-		self.show()
 
 		self.btrack_option.toggled.connect(self.show_tracking_options)
 		self.trackpy_option.toggled.connect(self.show_tracking_options)
-
-		QApplication.processEvents()
-		self.adjustScrollArea()
 
 	def show_tracking_options(self):
 
@@ -136,14 +108,14 @@ class ConfigTracking(CelldetectiveMainWindow):
 			self.config_frame.show()
 			self.features_frame.show()
 			self.config_trackpy_frame.hide()
-			#self.scroll_area.setMinimumHeight(min(int(930), int(0.9*self.screen_height)))
-			#self.adjustSize()
+			self._adjustSize()
+			self.resize(int(self.width()), int(self._screen_height * 0.8))
 		else:
 			self.config_frame.hide()
 			self.features_frame.hide()
 			self.config_trackpy_frame.show()
-			#self.scroll_area.setMinimumHeight(self.minimum_height)
-			#self.adjustSize()
+			self._adjustSize()
+			self.resize(int(self.width()), int(self._screen_height * 0.55))
 
 	def populate_post_proc_frame(self):
 
@@ -208,7 +180,7 @@ class ConfigTracking(CelldetectiveMainWindow):
 		else:
 			self.collapse_post_proc_btn.setIcon(icon(MDI6.chevron_up, color="black"))
 			self.collapse_post_proc_btn.setIconSize(QSize(20, 20))
-			self.scroll_area.setMinimumHeight(min(int(930), int(0.9*self.screen_height)))
+			self.scroll_area.setMinimumHeight(min(int(930), int(0.9*self._screen_height)))
 
 
 	def help_post(self):
@@ -324,7 +296,7 @@ class ConfigTracking(CelldetectiveMainWindow):
 		else:
 			self.collapse_features_btn.setIcon(icon(MDI6.chevron_up, color="black"))
 			self.collapse_features_btn.setIconSize(QSize(20, 20))
-			self.scroll_area.setMinimumHeight(min(int(930), int(0.9*self.screen_height)))
+			self.scroll_area.setMinimumHeight(min(int(930), int(0.9*self._screen_height)))
 
 
 	def generate_post_proc_panel_contents(self):
@@ -619,7 +591,7 @@ class ConfigTracking(CelldetectiveMainWindow):
 		else:
 			self.collapse_config_btn.setIcon(icon(MDI6.chevron_up,color="black"))
 			self.collapse_config_btn.setIconSize(QSize(20, 20))
-			self.scroll_area.setMinimumHeight(min(int(930), int(0.9*self.screen_height)))
+			self.scroll_area.setMinimumHeight(min(int(930), int(0.9*self._screen_height)))
 
 	def collapse_config_trackpy_advanced(self):
 
@@ -640,7 +612,7 @@ class ConfigTracking(CelldetectiveMainWindow):
 		else:
 			self.collapse_config_trackpy_btn.setIcon(icon(MDI6.chevron_up,color="black"))
 			self.collapse_config_trackpy_btn.setIconSize(QSize(20, 20))
-			self.scroll_area.setMinimumHeight(min(int(930), int(0.9*self.screen_height)))
+			self.scroll_area.setMinimumHeight(min(int(930), int(0.9*self._screen_height)))
 
 
 	def generate_config_trackpy_panel_contents(self):
@@ -653,7 +625,7 @@ class ConfigTracking(CelldetectiveMainWindow):
 		self.search_range_lbl = QLabel("search range [px]: ")
 		self.search_range_le = QLineEdit('30')
 		self.search_range_le.setPlaceholderText('search distance in pixels')
-		self.search_range_le.setValidator(self.floatValidator)
+		self.search_range_le.setValidator(self._floatValidator)
 		sr_layout.addWidget(self.search_range_lbl, 30)
 		sr_layout.addWidget(self.search_range_le, 70)
 		layout.addLayout(sr_layout)
@@ -731,7 +703,7 @@ class ConfigTracking(CelldetectiveMainWindow):
 
 		self.file_dialog = QFileDialog()
 		try:
-			modelpath = os.sep.join([self.soft_path, "celldetective","models","tracking_configs"]) + os.sep
+			modelpath = os.sep.join([self._software_path, "celldetective","models","tracking_configs"]) + os.sep
 			print("Track config path: ", modelpath)
 			self.filename = self.file_dialog.getOpenFileName(None, "Load config", modelpath, "json files (*.json)")[0]
 			if self.filename!=self.config_path:
@@ -844,7 +816,7 @@ class ConfigTracking(CelldetectiveMainWindow):
 			json_data = json.load(f)
 			self.config_le.setText(json.dumps(json_data, indent=4))
 
-	def write_instructions(self):
+	def _write_instructions(self):
 
 		"""
 		Write the selected options in a json file for later reading by the software.
@@ -953,7 +925,7 @@ class ConfigTracking(CelldetectiveMainWindow):
 		else:
 			self.haralick_options = None		
 
-	def load_previous_tracking_instructions(self):
+	def _load_previous_instructions(self):
 
 		"""
 		Read the tracking options from a previously written json file.

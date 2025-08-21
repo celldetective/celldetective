@@ -1,11 +1,10 @@
 from subprocess import Popen
 
-from PyQt5.QtWidgets import QApplication, QMessageBox, QScrollArea, QComboBox, QFrame, QCheckBox, \
+from PyQt5.QtWidgets import QMessageBox, QComboBox, QFrame, QCheckBox, \
 	QGridLayout, QLineEdit, QVBoxLayout, QLabel, QHBoxLayout, QPushButton
 from PyQt5.QtCore import Qt, QSize
-from PyQt5.QtGui import QDoubleValidator, QIntValidator
 
-from celldetective.gui.gui_utils import center_window, FeatureChoice, ListWidget, QHSeperationLine, FigureCanvas, \
+from celldetective.gui.gui_utils import FeatureChoice, ListWidget, QHSeperationLine, FigureCanvas, \
 	GeometryChoice, OperationChoice
 from superqt import QLabeledDoubleSlider
 from superqt.fonticon import icon
@@ -27,10 +26,10 @@ from pathlib import Path
 from celldetective.gui.viewers import CellEdgeVisualizer, SpotDetectionVisualizer
 from celldetective.gui.layouts import ProtocolDesignerLayout, BackgroundFitCorrectionLayout, LocalCorrectionLayout
 from celldetective.gui.gui_utils import PreprocessingLayout2
-from celldetective.gui import CelldetectiveMainWindow, CelldetectiveWidget
+from celldetective.gui.settings._settings_base import CelldetectiveSettingsPanel
 
 
-class ConfigMeasurements(CelldetectiveMainWindow):
+class SettingsMeasurements(CelldetectiveSettingsPanel):
 	"""
 	UI to set measurement instructions.
 
@@ -38,49 +37,33 @@ class ConfigMeasurements(CelldetectiveMainWindow):
 
 	def __init__(self, parent_window=None):
 
-		super().__init__()
-
 		self.parent_window = parent_window
-		self.setWindowTitle("Configure measurements")
 		self.mode = self.parent_window.mode
 		self.exp_dir = self.parent_window.exp_dir
 		self.background_correction = []
 		self.config_name = f"btrack_config_{self.mode}.json"
 		self.measure_instructions_path = self.parent_window.exp_dir + f"configs/measurement_instructions_{self.mode}.json"
-		self.soft_path = get_software_location()
 		self.clear_previous = False
-
-		exp_config = self.exp_dir + "config.ini"
 		self.config_path = self.exp_dir + self.config_name
 		self.channel_names, self.channels = extract_experiment_channels(self.exp_dir)
 		self.channel_names = np.array(self.channel_names)
 		self.channels = np.array(self.channels)
+		
+		super().__init__("Configure measurements")
 
-		self.screen_height = self.parent_window.parent_window.parent_window.screen_height
-		center_window(self)
-
-		self.onlyFloat = QDoubleValidator()
-		self.onlyInt = QIntValidator()
-
-		self.setMinimumWidth(500)
-		self.setMinimumHeight(int(0.3 * self.screen_height))
-		self.setMaximumHeight(int(0.8 * self.screen_height))
-		self.populate_widget()
-		self.load_previous_measurement_instructions()
-
-	def populate_widget(self):
+		self._add_to_layout()
+		self._load_previous_instructions()
+		
+		self._adjustSize()
+		self.resize(int(self.width()), int(self._screen_height * 0.8))
+	
+	def _create_widgets(self):
 
 		"""
 		Create the multibox design.
 
 		"""
-
-		# Create button widget and layout
-		self.scroll_area = QScrollArea(self)
-		self.button_widget = CelldetectiveWidget()
-		main_layout = QVBoxLayout()
-		self.button_widget.setLayout(main_layout)
-		main_layout.setContentsMargins(30, 30, 30, 30)
+		super()._create_widgets()
 
 		self.normalisation_frame = QFrame()
 		self.normalisation_frame.setFrameStyle(QFrame.StyledPanel | QFrame.Raised)
@@ -98,48 +81,31 @@ class ConfigMeasurements(CelldetectiveMainWindow):
 		self.normalisation_frame.setLayout(self.protocol_layout)
 
 		#self.populate_normalisation_tabs()
-		main_layout.addWidget(self.normalisation_frame)
 
 		# first frame for FEATURES
 		self.features_frame = QFrame()
 		self.features_frame.setFrameStyle(QFrame.StyledPanel | QFrame.Raised)
 		self.populate_features_frame()
-		main_layout.addWidget(self.features_frame)
 
 		# second frame for ISOTROPIC MEASUREMENTS
 		self.iso_frame = QFrame()
 		self.iso_frame.setFrameStyle(QFrame.StyledPanel | QFrame.Raised)
 		self.populate_iso_frame()
-		main_layout.addWidget(self.iso_frame)
 
 		self.spot_detection_frame = QFrame()
 		self.spot_detection_frame.setFrameStyle(QFrame.StyledPanel | QFrame.Raised)
 		self.populate_spot_detection()
-		main_layout.addWidget(self.spot_detection_frame)
 
 		self.clear_previous_btn = QCheckBox('clear previous measurements')
-		main_layout.addWidget(self.clear_previous_btn)
 
-		self.submit_btn = QPushButton('Save')
-		self.submit_btn.setStyleSheet(self.button_style_sheet)
-		self.submit_btn.clicked.connect(self.write_instructions)
-		main_layout.addWidget(self.submit_btn)
-
-		# self.populate_left_panel()
-		# grid.addLayout(self.left_side, 0, 0, 1, 1)
-		self.button_widget.adjustSize()
-
-		self.scroll_area.setAlignment(Qt.AlignCenter)
-		self.scroll_area.setWidget(self.button_widget)
-		self.scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-		self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-		self.scroll_area.setWidgetResizable(True)
-		self.setCentralWidget(self.scroll_area)
-		self.show()
-
-		QApplication.processEvents()
-		self.adjustScrollArea()
-
+	def _add_to_layout(self):
+		self._layout.addWidget(self.normalisation_frame)
+		self._layout.addWidget(self.features_frame)
+		self._layout.addWidget(self.iso_frame)
+		self._layout.addWidget(self.spot_detection_frame)
+		self._layout.addWidget(self.clear_previous_btn)
+		self._layout.addWidget(self.submit_btn)
+	
 	def populate_iso_frame(self):
 
 		"""
@@ -431,7 +397,7 @@ class ConfigMeasurements(CelldetectiveMainWindow):
 
 	def go_to_extraprops(self):
 		
-		path = os.sep.join([self.soft_path,'celldetective',os.sep,'extra_properties.py'])
+		path = os.sep.join([self._software_path,'celldetective',os.sep,'extra_properties.py'])
 		try:
 			Popen(f'explorer {os.path.realpath(path)}')
 		except:
@@ -487,7 +453,7 @@ class ConfigMeasurements(CelldetectiveMainWindow):
 		while self.scroll_area.verticalScrollBar().isVisible() and self.height() < self.maximumHeight():
 			self.resize(self.width(), self.height() + step)
 
-	def write_instructions(self):
+	def _write_instructions(self):
 
 		"""
 		Write the selected options in a json file for later reading by the software.
@@ -566,7 +532,7 @@ class ConfigMeasurements(CelldetectiveMainWindow):
 		else:
 			self.haralick_options = None
 
-	def load_previous_measurement_instructions(self):
+	def _load_previous_instructions(self):
 
 		"""
 		Read the measurmeent options from a previously written json file and format properly for the UI.
@@ -684,18 +650,6 @@ class ConfigMeasurements(CelldetectiveMainWindow):
 						self.operations_list.list_widget.addItems(isotropic_operations)
 					else:
 						self.operations_list.list_widget.clear()
-
-				# if 'radial_intensity' in measurement_instructions:
-				#     radial_intensity = measurement_instructions['radial_intensity']
-				#     if radial_intensity is not None:
-				#         self.radial_intensity_btn.setChecked(True)
-				#         self.step_size.setText(str(radial_intensity['radial_step']))
-				#         self.step_size.setEnabled(True)
-				#         self.step_lbl.setEnabled(True)
-				#         for checkbox in self.channel_chechkboxes:
-				#             checkbox.setEnabled(True)
-				#             if checkbox.text() in radial_intensity['radial_channels']:
-				#                 checkbox.setChecked(True)
 
 				if 'clear_previous' in measurement_instructions:
 					self.clear_previous = measurement_instructions['clear_previous']
@@ -946,7 +900,7 @@ class ConfigMeasurements(CelldetectiveMainWindow):
 		diam_hbox = QHBoxLayout()
 		self.diameter_lbl = QLabel('Spot diameter: ')
 		self.diameter_value = QLineEdit()
-		self.diameter_value.setValidator(self.onlyFloat)
+		self.diameter_value.setValidator(self._floatValidator)
 		self.diameter_value.setText('7')
 		self.diameter_value.textChanged.connect(self.enable_spot_preview)
 
@@ -957,21 +911,13 @@ class ConfigMeasurements(CelldetectiveMainWindow):
 		thresh_hbox = QHBoxLayout()
 		self.threshold_lbl = QLabel('Spot threshold: ')
 		self.threshold_value = QLineEdit()
-		self.threshold_value.setValidator(self.onlyFloat)
+		self.threshold_value.setValidator(self._floatValidator)
 		self.threshold_value.setText('0')
 		self.threshold_value.textChanged.connect(self.enable_spot_preview)
 
 		thresh_hbox.addWidget(self.threshold_lbl, 30)
 		thresh_hbox.addWidget(self.threshold_value, 70)
 		layout.addLayout(thresh_hbox)
-
-		# #invert_layout = QHBoxLayout()
-		# self.invert_check = QCheckBox('invert')
-		# self.invert_value_le = QLineEdit('65535')
-		# self.invert_value_le.setValidator(self.onlyFloat)
-		# layout.addWidget(self.invert_check, 6, 0)
-		# layout.addWidget(self.invert_value_le, 6, 1)
-		# #layout.addLayout(invert_layout, 5, 1, 1, 1)
 
 		self.spot_detection_widgets = [self.spot_channel, 
 									   self.spot_channel_lbl,

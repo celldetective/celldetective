@@ -13,13 +13,17 @@ from celldetective.io import get_segmentation_models_list, control_segmentation_
 	control_tracks, load_experiment_tables, get_pair_signal_models_list
 from celldetective.io import locate_segmentation_model, extract_position_name, fix_missing_labels, locate_signal_model
 from celldetective.gui import SegmentationModelLoader, ClassifierWidget, ConfigNeighborhoods, \
-	ConfigSegmentationModelTraining, ConfigTracking, SignalAnnotator, ConfigSignalModelTraining, ConfigMeasurements, \
+	ConfigSegmentationModelTraining, SignalAnnotator, ConfigSignalModelTraining, \
 	ConfigSignalAnnotator, TableUI, CelldetectiveWidget
+
 from celldetective.gui.settings._settings_segmentation import SettingsSegmentation
+from celldetective.gui.settings._settings_measurements import SettingsMeasurements
+from celldetective.gui.settings._settings_tracking import SettingsTracking
+
 from celldetective.gui.gui_utils import QHSeperationLine
 from celldetective.relative_measurements import rel_measure_at_position
 from celldetective.signals import analyze_signals_at_position, analyze_pair_signals_at_position
-from celldetective.utils import extract_experiment_channels
+from celldetective.utils import extract_experiment_channels, remove_file_if_exists
 import numpy as np
 from glob import glob
 from natsort import natsorted
@@ -348,14 +352,10 @@ class ProcessPanel(QFrame, Styles):
 		if returnValue == QMessageBox.No:
 			return None
 		elif returnValue == QMessageBox.Yes:
-			if os.path.exists(os.sep.join([self.parent_window.pos, 'output', 'tables', f'trajectories_{self.mode}.csv'])):
-				os.remove(os.sep.join([self.parent_window.pos, 'output', 'tables', f'trajectories_{self.mode}.csv']))
-			if os.path.exists(os.sep.join([self.parent_window.pos, 'output', 'tables', f'trajectories_{self.mode}.pkl'])):
-				os.remove(os.sep.join([self.parent_window.pos, 'output', 'tables', f'trajectories_{self.mode}.pkl']))
-			if os.path.exists(os.sep.join([self.parent_window.pos, 'output', 'tables', f'napari_{self.mode[:-1]}_trajectories.npy'])):
-				os.remove(os.sep.join([self.parent_window.pos, 'output', 'tables', f'napari_{self.mode[:-1]}_trajectories.npy']))
-			if os.path.exists(os.sep.join([self.parent_window.pos, 'output', 'tables', f'trajectories_pairs.csv'])):
-				os.remove(os.sep.join([self.parent_window.pos, 'output', 'tables', f'trajectories_pairs.csv']))
+			remove_file_if_exists(os.sep.join([self.parent_window.pos, 'output', 'tables', f'trajectories_{self.mode}.csv']))
+			remove_file_if_exists(os.sep.join([self.parent_window.pos, 'output', 'tables', f'trajectories_{self.mode}.pkl']))
+			remove_file_if_exists(os.sep.join([self.parent_window.pos, 'output', 'tables', f'napari_{self.mode[:-1]}_trajectories.npy']))
+			remove_file_if_exists(os.sep.join([self.parent_window.pos, 'output', 'tables', f'trajectories_pairs.csv']))
 			self.parent_window.update_position_options()
 		else:
 			return None
@@ -374,13 +374,13 @@ class ProcessPanel(QFrame, Styles):
 		#self.to_disable.append(self.segment_action)
 		grid_segment.addWidget(self.segment_action, 90)
 
-		self.flip_segment_btn = QPushButton()
-		self.flip_segment_btn.setIcon(icon(MDI6.camera_flip_outline,color="black"))
-		self.flip_segment_btn.setIconSize(QSize(20, 20))
-		self.flip_segment_btn.clicked.connect(self.flip_segmentation)
-		self.flip_segment_btn.setStyleSheet(self.button_select_all)
-		self.flip_segment_btn.setToolTip("Flip the order of the frames for segmentation.")
-		grid_segment.addWidget(self.flip_segment_btn, 5)
+		# self.flip_segment_btn = QPushButton()
+		# self.flip_segment_btn.setIcon(icon(MDI6.camera_flip_outline,color="black"))
+		# self.flip_segment_btn.setIconSize(QSize(20, 20))
+		# self.flip_segment_btn.clicked.connect(self.flip_segmentation)
+		# self.flip_segment_btn.setStyleSheet(self.button_select_all)
+		# self.flip_segment_btn.setToolTip("Flip the order of the frames for segmentation.")
+		# grid_segment.addWidget(self.flip_segment_btn, 5)
 
 		self.segmentation_config_btn = QPushButton()
 		self.segmentation_config_btn.setIcon(icon(MDI6.cog_outline,color="black"))
@@ -680,8 +680,8 @@ class ProcessPanel(QFrame, Styles):
 
 	def open_tracking_configuration_ui(self):
 		print('Set the tracking parameters...')
-		self.ConfigTracking = ConfigTracking(self)
-		self.ConfigTracking.show()
+		self.settings_tracking = SettingsTracking(self)
+		self.settings_tracking.show()
 
 	def open_signal_model_config_ui(self):
 		print('Set the training parameters for new signal models...')
@@ -695,13 +695,13 @@ class ProcessPanel(QFrame, Styles):
 
 	def open_measurement_configuration_ui(self):
 		print('Set the measurements to be performed...')
-		self.ConfigMeasurements = ConfigMeasurements(self)
-		self.ConfigMeasurements.show()
+		self.settings_measurements = SettingsMeasurements(self)
+		self.settings_measurements.show()
 		
 	def open_segmentation_configuration_ui(self):
 		print('Set the segmentation settings to be performed...')
-		self.config_segmentation = SettingsSegmentation(self)
-		self.config_segmentation.show()
+		self.settings_segmentation = SettingsSegmentation(self)
+		self.settings_segmentation.show()
 
 	def open_classifier_ui(self):
 
@@ -780,8 +780,7 @@ class ProcessPanel(QFrame, Styles):
 				#tabs += [pos+os.sep.join(['output', 'tables', f'trajectories_pairs.csv']) for pos in self.df_pos_info['pos_path'].unique()]
 				tabs += [pos+os.sep.join(['output', 'tables', f'napari_{self.mode}_trajectories.npy']) for pos in self.df_pos_info['pos_path'].unique()]
 				for t in tabs:
-					if os.path.exists(t.replace('.csv','.pkl')):
-						os.remove(t.replace('.csv','.pkl'))
+					remove_file_if_exists(t.replace('.csv','.pkl'))
 					try:
 						os.remove(t)
 					except:

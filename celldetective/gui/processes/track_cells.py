@@ -1,10 +1,8 @@
 from multiprocessing import Process
 import time
-import datetime
-import os
-import json
 from celldetective.io import auto_load_number_of_frames, _load_frames_to_measure, locate_labels
-from celldetective.utils import extract_experiment_channels, ConfigSectionMap, _get_img_num_per_channel, _mask_intensity_measurements
+from celldetective.utils import ConfigSectionMap, _get_img_num_per_channel, \
+	_mask_intensity_measurements, remove_file_if_exists
 from pathlib import Path, PurePath
 from glob import glob
 from tqdm import tqdm
@@ -280,8 +278,7 @@ class TrackingProcess(Process):
 		trajectories.to_csv(self.pos+os.sep.join(['output', 'tables', self.table_name]), index=False)
 		print(f"Trajectory table successfully exported in {os.sep.join(['output', 'tables'])}...")
 
-		if os.path.exists(self.pos+os.sep.join(['output', 'tables', self.table_name.replace('.csv','.pkl')])):
-			os.remove(self.pos+os.sep.join(['output', 'tables', self.table_name.replace('.csv','.pkl')]))
+		remove_file_if_exists(self.pos+os.sep.join(['output', 'tables', self.table_name.replace('.csv','.pkl')]))
 
 		del trajectories; del napari_data;
 		gc.collect()		

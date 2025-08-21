@@ -67,12 +67,12 @@ def test_app(app, qtbot):
 	# Config tracking
 	qtbot.mouseClick(app.control_panel.ProcessPopulations[0].track_config_btn, QtCore.Qt.LeftButton)
 	qtbot.wait(1000)
-	app.control_panel.ProcessPopulations[0].ConfigTracking.close()
+	app.control_panel.ProcessPopulations[0].settings_tracking.close()
 
 	# Config measurements
 	qtbot.mouseClick(app.control_panel.ProcessPopulations[0].measurements_config_btn, QtCore.Qt.LeftButton)
 	qtbot.wait(1000)
-	app.control_panel.ProcessPopulations[0].ConfigMeasurements.close()
+	app.control_panel.ProcessPopulations[0].settings_measurements.close()
 
 	# Classifier widget
 	qtbot.mouseClick(app.control_panel.ProcessPopulations[0].classify_btn, QtCore.Qt.LeftButton)

@@ -2,8 +2,7 @@ from PyQt5.QtWidgets import QCheckBox
 from PyQt5.QtCore import QSize
 from superqt.fonticon import icon
 from fonticon_mdi6 import MDI6
-from celldetective.utils import get_software_location
-from celldetective.gui.settings._settings_panel import CelldetectiveSettingsPanel
+from celldetective.gui.settings._settings_base import CelldetectiveSettingsPanel
 import json
 import os
 
@@ -11,16 +10,14 @@ class SettingsSegmentation(CelldetectiveSettingsPanel):
 	
 	def __init__(self, parent_window=None):
 		
-		super().__init__()
+		super().__init__(title="Configure segmentation")
 		self.parent_window = parent_window
-		self.setWindowTitle("Configure segmentation")
 		self.mode = self.parent_window.mode
 		self.exp_dir = self.parent_window.exp_dir
 		self._instructions_path = self.parent_window.exp_dir + f"configs/segmentation_instructions_{self.mode}.json"
-		self.soft_path = get_software_location()
 		self._add_to_layout()
 		self._load_previous_instructions()
-	
+		
 	def _create_widgets(self):
 		super()._create_widgets()
 		

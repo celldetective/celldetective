@@ -31,11 +31,11 @@ from scipy.stats import ks_2samp
 from cliffs_delta import cliffs_delta
 from stardist.models import StarDist2D
 from cellpose.models import CellposeModel
-from pathlib import PosixPath, PurePosixPath, WindowsPath
+from pathlib import PosixPath, PurePosixPath, WindowsPath, Path
 from prettytable import PrettyTable
+from typing import List
 
-
-def is_integer_array(arr):
+def is_integer_array(arr: np.ndarray) -> bool:
 
 	# Mask out NaNs
 	non_nan_values = arr[arr==arr].flatten()
@@ -46,7 +46,7 @@ def is_integer_array(arr):
 	else:
 		return False
 
-def get_config(experiment):
+def get_config(experiment: str | Path) -> str:
 
 	"""
 	Retrieves the path to the configuration file for a given experiment.
@@ -94,7 +94,7 @@ def get_config(experiment):
 	return config
 
 
-def _remove_invalid_cols(df):
+def _remove_invalid_cols(df: pd.DataFrame) -> pd.DataFrame:
 
 	"""
 	Removes invalid columns from a DataFrame.
@@ -120,7 +120,7 @@ def _remove_invalid_cols(df):
 	df = df.dropna(axis=1, how='all')
 	return df
 
-def _extract_coordinates_from_features(df, timepoint):
+def _extract_coordinates_from_features(df: pd.DataFrame, timepoint: int) -> pd.DataFrame:
 
 	"""
 	Re-format coordinates from a regionprops table to tracking/measurement table format. 
@@ -161,7 +161,7 @@ def _extract_coordinates_from_features(df, timepoint):
 
 	return coords
 
-def _mask_intensity_measurements(df, mask_channels):
+def _mask_intensity_measurements(df: pd.DataFrame, mask_channels: List[str] | None):
 
 	"""
 	Removes columns from a DataFrame that match specific channel name patterns.
@@ -210,7 +210,7 @@ def _mask_intensity_measurements(df, mask_channels):
 			df = df.drop(cols_to_drop, axis=1)
 	return df
 
-def _rearrange_multichannel_frame(frame, n_channels=None):
+def _rearrange_multichannel_frame(frame: np.ndarray, n_channels: int | None = None) -> np.ndarray:
 
 	"""
 	Rearranges the axes of a multi-channel frame to ensure the channel axis is at the end.
@@ -271,7 +271,7 @@ def _rearrange_multichannel_frame(frame, n_channels=None):
 
 	return frame
 
-def _fix_no_contrast(frames, value=1):
+def _fix_no_contrast(frames: np.ndarray, value: float | int = 1):
 
 	"""
 	Ensures that frames with no contrast (i.e., containing only a single unique value) are adjusted.
@@ -310,7 +310,7 @@ def _fix_no_contrast(frames, value=1):
 			frames[0,0,k] += value
 	return frames
 
-def zoom_multiframes(frames, zoom_factor):
+def zoom_multiframes(frames: np.ndarray, zoom_factor: float) -> np.ndarray:
 
 	"""
 	Applies zooming to each frame (channel) in a multi-frame image.
@@ -1861,7 +1861,7 @@ def ConfigSectionMap(path,section):
 		try:
 			dict1[option] = Config.get(section, option)
 			if dict1[option] == -1:
-				DebugPrint("skip: %s" % option)
+				print("skip: %s" % option)
 		except:
 			print("exception on %s!" % option)
 			dict1[option] = None
@@ -2207,7 +2207,7 @@ def extract_experiment_channels(experiment):
 	return _extract_channels_from_config(config)
 
 
-def get_software_location():
+def get_software_location() -> str:
 
 	"""
 	Get the installation folder of celldetective.
@@ -2852,8 +2852,7 @@ def download_url_to_file(url, dst, progress=True):
 		shutil.move(f.name, dst)
 	finally:
 		f.close()
-		if os.path.exists(f.name):
-			os.remove(f.name)
+		remove_file_if_exists(f.name)
 
 def get_zenodo_files(cat=None):
 
@@ -3105,3 +3104,10 @@ def pretty_table(dct):
 		table.add_column(str(c), [])
 	table.add_row([dct.get(c, "") for c in dct.keys()])
 	print(table)
+
+def remove_file_if_exists(file: str | Path):
+	if os.path.exists(file):
+		try:
+			os.remove(file)
+		except Exception as e:
+			print(e)
