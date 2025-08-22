@@ -6,11 +6,11 @@ from celldetective.gui.settings._settings_neighborhood import ConfigNeighborhood
 from .classifier_widget import ClassifierWidget
 from .survival_ui import ConfigSurvival
 from .plot_signals_ui import ConfigSignalPlot
-from celldetective.gui.settings._settings_signal_annotator import ConfigSignalAnnotator
+from celldetective.gui.settings._settings_signal_annotator import SettingsSignalAnnotator
 from .signal_annotator import SignalAnnotator
 from .signal_annotator2 import SignalAnnotator2
 from celldetective.gui.settings._settings_event_model_training import ConfigSignalModelTraining
-from celldetective.gui.settings._settings_segmentation_model_training import ConfigSegmentationModelTraining
+from celldetective.gui.settings._settings_segmentation_model_training import SettingsSegmentationModelTraining
 from .thresholds_gui import ThresholdConfigWizard
 from .seg_model_loader import SegmentationModelLoader
 from .process_block import ProcessPanel, NeighPanel, PreprocessingPanel

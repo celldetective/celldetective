@@ -1,3 +1,8 @@
+"""
+Copyright © 2023 Laboratoire Adhesion et Inflammation, Authored by Remy Torro.
+"""
+
+
 from PyQt5.QtWidgets import QRadioButton, QButtonGroup, QMessageBox, QComboBox, QFrame, QCheckBox, QFileDialog, QGridLayout, QTextEdit, QLineEdit, QVBoxLayout, QLabel, QHBoxLayout, QPushButton
 from PyQt5.QtCore import Qt, QSize
 

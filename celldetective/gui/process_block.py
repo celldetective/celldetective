@@ -13,12 +13,12 @@ from celldetective.io import get_segmentation_models_list, control_segmentation_
 	control_tracks, load_experiment_tables, get_pair_signal_models_list
 from celldetective.io import locate_segmentation_model, extract_position_name, fix_missing_labels, locate_signal_model
 from celldetective.gui import SegmentationModelLoader, ClassifierWidget, ConfigNeighborhoods, \
-	ConfigSegmentationModelTraining, SignalAnnotator, ConfigSignalModelTraining, \
-	ConfigSignalAnnotator, TableUI, CelldetectiveWidget
+	SettingsSegmentationModelTraining, SignalAnnotator, ConfigSignalModelTraining, TableUI, CelldetectiveWidget
 
 from celldetective.gui.settings._settings_segmentation import SettingsSegmentation
 from celldetective.gui.settings._settings_measurements import SettingsMeasurements
 from celldetective.gui.settings._settings_tracking import SettingsTracking
+from celldetective.gui.settings._settings_signal_annotator import SettingsSignalAnnotator
 
 from celldetective.gui.gui_utils import QHSeperationLine
 from celldetective.relative_measurements import rel_measure_at_position
@@ -690,8 +690,8 @@ class ProcessPanel(QFrame, Styles):
 
 	def open_segmentation_model_config_ui(self):
 		print('Set the training parameters for a new segmentation model...')
-		self.ConfigSegmentationTrain = ConfigSegmentationModelTraining(self)
-		self.ConfigSegmentationTrain.show()
+		self.settings_segmentation_training = SettingsSegmentationModelTraining(self)
+		self.settings_segmentation_training.show()
 
 	def open_measurement_configuration_ui(self):
 		print('Set the measurements to be performed...')
@@ -723,8 +723,8 @@ class ProcessPanel(QFrame, Styles):
 			self.ClassifierWidget.show()
 
 	def open_signal_annotator_configuration_ui(self):
-		self.ConfigSignalAnnotator = ConfigSignalAnnotator(self)
-		self.ConfigSignalAnnotator.show()
+		self.settings_signal_annotator = SettingsSignalAnnotator(self)
+		self.settings_signal_annotator.show()
 
 	def reset_generalist_setup(self, index):
 		self.cellpose_calibrated = False
@@ -1456,8 +1456,8 @@ class NeighPanel(QFrame, Styles):
 
 	def open_signal_annotator_configuration_ui(self):
 		self.mode = 'pairs'
-		self.ConfigSignalAnnotator = ConfigSignalAnnotator(self)
-		self.ConfigSignalAnnotator.show()
+		self.config_signal_annotator = SettingsSignalAnnotator(self)
+		self.config_signal_annotator.show()
 
 	def open_signal_model_config_ui(self):
 		self.ConfigSignalTrain = ConfigSignalModelTraining(self, signal_mode='pairs')

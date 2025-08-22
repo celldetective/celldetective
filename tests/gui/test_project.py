@@ -62,7 +62,7 @@ def test_app(app, qtbot):
 	# Train model
 	qtbot.mouseClick(app.control_panel.ProcessPopulations[0].train_btn, QtCore.Qt.LeftButton)
 	qtbot.wait(1000)
-	app.control_panel.ProcessPopulations[0].ConfigSegmentationTrain.close()
+	app.control_panel.ProcessPopulations[0].settings_segmentation_training.close()
 
 	# Config tracking
 	qtbot.mouseClick(app.control_panel.ProcessPopulations[0].track_config_btn, QtCore.Qt.LeftButton)
@@ -81,9 +81,9 @@ def test_app(app, qtbot):
 
 	# Config signal annotator
 	qtbot.mouseClick(app.control_panel.ProcessPopulations[0].config_signal_annotator_btn, QtCore.Qt.LeftButton)
-	qtbot.mouseClick(app.control_panel.ProcessPopulations[0].ConfigSignalAnnotator.rgb_btn, QtCore.Qt.LeftButton)
+	qtbot.mouseClick(app.control_panel.ProcessPopulations[0].settings_signal_annotator.rgb_btn, QtCore.Qt.LeftButton)
 	qtbot.wait(1000)
-	app.control_panel.ProcessPopulations[0].ConfigSignalAnnotator.close()
+	app.control_panel.ProcessPopulations[0].settings_signal_annotator.close()
 
 	# Signal annotator widget
 	qtbot.mouseClick(app.control_panel.ProcessPopulations[0].check_signals_btn, QtCore.Qt.LeftButton)

@@ -16,10 +16,10 @@ import json
 import os
 from glob import glob
 from datetime import datetime
-from celldetective.gui import CelldetectiveMainWindow, CelldetectiveWidget
+from celldetective.gui import CelldetectiveWidget
+from celldetective.gui.settings._settings_base import CelldetectiveSettingsPanel
 
-
-class ConfigSegmentationModelTraining(CelldetectiveMainWindow):
+class SettingsSegmentationModelTraining(CelldetectiveSettingsPanel):
 	
 	"""
 	UI to set segmentation model training instructions.
@@ -28,84 +28,54 @@ class ConfigSegmentationModelTraining(CelldetectiveMainWindow):
 
 	def __init__(self, parent_window=None):
 		
-		super().__init__()
 		self.parent_window = parent_window
 		self.use_gpu = self.parent_window.use_gpu
-		self.setWindowTitle("Train segmentation model")
 		self.mode = self.parent_window.mode
 		self.exp_dir = self.parent_window.exp_dir
-		self.soft_path = get_software_location()
-		self.pretrained_model = None 
+		self.pretrained_model = None
 		self.dataset_folder = None
-		self.software_models_dir = os.sep.join([self.soft_path, 'celldetective', 'models', f'segmentation_{self.mode}'])
+		super().__init__(title="Train segmentation model")
 
-		self.onlyFloat = QDoubleValidator()
-		self.onlyInt = QIntValidator()
-
-		self.screen_height = self.parent_window.parent_window.parent_window.screen_height
-		center_window(self)
-
-		self.setMinimumWidth(500)
-		self.setMinimumHeight(int(0.3*self.screen_height))
-		self.setMaximumHeight(int(0.8*self.screen_height))
-		self.populate_widget()
-		#self.load_previous_measurement_instructions()
-
-	def populate_widget(self):
+		self.software_models_dir = os.sep.join([self._software_path, 'celldetective', 'models', f'segmentation_{self.mode}'])
+		self._add_to_layout()
+		self._load_previous_instructions()
+		
+		self._adjustSize()
+		self.resize(int(self.width()), int(self._screen_height * 0.8))
+	
+	def _add_to_layout(self):
+		
+		self._layout.addWidget(self.model_frame)
+		self._layout.addWidget(self.data_frame)
+		self._layout.addWidget(self.hyper_frame)
+		self._layout.addWidget(self.submit_warning)
+		self._layout.addWidget(self.submit_btn)
+	
+	def _create_widgets(self):
 
 		"""
 		Create the multibox design.
 
 		"""
 		
-		# Create button widget and layout
-		self.scroll_area = QScrollArea(self)
-		self.button_widget = CelldetectiveWidget()
-		self.main_layout = QVBoxLayout()
-		self.button_widget.setLayout(self.main_layout)
-		self.main_layout.setContentsMargins(30,30,30,30)
-
-		# first frame for FEATURES
+		super()._create_widgets()
 		self.model_frame = QFrame()
 		self.model_frame.setFrameStyle(QFrame.StyledPanel | QFrame.Raised)
 		self.populate_model_frame()
-		self.main_layout.addWidget(self.model_frame)
 
 		self.data_frame = QFrame()
 		self.data_frame.setFrameStyle(QFrame.StyledPanel | QFrame.Raised)
 		self.populate_data_frame()
-		self.main_layout.addWidget(self.data_frame)
 
 		self.hyper_frame = QFrame()
 		self.hyper_frame.setFrameStyle(QFrame.StyledPanel | QFrame.Raised)
 		self.populate_hyper_frame()
-		self.main_layout.addWidget(self.hyper_frame)
 
-		self.submit_btn = QPushButton('Train')
-		self.submit_btn.setStyleSheet(self.button_style_sheet)
-		self.submit_btn.clicked.connect(self.prep_model)
-		self.main_layout.addWidget(self.submit_btn)
 		self.submit_btn.setEnabled(False)
 		self.submit_warning = QLabel('')
-		self.main_layout.addWidget(self.submit_warning)
 
 		self.spatial_calib_le.textChanged.connect(self.activate_train_btn)
 		self.modelname_le.setText(f"Untitled_model_{datetime.today().strftime('%Y-%m-%d')}")
-
-		#self.populate_left_panel()
-		#grid.addLayout(self.left_side, 0, 0, 1, 1)
-		self.button_widget.adjustSize()
-
-		self.scroll_area.setAlignment(Qt.AlignCenter)
-		self.scroll_area.setWidget(self.button_widget)
-		self.scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-		self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-		self.scroll_area.setWidgetResizable(True)
-		self.setCentralWidget(self.scroll_area)
-		self.show()
-
-		QApplication.processEvents()
-		self.adjustScrollArea()
 
 	def populate_hyper_frame(self):
 
@@ -135,14 +105,14 @@ class ConfigSegmentationModelTraining(CelldetectiveMainWindow):
 		lr_layout = QHBoxLayout()
 		lr_layout.addWidget(QLabel('learning rate: '),30)
 		self.lr_le = QLineEdit('0,0003')
-		self.lr_le.setValidator(self.onlyFloat)
+		self.lr_le.setValidator(self._floatValidator)
 		lr_layout.addWidget(self.lr_le, 70)
 		layout.addLayout(lr_layout)
 
 		bs_layout = QHBoxLayout()
 		bs_layout.addWidget(QLabel('batch size: '),30)
 		self.bs_le = QLineEdit('8')
-		self.bs_le.setValidator(self.onlyInt)
+		self.bs_le.setValidator(self._intValidator)
 		bs_layout.addWidget(self.bs_le, 70)
 		layout.addLayout(bs_layout)
 
@@ -318,7 +288,7 @@ class ConfigSegmentationModelTraining(CelldetectiveMainWindow):
 		parent_pxtoum = f"{self.parent_window.parent_window.PxToUm}"
 		self.spatial_calib_le = QLineEdit(parent_pxtoum.replace('.',','))
 		self.spatial_calib_le.setPlaceholderText('e.g. 0.1 µm per pixel')
-		self.spatial_calib_le.setValidator(self.onlyFloat)
+		self.spatial_calib_le.setValidator(self._floatValidator)
 		spatial_calib_layout.addWidget(self.spatial_calib_le, 70)
 		layout.addLayout(spatial_calib_layout)
 
@@ -542,7 +512,7 @@ class ConfigSegmentationModelTraining(CelldetectiveMainWindow):
 		while self.scroll_area.verticalScrollBar().isVisible() and self.height() < self.maximumHeight():
 			self.resize(self.width(), self.height() + step)
 
-	def prep_model(self):
+	def _write_instructions(self):
 
 		model_name = self.modelname_le.text()
 		pretrained_model = self.pretrained_model
@@ -624,3 +594,6 @@ class ConfigSegmentationModelTraining(CelldetectiveMainWindow):
 		self.parent_window.init_seg_model_list()
 		idx = self.parent_window.seg_model_list.findText(model_name)
 		self.parent_window.seg_model_list.setCurrentIndex(idx)
+	
+	def _load_previous_instructions(self):
+		pass

@@ -1,5 +1,5 @@
 """
-Copright © 2023 Laboratoire Adhesion et Inflammation, Authored by Remy Torro.
+Copyright © 2023 Laboratoire Adhesion et Inflammation, Authored by Remy Torro.
 """
 
 from PyQt5.QtWidgets import QComboBox, QLabel, QRadioButton, QLineEdit, QApplication, QPushButton, QScrollArea, QVBoxLayout, QHBoxLayout
@@ -12,9 +12,9 @@ import numpy as np
 from superqt.fonticon import icon
 from fonticon_mdi6 import MDI6
 import os
-from celldetective.gui import CelldetectiveWidget, CelldetectiveMainWindow
+from celldetective.gui.settings._settings_base import CelldetectiveSettingsPanel
 
-class ConfigSignalAnnotator(CelldetectiveMainWindow):
+class SettingsSignalAnnotator(CelldetectiveSettingsPanel):
 	
 	"""
 	UI to set normalization and animation parameters for the annotator tool. 
@@ -23,65 +23,94 @@ class ConfigSignalAnnotator(CelldetectiveMainWindow):
 
 	def __init__(self, parent_window=None):
 		
-		super().__init__()
 		self.parent_window = parent_window
-		self.setWindowTitle("Configure signal annotator")
 		self.mode = self.parent_window.mode
 		self.exp_dir = self.parent_window.exp_dir
-		self.soft_path = get_software_location()
 		
 		self.instructions_path = self.parent_window.exp_dir + f"configs/signal_annotator_config_{self.mode}.json"
 		if self.mode == "pairs":
 			self.instructions_path = self.parent_window.exp_dir + "configs/signal_annotator_config_neighborhood.json"
 
-		exp_config = self.exp_dir +"config.ini"
-		#self.config_path = self.exp_dir + self.config_name
 		self.channel_names, self.channels = extract_experiment_channels(self.exp_dir)
 		self.channel_names = np.array(self.channel_names)
 		self.channels = np.array(self.channels)
 		self.log_option = False
+		
+		super().__init__(title="Configure signal annotator")
 
-		self.screen_height = self.parent_window.parent_window.parent_window.screen_height
-		center_window(self)
+		self._add_to_layout()
+		self._load_previous_instructions()
+		
+		self._adjustSize()
+		self.resize(int(self.width()), int(self._screen_height * 0.55))
+	
+	def _add_to_layout(self):
+		
+		sub_layout = QVBoxLayout()
+		sub_layout.setContentsMargins(10,10,10,20)
+		sub_layout.setContentsMargins(30,30,30,30)
+		sub_layout.addWidget(self._modality_lbl)
+		
+		# Create radio buttons
+		option_layout = QHBoxLayout()
+		option_layout.addWidget(self.gs_btn, alignment=Qt.AlignCenter)
+		option_layout.addWidget(self.rgb_btn, alignment=Qt.AlignCenter)
+		sub_layout.addLayout(option_layout)
+		
+		btn_hbox = QHBoxLayout()
+		btn_hbox.addWidget(QLabel(''), 90)
+		btn_hbox.addWidget(self.log_btn, 5,alignment=Qt.AlignRight)
+		btn_hbox.addWidget(self.percentile_btn, 5,alignment=Qt.AlignRight)
+		sub_layout.addLayout(btn_hbox)
 
-		self.setMinimumHeight(int(0.4*self.screen_height))
-		self.setMaximumHeight(int(0.8*self.screen_height))
-		self.populate_widget()
-		#self.load_previous_measurement_instructions()
+		for i in range(3):
+			hlayout = QHBoxLayout()
+			hlayout.addWidget(self.channel_cbs_lbls[i], 20)
+			hlayout.addWidget(self.channel_cbs[i], 80)
+			sub_layout.addLayout(hlayout)
 
+			hlayout2 = QHBoxLayout()
+			hlayout2.addWidget(self.min_val_lbls[i], 20)
+			hlayout2.addWidget(self.min_val_les[i], 80)
+			sub_layout.addLayout(hlayout2)
 
-	def populate_widget(self):
+			hlayout3 = QHBoxLayout()
+			hlayout3.addWidget(self.max_val_lbls[i], 20)
+			hlayout3.addWidget(self.max_val_les[i], 80)
+			sub_layout.addLayout(hlayout3)
+
+		sub_layout.addWidget(self.hsep)
+		hbox_frac = QHBoxLayout()
+		hbox_frac.addWidget(self._fraction_lbl, 20)
+		hbox_frac.addWidget(self.fraction_slider, 80)
+		sub_layout.addLayout(hbox_frac)
+		
+		hbox_interval = QHBoxLayout()
+		hbox_interval.addWidget(self._interval_lbl, 20)
+		hbox_interval.addWidget(self.interval_slider, 80)
+		sub_layout.addLayout(hbox_interval)
+		
+		self._layout.addLayout(sub_layout)
+
+		self._layout.addWidget(self.submit_btn)
+
+	def _create_widgets(self):
 		
 		"""
 		Create the widgets.
 		
 		"""
-
-		self.scroll_area = QScrollArea(self)
-		self.button_widget = CelldetectiveWidget()
-
-		self.main_layout = QVBoxLayout()
-		self.main_layout.setContentsMargins(30,30,30,30)
-
-		sub_layout = QVBoxLayout()
-		sub_layout.setContentsMargins(10,10,10,20)
-
-		self.button_widget.setLayout(self.main_layout)
-		sub_layout.setContentsMargins(30,30,30,30)
-
-		sub_layout.addWidget(QLabel('Modality: '))
+		super()._create_widgets()
 		
-		# Create radio buttons
-		option_layout = QHBoxLayout()
+		self._modality_lbl = QLabel("Modality: ")
+		self._fraction_lbl = QLabel("fraction: ")
+		self._interval_lbl = QLabel('interval [ms]: ')
+		
 		self.gs_btn = QRadioButton('grayscale')
 		self.gs_btn.setChecked(True)
-		option_layout.addWidget(self.gs_btn, alignment=Qt.AlignCenter)
-
+		
 		self.rgb_btn = QRadioButton('RGB')
-		option_layout.addWidget(self.rgb_btn, alignment=Qt.AlignCenter)
-		sub_layout.addLayout(option_layout)
 
-		btn_hbox = QHBoxLayout()
 
 		self.percentile_btn = QPushButton()
 		self.percentile_btn.setIcon(icon(MDI6.percent_circle_outline,color="black"))
@@ -97,11 +126,6 @@ class ConfigSignalAnnotator(CelldetectiveMainWindow):
 		self.log_btn.setToolTip("Log-transform the intensities.")
 		self.log_btn.setIconSize(QSize(20, 20))	
 
-		btn_hbox.addWidget(QLabel(''), 90)
-		btn_hbox.addWidget(self.log_btn, 5,alignment=Qt.AlignRight)
-		btn_hbox.addWidget(self.percentile_btn, 5,alignment=Qt.AlignRight)
-		sub_layout.addLayout(btn_hbox)
-
 		self.channel_cbs = [QComboBox() for i in range(3)]
 		self.channel_cbs_lbls = [QLabel() for i in range(3)]
 
@@ -115,23 +139,13 @@ class ConfigSignalAnnotator(CelldetectiveMainWindow):
 
 		for i in range(3):
 
-			hlayout = QHBoxLayout()
 			self.channel_cbs[i].addItems(self.channel_names)
 			self.channel_cbs[i].setCurrentIndex(i)
 			self.channel_cbs_lbls[i].setText(self.rgb_text[i])
-			hlayout.addWidget(self.channel_cbs_lbls[i], 20)
-			hlayout.addWidget(self.channel_cbs[i], 80)
-			sub_layout.addLayout(hlayout)
+			
+			self.min_val_les[i].setValidator(self._floatValidator)
+			self.max_val_les[i].setValidator(self._floatValidator)
 
-			hlayout2 = QHBoxLayout()
-			hlayout2.addWidget(self.min_val_lbls[i], 20)
-			hlayout2.addWidget(self.min_val_les[i], 80)			
-			sub_layout.addLayout(hlayout2)
-
-			hlayout3 = QHBoxLayout()
-			hlayout3.addWidget(self.max_val_lbls[i], 20)
-			hlayout3.addWidget(self.max_val_les[i], 80)			
-			sub_layout.addLayout(hlayout3)
 
 		self.enable_channels()
 		
@@ -139,10 +153,6 @@ class ConfigSignalAnnotator(CelldetectiveMainWindow):
 		self.rgb_btn.toggled.connect(self.enable_channels)
 
 		self.hsep = QHSeperationLine()
-		sub_layout.addWidget(self.hsep)
-
-		hbox_frac = QHBoxLayout()
-		hbox_frac.addWidget(QLabel('fraction: '), 20)
 
 		self.fraction_slider = QLabeledDoubleSlider()
 		self.fraction_slider.setSingleStep(0.05)
@@ -152,13 +162,6 @@ class ConfigSignalAnnotator(CelldetectiveMainWindow):
 		self.fraction_slider.setRange(0.1,1)
 		self.fraction_slider.setValue(0.25)
 
-		hbox_frac.addWidget(self.fraction_slider, 80)
-		sub_layout.addLayout(hbox_frac)
-
-
-		hbox_interval = QHBoxLayout()
-		hbox_interval.addWidget(QLabel('interval [ms]: '), 20)
-
 		self.interval_slider = QLabeledSlider()
 		self.interval_slider.setSingleStep(1)
 		self.interval_slider.setTickInterval(1)
@@ -166,29 +169,6 @@ class ConfigSignalAnnotator(CelldetectiveMainWindow):
 		self.interval_slider.setOrientation(Qt.Horizontal)
 		self.interval_slider.setRange(1,1000)
 		self.interval_slider.setValue(1)
-		hbox_interval.addWidget(self.interval_slider, 80)
-		sub_layout.addLayout(hbox_interval)
-
-		self.main_layout.addLayout(sub_layout)
-
-		self.submit_btn = QPushButton('Save')
-		self.submit_btn.setStyleSheet(self.button_style_sheet)
-		self.submit_btn.clicked.connect(self.write_instructions)
-		self.main_layout.addWidget(self.submit_btn)
-
-
-		self.button_widget.adjustSize()
-		self.scroll_area.setAlignment(Qt.AlignCenter)
-		self.scroll_area.setWidget(self.button_widget)
-		self.scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-		self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-		self.scroll_area.setWidgetResizable(True)
-		self.setCentralWidget(self.scroll_area)
-		self.show()
-
-		self.read_instructions()
-
-		QApplication.processEvents()
 
 	def enable_channels(self):
 
@@ -207,7 +187,6 @@ class ConfigSignalAnnotator(CelldetectiveMainWindow):
 				self.channel_cbs_lbls[k].setEnabled(False)
 
 			for k in range(3):
-
 				self.min_val_les[k].setEnabled(False)
 				self.min_val_lbls[k].setEnabled(False)
 				self.max_val_les[k].setEnabled(False)
@@ -219,7 +198,6 @@ class ConfigSignalAnnotator(CelldetectiveMainWindow):
 			self.percentile_btn.setEnabled(True)
 
 			for k in range(3):
-
 				self.channel_cbs[k].setEnabled(True)
 				self.channel_cbs_lbls[k].setEnabled(True)
 
@@ -256,7 +234,7 @@ class ConfigSignalAnnotator(CelldetectiveMainWindow):
 				self.max_val_lbls[k].setText('Max percentile: ')	
 				self.max_val_les[k].setText('99.99')
 
-	def write_instructions(self):
+	def _write_instructions(self):
 
 		"""
 		Save the current configuration.
@@ -267,7 +245,7 @@ class ConfigSignalAnnotator(CelldetectiveMainWindow):
 		max_i = 3 if self.rgb_btn.isChecked() else 1
 		channels = []
 		for i in range(max_i):
-			channels.append([self.channel_cbs[i].currentText(), float(self.min_val_les[i].text()), float(self.max_val_les[i].text())])
+			channels.append([self.channel_cbs[i].currentText(), float(self.min_val_les[i].text().replace(',','.')), float(self.max_val_les[i].text().replace(',','.'))])
 		instructions.update({'channels': channels})
 		
 		print('Instructions: ', instructions)
@@ -277,7 +255,7 @@ class ConfigSignalAnnotator(CelldetectiveMainWindow):
 		print('Done.')
 		self.close()
 
-	def read_instructions(self):
+	def _load_previous_instructions(self):
 		
 		"""
 		Read and set the widgets to the last configuration.
@@ -312,8 +290,8 @@ class ConfigSignalAnnotator(CelldetectiveMainWindow):
 					for i in range(max_iter):
 						idx = self.channel_cbs[i].findText(channels[i][0])
 						self.channel_cbs[i].setCurrentIndex(idx)					
-						self.min_val_les[i].setText(str(channels[i][1]))
-						self.max_val_les[i].setText(str(channels[i][2]))
+						self.min_val_les[i].setText(str(channels[i][1]).replace('.',','))
+						self.max_val_les[i].setText(str(channels[i][2]).replace('.',','))
 
 				if 'fraction' in instructions:
 					fraction = instructions['fraction']
