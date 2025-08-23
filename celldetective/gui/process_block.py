@@ -13,7 +13,7 @@ from celldetective.io import get_segmentation_models_list, control_segmentation_
 	control_tracks, load_experiment_tables, get_pair_signal_models_list
 from celldetective.io import locate_segmentation_model, extract_position_name, fix_missing_labels, locate_signal_model
 from celldetective.gui import SegmentationModelLoader, ClassifierWidget, ConfigNeighborhoods, \
-	SettingsSegmentationModelTraining, SignalAnnotator, ConfigSignalModelTraining, TableUI, CelldetectiveWidget
+	SettingsSegmentationModelTraining, SignalAnnotator, TableUI, CelldetectiveWidget, SettingsEventDetectionModelTraining
 
 from celldetective.gui.settings._settings_segmentation import SettingsSegmentation
 from celldetective.gui.settings._settings_measurements import SettingsMeasurements
@@ -685,8 +685,8 @@ class ProcessPanel(QFrame, Styles):
 
 	def open_signal_model_config_ui(self):
 		print('Set the training parameters for new signal models...')
-		self.ConfigSignalTrain = ConfigSignalModelTraining(self)
-		self.ConfigSignalTrain.show()
+		self.settings_event_detection_training = SettingsEventDetectionModelTraining(self)
+		self.settings_event_detection_training.show()
 
 	def open_segmentation_model_config_ui(self):
 		print('Set the training parameters for a new segmentation model...')
@@ -1460,8 +1460,8 @@ class NeighPanel(QFrame, Styles):
 		self.config_signal_annotator.show()
 
 	def open_signal_model_config_ui(self):
-		self.ConfigSignalTrain = ConfigSignalModelTraining(self, signal_mode='pairs')
-		self.ConfigSignalTrain.show()
+		self.settings_pair_event_detection_training = SettingsEventDetectionModelTraining(self, signal_mode='pairs')
+		self.settings_pair_event_detection_training.show()
 		
 	def remove_protocol_from_list(self):
 

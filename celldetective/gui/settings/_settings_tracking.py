@@ -43,15 +43,16 @@ class SettingsTracking(CelldetectiveSettingsPanel):
 		self.channel_names, self.channels = extract_experiment_channels(self.exp_dir)
 		self.channel_names = np.array(self.channel_names)
 		self.channels = np.array(self.channels)
+		self.minimum_height = 300
 
 		super().__init__(title="Configure tracking")
-
+		
 		self._add_to_layout()
 		self._load_previous_instructions()
-
+		
+		self._widget.setMinimumWidth(500)
 		self._adjustSize()
-		self.resize(int(self.width()), int(self._screen_height * 0.55))
-	
+		self.resize(int(self.width()*1.5), int(self._screen_height * 0.8))
 	
 	def _add_to_layout(self):
 		
@@ -113,14 +114,13 @@ class SettingsTracking(CelldetectiveSettingsPanel):
 			self.config_frame.show()
 			self.features_frame.show()
 			self.config_trackpy_frame.hide()
-			self._adjustSize()
-			self.resize(int(self.width()), int(self._screen_height * 0.8))
+			#self._adjustSize()
 		else:
 			self.config_frame.hide()
 			self.features_frame.hide()
 			self.config_trackpy_frame.show()
-			self._adjustSize()
-			self.resize(int(self.width()), int(self._screen_height * 0.55))
+			#self._adjustSize()
+	
 
 	def populate_post_proc_frame(self):
 
@@ -180,12 +180,12 @@ class SettingsTracking(CelldetectiveSettingsPanel):
 			self.collapse_post_proc_btn.setIcon(icon(MDI6.chevron_down, color="black"))
 			self.collapse_post_proc_btn.setIconSize(QSize(20, 20))
 			if len(is_open[is_open])==0:
-				self.scroll_area.setMinimumHeight(int(self.minimum_height))
-				self.adjustSize()
+				pass
+				#self._scroll_area.setMinimumHeight(int(self.minimum_height))
+				#self._adjustSize()
 		else:
 			self.collapse_post_proc_btn.setIcon(icon(MDI6.chevron_up, color="black"))
 			self.collapse_post_proc_btn.setIconSize(QSize(20, 20))
-			self.scroll_area.setMinimumHeight(min(int(930), int(0.9*self._screen_height)))
 
 
 	def help_post(self):
@@ -296,12 +296,12 @@ class SettingsTracking(CelldetectiveSettingsPanel):
 			self.collapse_features_btn.setIcon(icon(MDI6.chevron_down, color="black"))
 			self.collapse_features_btn.setIconSize(QSize(20, 20))
 			if len(is_open[is_open])==0:
-				self.scroll_area.setMinimumHeight(int(self.minimum_height))
-				self.adjustSize()
+				pass
+				#self._scroll_area.setMinimumHeight(int(self.minimum_height))
+				#self._adjustSize()
 		else:
 			self.collapse_features_btn.setIcon(icon(MDI6.chevron_up, color="black"))
 			self.collapse_features_btn.setIconSize(QSize(20, 20))
-			self.scroll_area.setMinimumHeight(min(int(930), int(0.9*self._screen_height)))
 
 
 	def generate_post_proc_panel_contents(self):
@@ -591,12 +591,12 @@ class SettingsTracking(CelldetectiveSettingsPanel):
 			self.collapse_config_btn.setIcon(icon(MDI6.chevron_down,color="black"))
 			self.collapse_config_btn.setIconSize(QSize(20, 20))
 			if len(is_open[is_open])==0:
-				self.scroll_area.setMinimumHeight(int(self.minimum_height))
-				self.adjustSize()
+				pass
+				#self._scroll_area.setMinimumHeight(int(self.minimum_height))
+				#self._adjustSize()
 		else:
 			self.collapse_config_btn.setIcon(icon(MDI6.chevron_up,color="black"))
 			self.collapse_config_btn.setIconSize(QSize(20, 20))
-			self.scroll_area.setMinimumHeight(min(int(930), int(0.9*self._screen_height)))
 
 	def collapse_config_trackpy_advanced(self):
 
@@ -612,12 +612,12 @@ class SettingsTracking(CelldetectiveSettingsPanel):
 			self.collapse_config_trackpy_btn.setIcon(icon(MDI6.chevron_down,color="black"))
 			self.collapse_config_trackpy_btn.setIconSize(QSize(20, 20))
 			if len(is_open[is_open])==0:
-				self.scroll_area.setMinimumHeight(int(self.minimum_height))
-				self.adjustSize()
+				pass
+				#self._scroll_area.setMinimumHeight(int(self.minimum_height))
+				#self._adjustSize()
 		else:
 			self.collapse_config_trackpy_btn.setIcon(icon(MDI6.chevron_up,color="black"))
 			self.collapse_config_trackpy_btn.setIconSize(QSize(20, 20))
-			self.scroll_area.setMinimumHeight(min(int(930), int(0.9*self._screen_height)))
 
 
 	def generate_config_trackpy_panel_contents(self):
@@ -799,16 +799,16 @@ class SettingsTracking(CelldetectiveSettingsPanel):
 		else:
 			self.post_proc_ticked = True	
 
-	def adjustScrollArea(self):
-		
-		"""
-		Auto-adjust scroll area to fill space 
-		(from https://stackoverflow.com/questions/66417576/make-qscrollarea-use-all-available-space-of-qmainwindow-height-axis)
-		"""
-
-		step = 5
-		while self.scroll_area.verticalScrollBar().isVisible() and self.height() < self.maximumHeight():
-			self.resize(self.width(), self.height() + step)
+	# def adjustScrollArea(self):
+	#
+	# 	"""
+	# 	Auto-adjust scroll area to fill space
+	# 	(from https://stackoverflow.com/questions/66417576/make-qscrollarea-use-all-available-space-of-qmainwindow-height-axis)
+	# 	"""
+	#
+	# 	step = 5
+	# 	while self._scroll_area.verticalScrollBar().isVisible() and self.height() < self.maximumHeight():
+	# 		self.resize(self.width(), self.height() + step)
 
 	def load_cell_config(self):
 

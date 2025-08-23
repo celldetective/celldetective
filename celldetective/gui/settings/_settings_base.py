@@ -14,7 +14,7 @@ class CelldetectiveSettingsPanel(CelldetectiveMainWindow):
 		self.setWindowTitle(title)
 		
 		self._get_screen_height()
-		self.setMinimumWidth(500)
+		#self.setMinimumWidth(500)
 		self.setMaximumHeight(int(0.8 * self._screen_height))
 		self._scroll_area = QScrollArea(self)
 		self._floatValidator = QDoubleValidator()

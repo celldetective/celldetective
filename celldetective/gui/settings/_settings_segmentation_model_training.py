@@ -1,13 +1,11 @@
-from PyQt5.QtWidgets import QApplication,QRadioButton, QScrollArea, QComboBox, QFrame, QFileDialog, QGridLayout, QLineEdit, QVBoxLayout, QLabel, QHBoxLayout, QPushButton
+from PyQt5.QtWidgets import QRadioButton, QComboBox, QFrame, QFileDialog, QGridLayout, QLineEdit, QVBoxLayout, QLabel, QHBoxLayout, QPushButton
 from PyQt5.QtCore import Qt, QSize
-from PyQt5.QtGui import QDoubleValidator, QIntValidator
-from celldetective.gui.gui_utils import center_window, generic_message
+from celldetective.gui.gui_utils import generic_message
 from celldetective.gui.layouts import ChannelNormGenerator
 
 from superqt import QLabeledDoubleSlider,QLabeledSlider
 from superqt.fonticon import icon
 from fonticon_mdi6 import MDI6
-from celldetective.utils import get_software_location
 from celldetective.io import get_segmentation_datasets_list, locate_segmentation_dataset, get_segmentation_models_list
 from celldetective.segmentation import train_segmentation_model
 from celldetective.gui.layouts import CellposeParamsWidget
@@ -16,7 +14,6 @@ import json
 import os
 from glob import glob
 from datetime import datetime
-from celldetective.gui import CelldetectiveWidget
 from celldetective.gui.settings._settings_base import CelldetectiveSettingsPanel
 
 class SettingsSegmentationModelTraining(CelldetectiveSettingsPanel):
@@ -73,6 +70,7 @@ class SettingsSegmentationModelTraining(CelldetectiveSettingsPanel):
 
 		self.submit_btn.setEnabled(False)
 		self.submit_warning = QLabel('')
+		self.submit_btn.setText("Train")
 
 		self.spatial_calib_le.textChanged.connect(self.activate_train_btn)
 		self.modelname_le.setText(f"Untitled_model_{datetime.today().strftime('%Y-%m-%d')}")

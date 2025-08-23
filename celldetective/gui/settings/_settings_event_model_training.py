@@ -1,12 +1,9 @@
-from PyQt5.QtWidgets import QApplication, QDialog, QMessageBox, QScrollArea, QComboBox, QFrame, QCheckBox, QFileDialog, QGridLayout, QLineEdit, QVBoxLayout, QLabel, QHBoxLayout, QPushButton
+from PyQt5.QtWidgets import QMessageBox, QComboBox, QFrame, QCheckBox, QFileDialog, QGridLayout, QLineEdit, QVBoxLayout, QLabel, QHBoxLayout, QPushButton
 from PyQt5.QtCore import Qt, QSize
-from PyQt5.QtGui import QDoubleValidator, QIntValidator, QIcon
-from celldetective.gui.gui_utils import center_window
 from celldetective.gui.layouts import ChannelNormGenerator
 from superqt import QLabeledDoubleSlider, QLabeledSlider, QSearchableComboBox
 from superqt.fonticon import icon
 from fonticon_mdi6 import MDI6
-from celldetective.utils import get_software_location
 from celldetective.io import locate_signal_dataset, get_signal_datasets_list, load_experiment_tables
 from celldetective.signals import train_signal_model
 import numpy as np
@@ -14,12 +11,12 @@ import json
 import os
 from glob import glob
 from datetime import datetime
-from celldetective.gui import CelldetectiveMainWindow, CelldetectiveWidget
 from pandas.api.types import is_numeric_dtype
 from celldetective.gui.processes.train_signal_model import TrainSignalModelProcess
 from celldetective.gui.workers import ProgressWindow
+from celldetective.gui.settings._settings_base import CelldetectiveSettingsPanel
 
-class ConfigSignalModelTraining(CelldetectiveMainWindow):
+class SettingsEventDetectionModelTraining(CelldetectiveSettingsPanel):
 	
 	"""
 	UI to set measurement instructions.
@@ -28,87 +25,62 @@ class ConfigSignalModelTraining(CelldetectiveMainWindow):
 
 	def __init__(self, parent_window=None, signal_mode='single-cells'):
 		
-		super().__init__()
 		self.parent_window = parent_window
-		self.setWindowTitle("Train signal model")
 		self.mode = self.parent_window.mode
 		self.exp_dir = self.parent_window.exp_dir
-		self.soft_path = get_software_location()
-		self.pretrained_model = None 
+		self.pretrained_model = None
 		self.dataset_folder = None
 		self.current_neighborhood = None
 		self.reference_population = None
 		self.neighbor_population = None
 		self.signal_mode = signal_mode
+		
+		super().__init__(title="Train event detection model")
 
 		if self.signal_mode=='single-cells':
-			self.signal_models_dir = self.soft_path+os.sep+os.sep.join(['celldetective','models','signal_detection'])
+			self.signal_models_dir = self._software_path+os.sep+os.sep.join(['celldetective','models','signal_detection'])
 		elif self.signal_mode=='pairs':
-			self.signal_models_dir = self.soft_path+os.sep+os.sep.join(['celldetective','models','pair_signal_detection'])
+			self.signal_models_dir = self._software_path+os.sep+os.sep.join(['celldetective','models','pair_signal_detection'])
 			self.mode = 'pairs'
+		
+		self._add_to_layout()
+		self._load_previous_instructions()
+		
+		self._adjustSize()
+		new_width = int(self.width()*1.2)
+		self.resize(new_width, int(self._screen_height * 0.8))
+		self.setMinimumWidth(new_width)
+	
+	def _add_to_layout(self):
+		self._layout.addWidget(self.model_frame)
+		self._layout.addWidget(self.data_frame)
+		self._layout.addWidget(self.hyper_frame)
+		self._layout.addWidget(self.submit_btn)
 
-		self.onlyFloat = QDoubleValidator()
-		self.onlyInt = QIntValidator()
-
-		self.screen_height = self.parent_window.parent_window.parent_window.screen_height
-		center_window(self)
-
-		self.setMinimumWidth(500)
-		self.setMinimumHeight(int(0.3*self.screen_height))
-		self.setMaximumHeight(int(0.8*self.screen_height))
-		self.populate_widget()
-		#self.load_previous_measurement_instructions()
-
-	def populate_widget(self):
+	def _create_widgets(self):
 
 		"""
 		Create the multibox design.
 
 		"""
+		super()._create_widgets()
 		
-		# Create button widget and layout
-		self.scroll_area = QScrollArea(self)
-		self.button_widget = CelldetectiveWidget()
-		self.main_layout = QVBoxLayout()
-		self.button_widget.setLayout(self.main_layout)
-		self.main_layout.setContentsMargins(30,30,30,30)
-
 		# first frame for FEATURES
 		self.model_frame = QFrame()
 		self.model_frame.setFrameStyle(QFrame.StyledPanel | QFrame.Raised)
 		self.populate_model_frame()
-		self.main_layout.addWidget(self.model_frame)
 
 		self.data_frame = QFrame()
 		self.data_frame.setFrameStyle(QFrame.StyledPanel | QFrame.Raised)
 		self.populate_data_frame()
-		self.main_layout.addWidget(self.data_frame)
 
 		self.hyper_frame = QFrame()
 		self.hyper_frame.setFrameStyle(QFrame.StyledPanel | QFrame.Raised)
 		self.populate_hyper_frame()
-		self.main_layout.addWidget(self.hyper_frame)
 
-		self.submit_btn = QPushButton('Train')
-		self.submit_btn.setStyleSheet(self.button_style_sheet)
-		self.submit_btn.clicked.connect(self.prep_model)
-		self.main_layout.addWidget(self.submit_btn)
 		self.submit_btn.setEnabled(False)
+		self.submit_btn.setText("Train")
 
-		#self.populate_left_panel()
-		#grid.addLayout(self.left_side, 0, 0, 1, 1)
-		self.button_widget.adjustSize()
-
-		self.scroll_area.setAlignment(Qt.AlignCenter)
-		self.scroll_area.setWidget(self.button_widget)
-		self.scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-		self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-		self.scroll_area.setWidgetResizable(True)
-		self.setCentralWidget(self.scroll_area)
-		self.show()
-
-		QApplication.processEvents()
-		self.adjustScrollArea()
 
 	def populate_hyper_frame(self):
 
@@ -138,14 +110,14 @@ class ConfigSignalModelTraining(CelldetectiveMainWindow):
 		lr_layout = QHBoxLayout()
 		lr_layout.addWidget(QLabel('learning rate: '),30)
 		self.lr_le = QLineEdit('0,01')
-		self.lr_le.setValidator(self.onlyFloat)
+		self.lr_le.setValidator(self._floatValidator)
 		lr_layout.addWidget(self.lr_le, 70)
 		layout.addLayout(lr_layout)
 
 		bs_layout = QHBoxLayout()
 		bs_layout.addWidget(QLabel('batch size: '),30)
 		self.bs_le = QLineEdit('64')
-		self.bs_le.setValidator(self.onlyInt)
+		self.bs_le.setValidator(self._intValidator)
 		bs_layout.addWidget(self.bs_le, 70)
 		layout.addLayout(bs_layout)
 
@@ -378,42 +350,11 @@ class ConfigSignalModelTraining(CelldetectiveMainWindow):
 		self.dataframes = {}
 		self.neighborhood_cols = []
 		for population in self.parent_window.parent_window.populations:
-			df_pop = load_experiment_tables(self.parent_window.exp_dir, population=pop, load_pickle=True)
-			self.dataframes.update({pop: df_pop})
+			df_pop = load_experiment_tables(self.parent_window.exp_dir, population=population, load_pickle=True)
+			self.dataframes.update({population: df_pop})
 			if df_pop is not None:
 				self.neighborhood_cols.extend(
-					[f'{pop}_ref_' + c for c in list(df_pop.columns) if c.startswith('neighborhood')])
-
-		# df_targets = load_experiment_tables(self.parent_window.exp_dir, population='targets', load_pickle=True)
-		# df_effectors = load_experiment_tables(self.parent_window.exp_dir, population='effectors', load_pickle=True)
-		#
-		# self.dataframes = {
-		# 	'targets': df_targets,
-		# 	'effectors': df_effectors,
-		# }
-		#
-		# self.neighborhood_cols = []
-		# self.reference_populations = []
-		# self.neighbor_populations = []
-		# if df_targets is not None:
-		# 	self.neighborhood_cols.extend(['target_ref_'+c for c in list(df_targets.columns) if c.startswith('neighborhood')])
-		# 	self.reference_populations.extend(['targets' for c in list(df_targets.columns) if c.startswith('neighborhood')])
-		# 	for c in list(df_targets.columns):
-		# 		if c.startswith('neighborhood') and '_2_' in c:
-		# 			self.neighbor_populations.append('effectors')
-		# 		elif c.startswith('neighborhood') and 'self' in c:
-		# 			self.neighbor_populations.append('targets')
-		#
-		# if df_effectors is not None:
-		# 	self.neighborhood_cols.extend(['effector_ref_'+c for c in list(df_effectors.columns) if c.startswith('neighborhood')])
-		# 	self.reference_populations.extend(['effectors' for c in list(df_effectors.columns) if c.startswith('neighborhood')])
-		# 	for c in list(df_effectors.columns):
-		# 		if c.startswith('neighborhood') and '_2_' in c:
-		# 			self.neighbor_populations.append('targets')
-		# 		elif c.startswith('neighborhood') and 'self' in c:
-		# 			self.neighbor_populations.append('effectors')
-		#
-		# print(f"The following neighborhoods were detected: {self.neighborhood_cols=} {self.reference_populations=} {self.neighbor_populations=}")
+					[f'{population}_ref_' + c for c in list(df_pop.columns) if c.startswith('neighborhood')])
 
 		self.neighborhood_choice_cb.addItems(self.neighborhood_cols)
 
@@ -519,7 +460,7 @@ class ConfigSignalModelTraining(CelldetectiveMainWindow):
 		while self.scroll_area.verticalScrollBar().isVisible() and self.height() < self.maximumHeight():
 			self.resize(self.width(), self.height() + step)
 
-	def prep_model(self):
+	def _write_instructions(self):
 
 		model_name = self.modelname_le.text()
 		pretrained_model = self.pretrained_model
@@ -598,3 +539,6 @@ class ConfigSignalModelTraining(CelldetectiveMainWindow):
 
 		train_signal_model(model_folder+"training_instructions.json")
 		self.parent_window.refresh_signal_models()
+	
+	def _load_previous_instructions(self):
+		pass
