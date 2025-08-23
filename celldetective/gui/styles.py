@@ -14,7 +14,8 @@ class Styles(object):
 
 		
 		self.celldetective_blue = "#1565c0"
-		self.celldetective_icon = QIcon(os.sep.join([get_software_location(),'celldetective','icons','logo.png']))
+		self.celldetective_logo_path = os.sep.join([get_software_location(),'celldetective','icons','logo.png'])
+		self.celldetective_icon = QIcon(self.celldetective_logo_path)
 
 		self.action_lbl_style_sheet = """
 			font-size: 10px;

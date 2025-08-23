@@ -17,7 +17,7 @@ class AboutWidget(CelldetectiveWidget):
 		self.setMaximumWidth(320)
 		center_window(self)
 		
-		logo = QPixmap(os.sep.join([get_software_location(), 'celldetective', 'icons', 'logo.png']))
+		logo = QPixmap(self.celldetective_logo_path)
 		
 		# Create the layout
 		layout = QVBoxLayout(self)
@@ -31,7 +31,7 @@ class AboutWidget(CelldetectiveWidget):
 									""")
 		layout.addWidget(self.soft_name, alignment=Qt.AlignCenter)
 		
-		self.version_lbl = QLabel(f"Version {__version__} <a href=\"https://github.com/remyeltorro/celldetective"
+		self.version_lbl = QLabel(f"Version {__version__} <a href=\"https://github.com/celldetective/celldetective"
 								  f"/releases\">(release notes)</a>")
 		self.version_lbl.setOpenExternalLinks(True)
 		layout.addWidget(self.version_lbl, alignment=Qt.AlignCenter)
