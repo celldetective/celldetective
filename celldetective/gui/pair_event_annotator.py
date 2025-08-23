@@ -26,7 +26,7 @@ from sklearn.preprocessing import MinMaxScaler
 from functools import partial
 from pandas.api.types import is_numeric_dtype
 
-class SignalAnnotator2(CelldetectiveMainWindow):
+class PairEventAnnotator(CelldetectiveMainWindow):
 
 	"""
 	UI to set tracking parameters for bTrack.

@@ -12,7 +12,7 @@ from celldetective.gui.viewers import CellSizeViewer, CellEdgeVisualizer
 from celldetective.gui import CelldetectiveWidget
 
 
-class ConfigNeighborhoods(CelldetectiveWidget):
+class SettingsNeighborhood(CelldetectiveWidget):
 	
 	"""
 	Widget to configure neighborhood measurements.

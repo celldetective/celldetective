@@ -88,7 +88,7 @@ def test_app(app, qtbot):
 	# Signal annotator widget
 	qtbot.mouseClick(app.control_panel.ProcessPopulations[0].check_signals_btn, QtCore.Qt.LeftButton)
 	qtbot.wait(1000)
-	app.control_panel.ProcessPopulations[0].SignalAnnotator.close()
+	app.control_panel.ProcessPopulations[0].event_annotator.close()
 
 	# Table widget
 	qtbot.mouseClick(app.control_panel.ProcessPopulations[0].view_tab_btn, QtCore.Qt.LeftButton)

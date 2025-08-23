@@ -317,12 +317,6 @@ class SettingsSegmentationModelTraining(CelldetectiveSettingsPanel):
 
 	def showDialog_pretrained(self):
 
-		# try:
-		# 	self.cancel_pretrained.click()
-		# except Exception as e:
-		# 	print(e)
-		# 	pass
-
 		self.clear_pretrained()
 		self.pretrained_model = None
 		self.pretrained_model = QFileDialog.getExistingDirectory(
@@ -498,17 +492,6 @@ class SettingsSegmentationModelTraining(CelldetectiveSettingsPanel):
 		self.ch_norm.add_col_btn.setEnabled(False)
 
 		self.spatial_calib_le.setText(str(spatial_calib).replace('.',','))
-
-	def adjustScrollArea(self):
-		
-		"""
-		Auto-adjust scroll area to fill space 
-		(from https://stackoverflow.com/questions/66417576/make-qscrollarea-use-all-available-space-of-qmainwindow-height-axis)
-		"""
-
-		step = 5
-		while self.scroll_area.verticalScrollBar().isVisible() and self.height() < self.maximumHeight():
-			self.resize(self.width(), self.height() + step)
 
 	def _write_instructions(self):
 

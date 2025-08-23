@@ -1,36 +1,30 @@
-from PyQt5.QtWidgets import QComboBox, QLabel, QRadioButton, QLineEdit, QFileDialog, QApplication, \
-	QPushButton, QVBoxLayout, QHBoxLayout, QMessageBox, QShortcut, QLineEdit, QSlider, QCheckBox
+from PyQt5.QtWidgets import QComboBox, QLabel, QRadioButton, QFileDialog, QApplication, \
+	QPushButton, QVBoxLayout, QHBoxLayout, QMessageBox, QShortcut, QLineEdit, QSlider
 from PyQt5.QtCore import Qt, QSize
 from PyQt5.QtGui import QKeySequence, QIntValidator
 
 from celldetective.gui.gui_utils import center_window, color_from_state
 from superqt import QLabeledDoubleSlider, QLabeledDoubleRangeSlider, QSearchableComboBox
-from celldetective.utils import extract_experiment_channels, get_software_location, _get_img_num_per_channel
-from celldetective.io import auto_load_number_of_frames, load_frames, \
-	load_napari_data, get_experiment_metadata, get_experiment_labels, locate_labels
-from celldetective.gui.gui_utils import FigureCanvas, color_from_status, color_from_class, ExportPlotBtn
-import json
+from celldetective.utils import _get_img_num_per_channel
+from celldetective.io import load_frames, get_experiment_metadata, get_experiment_labels, locate_labels
+from celldetective.gui.gui_utils import FigureCanvas, color_from_status, color_from_class
 import numpy as np
 from superqt.fonticon import icon
 from fonticon_mdi6 import MDI6
 import os
-from glob import glob
 import matplotlib.pyplot as plt
-from matplotlib.ticker import MultipleLocator
 from tqdm import tqdm
 import gc
 from matplotlib.animation import FuncAnimation
 from matplotlib.cm import tab10
 import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
-from celldetective.gui import Styles, CelldetectiveWidget, CelldetectiveMainWindow
+from celldetective.gui import CelldetectiveWidget
 from celldetective.measure import contour_of_instance_segmentation
 from celldetective.utils import pretty_table
 from celldetective.gui.base_annotator import BaseAnnotator
 
-
-
-class SignalAnnotator(BaseAnnotator):
+class EventAnnotator(BaseAnnotator):
 	"""
 	UI to set tracking parameters for bTrack.
 

@@ -7,18 +7,15 @@ import gc
 from PyQt5.QtGui import QDoubleValidator, QIntValidator
 
 from celldetective.gui.processes.compute_neighborhood import NeighborhoodProcess
-from celldetective.gui.signal_annotator import MeasureAnnotator
-from celldetective.gui.signal_annotator2 import SignalAnnotator2
+from celldetective.gui.event_annotator import MeasureAnnotator
 from celldetective.io import get_segmentation_models_list, control_segmentation_napari, get_signal_models_list, \
 	control_tracks, load_experiment_tables, get_pair_signal_models_list
 from celldetective.io import locate_segmentation_model, extract_position_name, fix_missing_labels, locate_signal_model
-from celldetective.gui import SegmentationModelLoader, ClassifierWidget, ConfigNeighborhoods, \
-	SettingsSegmentationModelTraining, SignalAnnotator, TableUI, CelldetectiveWidget, SettingsEventDetectionModelTraining
+from celldetective.gui import SegmentationModelLoader, ClassifierWidget, \
+	EventAnnotator, TableUI, CelldetectiveWidget, PairEventAnnotator
 
-from celldetective.gui.settings._settings_segmentation import SettingsSegmentation
-from celldetective.gui.settings._settings_measurements import SettingsMeasurements
-from celldetective.gui.settings._settings_tracking import SettingsTracking
-from celldetective.gui.settings._settings_signal_annotator import SettingsSignalAnnotator
+from celldetective.gui.settings import SettingsSegmentation, SettingsMeasurements, SettingsTracking, \
+	SettingsSignalAnnotator, SettingsNeighborhood, SettingsSegmentationModelTraining, SettingsEventDetectionModelTraining
 
 from celldetective.gui.gui_utils import QHSeperationLine
 from celldetective.relative_measurements import rel_measure_at_position
@@ -613,8 +610,8 @@ class ProcessPanel(QFrame, Styles):
 
 		test = self.parent_window.locate_selected_position()
 		if test:
-			self.SignalAnnotator = SignalAnnotator(self)
-			self.SignalAnnotator.show()
+			self.event_annotator = EventAnnotator(self)
+			self.event_annotator.show()
 
 	def check_measurements(self):
 
@@ -1472,7 +1469,7 @@ class NeighPanel(QFrame, Styles):
 
 	def open_config_distance_threshold_neighborhood(self):
 
-		self.ConfigNeigh = ConfigNeighborhoods(parent_window=self,
+		self.ConfigNeigh = SettingsNeighborhood(parent_window=self,
 											   neighborhood_type='distance_threshold',
 											   neighborhood_parameter_name='threshold distance',
 											   )
@@ -1480,7 +1477,7 @@ class NeighPanel(QFrame, Styles):
 
 	def open_config_contact_neighborhood(self):
 
-		self.ConfigNeigh = ConfigNeighborhoods(parent_window=self,
+		self.ConfigNeigh = SettingsNeighborhood(parent_window=self,
 											   neighborhood_type='mask_contact',
 											   neighborhood_parameter_name='tolerance contact distance',
 											   )
@@ -1563,8 +1560,8 @@ class NeighPanel(QFrame, Styles):
 
 		test = self.parent_window.locate_selected_position()
 		if test:
-			self.SignalAnnotator2 = SignalAnnotator2(self)
-			self.SignalAnnotator2.show()
+			self.pair_event_annotator = PairEventAnnotator(self)
+			self.pair_event_annotator.show()
 
 
 class PreprocessingPanel(QFrame, Styles):
