@@ -59,6 +59,22 @@ COL_DTYPES = {
 OBJECT_COLUMNS = [col for col, dtype in COL_DTYPES.items() if dtype == object]
 PROP_VALS = set(PROPS.values())
 
+_require_intensity_image = (
+    'image_intensity',
+    'intensity_max',
+    'intensity_mean',
+    'intensity_median',
+    'intensity_min',
+    'intensity_std',
+    'moments_weighted',
+    'moments_weighted_central',
+    'centroid_weighted',
+    'centroid_weighted_local',
+    'moments_weighted_hu',
+    'moments_weighted_normalized',
+)
+
+
 class CustomRegionProps(RegionProperties):
 
 	"""
@@ -79,11 +95,6 @@ class CustomRegionProps(RegionProperties):
 			assert len(self.channel_names)==self._intensity_image.shape[-1],'Mismatch between provided channel names and the number of channels in the image...'
 
 		if attr == "__setstate__":
-			# When deserializing this object with pickle, `__setstate__`
-			# is accessed before any other attributes like `self._intensity_image`
-			# are available which leads to a RecursionError when trying to
-			# access them later on in this function. So guard against this by
-			# provoking the default AttributeError (gh-6465).
 			return self.__getattribute__(attr)
 
 		if self._intensity_image is None and attr in _require_intensity_image:
