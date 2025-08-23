@@ -1,4 +1,3 @@
-import numpy as np
 from celldetective.io import auto_load_number_of_frames, load_frames
 from celldetective.filters import *
 from celldetective.segmentation import filter_image, threshold_image
@@ -14,14 +13,13 @@ import os
 from PyQt5.QtWidgets import QHBoxLayout, QPushButton, QLabel, QComboBox, QLineEdit, QListWidget, QShortcut
 from PyQt5.QtCore import Qt, QSize
 from PyQt5.QtGui import QKeySequence, QDoubleValidator
-from celldetective.gui.gui_utils import FigureCanvas, center_window, QuickSliderLayout, QHSeperationLine, ThresholdLineEdit, PreprocessingLayout2
-from celldetective.gui import Styles, CelldetectiveWidget
+from celldetective.gui.gui_utils import FigureCanvas, QuickSliderLayout, QHSeperationLine, ThresholdLineEdit, PreprocessingLayout2
+from celldetective.gui import CelldetectiveWidget
 from superqt import QLabeledDoubleSlider, QLabeledSlider, QLabeledDoubleRangeSlider
 from superqt.fonticon import icon
 from fonticon_mdi6 import MDI6
 from matplotlib_scalebar.scalebar import ScaleBar
 import gc
-from celldetective.utils import mask_edges
 from scipy.ndimage import shift
 
 class StackVisualizer(CelldetectiveWidget):

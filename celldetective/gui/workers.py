@@ -4,8 +4,6 @@ from PyQt5.QtCore import QRunnable, QObject, pyqtSignal, QThreadPool, QSize, Qt
 
 from celldetective.gui.base_components import CelldetectiveDialog
 from celldetective.gui.gui_utils import center_window
-from celldetective.gui import Styles
-import time
 import math
 
 class ProgressWindow(CelldetectiveDialog):

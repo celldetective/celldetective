@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import QMessageBox, QComboBox, QLineEdit, QVBoxLayout, QLabel, QHBoxLayout, QPushButton
+from PyQt5.QtWidgets import QComboBox, QLineEdit, QVBoxLayout, QLabel, QHBoxLayout, QPushButton
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QDoubleValidator
 from celldetective.gui.gui_utils import center_window, generic_message
