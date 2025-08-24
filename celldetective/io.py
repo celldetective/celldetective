@@ -33,7 +33,7 @@ from stardist import fill_label_holes
 from skimage.transform import resize
 import re
 
-from typing import List
+from typing import List, Tuple
 
 def extract_experiment_from_well(well_path):
 
@@ -218,7 +218,14 @@ def collect_experiment_metadata(pos_path=None, well_path=None):
 	else:
 		pos_name = 0
 
-	dico = {"pos_path": pos_path, "position": pos_path, "pos_name": pos_name, "well_path": well_path, "well_name": well_name, "well_nbr": well_nbr, "experiment": experiment}
+	dico = {"pos_path": pos_path,
+			"position": pos_path,
+			"pos_name": pos_name,
+			"well_path": well_path,
+			"well_name": well_name,
+			"well_nbr": well_nbr,
+			"experiment": experiment,
+			}
 
 	meta = get_experiment_metadata(experiment) # None or dict of metadata
 	if meta is not None:
@@ -313,9 +320,9 @@ def get_spatial_calibration(experiment):
 	"""
 
 	config = get_config(experiment)
-	PxToUm = float(config_section_to_dict(config, "MovieSettings")["pxtoum"])
+	px_to_um = float(config_section_to_dict(config, "MovieSettings")["pxtoum"])
 
-	return PxToUm
+	return px_to_um
 
 
 def get_temporal_calibration(experiment):
@@ -358,9 +365,9 @@ def get_temporal_calibration(experiment):
 	"""
 
 	config = get_config(experiment)
-	FrameToMin = float(config_section_to_dict(config, "MovieSettings")["frametomin"])
+	frame_to_min = float(config_section_to_dict(config, "MovieSettings")["frametomin"])
 
-	return FrameToMin
+	return frame_to_min
 
 def get_experiment_metadata(experiment):
 
@@ -379,7 +386,7 @@ def get_experiment_labels(experiment):
 		values = labels[k].split(',')
 		if nbr_of_wells != len(values):
 			values = [str(s) for s in np.linspace(0, nbr_of_wells - 1, nbr_of_wells)]
-		if np.all([s.isnumeric() for s in values]):
+		if np.all(np.array([s.isnumeric() for s in values])):
 			values = [float(s) for s in values]
 		labels.update({k: values})
 
@@ -614,7 +621,7 @@ def get_experiment_populations(experiment, dtype=str):
 	return list([dtype(c) for c in populations])
 
 
-def interpret_wells_and_positions(experiment: str, well_option: str | int | List[int], position_option: str | int | List[int]):
+def interpret_wells_and_positions(experiment: str, well_option: str | int | List[int], position_option: str | int | List[int]) -> Tuple[List[int], List[int]] | None:
 	"""
 	Interpret well and position options for a given experiment.
 
@@ -667,6 +674,9 @@ def interpret_wells_and_positions(experiment: str, well_option: str | int | List
 		well_indices = [int(well_option)]
 	elif isinstance(well_option, list):
 		well_indices = well_option
+	else:
+		print("Well indices could not be interpreted...")
+		return None
 
 	if position_option == '*':
 		position_indices = None
@@ -674,6 +684,9 @@ def interpret_wells_and_positions(experiment: str, well_option: str | int | List
 		position_indices = np.array([position_option], dtype=int)
 	elif isinstance(position_option, list):
 		position_indices = position_option
+	else:
+		print("Position indices could not be interpreted...")
+		return None
 
 	return well_indices, position_indices
 
