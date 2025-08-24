@@ -1,7 +1,7 @@
 import argparse
 import os
 from celldetective.relative_measurements import measure_pair_signals_at_position, extract_neighborhoods_from_pickles
-from celldetective.utils import ConfigSectionMap, extract_experiment_channels
+from celldetective.utils import config_section_to_dict, extract_experiment_channels
 from celldetective.io import get_experiment_populations
 
 from pathlib import Path, PurePath
@@ -31,10 +31,10 @@ assert os.path.exists(config), 'The configuration file for the experiment could 
 print("Configuration file: ", config)
 
 # from exp config fetch spatial calib, channel names
-movie_prefix = ConfigSectionMap(config, "MovieSettings")["movie_prefix"]
-spatial_calibration = float(ConfigSectionMap(config, "MovieSettings")["pxtoum"])
-time_calibration = float(ConfigSectionMap(config, "MovieSettings")["frametomin"])
-len_movie = float(ConfigSectionMap(config, "MovieSettings")["len_movie"])
+movie_prefix = config_section_to_dict(config, "MovieSettings")["movie_prefix"]
+spatial_calibration = float(config_section_to_dict(config, "MovieSettings")["pxtoum"])
+time_calibration = float(config_section_to_dict(config, "MovieSettings")["frametomin"])
+len_movie = float(config_section_to_dict(config, "MovieSettings")["len_movie"])
 channel_names, channel_indices = extract_experiment_channels(expfolder)
 nbr_channels = len(channel_names)
 

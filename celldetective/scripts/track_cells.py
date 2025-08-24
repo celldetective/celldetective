@@ -9,7 +9,7 @@ import json
 from celldetective.io import _load_frames_to_measure, auto_load_number_of_frames, interpret_tracking_configuration, \
 	extract_position_name, \
 	locate_labels
-from celldetective.utils import _mask_intensity_measurements, extract_experiment_channels, ConfigSectionMap, _get_img_num_per_channel, extract_experiment_channels
+from celldetective.utils import _mask_intensity_measurements, extract_experiment_channels, config_section_to_dict, _get_img_num_per_channel, extract_experiment_channels
 from celldetective.measure import drop_tonal_features, measure_features
 from celldetective.tracking import track
 from pathlib import Path, PurePath
@@ -67,12 +67,12 @@ print("Configuration file: ",config)
 print(f"Population: {mode}...")
 
 # from exp config fetch spatial calib, channel names
-movie_prefix = ConfigSectionMap(config,"MovieSettings")["movie_prefix"]
-spatial_calibration = float(ConfigSectionMap(config,"MovieSettings")["pxtoum"])
-time_calibration = float(ConfigSectionMap(config,"MovieSettings")["frametomin"])
-len_movie = float(ConfigSectionMap(config,"MovieSettings")["len_movie"])
-shape_x = int(ConfigSectionMap(config,"MovieSettings")["shape_x"])
-shape_y = int(ConfigSectionMap(config,"MovieSettings")["shape_y"])
+movie_prefix = config_section_to_dict(config, "MovieSettings")["movie_prefix"]
+spatial_calibration = float(config_section_to_dict(config, "MovieSettings")["pxtoum"])
+time_calibration = float(config_section_to_dict(config, "MovieSettings")["frametomin"])
+len_movie = float(config_section_to_dict(config, "MovieSettings")["len_movie"])
+shape_x = int(config_section_to_dict(config, "MovieSettings")["shape_x"])
+shape_y = int(config_section_to_dict(config, "MovieSettings")["shape_y"])
 
 channel_names, channel_indices = extract_experiment_channels(expfolder)
 nbr_channels = len(channel_names)

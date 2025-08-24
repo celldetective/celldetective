@@ -6,7 +6,7 @@ from tqdm import tqdm
 import numpy as np
 import os
 from celldetective.io import get_config, get_experiment_wells, interpret_wells_and_positions, extract_well_name_and_number, get_positions_in_well, extract_position_name, get_position_movie_path, load_frames, auto_load_number_of_frames
-from celldetective.utils import interpolate_nan, estimate_unreliable_edge, unpad, ConfigSectionMap, _extract_channel_indices_from_config, _extract_nbr_channels_from_config, _get_img_num_per_channel
+from celldetective.utils import interpolate_nan, estimate_unreliable_edge, unpad, config_section_to_dict, _extract_channel_indices_from_config, _extract_nbr_channels_from_config, _get_img_num_per_channel
 from celldetective.segmentation import filter_image, threshold_image
 from csbdeep.io import save_tiff_imagej_compatible
 from gc import collect
@@ -71,8 +71,8 @@ def estimate_background_per_condition(experiment, threshold_on_std=1, well_optio
 
 	config = get_config(experiment)
 	wells = get_experiment_wells(experiment)
-	len_movie = float(ConfigSectionMap(config,"MovieSettings")["len_movie"])
-	movie_prefix = ConfigSectionMap(config,"MovieSettings")["movie_prefix"]	
+	len_movie = float(config_section_to_dict(config, "MovieSettings")["len_movie"])
+	movie_prefix = config_section_to_dict(config, "MovieSettings")["movie_prefix"]
 
 	well_indices, position_indices = interpret_wells_and_positions(experiment, well_option, "*")
 
@@ -247,9 +247,9 @@ def correct_background_model_free(
 
 	config = get_config(experiment)
 	wells = get_experiment_wells(experiment)
-	len_movie = float(ConfigSectionMap(config,"MovieSettings")["len_movie"])
+	len_movie = float(config_section_to_dict(config, "MovieSettings")["len_movie"])
 	if movie_prefix is None:
-		movie_prefix = ConfigSectionMap(config,"MovieSettings")["movie_prefix"]	
+		movie_prefix = config_section_to_dict(config, "MovieSettings")["movie_prefix"]
 
 	well_indices, position_indices = interpret_wells_and_positions(experiment, well_option, position_option)
 	channel_indices = _extract_channel_indices_from_config(config, [target_channel])
@@ -771,9 +771,9 @@ def correct_background_model(
 
 	config = get_config(experiment)
 	wells = get_experiment_wells(experiment)
-	len_movie = float(ConfigSectionMap(config,"MovieSettings")["len_movie"])
+	len_movie = float(config_section_to_dict(config, "MovieSettings")["len_movie"])
 	if movie_prefix is None:
-		movie_prefix = ConfigSectionMap(config,"MovieSettings")["movie_prefix"]	
+		movie_prefix = config_section_to_dict(config, "MovieSettings")["movie_prefix"]
 
 	well_indices, position_indices = interpret_wells_and_positions(experiment, well_option, position_option)
 	channel_indices = _extract_channel_indices_from_config(config, [target_channel])
@@ -1086,9 +1086,9 @@ def correct_channel_offset(
 
 	config = get_config(experiment)
 	wells = get_experiment_wells(experiment)
-	len_movie = float(ConfigSectionMap(config,"MovieSettings")["len_movie"])
+	len_movie = float(config_section_to_dict(config, "MovieSettings")["len_movie"])
 	if movie_prefix is None:
-		movie_prefix = ConfigSectionMap(config,"MovieSettings")["movie_prefix"]	
+		movie_prefix = config_section_to_dict(config, "MovieSettings")["movie_prefix"]
 
 	well_indices, position_indices = interpret_wells_and_positions(experiment, well_option, position_option)
 	channel_indices = _extract_channel_indices_from_config(config, [target_channel])

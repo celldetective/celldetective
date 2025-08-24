@@ -6,7 +6,7 @@ import json
 from pathlib import Path, PurePath
 
 from celldetective.io import auto_load_number_of_frames, load_frames, locate_labels
-from celldetective.utils import extract_experiment_channels, ConfigSectionMap, _get_img_num_per_channel
+from celldetective.utils import extract_experiment_channels, config_section_to_dict, _get_img_num_per_channel
 from celldetective.utils import remove_trajectory_measurements, _extract_coordinates_from_features, _remove_invalid_cols
 from celldetective.measure import drop_tonal_features, measure_features, measure_isotropic_intensity, measure_radial_distance_to_center, center_of_mass_to_abs_coordinates
 
@@ -20,6 +20,10 @@ from art import tprint
 
 
 class MeasurementProcess(Process):
+	
+	pos: str | Path | None = None
+	mode: str | None = None
+	n_threads: int = 1
 
 	def __init__(self, queue=None, process_args=None):
 		
@@ -173,12 +177,12 @@ class MeasurementProcess(Process):
 
 	def extract_experiment_parameters(self):
 
-		self.movie_prefix = ConfigSectionMap(self.config,"MovieSettings")["movie_prefix"]
-		self.spatial_calibration = float(ConfigSectionMap(self.config,"MovieSettings")["pxtoum"])
-		self.time_calibration = float(ConfigSectionMap(self.config,"MovieSettings")["frametomin"])
-		self.len_movie = float(ConfigSectionMap(self.config,"MovieSettings")["len_movie"])
-		self.shape_x = int(ConfigSectionMap(self.config,"MovieSettings")["shape_x"])
-		self.shape_y = int(ConfigSectionMap(self.config,"MovieSettings")["shape_y"])
+		self.movie_prefix = config_section_to_dict(self.config, "MovieSettings")["movie_prefix"]
+		self.spatial_calibration = float(config_section_to_dict(self.config, "MovieSettings")["pxtoum"])
+		self.time_calibration = float(config_section_to_dict(self.config, "MovieSettings")["frametomin"])
+		self.len_movie = float(config_section_to_dict(self.config, "MovieSettings")["len_movie"])
+		self.shape_x = int(config_section_to_dict(self.config, "MovieSettings")["shape_x"])
+		self.shape_y = int(config_section_to_dict(self.config, "MovieSettings")["shape_y"])
 
 		self.channel_names, self.channel_indices = extract_experiment_channels(self.exp_dir)
 		self.nbr_channels = len(self.channel_names)

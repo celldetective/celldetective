@@ -7,7 +7,7 @@ import datetime
 import os
 import json
 from celldetective.io import locate_segmentation_model, auto_load_number_of_frames, extract_position_name, _load_frames_to_segment, _check_label_dims
-from celldetective.utils import _prep_stardist_model, _prep_cellpose_model, _rescale_labels, _segment_image_with_stardist_model,_segment_image_with_cellpose_model,_get_normalize_kwargs_from_config, _estimate_scale_factor, _extract_channel_indices_from_config, ConfigSectionMap, _extract_nbr_channels_from_config, _get_img_num_per_channel
+from celldetective.utils import _prep_stardist_model, _prep_cellpose_model, _rescale_labels, _segment_image_with_stardist_model,_segment_image_with_cellpose_model,_get_normalize_kwargs_from_config, _estimate_scale_factor, _extract_channel_indices_from_config, config_section_to_dict, _extract_nbr_channels_from_config, _get_img_num_per_channel
 from pathlib import Path, PurePath
 from glob import glob
 from shutil import rmtree
@@ -91,9 +91,9 @@ normalize_kwargs = _get_normalize_kwargs_from_config(input_config)
 
 model_type = input_config['model_type']
 
-movie_prefix = ConfigSectionMap(config,"MovieSettings")["movie_prefix"]
-spatial_calibration = float(ConfigSectionMap(config,"MovieSettings")["pxtoum"])
-len_movie = float(ConfigSectionMap(config,"MovieSettings")["len_movie"])
+movie_prefix = config_section_to_dict(config, "MovieSettings")["movie_prefix"]
+spatial_calibration = float(config_section_to_dict(config, "MovieSettings")["pxtoum"])
+len_movie = float(config_section_to_dict(config, "MovieSettings")["len_movie"])
 
 # Try to find the file
 try:

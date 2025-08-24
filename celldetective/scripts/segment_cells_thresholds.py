@@ -7,7 +7,7 @@ import os
 import json
 from celldetective.io import auto_load_number_of_frames, load_frames, extract_position_name
 from celldetective.segmentation import segment_frame_from_thresholds
-from celldetective.utils import _extract_channel_indices_from_config, ConfigSectionMap, _extract_nbr_channels_from_config, _get_img_num_per_channel, extract_experiment_channels
+from celldetective.utils import _extract_channel_indices_from_config, config_section_to_dict, _extract_nbr_channels_from_config, _get_img_num_per_channel, extract_experiment_channels
 from pathlib import Path, PurePath
 from glob import glob
 from shutil import rmtree
@@ -70,8 +70,8 @@ print(f'Required channels: {required_channels} located at channel indices {chann
 
 threshold_instructions.update({'target_channel': channel_indices[0]})
 
-movie_prefix = ConfigSectionMap(config,"MovieSettings")["movie_prefix"]
-len_movie = float(ConfigSectionMap(config,"MovieSettings")["len_movie"])
+movie_prefix = config_section_to_dict(config, "MovieSettings")["movie_prefix"]
+len_movie = float(config_section_to_dict(config, "MovieSettings")["len_movie"])
 channel_names, channel_indices = extract_experiment_channels(expfolder)
 threshold_instructions.update({'channel_names': channel_names})
 

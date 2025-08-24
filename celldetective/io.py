@@ -24,12 +24,16 @@ from magicgui import magicgui
 from pathlib import Path, PurePath
 from shutil import copyfile, rmtree
 
-from celldetective.utils import _rearrange_multichannel_frame, _fix_no_contrast, zoom_multiframes,ConfigSectionMap, extract_experiment_channels, _extract_labels_from_config, get_zenodo_files, download_zenodo_file
-from celldetective.utils import interpolate_nan_multichannel, _estimate_scale_factor, _extract_channel_indices_from_config, _extract_channel_indices, _extract_nbr_channels_from_config, _get_img_num_per_channel, normalize_per_channel, get_config
+from celldetective.utils import _rearrange_multichannel_frame, _fix_no_contrast, zoom_multiframes, \
+	config_section_to_dict, extract_experiment_channels, _extract_labels_from_config, get_zenodo_files, \
+	download_zenodo_file
+from celldetective.utils import interpolate_nan_multichannel, get_config
 
 from stardist import fill_label_holes
 from skimage.transform import resize
 import re
+
+from typing import List
 
 def extract_experiment_from_well(well_path):
 
@@ -202,6 +206,9 @@ def collect_experiment_metadata(pos_path=None, well_path=None):
 		if not well_path.endswith(os.sep):
 			well_path += os.sep
 		experiment = extract_experiment_from_well(well_path)
+	else:
+		print("Please provide a position or well path...")
+		return
 		
 	wells = list(get_experiment_wells(experiment))
 	idx = wells.index(well_path)
@@ -306,7 +313,7 @@ def get_spatial_calibration(experiment):
 	"""
 
 	config = get_config(experiment)
-	PxToUm = float(ConfigSectionMap(config, "MovieSettings")["pxtoum"])
+	PxToUm = float(config_section_to_dict(config, "MovieSettings")["pxtoum"])
 
 	return PxToUm
 
@@ -351,14 +358,14 @@ def get_temporal_calibration(experiment):
 	"""
 
 	config = get_config(experiment)
-	FrameToMin = float(ConfigSectionMap(config, "MovieSettings")["frametomin"])
+	FrameToMin = float(config_section_to_dict(config, "MovieSettings")["frametomin"])
 
 	return FrameToMin
 
 def get_experiment_metadata(experiment):
 
 	config = get_config(experiment)
-	metadata = ConfigSectionMap(config, "Metadata")
+	metadata = config_section_to_dict(config, "Metadata")
 	return metadata
 
 def get_experiment_labels(experiment):
@@ -367,7 +374,7 @@ def get_experiment_labels(experiment):
 	wells = get_experiment_wells(experiment)
 	nbr_of_wells = len(wells)
 
-	labels = ConfigSectionMap(config, "Labels")
+	labels = config_section_to_dict(config, "Labels")
 	for k in list(labels.keys()):
 		values = labels[k].split(',')
 		if nbr_of_wells != len(values):
@@ -427,7 +434,7 @@ def get_experiment_concentrations(experiment, dtype=str):
 	wells = get_experiment_wells(experiment)
 	nbr_of_wells = len(wells)
 
-	concentrations = ConfigSectionMap(config, "Labels")["concentrations"].split(",")
+	concentrations = config_section_to_dict(config, "Labels")["concentrations"].split(",")
 	if nbr_of_wells != len(concentrations):
 		concentrations = [str(s) for s in np.linspace(0, nbr_of_wells - 1, nbr_of_wells)]
 
@@ -482,7 +489,7 @@ def get_experiment_cell_types(experiment, dtype=str):
 	wells = get_experiment_wells(experiment)
 	nbr_of_wells = len(wells)
 
-	cell_types = ConfigSectionMap(config, "Labels")["cell_types"].split(",")
+	cell_types = config_section_to_dict(config, "Labels")["cell_types"].split(",")
 	if nbr_of_wells != len(cell_types):
 		cell_types = [str(s) for s in np.linspace(0, nbr_of_wells - 1, nbr_of_wells)]
 
@@ -534,7 +541,7 @@ def get_experiment_antibodies(experiment, dtype=str):
 	wells = get_experiment_wells(experiment)
 	nbr_of_wells = len(wells)
 
-	antibodies = ConfigSectionMap(config, "Labels")["antibodies"].split(",")
+	antibodies = config_section_to_dict(config, "Labels")["antibodies"].split(",")
 	if nbr_of_wells != len(antibodies):
 		antibodies = [str(s) for s in np.linspace(0, nbr_of_wells - 1, nbr_of_wells)]
 
@@ -589,7 +596,7 @@ def get_experiment_pharmaceutical_agents(experiment, dtype=str):
 	wells = get_experiment_wells(experiment)
 	nbr_of_wells = len(wells)
 
-	pharmaceutical_agents = ConfigSectionMap(config, "Labels")["pharmaceutical_agents"].split(",")
+	pharmaceutical_agents = config_section_to_dict(config, "Labels")["pharmaceutical_agents"].split(",")
 	if nbr_of_wells != len(pharmaceutical_agents):
 		pharmaceutical_agents = [str(s) for s in np.linspace(0, nbr_of_wells - 1, nbr_of_wells)]
 
@@ -599,7 +606,7 @@ def get_experiment_pharmaceutical_agents(experiment, dtype=str):
 def get_experiment_populations(experiment, dtype=str):
 
 	config = get_config(experiment)
-	populations_str = ConfigSectionMap(config, "Populations")
+	populations_str = config_section_to_dict(config, "Populations")
 	if populations_str is not None:
 		populations = populations_str['populations'].split(',')
 	else:
@@ -607,7 +614,7 @@ def get_experiment_populations(experiment, dtype=str):
 	return list([dtype(c) for c in populations])
 
 
-def interpret_wells_and_positions(experiment, well_option, position_option):
+def interpret_wells_and_positions(experiment: str, well_option: str | int | List[int], position_option: str | int | List[int]):
 	"""
 	Interpret well and position options for a given experiment.
 
@@ -617,8 +624,8 @@ def interpret_wells_and_positions(experiment, well_option, position_option):
 
 	Parameters
 	----------
-	experiment : object
-		The experiment object containing well information.
+	experiment : str
+		The experiment path containing well information.
 	well_option : str, int, or list of int
 		The well selection option:
 		- '*' : Select all wells.
@@ -970,7 +977,7 @@ def load_experiment_tables(experiment, population='targets', well_option='*', po
 	config = get_config(experiment)
 	wells = get_experiment_wells(experiment)
 
-	movie_prefix = ConfigSectionMap(config, "MovieSettings")["movie_prefix"]
+	movie_prefix = config_section_to_dict(config, "MovieSettings")["movie_prefix"]
 
 	labels = get_experiment_labels(experiment)
 	metadata = get_experiment_metadata(experiment) # None or dict of metadata
@@ -1417,7 +1424,7 @@ def auto_load_number_of_frames(stack_path):
 
 	Handle invalid or missing paths gracefully:
 
-	>>> frames = auto_load_number_of_frames(None)
+	>>> frames = auto_load_number_of_frames("stack.tif")
 	>>> print(frames)
 	None
 
@@ -1520,7 +1527,7 @@ def parse_isotropic_radii(string):
 
 	"""
 
-	sections = re.split(',| ', string)
+	sections = re.split(r"[ ,]", string)
 	radii = []
 	for k, s in enumerate(sections):
 		if s.isdigit():
@@ -2559,7 +2566,7 @@ def control_segmentation_napari(position, prefix='Aligned', population="target",
 			for k in keys:
 				info.update({k: metadata_info[k]})
 
-		spatial_calibration = float(ConfigSectionMap(config,"MovieSettings")["pxtoum"])
+		spatial_calibration = float(config_section_to_dict(config, "MovieSettings")["pxtoum"])
 		channel_names, channel_indices = extract_experiment_channels(expfolder)
 
 		annotation_folder = expfolder + os.sep + f'annotations_{population}' + os.sep
@@ -2797,7 +2804,7 @@ def _view_on_napari(tracks=None, stack=None, labels=None):
 	...                        'x': [10, 20, 30], 'y': [15, 25, 35]})
 	>>> stack = np.random.rand(100, 100, 3)
 	>>> labels = np.random.randint(0, 2, (100, 100))
-	>>> view_on_napari(tracks, stack=stack, labels=labels)
+	>>> _view_on_napari(tracks, stack=stack, labels=labels)
 	# Visualize tracks, stack, and labels using Napari.
 
 	"""

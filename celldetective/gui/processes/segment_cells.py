@@ -5,7 +5,7 @@ import os
 import json
 import numpy as np
 from celldetective.io import extract_position_name, locate_segmentation_model, auto_load_number_of_frames, load_frames, _check_label_dims, _load_frames_to_segment
-from celldetective.utils import _rescale_labels, _segment_image_with_stardist_model, _segment_image_with_cellpose_model, _prep_stardist_model, _prep_cellpose_model, _get_normalize_kwargs_from_config, extract_experiment_channels, _estimate_scale_factor, _extract_channel_indices_from_config, ConfigSectionMap, _extract_nbr_channels_from_config, _get_img_num_per_channel
+from celldetective.utils import _rescale_labels, _segment_image_with_stardist_model, _segment_image_with_cellpose_model, _prep_stardist_model, _prep_cellpose_model, _get_normalize_kwargs_from_config, extract_experiment_channels, _estimate_scale_factor, _extract_channel_indices_from_config, config_section_to_dict, _extract_nbr_channels_from_config, _get_img_num_per_channel
 
 from pathlib import Path, PurePath
 from glob import glob
@@ -71,9 +71,9 @@ class BaseSegmentProcess(Process):
 
 	def extract_experiment_parameters(self):
 
-		self.spatial_calibration = float(ConfigSectionMap(self.config,"MovieSettings")["pxtoum"])
-		self.len_movie = float(ConfigSectionMap(self.config,"MovieSettings")["len_movie"])
-		self.movie_prefix = ConfigSectionMap(self.config,"MovieSettings")["movie_prefix"]
+		self.spatial_calibration = float(config_section_to_dict(self.config, "MovieSettings")["pxtoum"])
+		self.len_movie = float(config_section_to_dict(self.config, "MovieSettings")["len_movie"])
+		self.movie_prefix = config_section_to_dict(self.config, "MovieSettings")["movie_prefix"]
 		self.nbr_channels = _extract_nbr_channels_from_config(self.config)
 		self.channel_names, self.channel_indices = extract_experiment_channels(self.exp_dir)
 

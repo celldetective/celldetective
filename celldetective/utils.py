@@ -1,8 +1,6 @@
-
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import re
 import os
 from scipy.ndimage import shift, zoom
 os.environ['TF_CPP_MIN_VLOG_LEVEL'] = '3'
@@ -31,9 +29,9 @@ from scipy.stats import ks_2samp
 from cliffs_delta import cliffs_delta
 from stardist.models import StarDist2D
 from cellpose.models import CellposeModel
-from pathlib import PosixPath, PurePosixPath, WindowsPath, Path
+from pathlib import PosixPath, PurePath, PurePosixPath, WindowsPath, Path
 from prettytable import PrettyTable
-from typing import List
+from typing import List, Dict
 
 def is_integer_array(arr: np.ndarray) -> bool:
 
@@ -1280,7 +1278,7 @@ def rename_intensity_column(df, channels):
 		sections = np.array(re.split('-|_', intensity_cols[k]))
 		test_digit = np.array([False for s in sections])
 		for j,s in enumerate(sections):
-			if s.isdigit():
+			if str(s).isdigit():
 				if int(s)<len(channel_names):
 					test_digit[j] = True
 			
@@ -1813,8 +1811,8 @@ def _extract_channel_indices(channels, required_channels):
 
 	return channel_indices
 
-def ConfigSectionMap(path,section):
-
+def config_section_to_dict(path: str | PurePath | Path, section: str) -> Dict | None:
+	
 	"""
 	Parse the config file to extract experiment parameters
 	following https://wiki.python.org/moin/ConfigParserExamples
@@ -1837,7 +1835,7 @@ def ConfigSectionMap(path,section):
 	--------
 	>>> config = "path/to/config_file.ini"
 	>>> section = "Channels"
-	>>> channel_dictionary = ConfigSectionMap(config,section)
+	>>> channel_dictionary = config_section_to_dict(config,section)
 	>>> print(channel_dictionary)
 	# {'brightfield_channel': '0',
 	#  'live_nuclei_channel': 'nan',
@@ -1915,7 +1913,7 @@ def _extract_channel_indices_from_config(config, channels_to_extract):
 	channels = []
 	for c in channels_to_extract:
 		try:
-			c1 = int(ConfigSectionMap(config,"Channels")[c])
+			c1 = int(config_section_to_dict(config, "Channels")[c])
 			channels.append(c1)
 		except Exception as e:
 			print(f"Warning: The channel {c} required by the model is not available in your data...")
@@ -1941,10 +1939,10 @@ def _extract_nbr_channels_from_config(config, return_names=False):
 	nbr_channels = 0
 	channels = []
 	try:
-		fields = ConfigSectionMap(config,"Channels")
+		fields = config_section_to_dict(config, "Channels")
 		for c in fields:
 			try:
-				channel = int(ConfigSectionMap(config, "Channels")[c])
+				channel = int(config_section_to_dict(config, "Channels")[c])
 				nbr_channels += 1
 				channels.append(c)
 			except:
@@ -1958,49 +1956,49 @@ def _extract_nbr_channels_from_config(config, return_names=False):
 		nbr_channels = 0
 		channels = []
 		try:
-			brightfield_channel = int(ConfigSectionMap(config,"MovieSettings")["brightfield_channel"])
+			brightfield_channel = int(config_section_to_dict(config, "MovieSettings")["brightfield_channel"])
 			nbr_channels += 1
 			channels.append('brightfield_channel')
 		except:
 			brightfield_channel = None
 
 		try:
-			live_nuclei_channel = int(ConfigSectionMap(config,"MovieSettings")["live_nuclei_channel"])
+			live_nuclei_channel = int(config_section_to_dict(config, "MovieSettings")["live_nuclei_channel"])
 			nbr_channels += 1
 			channels.append('live_nuclei_channel')
 		except:
 			live_nuclei_channel = None
 
 		try:
-			dead_nuclei_channel = int(ConfigSectionMap(config,"MovieSettings")["dead_nuclei_channel"])
+			dead_nuclei_channel = int(config_section_to_dict(config, "MovieSettings")["dead_nuclei_channel"])
 			nbr_channels +=1
 			channels.append('dead_nuclei_channel')
 		except:
 			dead_nuclei_channel = None
 
 		try:
-			effector_fluo_channel = int(ConfigSectionMap(config,"MovieSettings")["effector_fluo_channel"])
+			effector_fluo_channel = int(config_section_to_dict(config, "MovieSettings")["effector_fluo_channel"])
 			nbr_channels +=1
 			channels.append('effector_fluo_channel')
 		except:
 			effector_fluo_channel = None
 
 		try:
-			adhesion_channel = int(ConfigSectionMap(config,"MovieSettings")["adhesion_channel"])
+			adhesion_channel = int(config_section_to_dict(config, "MovieSettings")["adhesion_channel"])
 			nbr_channels += 1
 			channels.append('adhesion_channel')
 		except:
 			adhesion_channel = None
 
 		try:
-			fluo_channel_1 = int(ConfigSectionMap(config,"MovieSettings")["fluo_channel_1"])
+			fluo_channel_1 = int(config_section_to_dict(config, "MovieSettings")["fluo_channel_1"])
 			nbr_channels += 1
 			channels.append('fluo_channel_1')
 		except:
 			fluo_channel_1 = None	
 
 		try:
-			fluo_channel_2 = int(ConfigSectionMap(config,"MovieSettings")["fluo_channel_2"])
+			fluo_channel_2 = int(config_section_to_dict(config, "MovieSettings")["fluo_channel_2"])
 			nbr_channels += 1
 			channels.append('fluo_channel_2')
 		except:
@@ -2106,10 +2104,10 @@ def _extract_labels_from_config(config,number_of_wells):
 
 	
 	try:
-		concentrations = ConfigSectionMap(config,"Labels")["concentrations"].split(",")
-		cell_types = ConfigSectionMap(config,"Labels")["cell_types"].split(",")
-		antibodies = ConfigSectionMap(config,"Labels")["antibodies"].split(",")
-		pharmaceutical_agents = ConfigSectionMap(config,"Labels")["pharmaceutical_agents"].split(",")
+		concentrations = config_section_to_dict(config, "Labels")["concentrations"].split(",")
+		cell_types = config_section_to_dict(config, "Labels")["cell_types"].split(",")
+		antibodies = config_section_to_dict(config, "Labels")["antibodies"].split(",")
+		pharmaceutical_agents = config_section_to_dict(config, "Labels")["pharmaceutical_agents"].split(",")
 		index = np.arange(len(concentrations)).astype(int) + 1
 		if not np.all(pharmaceutical_agents=="None"):
 			labels = [f"W{idx}: [CT] "+a+"; [Ab] "+b+" @ "+c+" pM "+d for idx,a,b,c,d in zip(index,cell_types,antibodies,concentrations,pharmaceutical_agents)]
@@ -2155,10 +2153,10 @@ def _extract_channels_from_config(config):
 	channel_names = []
 	channel_indices = []
 	try:
-		fields = ConfigSectionMap(config,"Channels")
+		fields = config_section_to_dict(config, "Channels")
 		for c in fields:
 			try:
-				idx = int(ConfigSectionMap(config, "Channels")[c])
+				idx = int(config_section_to_dict(config, "Channels")[c])
 				channel_names.append(c)
 				channel_indices.append(idx)
 			except:
@@ -2984,7 +2982,7 @@ def collapse_trajectories_by_status(df, status=None, projection='mean', populati
 
 	return group_table
 
-def step_function(t, t_shift, dt):
+def step_function(t: np.ndarray | List, t_shift: float, dt: float) -> np.ndarray:
 
 	"""
 	Computes a step function using the logistic sigmoid function.
@@ -3026,7 +3024,7 @@ def step_function(t, t_shift, dt):
 	return 1/(1+np.exp(-(t-t_shift)/dt))
 
 
-def test_2samp_generic(data, feature=None, groupby_cols=None, method="ks_2samp", *args, **kwargs):
+def test_2samp_generic(data: pd.DataFrame, feature: str | None = None, groupby_cols: str | List[str] | None = None, method="ks_2samp", *args, **kwargs) -> pd.DataFrame:
 
 	"""
 	Performs pairwise statistical tests between groups of data, comparing a specified feature using a chosen method.
@@ -3098,7 +3096,7 @@ def test_2samp_generic(data, feature=None, groupby_cols=None, method="ks_2samp",
 
 	return pivot
 
-def pretty_table(dct):
+def pretty_table(dct: dict):
 	table = PrettyTable()
 	for c in dct.keys():
 		table.add_column(str(c), [])

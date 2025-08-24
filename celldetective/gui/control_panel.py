@@ -4,7 +4,7 @@ from celldetective.gui import CelldetectiveMainWindow, CelldetectiveWidget
 
 from PyQt5.QtCore import Qt, QSize
 from celldetective.gui.gui_utils import center_window, QHSeperationLine, QCheckableComboBox, generic_message
-from celldetective.utils import _extract_labels_from_config, ConfigSectionMap, extract_identity_col
+from celldetective.utils import _extract_labels_from_config, config_section_to_dict, extract_identity_col
 from celldetective.gui import ConfigEditor, ProcessPanel, PreprocessingPanel, AnalysisPanel, NeighPanel
 from celldetective.io import extract_position_name, get_experiment_wells, get_config, get_spatial_calibration, get_temporal_calibration, get_experiment_concentrations, get_experiment_cell_types, get_experiment_antibodies, get_experiment_pharmaceutical_agents, get_experiment_populations, extract_well_name_and_number
 from natsort import natsorted
@@ -318,10 +318,10 @@ class ControlPanel(CelldetectiveMainWindow):
 		self.FrameToMin = get_temporal_calibration(self.exp_dir)
 
 
-		self.len_movie = int(ConfigSectionMap(self.exp_config,"MovieSettings")["len_movie"])
-		self.shape_x = int(ConfigSectionMap(self.exp_config,"MovieSettings")["shape_x"])
-		self.shape_y = int(ConfigSectionMap(self.exp_config,"MovieSettings")["shape_y"])
-		self.movie_prefix = ConfigSectionMap(self.exp_config,"MovieSettings")["movie_prefix"]
+		self.len_movie = int(config_section_to_dict(self.exp_config, "MovieSettings")["len_movie"])
+		self.shape_x = int(config_section_to_dict(self.exp_config, "MovieSettings")["shape_x"])
+		self.shape_y = int(config_section_to_dict(self.exp_config, "MovieSettings")["shape_y"])
+		self.movie_prefix = config_section_to_dict(self.exp_config, "MovieSettings")["movie_prefix"]
 
 		# Read channels
 		self.exp_channels, channel_indices = extract_experiment_channels(self.exp_dir)
@@ -335,7 +335,7 @@ class ControlPanel(CelldetectiveMainWindow):
 		self.antibodies = get_experiment_antibodies(self.exp_dir)
 		self.pharmaceutical_agents = get_experiment_pharmaceutical_agents(self.exp_dir)
 
-		self.metadata = ConfigSectionMap(self.exp_config,"Metadata")
+		self.metadata = config_section_to_dict(self.exp_config, "Metadata")
 		print('Experiment configuration successfully read...')
 
 	def closeEvent(self, event):

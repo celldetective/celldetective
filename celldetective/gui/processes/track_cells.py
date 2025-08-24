@@ -1,7 +1,7 @@
 from multiprocessing import Process
 import time
 from celldetective.io import auto_load_number_of_frames, _load_frames_to_measure, locate_labels
-from celldetective.utils import ConfigSectionMap, _get_img_num_per_channel, \
+from celldetective.utils import config_section_to_dict, _get_img_num_per_channel, \
 	_mask_intensity_measurements, remove_file_if_exists
 from pathlib import Path, PurePath
 from glob import glob
@@ -153,12 +153,12 @@ class TrackingProcess(Process):
 
 	def extract_experiment_parameters(self):
 
-		self.movie_prefix = ConfigSectionMap(self.config,"MovieSettings")["movie_prefix"]
-		self.spatial_calibration = float(ConfigSectionMap(self.config,"MovieSettings")["pxtoum"])
-		self.time_calibration = float(ConfigSectionMap(self.config,"MovieSettings")["frametomin"])
-		self.len_movie = float(ConfigSectionMap(self.config,"MovieSettings")["len_movie"])
-		self.shape_x = int(ConfigSectionMap(self.config,"MovieSettings")["shape_x"])
-		self.shape_y = int(ConfigSectionMap(self.config,"MovieSettings")["shape_y"])
+		self.movie_prefix = config_section_to_dict(self.config, "MovieSettings")["movie_prefix"]
+		self.spatial_calibration = float(config_section_to_dict(self.config, "MovieSettings")["pxtoum"])
+		self.time_calibration = float(config_section_to_dict(self.config, "MovieSettings")["frametomin"])
+		self.len_movie = float(config_section_to_dict(self.config, "MovieSettings")["len_movie"])
+		self.shape_x = int(config_section_to_dict(self.config, "MovieSettings")["shape_x"])
+		self.shape_y = int(config_section_to_dict(self.config, "MovieSettings")["shape_y"])
 
 		self.channel_names, self.channel_indices = extract_experiment_channels(self.exp_dir)
 		self.nbr_channels = len(self.channel_names)
