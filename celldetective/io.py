@@ -33,7 +33,8 @@ from stardist import fill_label_holes
 from skimage.transform import resize
 import re
 
-from typing import List, Tuple
+from typing import List, Tuple, Union
+import numbers
 
 def extract_experiment_from_well(well_path):
 
@@ -208,7 +209,7 @@ def collect_experiment_metadata(pos_path=None, well_path=None):
 		experiment = extract_experiment_from_well(well_path)
 	else:
 		print("Please provide a position or well path...")
-		return
+		return None
 		
 	wells = list(get_experiment_wells(experiment))
 	idx = wells.index(well_path)
@@ -1047,15 +1048,23 @@ def load_experiment_tables(experiment, population='targets', well_option='*', po
 
 				if metadata is not None:
 					keys = list(metadata.keys())
-					for k in keys:
-						df_pos[k] = metadata[k]
+					for key in keys:
+						df_pos[key] = metadata[key]
 
 				df.append(df_pos)
 				any_table = True
 
-				pos_dict = {'pos_path': pos_path, 'pos_index': real_pos_index, 'pos_name': pos_name, 'table_path': table,
-					 'stack_path': stack_path,'well_path': well_path, 'well_index': real_well_index, 'well_name': well_name,
-					 'well_number': well_number, 'well_alias': well_alias}
+				pos_dict = {'pos_path': pos_path,
+							'pos_index': real_pos_index,
+							'pos_name': pos_name,
+							'table_path': table,
+							'stack_path': stack_path,
+							'well_path': well_path,
+							'well_index': real_well_index,
+							'well_name': well_name,
+							'well_number': well_number,
+							'well_alias': well_alias,
+							}
 
 				df_pos_info.append(pos_dict)
 
@@ -2364,7 +2373,7 @@ def load_napari_data(position, prefix="Aligned", population="target", return_sta
 	position : str
 		The path to the position or experiment directory.
 	prefix : str, optional
-		The prefix used to identify the the movie file. The default is "Aligned".
+		The prefix used to identify the movie file. The default is "Aligned".
 	population : str, optional
 		The population type to load, either "target" or "effector". The default is "target".
 
@@ -2416,7 +2425,7 @@ def load_napari_data(position, prefix="Aligned", population="target", return_sta
 	return data, properties, graph, labels, stack
 
 
-def auto_correct_masks(masks, bbox_factor = 1.75, min_area=9, fill_labels=False):
+def auto_correct_masks(masks, bbox_factor: float = 1.75, min_area: int = 9, fill_labels: bool = False):
 
 	"""
 	Correct segmentation masks to ensure consistency and remove anomalies.
@@ -2436,6 +2445,13 @@ def auto_correct_masks(masks, bbox_factor = 1.75, min_area=9, fill_labels=False)
 	masks : np.ndarray
 		A 2D array representing the segmented mask image with labeled regions. Each unique value 
 		in the array represents a different object or cell.
+	bbox_factor : float, optional
+		A factor on cell area that is compared directly to the bounding box area of the cell, to detect remote cells
+		sharing a same label value. The default is `1.75`.
+	min_area : int, optional
+		Discard cells that have an area smaller than this minimum area (px²). The default is `9` (3x3 pixels).
+	fill_labels : bool, optional
+		Fill holes within cell masks automatically. The default is `False`.
 
 	Returns
 	-------
@@ -2459,6 +2475,8 @@ def auto_correct_masks(masks, bbox_factor = 1.75, min_area=9, fill_labels=False)
 		   [0, 2, 2, 1],
 		   [0, 2, 0, 0]])
 	"""
+	
+	assert masks.ndim==2,"`masks` should be a 2D numpy array..."
 
 	# Avoid negative mask values
 	masks[masks<0] = np.abs(masks[masks<0])
@@ -2523,6 +2541,8 @@ def control_segmentation_napari(position, prefix='Aligned', population="target",
 		The prefix used to identify the stack. The default is 'Aligned'.
 	population : str, optional
 		The population type for which the segmentation is performed. The default is 'target'.
+	flush_memory : bool, optional
+		Pop napari layers upon closing the viewer to empty the memory footprint. The default is `False`.
 
 	Notes
 	-----
@@ -2890,22 +2910,6 @@ def get_segmentation_models_list(mode='targets', return_path=False):
 	else:
 		repository_models = get_zenodo_files(cat=os.sep.join(["models", f"segmentation_{mode}"]))
 
-	# if mode == 'targets':
-	# 	modelpath = os.sep.join(
-	# 		[os.path.split(os.path.dirname(os.path.realpath(__file__)))[0], "celldetective", "models",
-	# 		 "segmentation_targets", os.sep])
-	# 	repository_models = get_zenodo_files(cat=os.sep.join(["models", "segmentation_targets"]))
-	# elif mode == 'effectors':
-	# 	modelpath = os.sep.join(
-	# 		[os.path.split(os.path.dirname(os.path.realpath(__file__)))[0], "celldetective", "models",
-	# 		 "segmentation_effectors", os.sep])
-	# 	repository_models = get_zenodo_files(cat=os.sep.join(["models", "segmentation_effectors"]))
-	# elif mode == 'generic':
-	# 	modelpath = os.sep.join(
-	# 		[os.path.split(os.path.dirname(os.path.realpath(__file__)))[0], "celldetective", "models",
-	# 		 "segmentation_generic", os.sep])
-	# 	repository_models = get_zenodo_files(cat=os.sep.join(["models", "segmentation_generic"]))
-
 	available_models = natsorted(glob(modelpath + '*/'))
 	available_models = [m.replace('\\', '/').split('/')[-2] for m in available_models]
 
@@ -3225,7 +3229,7 @@ def normalize(frame, percentiles=(0.0,99.99), values=None, ignore_gray_value=0.,
 		subframe = frame.copy()
 
 	if values is not None:
-		mi = values[0];
+		mi = values[0]
 		ma = values[1]
 	else:
 		mi = np.nanpercentile(subframe.flatten(), percentiles[0], keepdims=True)
@@ -3246,9 +3250,14 @@ def normalize(frame, percentiles=(0.0,99.99), values=None, ignore_gray_value=0.,
 	return frame.copy().astype(dtype)
 
 
-def normalize_multichannel(multichannel_frame, percentiles=None,
-						   values=None, ignore_gray_value=0., clip=False,
-						   amplification=None, dtype=float):
+def normalize_multichannel(multichannel_frame: np.ndarray,
+						   percentiles=None,
+						   values=None,
+						   ignore_gray_value=0.,
+						   clip=False,
+						   amplification=None,
+						   dtype=float,
+						   ):
 	
 	"""
 	Normalizes a multichannel frame by adjusting the intensity values of each channel based on specified percentiles,
@@ -3297,12 +3306,10 @@ def normalize_multichannel(multichannel_frame, percentiles=None,
 	Examples
 	--------
 	>>> multichannel_frame = np.random.rand(100, 100, 3)  # Example multichannel frame
-	>>> normalized_frame = normalize_multichannel(multichannel_frame, percentiles=((1, 99), (2, 98), (0, 100)))
+	>>> normalized_frame = normalize_multichannel(multichannel_frame, percentiles=[(1, 99), (2, 98), (0, 100)])
 	# Normalizes each channel of the frame using specified percentile ranges.
 
 	"""
-
-
 
 	mf = multichannel_frame.copy().astype(float)
 	assert mf.ndim == 3, f'Wrong shape for the multichannel frame: {mf.shape}.'
