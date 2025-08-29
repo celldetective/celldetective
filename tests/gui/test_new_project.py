@@ -126,11 +126,11 @@ def test_new_project(app, qtbot):
 		app.control_panel.viewer.contrast_slider.setValue([200,300])
 		qtbot.wait(interaction_time*2)
 	
-	QApplication.closeAllWindows()
-	try:
-		shutil.rmtree(os.sep.join([parent_directory, "ExperimentTest"]))
-	except:
-		pass
+	# QApplication.closeAllWindows()
+	# try:
+	# 	shutil.rmtree(os.sep.join([parent_directory, "ExperimentTest"]))
+	# except:
+	# 	pass
 # def test_lauch_app(app, qtbot):
 # 	app.show()
 # 	qtbot.wait(1000)
