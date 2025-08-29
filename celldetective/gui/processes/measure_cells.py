@@ -17,6 +17,7 @@ import concurrent.futures
 import pandas as pd
 from natsort import natsorted
 from art import tprint
+from typing import Optional, Union
 
 
 class MeasurementProcess(Process):
