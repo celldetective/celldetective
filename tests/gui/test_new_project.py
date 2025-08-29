@@ -1,10 +1,9 @@
 import pytest
 from PyQt5 import QtCore
+from PyQt5.QtWidgets import QApplication
 from celldetective.gui.InitWindow import AppInitWindow
 from celldetective.utils import get_software_location
-import time
 import os
-from PyQt5 import QtWidgets
 from unittest.mock import patch
 import shutil
 from pathlib import Path
@@ -126,9 +125,12 @@ def test_new_project(app, qtbot):
 		
 		app.control_panel.viewer.contrast_slider.setValue([200,300])
 		qtbot.wait(interaction_time*2)
-
+	
+	QApplication.closeAllWindows()
+	try:
 		shutil.rmtree(os.sep.join([parent_directory, "ExperimentTest"]))
-
+	except:
+		pass
 # def test_lauch_app(app, qtbot):
 # 	app.show()
 # 	qtbot.wait(1000)
