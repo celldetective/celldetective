@@ -21,8 +21,8 @@ from art import tprint
 
 class MeasurementProcess(Process):
 	
-	pos: str | Path | None = None
-	mode: str | None = None
+	pos: Optional[Union[str,Path]] = None
+	mode: Optional[str] = None
 	n_threads: int = 1
 
 	def __init__(self, queue=None, process_args=None):

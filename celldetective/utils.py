@@ -31,7 +31,7 @@ from stardist.models import StarDist2D
 from cellpose.models import CellposeModel
 from pathlib import PosixPath, PurePath, PurePosixPath, WindowsPath, Path
 from prettytable import PrettyTable
-from typing import List, Dict
+from typing import List, Dict, Union, Optional
 
 def is_integer_array(arr: np.ndarray) -> bool:
 
@@ -44,7 +44,7 @@ def is_integer_array(arr: np.ndarray) -> bool:
 	else:
 		return False
 
-def get_config(experiment: str | Path) -> str:
+def get_config(experiment: Union[str,Path]) -> str:
 
 	"""
 	Retrieves the path to the configuration file for a given experiment.
@@ -159,7 +159,7 @@ def _extract_coordinates_from_features(df: pd.DataFrame, timepoint: int) -> pd.D
 
 	return coords
 
-def _mask_intensity_measurements(df: pd.DataFrame, mask_channels: List[str] | None):
+def _mask_intensity_measurements(df: pd.DataFrame, mask_channels: Optional[List[str]]):
 
 	"""
 	Removes columns from a DataFrame that match specific channel name patterns.
@@ -208,7 +208,7 @@ def _mask_intensity_measurements(df: pd.DataFrame, mask_channels: List[str] | No
 			df = df.drop(cols_to_drop, axis=1)
 	return df
 
-def _rearrange_multichannel_frame(frame: np.ndarray, n_channels: int | None = None) -> np.ndarray:
+def _rearrange_multichannel_frame(frame: np.ndarray, n_channels: Optional[int] = None) -> np.ndarray:
 
 	"""
 	Rearranges the axes of a multi-channel frame to ensure the channel axis is at the end.
@@ -269,7 +269,7 @@ def _rearrange_multichannel_frame(frame: np.ndarray, n_channels: int | None = No
 
 	return frame
 
-def _fix_no_contrast(frames: np.ndarray, value: float | int = 1):
+def _fix_no_contrast(frames: np.ndarray, value: Union[float,int] = 1):
 
 	"""
 	Ensures that frames with no contrast (i.e., containing only a single unique value) are adjusted.
@@ -1811,7 +1811,7 @@ def _extract_channel_indices(channels, required_channels):
 
 	return channel_indices
 
-def config_section_to_dict(path: str | PurePath | Path, section: str) -> Dict | None:
+def config_section_to_dict(path: Union[str,PurePath,Path], section: str) -> Union[Dict,None]:
 	
 	"""
 	Parse the config file to extract experiment parameters
@@ -2982,7 +2982,7 @@ def collapse_trajectories_by_status(df, status=None, projection='mean', populati
 
 	return group_table
 
-def step_function(t: np.ndarray | List, t_shift: float, dt: float) -> np.ndarray:
+def step_function(t: Union[np.ndarray,List], t_shift: float, dt: float) -> np.ndarray:
 
 	"""
 	Computes a step function using the logistic sigmoid function.
@@ -3024,7 +3024,7 @@ def step_function(t: np.ndarray | List, t_shift: float, dt: float) -> np.ndarray
 	return 1/(1+np.exp(-(t-t_shift)/dt))
 
 
-def test_2samp_generic(data: pd.DataFrame, feature: str | None = None, groupby_cols: str | List[str] | None = None, method="ks_2samp", *args, **kwargs) -> pd.DataFrame:
+def test_2samp_generic(data: pd.DataFrame, feature: Optional[str] = None, groupby_cols: Optional[Union[str,List[str]]] = None, method="ks_2samp", *args, **kwargs) -> pd.DataFrame:
 
 	"""
 	Performs pairwise statistical tests between groups of data, comparing a specified feature using a chosen method.
@@ -3103,7 +3103,7 @@ def pretty_table(dct: dict):
 	table.add_row([dct.get(c, "") for c in dct.keys()])
 	print(table)
 
-def remove_file_if_exists(file: str | Path):
+def remove_file_if_exists(file: Union[str,Path]):
 	if os.path.exists(file):
 		try:
 			os.remove(file)

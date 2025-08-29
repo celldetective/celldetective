@@ -622,7 +622,7 @@ def get_experiment_populations(experiment, dtype=str):
 	return list([dtype(c) for c in populations])
 
 
-def interpret_wells_and_positions(experiment: str, well_option: str | int | List[int], position_option: str | int | List[int]) -> Tuple[List[int], List[int]] | None:
+def interpret_wells_and_positions(experiment: str, well_option: Union[str,int,List[int]], position_option: Union[str,int,List[int]]) -> Union[Tuple[List[int], List[int]], None]:
 	"""
 	Interpret well and position options for a given experiment.
 
