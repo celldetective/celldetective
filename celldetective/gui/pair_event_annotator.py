@@ -167,8 +167,10 @@ class PairEventAnnotator(CelldetectiveMainWindow):
 		self.left_panel.addLayout(neigh_hbox)
 
 		self.reference_cell_info = QLabel('')
+		self.reference_cell_info.setStyleSheet("color: #1f77b4;")
 		self.pair_info = QLabel('')
 		self.neighbor_cell_info= QLabel('')
+		self.neighbor_cell_info.setStyleSheet("color: #d62728;")
 
 		class_hbox = QHBoxLayout()
 		class_hbox.addWidget(QLabel('interaction event: '), 25)

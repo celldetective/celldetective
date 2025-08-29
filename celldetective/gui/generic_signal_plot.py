@@ -504,7 +504,8 @@ class GenericSignalPlotWidget(CelldetectiveWidget):
 		# Spines
 		self.ax.spines['top'].set_visible(False)
 		self.ax.spines['right'].set_visible(False)
-
+		self.ax.grid(which='major', color='black', linestyle='-', linewidth=0.8, alpha=0.2)
+		self.ax.grid(which='minor', color='lightgray', linestyle='--', linewidth=0.5, alpha=0.1)
 		# Lims
 		safe_df = self.df.dropna(subset=self.feature_selected)
 		values = safe_df[self.feature_selected].values

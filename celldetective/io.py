@@ -3404,6 +3404,10 @@ def load_frames(img_nums, stack_path, scale=None, normalize_input=True, dtype=np
 		print(
 			f'Error in loading the frame {img_nums} {e}. Please check that the experiment channel information is consistent with the movie being read.')
 		return None
+	try:
+		frames[np.isinf(frames)] = np.nan
+	except Exception as e:
+		print(e)
 
 	frames = _rearrange_multichannel_frame(frames)
 

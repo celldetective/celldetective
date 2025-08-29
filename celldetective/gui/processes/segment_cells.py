@@ -55,6 +55,8 @@ class BaseSegmentProcess(Process):
 				print(f"Measurement instruction file successfully loaded...")
 				print(f"Instructions: {_instructions}...")
 			self.flip = _instructions.get("flip", False)
+		else:
+			self.flip = False
 
 
 	def write_folders(self):
