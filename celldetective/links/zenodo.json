@@ -8,7 +8,7 @@
     "record": "public",
     "status": "open"
   },
-  "created": "2025-08-30T13:23:55.995689+00:00",
+  "created": "2025-08-30T15:44:33.421316+00:00",
   "custom_fields": {
     "code:codeRepository": "https://github.com/celldetective/celldetective",
     "code:developmentStatus": {
@@ -40,11 +40,11 @@
         },
         "checksum": "md5:a88f2cbff39cab4369d80bfadbf31906",
         "ext": "zip",
-        "id": "1cfa4138-f483-4b1b-92fe-98167dda4209",
+        "id": "94dad22b-4b84-4fdf-b59d-cd6636891d90",
         "key": "CP_cyto3.zip",
         "links": {
-          "content": "https://zenodo.org/api/records/17008460/files/CP_cyto3.zip/content",
-          "self": "https://zenodo.org/api/records/17008460/files/CP_cyto3.zip"
+          "content": "https://zenodo.org/api/records/17008961/files/CP_cyto3.zip/content",
+          "self": "https://zenodo.org/api/records/17008961/files/CP_cyto3.zip"
         },
         "metadata": {},
         "mimetype": "application/zip",
@@ -57,11 +57,11 @@
         },
         "checksum": "md5:4a158688881c68de0d14117db2880930",
         "ext": "zip",
-        "id": "c5a4ab6e-c07c-408b-a6b5-f1480f169dcf",
+        "id": "417a13ec-5e2e-43ac-b126-cfa23ed3b7a4",
         "key": "CP_livecell.zip",
         "links": {
-          "content": "https://zenodo.org/api/records/17008460/files/CP_livecell.zip/content",
-          "self": "https://zenodo.org/api/records/17008460/files/CP_livecell.zip"
+          "content": "https://zenodo.org/api/records/17008961/files/CP_livecell.zip/content",
+          "self": "https://zenodo.org/api/records/17008961/files/CP_livecell.zip"
         },
         "metadata": {},
         "mimetype": "application/zip",
@@ -74,11 +74,11 @@
         },
         "checksum": "md5:479209924265c41bd04d50341b51da04",
         "ext": "zip",
-        "id": "186e0b3a-040b-4bfa-be15-a2e695bbd9ba",
+        "id": "9ef8d938-ae78-4a14-b0c0-1ce6c8b82daf",
         "key": "CP_nuclei.zip",
         "links": {
-          "content": "https://zenodo.org/api/records/17008460/files/CP_nuclei.zip/content",
-          "self": "https://zenodo.org/api/records/17008460/files/CP_nuclei.zip"
+          "content": "https://zenodo.org/api/records/17008961/files/CP_nuclei.zip/content",
+          "self": "https://zenodo.org/api/records/17008961/files/CP_nuclei.zip"
         },
         "metadata": {},
         "mimetype": "application/zip",
@@ -91,11 +91,11 @@
         },
         "checksum": "md5:ea161f28b6159c492c7fa8a76970017c",
         "ext": "zip",
-        "id": "13f7dd90-d967-4e37-bc8d-9ee41a1a9b89",
+        "id": "20619a7d-0e1e-452f-a078-eb148137dfe8",
         "key": "CP_tissuenet.zip",
         "links": {
-          "content": "https://zenodo.org/api/records/17008460/files/CP_tissuenet.zip/content",
-          "self": "https://zenodo.org/api/records/17008460/files/CP_tissuenet.zip"
+          "content": "https://zenodo.org/api/records/17008961/files/CP_tissuenet.zip/content",
+          "self": "https://zenodo.org/api/records/17008961/files/CP_tissuenet.zip"
         },
         "metadata": {},
         "mimetype": "application/zip",
@@ -108,11 +108,11 @@
         },
         "checksum": "md5:85823eee8bebaa894f2fd38491c53fca",
         "ext": "zip",
-        "id": "f77939be-df62-4172-8ccc-ddde63d7319d",
+        "id": "ec72851d-bde6-4c07-89b0-6c094664a3d4",
         "key": "NucCond.zip",
         "links": {
-          "content": "https://zenodo.org/api/records/17008460/files/NucCond.zip/content",
-          "self": "https://zenodo.org/api/records/17008460/files/NucCond.zip"
+          "content": "https://zenodo.org/api/records/17008961/files/NucCond.zip/content",
+          "self": "https://zenodo.org/api/records/17008961/files/NucCond.zip"
         },
         "metadata": {},
         "mimetype": "application/zip",
@@ -125,11 +125,11 @@
         },
         "checksum": "md5:49592e9f05a796d2787652e36c8ef6e2",
         "ext": "zip",
-        "id": "bc805e93-f533-443c-bcd8-982628ae9f80",
+        "id": "3bfce30b-b5b5-4615-b564-d08563317966",
         "key": "SD_versatile_fluo.zip",
         "links": {
-          "content": "https://zenodo.org/api/records/17008460/files/SD_versatile_fluo.zip/content",
-          "self": "https://zenodo.org/api/records/17008460/files/SD_versatile_fluo.zip"
+          "content": "https://zenodo.org/api/records/17008961/files/SD_versatile_fluo.zip/content",
+          "self": "https://zenodo.org/api/records/17008961/files/SD_versatile_fluo.zip"
         },
         "metadata": {},
         "mimetype": "application/zip",
@@ -142,11 +142,11 @@
         },
         "checksum": "md5:186bf4be5f78763dde9b181aa8f8d116",
         "ext": "zip",
-        "id": "3497514c-7554-42d0-9a7e-0c3f6fd13ec6",
+        "id": "d186dfb4-3704-401b-bd9a-d0228fbbbe52",
         "key": "SD_versatile_he.zip",
         "links": {
-          "content": "https://zenodo.org/api/records/17008460/files/SD_versatile_he.zip/content",
-          "self": "https://zenodo.org/api/records/17008460/files/SD_versatile_he.zip"
+          "content": "https://zenodo.org/api/records/17008961/files/SD_versatile_he.zip/content",
+          "self": "https://zenodo.org/api/records/17008961/files/SD_versatile_he.zip"
         },
         "metadata": {},
         "mimetype": "application/zip",
@@ -159,11 +159,11 @@
         },
         "checksum": "md5:0e2d912b6241446120b446b4a412218d",
         "ext": "zip",
-        "id": "6f22932a-1818-427d-8a1c-7735b779954c",
+        "id": "97e2fa2e-858b-4500-a07b-3fab17c12309",
         "key": "db-si-NucCondensation.zip",
         "links": {
-          "content": "https://zenodo.org/api/records/17008460/files/db-si-NucCondensation.zip/content",
-          "self": "https://zenodo.org/api/records/17008460/files/db-si-NucCondensation.zip"
+          "content": "https://zenodo.org/api/records/17008961/files/db-si-NucCondensation.zip/content",
+          "self": "https://zenodo.org/api/records/17008961/files/db-si-NucCondensation.zip"
         },
         "metadata": {},
         "mimetype": "application/zip",
@@ -176,11 +176,11 @@
         },
         "checksum": "md5:24d6da6c42435fdd0fa6a87616033b7c",
         "ext": "zip",
-        "id": "ed90ad9c-0874-4718-958f-757ca8b79890",
+        "id": "461a2f65-0ae6-4ec1-b971-62d5efd14a95",
         "key": "db-si-NucPI.zip",
         "links": {
-          "content": "https://zenodo.org/api/records/17008460/files/db-si-NucPI.zip/content",
-          "self": "https://zenodo.org/api/records/17008460/files/db-si-NucPI.zip"
+          "content": "https://zenodo.org/api/records/17008961/files/db-si-NucPI.zip/content",
+          "self": "https://zenodo.org/api/records/17008961/files/db-si-NucPI.zip"
         },
         "metadata": {},
         "mimetype": "application/zip",
@@ -193,11 +193,11 @@
         },
         "checksum": "md5:d893ef8c69133ad3bb076adaef8aaf8d",
         "ext": "zip",
-        "id": "c95229eb-a743-4479-8cef-52479275df70",
+        "id": "9de5c19d-0792-4d30-be54-8c40d1e0a97e",
         "key": "db_mcf7_nuclei_w_lymphocytes.zip",
         "links": {
-          "content": "https://zenodo.org/api/records/17008460/files/db_mcf7_nuclei_w_lymphocytes.zip/content",
-          "self": "https://zenodo.org/api/records/17008460/files/db_mcf7_nuclei_w_lymphocytes.zip"
+          "content": "https://zenodo.org/api/records/17008961/files/db_mcf7_nuclei_w_lymphocytes.zip/content",
+          "self": "https://zenodo.org/api/records/17008961/files/db_mcf7_nuclei_w_lymphocytes.zip"
         },
         "metadata": {},
         "mimetype": "application/zip",
@@ -210,11 +210,11 @@
         },
         "checksum": "md5:d0ae0d92264523bf69ea76865839fce1",
         "ext": "zip",
-        "id": "3f0286fb-e473-4554-a91b-d97add63eb34",
+        "id": "7b92495f-771a-48e0-98e2-3d3a7d8e4d93",
         "key": "db_primary_NK_w_mcf7.zip",
         "links": {
-          "content": "https://zenodo.org/api/records/17008460/files/db_primary_NK_w_mcf7.zip/content",
-          "self": "https://zenodo.org/api/records/17008460/files/db_primary_NK_w_mcf7.zip"
+          "content": "https://zenodo.org/api/records/17008961/files/db_primary_NK_w_mcf7.zip/content",
+          "self": "https://zenodo.org/api/records/17008961/files/db_primary_NK_w_mcf7.zip"
         },
         "metadata": {},
         "mimetype": "application/zip",
@@ -227,11 +227,11 @@
         },
         "checksum": "md5:1b236b9aba35cff623b234e6a4cac81e",
         "ext": "zip",
-        "id": "f68a0fd1-8137-447c-9cfc-6e36a7827408",
+        "id": "0dd13b30-a191-4dc7-b1e6-af8ce35cd312",
         "key": "db_spreading_lymphocytes.zip",
         "links": {
-          "content": "https://zenodo.org/api/records/17008460/files/db_spreading_lymphocytes.zip/content",
-          "self": "https://zenodo.org/api/records/17008460/files/db_spreading_lymphocytes.zip"
+          "content": "https://zenodo.org/api/records/17008961/files/db_spreading_lymphocytes.zip/content",
+          "self": "https://zenodo.org/api/records/17008961/files/db_spreading_lymphocytes.zip"
         },
         "metadata": {},
         "mimetype": "application/zip",
@@ -244,11 +244,11 @@
         },
         "checksum": "md5:3a826e2f02c42a8fc66344c27891539e",
         "ext": "zip",
-        "id": "5b59e741-175f-4aa9-b69f-4fc86ecd07f2",
+        "id": "2e7b3f4f-d34f-41a1-a4b5-0df6d31d8330",
         "key": "demo_adcc.zip",
         "links": {
-          "content": "https://zenodo.org/api/records/17008460/files/demo_adcc.zip/content",
-          "self": "https://zenodo.org/api/records/17008460/files/demo_adcc.zip"
+          "content": "https://zenodo.org/api/records/17008961/files/demo_adcc.zip/content",
+          "self": "https://zenodo.org/api/records/17008961/files/demo_adcc.zip"
         },
         "metadata": {},
         "mimetype": "application/zip",
@@ -261,11 +261,11 @@
         },
         "checksum": "md5:21152b506b4b9b54a15c7c5c6e25df36",
         "ext": "zip",
-        "id": "dce09957-b259-47a9-bf6c-f95817859d35",
+        "id": "1edb01a5-d038-46f4-8c38-a3b7cfa7a392",
         "key": "demo_ricm.zip",
         "links": {
-          "content": "https://zenodo.org/api/records/17008460/files/demo_ricm.zip/content",
-          "self": "https://zenodo.org/api/records/17008460/files/demo_ricm.zip"
+          "content": "https://zenodo.org/api/records/17008961/files/demo_ricm.zip/content",
+          "self": "https://zenodo.org/api/records/17008961/files/demo_ricm.zip"
         },
         "metadata": {},
         "mimetype": "application/zip",
@@ -278,11 +278,11 @@
         },
         "checksum": "md5:3c925d27564bbdbd14e0dc30c508b729",
         "ext": "zip",
-        "id": "bcc78640-ee4c-4bdc-859e-1d5a96178203",
+        "id": "b662eab8-dec5-49e6-928e-ecca36df65f2",
         "key": "lymphocytes_ricm.zip",
         "links": {
-          "content": "https://zenodo.org/api/records/17008460/files/lymphocytes_ricm.zip/content",
-          "self": "https://zenodo.org/api/records/17008460/files/lymphocytes_ricm.zip"
+          "content": "https://zenodo.org/api/records/17008961/files/lymphocytes_ricm.zip/content",
+          "self": "https://zenodo.org/api/records/17008961/files/lymphocytes_ricm.zip"
         },
         "metadata": {},
         "mimetype": "application/zip",
@@ -295,11 +295,11 @@
         },
         "checksum": "md5:f8553e793c70b64ebc7b4e4720dcde89",
         "ext": "zip",
-        "id": "8dd89e4a-8b62-40d0-be80-8af329043546",
+        "id": "f963ecc6-8d4b-43ae-8158-a8c63e4c2d43",
         "key": "lysis_H_PI.zip",
         "links": {
-          "content": "https://zenodo.org/api/records/17008460/files/lysis_H_PI.zip/content",
-          "self": "https://zenodo.org/api/records/17008460/files/lysis_H_PI.zip"
+          "content": "https://zenodo.org/api/records/17008961/files/lysis_H_PI.zip/content",
+          "self": "https://zenodo.org/api/records/17008961/files/lysis_H_PI.zip"
         },
         "metadata": {},
         "mimetype": "application/zip",
@@ -312,11 +312,11 @@
         },
         "checksum": "md5:b6512a2292d89ac2386db05459a88583",
         "ext": "zip",
-        "id": "9e6c514d-3354-4047-8c02-7dd1bac83d19",
+        "id": "a831696f-3fd0-4bbe-98a2-9d253f8b4ad5",
         "key": "lysis_PI_area.zip",
         "links": {
-          "content": "https://zenodo.org/api/records/17008460/files/lysis_PI_area.zip/content",
-          "self": "https://zenodo.org/api/records/17008460/files/lysis_PI_area.zip"
+          "content": "https://zenodo.org/api/records/17008961/files/lysis_PI_area.zip/content",
+          "self": "https://zenodo.org/api/records/17008961/files/lysis_PI_area.zip"
         },
         "metadata": {},
         "mimetype": "application/zip",
@@ -329,11 +329,11 @@
         },
         "checksum": "md5:b67edfcae354f41add3613a3f5726b03",
         "ext": "zip",
-        "id": "5e129bc3-6dc5-499a-b4a0-acd50c55b93a",
+        "id": "f383b00f-4076-42c8-af9a-72a3c37d6d5a",
         "key": "mcf7_nuc_multimodal.zip",
         "links": {
-          "content": "https://zenodo.org/api/records/17008460/files/mcf7_nuc_multimodal.zip/content",
-          "self": "https://zenodo.org/api/records/17008460/files/mcf7_nuc_multimodal.zip"
+          "content": "https://zenodo.org/api/records/17008961/files/mcf7_nuc_multimodal.zip/content",
+          "self": "https://zenodo.org/api/records/17008961/files/mcf7_nuc_multimodal.zip"
         },
         "metadata": {},
         "mimetype": "application/zip",
@@ -344,17 +344,17 @@
         "access": {
           "hidden": false
         },
-        "checksum": "md5:c0b68f7dbfd8872f7ddce30a0541af24",
+        "checksum": "md5:f9129d7a727596bd1ca46061e13bdd4f",
         "ext": "zip",
-        "id": "fd8e8e23-f771-4a78-8a8e-b7e75d58f0f1",
+        "id": "6eef7f82-ea52-4e0b-aa34-abb46758ed88",
         "key": "mcf7_nuc_stardist_transfer.zip",
         "links": {
-          "content": "https://zenodo.org/api/records/17008460/files/mcf7_nuc_stardist_transfer.zip/content",
-          "self": "https://zenodo.org/api/records/17008460/files/mcf7_nuc_stardist_transfer.zip"
+          "content": "https://zenodo.org/api/records/17008961/files/mcf7_nuc_stardist_transfer.zip/content",
+          "self": "https://zenodo.org/api/records/17008961/files/mcf7_nuc_stardist_transfer.zip"
         },
         "metadata": {},
         "mimetype": "application/zip",
-        "size": 509461449,
+        "size": 12787377,
         "storage_class": "L"
       },
       "primNK_cfse.zip": {
@@ -363,11 +363,11 @@
         },
         "checksum": "md5:d8a3f7a69dbc0549ed773fdbddec3889",
         "ext": "zip",
-        "id": "03d94279-2df9-4fd9-b670-c743ab14aea3",
+        "id": "40a47a56-7f1c-44ca-946a-958d56b0609c",
         "key": "primNK_cfse.zip",
         "links": {
-          "content": "https://zenodo.org/api/records/17008460/files/primNK_cfse.zip/content",
-          "self": "https://zenodo.org/api/records/17008460/files/primNK_cfse.zip"
+          "content": "https://zenodo.org/api/records/17008961/files/primNK_cfse.zip/content",
+          "self": "https://zenodo.org/api/records/17008961/files/primNK_cfse.zip"
         },
         "metadata": {},
         "mimetype": "application/zip",
@@ -380,11 +380,11 @@
         },
         "checksum": "md5:1e934849dd7ccaf4adcc1a3e49244096",
         "ext": "zip",
-        "id": "94a7fe69-a2cd-4683-9732-8fe96600eda5",
+        "id": "00603024-71d1-441f-ae51-3d683745ae43",
         "key": "primNK_multimodal.zip",
         "links": {
-          "content": "https://zenodo.org/api/records/17008460/files/primNK_multimodal.zip/content",
-          "self": "https://zenodo.org/api/records/17008460/files/primNK_multimodal.zip"
+          "content": "https://zenodo.org/api/records/17008961/files/primNK_multimodal.zip/content",
+          "self": "https://zenodo.org/api/records/17008961/files/primNK_multimodal.zip"
         },
         "metadata": {},
         "mimetype": "application/zip",
@@ -393,41 +393,41 @@
       }
     },
     "order": [],
-    "total_bytes": 3564392795
+    "total_bytes": 3067718723
   },
-  "id": "17008460",
+  "id": "17008961",
   "is_draft": false,
   "is_published": true,
   "links": {
-    "access": "https://zenodo.org/api/records/17008460/access",
-    "access_grants": "https://zenodo.org/api/records/17008460/access/grants",
-    "access_links": "https://zenodo.org/api/records/17008460/access/links",
-    "access_request": "https://zenodo.org/api/records/17008460/access/request",
-    "access_users": "https://zenodo.org/api/records/17008460/access/users",
-    "archive": "https://zenodo.org/api/records/17008460/files-archive",
-    "archive_media": "https://zenodo.org/api/records/17008460/media-files-archive",
-    "communities": "https://zenodo.org/api/records/17008460/communities",
-    "communities-suggestions": "https://zenodo.org/api/records/17008460/communities-suggestions",
-    "doi": "https://doi.org/10.5281/zenodo.17008460",
-    "draft": "https://zenodo.org/api/records/17008460/draft",
-    "files": "https://zenodo.org/api/records/17008460/files",
-    "latest": "https://zenodo.org/api/records/17008460/versions/latest",
-    "latest_html": "https://zenodo.org/records/17008460/latest",
-    "media_files": "https://zenodo.org/api/records/17008460/media-files",
+    "access": "https://zenodo.org/api/records/17008961/access",
+    "access_grants": "https://zenodo.org/api/records/17008961/access/grants",
+    "access_links": "https://zenodo.org/api/records/17008961/access/links",
+    "access_request": "https://zenodo.org/api/records/17008961/access/request",
+    "access_users": "https://zenodo.org/api/records/17008961/access/users",
+    "archive": "https://zenodo.org/api/records/17008961/files-archive",
+    "archive_media": "https://zenodo.org/api/records/17008961/media-files-archive",
+    "communities": "https://zenodo.org/api/records/17008961/communities",
+    "communities-suggestions": "https://zenodo.org/api/records/17008961/communities-suggestions",
+    "doi": "https://doi.org/10.5281/zenodo.17008961",
+    "draft": "https://zenodo.org/api/records/17008961/draft",
+    "files": "https://zenodo.org/api/records/17008961/files",
+    "latest": "https://zenodo.org/api/records/17008961/versions/latest",
+    "latest_html": "https://zenodo.org/records/17008961/latest",
+    "media_files": "https://zenodo.org/api/records/17008961/media-files",
     "parent": "https://zenodo.org/api/records/10650278",
     "parent_doi": "https://doi.org/10.5281/zenodo.10650278",
     "parent_doi_html": "https://zenodo.org/doi/10.5281/zenodo.10650278",
     "parent_html": "https://zenodo.org/records/10650278",
-    "preview_html": "https://zenodo.org/records/17008460?preview=1",
-    "requests": "https://zenodo.org/api/records/17008460/requests",
-    "reserve_doi": "https://zenodo.org/api/records/17008460/draft/pids/doi",
-    "self": "https://zenodo.org/api/records/17008460",
-    "self_doi": "https://doi.org/10.5281/zenodo.17008460",
-    "self_doi_html": "https://zenodo.org/doi/10.5281/zenodo.17008460",
-    "self_html": "https://zenodo.org/records/17008460",
-    "self_iiif_manifest": "https://zenodo.org/api/iiif/record:17008460/manifest",
-    "self_iiif_sequence": "https://zenodo.org/api/iiif/record:17008460/sequence/default",
-    "versions": "https://zenodo.org/api/records/17008460/versions"
+    "preview_html": "https://zenodo.org/records/17008961?preview=1",
+    "requests": "https://zenodo.org/api/records/17008961/requests",
+    "reserve_doi": "https://zenodo.org/api/records/17008961/draft/pids/doi",
+    "self": "https://zenodo.org/api/records/17008961",
+    "self_doi": "https://doi.org/10.5281/zenodo.17008961",
+    "self_doi_html": "https://zenodo.org/doi/10.5281/zenodo.17008961",
+    "self_html": "https://zenodo.org/records/17008961",
+    "self_iiif_manifest": "https://zenodo.org/api/iiif/record:17008961/manifest",
+    "self_iiif_sequence": "https://zenodo.org/api/iiif/record:17008961/sequence/default",
+    "versions": "https://zenodo.org/api/records/17008961/versions"
   },
   "media_files": {
     "count": 0,
@@ -841,7 +841,7 @@
       }
     ],
     "title": "Datasets, models and demos associated to \"Celldetective: an AI-enhanced image analysis tool for unraveling dynamic cell interactions\"",
-    "version": "1.1.1"
+    "version": "1.1.1.post1"
   },
   "parent": {
     "access": {
@@ -870,22 +870,22 @@
   "pids": {
     "doi": {
       "client": "datacite",
-      "identifier": "10.5281/zenodo.17008460",
+      "identifier": "10.5281/zenodo.17008961",
       "provider": "datacite"
     },
     "oai": {
-      "identifier": "oai:zenodo.org:17008460",
+      "identifier": "oai:zenodo.org:17008961",
       "provider": "oai"
     }
   },
   "revision_id": 4,
   "stats": {
     "all_versions": {
-      "data_volume": 858044583544.0,
-      "downloads": 11110,
-      "unique_downloads": 10787,
-      "unique_views": 613,
-      "views": 651
+      "data_volume": 858069165714.0,
+      "downloads": 11111,
+      "unique_downloads": 10788,
+      "unique_views": 615,
+      "views": 653
     },
     "this_version": {
       "data_volume": 0.0,
@@ -897,9 +897,9 @@
   },
   "status": "published",
   "swh": {},
-  "updated": "2025-08-30T13:23:56.860825+00:00",
+  "updated": "2025-08-30T15:44:34.276136+00:00",
   "versions": {
-    "index": 6,
+    "index": 7,
     "is_latest": true,
     "is_latest_draft": true
   }
