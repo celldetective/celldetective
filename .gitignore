@@ -162,3 +162,7 @@ celldetective/recent.txt
 celldetective/celldetective/recent.txt
 celldetective/threads.json
 celldetective/celldetective/threads.json
+
+celldetective/datasets/segmentation_annotations/*/
+celldetective/models/*/*/
+
