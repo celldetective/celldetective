@@ -8,7 +8,7 @@
     "record": "public",
     "status": "open"
   },
-  "created": "2025-01-23T11:15:01.232107+00:00",
+  "created": "2025-08-30T13:23:55.995689+00:00",
   "custom_fields": {
     "code:codeRepository": "https://github.com/celldetective/celldetective",
     "code:developmentStatus": {
@@ -40,11 +40,11 @@
         },
         "checksum": "md5:a88f2cbff39cab4369d80bfadbf31906",
         "ext": "zip",
-        "id": "e7d7f0c8-cb98-4b1d-ad9f-facf629934c7",
+        "id": "1cfa4138-f483-4b1b-92fe-98167dda4209",
         "key": "CP_cyto3.zip",
         "links": {
-          "content": "https://zenodo.org/api/records/14724949/files/CP_cyto3.zip/content",
-          "self": "https://zenodo.org/api/records/14724949/files/CP_cyto3.zip"
+          "content": "https://zenodo.org/api/records/17008460/files/CP_cyto3.zip/content",
+          "self": "https://zenodo.org/api/records/17008460/files/CP_cyto3.zip"
         },
         "metadata": {},
         "mimetype": "application/zip",
@@ -57,11 +57,11 @@
         },
         "checksum": "md5:4a158688881c68de0d14117db2880930",
         "ext": "zip",
-        "id": "e5b9d25f-1380-4c5a-b77b-ed166ad53eb3",
+        "id": "c5a4ab6e-c07c-408b-a6b5-f1480f169dcf",
         "key": "CP_livecell.zip",
         "links": {
-          "content": "https://zenodo.org/api/records/14724949/files/CP_livecell.zip/content",
-          "self": "https://zenodo.org/api/records/14724949/files/CP_livecell.zip"
+          "content": "https://zenodo.org/api/records/17008460/files/CP_livecell.zip/content",
+          "self": "https://zenodo.org/api/records/17008460/files/CP_livecell.zip"
         },
         "metadata": {},
         "mimetype": "application/zip",
@@ -74,11 +74,11 @@
         },
         "checksum": "md5:479209924265c41bd04d50341b51da04",
         "ext": "zip",
-        "id": "65198f8c-6e62-44f3-831c-68069f003c90",
+        "id": "186e0b3a-040b-4bfa-be15-a2e695bbd9ba",
         "key": "CP_nuclei.zip",
         "links": {
-          "content": "https://zenodo.org/api/records/14724949/files/CP_nuclei.zip/content",
-          "self": "https://zenodo.org/api/records/14724949/files/CP_nuclei.zip"
+          "content": "https://zenodo.org/api/records/17008460/files/CP_nuclei.zip/content",
+          "self": "https://zenodo.org/api/records/17008460/files/CP_nuclei.zip"
         },
         "metadata": {},
         "mimetype": "application/zip",
@@ -91,11 +91,11 @@
         },
         "checksum": "md5:ea161f28b6159c492c7fa8a76970017c",
         "ext": "zip",
-        "id": "9e379125-86b0-444a-972a-abbb5d07ad5f",
+        "id": "13f7dd90-d967-4e37-bc8d-9ee41a1a9b89",
         "key": "CP_tissuenet.zip",
         "links": {
-          "content": "https://zenodo.org/api/records/14724949/files/CP_tissuenet.zip/content",
-          "self": "https://zenodo.org/api/records/14724949/files/CP_tissuenet.zip"
+          "content": "https://zenodo.org/api/records/17008460/files/CP_tissuenet.zip/content",
+          "self": "https://zenodo.org/api/records/17008460/files/CP_tissuenet.zip"
         },
         "metadata": {},
         "mimetype": "application/zip",
@@ -106,15 +106,15 @@
         "access": {
           "hidden": false
         },
-        "checksum": "md5:f7cdea12058ee9ec2d5f5bc353615464",
+        "checksum": "md5:85823eee8bebaa894f2fd38491c53fca",
         "ext": "zip",
-        "id": "09a55790-4480-4d16-a3d4-745f4ff92846",
+        "id": "f77939be-df62-4172-8ccc-ddde63d7319d",
         "key": "NucCond.zip",
         "links": {
-          "content": "https://zenodo.org/api/records/14724949/files/NucCond.zip/content",
-          "self": "https://zenodo.org/api/records/14724949/files/NucCond.zip"
+          "content": "https://zenodo.org/api/records/17008460/files/NucCond.zip/content",
+          "self": "https://zenodo.org/api/records/17008460/files/NucCond.zip"
         },
-        "metadata": null,
+        "metadata": {},
         "mimetype": "application/zip",
         "size": 32419315,
         "storage_class": "L"
@@ -125,11 +125,11 @@
         },
         "checksum": "md5:49592e9f05a796d2787652e36c8ef6e2",
         "ext": "zip",
-        "id": "ca3dcb1f-d740-4df4-bcdd-bfd91ff8ffe0",
+        "id": "bc805e93-f533-443c-bcd8-982628ae9f80",
         "key": "SD_versatile_fluo.zip",
         "links": {
-          "content": "https://zenodo.org/api/records/14724949/files/SD_versatile_fluo.zip/content",
-          "self": "https://zenodo.org/api/records/14724949/files/SD_versatile_fluo.zip"
+          "content": "https://zenodo.org/api/records/17008460/files/SD_versatile_fluo.zip/content",
+          "self": "https://zenodo.org/api/records/17008460/files/SD_versatile_fluo.zip"
         },
         "metadata": {},
         "mimetype": "application/zip",
@@ -142,11 +142,11 @@
         },
         "checksum": "md5:186bf4be5f78763dde9b181aa8f8d116",
         "ext": "zip",
-        "id": "e70ea001-96da-4649-a325-e5ff310e00de",
+        "id": "3497514c-7554-42d0-9a7e-0c3f6fd13ec6",
         "key": "SD_versatile_he.zip",
         "links": {
-          "content": "https://zenodo.org/api/records/14724949/files/SD_versatile_he.zip/content",
-          "self": "https://zenodo.org/api/records/14724949/files/SD_versatile_he.zip"
+          "content": "https://zenodo.org/api/records/17008460/files/SD_versatile_he.zip/content",
+          "self": "https://zenodo.org/api/records/17008460/files/SD_versatile_he.zip"
         },
         "metadata": {},
         "mimetype": "application/zip",
@@ -159,11 +159,11 @@
         },
         "checksum": "md5:0e2d912b6241446120b446b4a412218d",
         "ext": "zip",
-        "id": "8332f59e-b71b-4af0-81b2-0c391ce9356d",
+        "id": "6f22932a-1818-427d-8a1c-7735b779954c",
         "key": "db-si-NucCondensation.zip",
         "links": {
-          "content": "https://zenodo.org/api/records/14724949/files/db-si-NucCondensation.zip/content",
-          "self": "https://zenodo.org/api/records/14724949/files/db-si-NucCondensation.zip"
+          "content": "https://zenodo.org/api/records/17008460/files/db-si-NucCondensation.zip/content",
+          "self": "https://zenodo.org/api/records/17008460/files/db-si-NucCondensation.zip"
         },
         "metadata": {},
         "mimetype": "application/zip",
@@ -176,11 +176,11 @@
         },
         "checksum": "md5:24d6da6c42435fdd0fa6a87616033b7c",
         "ext": "zip",
-        "id": "e332de75-5583-4517-b60b-a69438a88d11",
+        "id": "ed90ad9c-0874-4718-958f-757ca8b79890",
         "key": "db-si-NucPI.zip",
         "links": {
-          "content": "https://zenodo.org/api/records/14724949/files/db-si-NucPI.zip/content",
-          "self": "https://zenodo.org/api/records/14724949/files/db-si-NucPI.zip"
+          "content": "https://zenodo.org/api/records/17008460/files/db-si-NucPI.zip/content",
+          "self": "https://zenodo.org/api/records/17008460/files/db-si-NucPI.zip"
         },
         "metadata": {},
         "mimetype": "application/zip",
@@ -193,11 +193,11 @@
         },
         "checksum": "md5:d893ef8c69133ad3bb076adaef8aaf8d",
         "ext": "zip",
-        "id": "c9468f12-60a5-49ae-8979-9438acbea90d",
+        "id": "c95229eb-a743-4479-8cef-52479275df70",
         "key": "db_mcf7_nuclei_w_lymphocytes.zip",
         "links": {
-          "content": "https://zenodo.org/api/records/14724949/files/db_mcf7_nuclei_w_lymphocytes.zip/content",
-          "self": "https://zenodo.org/api/records/14724949/files/db_mcf7_nuclei_w_lymphocytes.zip"
+          "content": "https://zenodo.org/api/records/17008460/files/db_mcf7_nuclei_w_lymphocytes.zip/content",
+          "self": "https://zenodo.org/api/records/17008460/files/db_mcf7_nuclei_w_lymphocytes.zip"
         },
         "metadata": {},
         "mimetype": "application/zip",
@@ -210,11 +210,11 @@
         },
         "checksum": "md5:d0ae0d92264523bf69ea76865839fce1",
         "ext": "zip",
-        "id": "221a922f-80d4-4de1-a80e-0f871f06957f",
+        "id": "3f0286fb-e473-4554-a91b-d97add63eb34",
         "key": "db_primary_NK_w_mcf7.zip",
         "links": {
-          "content": "https://zenodo.org/api/records/14724949/files/db_primary_NK_w_mcf7.zip/content",
-          "self": "https://zenodo.org/api/records/14724949/files/db_primary_NK_w_mcf7.zip"
+          "content": "https://zenodo.org/api/records/17008460/files/db_primary_NK_w_mcf7.zip/content",
+          "self": "https://zenodo.org/api/records/17008460/files/db_primary_NK_w_mcf7.zip"
         },
         "metadata": {},
         "mimetype": "application/zip",
@@ -225,17 +225,17 @@
         "access": {
           "hidden": false
         },
-        "checksum": "md5:fb3eb4a57275507a9fd505e8c0bf3587",
+        "checksum": "md5:1b236b9aba35cff623b234e6a4cac81e",
         "ext": "zip",
-        "id": "76db95ae-1ebc-401a-a538-fb099f0fa65c",
+        "id": "f68a0fd1-8137-447c-9cfc-6e36a7827408",
         "key": "db_spreading_lymphocytes.zip",
         "links": {
-          "content": "https://zenodo.org/api/records/14724949/files/db_spreading_lymphocytes.zip/content",
-          "self": "https://zenodo.org/api/records/14724949/files/db_spreading_lymphocytes.zip"
+          "content": "https://zenodo.org/api/records/17008460/files/db_spreading_lymphocytes.zip/content",
+          "self": "https://zenodo.org/api/records/17008460/files/db_spreading_lymphocytes.zip"
         },
         "metadata": {},
         "mimetype": "application/zip",
-        "size": 509933296,
+        "size": 509933875,
         "storage_class": "L"
       },
       "demo_adcc.zip": {
@@ -244,11 +244,11 @@
         },
         "checksum": "md5:3a826e2f02c42a8fc66344c27891539e",
         "ext": "zip",
-        "id": "8528d27a-f851-4ff9-a9ea-0caefd862900",
+        "id": "5b59e741-175f-4aa9-b69f-4fc86ecd07f2",
         "key": "demo_adcc.zip",
         "links": {
-          "content": "https://zenodo.org/api/records/14724949/files/demo_adcc.zip/content",
-          "self": "https://zenodo.org/api/records/14724949/files/demo_adcc.zip"
+          "content": "https://zenodo.org/api/records/17008460/files/demo_adcc.zip/content",
+          "self": "https://zenodo.org/api/records/17008460/files/demo_adcc.zip"
         },
         "metadata": {},
         "mimetype": "application/zip",
@@ -261,11 +261,11 @@
         },
         "checksum": "md5:21152b506b4b9b54a15c7c5c6e25df36",
         "ext": "zip",
-        "id": "6d06ee77-7d56-434d-ba15-874b6773b3ef",
+        "id": "dce09957-b259-47a9-bf6c-f95817859d35",
         "key": "demo_ricm.zip",
         "links": {
-          "content": "https://zenodo.org/api/records/14724949/files/demo_ricm.zip/content",
-          "self": "https://zenodo.org/api/records/14724949/files/demo_ricm.zip"
+          "content": "https://zenodo.org/api/records/17008460/files/demo_ricm.zip/content",
+          "self": "https://zenodo.org/api/records/17008460/files/demo_ricm.zip"
         },
         "metadata": {},
         "mimetype": "application/zip",
@@ -276,17 +276,17 @@
         "access": {
           "hidden": false
         },
-        "checksum": "md5:d727d15d18225a76ac2944be2c29a538",
+        "checksum": "md5:3c925d27564bbdbd14e0dc30c508b729",
         "ext": "zip",
-        "id": "e154d694-c796-4924-8b38-68ba613c7a05",
+        "id": "bcc78640-ee4c-4bdc-859e-1d5a96178203",
         "key": "lymphocytes_ricm.zip",
         "links": {
-          "content": "https://zenodo.org/api/records/14724949/files/lymphocytes_ricm.zip/content",
-          "self": "https://zenodo.org/api/records/14724949/files/lymphocytes_ricm.zip"
+          "content": "https://zenodo.org/api/records/17008460/files/lymphocytes_ricm.zip/content",
+          "self": "https://zenodo.org/api/records/17008460/files/lymphocytes_ricm.zip"
         },
         "metadata": {},
         "mimetype": "application/zip",
-        "size": 24403972,
+        "size": 24404011,
         "storage_class": "L"
       },
       "lysis_H_PI.zip": {
@@ -295,11 +295,11 @@
         },
         "checksum": "md5:f8553e793c70b64ebc7b4e4720dcde89",
         "ext": "zip",
-        "id": "a73fe93c-2fa4-492f-bf94-9a0afb134e4d",
+        "id": "8dd89e4a-8b62-40d0-be80-8af329043546",
         "key": "lysis_H_PI.zip",
         "links": {
-          "content": "https://zenodo.org/api/records/14724949/files/lysis_H_PI.zip/content",
-          "self": "https://zenodo.org/api/records/14724949/files/lysis_H_PI.zip"
+          "content": "https://zenodo.org/api/records/17008460/files/lysis_H_PI.zip/content",
+          "self": "https://zenodo.org/api/records/17008460/files/lysis_H_PI.zip"
         },
         "metadata": {},
         "mimetype": "application/zip",
@@ -310,123 +310,124 @@
         "access": {
           "hidden": false
         },
-        "checksum": "md5:17f078d0b1ab4be198709d79948da46c",
+        "checksum": "md5:b6512a2292d89ac2386db05459a88583",
         "ext": "zip",
-        "id": "4867138a-7a35-4ac3-926f-675a842fa084",
+        "id": "9e6c514d-3354-4047-8c02-7dd1bac83d19",
         "key": "lysis_PI_area.zip",
         "links": {
-          "content": "https://zenodo.org/api/records/14724949/files/lysis_PI_area.zip/content",
-          "self": "https://zenodo.org/api/records/14724949/files/lysis_PI_area.zip"
+          "content": "https://zenodo.org/api/records/17008460/files/lysis_PI_area.zip/content",
+          "self": "https://zenodo.org/api/records/17008460/files/lysis_PI_area.zip"
         },
         "metadata": {},
         "mimetype": "application/zip",
-        "size": 33964442,
+        "size": 33964441,
         "storage_class": "L"
       },
       "mcf7_nuc_multimodal.zip": {
         "access": {
           "hidden": false
         },
-        "checksum": "md5:0feb3dd50573f432dc441429e32158f1",
+        "checksum": "md5:b67edfcae354f41add3613a3f5726b03",
         "ext": "zip",
-        "id": "5eb661b1-d393-4fb3-a7a8-9aeb901666b5",
+        "id": "5e129bc3-6dc5-499a-b4a0-acd50c55b93a",
         "key": "mcf7_nuc_multimodal.zip",
         "links": {
-          "content": "https://zenodo.org/api/records/14724949/files/mcf7_nuc_multimodal.zip/content",
-          "self": "https://zenodo.org/api/records/14724949/files/mcf7_nuc_multimodal.zip"
+          "content": "https://zenodo.org/api/records/17008460/files/mcf7_nuc_multimodal.zip/content",
+          "self": "https://zenodo.org/api/records/17008460/files/mcf7_nuc_multimodal.zip"
         },
         "metadata": {},
         "mimetype": "application/zip",
-        "size": 23584494,
+        "size": 23584519,
         "storage_class": "L"
       },
       "mcf7_nuc_stardist_transfer.zip": {
         "access": {
           "hidden": false
         },
-        "checksum": "md5:f263d38dd8a6b3095ac594ca044ee3e8",
+        "checksum": "md5:c0b68f7dbfd8872f7ddce30a0541af24",
         "ext": "zip",
-        "id": "2aed0230-eceb-44d4-aced-ca58295998f4",
+        "id": "fd8e8e23-f771-4a78-8a8e-b7e75d58f0f1",
         "key": "mcf7_nuc_stardist_transfer.zip",
         "links": {
-          "content": "https://zenodo.org/api/records/14724949/files/mcf7_nuc_stardist_transfer.zip/content",
-          "self": "https://zenodo.org/api/records/14724949/files/mcf7_nuc_stardist_transfer.zip"
+          "content": "https://zenodo.org/api/records/17008460/files/mcf7_nuc_stardist_transfer.zip/content",
+          "self": "https://zenodo.org/api/records/17008460/files/mcf7_nuc_stardist_transfer.zip"
         },
         "metadata": {},
         "mimetype": "application/zip",
-        "size": 12787354,
+        "size": 509461449,
         "storage_class": "L"
       },
       "primNK_cfse.zip": {
         "access": {
           "hidden": false
         },
-        "checksum": "md5:1a907cf702a2d0fb04dd8f22f39c7705",
+        "checksum": "md5:d8a3f7a69dbc0549ed773fdbddec3889",
         "ext": "zip",
-        "id": "e2b9aca3-cd3d-4985-bed5-609e936fc5d9",
+        "id": "03d94279-2df9-4fd9-b670-c743ab14aea3",
         "key": "primNK_cfse.zip",
         "links": {
-          "content": "https://zenodo.org/api/records/14724949/files/primNK_cfse.zip/content",
-          "self": "https://zenodo.org/api/records/14724949/files/primNK_cfse.zip"
+          "content": "https://zenodo.org/api/records/17008460/files/primNK_cfse.zip/content",
+          "self": "https://zenodo.org/api/records/17008460/files/primNK_cfse.zip"
         },
         "metadata": {},
         "mimetype": "application/zip",
-        "size": 24582160,
+        "size": 24582183,
         "storage_class": "L"
       },
       "primNK_multimodal.zip": {
         "access": {
           "hidden": false
         },
-        "checksum": "md5:f127dbba4988ad6b746b860a6efdcdea",
+        "checksum": "md5:1e934849dd7ccaf4adcc1a3e49244096",
         "ext": "zip",
-        "id": "54edce4a-3763-4ee2-accc-c1dc412697e5",
+        "id": "94a7fe69-a2cd-4683-9732-8fe96600eda5",
         "key": "primNK_multimodal.zip",
         "links": {
-          "content": "https://zenodo.org/api/records/14724949/files/primNK_multimodal.zip/content",
-          "self": "https://zenodo.org/api/records/14724949/files/primNK_multimodal.zip"
+          "content": "https://zenodo.org/api/records/17008460/files/primNK_multimodal.zip/content",
+          "self": "https://zenodo.org/api/records/17008460/files/primNK_multimodal.zip"
         },
         "metadata": {},
         "mimetype": "application/zip",
-        "size": 24346373,
+        "size": 24346392,
         "storage_class": "L"
       }
     },
     "order": [],
-    "total_bytes": 3067718016
+    "total_bytes": 3564392795
   },
-  "id": "14724949",
+  "id": "17008460",
   "is_draft": false,
   "is_published": true,
   "links": {
-    "access": "https://zenodo.org/api/records/14724949/access",
-    "access_grants": "https://zenodo.org/api/records/14724949/access/grants",
-    "access_links": "https://zenodo.org/api/records/14724949/access/links",
-    "access_request": "https://zenodo.org/api/records/14724949/access/request",
-    "access_users": "https://zenodo.org/api/records/14724949/access/users",
-    "archive": "https://zenodo.org/api/records/14724949/files-archive",
-    "archive_media": "https://zenodo.org/api/records/14724949/media-files-archive",
-    "communities": "https://zenodo.org/api/records/14724949/communities",
-    "communities-suggestions": "https://zenodo.org/api/records/14724949/communities-suggestions",
-    "doi": "https://doi.org/10.5281/zenodo.14724949",
-    "draft": "https://zenodo.org/api/records/14724949/draft",
-    "files": "https://zenodo.org/api/records/14724949/files",
-    "latest": "https://zenodo.org/api/records/14724949/versions/latest",
-    "latest_html": "https://zenodo.org/records/14724949/latest",
-    "media_files": "https://zenodo.org/api/records/14724949/media-files",
+    "access": "https://zenodo.org/api/records/17008460/access",
+    "access_grants": "https://zenodo.org/api/records/17008460/access/grants",
+    "access_links": "https://zenodo.org/api/records/17008460/access/links",
+    "access_request": "https://zenodo.org/api/records/17008460/access/request",
+    "access_users": "https://zenodo.org/api/records/17008460/access/users",
+    "archive": "https://zenodo.org/api/records/17008460/files-archive",
+    "archive_media": "https://zenodo.org/api/records/17008460/media-files-archive",
+    "communities": "https://zenodo.org/api/records/17008460/communities",
+    "communities-suggestions": "https://zenodo.org/api/records/17008460/communities-suggestions",
+    "doi": "https://doi.org/10.5281/zenodo.17008460",
+    "draft": "https://zenodo.org/api/records/17008460/draft",
+    "files": "https://zenodo.org/api/records/17008460/files",
+    "latest": "https://zenodo.org/api/records/17008460/versions/latest",
+    "latest_html": "https://zenodo.org/records/17008460/latest",
+    "media_files": "https://zenodo.org/api/records/17008460/media-files",
     "parent": "https://zenodo.org/api/records/10650278",
     "parent_doi": "https://doi.org/10.5281/zenodo.10650278",
     "parent_doi_html": "https://zenodo.org/doi/10.5281/zenodo.10650278",
     "parent_html": "https://zenodo.org/records/10650278",
-    "requests": "https://zenodo.org/api/records/14724949/requests",
-    "reserve_doi": "https://zenodo.org/api/records/14724949/draft/pids/doi",
-    "self": "https://zenodo.org/api/records/14724949",
-    "self_doi": "https://doi.org/10.5281/zenodo.14724949",
-    "self_doi_html": "https://zenodo.org/doi/10.5281/zenodo.14724949",
-    "self_html": "https://zenodo.org/records/14724949",
-    "self_iiif_manifest": "https://zenodo.org/api/iiif/record:14724949/manifest",
-    "self_iiif_sequence": "https://zenodo.org/api/iiif/record:14724949/sequence/default",
-    "versions": "https://zenodo.org/api/records/14724949/versions"
+    "preview_html": "https://zenodo.org/records/17008460?preview=1",
+    "requests": "https://zenodo.org/api/records/17008460/requests",
+    "reserve_doi": "https://zenodo.org/api/records/17008460/draft/pids/doi",
+    "self": "https://zenodo.org/api/records/17008460",
+    "self_doi": "https://doi.org/10.5281/zenodo.17008460",
+    "self_doi_html": "https://zenodo.org/doi/10.5281/zenodo.17008460",
+    "self_html": "https://zenodo.org/records/17008460",
+    "self_iiif_manifest": "https://zenodo.org/api/iiif/record:17008460/manifest",
+    "self_iiif_sequence": "https://zenodo.org/api/iiif/record:17008460/sequence/default",
+    "versions": "https://zenodo.org/api/records/17008460/versions"
   },
   "media_files": {
     "count": 0,
@@ -814,7 +815,7 @@
       }
     ],
     "description": "<p>This repository contains datasets, models and demos associated to&nbsp;<a href=\"https://github.com/remyeltorro/celldetective\">Celldetective</a>, a software for single-cell analysis from multimodal time lapse microscopy images.&nbsp;</p>\n<h1>Demos</h1>\n<h2>Cell-cell interaction assay: ADCC</h2>\n<p>We imaged a co-culture of MCF-7 breast cancer cells (targets) and human primary NK cells (effectors), interacting in the presence of bispecific antibodies, to measure antibody dependent cellular cytotoxicity (ADCC). The nuclei of all cells are marked with the Hoechst nuclear stain, the dead nuclei with the propidium iodide nuclear stain, the cytoplasm of the NK cells with CFSE. The system in epifluorescence and brightfield at either 20 or 40X magnification. We provide a single position demo for the ADCC assay, as \"demo_adcc.zip\". After unzipping, the demo_adcc folder can be loaded in Celldetective for testing.&nbsp;</p>\n<h2>Cell-surface interaction assay: RICM</h2>\n<p>We imaged human primary NK cells engaging in spreading with a surface coated with a bispecific antibody similar to the one used in the ADCC assay (replacing the target cells with a flat surface). The system is imaged using the RICM technique. Images are normalized using a median estimate of the background, pooled from all the positions in a well and dividing the images by this estimate. Here, we provide a single position demo for the cell-surface interactiona assay imaged in RICM, as \"demo_ricm.zip\". As above, after unzipping, the experiment can be tested and processed in Celldetective.</p>\n<h1>Datasets</h1>\n<h2>Image annotations for segmentation</h2>\n<h3>Cell-cell interaction assay: ADCC</h3>\n<p>We generated two sets of annotations from images of a co-culture of MCF-7 breast cancer cells and human primary NK cells, interacting in the presence of bispecific antibodies, to measure antibody dependent cellular cytotoxicity (ADCC). Since there are two separate cell populations of interest, the targets (MCF-7) and effectors (NK cells), we curated two datasets. Each sample in a dataset consists of a multichannel image (up to five channels in the context of ADCC, among brightfield , Hoechst nuclear stain, PI nuclear stain, CFSE, LAMP1), the associated instance segmentation annotation for the population of interest and a json file summarizing the content of each channel and the spatial calibration of the image.&nbsp;These sample data are generated directly in Celldetective, using a custom napari plugin.</p>\n<ul>\n<li>db_mcf7_nuclei_w_lymphocytes: MCF-7 cell nuclei are annotated specifically on images where primary NK cells (or rarely primary T cells), and RBCs co-exist. The annotation exploits up to four channels simultaneously.</li>\n<li>db_primary_NK_w_mcf7: human primary NK cells, with annotated cytoplasm (mostly from CFSE) but exploiting brightfield and Hoechst to segment out of focus or poorly labelled cells.</li>\n</ul>\n<p>These datasets are used to train several segmentation models to segment on one hand the MCF-7 nuclei and on the other hand the primary NK cells.</p>\n<h3>Cell-surface interaction assay: RICM</h3>\n<ul>\n<li>db_spreading_lymphocytes: we provide a dataset of primary NK cells (and occasionnaly mice T cells) imaged in RICM (with sometimes paired brightfield images). Cells are detected as soon as they start forming interferences on the image (hovering behavior). A pre-annotation was performed using a threshold based segmentation on the RICM modality. Manuel separation of cell-cell contacts and removal of false positive objects was performed by an expert annotator (using brightfield when available). RBCs are ignored in the annotations.&nbsp;</li>\n</ul>\n<h2>Single-cell signal annotations for classification and regression</h2>\n<h3>Cell-cell interaction assay: ADCC</h3>\n<p>We generated several signal classification/regression datasets with Celldetective to characterize the ADCC assay. Briefly, for a given event cells can be classified as \"the event occured during the observation\", \"no event occured during the observation\", \"the event already occured prior to observation\". If the event occurred during the observation, we can estimate when (the regression). Each single-cell is a dictionary with a collection of signals. The attribute \"class\" sets the class and \"t0\" the time of event (default is -1 for absence of event).&nbsp;</p>\n<ul>\n<li>db-si-NucPI: classification and regression of single-cells with respect to lysis events characterized by a strong PI increase upon lysis (also associated with decreasing nuclear area and sometimes a decreasing Hoechst)</li>\n<li>db-si-NucCondensation: classification and regression of single-cells with respect to nucleus shrinking events characterized by a decreasing nuclear area (UPDATE on 23/01/2024)</li>\n</ul>\n<h1>Models</h1>\n<h2>Segmentation models</h2>\n<h3>Generalist models</h3>\n<p>We integrated in Celldetective select published models for cellular segmentation from StarDist and Cellpose. We wraped the models with an input configuration to help Celldetective handle the normalization, rescaling and channel selection upon inference.&nbsp;</p>\n<ul>\n<li>Cellpose [1,2]: <em>cyto3</em>, <em>livecell</em>, <em>tissuenet</em>, <em>nuclei</em></li>\n<li>StarDist [3]: <em>versatile_fluo</em>, <em>versatile_he</em></li>\n</ul>\n<p>If you use any of these models your research, don't forget to cite the StarDist or Cellpose papers accordingly!</p>\n<h3>ADCC models</h3>\n<ul>\n<li>MCF-7 (in the presence of lymphocytes): <em>mcf7_nuc_multimodal, mcf7_nuc_stardist_transfer</em></li>\n<li>primary NKs (in the presence of MCF-7):&nbsp;<em>primNK_multimodal</em>, <em>primNK_SD</em>, <em>primNK_cfse</em></li>\n</ul>\n<h3>Spreading-assay models</h3>\n<ul>\n<li>Lymphocytes: <em>lymphocytes_ricm</em></li>\n</ul>\n<h2>Signal analysis models</h2>\n<p>We developed Deep Learning models that classify and regress the time of events from single-cell signals, applied to the ADCC assay.</p>\n<ul>\n<li>&nbsp;lysis detection: <em>lysis_H_PI</em>, <em>lysis_PI_area</em><em>. </em>Detect lysis events characterized at least by an increase of PI from one or more measurements (respectively PI+Hoechst and PI+nucleus area, trained on db-si-NucPI)</li>\n<li>nucleus shrinking detection:<em> NucCond</em>. Detect nucleus shrinking events from nuclear area signal (db-si-NucCondensation)</li>\n</ul>\n<h1>References</h1>\n<ol>\n<li>Stringer, C., Wang, T., Michaelos, M. &amp; Pachitariu, M. Cellpose: a generalist algorithm for cellular segmentation. Nat Methods 18, 100&ndash;106 (2021).</li>\n<li>Pachitariu, M. &amp; Stringer, C. Cellpose 2.0: how to train your own model. Nat Methods 19, 1634&ndash;1641 (2022).</li>\n<li>Schmidt, U., Weigert, M., Broaddus, C. &amp; Myers, G. Cell Detection with Star-Convex Polygons. in Medical Image Computing and Computer Assisted Intervention &ndash; MICCAI 2018 (eds. Frangi, A. F., Schnabel, J. A., Davatzikos, C., Alberola-L&oacute;pez, C. &amp; Fichtinger, G.) 265&ndash;273 (Springer International Publishing, Cham, 2018). doi:10.1007/978-3-030-00934-2_30.</li>\n</ol>\n<p>&nbsp;</p>\n<p>&nbsp;</p>",
-    "publication_date": "2024-01-23",
+    "publication_date": "2025-08-30",
     "publisher": "Zenodo",
     "resource_type": {
       "id": "dataset",
@@ -840,7 +841,7 @@
       }
     ],
     "title": "Datasets, models and demos associated to \"Celldetective: an AI-enhanced image analysis tool for unraveling dynamic cell interactions\"",
-    "version": "1.1.0.post3"
+    "version": "1.1.1"
   },
   "parent": {
     "access": {
@@ -869,22 +870,22 @@
   "pids": {
     "doi": {
       "client": "datacite",
-      "identifier": "10.5281/zenodo.14724949",
+      "identifier": "10.5281/zenodo.17008460",
       "provider": "datacite"
     },
     "oai": {
-      "identifier": "oai:zenodo.org:14724949",
+      "identifier": "oai:zenodo.org:17008460",
       "provider": "oai"
     }
   },
   "revision_id": 4,
   "stats": {
     "all_versions": {
-      "data_volume": 508036392926.0,
-      "downloads": 7948,
-      "unique_downloads": 7670,
-      "unique_views": 355,
-      "views": 386
+      "data_volume": 858044583544.0,
+      "downloads": 11110,
+      "unique_downloads": 10787,
+      "unique_views": 613,
+      "views": 651
     },
     "this_version": {
       "data_volume": 0.0,
@@ -896,9 +897,9 @@
   },
   "status": "published",
   "swh": {},
-  "updated": "2025-01-23T11:15:02.244210+00:00",
+  "updated": "2025-08-30T13:23:56.860825+00:00",
   "versions": {
-    "index": 5,
+    "index": 6,
     "is_latest": true,
     "is_latest_draft": true
   }
