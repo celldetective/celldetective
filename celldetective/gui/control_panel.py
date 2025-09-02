@@ -505,7 +505,10 @@ class ControlPanel(CelldetectiveMainWindow):
 				for i,p in enumerate(self.ProcessPopulations):
 					p.check_seg_btn.setEnabled(True)
 					if os.path.exists(os.sep.join([self.pos,'output','tables',f'trajectories_{self.populations[i]}.csv'])):
-						df = pd.read_csv(os.sep.join([self.pos,'output','tables',f'trajectories_{self.populations[i]}.csv']), nrows=1)
+						try:
+							df = pd.read_csv(os.sep.join([self.pos,'output','tables',f'trajectories_{self.populations[i]}.csv']), nrows=1)
+						except Exception as e:
+							continue
 						id_col = extract_identity_col(df)
 						p.check_measurements_btn.setEnabled(True)
 

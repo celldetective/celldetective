@@ -816,7 +816,11 @@ def get_position_table(pos, population, return_path=False):
 		table = pos + os.sep.join(['output', 'tables', f'trajectories_{population}.csv'])
 
 	if os.path.exists(table):
-		df_pos = pd.read_csv(table, low_memory=False)
+		try:
+			df_pos = pd.read_csv(table, low_memory=False)
+		except Exception as e:
+			print(e)
+			df_pos = None
 	else:
 		df_pos = None
 	
