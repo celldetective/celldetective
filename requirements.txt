@@ -9,8 +9,7 @@ stardist
 cellpose<3
 scikit-learn
 btrack
-tensorflow~=2.15.0
-#tensorflow #<=2.12.1
+tensorflow==2.20.0
 #keras==2.15.0
 napari<0.6.0
 tqdm

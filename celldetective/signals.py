@@ -13,6 +13,10 @@ from tensorflow.keras.utils import to_categorical
 from tensorflow.keras import Input, Model
 from tensorflow.keras.layers import Conv1D, BatchNormalization, Dense, Activation, Add, MaxPooling1D, Dropout, GlobalAveragePooling1D, Concatenate, ZeroPadding1D, Flatten
 from tensorflow.keras.callbacks import Callback
+import tensorflow.keras.metrics as metrics
+import tensorflow.keras.losses as losses
+
+
 from sklearn.metrics import confusion_matrix, classification_report
 from sklearn.metrics import jaccard_score, balanced_accuracy_score, precision_score, recall_score
 from scipy.interpolate import interp1d
@@ -656,16 +660,26 @@ class SignalDetectionModel(object):
 			self.pretrained = os.sep.join(self.pretrained.split(os.sep)[:-1])
 
 		try:
-			self.model_class = load_model(os.sep.join([self.pretrained,"classifier.h5"]),compile=False)
-			self.model_class.load_weights(os.sep.join([self.pretrained,"classifier.h5"]))
-			print("Classifier successfully loaded...")
+			if os.path.exists(os.sep.join([self.pretrained,"classifier.h5"])):
+				self.model_class = load_model(os.sep.join([self.pretrained,"classifier.h5"]),compile=False)
+				self.model_class.load_weights(os.sep.join([self.pretrained,"classifier.h5"]))
+				print("Classifier successfully loaded...")
+			else:
+				self.model_class = load_model(os.sep.join([self.pretrained, "classifier.keras"]), compile=False)
+				self.model_class.load_weights(os.sep.join([self.pretrained, "classifier.keras"]))
+				print("Classifier successfully loaded...")
 		except Exception as e:
 			print(f"Error {e}...")
 			self.model_class = None
 		try:
-			self.model_reg = load_model(os.sep.join([self.pretrained,"regressor.h5"]),compile=False)
-			self.model_reg.load_weights(os.sep.join([self.pretrained,"regressor.h5"]))
-			print("Regressor successfully loaded...")
+			if os.path.exists(os.sep.join([self.pretrained,"regressor.h5"])):
+				self.model_reg = load_model(os.sep.join([self.pretrained,"regressor.h5"]),compile=False)
+				self.model_reg.load_weights(os.sep.join([self.pretrained,"regressor.h5"]))
+				print("Regressor successfully loaded...")
+			else:
+				self.model_reg = load_model(os.sep.join([self.pretrained, "regressor.keras"]), compile=False)
+				self.model_reg.load_weights(os.sep.join([self.pretrained, "regressor.keras"]))
+				print("Regressor successfully loaded...")
 		except Exception as e:
 			print(f"Error {e}...")
 			self.model_reg = None
@@ -768,7 +782,7 @@ class SignalDetectionModel(object):
 	def fit_from_directory(self, datasets, normalize=True, normalization_percentile=None, normalization_values = None, 
 						  normalization_clip = None, channel_option=["live_nuclei_channel"], model_name=None, target_directory=None, 
 						  augment=True, augmentation_factor=2, validation_split=0.20, test_split=0.0, batch_size = 64, epochs=300, 
-						  recompile_pretrained=False, learning_rate=0.01, loss_reg="mse", loss_class = CategoricalCrossentropy(from_logits=False), show_plots=True):
+						  recompile_pretrained=False, learning_rate=0.01, loss_reg=losses.MeanSquaredError(), loss_class = CategoricalCrossentropy(from_logits=False), show_plots=True):
 		
 		"""
 		Trains the model using data from specified directories.
@@ -867,7 +881,7 @@ class SignalDetectionModel(object):
 
 	def fit(self, x_train, y_time_train, y_class_train, normalize=True, normalization_percentile=None, normalization_values = None, normalization_clip = None, pad=True, validation_data=None, test_data=None, channel_option=["live_nuclei_channel","dead_nuclei_channel"], model_name=None, 
 			target_directory=None, augment=True, augmentation_factor=3, validation_split=0.25, batch_size = 64, epochs=300,
-			recompile_pretrained=False, learning_rate=0.001, loss_reg="mse", loss_class = CategoricalCrossentropy(from_logits=False)):
+			recompile_pretrained=False, learning_rate=0.001, loss_reg=metrics.MeanSquaredError(), loss_class = CategoricalCrossentropy(from_logits=False)):
 
 		"""
 		Trains the model using provided datasets.
@@ -1228,8 +1242,8 @@ class SignalDetectionModel(object):
 			self.plot_model_history(mode="classifier")
 
 		# Set current classification model as the best model
-		self.model_class = load_model(os.sep.join([self.model_folder,"classifier.h5"]))
-		self.model_class.load_weights(os.sep.join([self.model_folder,"classifier.h5"]))
+		self.model_class = load_model(os.sep.join([self.model_folder,"classifier.keras"]))
+		self.model_class.load_weights(os.sep.join([self.model_folder,"classifier.keras"]))
 		
 		self.dico = {"history_classifier": self.history_classifier, "execution_time_classifier": self.cb[-1].times}
 
@@ -1325,19 +1339,19 @@ class SignalDetectionModel(object):
 				self.model_reg.set_weights(clone_model(self.model_reg).get_weights())
 				self.model_reg.compile(optimizer=Adam(learning_rate=self.learning_rate), 
 							  loss=self.loss_reg, 
-							  metrics=['mse','mae'])
+							  metrics=[metrics.MeanSquaredError(),metrics.MeanAbsoluteError()])
 			else:
 				self.initial_model = clone_model(self.model_reg)
 				self.model_reg.set_weights(self.initial_model.get_weights())
 				self.model_reg.compile(optimizer=Adam(learning_rate=self.learning_rate), 
 							  loss=self.loss_reg, 
-							  metrics=['mse','mae'])
+							  metrics=[metrics.MeanSquaredError(),metrics.MeanAbsoluteError()])
 				self.model_reg.set_weights(self.initial_model.get_weights())
 		else:
 			print("Compiling the regressor...")
 			self.model_reg.compile(optimizer=Adam(learning_rate=self.learning_rate), 
 						  loss=self.loss_reg, 
-						  metrics=['mse','mae'])
+						  metrics=[metrics.MeanSquaredError(),metrics.MeanAbsoluteError()])
 		
 			
 		self.gather_callbacks("regressor")
@@ -1351,16 +1365,29 @@ class SignalDetectionModel(object):
 		# 	plt.show()
 
 		if hasattr(self, 'x_val'):
+			mask = np.argmax(self.y_class_train, axis=1) == 0
+			mask_val = np.argmax(self.y_class_val,axis=1) == 0
+			print("Selected samples:", mask.sum())
+
+			if mask.sum() > 0:
+				print("x_train shape:", self.x_train[mask].shape)
+				print("y_train shape:", self.y_time_train[mask].shape)
+				print("x_val shape:", self.x_val[mask_val].shape)
+				print("y_val shape:", self.y_time_val[mask_val].shape)
+			else:
+				print("No samples for class 0!")
+
+
 			self.history_regressor = self.model_reg.fit(x=self.x_train[np.argmax(self.y_class_train,axis=1)==0],
-								y=self.y_time_train[np.argmax(self.y_class_train,axis=1)==0],
+								y=self.y_time_train[np.argmax(self.y_class_train,axis=1)==0].astype("float32"),
 								batch_size=self.batch_size,
 								epochs=self.epochs*2, 
-								validation_data=(self.x_val[np.argmax(self.y_class_val,axis=1)==0],self.y_time_val[np.argmax(self.y_class_val,axis=1)==0]),
+								validation_data=(self.x_val[np.argmax(self.y_class_val,axis=1)==0],self.y_time_val[np.argmax(self.y_class_val,axis=1)==0].astype("float32")),
 								callbacks=self.cb,
 								verbose=1)
 		else:
 			self.history_regressor = self.model_reg.fit(x=self.x_train[np.argmax(self.y_class_train,axis=1)==0],
-								y=self.y_time_train[np.argmax(self.y_class_train,axis=1)==0],
+								y=self.y_time_train[np.argmax(self.y_class_train,axis=1)==0].astype("float32"),
 								batch_size=self.batch_size,
 								epochs=self.epochs*2, 
 								callbacks=self.cb,
@@ -1373,8 +1400,8 @@ class SignalDetectionModel(object):
 		
 
 		# Evaluate best model 
-		self.model_reg = load_model(os.sep.join([self.model_folder,"regressor.h5"]))
-		self.model_reg.load_weights(os.sep.join([self.model_folder,"regressor.h5"]))
+		self.model_reg = load_model(os.sep.join([self.model_folder,"regressor.keras"]))
+		self.model_reg.load_weights(os.sep.join([self.model_folder,"regressor.keras"]))
 		self.evaluate_regression_model()
 		
 		try:
@@ -1508,7 +1535,7 @@ class SignalDetectionModel(object):
 			self.cb.append(reduce_lr)
 			csv_logger = CSVLogger(os.sep.join([self.model_folder,'log_classifier.csv']), append=True, separator=';')
 			self.cb.append(csv_logger)
-			checkpoint_path = os.sep.join([self.model_folder,"classifier.h5"])
+			checkpoint_path = os.sep.join([self.model_folder,"classifier.keras"])
 			cp_callback = ModelCheckpoint(checkpoint_path, monitor="val_iou",mode="max",verbose=1,save_best_only=True,save_weights_only=False,save_freq="epoch")
 			self.cb.append(cp_callback)
 			
@@ -1525,7 +1552,7 @@ class SignalDetectionModel(object):
 			csv_logger = CSVLogger(os.sep.join([self.model_folder,'log_regressor.csv']), append=True, separator=';')
 			self.cb.append(csv_logger)
 			
-			checkpoint_path = os.sep.join([self.model_folder,"regressor.h5"])
+			checkpoint_path = os.sep.join([self.model_folder,"regressor.keras"])
 			cp_callback = ModelCheckpoint(checkpoint_path,monitor="val_loss",mode="min",verbose=1,save_best_only=True,save_weights_only=False,save_freq="epoch")
 			self.cb.append(cp_callback)
 			

@@ -59,6 +59,9 @@ class TrainSegModelProcess(Process):
 	def train_stardist_model(self):
 
 		from stardist import calculate_extents, gputools_available
+		import configparser
+		configparser.SafeConfigParser = configparser.ConfigParser
+
 		from stardist.models import Config2D, StarDist2D
 		
 		n_rays = 32
@@ -123,11 +126,21 @@ class TrainSegModelProcess(Process):
 			model.train(self.X_trn, self.Y_trn, validation_data=(self.X_val,self.Y_val), augmenter=augmenter)
 		model.optimize_thresholds(self.X_val,self.Y_val)
 
+		def make_json_safe(obj):
+			if isinstance(obj, np.ndarray):
+				return obj.tolist()  # convert to list
+			if isinstance(obj, (np.int64, np.int32)):
+				return int(obj)
+			if isinstance(obj, (np.float32, np.float64)):
+				return float(obj)
+			return str(obj)  # fallback
+
 		config_inputs = {"channels": self.target_channels, 'normalization_percentile': self.normalization_percentile,
 		'normalization_clip': self.normalization_clip, 'normalization_values': self.normalization_values, 
 		'model_type': 'stardist', 'spatial_calibration': self.spatial_calibration, 'dataset': {'train': self.files_train, 'validation': self.files_val}}
+		print(f"{config_inputs=}")
 
-		json_input_config = json.dumps(config_inputs, indent=4)
+		json_input_config = json.dumps(config_inputs, indent=4, default=make_json_safe)
 		with open(os.sep.join([self.target_directory, self.model_name, "config_input.json"]), "w") as outfile:
 			outfile.write(json_input_config)
 

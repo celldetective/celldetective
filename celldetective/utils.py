@@ -27,6 +27,10 @@ from scipy import ndimage
 from skimage.morphology import disk
 from scipy.stats import ks_2samp
 from cliffs_delta import cliffs_delta
+
+import configparser
+configparser.SafeConfigParser = configparser.ConfigParser
+
 from stardist.models import StarDist2D
 from cellpose.models import CellposeModel
 from pathlib import PosixPath, PurePath, PurePosixPath, WindowsPath, Path
