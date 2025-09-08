@@ -43,41 +43,44 @@ class DownloadProcess(Process):
 		self.t0 = time.time()
 
 	def download_url_to_file(self, url, dst):
-
-		file_size = None
-		ssl._create_default_https_context = ssl._create_unverified_context
-		u = urlopen(url)
-		meta = u.info()
-		if hasattr(meta, 'getheaders'):
-			content_length = meta.getheaders("Content-Length")
-		else:
-			content_length = meta.get_all("Content-Length")
-		if content_length is not None and len(content_length) > 0:
-			file_size = int(content_length[0])
-		# We deliberately save it in a temp file and move it after
-		dst = os.path.expanduser(dst)
-		dst_dir = os.path.dirname(dst)
-		f = tempfile.NamedTemporaryFile(delete=False, dir=dst_dir)
-
 		try:
-			with tqdm(total=file_size, disable=not self.progress,
-					  unit='B', unit_scale=True, unit_divisor=1024) as pbar:
-				while True:
-					buffer = u.read(8192) #8192
-					if len(buffer) == 0:
-						break
-					f.write(buffer)
-					pbar.update(len(buffer))
-					self.sum_done+=len(buffer) / file_size * 100
-					mean_exec_per_step = (time.time() - self.t0) / (self.sum_done*file_size / 100 + 1)
-					pred_time = (file_size - (self.sum_done*file_size / 100 + 1)) * mean_exec_per_step
-					self.queue.put([self.sum_done, pred_time])
-			f.close()
-			shutil.move(f.name, dst)
-		finally:
-			f.close()
-			if os.path.exists(f.name):
-				os.remove(f.name)
+			file_size = None
+			ssl._create_default_https_context = ssl._create_unverified_context
+			u = urlopen(url)
+			meta = u.info()
+			if hasattr(meta, 'getheaders'):
+				content_length = meta.getheaders("Content-Length")
+			else:
+				content_length = meta.get_all("Content-Length")
+			if content_length is not None and len(content_length) > 0:
+				file_size = int(content_length[0])
+			# We deliberately save it in a temp file and move it after
+			dst = os.path.expanduser(dst)
+			dst_dir = os.path.dirname(dst)
+			f = tempfile.NamedTemporaryFile(delete=False, dir=dst_dir)
+
+			try:
+				with tqdm(total=file_size, disable=not self.progress,
+						  unit='B', unit_scale=True, unit_divisor=1024) as pbar:
+					while True:
+						buffer = u.read(8192) #8192
+						if len(buffer) == 0:
+							break
+						f.write(buffer)
+						pbar.update(len(buffer))
+						self.sum_done+=len(buffer) / file_size * 100
+						mean_exec_per_step = (time.time() - self.t0) / (self.sum_done*file_size / 100 + 1)
+						pred_time = (file_size - (self.sum_done*file_size / 100 + 1)) * mean_exec_per_step
+						self.queue.put([self.sum_done, pred_time])
+				f.close()
+				shutil.move(f.name, dst)
+			finally:
+				f.close()
+				if os.path.exists(f.name):
+					os.remove(f.name)
+		except Exception as e:
+			print("No internet connection: ", e)
+			return None
 
 	def run(self):
 		
