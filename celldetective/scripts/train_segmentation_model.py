@@ -232,7 +232,16 @@ elif model_type=='stardist':
 	'normalization_clip': normalization_clip, 'normalization_values': normalization_values, 
 	'model_type': 'stardist', 'spatial_calibration': spatial_calibration,'cell_size_um': median_size * spatial_calibration, 'dataset': {'train': files_train, 'validation': files_val}}
 
-	json_input_config = json.dumps(config_inputs, indent=4)
+	def make_json_safe(obj):
+		if isinstance(obj, np.ndarray):
+			return obj.tolist()  # convert to list
+		if isinstance(obj, (np.int64, np.int32)):
+			return int(obj)
+		if isinstance(obj, (np.float32, np.float64)):
+			return float(obj)
+		return str(obj)  # fallback
+
+	json_input_config = json.dumps(config_inputs, indent=4, default=make_json_safe)
 	with open(os.sep.join([target_directory, model_name, "config_input.json"]), "w") as outfile:
 		outfile.write(json_input_config)
 
