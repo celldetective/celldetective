@@ -321,7 +321,7 @@ class SettingsSegmentationModelTraining(CelldetectiveSettingsPanel):
 		self.pretrained_model = None
 		self.pretrained_model = QFileDialog.getExistingDirectory(
 						self, "Open Directory",
-						os.sep.join([self.soft_path, 'celldetective', 'models', f'segmentation_generic','']),
+						os.sep.join([self._software_path, 'celldetective', 'models', f'segmentation_generic','']),
 						QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks,
 						)
 		
