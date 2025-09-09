@@ -360,6 +360,7 @@ class ClassifierWidget(CelldetectiveWidget):
 		try:
 			self.df = classify_cells_from_query(self.df, self.name_le.text(), query)
 		except Exception as e:
+			print(f"Exception {e}...")
 			msgBox = QMessageBox()
 			msgBox.setIcon(QMessageBox.Warning)
 			link = "https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.query.html"
