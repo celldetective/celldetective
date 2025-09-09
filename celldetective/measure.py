@@ -1439,6 +1439,8 @@ def classify_cells_from_query(df, status_attr, query):
 		status_attr = 'status_'+status_attr
 
 	df = df.copy()
+	df = df.replace([np.inf, -np.inf], np.nan)
+
 	df.loc[:,status_attr] = 0
 	df[status_attr] = df[status_attr].astype(float)
 

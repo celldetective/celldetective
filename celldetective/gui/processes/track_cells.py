@@ -244,7 +244,9 @@ class TrackingProcess(Process):
 
 		print('Features successfully measured...')
 
-		df = pd.concat(self.timestep_dataframes)	
+		df = pd.concat(self.timestep_dataframes)
+		df = df.replace([np.inf, -np.inf], np.nan)
+
 		df.reset_index(inplace=True, drop=True)
 		df = _mask_intensity_measurements(df, self.mask_channels)
 

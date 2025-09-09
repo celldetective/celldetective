@@ -336,7 +336,8 @@ class MeasurementProcess(Process):
 
 			df = df.reset_index(drop=True)
 			df = _remove_invalid_cols(df)
-			
+			df = df.replace([np.inf, -np.inf], np.nan)
+
 			df.to_csv(self.pos+os.sep.join(["output", "tables", self.table_name]), index=False)
 			print(f'Measurement table successfully exported in  {os.sep.join(["output", "tables"])}...')
 			print('Done.')
