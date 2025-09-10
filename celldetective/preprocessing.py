@@ -14,7 +14,7 @@ from lmfit import Parameters, Model
 import tifffile.tifffile as tiff
 from scipy.ndimage import shift
 
-def estimate_background_per_condition(experiment, threshold_on_std=1, well_option='*', target_channel="channel_name", frame_range=[0,5], mode="timeseries", activation_protocol=[['gauss',2],['std',4]], show_progress_per_pos=False, show_progress_per_well=True, offset=None):
+def estimate_background_per_condition(experiment, threshold_on_std=1, well_option='*', target_channel="channel_name", frame_range=[0,5], mode="timeseries", activation_protocol=[['gauss',2],['std',4]], show_progress_per_pos=False, show_progress_per_well=True, offset=None, fix_nan: bool = False):
 	
 	"""
 	Estimate the background for each condition in an experiment.
@@ -152,6 +152,8 @@ def estimate_background_per_condition(experiment, threshold_on_std=1, well_optio
 			if offset is not None:
 				#print("The offset is applied to background...")
 				background -= offset
+			if fix_nan:
+				background = interpolate_nan(background.copy().astype(float))
 			backgrounds.append({"bg": background, "well": well_path})
 			print(f"Background successfully computed for well {well_name}...")
 		except Exception as e:
@@ -179,6 +181,7 @@ def correct_background_model_free(
 					   export = False,
 					   return_stacks = False,
 					   movie_prefix=None,
+					   fix_nan=False,
 					   activation_protocol=[['gauss',2],['std',4]],
 					   export_prefix='Corrected',
 					   **kwargs,
@@ -263,7 +266,7 @@ def correct_background_model_free(
 		well_name, _ = extract_well_name_and_number(well_path)
 
 		try:
-			background = estimate_background_per_condition(experiment, threshold_on_std=threshold_on_std, well_option=int(well_indices[k]), target_channel=target_channel, frame_range=frame_range, mode=mode, show_progress_per_pos=True, show_progress_per_well=False, activation_protocol=activation_protocol, offset=offset)
+			background = estimate_background_per_condition(experiment, threshold_on_std=threshold_on_std, well_option=int(well_indices[k]), target_channel=target_channel, frame_range=frame_range, mode=mode, show_progress_per_pos=True, show_progress_per_well=False, activation_protocol=activation_protocol, offset=offset, fix_nan=fix_nan)
 			background = background[0]
 			background = background['bg']
 		except Exception as e:
@@ -298,6 +301,7 @@ def correct_background_model_free(
 															clip = clip,
 															offset = offset,
 															export = export,
+															fix_nan=fix_nan,
 															activation_protocol = activation_protocol,
 															prefix = export_prefix,
 														  )
@@ -315,7 +319,7 @@ def correct_background_model_free(
 
 
 
-def apply_background_to_stack(stack_path, background, target_channel_index=0, nbr_channels=1, stack_length=45, offset = None, activation_protocol=[['gauss',2],['std',4]], threshold_on_std=1, optimize_option=True, opt_coef_range=(0.95,1.05), opt_coef_nbr=100, operation='divide', clip=False, export=False, prefix="Corrected"):
+def apply_background_to_stack(stack_path, background, target_channel_index=0, nbr_channels=1, stack_length=45, offset = None, activation_protocol=[['gauss',2],['std',4]], threshold_on_std=1, optimize_option=True, opt_coef_range=(0.95,1.05), opt_coef_nbr=100, operation='divide', clip=False, export=False, prefix="Corrected", fix_nan=False):
 
 	"""
 	Apply background correction to an image stack.
@@ -420,7 +424,7 @@ def apply_background_to_stack(stack_path, background, target_channel_index=0, nb
 				loss.append(s)
 
 			c = coefficients[np.argmin(loss)]
-			print(f"Frame: {i}; optimal coefficient: {c}...")
+			print(f"IFD {i}; optimal coefficient: {c}...")
 			# if c==min(coefficients) or c==max(coefficients):
 			# 	print('Warning... The optimal coefficient is beyond the range provided... Please adjust your coefficient range...')	
 		else:
@@ -430,13 +434,11 @@ def apply_background_to_stack(stack_path, background, target_channel_index=0, nb
 			correction = np.divide(target_img, background*c, where=background==background)
 			correction[background!=background] = np.nan
 			correction[target_img!=target_img] = np.nan
-			fill_val = 1.0
 
 		elif operation=="subtract":
 			correction = np.subtract(target_img, background*c, where=background==background)
 			correction[background!=background] = np.nan
 			correction[target_img!=target_img] = np.nan
-			fill_val = 0.0
 			if clip:
 				correction[correction<=0.] = 0.
 		else:
@@ -444,6 +446,8 @@ def apply_background_to_stack(stack_path, background, target_channel_index=0, nb
 			return
 
 		correction[~np.isfinite(correction)] = np.nan
+		if fix_nan:
+			correction = interpolate_nan(correction.copy())
 		frames[:,:,target_channel_index] = correction
 		corrected_stack.append(frames)
 

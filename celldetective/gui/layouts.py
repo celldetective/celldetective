@@ -1330,6 +1330,8 @@ class BackgroundModelFreeCorrectionLayout(QGridLayout, Styles):
 		for c in self.coef_widgets:
 			c.setEnabled(False)
 
+		self.interpolate_check = QCheckBox("interpolate NaNs")
+
 	def add_to_layout(self):
 		
 		channel_layout = QHBoxLayout()
@@ -1394,10 +1396,12 @@ class BackgroundModelFreeCorrectionLayout(QGridLayout, Styles):
 		self.operation_layout = OperationLayout()
 		self.addLayout(self.operation_layout, 9, 0, 1, 3)
 
+		self.addWidget(self.interpolate_check, 10, 0, 1, 1)
+
 		correction_layout = QHBoxLayout()
 		correction_layout.addWidget(self.add_correction_btn, 95)
 		correction_layout.addWidget(self.corrected_stack_viewer_btn, 5)
-		self.addLayout(correction_layout, 10, 0, 1, 3)
+		self.addLayout(correction_layout, 11, 0, 1, 3)
 
 		# verticalSpacer = QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
 		# self.addItem(verticalSpacer, 5, 0, 1, 3)
@@ -1456,7 +1460,8 @@ class BackgroundModelFreeCorrectionLayout(QGridLayout, Styles):
 					  "opt_coef_nbr": opt_coef_nbr,
 					  "operation": operation,
 					  "clip": clip,
-					  "offset": offset
+					  "offset": offset,
+					  "fix_nan": self.interpolate_check.isChecked(),
 					 }
 
 	def set_target_channel(self):
@@ -1532,6 +1537,7 @@ class BackgroundModelFreeCorrectionLayout(QGridLayout, Styles):
 						   clip = clip,
 						   export= False,
 						   return_stacks=True,
+						   fix_nan=self.interpolate_check.isChecked(),
 						   show_progress_per_well = True,
 						   show_progress_per_pos = False,
 							)
