@@ -439,7 +439,11 @@ def apply_background_to_stack(stack_path, background, target_channel_index=0, nb
 			fill_val = 0.0
 			if clip:
 				correction[correction<=0.] = 0.
+		else:
+			print("Operation not supported... Abort.")
+			return
 
+		correction[~np.isfinite(correction)] = np.nan
 		frames[:,:,target_channel_index] = correction
 		corrected_stack.append(frames)
 
