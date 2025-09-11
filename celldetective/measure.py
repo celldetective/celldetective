@@ -1439,7 +1439,7 @@ def classify_cells_from_query(df, status_attr, query):
 		status_attr = 'status_'+status_attr
 
 	df = df.copy()
-	df = df.replace([np.inf, -np.inf], np.nan)
+	df = df.replace([np.inf, -np.inf, None], np.nan)
 
 	df.loc[:,status_attr] = 0
 	df[status_attr] = df[status_attr].astype(float)
@@ -1453,11 +1453,13 @@ def classify_cells_from_query(df, status_attr, query):
 	else:
 		try:
 			if cols_in_df:
-				selection = df.dropna(subset=cols).query(query).index
-				null_selection = df[df.loc[:,cols].isna().any(axis=1)].index
-				# Set NaN to invalid cells, 1 otherwise
-				df.loc[null_selection, status_attr] = np.nan
-				df.loc[selection, status_attr] = 1
+				sub_df = df.dropna(subset=cols)
+				if len(sub_df)>0:
+					selection = sub_df.query(query).index
+					null_selection = df[df.loc[:,cols].isna().any(axis=1)].index
+					# Set NaN to invalid cells, 1 otherwise
+					df.loc[null_selection, status_attr] = np.nan
+					df.loc[selection, status_attr] = 1
 			else:
 				df.loc[:, status_attr] = np.nan
 		except Exception as e:
