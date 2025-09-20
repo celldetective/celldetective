@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import QApplication, QMessageBox, QHBoxLayout, QFileDialog, QVBoxLayout, QScrollArea, QCheckBox, QGridLayout, QLabel, QLineEdit, QPushButton
+from PyQt5.QtWidgets import QApplication,QWidget, QMessageBox, QHBoxLayout, QFileDialog, QVBoxLayout, QScrollArea, QCheckBox, QGridLayout, QLabel, QLineEdit, QPushButton
 from PyQt5.QtGui import QIntValidator, QDoubleValidator
 from celldetective.gui.gui_utils import center_window, help_generic
 from celldetective.utils import get_software_location
@@ -566,30 +566,69 @@ class SetupConditionLabels(CelldetectiveWidget):
 		self.parent_window = parent_window
 		self.n_wells = n_wells
 		self.setWindowTitle("Well conditions")
-		self.layout = QVBoxLayout()
-		self.layout.setContentsMargins(30,30,30,30)
-		self.setLayout(self.layout)
+		
+		# --- Outer layout ---
+		self.outer_layout = QVBoxLayout(self)
+		self.outer_layout.setContentsMargins(10, 10, 10, 10)
+		
+		# --- Scroll area ---
+		self.scroll = QScrollArea(self)
+		self.scroll.setWidgetResizable(True)
+		self.outer_layout.addWidget(self.scroll, stretch=1)  # takes most space
+		
+		# Container inside scroll
+		self.container = QWidget()
+		self.scroll.setWidget(self.container)
+		
+		# Content layout (scrollable part)
+		self.layout = QVBoxLayout(self.container)
+		self.layout.setContentsMargins(30, 30, 30, 30)
+		
 		self.onlyFloat = QDoubleValidator()
 		self.populate()
+		
+		self.concentration_units_le = QLineEdit('pM')
+		self.concentration_units_le.setPlaceholderText('concentration units')
+		
+		concentration_units_layout = QHBoxLayout()
+		concentration_units_layout.addWidget(QLabel('concentration\nunits: '), 5, alignment=Qt.AlignLeft)
+		concentration_units_layout.addWidget(self.concentration_units_le, 10)
+		concentration_units_layout.addWidget(QLabel(''), 85)
+		self.outer_layout.addLayout(concentration_units_layout)
+		
+		# --- Fixed button row (not scrollable) ---
+		btn_hbox = QHBoxLayout()
+		btn_hbox.setContentsMargins(0, 15, 0, 0)
+		
+		self.skip_btn = QPushButton('Skip')
+		self.skip_btn.setStyleSheet(self.button_style_sheet_2)
+		self.skip_btn.clicked.connect(self.set_default_values)
+		btn_hbox.addWidget(self.skip_btn)
+		
+		self.submit_btn = QPushButton('Submit')
+		self.submit_btn.setStyleSheet(self.button_style_sheet)
+		self.submit_btn.clicked.connect(self.set_user_values)
+		btn_hbox.addWidget(self.submit_btn)
+		
+		self.outer_layout.addLayout(btn_hbox)  # outside scroll
+		self.setMinimumWidth(int(0.6 * self.parent_window.parent_window.screen_width))
+		
 		center_window(self)
 
 	def populate(self):
-
 		self.cell_type_cbs = [QLineEdit() for i in range(self.n_wells)]
 		self.antibodies_cbs = [QLineEdit() for i in range(self.n_wells)]
 		self.concentrations_cbs = [QLineEdit() for i in range(self.n_wells)]
 		self.pharmaceutical_agents_cbs = [QLineEdit() for i in range(self.n_wells)]
-		self.concentration_units_le = QLineEdit('pM')
-		self.concentration_units_le.setPlaceholderText('concentration units')
 
 		for i in range(self.n_wells):
 			hbox = QHBoxLayout()
-			hbox.setContentsMargins(15,5,15,5)
+			hbox.setContentsMargins(15, 5, 15, 5)
 			hbox.addWidget(QLabel(f'well {i+1}'), 5, alignment=Qt.AlignLeft)
 			hbox.addWidget(QLabel('cell type: '), 5)
 			hbox.addWidget(self.cell_type_cbs[i], 10)
 			self.cell_type_cbs[i].setPlaceholderText('e.g. T-cell, NK')
-
+			
 			hbox.addWidget(QLabel('antibody: '), 5)
 			hbox.addWidget(self.antibodies_cbs[i], 10)
 			self.antibodies_cbs[i].setPlaceholderText('e.g. anti-CD4')
@@ -602,27 +641,9 @@ class SetupConditionLabels(CelldetectiveWidget):
 			hbox.addWidget(QLabel('pharmaceutical agents: '), 5)
 			hbox.addWidget(self.pharmaceutical_agents_cbs[i], 10)
 			self.pharmaceutical_agents_cbs[i].setPlaceholderText('e.g. dextran')
-
+			
 			self.layout.addLayout(hbox)
-
-		concentration_units_layout = QHBoxLayout()
-		concentration_units_layout.addWidget(QLabel('concentration\nunits: '),5,alignment=Qt.AlignLeft)
-		concentration_units_layout.addWidget(self.concentration_units_le,10)
-		concentration_units_layout.addWidget(QLabel(''), 85)
-		self.layout.addLayout(concentration_units_layout)
-
-		btn_hbox = QHBoxLayout()
-		btn_hbox.setContentsMargins(0,20,0,0)
-		self.skip_btn = QPushButton('Skip')
-		self.skip_btn.setStyleSheet(self.button_style_sheet_2)
-		self.skip_btn.clicked.connect(self.set_default_values)
-		btn_hbox.addWidget(self.skip_btn)
-
-		self.submit_btn = QPushButton('Submit')
-		self.submit_btn.setStyleSheet(self.button_style_sheet)
-		self.submit_btn.clicked.connect(self.set_user_values)
-		btn_hbox.addWidget(self.submit_btn)
-		self.layout.addLayout(btn_hbox)
+		
 
 	def set_default_values(self):
 		
