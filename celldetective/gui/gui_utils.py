@@ -653,6 +653,7 @@ class FilterChoice(CelldetectiveWidget):
 			'log_filter': {'blob_size': 30},
 			'tophat_filter': {'size': 4, 'connectivity': 4},
 			'otsu_filter': None,
+			'multiotsu_filter': {'classes': 3},
 			'local_filter': {'block_size': 73, 'method': 'mean', 'offset': 0},
 			'niblack_filter': {'window_size': 15, 'k': 0.2},
 			# 'sauvola_filter': {'window_size': 15, 'k': 0.2}

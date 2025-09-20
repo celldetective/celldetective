@@ -1,4 +1,5 @@
-from skimage.filters import difference_of_gaussians, threshold_otsu, threshold_local, threshold_niblack, threshold_sauvola
+from skimage.filters import difference_of_gaussians, threshold_multiotsu, threshold_otsu, threshold_local, \
+	threshold_niblack, threshold_sauvola
 from celldetective.utils import interpolate_nan
 import scipy.ndimage as snd
 import numpy as np
@@ -102,6 +103,11 @@ def otsu_filter(img, *kwargs):
 	binary = img >= thresh
 	return binary.astype(float)
 
+def multiotsu_filter(img, classes=3, *kwargs):
+	thresholds = threshold_multiotsu(img, classes=classes)
+	regions = np.digitize(img, bins=thresholds)
+	return regions.astype(float)
+	
 def local_filter(img, *kwargs):
 	thresh = threshold_local(img.astype(float), *kwargs)
 	binary = img >= thresh
