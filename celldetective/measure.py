@@ -17,6 +17,7 @@ from math import ceil
 from skimage.draw import disk as dsk
 from skimage.feature import blob_dog, blob_log
 
+from celldetective.gui.exceptions import EmptyQueryError, MissingColumnsError, QueryError
 from celldetective.utils import rename_intensity_column, create_patch_mask, remove_redundant_features, \
 	remove_trajectory_measurements, contour_of_instance_segmentation, extract_cols_from_query, step_function, interpolate_nan, _remove_invalid_cols
 from celldetective.preprocessing import field_correction
@@ -1432,40 +1433,39 @@ def classify_cells_from_query(df, status_attr, query):
 		If the query is invalid or if there are issues with the DataFrame or query syntax, an error message is printed, and `None` is returned.
 	
 	"""
-
-
-	# Initialize all states to 0
-	if not status_attr.startswith('status_'):
-		status_attr = 'status_'+status_attr
-
+	
+	if not status_attr.startswith("status_"):
+		status_attr = "status_" + status_attr
+	
 	df = df.copy()
 	df = df.replace([np.inf, -np.inf, None], np.nan)
 	df = df.convert_dtypes()
 	
-	df.loc[:,status_attr] = 0
+	df.loc[:, status_attr] = 0
 	df[status_attr] = df[status_attr].astype(float)
-
+	
 	cols = extract_cols_from_query(query)
-	print(f"{cols=}")
-
-	cols_in_df = np.all([c in list(df.columns) for c in cols], axis=0)
-	if query=='':
-		print('The provided query is empty...')
-	else:
-		try:
-			if cols_in_df:
-				sub_df = df.dropna(subset=cols)
-				if len(sub_df)>0:
-					selection = sub_df.query(query).index
-					null_selection = df[df.loc[:,cols].isna().any(axis=1)].index
-					# Set NaN to invalid cells, 1 otherwise
-					df.loc[null_selection, status_attr] = np.nan
-					df.loc[selection, status_attr] = 1
-			else:
-				df.loc[:, status_attr] = np.nan
-		except Exception as e:
-			print(f"The query could not be understood. No filtering was applied. {e}...")
-			return None
+	print(f"The following DataFrame measurements were identified in the query: {cols=}...")
+	
+	if query.strip() == "":
+		raise EmptyQueryError("The provided query is empty.")
+	
+	missing_cols = [c for c in cols if c not in df.columns]
+	if missing_cols:
+		raise MissingColumnsError(missing_cols)
+	
+	try:
+		sub_df = df.dropna(subset=cols)
+		if len(sub_df) > 0:
+			selection = sub_df.query(query).index
+			null_selection = df[df.loc[:, cols].isna().any(axis=1)].index
+			df.loc[null_selection, status_attr] = np.nan
+			df.loc[selection, status_attr] = 1
+		else:
+			df.loc[:, status_attr] = np.nan
+	except Exception as e:
+		raise QueryError(f"The query could not be understood: {e}")
+	
 	return df.copy()
 
 def classify_tracks_from_query(df, event_name, query, irreversible_event=True, unique_state=False, r2_threshold=0.5, percentile_recovery=50):

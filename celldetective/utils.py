@@ -1151,27 +1151,24 @@ def demangle_column_name(name):
 
 def extract_cols_from_query(query: str):
 	
-	# Track variables in a dictionary to be used as a dictionary of globals. From: https://stackoverflow.com/questions/64576913/extract-pandas-dataframe-column-names-from-query-string
-	
-	variables = {}
+	backtick_pattern = r'`([^`]+)`'
+	backticked = set(re.findall(backtick_pattern, query))
 
-	while True:
-		try:
-			# Try creating a Expr object with the query string and dictionary of globals.
-			# This will raise an error as long as the dictionary of globals is incomplete.
-			env = pd.core.computation.scope.ensure_scope(level=0, global_dict=variables)
-			pd.core.computation.eval.Expr(query, env=env)
+	# 2. Remove backtick sections so they don't get double-counted
+	cleaned_query = re.sub(backtick_pattern, "", query)
 
-			# Exit the loop when evaluation is successful.
-			break
-		except pd.errors.UndefinedVariableError as e:
-			# This relies on the format defined here: https://github.com/pandas-dev/pandas/blob/965ceca9fd796940050d6fc817707bba1c4f9bff/pandas/errors/__init__.py#L401
-			name = re.findall("name '(.+?)' is not defined", str(e))[0]
+	# 3. Extract bare identifiers from the remaining string
+	identifier_pattern = r'\b([A-Za-z_]\w*)\b'
+	bare = set(re.findall(identifier_pattern, cleaned_query))
 
-			# Add the name to the globals dictionary with a dummy value.
-			variables[name] = None
+	# 4. Remove Python keywords, operators, and pandas builtins
+	blacklist = set(dir(pd)) | set(dir(__builtins__)) | {
+		"and", "or", "not", "in", "True", "False"
+	}
+	bare = {c for c in bare if c not in blacklist}
+	cols = backticked | bare
 
-	return [demangle_column_name(name) for name in variables.keys()]
+	return list([demangle_column_name(c) for c in cols])
 
 def create_patch_mask(h, w, center=None, radius=None):
 

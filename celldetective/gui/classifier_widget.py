@@ -10,6 +10,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import json
 
+from celldetective.gui.exceptions import EmptyQueryError, MissingColumnsError, QueryError
 from celldetective.gui.gui_utils import FigureCanvas, center_window, color_from_status, help_generic
 from celldetective.gui.base_components import CelldetectiveWidget
 from celldetective.utils import get_software_location
@@ -352,26 +353,29 @@ class ClassifierWidget(CelldetectiveWidget):
 		
 		except Exception as e:
 			pass
+	
+	def show_warning(self, message: str):
+		msgBox = QMessageBox()
+		msgBox.setIcon(QMessageBox.Warning)
+		link = "https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.query.html"
+		msgBox.setText(f"{message}<br><br>See <a href='{link}'>documentation</a>.")
+		msgBox.setWindowTitle("Warning")
+		msgBox.setStandardButtons(QMessageBox.Ok)
+		msgBox.exec()
 
 	def apply_property_query(self):
 		
 		query = self.property_query_le.text()
-		
 		try:
 			self.df = classify_cells_from_query(self.df, self.name_le.text(), query)
+		except EmptyQueryError as e:
+			self.show_warning(str(e))
+		except MissingColumnsError as e:
+			self.show_warning(f"{e}. Please check your column names.")
+		except QueryError as e:
+			self.show_warning(f"{e}. Wrap features in backticks if needed.")
 		except Exception as e:
-			print(f"Exception {e}...")
-			msgBox = QMessageBox()
-			msgBox.setIcon(QMessageBox.Warning)
-			link = "https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.query.html"
-			msg = "The query could not be understood. Please write a valid query following <a href='%s'>the documentation</a>. Wrap features in backticks (e.g. `feature` > 1) to facilitate query interpretation. " % link
-			msgBox.setText(msg)
-			msgBox.setWindowTitle("Warning")
-			msgBox.setStandardButtons(QMessageBox.Ok)
-			returnValue = msgBox.exec()
-			if returnValue == QMessageBox.Ok:
-				self.auto_close = False
-				return None
+			self.show_warning(f"Unexpected error: {e}")
 
 		self.class_name = "status_"+self.name_le.text()
 		if self.df is None:
