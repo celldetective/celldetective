@@ -655,6 +655,8 @@ class TableUI(CelldetectiveMainWindow):
 		self.derivative_action.triggered.connect(self.differenciate_selected_feature)
 		self.derivative_action.setShortcut("Ctrl+D")
 		self.mathMenu.addAction(self.derivative_action)
+		if not self.tracks:
+			self.derivative_action.setEnabled(False)
 
 		self.abs_action = QAction('&Absolute value...', self)
 		self.abs_action.triggered.connect(self.take_abs_of_selected_feature)

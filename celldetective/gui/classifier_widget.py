@@ -352,7 +352,7 @@ class ClassifierWidget(CelldetectiveWidget):
 			self.propscanvas.canvas.draw_idle()
 		
 		except Exception as e:
-			pass
+			print("Exception L355 ", e)
 	
 	def show_warning(self, message: str):
 		msgBox = QMessageBox()
