@@ -10,7 +10,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import json
 
-from celldetective.gui.exceptions import EmptyQueryError, MissingColumnsError, QueryError
+from celldetective.exceptions import EmptyQueryError, MissingColumnsError, QueryError
 from celldetective.gui.gui_utils import FigureCanvas, center_window, color_from_status, help_generic
 from celldetective.gui.base_components import CelldetectiveWidget
 from celldetective.utils import get_software_location

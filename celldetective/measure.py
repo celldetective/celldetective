@@ -17,7 +17,7 @@ from math import ceil
 from skimage.draw import disk as dsk
 from skimage.feature import blob_dog, blob_log
 
-from celldetective.gui.exceptions import EmptyQueryError, MissingColumnsError, QueryError
+from celldetective.exceptions import EmptyQueryError, MissingColumnsError, QueryError
 from celldetective.utils import rename_intensity_column, create_patch_mask, remove_redundant_features, \
 	remove_trajectory_measurements, contour_of_instance_segmentation, extract_cols_from_query, step_function, interpolate_nan, _remove_invalid_cols
 from celldetective.preprocessing import field_correction
