@@ -286,9 +286,16 @@ class ProcessPanel(QFrame, Styles):
 		self.grid_contents.addLayout(signal_layout,6,0,1,4)
 
 	def refresh_signal_models(self):
-		signal_models = get_signal_models_list()
+		self.signal_models = get_signal_models_list()
 		self.signal_models_list.clear()
-		self.signal_models_list.addItems(signal_models)
+		
+		thresh = 35
+		models_truncated = [m[:thresh - 3]+'...' if len(m)>thresh else m for m in self.signal_models]
+		
+		self.signal_models_list.addItems(models_truncated)
+		for i in range(len(self.signal_models)):
+			self.signal_models_list.setItemData(i, self.signal_models[i], Qt.ToolTipRole)
+
 
 	def generate_tracking_options(self):
 
@@ -636,22 +643,22 @@ class ProcessPanel(QFrame, Styles):
 
 		self.seg_model_list.clear()
 		self.seg_models_specific = get_segmentation_models_list(mode=self.mode, return_path=False)
-		self.seg_models = self.seg_models_specific.copy() #get_segmentation_models_list(mode=self.mode, return_path=False)
-		thresh = 40
-		self.models_truncated = [m[:thresh - 3]+'...' if len(m)>thresh else m for m in self.seg_models]
-		#self.seg_model_list.addItems(models_truncated)
+		self.seg_models = self.seg_models_specific.copy()
+		self.n_specific_seg_models = len(self.seg_models)
 
 		self.seg_models_generic = get_segmentation_models_list(mode="generic", return_path=False)
 		self.seg_models.append('Threshold')
 		self.seg_models.extend(self.seg_models_generic)
 
-		#self.seg_models_generic.insert(0,'Threshold')
-		self.seg_model_list.addItems(self.seg_models)
+		thresh = 35
+		self.models_truncated = [m[:thresh - 3]+'...' if len(m)>thresh else m for m in self.seg_models]
+
+		self.seg_model_list.addItems(self.models_truncated)
 
 		for i in range(len(self.seg_models)):
 			self.seg_model_list.setItemData(i, self.seg_models[i], Qt.ToolTipRole)
 
-		self.seg_model_list.insertSeparator(len(self.models_truncated))
+		self.seg_model_list.insertSeparator(self.n_specific_seg_models)
 
 	# def tick_all_actions(self):
 	# 	self.switch_all_ticks_option()
@@ -794,7 +801,7 @@ class ProcessPanel(QFrame, Styles):
 			if returnValue == QMessageBox.No:
 				return None
 
-		if self.seg_model_list.currentIndex() > len(self.models_truncated):
+		if self.seg_model_list.currentIndex() > self.n_specific_seg_models:
 			self.model_name = self.seg_models[self.seg_model_list.currentIndex()-1]
 		else:
 			self.model_name = self.seg_models[self.seg_model_list.currentIndex()]
@@ -818,7 +825,8 @@ class ProcessPanel(QFrame, Styles):
 			return None
 
 		if self.signal_analysis_action.isChecked() and not self.signalChannelsSet:
-			self.signalChannelWidget = SignalModelParamsWidget(self, model_name = self.signal_models_list.currentText())
+			self.signal_model_name = self.signal_models[self.signal_models_list.currentIndex()]
+			self.signalChannelWidget = SignalModelParamsWidget(self, model_name = self.signal_model_name)
 			self.signalChannelWidget.show()
 			return None
 
@@ -938,7 +946,8 @@ class ProcessPanel(QFrame, Styles):
 								returnValue = msgBox.exec()
 								if returnValue == QMessageBox.No:
 									return None
-					analyze_signals_at_position(self.pos, self.signal_models_list.currentText(), self.mode)
+					self.signal_model_name = self.signal_models[self.signal_models_list.currentIndex()]
+					analyze_signals_at_position(self.pos, self.signal_model_name, self.mode)
 
 
 			# self.stack = None
@@ -1057,8 +1066,8 @@ class ProcessPanel(QFrame, Styles):
 		self.process_population()
 
 	def set_selected_signals_for_event_detection(self):
-
-		model_complete_path = locate_signal_model(self.signal_models_list.currentText())
+		self.signal_model_name = self.signal_models[self.signal_models_list.currentIndex()]
+		model_complete_path = locate_signal_model(self.signal_model_name)
 		input_config_path = model_complete_path+"config_input.json"
 		new_channels = [self.signalChannelWidget.channel_cbs[i].currentText() for i in range(len(self.signalChannelWidget.channel_cbs))]
 		with open(input_config_path) as config_file:
