@@ -882,7 +882,7 @@ class BackgroundFitCorrectionLayout(QGridLayout, Styles):
 		else:
 			clip = False
 
-		corrected_stack = correct_background_model(self.attr_parent.exp_dir, 
+		corrected_stack = correct_background_model(self.attr_parent.exp_dir,
 						   well_option=self.attr_parent.well_list.getSelectedIndices(), #+1 ??
 						   position_option=self.attr_parent.position_list.getSelectedIndices(), #+1??
 						   target_channel=self.channels_cb.currentText(),
@@ -897,14 +897,18 @@ class BackgroundFitCorrectionLayout(QGridLayout, Styles):
 						   show_progress_per_pos = False,
 							)
 
-		self.viewer = StackVisualizer(
-									  stack=corrected_stack[0],
-									  window_title='Corrected channel',
-									  target_channel=self.channels_cb.currentIndex(),
-									  frame_slider = True,
-									  contrast_slider = True
-									 )
-		self.viewer.show()
+		if corrected_stack:
+			self.viewer = StackVisualizer(
+										  stack=corrected_stack[0],
+										  window_title='Corrected channel',
+										  target_channel=self.channels_cb.currentIndex(),
+										  frame_slider = True,
+										  contrast_slider = True
+										 )
+			self.viewer.show()
+		else:
+			print("Corrected stack could not be generated... No stack available...")
+
 
 
 class LocalCorrectionLayout(BackgroundFitCorrectionLayout):

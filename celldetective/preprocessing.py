@@ -801,6 +801,10 @@ def correct_background_model(
 		for pidx,pos_path in enumerate(tqdm(selection, disable=not show_progress_per_pos)):
 			
 			stack_path = get_position_movie_path(pos_path, prefix=movie_prefix)
+			if stack_path is None:
+				print(f"No stack could be found in {pos_path}... Skip...")
+				continue
+
 			print(f'Applying the correction to position {extract_position_name(pos_path)}...')
 			len_movie_auto = auto_load_number_of_frames(stack_path)
 			if len_movie_auto is not None:

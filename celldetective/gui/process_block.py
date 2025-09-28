@@ -585,6 +585,14 @@ class ProcessPanel(QFrame, Styles):
 			print(f"Loading images and labels into napari...")
 			try:
 				control_segmentation_napari(self.parent_window.pos, prefix=self.parent_window.movie_prefix, population=self.mode,flush_memory=True)
+			except FileNotFoundError as e:
+				msgBox = QMessageBox()
+				msgBox.setIcon(QMessageBox.Warning)
+				msgBox.setText(str(e))
+				msgBox.setWindowTitle("Warning")
+				msgBox.setStandardButtons(QMessageBox.Ok)
+				_ = msgBox.exec()
+				return
 			except Exception as e:
 				print(f'Task unsuccessful... Exception {e}...')
 				msgBox = QMessageBox()
@@ -961,7 +969,16 @@ class ProcessPanel(QFrame, Styles):
 
 	def open_napari_tracking(self):
 		print(f'View the tracks before post-processing for position {self.parent_window.pos} in napari...')
-		control_tracks(self.parent_window.pos, prefix=self.parent_window.movie_prefix, population=self.mode, threads=self.parent_window.parent_window.n_threads)
+		try:
+			control_tracks(self.parent_window.pos, prefix=self.parent_window.movie_prefix, population=self.mode, threads=self.parent_window.parent_window.n_threads)
+		except FileNotFoundError as e:
+			msgBox = QMessageBox()
+			msgBox.setIcon(QMessageBox.Warning)
+			msgBox.setText(str(e))
+			msgBox.setWindowTitle("Warning")
+			msgBox.setStandardButtons(QMessageBox.Ok)
+			_ = msgBox.exec()
+			return
 
 	def view_table_ui(self):
 

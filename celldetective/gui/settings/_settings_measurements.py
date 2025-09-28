@@ -672,6 +672,7 @@ class SettingsMeasurements(CelldetectiveSettingsPanel):
 			returnValue = msgBox.exec()
 			if returnValue == QMessageBox.Ok:
 				self.current_stack = None
+				self.test_frame = None
 				return None
 		else:
 			self.current_stack = movies[0]

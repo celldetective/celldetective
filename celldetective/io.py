@@ -1131,7 +1131,9 @@ def locate_stack(position, prefix='Aligned'):
 		position += os.sep
 
 	stack_path = glob(position + os.sep.join(['movie', f'{prefix}*.tif']))
-	assert len(stack_path) > 0, f"No movie with prefix {prefix} found..."
+	if not stack_path:
+		raise FileNotFoundError(f"No movie with prefix {prefix} found...")
+
 	stack = imread(stack_path[0].replace('\\', '/'))
 	stack_length = auto_load_number_of_frames(stack_path[0])
 
