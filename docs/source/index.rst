@@ -33,6 +33,12 @@ Contents
    interactions
    analysis
 
+.. toctree::
+   :maxdepth: 2
+   :caption: How-to guides
+
+   how-to-guides/basics/index
+   how-to-guides/advanced/index
 
 .. toctree::
    :caption: Advanced:
@@ -47,12 +53,16 @@ Contents
    adcc-example
    spreading-assay-example
 
-
 .. toctree::
    :caption: Help:
 
    troubleshooting
-   
+
+.. toctree::
+   :caption: Explanation:
+
+   data-organization
+
    
 .. toctree::
    :caption: API Reference:
