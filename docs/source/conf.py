@@ -58,7 +58,6 @@ html_static_path = ['_static']
 html_logo = "_static/logo.png"
 html_css_files = [
     'https://fonts.googleapis.com/icon?family=Material+Icons',
-    'custom.css',
 ]
 
 html_theme_options = {'style_nav_header_background': '#b9c3cb'}

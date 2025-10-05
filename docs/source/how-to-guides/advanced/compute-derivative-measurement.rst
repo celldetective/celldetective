@@ -1,53 +1,31 @@
-How to create a new experiment
+How to differentiate a feature
 ------------------------------
 
-This guide shows you how to create an experiment project and import your data. Learn more about the structure of an experiment project :doc:`here <data-organization>`.
+This guide shows you how to compute and save the derivative of a single-cell measurement.
 
-Reference keys: *experiment project*, *well*, *position*, *population*, *cell type*, *antibody*, *concentration*, *pharmaceutical agents*
+**Prerequisite**: the segmentation, tracking and measurement steps must be done for at least one population.
 
-New project
-~~~~~~~~~~~
+Reference keys: *single-cell measurement*, *timeseries*
 
-#. Launch the software and go to **File > New Experiment...**
+Differentiate a feature
+~~~~~~~~~~~~~~~~~~~~~~~
 
-#. Set a folder where the project will be stored.
+#. Open a project.
 
-#. Fill the information requested. Refer to the reference guide for more precision.
- - Name for the experiment. Avoid spaces in the name.
+#. Set in the header the wells and positions for which you want to compute that derivative.
 
- - Number of wells.
+#. Expand the block associated with your cell population.
 
- - Number of positions per well. If variable, put the highest number in a well.
+#. Click on the :icon:`table,#1565c0` **Explore table** button to open the table view.
 
- - Conversion factor from pixel to :math:`\mu m` on the images.
+#. Go to **Math > Differentiate...**
 
- - Time interval between two frames in minutes if time-series data. Else, leave at default value. If time-series but variable, put an average estimate.
+#. Set up the derivative computation (see the reference guide for the available options):
 
- - Number of frames. If variable, put a lower estimate. Value read directly from the stacks in most cases.
+ - Select the measurement of interest (e.g. `area`).
+ - Set the window size to 1.
+ - Set the derivative mode to `forward`.
 
- - Prefix to find the image stack file. Leave blank if filenames have variable prefixes.
+#. Compute. A new feature **d/dt.area** is written at the end of the table.
 
- - Image width/height in pixels.
-
-#. Select your channels and specify their index in the stack with the slider on the right side (0 is first, 1 is the second channel, etc). Use existing channels if appropriate. Else, create your own channel. Avoid spaces in the name.
-
-#. Select your cell population(s). If you have an immune cell population, select `effectors`. If you have cancer cells, select `targets`. Else create appropriate populations.
-
-#. Submit.
-
-#. In the pop-up window, fill the information for each well (cell type, antibody, concentration, pharmaceutical agents). Fields can be left blank.
-
-#. After submitting:
- - The dialog closes.
-
- - The path to the newly created experiment is automatically loaded in the startup window. Click **Open** to access it.
-
- - On the disk, the experiment folder is created with a configuration file that looks like the example below.
-
-Drag and drop the image stacks
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-#. Open the project in Celldetective.  Click on the :icon:`folder,black` icon next to the experiment name in the top menu to open the experiment folder.
-
-#. Drag and drop each TIF stack file in its its corresponding position folder, specifically in the ``movie/`` subfolder (e.g., ``W1/100/movie/``). Step **not automated**.
-
+#. Go to **File > Save inplace...** to write this new feature in all of the position tables.
