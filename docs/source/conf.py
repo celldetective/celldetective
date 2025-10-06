@@ -65,6 +65,7 @@ html_theme_options = {'style_nav_header_background': '#b9c3cb'}
 # -- Options for EPUB output
 epub_show_urls = 'footnote'
 
+from html import escape
 from docutils import nodes
 from docutils.parsers.rst import roles
 
@@ -75,10 +76,13 @@ def material_icon(name, rawtext, text, lineno, inliner, options={}, content=[]):
     color = parts[1] if len(parts) > 1 else "inherit"
     size = parts[2] if len(parts) > 2 else "1em"
 
+    # Escape HTML-sensitive content
+    icon_html = escape(icon_name)
+
     html = (
         f'<span class="material-icons" '
         f'style="vertical-align: middle; color: {color}; font-size: {size};">'
-        f'{icon_name}</span>'
+        f'{icon_html}</span>'
     )
     node = nodes.raw('', html, format='html')
     return [node], []

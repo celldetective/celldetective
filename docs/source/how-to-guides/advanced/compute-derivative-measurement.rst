@@ -5,10 +5,9 @@ This guide shows you how to compute and save the derivative of a single-cell mea
 
 **Prerequisite**: the segmentation, tracking and measurement steps must be done for at least one population.
 
-Reference keys: *single-cell measurement*, *timeseries*
+Reference keys: *single-cell measurement*
 
-Differentiate a feature
-~~~~~~~~~~~~~~~~~~~~~~~
+**Step-by-step:**
 
 #. Open a project.
 
@@ -16,16 +15,16 @@ Differentiate a feature
 
 #. Expand the block associated with your cell population.
 
-#. Click on the :icon:`table,#1565c0` **Explore table** button to open the table view.
+#. Click on the :icon:`table_chart,#1565c0` **Explore table** button to open the table view.
 
-#. Go to **Math > Differentiate...**
+#. Go to **Math > Differentiate...**. If the option is disabled, check that you have cell tracks.
 
-#. Set up the derivative computation (see the reference guide for the available options):
+#. Set up the derivative computation (see :py:func:`celldetective.utils.derivative` for implementation details):
 
- - Select the measurement of interest (e.g. `area`).
- - Set the window size to 1.
- - Set the derivative mode to `forward`.
+   - Select the measurement of interest :math:`m` (e.g. ``area``).
+   - Set the window size to ``1``.
+   - Set the derivative mode to ``forward``.
 
-#. Compute. A new feature **d/dt.area** is written at the end of the table.
+#. Compute. A new feature **d/dt.m**, is written at the end of the table.
 
 #. Go to **File > Save inplace...** to write this new feature in all of the position tables.
