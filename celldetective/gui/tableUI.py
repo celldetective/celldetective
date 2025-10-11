@@ -3,6 +3,9 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QBrush, QColor, QDoubleValidator
 import pandas as pd
 import matplotlib.pyplot as plt
+
+from celldetective.gui.table_ops.merge_groups import MergeGroupWidget
+
 plt.rcParams['svg.fonttype'] = 'none'
 from celldetective.gui.gui_utils import FigureCanvas, center_window, QHSeperationLine, GenericOpColWidget, PandasModel
 from celldetective.utils import differentiate_per_track, collapse_trajectories_by_status, test_2samp_generic, safe_log
@@ -650,6 +653,10 @@ class TableUI(CelldetectiveMainWindow):
 		self.calibrate_action.triggered.connect(self.calibrate_selected_feature)
 		self.calibrate_action.setShortcut("Ctrl+C")
 		self.mathMenu.addAction(self.calibrate_action)
+		
+		self.merge_classification_action = QAction('&Merge states...', self)
+		self.merge_classification_action.triggered.connect(self.merge_classification_features)
+		self.mathMenu.addAction(self.merge_classification_action)
 
 		self.derivative_action = QAction('&Differentiate...', self)
 		self.derivative_action.triggered.connect(self.differenciate_selected_feature)
@@ -995,6 +1002,22 @@ class TableUI(CelldetectiveMainWindow):
 
 		self.LogWidget = LogColWidget(self, selected_col)
 		self.LogWidget.show()
+		
+	def merge_classification_features(self):
+		
+		x = self.table_view.selectedIndexes()
+		col_idx = np.unique(np.array([l.column() for l in x]))
+		
+		col_selection = []
+		if isinstance(col_idx, (list, np.ndarray)):
+			cols = np.array(list(self.data.columns))
+			if len(col_idx) > 0:
+				selected_cols = cols[col_idx]
+				col_selection.extend(selected_cols)
+		
+		self.merge_classification_widget = MergeGroupWidget(self, columns = col_selection)
+		self.merge_classification_widget.show()
+
 
 	def calibrate_selected_feature(self):
 		
