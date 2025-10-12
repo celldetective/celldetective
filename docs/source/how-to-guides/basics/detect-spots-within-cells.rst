@@ -25,8 +25,10 @@ Reference keys: *single-cell measurements*
 
 #. Increase the detection threshold to remove as many false positive detections as possible.
 
-#. Once the detection is satisfactory, press :icon:`plus,black` Add measurement. The viewer closes automatically.
+#. Once the detection is satisfactory, press :icon:`plus,black` Add measurement.
 
 #. Save the new measurement settings.
 
 #. Check the MEASURE option and press *Submit* to measure.
+
+See :py:func:`celldetective.measure.extract_blobs_in_image` for more information about the algorithm used for single-spot detection.
