@@ -20,11 +20,11 @@ class TestFitPlane(unittest.TestCase):
 		self.assertTrue(np.allclose(self.img, mat))
 
 	def test_plane_is_well_fit_and_applied_with_division(self):
-		result = field_correction(self.img, threshold_on_std=1.0E05, operation='divide', model='plane', clip=False, return_bg=False, activation_protocol=[])
+		result = field_correction(self.img, threshold=1.0E05, operation='divide', model='plane', clip=False, return_bg=False, activation_protocol=[])
 		self.assertTrue(np.allclose(result, np.full((100,100), 1.0)))
 
 	def test_plane_is_well_fit_and_applied_with_subtraction(self):
-		result = field_correction(self.img, threshold_on_std=1.0E05, operation='subtract', model='plane', clip=False, return_bg=False, activation_protocol=[])
+		result = field_correction(self.img, threshold=1.0E05, operation='subtract', model='plane', clip=False, return_bg=False, activation_protocol=[])
 		self.assertTrue(np.allclose(result, np.zeros((100,100))))
 
 	def test_plane_is_well_fit_with_cell(self):

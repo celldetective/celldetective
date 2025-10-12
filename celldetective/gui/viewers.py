@@ -10,7 +10,7 @@ from natsort import natsorted
 from glob import glob
 import os
 
-from PyQt5.QtWidgets import QHBoxLayout, QPushButton, QLabel, QComboBox, QLineEdit, QListWidget, QShortcut
+from PyQt5.QtWidgets import QHBoxLayout, QMessageBox, QPushButton, QLabel, QComboBox, QLineEdit, QListWidget, QShortcut
 from PyQt5.QtCore import Qt, QSize
 from PyQt5.QtGui import QKeySequence, QDoubleValidator
 from celldetective.gui.gui_utils import FigureCanvas, QuickSliderLayout, QHSeperationLine, ThresholdLineEdit, PreprocessingLayout2
