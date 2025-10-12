@@ -1,53 +1,41 @@
 How to align two channels
 =========================
 
-This guide shows you how to create an experiment project and import your data. Learn more about the structure of an experiment project :doc:`here <data-organization>`.
+This guide shows you how to correct a spatial offset between two channels.
 
-Reference keys: *experiment project*, *well*, *position*, *population*, *cell type*, *antibody*, *concentration*, *pharmaceutical agents*
+Reference keys: *preprocessing*, *alignment*
 
-New project
-~~~~~~~~~~~
+Alignment protocol
+~~~~~~~~~~~~~~~~~~
 
-#. Launch the software and go to **File > New Experiment...**
+#. Launch the software. Open a project.
 
-#. Set a folder where the project will be stored.
+#. Expand the **PROCESSING** block, scroll down to **CHANNEL OFFSET CORRECTION**.
 
-#. Fill the information requested. Refer to the reference guide for more precision.
- - Name for the experiment. Avoid spaces in the name.
+#. Click on the :icon:`image-check,black` icon to set visually the shift values with a dedicated viewer.
 
- - Number of wells.
+#. Set the overlay transparency slider to 0.
 
- - Number of positions per well. If variable, put the highest number in a well.
+#. Set the "reference" channel (Channel). Adjust the contrast to over saturate contours.
 
- - Conversion factor from pixel to :math:`\mu m` on the images.
+#. Set the overlay transparency slider to 1.
 
- - Time interval between two frames in minutes if time-series data. Else, leave at default value. If time-series but variable, put an average estimate.
+#. Select your overlay channel (the channel image to move relative to the first). Adjust the contrast to saturate contours.
 
- - Number of frames. If variable, put a lower estimate. Value read directly from the stacks in most cases.
+#. Set the overlay transparency slider to 0.5.
 
- - Prefix to find the image stack file. Leave blank if filenames have variable prefixes.
+#. Use keyboard arrows to move the overlay image and achieve perfect alignment in most places (see note). To achieve higher precision, fine-tune the shift values in the respective shift fields (and apply to view the result).
 
- - Image width/height in pixels.
+#. Press set.
 
-#. Select your channels and specify their index in the stack with the slider on the right side (0 is first, 1 is the second channel, etc). Use existing channels if appropriate. Else, create your own channel. Avoid spaces in the name.
+.. note::
+	A good alignment at the center does not guarantee a good alignment at the edges. This correction method only allows for 2D rigid translations, which may not be true for your data.
 
-#. Select your cell population(s). If you have an immune cell population, select `effectors`. If you have cancer cells, select `targets`. Else create appropriate populations.
+Apply correction
+~~~~~~~~~~~~~~~~
 
-#. Submit.
+#. Press :icon:`plus,#1565c0` :blue:`Add correction`.
 
-#. In the pop-up window, fill the information for each well (cell type, antibody, concentration, pharmaceutical agents). Fields can be left blank.
+#. Once all preprocessing protocols have been defined (background correction, other channel alignments), press Submit. To apply the same protocol to all positions, accept the first popup.
 
-#. After submitting:
- - The dialog closes.
-
- - The path to the newly created experiment is automatically loaded in the startup window. Click **Open** to access it.
-
- - On the disk, the experiment folder is created with a configuration file that looks like the example below.
-
-Drag and drop the image stacks
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-#. Open the project in Celldetective.  Click on the :icon:`folder,black` icon next to the experiment name in the top menu to open the experiment folder.
-
-#. Drag and drop each TIF stack file in its its corresponding position folder, specifically in the ``movie/`` subfolder (e.g., ``W1/100/movie/``). Step **not automated**.
-
+#. At the end of the preprocessing change the movie stack prefix in the experiment configuration to ``Corrected_``.
