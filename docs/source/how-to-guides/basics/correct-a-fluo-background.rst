@@ -1,53 +1,42 @@
 How to correct a fluorescent background
----------------------------------------
+=======================================
 
-This guide shows you how to create an experiment project and import your data. Learn more about the structure of an experiment project :doc:`here <data-organization>`.
+This guide shows you how to subtract the background bulk fluorescence from a fluorescence image.
 
 Reference keys: *background correction*
 
-New project
-~~~~~~~~~~~
+Correction protocol
+~~~~~~~~~~~~~~~~~~~
 
-#. Launch the software and go to **File > New Experiment...**
+#. Launch the software. Open a project.
 
-#. Set a folder where the project will be stored.
+#. Expand the **PROCESSING** block. In the **BACKGROUND CORRECTION** section, click on the Fit tab.
 
-#. Fill the information requested. Refer to the reference guide for more precision.
- - Name for the experiment. Avoid spaces in the name.
+#. Set the fluorescence channel to correct.
 
- - Number of wells.
+#. Click on the :icon:`image-check,black` icon next to the threshold field to estimate this threshold value visually.
 
- - Number of positions per well. If variable, put the highest number in a well.
+#. Use the threshold slider to select as many cells as possible (in purple) while leaving most of the background regions unselected (not purple).
 
- - Conversion factor from pixel to :math:`\mu m` on the images.
+#. Apply.
 
- - Time interval between two frames in minutes if time-series data. Else, leave at default value. If time-series but variable, put an average estimate.
+#. Set the ``paraboloid`` model.
 
- - Number of frames. If variable, put a lower estimate. Value read directly from the stacks in most cases.
+#. Tick the subtract operation.
 
- - Prefix to find the image stack file. Leave blank if filenames have variable prefixes.
+#. Do not clip.
 
- - Image width/height in pixels.
+See :py:func:`celldetective.preprocessing.field_correction` to understand what the threshold represents.
+See :py:func:`celldetective.preprocessing.paraboloid` for a definition of the paraboloid model.
 
-#. Select your channels and specify their index in the stack with the slider on the right side (0 is first, 1 is the second channel, etc). Use existing channels if appropriate. Else, create your own channel. Avoid spaces in the name.
+.. note::
+	Not clipping allows you to perform quality control on the resulting intensities. If the model is poor you should see many negative values.
 
-#. Select your cell population(s). If you have an immune cell population, select `effectors`. If you have cancer cells, select `targets`. Else create appropriate populations.
+Apply correction
+~~~~~~~~~~~~~~~~
 
-#. Submit.
+#. Press :icon:`plus,#1565c0` :blue:`Add correction`.
 
-#. In the pop-up window, fill the information for each well (cell type, antibody, concentration, pharmaceutical agents). Fields can be left blank.
+#. Once all preprocessing protocols have been defined (background correction, other channel alignments), scroll down and press Submit. To apply the same protocol to all positions, accept the first popup.
 
-#. After submitting:
- - The dialog closes.
-
- - The path to the newly created experiment is automatically loaded in the startup window. Click **Open** to access it.
-
- - On the disk, the experiment folder is created with a configuration file that looks like the example below.
-
-Drag and drop the image stacks
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-#. Open the project in Celldetective.  Click on the :icon:`folder,black` icon next to the experiment name in the top menu to open the experiment folder.
-
-#. Drag and drop each TIF stack file in its its corresponding position folder, specifically in the ``movie/`` subfolder (e.g., ``W1/100/movie/``). Step **not automated**.
-
+#. At the end of the preprocessing change the movie stack prefix in the experiment configuration to ``Corrected_``.

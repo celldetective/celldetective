@@ -1,6 +1,7 @@
 """
 Copright © 2024 Laboratoire Adhesion et Inflammation, Authored by Remy Torro & Ksenija Dervanova.
 """
+from typing import List
 
 from tqdm import tqdm
 import numpy as np
@@ -921,7 +922,7 @@ def fit_and_apply_model_background_to_stack(stack_path,
 				frames = load_frames(list(np.arange(i,(i+nbr_channels))), stack_path, normalize_input=False).astype(float)
 				target_img = frames[:,:,target_channel_index].copy()
 				
-				correction = field_correction(target_img, threshold_on_std=threshold_on_std, operation=operation, model=model, clip=clip, activation_protocol=activation_protocol)
+				correction = field_correction(target_img, threshold=threshold_on_std, operation=operation, model=model, clip=clip, activation_protocol=activation_protocol)
 				frames[:,:,target_channel_index] = correction.copy()
 
 				if return_stacks:
@@ -942,7 +943,7 @@ def fit_and_apply_model_background_to_stack(stack_path,
 			frames = load_frames(list(np.arange(i,(i+nbr_channels))), stack_path, normalize_input=False).astype(float)
 			target_img = frames[:,:,target_channel_index].copy()
 			
-			correction = field_correction(target_img, threshold_on_std=threshold_on_std, operation=operation, model=model, clip=clip, activation_protocol=activation_protocol)
+			correction = field_correction(target_img, threshold=threshold_on_std, operation=operation, model=model, clip=clip, activation_protocol=activation_protocol)
 			frames[:,:,target_channel_index] = correction.copy()
 
 			corrected_stack.append(frames)
@@ -957,7 +958,7 @@ def fit_and_apply_model_background_to_stack(stack_path,
 	else:
 		return None
 
-def field_correction(img, threshold_on_std=1, operation='divide', model='paraboloid', clip=False, return_bg=False, activation_protocol=[['gauss',2],['std',4]]):
+def field_correction(img: np.ndarray, threshold: float = 1, operation: str = 'divide', model: str = 'paraboloid', clip: bool = False, return_bg: bool = False, activation_protocol: List[List] = [['gauss',2],['std',4]]):
 	
 	"""
 	Apply field correction to an image.
@@ -970,8 +971,8 @@ def field_correction(img, threshold_on_std=1, operation='divide', model='parabol
 	----------
 	img : numpy.ndarray
 		The input image to be corrected.
-	threshold_on_std : float, optional
-		The threshold value on the standard deviation for masking (default is 1).
+	threshold : float, optional
+		The threshold value on the image, post activation protocol for masking out cells (default is 1).
 	operation : str, optional
 		The operation to apply for background correction, either 'divide' or 'subtract' (default is 'divide').
 	model : str, optional
@@ -1009,7 +1010,7 @@ def field_correction(img, threshold_on_std=1, operation='divide', model='parabol
 
 	std_frame = filter_image(target_copy,filters=activation_protocol)
 	edge = estimate_unreliable_edge(activation_protocol)
-	mask = threshold_image(std_frame, threshold_on_std, np.inf, foreground_value=1, edge_exclusion=edge).astype(int)
+	mask = threshold_image(std_frame, threshold, np.inf, foreground_value=1, edge_exclusion=edge).astype(int)
 	background = fit_background_model(img, cell_masks=mask, model=model, edge_exclusion=edge)
 
 	if operation=="divide":

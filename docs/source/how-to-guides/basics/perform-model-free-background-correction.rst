@@ -1,53 +1,44 @@
 How to perform a model-free background correction
 -------------------------------------------------
 
-This guide shows you how to create an experiment project and import your data. Learn more about the structure of an experiment project :doc:`here <data-organization>`.
+This guide shows you how to sample a background model across multiple positions and correct your images. This guide is particularly applicable to label-free images such as brightfield and RICM.
 
-Reference keys: *experiment project*, *well*, *position*, *population*, *cell type*, *antibody*, *concentration*, *pharmaceutical agents*
+Reference keys: *background correction*
 
-New project
-~~~~~~~~~~~
+Correction protocol
+~~~~~~~~~~~~~~~~~~~
 
-#. Launch the software and go to **File > New Experiment...**
+#. Launch the software. Open a project.
 
-#. Set a folder where the project will be stored.
+#. Expand the **PROCESSING** block. In the **BACKGROUND CORRECTION** section, click on the Model-free tab.
 
-#. Fill the information requested. Refer to the reference guide for more precision.
- - Name for the experiment. Avoid spaces in the name.
+#. Set the channel to correct.
 
- - Number of wells.
+#. If your image stack is a timeseries, set the stack mode to timeseries and adjust the time range to take the frames with the least amount of cells (often the first few frames). Else, tick tiles (all frames will be used).
 
- - Number of positions per well. If variable, put the highest number in a well.
+#. Click on the :icon:`image-check,black` icon next to the threshold field to estimate this threshold value visually.
 
- - Conversion factor from pixel to :math:`\mu m` on the images.
+#. Use the threshold slider to select as many cells as possible (in purple) while leaving most of the background regions unselected (not purple).
 
- - Time interval between two frames in minutes if time-series data. Else, leave at default value. If time-series but variable, put an average estimate.
+#. In the QC section, select a well of interest and click on the :icon:`image-check,black` to perform a visual assessment of the sampled background for this well. Repeat for all wells of interest.
 
- - Number of frames. If variable, put a lower estimate. Value read directly from the stacks in most cases.
+#. Tick the "Optimize for each frame?" option.
 
- - Prefix to find the image stack file. Leave blank if filenames have variable prefixes.
+#. Leave default values:
 
- - Image width/height in pixels.
+	- coefficient range between 0.95 and 1.05
+	- number of coefficients of 100
 
-#. Select your channels and specify their index in the stack with the slider on the right side (0 is first, 1 is the second channel, etc). Use existing channels if appropriate. Else, create your own channel. Avoid spaces in the name.
+#. Set the black level of the image in offset (e.g. minimum pixel value observed if the microscope side port shutter or light source shutter is closed).
 
-#. Select your cell population(s). If you have an immune cell population, select `effectors`. If you have cancer cells, select `targets`. Else create appropriate populations.
+#. Tick the ``Divide`` option.
 
-#. Submit.
 
-#. In the pop-up window, fill the information for each well (cell type, antibody, concentration, pharmaceutical agents). Fields can be left blank.
+Apply correction
+~~~~~~~~~~~~~~~~
 
-#. After submitting:
- - The dialog closes.
+#. Press :icon:`plus,#1565c0` :blue:`Add correction`.
 
- - The path to the newly created experiment is automatically loaded in the startup window. Click **Open** to access it.
+#. Once all preprocessing protocols have been defined (background correction, other channel alignments), scroll down and press Submit. To apply the same protocol to all positions, accept the first popup.
 
- - On the disk, the experiment folder is created with a configuration file that looks like the example below.
-
-Drag and drop the image stacks
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-#. Open the project in Celldetective.  Click on the :icon:`folder,black` icon next to the experiment name in the top menu to open the experiment folder.
-
-#. Drag and drop each TIF stack file in its its corresponding position folder, specifically in the ``movie/`` subfolder (e.g., ``W1/100/movie/``). Step **not automated**.
-
+#. At the end of the preprocessing change the movie stack prefix in the experiment configuration to ``Corrected_``.
