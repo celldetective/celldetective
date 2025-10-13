@@ -7,7 +7,7 @@ Reference keys: *experiment project*, *well*, *position*
 
 We designed a software that structures experimental data into nested well and position folders, mimicking the spatial segregation in a multi-well plate. The well partitioning allows experimentalists to test in parallel multiple biological conditions, such as different cell types, drugs or antibodies at different concentrations, pre-treatments on the cells or surfaces and so on.
 
-.. figure:: _static/glass-slide.png
+.. figure:: ../_static/glass-slide.png
     :align: center
     :alt: exp_folder_mimics_glass_slide
 

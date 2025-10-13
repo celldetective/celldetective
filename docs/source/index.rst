@@ -41,15 +41,12 @@ Contents
    how-to-guides/advanced/index
 
 .. toctree::
-   :caption: Concepts:
+   :caption: Explanation:
 
+   concepts/data-organization
+   concepts/population-specific-segmentation
    concepts/single-cell-event
-
-.. toctree::
-   :caption: Advanced:
-   
-   train-seg-models
-   train-signal-models
+   concepts/neighborhood
 
 .. toctree::
    :caption: Examples:
@@ -62,11 +59,6 @@ Contents
    :caption: Help:
 
    troubleshooting
-
-.. toctree::
-   :caption: Explanation:
-
-   data-organization
 
    
 .. toctree::

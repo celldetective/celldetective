@@ -1,5 +1,5 @@
-How to create a new experiment
-------------------------------
+How to transfer an event detection model on your data
+-----------------------------------------------------
 
 This guide shows you how to create an experiment project and import your data. Learn more about the structure of an experiment project :doc:`here <data-organization>`.
 

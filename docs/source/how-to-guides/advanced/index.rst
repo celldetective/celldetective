@@ -5,8 +5,9 @@ Advanced
    :maxdepth: 1
 
    compute-derivative-measurement
+   inject-metadata
    write-a-custom-measurement
    train-a-segmentation-model-from-scratch
-   train-event-detection-model
+   train-an-event-detection-model
    transfer-a-segmentation-model
    transfer-an-event-detection-model
