@@ -41,6 +41,11 @@ Contents
    how-to-guides/advanced/index
 
 .. toctree::
+   :caption: Concepts:
+
+   concepts/single-cell-event
+
+.. toctree::
    :caption: Advanced:
    
    train-seg-models
