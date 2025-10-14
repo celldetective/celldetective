@@ -1,6 +1,8 @@
 Population-specific segmentation
 --------------------------------
 
+Reference keys: *cell population*, *instance segmentation*
+
 The process of instance segmentation takes an image (multichannel or not) as its input and yields a label image (2D), where each segmented object is attributed a single label.
 
 

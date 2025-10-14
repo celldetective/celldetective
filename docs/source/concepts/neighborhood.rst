@@ -1,6 +1,9 @@
 Neighborhood
 ------------
 
+Reference keys: *neighborhood*, *neighbor counts*
+
+
 Principle
 ~~~~~~~~~
 
