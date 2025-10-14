@@ -165,4 +165,5 @@ celldetective/celldetective/threads.json
 
 celldetective/datasets/segmentation_annotations/*/
 celldetective/models/*/*/
+docs/source/generated/
 

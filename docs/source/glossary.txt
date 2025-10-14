@@ -1,0 +1,100 @@
+Reference
+ └── Data structure
+      └── Experiment project
+          |___ Well folder
+               |__ Position folder
+          |___ Experiment configuration
+
+
+
+
+Experiment project: A folder containing an experiment configuration file and well folders. All analysis settings and results associated
+with this project are stored here. This is the main input to celldetective.
+
+Experiment configuration: Named config.ini. A file storing info about the image stacks, the cell populations, and per-well metadata
+as well as experiment-wide metadata.
+
+Well: A folder with nomenclature `W{i}` where `{i}` is the number of the well, starting at 1. The folder contains at least one
+position folder. Each well is associated a set of metadata defined in the experiment configuration file.
+
+.. _well-folders:
+
+Well folders
+=============
+
+Overview
+--------
+
+Each *well folder* represents a single acquisition site or experimental unit in the dataset.
+The folder name encodes the well index (e.g., ``W1/``, ``W2/``, ``W10/``).
+
+These folders are generated automatically by :mod:`celldetective` during data import and
+contain all files related to that well.
+
+Naming convention
+-----------------
+
+**Pattern:** ``W{number}``
+
+- Always starts with an uppercase ``W``.
+- The number starts at 1 and increments sequentially (``W1``, ``W2``, ...).
+- There is no upper limit on the well number.
+
+**Regex:** ``^W\d+/?$``
+
+Examples::
+
+    W1/
+    W2/
+    W10/
+    W123/
+
+Contents
+--------
+
+A typical well folder contains the following files and subfolders:
+
+===================  =============================================
+File / Subfolder     Description
+===================  =============================================
+``images/``          Raw image data associated with this well
+``masks/``           Segmentation masks for each channel
+``metadata.json``    Well-specific acquisition metadata
+``results.csv``      Per-cell measurement table
+===================  =============================================
+
+Notes
+-----
+
+- The folder may be missing some subdirectories if processing was incomplete.
+- All well folders must be located inside a valid plate directory (see :ref:`plate-structure`).
+
+Example
+-------
+
+.. code-block:: text
+
+   W1/
+   ├── images/
+   │   ├── ch1.tif
+   │   ├── ch2.tif
+   ├── masks/
+   │   ├── mask_ch1.tif
+   │   └── mask_ch2.tif
+   ├── metadata.json
+   └── results.csv
+
+
+Position: a folder with nomenclature `{well number}0{position number}`, with {position number} starting at 0. Position folders
+always contain a movie folder. Other folders generated during analysis include `labels_{population name}`` and `output`.
+
+Population: a group of cells analyzed at single-cell resolution using a specific analysis path. Usually coincides with a
+cell type, but could also refer to a phenotype.
+
+Cell type:
+
+Antibody:
+
+Concentration:
+
+Pharmaceutical agents:

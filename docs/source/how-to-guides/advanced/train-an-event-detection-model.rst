@@ -1,8 +1,7 @@
-Train single-cell signal analysis models
-========================================
+How to train an event detection model from scratch
+==================================================
 
-.. _train-signal-models:
-
+This guide shows you how to train your own event detection model in celldetective, on your data.
 
 Prepare your training data
 --------------------------
@@ -24,7 +23,7 @@ For the training data, locate the folder where you stored the ``npy`` annotation
 
 .. _train-seg-models:
 
-.. figure:: _static/train-signal-model.png
+.. figure:: ../../_static/train-signal-model.png
     :align: center
     :alt: texture_options
     

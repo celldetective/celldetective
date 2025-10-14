@@ -1,6 +1,7 @@
-Train a cell segmentation model
-===============================
+How to train a segmentation model from scratch
+==============================================
 
+This guide shows you how to train your own segmentation model in celldetective, on your data.
 
 Prepare your training data
 --------------------------
@@ -38,7 +39,7 @@ Tune your hyperparameters: learning rate, batch size and the number of epochs. T
 
 .. _train-seg-models:
 
-.. figure:: _static/train-segmentation-models.png
+.. figure:: ../../_static/train-segmentation-models.png
     :align: center
     :alt: segmentation_models
     

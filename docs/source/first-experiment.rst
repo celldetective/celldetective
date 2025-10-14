@@ -29,54 +29,18 @@ Before loading your data into Celldetective, we recommend opening the raw stacks
 For large stacks exceeding 5 GB, we recommend using the **Bio-Formats Exporter** plugin in ImageJ to save the stacks. This format optimizes the data for efficient processing and visualization in Celldetective.
 
 
-Data organization
------------------
-
-We designed a software that structures experimental data into nested well and position folders, mimicking the spatial segregation in a multi-well plate. The well partitioning allows experimentalists to test in parallel multiple biological conditions, such as different cell types, drugs or antibodies at different concentrations, pre-treatments on the cells or surfaces and so on. 
-
-
-.. figure:: _static/glass-slide.png
-    :align: center
-    :alt: exp_folder_mimics_glass_slide
-    
-    The experiment folder mimics the organization of the glass slide into wells and fields of view within wells.
-
-
-Since cells are microscopic objects observed under high magnification, capturing all cells within a well in a single image is rarely feasible. Instead, experimentalists typically select multiple imaging positions within the well, aiming for a representative sample of the entire well.
-
-In Celldetective, single-cell detection is performed independently for each position. The software allows looping through multiple positions or wells, enabling streamlined analysis. Higher-level representations, such as population responses, can aggregate single-cell data from all positions within a well to provide a comprehensive overview.
-
-A **Celldetective experiment** consists of a folder and a configuration file in ``.ini`` format. The folder is organized hierarchically to support data from multiple wells and positions:
-
-#. Experiment folder: Contains individual well folders (one per well) and the configuration file.
-#. Well folder: Includes subfolders corresponding to positions within that well.
-#. Position folder: Contains a single ``movie/`` subfolder where the user drops the stack associated with that position.
-
-In Celldetective, "processing a movie" is synonymous with processing a position. This approach standardizes workflows and ensures clear data organization.
+Creating a new experiment
+-------------------------
 
 .. figure:: _static/maingui.png
     :align: center
     :alt: exp_folder_mimics_glass_slide
-    
+
     Startup window (top). Panels to create (left) or process (right) an experiment.
 
+To create a new experiment project in Celldetective, follow these steps:
 
-.. note::
-
-    The **movie prefix** field allows you to specify a particular movie in a position folder based on its filename (e.g., movies named "Aligned," "Normed," or "Corrected"). While this field can be left blank initially, it becomes especially useful if you perform preprocessing steps on your stacks.
-
-
-.. note::
-
-    Setting the **number of frames** is optional. In many cases, this information is already embedded in the metadata of the ``tif`` stack. If the metadata does not include this detail, the value you specify here will be used instead.
-
-
-Creating a new experiment
--------------------------
-
-To automatically generate the folder tree for a new experiment in Celldetective, follow these steps:
-
-#. Open Celldetective and navigate to **File > New Experiment...** or press ``Ctrl+N``.
+#. Open Celldetective and navigate to **File > New Experiment...**.
 
 #. A dialog window will prompt you to select the disk location for the experiment folder.
 
@@ -102,6 +66,8 @@ To automatically generate the folder tree for a new experiment in Celldetective,
 
     - On the disk, the experiment folder is created with a configuration file that looks like the example below.
 
+Learn more about the structure of an experiment project :doc:`here <data-organization>`.
+
 .. figure:: _static/bio-cond-new-exp.png
     :align: center
     :alt: bio_conditions_new_exp
@@ -111,6 +77,15 @@ To automatically generate the folder tree for a new experiment in Celldetective,
 .. note::
 
     Condition fields can be left blank, and will default to ``0, 1, 2, ...`` in the configuration file.
+
+.. note::
+
+    The **movie prefix** field allows you to specify a particular movie in a position folder based on its filename (e.g., movies named "Aligned," "Normed," or "Corrected"). While this field can be left blank initially, it becomes especially useful if you perform preprocessing steps on your stacks.
+
+
+.. note::
+
+    Setting the **number of frames** is optional. In many cases, this information is already embedded in the metadata of the ``tif`` stack. If the metadata does not include this detail, the value you specify here will be used instead.
 
 
 Configuration file example
@@ -160,7 +135,7 @@ Configuration file tags
 - ``Labels``: provides additional descriptive information for each well in the experiment. You can add extra-fields with the same comma-separated format. The information will be propagated to the single-cell data in each respective each well. 
 - ``Metadata``: extra information related to the experiment. You can add extra fields which will be propagated to the single-cell data.
 
-Quick acess to the experiment folder
+Quick access to the experiment folder
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Once an experiment is opened in Celldetective, you can quickly access its folder by clicking the **folder icon** next to the experiment name in the top menu.

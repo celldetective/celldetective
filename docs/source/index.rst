@@ -33,12 +33,20 @@ Contents
    interactions
    analysis
 
+.. toctree::
+   :maxdepth: 2
+   :caption: How-to guides
+
+   how-to-guides/basics/index
+   how-to-guides/advanced/index
 
 .. toctree::
-   :caption: Advanced:
-   
-   train-seg-models
-   train-signal-models
+   :caption: Explanation:
+
+   concepts/data-organization
+   concepts/population-specific-segmentation
+   concepts/single-cell-event
+   concepts/neighborhood
 
 .. toctree::
    :caption: Examples:
@@ -47,12 +55,11 @@ Contents
    adcc-example
    spreading-assay-example
 
-
 .. toctree::
    :caption: Help:
 
    troubleshooting
-   
+
    
 .. toctree::
    :caption: API Reference:
