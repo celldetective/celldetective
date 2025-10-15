@@ -5,6 +5,7 @@ Advanced
    :maxdepth: 1
 
    compute-derivative-measurement
+   create-characteristic-group-from-binary-classifications
    ..inject-metadata
    ..write-a-custom-measurement
    train-a-segmentation-model-from-scratch
