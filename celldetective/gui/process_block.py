@@ -8,6 +8,7 @@ from PyQt5.QtGui import QDoubleValidator, QIntValidator
 
 from celldetective.gui.processes.compute_neighborhood import NeighborhoodProcess
 from celldetective.gui.event_annotator import MeasureAnnotator
+from celldetective.gui.widgets import FileComboBox
 from celldetective.io import get_segmentation_models_list, control_segmentation_napari, get_signal_models_list, \
 	control_tracks, load_experiment_tables, get_pair_signal_models_list
 from celldetective.io import locate_segmentation_model, extract_position_name, fix_missing_labels, locate_signal_model
@@ -265,7 +266,7 @@ class ProcessPanel(QFrame, Styles):
 		model_zoo_layout = QHBoxLayout()
 		model_zoo_layout.addWidget(QLabel("Model zoo:"),90)
 
-		self.signal_models_list = QComboBox()
+		self.signal_models_list = FileComboBox()
 		self.signal_models_list.setEnabled(False)
 		self.refresh_signal_models()
 		#self.to_disable.append(self.cell_models_list)
@@ -286,15 +287,17 @@ class ProcessPanel(QFrame, Styles):
 		self.grid_contents.addLayout(signal_layout,6,0,1,4)
 
 	def refresh_signal_models(self):
-		self.signal_models = get_signal_models_list()
+		
+		self.signal_models, signal_model_path = get_signal_models_list(return_path=True)
 		self.signal_models_list.clear()
+		self.signal_models_list.addPaths([signal_model_path + sm for sm in self.signal_models])
 		
-		thresh = 35
-		models_truncated = [m[:thresh - 3]+'...' if len(m)>thresh else m for m in self.signal_models]
-		
-		self.signal_models_list.addItems(models_truncated)
-		for i in range(len(self.signal_models)):
-			self.signal_models_list.setItemData(i, self.signal_models[i], Qt.ToolTipRole)
+		# thresh = 35
+		# models_truncated = [m[:thresh - 3]+'...' if len(m)>thresh else m for m in self.signal_models]
+		#
+		# self.signal_models_list.addItems(models_truncated)
+		# for i in range(len(self.signal_models)):
+		# 	self.signal_models_list.setItemData(i, self.signal_models[i], Qt.ToolTipRole)
 
 
 	def generate_tracking_options(self):
@@ -833,11 +836,19 @@ class ProcessPanel(QFrame, Styles):
 			return None
 
 		if self.signal_analysis_action.isChecked() and not self.signalChannelsSet:
-			self.signal_model_name = self.signal_models[self.signal_models_list.currentIndex()]
-			self.signalChannelWidget = SignalModelParamsWidget(self, model_name = self.signal_model_name)
-			self.signalChannelWidget.show()
-			return None
-
+			self.signal_model_name = self.signal_models_list.get_item_names(self.signal_models_list.currentIndex())
+			if self.signal_model_name is not None:
+				self.signalChannelWidget = SignalModelParamsWidget(self, model_name = self.signal_model_name)
+				self.signalChannelWidget.show()
+				return None
+			else:
+				msgBox = QMessageBox()
+				msgBox.setIcon(QMessageBox.Warning)
+				msgBox.setText("No event detection model was selected... Skip event detection.")
+				msgBox.setWindowTitle("Info")
+				msgBox.setStandardButtons(QMessageBox.Ok)
+				_ = msgBox.exec()
+				return None
 
 		self.movie_prefix = self.parent_window.movie_prefix
 
@@ -954,8 +965,9 @@ class ProcessPanel(QFrame, Styles):
 								returnValue = msgBox.exec()
 								if returnValue == QMessageBox.No:
 									return None
-					self.signal_model_name = self.signal_models[self.signal_models_list.currentIndex()]
-					analyze_signals_at_position(self.pos, self.signal_model_name, self.mode)
+					self.signal_model_name = self.signal_models.get_names(self.signal_models_list.currentIndex())
+					if self.signal_model_name is not None:
+						analyze_signals_at_position(self.pos, self.signal_model_name, self.mode)
 
 
 			# self.stack = None
@@ -1083,7 +1095,7 @@ class ProcessPanel(QFrame, Styles):
 		self.process_population()
 
 	def set_selected_signals_for_event_detection(self):
-		self.signal_model_name = self.signal_models[self.signal_models_list.currentIndex()]
+		self.signal_model_name = self.signal_models.get_names(self.signal_models_list.currentIndex())
 		model_complete_path = locate_signal_model(self.signal_model_name)
 		input_config_path = model_complete_path+"config_input.json"
 		new_channels = [self.signalChannelWidget.channel_cbs[i].currentText() for i in range(len(self.signalChannelWidget.channel_cbs))]
@@ -1330,7 +1342,7 @@ class NeighPanel(QFrame, Styles):
 		pair_model_zoo_layout = QHBoxLayout()
 		pair_model_zoo_layout.addWidget(QLabel("Model zoo:"), 90)
 
-		self.pair_signal_models_list = QComboBox()
+		self.pair_signal_models_list = FileComboBox()
 		self.pair_signal_models_list.setEnabled(False)
 		self.refresh_signal_models()
 		# self.to_disable.append(self.cell_models_list)
@@ -1473,9 +1485,9 @@ class NeighPanel(QFrame, Styles):
 			self.delete_protocol_btn.setEnabled(False)
 
 	def refresh_signal_models(self):
-		signal_models = get_pair_signal_models_list()
+		signal_models, signal_model_path = get_pair_signal_models_list(return_path=True)
 		self.pair_signal_models_list.clear()
-		self.pair_signal_models_list.addItems(signal_models)
+		self.pair_signal_models_list.addPaths([signal_model_path + sm for sm in signal_models])
 
 	def open_signal_annotator_configuration_ui(self):
 		self.mode = 'pairs'
@@ -1572,8 +1584,9 @@ class NeighPanel(QFrame, Styles):
 					rel_measure_at_position(self.pos)
 
 				if self.signal_analysis_action.isChecked():
-
-					analyze_pair_signals_at_position(self.pos, self.pair_signal_models_list.currentText(), use_gpu=self.parent_window.parent_window.use_gpu, populations=self.parent_window.populations)
+					signal_model_name = self.pair_signal_models_list.get_item_names(self.pair_signal_models_list.currentIndex())
+					if signal_model_name is not None:
+						analyze_pair_signals_at_position(self.pos, signal_model_name, use_gpu=self.parent_window.parent_window.use_gpu, populations=self.parent_window.populations)
 
 		self.parent_window.update_position_options()
 		for action in [self.neigh_action, self.measure_pairs_action, self.signal_analysis_action]:
