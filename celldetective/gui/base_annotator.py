@@ -303,8 +303,6 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
 		self.correct_btn.disconnect()
 		self.correct_btn.clicked.connect(self.show_annotation_buttons)
 		
-		print(f"{self.selection=}")
-		
 		ind = event.ind
 		
 		if len(ind) > 1:
@@ -410,6 +408,7 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
 			self.channels = np.array(self.channels)
 			self.nbr_channels = len(self.channels)
 			self.img = load_frames(0, self.stack_path, normalize_input=False)
+			
 	def create_cell_signal_canvas(self):
 
 		self.cell_fig, self.cell_ax = plt.subplots(tight_layout=True)

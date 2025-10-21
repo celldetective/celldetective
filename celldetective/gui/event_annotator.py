@@ -855,7 +855,7 @@ class MeasureAnnotator(BaseAnnotator):
 			self.current_channel = 0
 			self.frame_lbl = QLabel('position: ')
 			self.static_image()
-	
+			
 			self.populate_window()
 			self.changed_class()
 	
@@ -865,6 +865,27 @@ class MeasureAnnotator(BaseAnnotator):
 
 		else:
 			self.close()
+
+	def create_cell_hist(self):
+		
+		self.hist_fig, self.hist_ax = plt.subplots(tight_layout=True)
+		self.hist_fcanvas = FigureCanvas(self.hist_fig, interactive=True)
+		self.hist_ax.clear()
+		
+		self.hist_bins = 30
+		self.hist_data = np.array([])  # initially empty
+		self.hist_patches = self.hist_ax.hist(self.hist_data, bins=self.hist_bins, color='tab:blue', alpha=0.7, density=True)[2]
+		
+		self.hist_ax.set_xlabel("intensity [a.u.]")
+		self.hist_ax.set_yticks([])
+		self.hist_ax.spines["top"].set_visible(False)
+		self.hist_ax.spines['right'].set_visible(False)
+		self.hist_fig.set_facecolor('none')  # or 'None'
+		self.hist_fig.canvas.setStyleSheet("background-color: transparent;")
+
+		self.hist_ax.set_xlim(self.contrast_slider.minimum(), self.contrast_slider.maximum())
+		self.hist_ax.set_ylim(0,1)
+		self.hist_fig.canvas.draw()
 	
 	def locate_tracks(self):
 
@@ -1058,8 +1079,8 @@ class MeasureAnnotator(BaseAnnotator):
 		self.frame_slider.setFixedSize(200, 30)
 		self.frame_slider.setRange(0, self.len_movie - 1)
 		self.frame_slider.setValue(0)
-		self.frame_slider.valueChanged.connect(self.update_frame)
-
+		
+		
 		self.start_btn = QPushButton()
 		self.start_btn.clicked.connect(self.start)
 		self.start_btn.setIcon(icon(MDI6.play, color="black"))
@@ -1073,9 +1094,8 @@ class MeasureAnnotator(BaseAnnotator):
 		animation_buttons_box.addWidget(self.last_frame_btn, 5, alignment=Qt.AlignLeft)
 
 		self.right_panel.addLayout(animation_buttons_box, 5)
-
 		self.right_panel.addWidget(self.fcanvas, 90)
-
+		
 		contrast_hbox = QHBoxLayout()
 		contrast_hbox.setContentsMargins(150, 5, 150, 5)
 		self.contrast_slider = QLabeledDoubleRangeSlider()
@@ -1098,6 +1118,10 @@ class MeasureAnnotator(BaseAnnotator):
 		self.alpha_slider.setValue(self.current_alpha)
 		self.alpha_slider.setDecimals(3)
 		self.alpha_slider.valueChanged.connect(self.set_transparency)
+		
+		self.create_cell_hist()
+		self.frame_slider.valueChanged.connect(self.update_frame)
+		self.left_panel.addWidget(self.hist_fcanvas, 45)
 
 		slider_alpha_hbox = QHBoxLayout()
 		slider_alpha_hbox.setContentsMargins(150, 5, 150, 5)
@@ -1263,7 +1287,7 @@ class MeasureAnnotator(BaseAnnotator):
 			self.plot_red_points(self.cell_ax)
 		else:
 			self.plot_signals()
-		
+			
 		self.loc_t = []
 		self.loc_idx = []
 		for t in range(len(self.tracks)):
@@ -1279,6 +1303,7 @@ class MeasureAnnotator(BaseAnnotator):
 	
 		self.draw_frame(self.current_frame)
 		self.fcanvas.canvas.draw()
+		
 
 	def cancel_selection(self):
 		super().cancel_selection()
@@ -1683,3 +1708,42 @@ class MeasureAnnotator(BaseAnnotator):
 		self.time_of_interest_le.setEnabled(False)
 		self.time_of_interest_le.setText("99")
 		self.apply_modification()
+	
+	def update_cell_histogram(self, cell_id, frame):
+		
+		# Get pixel values of the selected cell
+		mask = self.labels[frame] == cell_id
+		if np.sum(mask) == 0:
+			self.hist_data = np.array([])
+		else:
+			self.hist_data = self.img[mask].flatten()
+		
+		# # Compute histogram
+		# counts, bins = np.histogram(self.hist_data, bins=60)
+		#
+		# # Update heights of existing bars
+		# for rect, h in zip(self.hist_patches, counts):
+		# 	rect.set_height(h)
+		#
+		# # If there are more or fewer bars than patches (rare), redraw everything
+		# if len(counts) != len(self.hist_patches):
+		
+		self.hist_ax.clear()
+		self.hist_patches = self.hist_ax.hist(self.hist_data, bins=60, color='tab:blue', alpha=0.7, density=True)
+	
+		# Redraw the canvas
+		self.hist_ax.set_ylim(0,max(self.hist_patches[0]))
+		self.hist_ax.set_xlim(self.contrast_slider.minimum(),self.contrast_slider.maximum())
+		self.hist_fig.canvas.draw()
+		
+	def on_scatter_pick(self, event):
+		super().on_scatter_pick(event)
+		msx, msy = event.mouseevent.xdata, event.mouseevent.ydata
+		try:
+			label_id = self.labels[self.current_frame][int(msy), int(msx)]
+		except:
+			label_id = 0
+		if label_id != 0:
+			self.update_cell_histogram(label_id, self.current_frame)
+
+
