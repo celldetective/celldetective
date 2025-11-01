@@ -24,9 +24,12 @@ Our framework for classification borrows directly from survival theory, which is
 
 Cells belonging to the "event" class are associated with an **event time** (:math:`t_{\text{event}}`). This is interpreted as the time at which the event begins. By convention, the onset of the event is used, which is a requirement for performing survival studies.
 
+Event detection can be automatized using either a condition-based method or by training deep learning models to classify and regress single-cell time series for the event of interest.
+
 Applications and Limitations
 ----------------------------
 
 In Celldetective, events are fundamental for several analyses. For example, you can build a survival function (using up to two events) or synchronize multiple single-cell time-series relative to the time of an event.
 
 A key **limitation** is that the event concept in Celldetective is not designed to handle cyclic events. Such processes must be decomposed into a series of discrete, successive events (e.g., "start of mitosis," "end of mitosis"). Frequency characterization is not supported at this time.
+
