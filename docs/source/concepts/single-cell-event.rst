@@ -1,7 +1,7 @@
 Single-Cell Event
 =================
 
-**Reference keys:** *single-cell event*, *event time*, *event class*
+**Reference keys:** :term:`event`, :term:`event time`, :term:`event class`
 
 A **single-cell event** is defined as a specific occurrence that happens to a cell at a particular time point. This can include:
 

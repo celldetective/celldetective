@@ -10,9 +10,9 @@ Basics
    align-channels
    annotate-a-group
    annotate-an-event
-   ..annotate-for-segmentation
+   annotate-for-segmentation
    correct-a-track
-   ..perform-conditional-cell-classification
+   perform-conditional-cell-classification
    ..detect-an-event-with-conditions
    detect-spots-within-cells
    ..measure-locally-corrected-intensity-measurements

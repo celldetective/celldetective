@@ -114,7 +114,7 @@ class ConfigNewExperiment(CelldetectiveMainWindow):
 		self.ms_grid = QGridLayout()
 		self.ms_grid.setContentsMargins(21,30,20,30)
 
-		ms_lbl = QLabel("MOVIE SETTINGS")
+		ms_lbl = QLabel("SETTINGS")
 		ms_lbl.setStyleSheet("""
 			font-weight: bold;
 			""")
@@ -417,6 +417,15 @@ class ConfigNewExperiment(CelldetectiveMainWindow):
 		Create the folder tree, the config, issue a warning if the experiment folder already exists.
 		"""
 
+		if not os.path.exists(self.supFolder.text()):
+			msgBox = QMessageBox()
+			msgBox.setIcon(QMessageBox.Critical)
+			msgBox.setText("The target path for the experiment project does not exist... Abort.")
+			msgBox.setWindowTitle("Error")
+			msgBox.setStandardButtons(QMessageBox.Ok)
+			msgBox.exec()
+			return None
+
 		channel_indices = []
 		for i in range(len(self.channels)):
 			if self.checkBoxes[i].isChecked():
@@ -589,7 +598,8 @@ class SetupConditionLabels(CelldetectiveWidget):
 		
 		self.concentration_units_le = QLineEdit('pM')
 		self.concentration_units_le.setPlaceholderText('concentration units')
-		
+		self.concentration_units_le.textChanged.connect(self.update_placeholders)
+
 		concentration_units_layout = QHBoxLayout()
 		concentration_units_layout.addWidget(QLabel('concentration\nunits: '), 5, alignment=Qt.AlignLeft)
 		concentration_units_layout.addWidget(self.concentration_units_le, 10)
@@ -643,7 +653,10 @@ class SetupConditionLabels(CelldetectiveWidget):
 			self.pharmaceutical_agents_cbs[i].setPlaceholderText('e.g. dextran')
 			
 			self.layout.addLayout(hbox)
-		
+
+	def update_placeholders(self, new_unit):
+		for le in self.concentrations_cbs:
+			le.setPlaceholderText(f"e.g. 100 ({new_unit})")
 
 	def set_default_values(self):
 		

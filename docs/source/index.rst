@@ -62,8 +62,9 @@ Contents
 
    
 .. toctree::
-   :caption: API Reference:
-   
+   :caption: Reference:
+
+   reference/glossary
    API
 
 .. toctree::
