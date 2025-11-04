@@ -627,6 +627,7 @@ class ProcessPanel(QFrame, Styles):
 		if test:
 			self.event_annotator = EventAnnotator(self)
 			self.event_annotator.show()
+			center_window(self.event_annotator)
 
 	def check_measurements(self):
 
@@ -687,13 +688,15 @@ class ProcessPanel(QFrame, Styles):
 
 	def upload_segmentation_model(self):
 		print('Load a segmentation model or pipeline...')
-		self.SegModelLoader = SegmentationModelLoader(self)
-		self.SegModelLoader.show()
+		self.seg_model_loader = SegmentationModelLoader(self)
+		self.seg_model_loader.show()
+		center_window(self.seg_model_loader)
 
 	def open_tracking_configuration_ui(self):
 		print('Set the tracking parameters...')
 		self.settings_tracking = SettingsTracking(self)
 		self.settings_tracking.show()
+		center_window(self.settings_tracking)
 
 	def open_signal_model_config_ui(self):
 		print('Set the training parameters for new signal models...')
@@ -709,6 +712,7 @@ class ProcessPanel(QFrame, Styles):
 		print('Set the measurements to be performed...')
 		self.settings_measurements = SettingsMeasurements(self)
 		self.settings_measurements.show()
+		center_window(self.settings_measurements)
 		
 	def open_segmentation_configuration_ui(self):
 		print('Set the segmentation settings to be performed...')
@@ -733,6 +737,7 @@ class ProcessPanel(QFrame, Styles):
 		else:
 			self.ClassifierWidget = ClassifierWidget(self)
 			self.ClassifierWidget.show()
+			center_window(self.ClassifierWidget)
 
 	def open_signal_annotator_configuration_ui(self):
 		self.settings_signal_annotator = SettingsSignalAnnotator(self)
@@ -991,6 +996,7 @@ class ProcessPanel(QFrame, Styles):
 				plot_mode = 'static'
 			self.tab_ui = TableUI(self.df, f"{self.parent_window.well_list.currentText()}; Position {self.parent_window.position_list.currentText()}", population=self.mode, plot_mode=plot_mode, save_inplace_option=True)
 			self.tab_ui.show()
+			center_window(self.tab_ui)
 		else:
 			print('Table could not be loaded...')
 			msgBox = QMessageBox()
@@ -1441,6 +1447,7 @@ class NeighPanel(QFrame, Styles):
 			plot_mode = 'static'
 			self.tab_ui = TableUI(self.df, f"{self.parent_window.well_list.currentText()}; Position {self.parent_window.position_list.currentText()}", population='pairs', plot_mode=plot_mode, save_inplace_option=True)
 			self.tab_ui.show()
+			center_window(self.tab_ui)
 		else:
 			print('Table could not be loaded...')
 			msgBox = QMessageBox()

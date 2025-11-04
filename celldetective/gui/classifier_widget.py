@@ -39,10 +39,6 @@ class ClassifierWidget(CelldetectiveWidget):
 		self.class_name = 'custom'
 		self.name_le = QLineEdit(self.class_name)
 		self.init_class()
-
-		# Create the QComboBox and add some items
-		center_window(self)
-
 		
 		layout = QVBoxLayout(self)
 		layout.setContentsMargins(30, 30, 30, 30)

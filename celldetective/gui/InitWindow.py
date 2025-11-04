@@ -63,8 +63,6 @@ class AppInitWindow(CelldetectiveMainWindow):
 		self.create_buttons_hbox()
 		self.setCentralWidget(central_widget)
 		self.reload_previous_gpu_threads()
-		center_window(self)
-
 		self.show()
 	
 	def closeEvent(self, event):
@@ -403,6 +401,7 @@ class AppInitWindow(CelldetectiveMainWindow):
 
 			self.control_panel = ControlPanel(self, self.exp_dir)
 			self.control_panel.show()
+			center_window(self.control_panel)
 
 			self.reload_previous_experiments()
 			self._createMenuBar()

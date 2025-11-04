@@ -92,9 +92,6 @@ class ControlPanel(CelldetectiveMainWindow):
 		self.screen_height = desktop.screenGeometry().height()
 		self.screen_width = desktop.screenGeometry().width()
 		self.scroll.setMinimumWidth(440)
-		
-		center_window(self)
-
 
 		self.well_list.setCurrentIndex(0)
 		#self.position_list.setCurrentIndex(0)
