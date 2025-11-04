@@ -134,10 +134,56 @@ if model_type=='cellpose':
 		pretrained_path = os.sep.join([pretrained,os.path.split(pretrained)[-1]])
 	else:
 		pretrained_path = pretrained
-	
-	model = CellposeModel(gpu=use_gpu, model_type=None, pretrained_model=pretrained_path, diam_mean=diam_mean, nchan=X_aug[0].shape[0],) 
-	model.train(train_data=X_aug, train_labels=Y_aug, normalize=False, channels=None, batch_size=batch_size,
-				min_train_masks=1,save_path=target_directory+os.sep+model_name,n_epochs=epochs, model_name=model_name, learning_rate=learning_rate, test_data = X_val, test_labels=Y_val)
+
+	model = CellposeModel(
+		gpu=use_gpu,
+		model_type=None,
+		pretrained_model=pretrained_path,
+		diam_mean=diam_mean,
+		nchan=X_aug[0].shape[0],
+	)
+	for name, module in model.net.named_children():
+		print(name, type(module))
+
+	# Freeze parts of the UNET (if we loaded a pretrained model)
+	if pretrained is not None:
+		for param in model.net.downsample.parameters():
+			param.requires_grad = False
+
+		# Optional: freeze style branch (recommended unless you are training on very different imaging domains)
+		for param in model.net.make_style.parameters():
+			param.requires_grad = False
+
+		# Keep decoder (upsampling path) trainable
+		for param in model.net.upsample.parameters():
+			param.requires_grad = True
+
+		# Keep output head trainable
+		for param in model.net.output.parameters():
+			param.requires_grad = True
+
+		# Unfreeze all output heads (version-safe)
+		output_heads = ['output', 'output_conv', 'flow', 'prob']
+		for head_name in output_heads:
+			if hasattr(model.net, head_name):
+				for param in getattr(model.net, head_name).parameters():
+					param.requires_grad = True
+
+	# Now train normally (Cellpose will internally skip frozen params)
+	model.train(
+		train_data=X_aug,
+		train_labels=Y_aug,
+		normalize=False,
+		channels=None,
+		batch_size=batch_size,
+		min_train_masks=1,
+		save_path=target_directory + os.sep + model_name,
+		n_epochs=epochs,
+		model_name=model_name,
+		learning_rate=learning_rate,
+		test_data=X_val,
+		test_labels=Y_val,
+	)
 
 	file_to_move = glob(os.sep.join([target_directory, model_name, 'models','*']))[0]
 	shutil.move(file_to_move, os.sep.join([target_directory, model_name,''])+os.path.split(file_to_move)[-1])
@@ -222,11 +268,26 @@ elif model_type=='stardist':
 	if any(median_size > fov):
 		print("WARNING: median object size larger than field of view of the neural network.")
 
+	if pretrained is not None:
+
+		mod = model.keras_model
+		encoder_depth = len(mod.layers) // 2
+
+		for layer in mod.layers[:encoder_depth]:
+			layer.trainable = False
+
+		# Keep decoder trainable
+		for layer in mod.layers[encoder_depth:]:
+			layer.trainable = True
+
 	if augmentation_factor==1.0:
 		model.train(X_trn, Y_trn, validation_data=(X_val,Y_val))
 	else:
 		model.train(X_trn, Y_trn, validation_data=(X_val,Y_val), augmenter=augmenter)
 	model.optimize_thresholds(X_val,Y_val)
+
+	if isinstance(median_size, list):
+		median_size = np.mean(median_size)
 
 	config_inputs = {"channels": target_channels, 'normalization_percentile': normalization_percentile,
 	'normalization_clip': normalization_clip, 'normalization_values': normalization_values, 
