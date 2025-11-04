@@ -702,11 +702,13 @@ class ProcessPanel(QFrame, Styles):
 		print('Set the training parameters for new signal models...')
 		self.settings_event_detection_training = SettingsEventDetectionModelTraining(self)
 		self.settings_event_detection_training.show()
+		center_window(self.settings_event_detection_training)
 
 	def open_segmentation_model_config_ui(self):
 		print('Set the training parameters for a new segmentation model...')
 		self.settings_segmentation_training = SettingsSegmentationModelTraining(self)
 		self.settings_segmentation_training.show()
+		center_window(self.settings_segmentation_training)
 
 	def open_measurement_configuration_ui(self):
 		print('Set the measurements to be performed...')
