@@ -3,11 +3,17 @@ Population-specific segmentation
 
 **Reference keys:** :term:`cell population`, :term:`instance segmentation`
 
-The purpose of Celldetective is to achieve single-cell resolution through :term:`instance segmentation`. In co-cultures, different cell types can be in spatial co-presence on a 2D projection, making single-cell quantifications challenging.
+Independent segmentation
+========================
 
-One way to fix this problem, particularly in effector/target systems, is to separate the segmentation of each **cell population**, in order to have masks as complete as possible for each population. Measurements can thus be performed as cleanly as possible, within the constraints of 2D images.
+The purpose of Celldetective is to achieve single-cell resolution through instance segmentation. In co-cultures, different cell types can be in spatial co-presence on a 2D projection, making single-cell quantifications challenging.
 
-Another way to put this is that if you have several :term:`cell populations` on your images, you should repeat the segmentation task for each :term:`population <cell population>` of interest, with a segmentation method as appropriate as possible for the population you want. A consequence of this is that what we call a ":term:`cell population`" is a group of cells that were segmented using the same method (a population does not have to strictly relate to cell type; it can be based on different cell states in a mono culture, for example).
+One way to fix this problem, particularly in effector/target systems, is to segment independently each **cell population**, in order to have masks as complete as possible for each population separately. Measurements can thus be performed as cleanly as possible, within the constraints of 2D images.
+
+Another way to put this is that if you have several cell populations on your images, you should repeat the segmentation task for each population of interest, with a segmentation method as appropriate as possible for the population you want. A consequence of this is that what we call a "cell population" is a group of cells that were segmented using the same method (a population does not have to strictly relate to cell type; it can be based on different cell states in a mono culture, for example).
+
+Strategies
+==========
 
 .. The process of :term:`instance segmentation` takes an image (multichannel or not) as its input and yields a label image (2D), where each segmented object is attributed a single label.
 

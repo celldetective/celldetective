@@ -124,21 +124,6 @@ We provide two simple plugins to:
     
     **napari**. napari provides the basic requirements of image manipulation software, namely a brush, rubber, bucket and pipette, to work on the segmentation layer. In this RICM image of spreading NK cells, two couples of cells have been mistakenly segmented as one object and must be separated. On the right panel, two plugins specific to Celldetective allow 1) the export of the modified masks directly in the position folder, and 2) to create automatically an annotation consisting of the current multichannel frame, the modified mask and a configuration file specifying the modality content of the image and its spatial calibration.
 
-Annotation strategy
-~~~~~~~~~~~~~~~~~~~
-
-Your annotation should be complete: all cells must be segmented properly before export. Otherwise the segmentation model will be trained to do a poor or incomplete segmentation. Since annotating a full field of view can be painstaking, we allow you to define rectangle ROIs using directly napari, to define the crops where the annotation is complete and can be used to train a model. 
-
-Set the frame of interest, click on the ``New shapes layer`` button, and draw a rectangle over the region of interest. If you trigger the ``Export the annotation of the current frame`` button, you will export the defined ROI instead of the complete field of view.
-
-.. figure:: _static/annotate-roi.gif
-    :align: center
-    :alt: roi_annotation
-    
-    **Exporting a ROI of annotations for segmentation.** In this demo, a false positive cell mask is removed. A rectangular ROI is defined at this given frame, locally to the modification. Upon export, only this crop is exported as a training sample.
-
-
-
 References
 ----------
 

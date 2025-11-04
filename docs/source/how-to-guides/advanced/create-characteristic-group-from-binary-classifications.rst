@@ -5,7 +5,7 @@ This guide shows you how to assemble multiple one-hot-encoded classifications in
 
 **Prerequisite**: the segmentation and measurements for at least one population.
 
-Reference keys: *single-cell measurement*, *characteristic group*, *phenotype*
+Reference keys: :term:`single-cell measurement`, :term:`characteristic group`, :term:`phenotype`
 
 **Step-by-step:**
 
@@ -13,7 +13,7 @@ Reference keys: *single-cell measurement*, *characteristic group*, *phenotype*
 
 #. Click on the :icon:`table,#1565c0` :blue:`Explore table` button to open the table view.
 
-#. Select your groups or status classification-like features to merge them into a single characteristic group by Ctrl+Clicking on the column to combine.
+#. Select your groups or status classification-like features to merge them into a single characteristic group by Ctrl+Left-Clicking on the column to combine.
 
 #. Go to **Math > Merge states...**. Set a name for the new group. Check the feature names to merge.
 

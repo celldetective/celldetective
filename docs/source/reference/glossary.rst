@@ -29,10 +29,26 @@ This glossary defines the key concepts used in the documentation.
         Metrics quantifying the number of neighboring cells within a defined :term:`neighborhood`, calculated using one of three methods: inclusive, exclusive, or intermediate (weighted).
 
     experiment project
-        The highest organizational level in Celldetective, consisting of a main folder and a configuration file, containing all experimental data.
+        A **Celldetective experiment** consists of a folder and a configuration file in ``.ini`` format. The folder is organized hierarchically to support data from multiple wells and positions:
+
+        #. **Experiment folder**: Contains individual well folders (one per well) and the configuration file.
+        #. **Well folder**: Includes subfolders corresponding to position within that well.
+        #. **Position folder**: Contains a single ``movie/`` subfolder where the user drops the stack associated with that position.
 
     well
-        A folder within the :term:`experiment project` that groups data from one physical well on a multi-well plate, typically corresponding to a single biological condition.
+        A collection of positions sharing the same biological condition, often associated with a physical well from a multi-well plate.
 
     position
-        A subfolder within a :term:`well` folder, representing a single field of view (microscopy image stack or "movie") taken within that well.
+        A field of view (microscopy image stack or "movie") taken within a well. Interchangeably the spatial position and the associated image data.
+
+    characteristic group
+        A ensemble of instantaneous cell :term:`phenotypes <phenotype>`.
+
+    phenotype
+        A ensemble of cells sharing similar features at time :math:`t`. An ensemble of phenotypes forms a characteristic group.
+
+    single-cell measurement
+        A property measured from either an image or dynamical information associated with a unique cell at time :math:`t`.
+
+    survival
+        Probability that a cell exhibits an event as a function of time :math:`\Delta t_\textrm{event}`.

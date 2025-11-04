@@ -3,12 +3,12 @@ How to annotate a dataset for segmentation
 
 This guide shows you how to annotate images to train a segmentation model for the population of interest.
 
-Reference keys: *instance segmentation labels*, :term:`population`
+Reference keys: :term:`instance segmentation`, :term:`cell population`
 
 
-#. Launch the software, load an experiment containing the modaliti(es) and cell population of interest, expand the single-cell block for your population of interest.
+#. Launch the software, load an experiment containing the imaging modaliti(es) and cell population of interest. Expand the single-cell processing block for your population of interest.
 
-#. Recommended: pre-segment the cells you want using either a generic segmentation model (``CP_cyto3``, ``SD_versatile`` for nuclei, see this guide) or with a traditional segmentation pipeline (see this guide).
+#. Recommended: pre-segment the cells you want using either a generic segmentation model (``CP_cyto3``, ``SD_versatile`` for nuclei, see this guide) or with a traditional segmentation pipeline -- see this guide).
 
 #. Click on the :icon:`eye-check,black` button on the right side of the *SEGMENT* option to open the initial masks in napari.
 
@@ -27,3 +27,10 @@ Reference keys: *instance segmentation labels*, :term:`population`
 .. note::
 
     Deep learning models struggle with inconsistencies. Performance tends to degrade if annotations conventions are not clearly defined and robust.
+
+.. figure:: ../../_static/annotate-roi.gif
+    :align: center
+    :alt: roi_annotation
+
+    **Exporting a ROI of annotations for segmentation.** In this demo, a false positive cell mask is removed. A rectangular ROI is defined at this given frame, locally to the modification. Upon export, only this crop is exported as a training sample.
+
