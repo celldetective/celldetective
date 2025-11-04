@@ -2,7 +2,6 @@ from PyQt5.QtCore import QSize
 from fonticon_mdi6 import MDI6
 from superqt.fonticon import icon
 
-from celldetective.gui import Styles
 from natsort import natsorted
 from PyQt5.QtWidgets import QMessageBox, QWidget, QVBoxLayout
 from glob import glob
@@ -2716,6 +2715,8 @@ def control_segmentation_napari(position, prefix='Aligned', population="target",
 	@magicgui(call_button='Export the annotation\nof the current frame')
 	def export_widget():
 		return export_annotation()
+
+	from celldetective.gui import Styles
 
 	stack, labels = locate_stack_and_labels(position, prefix=prefix, population=population)
 	output_folder = position + f'labels_{population}{os.sep}'
