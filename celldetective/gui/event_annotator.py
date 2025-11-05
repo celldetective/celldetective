@@ -1,3 +1,4 @@
+import scipy
 from PyQt5.QtWidgets import QComboBox, QLabel, QRadioButton, QFileDialog, QApplication, \
 	QPushButton, QVBoxLayout, QHBoxLayout, QMessageBox, QShortcut, QLineEdit, QSlider
 from PyQt5.QtCore import Qt, QSize
@@ -1718,22 +1719,24 @@ class MeasureAnnotator(BaseAnnotator):
 		else:
 			self.hist_data = self.img[mask].flatten()
 		
-		# # Compute histogram
-		# counts, bins = np.histogram(self.hist_data, bins=60)
-		#
-		# # Update heights of existing bars
-		# for rect, h in zip(self.hist_patches, counts):
-		# 	rect.set_height(h)
-		#
-		# # If there are more or fewer bars than patches (rare), redraw everything
-		# if len(counts) != len(self.hist_patches):
-		
 		self.hist_ax.clear()
 		self.hist_patches = self.hist_ax.hist(self.hist_data, bins=60, color='tab:blue', alpha=0.7, density=True)
-	
+		counts, bin_edges, _ = self.hist_patches
+		max_idx = np.argmax(counts)
+		mode_value = (bin_edges[max_idx] + bin_edges[max_idx + 1]) / 2
+
 		# Redraw the canvas
 		self.hist_ax.set_ylim(0,max(self.hist_patches[0]))
 		self.hist_ax.set_xlim(self.contrast_slider.minimum(),self.contrast_slider.maximum())
+		min_y, max_y = self.hist_ax.get_ylim()
+		mean_value = np.nanmean(self.hist_data)
+		median_value = np.nanmedian(self.hist_data)
+
+		self.hist_ax.vlines(mean_value, min_y, max_y, color="tab:blue")
+		self.hist_ax.vlines(median_value, min_y, max_y, color="tab:red")
+		self.hist_ax.vlines(mode_value, min_y, max_y, color="purple")
+		self.hist_ax.set_yticks([])
+
 		self.hist_fig.canvas.draw()
 		
 	def on_scatter_pick(self, event):
