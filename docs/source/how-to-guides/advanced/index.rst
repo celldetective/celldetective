@@ -6,7 +6,7 @@ Advanced
 
    compute-derivative-measurement
    create-characteristic-group-from-binary-classifications
-   ..inject-metadata
+   inject-metadata
    ..write-a-custom-measurement
    train-a-segmentation-model-from-scratch
    train-an-event-detection-model

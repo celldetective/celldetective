@@ -18,7 +18,7 @@ Reference keys: :term:`instance segmentation`, :term:`cell population`
 
 #. Recommended: press the *New shapes layer* button in the layer list section and the *Add Rectangle* button in the layer controls to draw a crop of a sub-region of the current field of view, limiting the amount of annotations to perform and allowing you to move to another time point to take a different sub-region without spatial repetition. Use the opacity slider to make it as transparent as possible so that cell masks can be annotated properly.
 
-#. Click on the segmentation layer. Use the segmentation layer controls to paint new cells (press *M* to increment a new label value), the rubber to erase cells or part of cells. Use the fill bucket with a label value of 0 to erase a cell. Work within the crop region, for the current timepoint only. You can use the time slider to see what happens before/after the current timepoint but the annotation should be done only for the current timepoint.
+#. Click on the segmentation layer. Use the segmentation layer controls to paint new cells (press :kbd:`M` to increment a new label value), the rubber to erase cells or part of cells. Use the fill bucket with a label value of 0 to erase a cell. Work within the crop region, for the current timepoint only. You can use the time slider to see what happens before/after the current timepoint but the annotation should be done only for the current timepoint.
 
 #. Once the cell masks are as perfect as they can be within the annotated region, press the *Save the modified labels* button to export the annotation. It is written in a *labels_population-name* folder in the current experiment project.
 

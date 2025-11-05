@@ -52,3 +52,12 @@ This glossary defines the key concepts used in the documentation.
 
     survival
         Probability that a cell exhibits an event as a function of time :math:`\Delta t_\textrm{event}`.
+
+    background correction
+        A process that flattens or removes the non-cell part of an image.
+
+    preprocessing
+        Any operation performed on the raw microscopy images before segmentation and measurements.
+
+    alignment
+        The correction of microscopy image drifts over time and offsets so that non-moving objects do not appear to be moving up to tracking errors in case of tracking.
