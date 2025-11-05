@@ -656,15 +656,17 @@ class SignalDetectionModel(object):
 			self.pretrained = os.sep.join(self.pretrained.split(os.sep)[:-1])
 
 		try:
-			self.model_class = load_model(os.sep.join([self.pretrained,"classifier.h5"]),compile=False)
+			self.model_class = load_model(os.sep.join([self.pretrained,"classifier.h5"]),compile=False, custom_objects={"mse": MeanSquaredError()})
 			self.model_class.load_weights(os.sep.join([self.pretrained,"classifier.h5"]))
+			self.model_class = self.freeze_encoder(self.model_class, 5)
 			print("Classifier successfully loaded...")
 		except Exception as e:
 			print(f"Error {e}...")
 			self.model_class = None
 		try:
-			self.model_reg = load_model(os.sep.join([self.pretrained,"regressor.h5"]),compile=False)
+			self.model_reg = load_model(os.sep.join([self.pretrained,"regressor.h5"]),compile=False, custom_objects={"mse": MeanSquaredError()})
 			self.model_reg.load_weights(os.sep.join([self.pretrained,"regressor.h5"]))
+			self.model_reg = self.freeze_encoder(self.model_reg, 5)
 			print("Regressor successfully loaded...")
 		except Exception as e:
 			print(f"Error {e}...")
@@ -709,6 +711,11 @@ class SignalDetectionModel(object):
 		assert model_class_input_shape==model_reg_input_shape, f"mismatch between input shape of classification: {self.model_class.layers[0].input_shape[0]} and regression {self.model_reg.layers[0].input_shape[0]} models... Error."
 
 		return True
+
+	def freeze_encoder(self, model, n_trainable_layers: int = 3):
+		for layer in model.layers[:-min(n_trainable_layers, len(model.layers))]:  # freeze everything except final Dense layer
+			layer.trainable = False
+		return model
 
 	def create_models_from_scratch(self):
 
@@ -1228,7 +1235,7 @@ class SignalDetectionModel(object):
 			self.plot_model_history(mode="classifier")
 
 		# Set current classification model as the best model
-		self.model_class = load_model(os.sep.join([self.model_folder,"classifier.h5"]))
+		self.model_class = load_model(os.sep.join([self.model_folder,"classifier.h5"]), custom_objects={"mse": MeanSquaredError()})
 		self.model_class.load_weights(os.sep.join([self.model_folder,"classifier.h5"]))
 		
 		self.dico = {"history_classifier": self.history_classifier, "execution_time_classifier": self.cb[-1].times}
@@ -1373,7 +1380,7 @@ class SignalDetectionModel(object):
 		
 
 		# Evaluate best model 
-		self.model_reg = load_model(os.sep.join([self.model_folder,"regressor.h5"]))
+		self.model_reg = load_model(os.sep.join([self.model_folder,"regressor.h5"]), custom_objects={"mse": MeanSquaredError()})
 		self.model_reg.load_weights(os.sep.join([self.model_folder,"regressor.h5"]))
 		self.evaluate_regression_model()
 		

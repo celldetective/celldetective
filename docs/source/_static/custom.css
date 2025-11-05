@@ -3,3 +3,12 @@
   vertical-align: middle;
   color: var(--color-success, #000000);
 }
+
+.kbd {
+  background: #eee;
+  border-radius: 3px;
+  padding: 2px 4px;
+  border: 1px solid #ccc;
+  font-size: 0.9em;
+  font-family: sans-serif;
+}

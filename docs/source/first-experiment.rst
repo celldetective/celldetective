@@ -38,55 +38,7 @@ Creating a new experiment
 
     Startup window (top). Panels to create (left) or process (right) an experiment.
 
-To create a new experiment project in Celldetective, follow these steps:
-
-#. Open Celldetective and navigate to **File > New Experiment...**.
-
-#. A dialog window will prompt you to select the disk location for the experiment folder.
-
-#. A second window will appear, requesting the information needed to populate the configuration file, including:
-
-    - Number of wells
-
-    - Number of positions per well
-
-    - Spatio-temporal calibration
-
-    - Channel names and their order
-
-    - Names of the cell populations to analyze
-
-#. Once you click **Submit**, another dialog window will ask for a brief description of the biological conditions associated with each well.
-
-#. After submitting the information:
-
-    - The dialog closes.
-
-    - The path to the newly created experiment is automatically loaded in the startup window. Click **Open** to access it.
-
-    - On the disk, the experiment folder is created with a configuration file that looks like the example below.
-
-Learn more about the structure of an experiment project :doc:`here <data-organization>`.
-
-.. figure:: _static/bio-cond-new-exp.png
-    :align: center
-    :alt: bio_conditions_new_exp
-    
-    Celldetective collects information about the biological conditions tested in each well. This information is propagated down to the single cell description.
-
-.. note::
-
-    Condition fields can be left blank, and will default to ``0, 1, 2, ...`` in the configuration file.
-
-.. note::
-
-    The **movie prefix** field allows you to specify a particular movie in a position folder based on its filename (e.g., movies named "Aligned," "Normed," or "Corrected"). While this field can be left blank initially, it becomes especially useful if you perform preprocessing steps on your stacks.
-
-
-.. note::
-
-    Setting the **number of frames** is optional. In many cases, this information is already embedded in the metadata of the ``tif`` stack. If the metadata does not include this detail, the value you specify here will be used instead.
-
+To create a new experiment, follow this :ref:`how-to guide <new-experiment-guide>`.
 
 Configuration file example
 ~~~~~~~~~~~~~~~~~~~~~~~~~~

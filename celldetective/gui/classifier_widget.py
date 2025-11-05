@@ -39,10 +39,6 @@ class ClassifierWidget(CelldetectiveWidget):
 		self.class_name = 'custom'
 		self.name_le = QLineEdit(self.class_name)
 		self.init_class()
-
-		# Create the QComboBox and add some items
-		center_window(self)
-
 		
 		layout = QVBoxLayout(self)
 		layout.setContentsMargins(30, 30, 30, 30)
@@ -122,7 +118,7 @@ class ClassifierWidget(CelldetectiveWidget):
 		self.property_query_le.setToolTip('Classify points using a query on measurements.\nYou can use "and" and "or" conditions to combine\nmeasurements (e.g. "area > 100 or eccentricity > 0.95").')
 		self.property_query_le.textChanged.connect(self.activate_submit_btn)
 		hbox_classify.addWidget(self.property_query_le, 70)
-		self.submit_query_btn = QPushButton('Submit...')
+		self.submit_query_btn = QPushButton('Preview')
 		self.submit_query_btn.clicked.connect(self.apply_property_query)
 		self.submit_query_btn.setEnabled(False)
 		hbox_classify.addWidget(self.submit_query_btn, 20)

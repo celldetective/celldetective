@@ -22,7 +22,7 @@ else:
 # -- Project information
 
 project = 'celldetective'
-copyright = '2024, Rémy Torro'
+copyright = '2025, Laboratoire Adhésion et Inflammation (LAI) U1067 INSERM CNRS'
 author = 'Rémy Torro'
 
 release = verstr
@@ -38,7 +38,24 @@ extensions = [
 	"sphinx.ext.viewcode",
 	'sphinx.ext.napoleon',
 	'sphinx.ext.autosummary',
-	'nbsphinx_link',
+    'hoverxref.extension',
+    'nbsphinx_link',
+    "sphinxcontrib.jquery",
+]
+
+autosummary_generate = True
+
+hoverxref_autoref = True
+hoverxref_roles = ['term']
+hoverxref_domains = ['std']
+
+hoverxref_api_host = 'local'
+hoverxref_role_types = {
+    'term': 'tooltip',
+}
+
+hoverxref_intersphinx = [
+    'https://docs.python.org/3/',
 ]
 
 autoapi_dirs = ['celldetective']
@@ -47,7 +64,7 @@ intersphinx_mapping = {
 	'python': ('https://docs.python.org/3/', None),
 	'sphinx': ('https://www.sphinx-doc.org/en/master/', None),
 }
-intersphinx_disabled_domains = ['std']
+#intersphinx_disabled_domains = ['std']
 
 templates_path = ['_templates']
 
@@ -61,7 +78,7 @@ html_css_files = [
 	#'https://fonts.googleapis.com/icon?family=Material+Icons',
 	#'custom.css',
 ]
-
+html_favicon = '_static/favicon.png'
 html_theme_options = {'style_nav_header_background': '#b9c3cb'}
 
 # -- Options for EPUB output

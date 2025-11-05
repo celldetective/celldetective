@@ -1,7 +1,14 @@
 import configparser
+import os
+from subprocess import Popen
+
 from PyQt5.QtWidgets import QVBoxLayout, QScrollArea, QLabel, QHBoxLayout, QLineEdit, QPushButton
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QSize
 import configparser
+
+from fonticon_mdi6 import MDI6
+from superqt.fonticon import icon
+
 from celldetective.gui import CelldetectiveWidget
 
 
@@ -26,6 +33,14 @@ class ConfigEditor(CelldetectiveWidget):
         self.layout = QVBoxLayout()
 
         # Create a scroll area to contain the main layout
+        self.edit_config_btn = QPushButton("")
+        self.edit_config_btn.setStyleSheet(self.button_select_all)
+        self.edit_config_btn.setIcon(icon(MDI6.file_cog, color="black"))
+        self.edit_config_btn.setToolTip("Advanced edition.")
+        self.edit_config_btn.setIconSize(QSize(20, 20))
+
+        self.layout.addWidget(self.edit_config_btn, alignment=Qt.AlignRight)
+
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll_content = CelldetectiveWidget()
@@ -45,6 +60,19 @@ class ConfigEditor(CelldetectiveWidget):
         self.setLayout(self.layout)
 
         self.load_config()
+
+        self.edit_config_btn.clicked.connect(self.edit_in_text_editor)
+
+    def edit_in_text_editor(self):
+        path = self.config_path
+        try:
+            Popen(f'explorer {os.path.realpath(path)}')
+        except:
+
+            try:
+                os.system('xdg-open "%s"' % path)
+            except:
+                return None
 
     def load_config(self):
         file_name = self.config_path

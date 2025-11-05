@@ -15,7 +15,7 @@ Reference keys: *single-cell measurement*
 
 #. Expand the block associated with your cell population.
 
-#. Click on the :icon:`table_chart,#1565c0` **Explore table** button to open the table view.
+#. Click on the :icon:`table,#1565c0` **Explore table** button to open the table view.
 
 #. Go to **Math > Differentiate...**. If the option is disabled, check that you have cell tracks.
 

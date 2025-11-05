@@ -3,6 +3,9 @@ import sys
 from PyQt5.QtWidgets import QApplication, QSplashScreen
 from PyQt5.QtGui import QPixmap
 from os import sep
+
+from celldetective.gui.gui_utils import center_window
+
 from celldetective.utils import get_software_location
 from time import time, sleep
 
@@ -59,6 +62,7 @@ if __name__ == "__main__":
 	print('Libraries successfully loaded...')
 
 	window = AppInitWindow(App, software_location=software_location)
+	center_window(window)
 
 	if splash:
 		splash.finish(window)

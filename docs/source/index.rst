@@ -20,7 +20,7 @@ Contents
 --------
 
 .. toctree::
-   :caption: Basics:
+   :caption: Introduction:
 
    overview
    get-started
@@ -39,6 +39,7 @@ Contents
 
    how-to-guides/basics/index
    how-to-guides/advanced/index
+   troubleshooting
 
 .. toctree::
    :caption: Explanation:
@@ -46,28 +47,20 @@ Contents
    concepts/data-organization
    concepts/population-specific-segmentation
    concepts/single-cell-event
+   concepts/survival
    concepts/neighborhood
 
 .. toctree::
-   :caption: Examples:
+   :caption: Tutorials:
    
    example_notebook
    adcc-example
    spreading-assay-example
-
-.. toctree::
-   :caption: Help:
-
-   troubleshooting
-
    
 .. toctree::
-   :caption: API Reference:
-   
+   :caption: Reference:
+
+   reference/glossary
    API
-
-.. toctree::
-   :caption: About:
-
    acknowledegments
    cite

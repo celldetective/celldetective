@@ -3,7 +3,7 @@ How to perform a model-free background correction
 
 This guide shows you how to sample a background model across multiple positions and correct your images. This guide is particularly applicable to label-free images such as brightfield and RICM.
 
-Reference keys: *background correction*
+Reference keys: :term:`background correction`
 
 Correction protocol
 ~~~~~~~~~~~~~~~~~~~

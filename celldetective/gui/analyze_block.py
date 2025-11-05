@@ -7,7 +7,7 @@ import os
 from celldetective.gui import Styles
 from glob import glob
 
-from celldetective.gui.gui_utils import generic_message
+from celldetective.gui.gui_utils import generic_message, center_window
 
 
 class AnalysisPanel(QFrame, Styles):
@@ -79,8 +79,9 @@ class AnalysisPanel(QFrame, Styles):
 		
 		self.check_for_tables()
 		if self.pop_exists:
-			self.configSurvival = ConfigSurvival(self)
-			self.configSurvival.show()
+			self.config_survival = ConfigSurvival(self)
+			self.config_survival.show()
+			center_window(self.config_survival)
 		else:
 			generic_message("No population table could be found... Abort...")
 			return None
@@ -89,8 +90,9 @@ class AnalysisPanel(QFrame, Styles):
 		
 		self.check_for_tables()
 		if self.pop_exists:
-			self.ConfigSignalPlot = ConfigSignalPlot(self)
-			self.ConfigSignalPlot.show()
+			self.config_signal_plot = ConfigSignalPlot(self)
+			self.config_signal_plot.show()
+			center_window(self.config_signal_plot)
 		else:
 			generic_message("No population table could be found... Abort...")
 			return None

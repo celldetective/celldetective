@@ -1,5 +1,9 @@
+from PyQt5.QtCore import QSize
+from fonticon_mdi6 import MDI6
+from superqt.fonticon import icon
+
 from natsort import natsorted
-from PyQt5.QtWidgets import QMessageBox
+from PyQt5.QtWidgets import QMessageBox, QWidget, QVBoxLayout
 from glob import glob
 from tifffile import imread, TiffFile
 import numpy as np
@@ -2712,6 +2716,8 @@ def control_segmentation_napari(position, prefix='Aligned', population="target",
 	def export_widget():
 		return export_annotation()
 
+	from celldetective.gui import Styles
+
 	stack, labels = locate_stack_and_labels(position, prefix=prefix, population=population)
 	output_folder = position + f'labels_{population}{os.sep}'
 	print(f"Shape of the loaded image stack: {stack.shape}...")
@@ -2719,8 +2725,16 @@ def control_segmentation_napari(position, prefix='Aligned', population="target",
 	viewer = napari.Viewer()
 	viewer.add_image(stack, channel_axis=-1, colormap=["gray"] * stack.shape[-1])
 	viewer.add_labels(labels.astype(int), name='segmentation', opacity=0.4)
-	viewer.window.add_dock_widget(save_widget, area='right')
-	viewer.window.add_dock_widget(export_widget, area='right')
+
+	button_container = QWidget()
+	layout = QVBoxLayout(button_container)
+	layout.setSpacing(10)
+	layout.addWidget(save_widget.native)
+	layout.addWidget(export_widget.native)
+	viewer.window.add_dock_widget(button_container, area='right')
+
+	save_widget.native.setStyleSheet(Styles().button_style_sheet)
+	export_widget.native.setStyleSheet(Styles().button_style_sheet)
 
 	def lock_controls(layer, widgets=(), locked=True):
 		qctrl = viewer.window.qt_viewer.controls.widgets[layer]

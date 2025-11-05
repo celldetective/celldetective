@@ -53,7 +53,6 @@ class ConfigSignalPlot(CelldetectiveWidget):
 		self.interpret_pos_location()
 
 		self.screen_height = self.parent_window.parent_window.parent_window.screen_height
-		center_window(self)
 		self.populate_widget()
 
 		if self.auto_close:

@@ -1,9 +1,11 @@
+.. _new-experiment-guide:
+
 How to create a new experiment
 ------------------------------
 
 This guide shows you how to create an experiment project and import your data. Learn more about the structure of an experiment project :doc:`here <data-organization>`.
 
-Reference keys: *experiment project*, *well*, *position*, *population*, *cell type*, *antibody*, *concentration*, *pharmaceutical agents*
+Reference keys: :term:`experiment project`, :term:`well`, :term:`position`, :term:`cell population`, *cell type*, *antibody*, *concentration*, *pharmaceutical agents*
 
 New project
 ~~~~~~~~~~~
@@ -23,13 +25,34 @@ New project
    - Prefix to find the image stack file. Leave blank if filenames have variable prefixes.
    - Image width/height in pixels.
 
+    .. figure:: ../../_static/new_exp1.png
+        :width: 60%
+        :align: center
+        :alt: static_class
+
+        Fill requested information.
+
 #. Select your channels and specify their index in the stack with the slider on the right side (0 is first, 1 is the second channel, etc). Use existing channels if appropriate. Else, create your own channel. Avoid spaces in the name.
 
 #. Select your cell population(s). If you have an immune cell population, select ``effectors``. If you have cancer cells, select ``targets``. Else create appropriate populations.
 
+    .. figure:: ../../_static/new_exp2.png
+        :width: 60%
+        :align: center
+        :alt: static_class
+
+        Example of a 5-channel and 3-population configuration.
+
 #. Submit.
 
 #. In the pop-up window, fill the information for each well (cell type, antibody, concentration, pharmaceutical agents). Fields can be left blank.
+
+    .. figure:: ../../_static/new_exp3.png
+        :width: 95%
+        :align: center
+        :alt: static_class
+
+        Example for a 6-well experiment with multiple biological conditions.
 
 #. After submitting:
 

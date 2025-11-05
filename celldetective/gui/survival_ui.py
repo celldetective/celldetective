@@ -46,7 +46,6 @@ class ConfigSurvival(CelldetectiveWidget):
 		#self.config_path = self.exp_dir + self.config_name
 
 		self.screen_height = self.parent_window.parent_window.parent_window.screen_height
-		center_window(self)
 
 		self.setMinimumWidth(350)
 		self.populate_widget()

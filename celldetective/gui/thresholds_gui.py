@@ -39,7 +39,6 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
         self.setMinimumWidth(int(0.8 * self.screen_width))
         self.setMinimumHeight(int(0.8 * self.screen_height))
         self.setWindowTitle("Threshold configuration wizard")
-        center_window(self)
 
         self._createActions()
         self._createMenuBar()

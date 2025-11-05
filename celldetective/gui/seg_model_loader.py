@@ -30,7 +30,6 @@ class SegmentationModelLoader(CelldetectiveWidget):
 		self.target_folder = f"segmentation_{self.mode}"
 		self.setWindowTitle('Upload model')
 		self.generate_content()
-		center_window(self)
 
 	def generate_content(self):
 
@@ -481,5 +480,6 @@ class SegmentationModelLoader(CelldetectiveWidget):
 		if self.parent_window.parent_window.current_stack is None:
 			return None
 		else:
-			self.ThreshWizard = ThresholdConfigWizard(self)
-			self.ThreshWizard.show()
+			self.thresh_wizard = ThresholdConfigWizard(self)
+			self.thresh_wizard.show()
+			center_window(self.thresh_wizard)
