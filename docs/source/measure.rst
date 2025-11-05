@@ -21,7 +21,7 @@ Options
 Background correction
 ~~~~~~~~~~~~~~~~~~~~~
 
-The background correction module allows you to correct the background intensity in a specific channel, 1) locally (``Local ``) or 2) over the field of view (``Field ``). In the ``Local `` mode, each cell is corrected one by one by the surrounding background intensity. You can estimate the background intensity level over any controlled distance. We provide a visualization tool for these background ROIs. You can measure 1) the mean or 2) the median intensity within the background ROI around each cell, which you can either 1) divide or 2) subtract from the intensity of the cell. 
+The background correction module allows you to correct the background intensity in a specific channel, 1) locally ( ``Local `` ) or 2) over the field of view ( ``Field `` ). In the ``Local`` mode, each cell is corrected one by one by the surrounding background intensity. You can estimate the background intensity level over any controlled distance. We provide a visualization tool for these background ROIs. You can measure 1) the mean or 2) the median intensity within the background ROI around each cell, which you can either 1) divide or 2) subtract from the intensity of the cell.
 
 .. figure:: _static/local_correction.png
     :align: center

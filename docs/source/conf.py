@@ -43,6 +43,8 @@ extensions = [
     "sphinxcontrib.jquery",
 ]
 
+autosummary_generate = True
+
 hoverxref_autoref = True
 hoverxref_roles = ['term']
 hoverxref_domains = ['std']

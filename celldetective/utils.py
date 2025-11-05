@@ -2818,6 +2818,7 @@ def download_url_to_file(url, dst, progress=True):
 		dst (string): Full path where object will be saved, e.g. `/tmp/temporary_file`
 		progress (bool, optional): whether or not to display a progress bar to stderr
 			Default: True
+
 	"""
 	file_size = None
 	import ssl

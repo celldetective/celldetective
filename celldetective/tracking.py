@@ -71,6 +71,7 @@ def track(labels, configuration=None, stack=None, spatial_calibration=1, feature
 
 	Examples
 	--------
+
 	>>> labels = np.array([[1, 1, 2, 2, 0, 0],
 						   [1, 1, 1, 2, 2, 0],
 						   [0, 0, 1, 2, 0, 0]])
