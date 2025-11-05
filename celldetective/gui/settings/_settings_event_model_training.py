@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from PyQt5.QtWidgets import QMessageBox, QComboBox, QFrame, QCheckBox, QFileDialog, QGridLayout, QLineEdit, QVBoxLayout, QLabel, QHBoxLayout, QPushButton
 from PyQt5.QtCore import Qt, QSize
 from celldetective.gui.layouts import ChannelNormGenerator
@@ -362,7 +364,7 @@ class SettingsEventDetectionModelTraining(CelldetectiveSettingsPanel):
 
 		self.pretrained_model = QFileDialog.getExistingDirectory(
 						self, "Open Directory",
-						os.sep.join([self.soft_path,'celldetective','models','signal_detection','']),
+						os.sep.join([self._software_path,'celldetective','models','signal_detection','']),
 						QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks,
 						)
 
@@ -371,10 +373,10 @@ class SettingsEventDetectionModelTraining(CelldetectiveSettingsPanel):
 			subfiles = glob(os.sep.join([self.pretrained_model,"*"]))
 			if os.sep.join([self.pretrained_model,"config_input.json"]) in subfiles:
 				self.load_pretrained_config()
-				self.pretrained_lbl.setText(self.pretrained_model.split(os.sep)[-1])
+				self.pretrained_lbl.setText(Path(self.pretrained_model).name)
 				self.cancel_pretrained.setVisible(True)
 				self.recompile_option.setEnabled(True)
-				self.modelname_le.setText(f"{self.pretrained_model.split(os.sep)[-1]}_{datetime.today().strftime('%Y-%m-%d')}")
+				self.modelname_le.setText(f"{Path(self.pretrained_model).name}_{datetime.today().strftime('%Y-%m-%d')}")
 			else:
 				self.pretrained_model = None
 				self.pretrained_lbl.setText('No folder chosen')	
@@ -519,6 +521,7 @@ class SettingsEventDetectionModelTraining(CelldetectiveSettingsPanel):
 		'learning_rate': lr, 'batch_size': bs, 'epochs': epochs, 'label': self.class_name_le.text(), 'neighborhood_of_interest': self.current_neighborhood, 'reference_population': self.reference_population, 'neighbor_population': self.neighbor_population}
 
 		model_folder = self.signal_models_dir +os.sep+ model_name + os.sep
+		print(f"{self.signal_models_dir=} {model_name=}")
 		if not os.path.exists(model_folder):
 			os.mkdir(model_folder)
 
