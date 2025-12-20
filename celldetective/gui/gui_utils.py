@@ -9,9 +9,7 @@ from celldetective.gui import Styles, CelldetectiveWidget
 from superqt.fonticon import icon
 from fonticon_mdi6 import MDI6
 
-from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
-from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT
-import matplotlib.pyplot as plt
+
 
 from celldetective.utils import get_software_location
 
@@ -1000,9 +998,11 @@ class FigureCanvas(CelldetectiveWidget):
 		super().__init__()
 		self.fig = fig
 		self.setWindowTitle(title)
+		from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
 		self.canvas = FigureCanvasQTAgg(self.fig)
 		self.canvas.setStyleSheet("background-color: transparent;")
 		if interactive:
+			from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT
 			self.toolbar = NavigationToolbar2QT(self.canvas)
 		self.layout = QVBoxLayout(self)
 		self.layout.addWidget(self.canvas,90)
@@ -1016,6 +1016,12 @@ class FigureCanvas(CelldetectiveWidget):
 		
 		super().resizeEvent(event)
 		try:
+			# Check if layout engine is explicitly disabled (set to None)
+			# If so, do NOT force tight_layout, as it overrides manual/gridspec layout
+			if hasattr(self.fig, 'get_layout_engine'):
+				if self.fig.get_layout_engine() is None:
+					return
+			
 			self.fig.tight_layout()
 		except:
 			pass
@@ -1027,6 +1033,7 @@ class FigureCanvas(CelldetectiveWidget):
 		""" Delete figure on closing window. """
 		# self.canvas.ax.cla() # ****
 		self.fig.clf()  # ****
+		import matplotlib.pyplot as plt
 		plt.close(self.fig)
 		super(FigureCanvas, self).closeEvent(event)
 
@@ -1224,6 +1231,7 @@ def color_from_state(state, recently_modified=False):
 		elif value==99:
 			color_map[value] = 'k'
 		else:
+			import matplotlib.pyplot as plt
 			color_map[value] = plt.cm.tab20(value/20.0)
 
 	return color_map

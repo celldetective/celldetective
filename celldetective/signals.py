@@ -34,6 +34,8 @@ import math
 import pandas as pd
 from pandas.api.types import is_numeric_dtype
 from scipy.stats import median_abs_deviation
+import logging
+logger = logging.getLogger("celldetective")
 
 abs_path = os.sep.join([os.path.split(os.path.dirname(os.path.realpath(__file__)))[0],'celldetective'])
 
@@ -177,12 +179,12 @@ def analyze_signals(trajectories, model, interpolate_na=True,
 			third_priority_cols = [a for a in available_signals if s in a and not a.startswith(s)]
 			candidates = priority_cols + second_priority_cols + third_priority_cols
 			assert len(candidates)>0,f'No signal matches with the requirements of the model {required_signals}. Please pass the signals manually with the argument selected_signals or add measurements. Abort.'
-			print(f"Selecting the first time series among: {candidates} for input requirement {s}...")
+			logger.info(f"Selecting the first time series among: {candidates} for input requirement {s}...")
 			selected_signals.append(candidates[0])
 	else:
 		assert len(selected_signals)==len(required_signals),f'Mismatch between the number of required signals {required_signals} and the provided signals {selected_signals}... Abort.'
 
-	print(f'The following channels will be passed to the model: {selected_signals}')
+	logger.info(f'The following channels will be passed to the model: {selected_signals}')
 	trajectories_clean = clean_trajectories(trajectories, interpolate_na=interpolate_na, interpolate_position_gaps=interpolate_na, column_labels=column_labels)
 
 	max_signal_size = int(trajectories_clean[column_labels['time']].max()) + 2
@@ -217,7 +219,7 @@ def analyze_signals(trajectories, model, interpolate_na=True,
 			indices = group.index
 			trajectories.loc[indices,class_col] = classes[i]
 			trajectories.loc[indices,time_col] = times_recast[i]
-		print('Done.')
+		logger.info('Done.')
 
 		for tid, group in trajectories.groupby(column_labels['track']):
 			
@@ -346,7 +348,7 @@ def analyze_pair_signals_at_position(pos, model, use_gpu=True, populations=['tar
 
 	# Need to identify expected reference / neighbor tables
 	model_path = locate_signal_model(model, pairs=True)
-	print(f'Looking for model in {model_path}...')
+	logger.info(f'Looking for model in {model_path}...')
 	complete_path = model_path
 	complete_path = rf"{complete_path}"
 	model_config_path = os.sep.join([complete_path, 'config_input.json'])
@@ -358,11 +360,11 @@ def analyze_pair_signals_at_position(pos, model, use_gpu=True, populations=['tar
 	neighbor_population = model_config_path['neighbor_population']
 
 	if dataframes[reference_population] is None:
-		print(f"No tabulated data can be found for the reference population ({reference_population})... Abort...")
+		logger.error(f"No tabulated data can be found for the reference population ({reference_population})... Abort...")
 		return None
 
 	if dataframes[neighbor_population] is None:
-		print(f"No tabulated data can be found for the neighbor population ({neighbor_population})... Abort...")
+		logger.error(f"No tabulated data can be found for the neighbor population ({neighbor_population})... Abort...")
 		return None
 
 	df = analyze_pair_signals(df_pairs, dataframes[reference_population], dataframes[neighbor_population], model=model)
@@ -376,7 +378,7 @@ def analyze_pair_signals(trajectories_pairs,trajectories_reference,trajectories_
 						model_path=None, plot_outcome=False, output_dir=None, column_labels = {'track': "TRACK_ID", 'time': 'FRAME', 'x': 'POSITION_X', 'y': 'POSITION_Y'}):
 
 	model_path = locate_signal_model(model, path=model_path, pairs=True)
-	print(f'Looking for model in {model_path}...')
+	logger.info(f'Looking for model in {model_path}...')
 	complete_path = model_path
 	complete_path = rf"{complete_path}"
 	model_config_path = os.sep.join([complete_path, 'config_input.json'])
@@ -414,7 +416,7 @@ def analyze_pair_signals(trajectories_pairs,trajectories_reference,trajectories_
 		if is_numeric_dtype(trajectories_neighbors[col]):
 			available_signals.append(col)		
 
-	print('The available signals are : ', available_signals)
+	logger.info(f'The available signals are : {available_signals}')
 
 	f = open(model_config_path)
 	config = json.load(f)
@@ -431,14 +433,14 @@ def analyze_pair_signals(trajectories_pairs,trajectories_reference,trajectories_
 		selected_signals = []
 		for s in required_signals:
 			pattern_test = [s in a or s==a for a in available_signals]
-			print(f'Pattern test for signal {s}: ', pattern_test)
+			logger.debug(f'Pattern test for signal {s}: {pattern_test}')
 			assert np.any(pattern_test),f'No signal matches with the requirements of the model {required_signals}. Please pass the signals manually with the argument selected_signals or add measurements. Abort.'
 			valid_columns = np.array(available_signals)[np.array(pattern_test)]
 			if len(valid_columns)==1:
 				selected_signals.append(valid_columns[0])
 			else:
 				#print(test_number_of_nan(trajectories, valid_columns))
-				print(f'Found several candidate signals: {valid_columns}')
+				logger.warning(f'Found several candidate signals: {valid_columns}')
 				for vc in natsorted(valid_columns):
 					if 'circle' in vc:
 						selected_signals.append(vc)
@@ -450,16 +452,16 @@ def analyze_pair_signals(trajectories_pairs,trajectories_reference,trajectories_
 	else:
 		assert len(selected_signals)==len(required_signals),f'Mismatch between the number of required signals {required_signals} and the provided signals {selected_signals}... Abort.'
 
-	print(f'The following channels will be passed to the model: {selected_signals}')
+	logger.info(f'The following channels will be passed to the model: {selected_signals}')
 	trajectories_reference_clean = interpolate_nan_properties(trajectories_reference, track_label=reference_groupby_cols)
 	trajectories_neighbors_clean = interpolate_nan_properties(trajectories_neighbors, track_label=neighbor_groupby_cols)
 	trajectories_pairs_clean = interpolate_nan_properties(trajectories_pairs, track_label=pair_groupby_cols)
-	print(f'{trajectories_pairs_clean.columns=}')
+	logger.debug(f'{trajectories_pairs_clean.columns=}')
 	
 	max_signal_size = int(trajectories_pairs_clean['pair_FRAME'].max()) + 2
 	pair_tracks =  trajectories_pairs_clean.groupby(pair_groupby_cols).size()
 	signals = np.zeros((len(pair_tracks),max_signal_size, len(selected_signals)))
-	print(f'{max_signal_size=} {len(pair_tracks)=} {signals.shape=}')
+	logger.debug(f'{max_signal_size=} {len(pair_tracks)=} {signals.shape=}')
 	
 	for i,(pair,group) in enumerate(trajectories_pairs_clean.groupby(pair_groupby_cols)):
 
@@ -497,7 +499,7 @@ def analyze_pair_signals(trajectories_pairs,trajectories_reference,trajectories_
 
 
 	model = SignalDetectionModel(pretrained=complete_path)
-	print('signal shape: ', signals.shape)
+	logger.info(f'signal shape: {signals.shape}')
 
 	classes = model.predict_class(signals)
 	times_recast = model.predict_time_of_interest(signals)
@@ -515,7 +517,7 @@ def analyze_pair_signals(trajectories_pairs,trajectories_reference,trajectories_
 		indices = group.index
 		trajectories_pairs.loc[indices,class_col] = classes[i]
 		trajectories_pairs.loc[indices,time_col] = times_recast[i]
-	print('Done.')
+	logger.info('Done.')
 
 	# At the end rename cols again
 	trajectories_pairs = trajectories_pairs.rename(columns=lambda x: x.replace('pair_',''))
@@ -602,7 +604,7 @@ class SignalDetectionModel(object):
 
 	
 	def __init__(self, path=None, pretrained=None, channel_option=["live_nuclei_channel"], model_signal_length=128, n_channels=1, 
-				n_conv=2, n_classes=3, dense_collection=512, dropout_rate=0.1, label=''):
+				n_conv=2, n_classes=3, dense_collection=512, dropout_rate=0.1, label='', kernel_size=7):
 		
 		self.prep_gpu()
 
@@ -615,20 +617,21 @@ class SignalDetectionModel(object):
 		self.dense_collection = dense_collection
 		self.dropout_rate = dropout_rate
 		self.label = label
+		self.kernel_size = kernel_size
 		self.show_plots = True
 
 
 		if self.pretrained is not None:
-			print(f"Load pretrained models from {pretrained}...")
+			logger.info(f"Load pretrained models from {pretrained}...")
 			test = self.load_pretrained_model()
 			if test is None:
 				self.pretrained = None
-				print('Pretrained model could not be loaded. Check the log for error. Abort...')
+				logger.error('Pretrained model could not be loaded. Check the log for error. Abort...')
 				return None
 		else:
-			print("Create models from scratch...")
+			logger.info("Create models from scratch...")
 			self.create_models_from_scratch()
-			print("Models successfully created.")
+			logger.info("Models successfully created.")
 
 	
 	def load_pretrained_model(self):
@@ -659,17 +662,17 @@ class SignalDetectionModel(object):
 			self.model_class = load_model(os.sep.join([self.pretrained,"classifier.h5"]),compile=False, custom_objects={"mse": MeanSquaredError()})
 			self.model_class.load_weights(os.sep.join([self.pretrained,"classifier.h5"]))
 			self.model_class = self.freeze_encoder(self.model_class, 5)
-			print("Classifier successfully loaded...")
+			logger.info("Classifier successfully loaded...")
 		except Exception as e:
-			print(f"Error {e}...")
+			logger.error(f"Error {e}...")
 			self.model_class = None
 		try:
 			self.model_reg = load_model(os.sep.join([self.pretrained,"regressor.h5"]),compile=False, custom_objects={"mse": MeanSquaredError()})
 			self.model_reg.load_weights(os.sep.join([self.pretrained,"regressor.h5"]))
 			self.model_reg = self.freeze_encoder(self.model_reg, 5)
-			print("Regressor successfully loaded...")
+			logger.info("Regressor successfully loaded...")
 		except Exception as e:
-			print(f"Error {e}...")
+			logger.error(f"Error {e}...")
 			self.model_reg = None
 
 		if self.model_class is None and self.model_reg is None:
@@ -680,7 +683,7 @@ class SignalDetectionModel(object):
 			model_config = json.load(config_file)
 
 		req_channels = model_config["channels"]
-		print(f"Required channels read from pretrained model: {req_channels}")
+		logger.info(f"Required channels read from pretrained model: {req_channels}")
 		self.channel_option = req_channels
 		if 'normalize' in model_config:
 			self.normalize = model_config['normalize']
@@ -706,7 +709,7 @@ class SignalDetectionModel(object):
 			model_class_input_shape = self.model_class.input_shape
 			model_reg_input_shape = self.model_reg.input_shape
 		except Exception as e:
-			print(e)		
+			logger.error(f"{e}")		
 
 		assert model_class_input_shape==model_reg_input_shape, f"mismatch between input shape of classification: {self.model_class.layers[0].input_shape[0]} and regression {self.model_reg.layers[0].input_shape[0]} models... Error."
 
@@ -738,7 +741,8 @@ class SignalDetectionModel(object):
 									dense_collection=self.dense_collection,
 									dropout_rate=self.dropout_rate, 
 									header="classifier", 
-									model_signal_length = self.model_signal_length
+									model_signal_length = self.model_signal_length,
+									kernel_size=self.kernel_size
 									)
 
 		self.model_reg = ResNetModelCurrent(n_channels=self.n_channels,
@@ -747,7 +751,8 @@ class SignalDetectionModel(object):
 									dense_collection=self.dense_collection,
 									dropout_rate=self.dropout_rate, 
 									header="regressor", 
-									model_signal_length = self.model_signal_length
+									model_signal_length = self.model_signal_length,
+									kernel_size=self.kernel_size
 									)
 
 	def prep_gpu(self):
@@ -775,7 +780,7 @@ class SignalDetectionModel(object):
 	def fit_from_directory(self, datasets, normalize=True, normalization_percentile=None, normalization_values = None, 
 						  normalization_clip = None, channel_option=["live_nuclei_channel"], model_name=None, target_directory=None, 
 						  augment=True, augmentation_factor=2, validation_split=0.20, test_split=0.0, batch_size = 64, epochs=300, 
-						  recompile_pretrained=False, learning_rate=0.01, loss_reg="mse", loss_class = CategoricalCrossentropy(from_logits=False), show_plots=True):
+						  recompile_pretrained=False, learning_rate=0.01, loss_reg="mse", loss_class = CategoricalCrossentropy(from_logits=False), show_plots=True, callbacks=[]):
 		
 		"""
 		Trains the model using data from specified directories.
@@ -870,11 +875,11 @@ class SignalDetectionModel(object):
 		print(f"Found {len(self.list_of_sets)} datasets...")
 
 		self.prepare_sets()
-		self.train_generic()
+		self.train_generic(callbacks=callbacks)
 
 	def fit(self, x_train, y_time_train, y_class_train, normalize=True, normalization_percentile=None, normalization_values = None, normalization_clip = None, pad=True, validation_data=None, test_data=None, channel_option=["live_nuclei_channel","dead_nuclei_channel"], model_name=None, 
 			target_directory=None, augment=True, augmentation_factor=3, validation_split=0.25, batch_size = 64, epochs=300,
-			recompile_pretrained=False, learning_rate=0.001, loss_reg="mse", loss_class = CategoricalCrossentropy(from_logits=False)):
+			recompile_pretrained=False, learning_rate=0.001, loss_reg="mse", loss_class = CategoricalCrossentropy(from_logits=False), callbacks=[]):
 
 		"""
 		Trains the model using provided datasets.
@@ -976,17 +981,24 @@ class SignalDetectionModel(object):
 		self.loss_reg = loss_reg
 		self.loss_class = loss_class
 
-		self.train_generic()
+		self.train_generic(callbacks=callbacks)
 
-	def train_generic(self):
+	def train_generic(self, callbacks=[]):
 		
 		if not os.path.exists(self.model_folder):
 			os.mkdir(self.model_folder)
 
-		self.train_classifier()
-		self.train_regressor()
+		self.train_classifier(callbacks=callbacks)
+		self.train_regressor(callbacks=callbacks)
 
-		config_input = {"channels": self.channel_option, "model_signal_length": self.model_signal_length, 'label': self.label, 'normalize': self.normalize, 'normalization_percentile': self.normalization_percentile, 'normalization_values': self.normalization_values, 'normalization_clip': self.normalization_clip}
+		config_input = {"channels": self.channel_option, 
+				  "model_signal_length": self.model_signal_length, 
+				  'label': self.label, 
+				  'normalize': self.normalize, 
+				  'normalization_percentile': self.normalization_percentile, 
+				  'normalization_values': self.normalization_values, 
+				  'normalization_clip': self.normalization_clip,
+				  'kernel_size': self.kernel_size}
 		json_string = json.dumps(config_input)
 		with open(os.sep.join([self.model_folder,"config_input.json"]), 'w') as outfile:
 			outfile.write(json_string)
@@ -1160,7 +1172,7 @@ class SignalDetectionModel(object):
 
 
 		
-	def train_classifier(self):
+	def train_classifier(self, callbacks=[]):
 
 		"""
 		Trains the classifier component of the model to predict event classes in signals.
@@ -1204,6 +1216,7 @@ class SignalDetectionModel(object):
 						  metrics=['accuracy', Precision(), Recall(),MeanIoU(num_classes=self.n_classes, name='iou', dtype=float, sparse_y_true=False, sparse_y_pred=False)])
 			
 		self.gather_callbacks("classifier")
+		self.cb += callbacks
 
 
 		# for i in range(30):
@@ -1305,7 +1318,7 @@ class SignalDetectionModel(object):
 			print("Validation set: ",classification_report(ground_truth,predictions))
 
 
-	def train_regressor(self):
+	def train_regressor(self, callbacks=[]):
 
 		"""
 		Trains the regressor component of the model to estimate the time of interest for events in signals.
@@ -1348,6 +1361,7 @@ class SignalDetectionModel(object):
 		
 			
 		self.gather_callbacks("regressor")
+		self.cb += callbacks
 
 		# Train on subset of data with event 
 
@@ -2159,11 +2173,10 @@ def augmenter(signal, time_of_interest, cclass, model_signal_length, time_shift=
 	return signal, time_of_interest/model_signal_length, cclass
 
 
-def residual_block1D(x, number_of_filters, kernel_size=8, match_filter_size=True, connection='identity'):
+def residual_block1D(x, number_of_filters, kernel_size=7, strides=1):
 
 	"""
-
-	Create a 1D residual block.
+	Create a 1D residual block (Pre-activation ResNet v2).
 
 	Parameters
 	----------
@@ -2171,62 +2184,41 @@ def residual_block1D(x, number_of_filters, kernel_size=8, match_filter_size=True
 		Input tensor.
 	number_of_filters : int
 		Number of filters in the convolutional layers.
-	match_filter_size : bool, optional
-		Whether to match the filter size of the skip connection to the output. Default is True.
+	kernel_size : int, optional
+		Kernel size for convolutions. Default is 7.
+	strides : int, optional
+		Strides for the first convolution in the block (for downsampling). Default is 1.
 
 	Returns
 	-------
 	Tensor
 		Output tensor of the residual block.
-
-	Notes
-	-----
-	This function creates a 1D residual block by performing the original mapping followed by adding a skip connection
-	and applying non-linear activation. The skip connection allows the gradient to flow directly to earlier layers and
-	helps mitigate the vanishing gradient problem. The residual block consists of three convolutional layers with
-	batch normalization and ReLU activation functions.
-
-	If `match_filter_size` is True, the skip connection is adjusted to have the same number of filters as the output.
-	Otherwise, the skip connection is kept as is.
-
-	Examples
-	--------
-	>>> inputs = Input(shape=(10, 3))
-	>>> x = residual_block1D(inputs, 64)
-	# Create a 1D residual block with 64 filters and apply it to the input tensor.
-	
 	"""
 
+	# Pre-activation: BN -> ReLU
+	x_bn = BatchNormalization()(x)
+	x_act = Activation("relu")(x_bn)
 
-	# Create skip connection
-	x_skip = x
+	# Convolution 1
+	x_conv = Conv1D(number_of_filters, kernel_size=kernel_size, strides=strides, padding="same")(x_act)
 
-	# Perform the original mapping
-	if connection=='identity':
-		x = Conv1D(number_of_filters, kernel_size=kernel_size, strides=1,padding="same")(x_skip)
-	elif connection=='projection':
-		x = ZeroPadding1D(padding=kernel_size//2)(x_skip)
-		x = Conv1D(number_of_filters, kernel_size=kernel_size, strides=2,padding="valid")(x)
-	x = BatchNormalization()(x)
-	x = Activation("relu")(x)
+	# BN -> ReLU
+	x_bn2 = BatchNormalization()(x_conv)
+	x_act2 = Activation("relu")(x_bn2)
 
-	x = Conv1D(number_of_filters, kernel_size=kernel_size, strides=1,padding="same")(x)
-	x = BatchNormalization()(x)
+	# Convolution 2
+	x_out = Conv1D(number_of_filters, kernel_size=kernel_size, strides=1, padding="same")(x_act2)
 
-	if match_filter_size and connection=='identity':
-		x_skip = Conv1D(number_of_filters, kernel_size=1, padding="same")(x_skip)
-	elif match_filter_size and connection=='projection':
-		x_skip = Conv1D(number_of_filters, kernel_size=1, strides=2, padding="valid")(x_skip)
+	# Shortcut connection
+	if strides > 1 or x.shape[-1] != number_of_filters:
+		# Projection shortcut
+		shortcut = Conv1D(number_of_filters, kernel_size=1, strides=strides, padding="same")(x)
+	else:
+		# Identity shortcut
+		shortcut = x
 
-
-	# Add the skip connection to the regular mapping
-	x = Add()([x, x_skip])
-
-	# Nonlinearly activate the result
-	x = Activation("relu")(x)
-
-	# Return the result
-	return x
+	# Add
+	return Add()([x_out, shortcut])
 
 
 def MultiscaleResNetModel(n_channels, n_classes = 3, dropout_rate=0, dense_collection=0, use_pooling=True,
@@ -2320,14 +2312,10 @@ def MultiscaleResNetModel(n_channels, n_classes = 3, dropout_rate=0, dense_colle
 	return model
 
 def ResNetModelCurrent(n_channels, n_slices, depth=2, use_pooling=True, n_classes = 3, dropout_rate=0.1, dense_collection=512,
-					   header="classifier", model_signal_length = 128):
+					   header="classifier", model_signal_length = 128, kernel_size=7):
 	
 	"""
-	Creates a ResNet-based model tailored for signal classification or regression tasks.
-
-	This function constructs a 1D ResNet architecture with specified parameters. The model can be configured
-	for either classification or regression tasks, determined by the `header` parameter. It consists of
-	configurable ResNet blocks, global average pooling, optional dense layers, and dropout for regularization.
+	Creates a ResNet-based model (ResNet v2) tailored for signal classification or regression tasks.
 
 	Parameters
 	----------
@@ -2338,7 +2326,7 @@ def ResNetModelCurrent(n_channels, n_slices, depth=2, use_pooling=True, n_classe
 	depth : int, optional
 		The depth of the network, i.e., how many times the number of filters is doubled. Default is 2.
 	use_pooling : bool, optional
-		Whether to use MaxPooling between ResNet blocks. Default is True.
+		Deprecated. Replaced by strided convolutions. Kept for API compatibility.
 	n_classes : int, optional
 		The number of classes for the classification task. Ignored for regression. Default is 3.
 	dropout_rate : float, optional
@@ -2349,25 +2337,13 @@ def ResNetModelCurrent(n_channels, n_slices, depth=2, use_pooling=True, n_classe
 		Specifies the task type: "classifier" for classification or "regressor" for regression. Default is "classifier".
 	model_signal_length : int, optional
 		The length of the input signal. Default is 128.
+	kernel_size : int, optional
+		Kernel size for convolutions. Default is 7.
 
 	Returns
 	-------
 	keras.Model
 		The constructed Keras model ready for training or inference.
-
-	Notes
-	-----
-	- The model uses Conv1D layers for signal processing and applies global average pooling before the final classification
-	  or regression layer.
-	- The choice of `final_activation` and `neurons_final` depends on the task: "softmax" and `n_classes` for classification,
-	  and "linear" and 1 for regression.
-	- This function relies on a custom `residual_block1D` function for constructing ResNet blocks.
-
-	Examples
-	--------
-	>>> model = ResNetModelCurrent(n_channels=1, n_slices=2, depth=2, use_pooling=True, n_classes=3, dropout_rate=0.1, dense_collection=512, header="classifier", model_signal_length=128)
-	# Creates a ResNet model configured for classification with 3 classes.
-
 	"""
 
 	if header=="classifier":
@@ -2380,25 +2356,43 @@ def ResNetModelCurrent(n_channels, n_slices, depth=2, use_pooling=True, n_classe
 		return None
 
 	inputs = Input(shape=(model_signal_length,n_channels,))
-	x2 = Conv1D(64, kernel_size=1,strides=1,padding='same')(inputs)
+	
+	# Initial Conv (Increased kernel size to 7)
+	x = Conv1D(64, kernel_size=kernel_size, strides=1, padding='same')(inputs)
 
 	n_filters = 64
 	for k in range(depth):
+		
+		# Double filters at each stage (except maybe the first?)
+		# Original logic: n_filters started at 64, doubled *after* the loop.
+		# Here we handle filter doubling and downsampling explicitly.
+		
+		stage_filters = n_filters * (2**k)
+
 		for i in range(n_slices):
-				x2 = residual_block1D(x2,n_filters,kernel_size=8)
-		n_filters *= 2
-		if use_pooling and k!=(depth-1):
-			x2 = MaxPooling1D()(x2)
+			
+			# Downsample at the beginning of a new stage (except the first stage)
+			if k > 0 and i == 0:
+				s = 2
+			else:
+				s = 1
 
-	x2 = GlobalAveragePooling1D()(x2)
+			x = residual_block1D(x, stage_filters, kernel_size=kernel_size, strides=s)
+
+
+	# Final Pre-activation before Pooling
+	x = BatchNormalization()(x)
+	x = Activation("relu")(x)
+
+	x = GlobalAveragePooling1D()(x)
 	if dense_collection>0:
-		x2 = Dense(dense_collection)(x2)
+		x = Dense(dense_collection)(x)
 	if dropout_rate>0:
-		x2 = Dropout(dropout_rate)(x2)
+		x = Dropout(dropout_rate)(x)
 
-	x2 = Dense(neurons_final,activation=final_activation,name=header)(x2)
-	model = Model(inputs, x2, name=header) 
-
+	x = Dense(neurons_final,activation=final_activation,name=header)(x)
+	model = Model(inputs, x, name=header) 
+	
 	return model
 
 

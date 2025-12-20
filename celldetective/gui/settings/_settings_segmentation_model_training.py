@@ -9,6 +9,8 @@ from fonticon_mdi6 import MDI6
 from celldetective.io import get_segmentation_datasets_list, locate_segmentation_dataset, get_segmentation_models_list
 from celldetective.segmentation import train_segmentation_model
 from celldetective.gui.layouts import CellposeParamsWidget
+from celldetective.gui.workers import ProgressWindow
+from celldetective.gui.processes.train_segmentation_model import TrainSegModelProcess
 import numpy as np
 import json
 import os
@@ -562,15 +564,16 @@ class SettingsSegmentationModelTraining(CelldetectiveSettingsPanel):
 		with open(model_folder+"training_instructions.json", 'w') as f:
 			json.dump(self.training_instructions, f, indent=4)
 		
-		# process_args = {"instructions": self.instructions, "use_gpu": self.use_gpu}
-		# self.job = ProgressWindow(TrainSegModelProcess, parent_window=self, title="Training", position_info=False, process_args=process_args)
-		# result = self.job.exec_()
-		# if result == QDialog.Accepted:
-		# 	pass
-		# elif result == QDialog.Rejected:
-		# 	return None		
 
-		train_segmentation_model(self.instructions, use_gpu=self.parent_window.parent_window.parent_window.use_gpu)
+		process_args = {"instructions": self.instructions, "use_gpu": self.use_gpu}
+		self.job = ProgressWindow(TrainSegModelProcess, parent_window=self, title="Training", position_info=False, process_args=process_args)
+		result = self.job.exec_()
+		if result == QDialog.Accepted:
+			pass
+		elif result == QDialog.Rejected:
+			return None		
+
+		#train_segmentation_model(self.instructions, use_gpu=self.parent_window.parent_window.parent_window.use_gpu)
 
 		self.parent_window.init_seg_model_list()
 		idx = self.parent_window.seg_model_list.findText(model_name)

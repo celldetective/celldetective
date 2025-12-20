@@ -9,11 +9,8 @@ import os
 from celldetective.io import get_config, get_experiment_wells, interpret_wells_and_positions, extract_well_name_and_number, get_positions_in_well, extract_position_name, get_position_movie_path, load_frames, auto_load_number_of_frames
 from celldetective.utils import interpolate_nan, estimate_unreliable_edge, unpad, config_section_to_dict, _extract_channel_indices_from_config, _extract_nbr_channels_from_config, _get_img_num_per_channel
 from celldetective.segmentation import filter_image, threshold_image
-from csbdeep.io import save_tiff_imagej_compatible
 from gc import collect
-from lmfit import Parameters, Model
-import tifffile.tifffile as tiff
-from scipy.ndimage import shift
+
 
 def estimate_background_per_condition(experiment, threshold_on_std=1, well_option='*', target_channel="channel_name", frame_range=[0,5], mode="timeseries", activation_protocol=[['gauss',2],['std',4]], show_progress_per_pos=False, show_progress_per_well=True, offset=None, fix_nan: bool = False):
 	
@@ -287,7 +284,7 @@ def correct_background_model_free(
 				len_movie_auto = auto_load_number_of_frames(stack_path)
 				if len_movie_auto is not None:
 					len_movie = len_movie_auto
-					img_num_channels = _get_img_num_per_channel(channel_indices, int(len_movie), nbr_channels)
+				img_num_channels = _get_img_num_per_channel(channel_indices, int(len_movie), nbr_channels)
 
 				corrected_stack = apply_background_to_stack(stack_path, 
 															background,
@@ -372,6 +369,10 @@ def apply_background_to_stack(stack_path, background, target_channel_index=0, nb
 	(44, 512, 512, 3)
 
 	"""
+	import os
+	import numpy as np
+	from .io import auto_load_number_of_frames, load_frames, save_tiff_imagej_compatible
+	from .utils import filter_image, estimate_unreliable_edge, threshold_image, interpolate_nan, unpad
 
 	if stack_length is None:
 		stack_length = auto_load_number_of_frames(stack_path)
@@ -587,6 +588,9 @@ def fit_plane(image, cell_masks=None, edge_exclusion=None):
 	--------
 	plane : The plane function used for fitting.
 	"""
+	import numpy as np
+	from .utils import unpad
+	from lmfit import Parameters, Model
 
 	data = np.empty(image.shape)
 	x = np.arange(0, image.shape[1])
@@ -623,7 +627,7 @@ def fit_plane(image, cell_masks=None, edge_exclusion=None):
 	return plane(xx, yy, **result.params)
 
 
-def fit_paraboloid(image, cell_masks=None, edge_exclusion=None):
+def fit_paraboloid(image, cell_masks=None, edge_exclusion=None, downsample=10):
 
 	"""
 	Fit a paraboloid to the given image data.
@@ -642,6 +646,9 @@ def fit_paraboloid(image, cell_masks=None, edge_exclusion=None):
 		will be excluded from the fitting process (default is None).
 	edge_exclusion : int, optional
 		The size of the edge to exclude from the fitting process (default is None).
+	downsample : int, optional
+		The downsampling factor to reduce the number of points used for fitting. 
+		Default is 10.
 
 	Returns
 	-------
@@ -654,11 +661,15 @@ def fit_paraboloid(image, cell_masks=None, edge_exclusion=None):
 	  the fitting process.
 	- The `edge_exclusion` parameter allows excluding edges of the specified size 
 	  from the fitting process to avoid boundary effects.
+	- Downsampling significantly speeds up the fitting process for large images 
+	  without compromising the accuracy of the low-frequency background estimate.
 
 	See Also
 	--------
 	paraboloid : The paraboloid function used for fitting.
 	"""
+
+	from lmfit import Parameters, Model
 
 	data = np.empty(image.shape)
 	x = np.arange(0, image.shape[1])
@@ -685,10 +696,22 @@ def fit_paraboloid(image, cell_masks=None, edge_exclusion=None):
 		weights = unpad(weights, edge_exclusion)
 		image = unpad(image, edge_exclusion)
 
-	result = model.fit(image,
-					   x=xx,
-					   y=yy,
-					   weights=weights,
+	# Downsample for faster fitting
+	if downsample > 1:
+		image_fit = image[::downsample, ::downsample]
+		xx_fit = xx[::downsample, ::downsample]
+		yy_fit = yy[::downsample, ::downsample]
+		weights_fit = weights[::downsample, ::downsample]
+	else:
+		image_fit = image
+		xx_fit = xx
+		yy_fit = yy
+		weights_fit = weights
+
+	result = model.fit(image_fit,
+					   x=xx_fit,
+					   y=yy_fit,
+					   weights=weights_fit,
 					   params=params, max_nfev=3000)
 
 	del model
@@ -716,6 +739,8 @@ def correct_background_model(
 						   activation_protocol=[['gauss',2],['std',4]],
 						   export_prefix='Corrected',
 						   return_stack = True,
+						   progress_callback=None,
+						   downsample=10,
 						   **kwargs,
 						   ):
 
@@ -824,6 +849,8 @@ def correct_background_model(
 														prefix=export_prefix,
 														activation_protocol=activation_protocol,
 														return_stacks = return_stacks,
+														progress_callback=progress_callback,
+														downsample=downsample
 													  )
 			print('Correction successful.')
 			if return_stacks:
@@ -847,6 +874,8 @@ def fit_and_apply_model_background_to_stack(stack_path,
 											activation_protocol=[['gauss',2],['std',4]], 
 											prefix="Corrected",
 											return_stacks=True,
+											progress_callback=None,
+											downsample=10
 											):
 
 	"""
@@ -905,6 +934,8 @@ def fit_and_apply_model_background_to_stack(stack_path,
 		return None
 	if stack_length_auto is not None:
 		stack_length = stack_length_auto
+	
+	import tifffile as tiff
 
 	corrected_stack = []
 
@@ -922,7 +953,7 @@ def fit_and_apply_model_background_to_stack(stack_path,
 				frames = load_frames(list(np.arange(i,(i+nbr_channels))), stack_path, normalize_input=False).astype(float)
 				target_img = frames[:,:,target_channel_index].copy()
 				
-				correction = field_correction(target_img, threshold=threshold_on_std, operation=operation, model=model, clip=clip, activation_protocol=activation_protocol)
+				correction = field_correction(target_img, threshold=threshold_on_std, operation=operation, model=model, clip=clip, activation_protocol=activation_protocol, downsample=downsample)
 				frames[:,:,target_channel_index] = correction.copy()
 
 				if return_stacks:
@@ -934,6 +965,9 @@ def fit_and_apply_model_background_to_stack(stack_path,
 				del target_img
 				del correction
 				collect()
+				
+				if progress_callback:
+					progress_callback()
 
 		if prefix is None:
 			os.replace(os.sep.join([path,newfile]), os.sep.join([path,file]))
@@ -943,7 +977,7 @@ def fit_and_apply_model_background_to_stack(stack_path,
 			frames = load_frames(list(np.arange(i,(i+nbr_channels))), stack_path, normalize_input=False).astype(float)
 			target_img = frames[:,:,target_channel_index].copy()
 			
-			correction = field_correction(target_img, threshold=threshold_on_std, operation=operation, model=model, clip=clip, activation_protocol=activation_protocol)
+			correction = field_correction(target_img, threshold=threshold_on_std, operation=operation, model=model, clip=clip, activation_protocol=activation_protocol, downsample=downsample)
 			frames[:,:,target_channel_index] = correction.copy()
 
 			corrected_stack.append(frames)
@@ -952,13 +986,16 @@ def fit_and_apply_model_background_to_stack(stack_path,
 			del target_img
 			del correction
 			collect()
+			
+			if progress_callback:
+				progress_callback()
 
 	if return_stacks:
 		return np.array(corrected_stack)
 	else:
 		return None
 
-def field_correction(img: np.ndarray, threshold: float = 1, operation: str = 'divide', model: str = 'paraboloid', clip: bool = False, return_bg: bool = False, activation_protocol: List[List] = [['gauss',2],['std',4]]):
+def field_correction(img: np.ndarray, threshold: float = 1, operation: str = 'divide', model: str = 'paraboloid', clip: bool = False, return_bg: bool = False, activation_protocol: List[List] = [['gauss',2],['std',4]], downsample: int = 10):
 	
 	"""
 	Apply field correction to an image.
@@ -1011,7 +1048,7 @@ def field_correction(img: np.ndarray, threshold: float = 1, operation: str = 'di
 	std_frame = filter_image(target_copy,filters=activation_protocol)
 	edge = estimate_unreliable_edge(activation_protocol)
 	mask = threshold_image(std_frame, threshold, np.inf, foreground_value=1, edge_exclusion=edge).astype(int)
-	background = fit_background_model(img, cell_masks=mask, model=model, edge_exclusion=edge)
+	background = fit_background_model(img, cell_masks=mask, model=model, edge_exclusion=edge, downsample=downsample)
 
 	if operation=="divide":
 		correction = np.divide(img, background, where=background==background)
@@ -1032,7 +1069,7 @@ def field_correction(img: np.ndarray, threshold: float = 1, operation: str = 'di
 	else:
 		return correction.copy()
 
-def fit_background_model(img, cell_masks=None, model='paraboloid', edge_exclusion=None):
+def fit_background_model(img, cell_masks=None, model='paraboloid', edge_exclusion=None, downsample=10):
 	
 	"""
 	Fit a background model to the given image.
@@ -1069,7 +1106,7 @@ def fit_background_model(img, cell_masks=None, model='paraboloid', edge_exclusio
 	"""
 
 	if model == "paraboloid":
-		bg = fit_paraboloid(img.astype(float), cell_masks=cell_masks, edge_exclusion=edge_exclusion).astype(float)
+		bg = fit_paraboloid(img.astype(float), cell_masks=cell_masks, edge_exclusion=edge_exclusion, downsample=downsample).astype(float)
 	elif model == "plane":
 		bg = fit_plane(img.astype(float), cell_masks=cell_masks, edge_exclusion=edge_exclusion).astype(float)
 

@@ -11,8 +11,6 @@ import numpy as np
 from celldetective.io import _view_on_napari, locate_labels, locate_stack, _view_on_napari, _check_label_dims, auto_correct_masks
 from celldetective.filters import * #rework this to give a name
 from celldetective.utils import interpolate_nan_multichannel,_rearrange_multichannel_frame, _fix_no_contrast, zoom_multiframes, _rescale_labels, rename_intensity_column, mask_edges, _prep_stardist_model, _prep_cellpose_model, estimate_unreliable_edge,_get_normalize_kwargs_from_config, _segment_image_with_stardist_model, _segment_image_with_cellpose_model
-from stardist import fill_label_holes
-from stardist.matching import matching
 
 import scipy.ndimage as ndi
 from skimage.segmentation import watershed
@@ -20,8 +18,11 @@ from skimage.feature import peak_local_max
 from skimage.measure import regionprops_table
 from skimage.exposure import match_histograms
 from scipy.ndimage import zoom
-import pandas as pd
+
 import subprocess
+import logging
+
+logger = logging.getLogger("celldetective")
 
 
 abs_path = os.sep.join([os.path.split(os.path.dirname(os.path.realpath(__file__)))[0],'celldetective'])
@@ -117,6 +118,10 @@ def segment(stack, model_name, channels=None, spatial_calibration=None, view_on_
 
 	elif model_type=='cellpose':
 		model, scale_model = _prep_cellpose_model(model_path.split('/')[-2], model_path, use_gpu=use_gpu, n_channels=len(required_channels), scale=scale)		
+
+	if model is None:
+		logger.error(f"Could not load model {model_name}. Aborting segmentation.")
+		return None
 
 	labels = []
 
@@ -351,7 +356,12 @@ def filter_on_property(labels, intensity_image=None, queries=None, channel_names
 	if intensity_image is not None:
 		props.extend(intensity_props)
 
+	if intensity_image is not None:
+		props.extend(intensity_props)
+
+	import pandas as pd
 	properties = pd.DataFrame(regionprops_table(labels, intensity_image=intensity_image, properties=props))
+
 	if channel_names is not None:
 		properties = rename_intensity_column(properties, channel_names)
 	properties['radial_distance'] = np.sqrt((properties['centroid-1'] - labels.shape[0]/2)**2 + (properties['centroid-0'] - labels.shape[1]/2)**2)
@@ -423,7 +433,11 @@ def apply_watershed(binary_image, coords, distance, fill_holes=True):
 	markers, _ = ndi.label(mask)
 	labels = watershed(-distance, markers, mask=binary_image)
 	if fill_holes:
-		labels = fill_label_holes(labels)
+		try:
+			from stardist import fill_label_holes
+			labels = fill_label_holes(labels)
+		except ImportError as ie:
+			logger.warning(f"Stardist not found, cannot fill holes... {ie}")
 	return labels
 
 def identify_markers_from_binary(binary_image, min_distance, footprint_size=20, footprint=None, return_edt=False):
@@ -733,6 +747,12 @@ def train_segmentation_model(config, use_gpu=True):
 def merge_instance_segmentation(labels, iou_matching_threshold=0.05, mode='OR'):
 
 	label_reference = labels[0]
+	try:
+		from stardist.matching import matching
+	except ImportError:
+		logger.warning("StarDist not installed. Cannot perform instance matching/merging...")
+		return label_reference
+
 	for i in range(1,len(labels)):
 
 		label_to_merge = labels[i]

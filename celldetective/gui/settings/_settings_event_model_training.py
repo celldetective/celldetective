@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from PyQt5.QtWidgets import QMessageBox, QComboBox, QFrame, QCheckBox, QFileDialog, QGridLayout, QLineEdit, QVBoxLayout, QLabel, QHBoxLayout, QPushButton
+from PyQt5.QtWidgets import QMessageBox, QDialog, QComboBox, QFrame, QCheckBox, QFileDialog, QGridLayout, QLineEdit, QVBoxLayout, QLabel, QHBoxLayout, QPushButton
 from PyQt5.QtCore import Qt, QSize
 from celldetective.gui.layouts import ChannelNormGenerator
 from superqt import QLabeledDoubleSlider, QLabeledSlider, QSearchableComboBox
@@ -58,6 +58,7 @@ class SettingsEventDetectionModelTraining(CelldetectiveSettingsPanel):
 		self._layout.addWidget(self.data_frame)
 		self._layout.addWidget(self.hyper_frame)
 		self._layout.addWidget(self.submit_btn)
+		self._layout.addWidget(self.warning_label)
 
 	def _create_widgets(self):
 
@@ -82,6 +83,11 @@ class SettingsEventDetectionModelTraining(CelldetectiveSettingsPanel):
 
 		self.submit_btn.setEnabled(False)
 		self.submit_btn.setText("Train")
+
+		self.warning_label = QLabel("")
+		self.warning_label.setStyleSheet("color: red; font-weight: bold;") 
+		self.warning_label.setAlignment(Qt.AlignCenter)
+		self.check_readiness()
 
 
 	def populate_hyper_frame(self):
@@ -208,6 +214,7 @@ class SettingsEventDetectionModelTraining(CelldetectiveSettingsPanel):
 		signal_datasets = ['--'] + available_datasets
 
 		self.dataset_cb.addItems(signal_datasets)
+		self.dataset_cb.currentTextChanged.connect(self.check_readiness)
 		include_dataset_layout.addWidget(self.dataset_cb, 70)
 		layout.addLayout(include_dataset_layout)
 
@@ -398,12 +405,16 @@ class SettingsEventDetectionModelTraining(CelldetectiveSettingsPanel):
 				print(f'found {len(subfiles)} files in folder')
 				self.data_folder_label.setText(self.dataset_folder[:16]+'...')
 				self.data_folder_label.setToolTip(self.dataset_folder)
+				self.data_folder_label.setToolTip(self.dataset_folder)
 				self.cancel_dataset.setVisible(True)
+				self.check_readiness()
 			else:
 				self.data_folder_label.setText('No folder chosen')
 				self.data_folder_label.setToolTip('')
 				self.dataset_folder = None
+				self.dataset_folder = None
 				self.cancel_dataset.setVisible(False)
+				self.check_readiness()
 
 	def clear_pretrained(self):
 		
@@ -418,12 +429,22 @@ class SettingsEventDetectionModelTraining(CelldetectiveSettingsPanel):
 		self.class_name_le.setText('')
 		self.modelname_le.setText(f"Untitled_model_{datetime.today().strftime('%Y-%m-%d')}")
 
+	def check_readiness(self):
+		if self.dataset_folder is None and self.dataset_cb.currentText() == '--':
+			self.submit_btn.setEnabled(False)
+			self.warning_label.setText("Please provide a dataset to train the model.")
+		else:
+			self.submit_btn.setEnabled(True)
+			self.warning_label.setText("")
+
 	def clear_dataset(self):
 
 		self.dataset_folder = None
 		self.data_folder_label.setText('No folder chosen')
 		self.data_folder_label.setToolTip('')
+		self.data_folder_label.setToolTip('')
 		self.cancel_dataset.setVisible(False)
+		self.check_readiness()
 
 
 	def load_pretrained_config(self):
@@ -531,16 +552,17 @@ class SettingsEventDetectionModelTraining(CelldetectiveSettingsPanel):
 		with open(model_folder+"training_instructions.json", 'w') as f:
 			json.dump(training_instructions, f, indent=4)
 		
-		# self.instructions = model_folder+"training_instructions.json"
-		# process_args = {"instructions": self.instructions} # "use_gpu": self.use_gpu
-		# self.job = ProgressWindow(TrainSignalModelProcess, parent_window=self, title="Training", position_info=False, process_args=process_args)
-		# result = self.job.exec_()
-		# if result == QDialog.Accepted:
-		# 	pass
-		# elif result == QDialog.Rejected:
-		# 	return None	
 
-		train_signal_model(model_folder+"training_instructions.json")
+		self.instructions = model_folder+"training_instructions.json"
+		process_args = {"instructions": self.instructions}
+		self.job = ProgressWindow(TrainSignalModelProcess, parent_window=self, title="Training", position_info=False, process_args=process_args)
+		result = self.job.exec_()
+		if result == QDialog.Accepted:
+			pass
+		elif result == QDialog.Rejected:
+			return None	
+
+		# train_signal_model(model_folder+"training_instructions.json")
 		self.parent_window.refresh_signal_models()
 	
 	def _load_previous_instructions(self):

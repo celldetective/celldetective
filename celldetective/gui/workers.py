@@ -124,6 +124,8 @@ class Runner(QRunnable):
 					break
 				elif data == "error":
 					self.signals.error.emit()
+				elif isinstance(data, str):
+					self.signals.update_time.emit(data)
 			except Exception as e:
 				print(e)
 				pass

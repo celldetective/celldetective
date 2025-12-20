@@ -2,6 +2,8 @@ import pandas as pd
 import numpy as np
 from tqdm import tqdm
 from sklearn.preprocessing import StandardScaler
+import logging
+logger = logging.getLogger("celldetective")
 
 from btrack.io.utils import localizations_to_objects
 from btrack import BayesianTracker
@@ -112,7 +114,7 @@ def track(labels, configuration=None, stack=None, spatial_calibration=1, feature
 			try:
 				columns.remove(tr)
 			except:
-				print(f'column {tr} could not be found...')
+				logger.warning(f'column {tr} could not be found...')
 
 		scaler = StandardScaler()
 		if columns:
@@ -121,7 +123,7 @@ def track(labels, configuration=None, stack=None, spatial_calibration=1, feature
 			df_temp = pd.DataFrame(x_scaled, columns=columns, index = objects.index)
 			objects[columns] = df_temp
 		else:
-			print('Warning: no features were passed to bTrack...')
+			logger.warning('Warning: no features were passed to bTrack...')
 
 		# 2) track the objects
 		new_btrack_objects = localizations_to_objects(objects)
@@ -156,18 +158,18 @@ def track(labels, configuration=None, stack=None, spatial_calibration=1, feature
 	else:
 		properties = None
 		graph = {}
-		print(f"{objects=} {objects.columns=}")
+		logger.debug(f"{objects=} {objects.columns=}")
 		objects = objects.rename(columns={"t": "frame"})
 		if search_range is not None and memory is not None:
 			data = tp.link(objects, search_range, memory=memory,link_strategy='auto')
 		else:
-			print('Please provide a valid search range and memory value...')
+			logger.error('Please provide a valid search range and memory value...')
 			return None
 		data['particle'] = data['particle'] + 1 # force track id to start at 1
 		df = data.rename(columns={'frame': column_labels['time'], 'x': column_labels['x'], 'y': column_labels['y'], 'particle': column_labels['track']})
 		df['state'] = 5.0; df['generation'] = 0.0; df['root'] = 1.0; df['parent'] = 1.0; df['dummy'] = False; df['z'] = 0.0;
 		data = df[[column_labels['track'],column_labels['time'],"z",column_labels['y'],column_labels['x']]].to_numpy()
-		print(f"{df=}")
+		logger.debug(f"{df=}")
 
 	if btrack_option:
 		df = df.merge(pd.DataFrame(properties),left_index=True, right_index=True)

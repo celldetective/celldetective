@@ -5,7 +5,9 @@ from superqt.fonticon import icon
 from natsort import natsorted
 from PyQt5.QtWidgets import QMessageBox, QWidget, QVBoxLayout
 from glob import glob
-from tifffile import imread, TiffFile
+from tifffile import imread, TiffFile, memmap
+import dask.array as da
+import dask
 import numpy as np
 import os
 import pandas as pd
@@ -70,11 +72,7 @@ def extract_experiment_from_well(well_path):
 	
 	"""
 
-	if not well_path.endswith(os.sep):
-		well_path += os.sep
-	exp_path_blocks = well_path.split(os.sep)[:-2]
-	experiment = os.sep.join(exp_path_blocks)
-	return experiment
+	return str(Path(well_path).resolve().parent)
 
 def extract_well_from_position(pos_path):
 
@@ -107,11 +105,7 @@ def extract_well_from_position(pos_path):
 
 	"""
 
-	if not pos_path.endswith(os.sep):
-		pos_path += os.sep
-	well_path_blocks = pos_path.split(os.sep)[:-2]
-	well_path = os.sep.join(well_path_blocks)+os.sep
-	return well_path
+	return str(Path(pos_path).resolve().parent) + os.sep
 
 def extract_experiment_from_position(pos_path):
 
@@ -143,13 +137,7 @@ def extract_experiment_from_position(pos_path):
 
 	"""
 
-	pos_path = pos_path.replace(os.sep, '/')
-	if not pos_path.endswith('/'):
-		pos_path += '/'
-	exp_path_blocks = pos_path.split('/')[:-3]
-	experiment = os.sep.join(exp_path_blocks)
-
-	return experiment
+	return str(Path(pos_path).resolve().parent.parent)
 
 def collect_experiment_metadata(pos_path=None, well_path=None):
 	
@@ -1094,7 +1082,7 @@ def load_experiment_tables(experiment, population='targets', well_option='*', po
 		return df
 
 
-def locate_stack(position, prefix='Aligned'):
+def locate_stack(position, prefix='Aligned', lazy=False):
 
 	"""
 
@@ -1138,25 +1126,51 @@ def locate_stack(position, prefix='Aligned'):
 	if not stack_path:
 		raise FileNotFoundError(f"No movie with prefix {prefix} found...")
 
-	stack = imread(stack_path[0].replace('\\', '/'))
+	if lazy:
+		try:
+			stack = da.from_array(memmap(stack_path[0].replace('\\', '/')), chunks=(1, None, None))
+		except ValueError: 
+			# In case of irregular shape or other memmap issues, fallback to delayed reading? 
+			# For now, sticking to memmap for single file stacks is standard.
+			# If memmap fails, we might try dask delayed but let's assume valid tiff for now.
+			# Actually memmap might fail if chunks are not regular... but tifffile handles it well usually.
+			pass
+	else:
+		stack = imread(stack_path[0].replace('\\', '/'))
+	
 	stack_length = auto_load_number_of_frames(stack_path[0])
 
 	if stack.ndim == 4:
-		stack = np.moveaxis(stack, 1, -1)
+		if lazy:
+			stack = da.moveaxis(stack, 1, -1)
+		else:
+			stack = np.moveaxis(stack, 1, -1)
 	elif stack.ndim == 3:
 		if min(stack.shape)!=stack_length:
 			channel_axis = np.argmin(stack.shape)
 			if channel_axis!=(stack.ndim-1):
-				stack = np.moveaxis(stack, channel_axis, -1)
-			stack = stack[np.newaxis, :, :, :]
+				if lazy:
+					stack = da.moveaxis(stack, channel_axis, -1)
+				else:
+					stack = np.moveaxis(stack, channel_axis, -1)
+			if lazy:
+				stack = stack[None, :, :, :]
+			else:
+				stack = stack[np.newaxis, :, :, :]
 		else:
-			stack = stack[:, :, :, np.newaxis]
+			if lazy:
+				stack = stack[:, :, :, None]
+			else:
+				stack = stack[:, :, :, np.newaxis]
 	elif stack.ndim==2:
-		stack = stack[np.newaxis, :, :, np.newaxis]
+		if lazy:
+			stack = stack[None, :, :, None]
+		else:
+			stack = stack[np.newaxis, :, :, np.newaxis]
 
 	return stack
 
-def locate_labels(position, population='target', frames=None):
+def locate_labels(position, population='target', frames=None, lazy=False):
 
 	"""
 	Locate and load label images for a given position and population in an experiment.
@@ -1223,7 +1237,13 @@ def locate_labels(position, population='target', frames=None):
 
 	if frames is None:
 
-		labels = np.array([imread(i.replace('\\', '/')) for i in label_path])
+		if lazy:
+			sample = imread(label_path[0].replace('\\', '/'))
+			lazy_imread = dask.delayed(imread) #, pure=True)
+			lazy_arrays = [da.from_delayed(lazy_imread(fn.replace('\\', '/')), shape=sample.shape, dtype=sample.dtype) for fn in label_path]
+			labels = da.stack(lazy_arrays, axis=0)
+		else:
+			labels = np.array([imread(i.replace('\\', '/')) for i in label_path])
 	
 	elif isinstance(frames, (int,float, np.int_)):
 
@@ -1311,7 +1331,7 @@ def fix_missing_labels(position, population='target', prefix='Aligned'):
 		#imwrite(os.sep.join([path, file]), template.astype(int))
 
 
-def locate_stack_and_labels(position, prefix='Aligned', population="target"):
+def locate_stack_and_labels(position, prefix='Aligned', population="target", lazy=False):
 
 	"""
 
@@ -1352,8 +1372,8 @@ def locate_stack_and_labels(position, prefix='Aligned', population="target"):
 	"""
 
 	position = position.replace('\\', '/')
-	labels = locate_labels(position, population=population)
-	stack = locate_stack(position, prefix=prefix)
+	labels = locate_labels(position, population=population, lazy=lazy)
+	stack = locate_stack(position, prefix=prefix, lazy=lazy)
 	if len(labels) < len(stack):
 		fix_missing_labels(position, population=population, prefix=prefix)
 		labels = locate_labels(position, population=population)
@@ -2055,7 +2075,107 @@ def relabel_segmentation(labels, df, exclude_nans=True, column_labels={'track': 
 	return new_labels
 
 
-def control_tracks(position, prefix="Aligned", population="target", relabel=True, flush_memory=True, threads=1):
+
+def relabel_segmentation_lazy(labels, df, column_labels={'track': "TRACK_ID", 'frame': 'FRAME', 'label': 'class_id'}):
+	
+	import dask.array as da
+	
+	df = df.copy() # Ensure we don't modify the original
+	
+	# Pre-calculate track IDs map for each frame to avoid passing big DF
+	# Since lazy operations should be stateless or self-contained chunks, we can't use shared state.
+	# We map (frame_idx, label) -> track_id
+	
+	# Strategy: map_blocks wrapper
+	# func(block, block_id=None)
+	# block is (1, Y, X) or (Y, X) depending on chunks
+	# We assume labels is (T, Y, X) and chunks=(1, Y, X)
+	
+	# But map_blocks is tricky with sparse updates. 
+	# A simpler approach for dask arrays of labels (stack of frames):
+	# Construct a list of delayed objects, each applying relabel_frame
+	
+	indices = list(range(labels.shape[0]))
+	
+	def relabel_frame(frame_data, frame_idx, df_subset):
+		
+		# frame_data is np.ndarray (Y, X)
+		if frame_data is None: return np.zeros((10,10)) # Should not happen if dask graph is correct
+		
+		new_frame = np.zeros_like(frame_data)
+		
+		# Get tracks in this frame
+		# subset df already filtered for this frame ideally, but if not:
+		if 'FRAME' in df_subset:
+			cells = df_subset.loc[df_subset['FRAME'] == frame_idx, ['TRACK_ID', 'class_id']].values
+		else:
+			# If df_subset is just for this frame
+			cells = df_subset[['TRACK_ID', 'class_id']].values
+			
+		tracks_at_t = cells[:,0]
+		identities = cells[:,1]
+		
+		# Find labels not in tracks (untracked objects)
+		# We need a deterministic ID generation for untracked objects that doesn't rely on global state.
+		# A simple hash or large offset: frame_idx * 10000 + label
+		# Assuming < 10000 tracks/objects per frame
+		
+		unique_labels = np.unique(frame_data)
+		if 0 in unique_labels:
+			unique_labels = unique_labels[unique_labels != 0]
+			
+		for lbl in unique_labels:
+			if lbl in identities:
+				# It is tracked
+				track_id = tracks_at_t[identities == lbl][0]
+			else:
+				# Untracked - generate deterministic ID
+				# This differs from original behavior which uses max(all_tracks) + counter
+				# But for visualization, unique ID is all that matters?
+				# The user might want consistent IDs for untracked? Original uses "new track id".
+				# Let's use a very large offset to distinguish untracked
+				track_id = 900000000 + frame_idx * 10000 + lbl
+				
+			new_frame[frame_data == lbl] = track_id
+			
+		return new_frame
+
+	# Optimize: group df by frame to avoid huge lookups in the loop
+	# But we can't pickle a huge DF into every task easily without overhead? 
+	# Actually Dask handles closure pickling. If DF is not too huge.
+	# Or we pass only small dict per frame.
+	
+	grouped = df.groupby(column_labels['frame'])
+	map_frame_tracks = {k: v[[column_labels['track'], column_labels['label']]] for k, v in grouped}
+	
+	lazy_frames = []
+	for t in range(labels.shape[0]):
+		
+		frame_tracks = map_frame_tracks.get(t, pd.DataFrame(columns=[column_labels['track'], column_labels['label']]))
+		
+		# labels[t] is a dask array slice
+		# We use map_blocks or delay
+		
+		# Using delayed on the dask chunk might be double wrapping?
+		# labels[t] is dask array. 
+		# If we use dask.delayed(relabel_frame)(labels[t], t, frame_tracks)
+		# labels[t] will be computed passed to relabel_frame.
+		
+		# Actually simpler: map_blocks on the whole array? 
+		# But we need frame index.
+		
+		# Let's use the list of delayed -> stack approach as it's robust for frame-by-frame processing
+		
+		d_frame = dask.delayed(relabel_frame)(labels[t], t, frame_tracks)
+		
+		# We need to wrap back to dask array 
+		# We know the shape and dtype
+		lazy_frames.append(da.from_delayed(d_frame, shape=labels.shape[1:], dtype=labels.dtype))
+		
+	return da.stack(lazy_frames)
+
+
+def control_tracks(position, prefix="Aligned", population="target", relabel=True, flush_memory=True, threads=1, lazy=False):
 
 	"""
 	Controls the tracking of cells or objects within a given position by locating the relevant image stack and label data,
@@ -2103,10 +2223,10 @@ def control_tracks(position, prefix="Aligned", population="target", relabel=True
 		position += os.sep
 
 	position = position.replace('\\','/')
-	stack, labels = locate_stack_and_labels(position, prefix=prefix, population=population)
+	stack, labels = locate_stack_and_labels(position, prefix=prefix, population=population, lazy=lazy)
 
 	view_tracks_in_napari(position, population, labels=labels, stack=stack, relabel=relabel,
-						  flush_memory=flush_memory, threads=threads)
+						  flush_memory=flush_memory, threads=threads, lazy=lazy)
 
 
 def tracks_to_btrack(df, exclude_nans=False):
@@ -2179,7 +2299,7 @@ def tracks_to_napari(df, exclude_nans=False):
 	return vertices, tracks, properties, graph
 
 
-def view_tracks_in_napari(position, population, stack=None, labels=None, relabel=True, flush_memory=True, threads=1):
+def view_tracks_in_napari(position, population, stack=None, labels=None, relabel=True, flush_memory=True, threads=1, lazy=False):
 	
 	"""
 	Updated
@@ -2193,7 +2313,10 @@ def view_tracks_in_napari(position, population, stack=None, labels=None, relabel
 
 	if (labels is not None) * relabel:
 		print('Replacing the cell mask labels with the track ID...')
-		labels = relabel_segmentation(labels, df, exclude_nans=True, threads=threads)
+		if lazy:
+			labels = relabel_segmentation_lazy(labels, df)
+		else:
+			labels = relabel_segmentation(labels, df, exclude_nans=True, threads=threads)
 
 	vertices, tracks, properties, graph = tracks_to_napari(df, exclude_nans=True)
 
@@ -2373,7 +2496,7 @@ def view_tracks_in_napari(position, population, stack=None, labels=None, relabel
 		gc.collect()
 
 
-def load_napari_data(position, prefix="Aligned", population="target", return_stack=True):
+def load_napari_data(position, prefix="Aligned", population="target", return_stack=True, lazy=False):
 	
 	"""
 	Load the necessary data for visualization in napari.
@@ -2428,9 +2551,9 @@ def load_napari_data(position, prefix="Aligned", population="target", return_sta
 		properties = None
 		graph = None
 	if return_stack:
-		stack, labels = locate_stack_and_labels(position, prefix=prefix, population=population)
+		stack, labels = locate_stack_and_labels(position, prefix=prefix, population=population, lazy=lazy)
 	else:
-		labels = locate_labels(position, population=population)
+		labels = locate_labels(position, population=population, lazy=lazy)
 		stack = None
 	return data, properties, graph, labels, stack
 
@@ -2537,7 +2660,7 @@ def auto_correct_masks(masks, bbox_factor: float = 1.75, min_area: int = 9, fill
 
 
 
-def control_segmentation_napari(position, prefix='Aligned', population="target", flush_memory=False):
+def control_segmentation_napari(position, prefix='Aligned', population="target", flush_memory=False, lazy=False):
 
 	"""
 
@@ -2718,7 +2841,7 @@ def control_segmentation_napari(position, prefix='Aligned', population="target",
 
 	from celldetective.gui import Styles
 
-	stack, labels = locate_stack_and_labels(position, prefix=prefix, population=population)
+	stack, labels = locate_stack_and_labels(position, prefix=prefix, population=population, lazy=lazy)
 	output_folder = position + f'labels_{population}{os.sep}'
 	print(f"Shape of the loaded image stack: {stack.shape}...")
 

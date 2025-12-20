@@ -13,3 +13,9 @@ from .process_block import ProcessPanel, NeighPanel, PreprocessingPanel
 from .analyze_block import AnalysisPanel
 from .control_panel import ControlPanel
 from .configure_new_exp import ConfigNewExperiment
+
+def __getattr__(name):
+	if name == 'SegmentationModelLoader':
+		from . import seg_model_loader
+		return seg_model_loader.SegmentationModelLoader
+	raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

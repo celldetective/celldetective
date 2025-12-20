@@ -1,6 +1,6 @@
 from PyQt5.QtWidgets import QDialog, QFrame, QGridLayout, QComboBox, QListWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout, QCheckBox, \
 	QMessageBox
-from PyQt5.QtCore import Qt, QSize
+from PyQt5.QtCore import Qt, QSize, QTimer
 from superqt.fonticon import icon
 from fonticon_mdi6 import MDI6
 import gc
@@ -39,6 +39,7 @@ from celldetective.gui.workers import ProgressWindow
 from celldetective.gui.processes.segment_cells import SegmentCellThresholdProcess, SegmentCellDLProcess
 from celldetective.gui.processes.track_cells import TrackingProcess
 from celldetective.gui.processes.measure_cells import MeasurementProcess
+from celldetective.gui.processes.background_correction import BackgroundCorrectionProcess
 
 class ProcessPanel(QFrame, Styles):
 	
@@ -136,6 +137,7 @@ class ProcessPanel(QFrame, Styles):
 			self.collapse_btn.setIcon(icon(MDI6.chevron_up, color="black"))
 			self.collapse_btn.setIconSize(QSize(20, 20))
 			self.parent_window.scroll.setMinimumHeight(min(int(930), int(0.9*self.parent_window.screen_height)))
+			QTimer.singleShot(10, lambda: center_window(self.window()))
 
 
 	# def help_population(self):
@@ -1174,6 +1176,7 @@ class NeighPanel(QFrame, Styles):
 			self.collapse_btn.setIcon(icon(MDI6.chevron_up,color="black"))
 			self.collapse_btn.setIconSize(QSize(20, 20))
 			self.parent_window.scroll.setMinimumHeight(min(int(1000), int(0.9*self.parent_window.screen_height)))
+			QTimer.singleShot(10, lambda: center_window(self.window()))
 
 
 	def populate_contents(self):
@@ -1674,6 +1677,7 @@ class PreprocessingPanel(QFrame, Styles):
 			self.collapse_btn.setIcon(icon(MDI6.chevron_up,color="black"))
 			self.collapse_btn.setIconSize(QSize(20, 20))
 			self.parent_window.scroll.setMinimumHeight(min(int(930), int(0.9*self.parent_window.screen_height)))
+			QTimer.singleShot(10, lambda: center_window(self.window()))
 
 	def populate_contents(self):
 
@@ -1783,17 +1787,28 @@ class PreprocessingPanel(QFrame, Styles):
 			
 			elif correction_protocol['correction_type']=='fit':
 				print(f'Fit correction; {movie_prefix=} {export_prefix=} {correction_protocol=}')
-				correct_background_model(self.exp_dir,
-								   well_option=well_option,
-								   position_option=position_option,
-								   export= True,
-								   return_stacks=False,
-								   show_progress_per_well = True,
-								   show_progress_per_pos = True,
-								   movie_prefix = movie_prefix,
-								   export_prefix = export_prefix,
-								   **correction_protocol,
-								)
+				
+				process_args = {
+					"exp_dir": self.exp_dir,
+					"well_option": well_option,
+					"position_option": position_option,
+					"export": True,
+					"return_stacks": False,
+					"movie_prefix": movie_prefix,
+					"export_prefix": export_prefix,
+					"activation_protocol": [['gauss',2],['std',4]],
+					**correction_protocol
+				}
+				
+				# Remove keys that might conflict or are handled specifically if needed
+				# BackgroundCorrectionProcess handles specific args and kwargs.
+				
+				self.job = ProgressWindow(BackgroundCorrectionProcess, parent_window=self, title="Background Correction", position_info=False, process_args=process_args)
+				result = self.job.exec_()
+				
+				if result == QDialog.Rejected:
+					print("Background correction cancelled.")
+					return None
 			elif correction_protocol['correction_type']=='offset':
 				print(f'Offset correction; {movie_prefix=} {export_prefix=} {correction_protocol=}')
 				correct_channel_offset(self.exp_dir,

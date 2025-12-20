@@ -17,8 +17,10 @@ from celldetective.gui.about import AboutWidget
 from celldetective.gui.gui_utils import center_window, generic_message
 from celldetective.gui.processes.downloader import DownloadProcess
 from celldetective.gui.workers import ProgressWindow
+from celldetective.gui.recorder import ActionReplayer
 from celldetective.io import correct_annotation, extract_well_name_and_number
 from celldetective.utils import download_zenodo_file, pretty_table
+from celldetective import logger
 
 
 class AppInitWindow(CelldetectiveMainWindow):
@@ -38,10 +40,10 @@ class AppInitWindow(CelldetectiveMainWindow):
 
 		try:
 			check_output('nvidia-smi')
-			print('NVIDIA GPU detected (activate or disable in Memory & Threads)...')
+			logger.info('NVIDIA GPU detected (activate or disable in Memory & Threads)...')
 			self.use_gpu = True
 		except Exception: # this command not being found can raise quite a few different errors depending on the configuration
-			print('No NVIDIA GPU detected...')
+			logger.info('No NVIDIA GPU detected...')
 			self.use_gpu = False
 
 		self.soft_path = software_location
@@ -124,6 +126,9 @@ class AppInitWindow(CelldetectiveMainWindow):
 
 		OptionsMenu = QMenu("Options", self)
 		OptionsMenu.addAction(self.MemoryAndThreadsAction)
+		OptionsMenu.addSeparator()
+		OptionsMenu.addAction(self.ReplaySessionAction)
+		OptionsMenu.addAction(self.OpenLogsAction)
 		menuBar.addMenu(OptionsMenu)
 
 		PluginsMenu = QMenu("Plugins", self)
@@ -156,6 +161,11 @@ class AppInitWindow(CelldetectiveMainWindow):
 
 		self.MemoryAndThreadsAction = QAction('Threads')
 
+		self.MemoryAndThreadsAction = QAction('Threads')
+		
+		self.ReplaySessionAction = QAction("Replay Session...", self)
+		self.OpenLogsAction = QAction("Open Session Logs", self)
+
 		self.CorrectAnnotationAction = QAction('Correct a segmentation annotation')
 
 		self.newExpAction = QAction('New', self)
@@ -184,6 +194,8 @@ class AppInitWindow(CelldetectiveMainWindow):
 		self.openModels.triggered.connect(self.open_models_folder)
 		self.AboutAction.triggered.connect(self.open_about_window)
 		self.MemoryAndThreadsAction.triggered.connect(self.set_memory_and_threads)
+		self.ReplaySessionAction.triggered.connect(self.replay_session)
+		self.OpenLogsAction.triggered.connect(self.open_session_logs)
 		self.CorrectAnnotationAction.triggered.connect(self.correct_seg_annotation)
 		self.DocumentationAction.triggered.connect(self.open_documentation)
 
@@ -225,16 +237,16 @@ class AppInitWindow(CelldetectiveMainWindow):
 
 		self.recentFileActs = []
 		self.threads_config_path = os.sep.join([self.soft_path,'celldetective','threads.json'])
-		print('Reading previous Memory & Threads settings...')
+		logger.info('Reading previous Memory & Threads settings...')
 		if os.path.exists(self.threads_config_path):
 			with open(self.threads_config_path, 'r') as f:
 				self.threads_config = json.load(f)
 			if 'use_gpu' in self.threads_config:
 				self.use_gpu = bool(self.threads_config['use_gpu'])
-				print(f'Use GPU: {self.use_gpu}...')
+				logger.info(f'Use GPU: {self.use_gpu}...')
 			if 'n_threads' in self.threads_config:
 				self.n_threads = int(self.threads_config['n_threads'])
-				print(f'Number of threads: {self.n_threads}...')
+				logger.info(f'Number of threads: {self.n_threads}...')
 
 
 	def reload_previous_experiments(self):
@@ -255,14 +267,14 @@ class AppInitWindow(CelldetectiveMainWindow):
 		
 		self.filename,_ = QFileDialog.getOpenFileName(self,"Open Image", "/home/", "TIF Files (*.tif)")
 		if self.filename!='':
-			print('Opening ',self.filename,' in napari...')
+			logger.info(f'Opening {self.filename} in napari...')
 			correct_annotation(self.filename)
 		else:
 			return None
 
 	def set_memory_and_threads(self):
 		
-		print('setting memory and threads')
+		logger.info('setting memory and threads')
 
 		self.ThreadsWidget = CelldetectiveWidget()
 		self.ThreadsWidget.setWindowTitle("Threads")
@@ -310,7 +322,7 @@ class AppInitWindow(CelldetectiveMainWindow):
 	def load_recent_exp(self, path):
 		
 		self.experiment_path_selection.setText(path)
-		print(f'Attempt to load experiment folder: {path}...')
+		logger.info(f'Attempt to load experiment folder: {path}...')
 		self.open_directory()
 
 	def open_about_window(self):
@@ -328,6 +340,31 @@ class AppInitWindow(CelldetectiveMainWindow):
 			Popen(f'explorer {os.path.realpath(path)}')
 		except:
 
+			try:
+				os.system('xdg-open "%s"' % path)
+			except:
+				return None
+
+	def replay_session(self):
+		path = os.path.join(os.path.expanduser("~"), ".celldetective", "sessions")
+		filename, _ = QFileDialog.getOpenFileName(self, "Select Session Log", path, "JSON Files (*.json)")
+		if filename:
+			replayer = ActionReplayer()
+			try:
+				replayer.load(filename)
+				generic_message("Replay will start now. Please do not interact with the window.", msg_type="information")
+				replayer.replay()
+			except Exception as e:
+				logger.error(f"Replay failed: {e}")
+				generic_message(f"Replay failed: {e}", msg_type="critical")
+
+	def open_session_logs(self):
+		path = os.path.join(os.path.expanduser("~"), ".celldetective", "sessions")
+		if not os.path.exists(path):
+			os.makedirs(path)
+		try:
+			Popen(f'explorer {os.path.realpath(path)}')
+		except:
 			try:
 				os.system('xdg-open "%s"' % path)
 			except:
@@ -368,14 +405,14 @@ class AppInitWindow(CelldetectiveMainWindow):
 
 	def create_new_experiment(self):
 
-		print("Configuring new experiment...")
+		logger.info("Configuring new experiment...")
 		self.new_exp_window = ConfigNewExperiment(self)
 		self.new_exp_window.show()
 
 	def open_directory(self):
 
 		self.exp_dir = self.experiment_path_selection.text().replace('/', os.sep)
-		print(f"Setting current directory to {self.exp_dir}...")
+		logger.info(f"Setting current directory to {self.exp_dir}...")
 
 		wells = glob(os.sep.join([self.exp_dir,"W*"]))
 		self.number_of_wells = len(wells)
@@ -384,16 +421,16 @@ class AppInitWindow(CelldetectiveMainWindow):
 			return None
 		else:
 			if self.number_of_wells==1:
-				print(f"Found {self.number_of_wells} well...")
+				logger.info(f"Found {self.number_of_wells} well...")
 			elif self.number_of_wells>1:
-				print(f"Found {self.number_of_wells} wells...")
+				logger.info(f"Found {self.number_of_wells} wells...")
 
 			number_pos = {}
 			for w in wells:
 				well_name, well_nbr = extract_well_name_and_number(w)
 				position_folders = glob(os.sep.join([w,f"{well_nbr}*", os.sep]))
 				number_pos.update({well_name: len(position_folders)})
-			print(f"Number of positions per well:")
+			logger.info(f"Number of positions per well:")
 			pretty_table(number_pos)
 			
 			with open(os.sep.join([self.soft_path,'celldetective','recent.txt']), 'a+') as f:

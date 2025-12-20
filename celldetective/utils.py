@@ -1,37 +1,23 @@
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 import os
-from scipy.ndimage import shift, zoom
 os.environ['TF_CPP_MIN_VLOG_LEVEL'] = '3'
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-from tensorflow.config import list_physical_devices
 import configparser
-from sklearn.utils.class_weight import compute_class_weight
-from skimage.util import random_noise
-from skimage.filters import gaussian
 import random
-from tifffile import imread
 import json
-from csbdeep.utils import normalize_mi_ma
 from glob import glob
 from urllib.request import urlopen
 import zipfile
 from tqdm import tqdm
 import shutil
 import tempfile
-from scipy.interpolate import griddata
 import re
-from scipy.ndimage.morphology import distance_transform_edt
-from scipy import ndimage
-from skimage.morphology import disk
-from scipy.stats import ks_2samp
-from cliffs_delta import cliffs_delta
-from stardist.models import StarDist2D
-from cellpose.models import CellposeModel
 from pathlib import PosixPath, PurePath, PurePosixPath, WindowsPath, Path
-from prettytable import PrettyTable
 from typing import List, Dict, Union, Optional
+import logging
+logger = logging.getLogger("celldetective")
+
 
 def is_integer_array(arr: np.ndarray) -> bool:
 
@@ -340,6 +326,7 @@ def zoom_multiframes(frames: np.ndarray, zoom_factor: float) -> np.ndarray:
 	  last axis.
 	"""
 
+	from scipy.ndimage import zoom
 	frames = [zoom(frames[:,:,c].copy(), [zoom_factor,zoom_factor], order=3, prefilter=False) for c in range(frames.shape[-1])]
 	frames = np.moveaxis(frames,0,-1)
 	return frames
@@ -378,6 +365,12 @@ def _prep_stardist_model(model_name, path, use_gpu=False, scale=1):
 	- GPU support depends on the availability of compatible hardware and software setup.
 	"""
 
+	try:
+		from stardist.models import StarDist2D
+	except ImportError:
+		logger.error("StarDist is not installed. Cannot load StarDist model.")
+		return None, scale
+
 	model = StarDist2D(None, name=model_name, basedir=path)
 	model.config.use_gpu = use_gpu
 	model.use_gpu = use_gpu
@@ -385,7 +378,7 @@ def _prep_stardist_model(model_name, path, use_gpu=False, scale=1):
 	scale_model = scale
 
 
-	print(f"StarDist model {model_name} successfully loaded...")
+	logger.info(f"StarDist model {model_name} successfully loaded...")
 	return model, scale_model
 
 def _prep_cellpose_model(model_name, path, use_gpu=False, n_channels=2, scale=None):
@@ -426,23 +419,31 @@ def _prep_cellpose_model(model_name, path, use_gpu=False, n_channels=2, scale=No
 	  `diam_labels` are attributes of the model.
 	"""
 
-	import torch
+	try:
+		import torch
+		from cellpose.models import CellposeModel
+	except ImportError:
+		logger.error("Cellpose or Torch is not installed. Cannot load Cellpose model.")
+		return None, scale
+
 	if not use_gpu:
 		device = torch.device("cpu")
 	else:
 		device = torch.device("cuda")
 
+	scale_model = scale
+	
 	model = CellposeModel(gpu=use_gpu, device=device, pretrained_model=path+model_name, model_type=None, nchan=n_channels) #diam_mean=30.0,
 	if scale is None:
 		scale_model = model.diam_mean / model.diam_labels
 	else:
 		scale_model = scale * model.diam_mean / model.diam_labels
 
-	print(f'Cell size in model: {model.diam_mean} pixels...')
-	print(f'Cell size in training set: {model.diam_labels} pixels...')
-	print(f"Rescaling factor to apply: {scale_model}...")
+	logger.info(f'Cell size in model: {model.diam_mean} pixels...')
+	logger.info(f'Cell size in training set: {model.diam_labels} pixels...')
+	logger.info(f"Rescaling factor to apply: {scale_model}...")
 
-	print(f'Cellpose model {model_name} successfully loaded...')
+	logger.info(f'Cellpose model {model_name} successfully loaded...')
 	return model, scale_model
 
 
@@ -453,7 +454,7 @@ def _get_normalize_kwargs_from_config(config):
 			with open(config) as cfg:
 				config = json.load(cfg)
 		else:
-			print('Configuration could not be loaded...')
+			logger.error('Configuration could not be loaded...')
 			os.abort()
 
 	normalization_percentile = config['normalization_percentile']
@@ -565,6 +566,7 @@ def _segment_image_with_stardist_model(img, model=None, return_details=False, ch
 		return lbl.astype(np.uint16), details
 
 def _rescale_labels(lbl, scale_model=1):
+	from scipy.ndimage import zoom
 	return zoom(lbl, [1./scale_model, 1./scale_model], order=0)
 
 def extract_cols_from_table_list(tables, nrows=1):
@@ -684,6 +686,7 @@ def contour_of_instance_segmentation(label, distance):
 	"""
 	if isinstance(distance,(list,tuple)) or distance >= 0 :
 
+		from scipy.ndimage.morphology import distance_transform_edt
 		edt = distance_transform_edt(label)
 
 		if isinstance(distance, list) or isinstance(distance, tuple):
@@ -699,6 +702,8 @@ def contour_of_instance_segmentation(label, distance):
 
 	else:
 		size = (2*abs(int(distance))+1, 2*abs(int(distance))+1)
+		import scipy.ndimage as ndimage
+		from skimage.morphology import disk
 		dilated_image = ndimage.grey_dilation(label, footprint=disk(int(abs(distance)))) #size=size,
 		border_label=np.copy(dilated_image)
 		matching_cells = np.logical_and(dilated_image != 0, label == dilated_image)
@@ -736,7 +741,7 @@ def extract_identity_col(trajectories):
 		if col in trajectories.columns and not trajectories[col].isnull().all():
 			return col
 
-	print('ID or TRACK_ID column could not be found in the table...')
+	logger.warning('ID or TRACK_ID column could not be found in the table...')
 	return None
 
 def derivative(x, timeline, window, mode='bi'):
@@ -1221,7 +1226,7 @@ def create_patch_mask(h, w, center=None, radius=None):
 	elif isinstance(radius,list):
 		mask = (dist_from_center <= radius[1])*(dist_from_center >= radius[0])
 	else:
-		print("Please provide a proper format for the radius")
+		logger.error("Please provide a proper format for the radius")
 		return None
 		
 	return mask
@@ -1282,7 +1287,7 @@ def rename_intensity_column(df, channels):
 		if np.any(test_digit):
 			index = int(sections[np.where(test_digit)[0]][-1])
 		else:
-			print(f'No valid channel index found for {intensity_cols[k]}... Skipping the renaming for {intensity_cols[k]}...')
+			logger.warning(f'No valid channel index found for {intensity_cols[k]}... Skipping the renaming for {intensity_cols[k]}...')
 			continue
 			
 		channel_name = channel_names[np.where(channel_indices==index)[0]][0]
@@ -1400,6 +1405,7 @@ def regression_plot(y_pred, y_true, savepath=None):
 	
 	"""
 
+	import matplotlib.pyplot as plt
 	fig,ax = plt.subplots(1,1,figsize=(4,3))
 	ax.scatter(y_pred, y_true)
 	ax.set_xlabel("prediction")
@@ -1500,6 +1506,7 @@ def compute_weights(y):
 	
 	"""
 
+	from sklearn.utils.class_weight import compute_class_weight
 	class_weights = compute_class_weight(
 											class_weight = "balanced",
 											classes = np.unique(y),
@@ -1550,7 +1557,7 @@ def train_test_split(data_x, data_y1, data_class=None, validation_size=0.25, tes
 	"""
 
 	if data_class is not None:
-		print(f"Unique classes: {np.sort(np.argmax(np.unique(data_class,axis=0),axis=1))}")
+		logger.info(f"Unique classes: {np.sort(np.argmax(np.unique(data_class,axis=0),axis=1))}")
 
 	for i in range(n_iterations):
 
@@ -1573,9 +1580,9 @@ def train_test_split(data_x, data_y1, data_class=None, validation_size=0.25, tes
 			y2_val = data_class[chunks[1]]
 
 		if data_class is not None:
-			print(f"classes in train set: {np.sort(np.argmax(np.unique(y2_train,axis=0),axis=1))}; classes in validation set: {np.sort(np.argmax(np.unique(y2_val,axis=0),axis=1))}")
+			logger.info(f"classes in train set: {np.sort(np.argmax(np.unique(y2_train,axis=0),axis=1))}; classes in validation set: {np.sort(np.argmax(np.unique(y2_val,axis=0),axis=1))}")
 			same_class_test = np.array_equal(np.sort(np.argmax(np.unique(y2_train,axis=0),axis=1)), np.sort(np.argmax(np.unique(y2_val,axis=0),axis=1)))
-			print(f"Check that classes are found in all sets: {same_class_test}...")
+			logger.info(f"Check that classes are found in all sets: {same_class_test}...")
 		else:
 			same_class_test = True
 
@@ -1710,7 +1717,7 @@ def _estimate_scale_factor(spatial_calibration, required_spatial_calibration):
 	epsilon = 0.05
 	if scale is not None:
 		if not np.all([scale >= (1-epsilon), scale <= (1+epsilon)]):
-			print(f"Each frame will be rescaled by a factor {scale} to match with the model training data...")
+			logger.info(f"Each frame will be rescaled by a factor {scale} to match with the model training data...")
 		else:
 			scale = None
 	return scale
@@ -1742,6 +1749,7 @@ def auto_find_gpu():
 	# GPU available: True or False based on the system's hardware configuration.
 	"""
 
+	from tensorflow.config import list_physical_devices
 	gpus = list_physical_devices('GPU')
 	if len(gpus)>0:
 		use_gpu = True
@@ -1856,9 +1864,9 @@ def config_section_to_dict(path: Union[str,PurePath,Path], section: str) -> Unio
 		try:
 			dict1[option] = Config.get(section, option)
 			if dict1[option] == -1:
-				print("skip: %s" % option)
+				logger.debug("skip: %s" % option)
 		except:
-			print("exception on %s!" % option)
+			logger.error("exception on %s!" % option)
 			dict1[option] = None
 	return dict1
 
@@ -1913,7 +1921,7 @@ def _extract_channel_indices_from_config(config, channels_to_extract):
 			c1 = int(config_section_to_dict(config, "Channels")[c])
 			channels.append(c1)
 		except Exception as e:
-			print(f"Warning: The channel {c} required by the model is not available in your data...")
+			logger.warning(f"Warning: The channel {c} required by the model is not available in your data...")
 			channels.append(None)
 	if np.all([c is None for c in channels]):
 		channels = None
@@ -2113,7 +2121,7 @@ def _extract_labels_from_config(config,number_of_wells):
 
 
 	except Exception as e:
-		print(f"{e}: the well labels cannot be read from the concentration and cell_type fields")
+		logger.warning(f"{e}: the well labels cannot be read from the concentration and cell_type fields")
 		labels = np.linspace(0,number_of_wells-1,number_of_wells,dtype=str)
 
 	return(labels)
@@ -2391,6 +2399,7 @@ def random_shift(image,mask, max_shift_amplitude=0.1):
 	input_shape = image.shape[0]
 	max_shift = input_shape*max_shift_amplitude
 	
+	from scipy.ndimage import shift
 	shift_value_x = random.choice(np.arange(max_shift))
 	if np.random.random() > 0.5:
 		shift_value_x*=-1
@@ -2437,6 +2446,7 @@ def blur(x,max_sigma=4.0):
 
 	sigma = np.random.random()*max_sigma
 	loc_i,loc_j,loc_c = np.where(x==0.)
+	from skimage.filters import gaussian
 	x = gaussian(x, sigma, channel_axis=-1, preserve_range=True)
 	x[loc_i,loc_j,loc_c] = 0.
 
@@ -2495,6 +2505,7 @@ def noise(x, apply_probability=0.5, clip_option=False):
 			p = np.random.random()
 			if p <= apply_probability:
 				try:
+					from skimage.util import random_noise
 					x_noise[:,:,k] = random_noise(x_noise[:,:,k], mode=m, clip=clip_option)
 				except:
 					pass
@@ -2672,6 +2683,7 @@ def normalize_per_channel(X, normalization_percentile_mode=True, normalization_v
 					max_val = normalization_values[k][1]
 
 				clip_option = normalization_clipping[k]
+				from csbdeep.utils import normalize_mi_ma
 				norm_x[:,:,k] = normalize_mi_ma(chan.astype(np.float32).copy(), min_val, max_val, clip=clip_option, eps=1e-20, dtype=np.float32)
 			else:
 				norm_x[:,:,k] = 0.
@@ -2748,12 +2760,14 @@ def load_image_dataset(datasets, channels, train_spatial_calibration=None, mask_
 			mask_path = os.sep.join([os.path.split(im)[0],os.path.split(im)[-1].replace('.tif', f'_{mask_suffix}.tif')])
 			if os.path.exists(mask_path):
 				# load image and mask
+				from tifffile import imread
 				image = imread(im)
 				if image.ndim==2:
 					image = image[np.newaxis]
 				if image.ndim>3:
 					print('Invalid image shape, skipping')
 					continue
+				from tifffile import imread
 				mask = imread(mask_path)
 				config_path = im.replace('.tif','.json')
 				if os.path.exists(config_path):
@@ -2791,6 +2805,7 @@ def load_image_dataset(datasets, channels, train_spatial_calibration=None, mask_
 	
 				if im_calib != train_spatial_calibration:
 					factor = im_calib / train_spatial_calibration
+					from scipy.ndimage import zoom
 					image = np.moveaxis([zoom(image[:,:,c].astype(float).copy(), [factor,factor], order=3, prefilter=False) for c in range(image.shape[-1])],0,-1) #zoom(image, [factor,factor,1], order=3)
 					mask = zoom(mask, [factor,factor], order=0)        
 					
@@ -2928,6 +2943,7 @@ def interpolate_nan(img, method='nearest'):
 		y = y_grid[mask].reshape(-1)
 		points = np.array([x,y]).T
 		values = img[mask].reshape(-1)
+		from scipy.interpolate import griddata
 		interp_grid = griddata(points, values, (x_grid, y_grid), method=method)
 		return interp_grid
 	else:
@@ -3074,9 +3090,11 @@ def test_2samp_generic(data: pd.DataFrame, feature: Optional[str] = None, groupb
 			dist1 = group1[feature].values
 			dist2 = group2[feature].values
 			if method=="ks_2samp":
+				from scipy.stats import ks_2samp
 				test = ks_2samp(list(dist1),list(dist2), alternative='less', mode='auto', *args, **kwargs)
 				val = test.pvalue
 			elif method=="cliffs_delta":
+				from cliffs_delta import cliffs_delta
 				test = cliffs_delta(list(dist1),list(dist2), *args, **kwargs)
 				val = test[0]
 
@@ -3095,6 +3113,7 @@ def test_2samp_generic(data: pd.DataFrame, feature: Optional[str] = None, groupb
 	return pivot
 
 def pretty_table(dct: dict):
+	from prettytable import PrettyTable
 	table = PrettyTable()
 	for c in dct.keys():
 		table.add_column(str(c), [])

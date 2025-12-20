@@ -5,9 +5,14 @@ Copyright © 2022 Laboratoire Adhesion et Inflammation, Authored by Remy Torro.
 import argparse
 import datetime
 import os
+import sys
 from art import tprint
 from celldetective.signals import analyze_signals
 import pandas as pd
+from celldetective import logger
+from celldetective.log_manager import PositionLogger, setup_global_logging
+
+setup_global_logging()
 
 tprint("Signals")
 
@@ -40,21 +45,20 @@ else:
 	table_name = f"trajectories_{mode}.csv"
 
 
+
 # Load trajectories, add centroid if not in trajectory
-trajectories = pos+os.sep.join(['output','tables', table_name])
-if os.path.exists(trajectories):
-	trajectories = pd.read_csv(trajectories)
+trajectories_path = os.path.join(pos, 'output', 'tables', table_name)
+if os.path.exists(trajectories_path):
+	trajectories = pd.read_csv(trajectories_path)
 else:
-	print('The trajectories table could not be found. Abort.')
-	os.abort()
+	logger.error('The trajectories table could not be found. Abort.')
+	exit(1)
 
-log=f'segmentation model: {model} \n'
+with PositionLogger(pos):
+	logger.info(f'Starting signal analysis with model: {model}, mode: {mode}')
+	
+	trajectories = analyze_signals(trajectories.copy(), model, interpolate_na=True, selected_signals=None, column_labels = column_labels, plot_outcome=True, output_dir=os.path.join(pos,'output', ''))
+	trajectories = trajectories.sort_values(by=[column_labels['track'], column_labels['time']])
+	trajectories.to_csv(os.path.join(pos, 'output', 'tables', table_name), index=False)
 
-with open(pos+f'log_{mode}.json', 'a') as f:
-	f.write(f'{datetime.datetime.now()} SIGNAL ANALYSIS \n')
-	f.write(log)
-
-trajectories = analyze_signals(trajectories.copy(), model, interpolate_na=True, selected_signals=None, column_labels = column_labels, plot_outcome=True,output_dir=pos+'output/')
-trajectories = trajectories.sort_values(by=[column_labels['track'], column_labels['time']])
-trajectories.to_csv(pos+os.sep.join(['output','tables', table_name]), index=False)
 

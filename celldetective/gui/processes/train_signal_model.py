@@ -9,6 +9,29 @@ from celldetective.signals import SignalDetectionModel
 from celldetective.io import locate_signal_model
 
 
+
+from tensorflow.keras.callbacks import Callback
+
+class ProgressCallback(Callback):
+
+	def __init__(self, queue=None, total_epochs=100):
+		super().__init__()
+		self.queue = queue
+		self.total_epochs = total_epochs
+		self.current_step = 0
+		self.t0 = time.time()
+
+	def on_epoch_end(self, epoch, logs=None):
+		
+		self.current_step += 1
+		# Send signal for progress bar
+		sum_done = (self.current_step)/self.total_epochs*100
+		mean_exec_per_step = (time.time() - self.t0) / (self.current_step)
+		pred_time = (self.total_epochs - self.current_step) * mean_exec_per_step
+		if self.queue is not None:
+			self.queue.put([sum_done, pred_time])
+
+
 class TrainSignalModelProcess(Process):
 
 	def __init__(self, queue=None, process_args=None, *args, **kwargs):
@@ -21,7 +44,7 @@ class TrainSignalModelProcess(Process):
 			for key, value in process_args.items():
 				setattr(self, key, value)
 
-		tprint("Train segmentation")
+		tprint("Train event detection")
 		self.read_instructions()
 		self.extract_training_params()
 
@@ -72,9 +95,13 @@ class TrainSignalModelProcess(Process):
 					outfile.write(json_string)
 
 	def run(self):
-
+		self.queue.put("Loading dataset...")
 		model = SignalDetectionModel(**self.model_params)
-		model.fit_from_directory(self.training_instructions['ds'], **self.train_params)
+		
+		total_epochs = self.train_params['epochs'] * 3
+		cb = ProgressCallback(queue=self.queue, total_epochs=total_epochs)
+
+		model.fit_from_directory(self.training_instructions['ds'], callbacks=[cb], **self.train_params)
 		self.neighborhood_postprocessing()
 		self.queue.put("finished")
 		self.queue.close()

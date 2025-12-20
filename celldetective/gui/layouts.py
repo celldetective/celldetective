@@ -1,4 +1,8 @@
 from PyQt5.QtWidgets import QCheckBox, QLineEdit, QListWidget, QTabWidget, QHBoxLayout,QMessageBox, QPushButton, QVBoxLayout, QRadioButton, QLabel, QButtonGroup, QSizePolicy, QComboBox,QSpacerItem, QGridLayout
+from celldetective.gui.processes.measure_cells import MeasurementProcess
+from celldetective.gui.processes.background_correction import BackgroundCorrectionProcess
+from celldetective.gui.workers import ProgressWindow
+from tifffile import imread
 from celldetective.gui.gui_utils import ThresholdLineEdit, QuickSliderLayout, center_window
 from PyQt5.QtCore import Qt, QSize
 from PyQt5.QtGui import QIntValidator, QDoubleValidator
@@ -770,6 +774,11 @@ class BackgroundFitCorrectionLayout(QGridLayout, Styles):
 																			   self.add_correction_btn
 																			   ])
 
+		self.downsample_lbl = QLabel('Downsample: ')
+		self.downsample_lbl.setToolTip('Factor by which to downsample the image for fitting (for speed).')
+		self.downsample_le = QLineEdit('10')
+		self.downsample_le.setValidator(QIntValidator())
+
 
 	def add_to_layout(self):
 		
@@ -792,16 +801,21 @@ class BackgroundFitCorrectionLayout(QGridLayout, Styles):
 		model_layout.addWidget(self.models_cb, 75)
 		self.addLayout(model_layout, 2, 0, 1, 3)
 
+		downsample_layout = QHBoxLayout()
+		downsample_layout.addWidget(self.downsample_lbl, 25)
+		downsample_layout.addWidget(self.downsample_le, 75)
+		self.addLayout(downsample_layout, 3, 0, 1, 3)
+
 		self.operation_layout = OperationLayout()
-		self.addLayout(self.operation_layout, 3, 0, 1, 3)
+		self.addLayout(self.operation_layout, 4, 0, 1, 3)
 
 		correction_layout = QHBoxLayout()
 		correction_layout.addWidget(self.add_correction_btn, 95)
 		correction_layout.addWidget(self.corrected_stack_viewer, 5)
-		self.addLayout(correction_layout, 4, 0, 1, 3)
+		self.addLayout(correction_layout, 5, 0, 1, 3)
 
 		verticalSpacer = QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
-		self.addItem(verticalSpacer, 5, 0, 1, 3)
+		self.addItem(verticalSpacer, 6, 0, 1, 3)
 
 	def add_instructions_to_parent_list(self):
 
@@ -833,7 +847,8 @@ class BackgroundFitCorrectionLayout(QGridLayout, Styles):
 					  "model": self.models_cb.currentText(),
 					  "threshold_on_std": self.threshold_le.get_threshold(),
 					  "operation": operation,
-					  "clip": clip
+					  "clip": clip,
+					  "downsample": int(self.downsample_le.text())
 					 }
 
 	def set_target_channel(self):
@@ -882,32 +897,41 @@ class BackgroundFitCorrectionLayout(QGridLayout, Styles):
 		else:
 			clip = False
 
-		corrected_stack = correct_background_model(self.attr_parent.exp_dir,
-						   well_option=self.attr_parent.well_list.getSelectedIndices(), #+1 ??
-						   position_option=self.attr_parent.position_list.getSelectedIndices(), #+1??
-						   target_channel=self.channels_cb.currentText(),
-						   model = self.models_cb.currentText(),
-						   threshold_on_std = self.threshold_le.get_threshold(),
-						   operation = operation,
-						   clip = clip,
-						   export= False,
-						   return_stacks=True,
-						   activation_protocol=[['gauss',2],['std',4]],
-						   show_progress_per_well = True,
-						   show_progress_per_pos = False,
-							)
+		process_args = {
+							"exp_dir": self.attr_parent.exp_dir,
+							"well_option": self.attr_parent.well_list.getSelectedIndices(),
+							"position_option": self.attr_parent.position_list.getSelectedIndices(),
+							"target_channel": self.channels_cb.currentText(),
+							"model": self.models_cb.currentText(),
+							"threshold_on_std": self.threshold_le.get_threshold(),
+							"operation": operation,
+							"clip": clip,
+							"clip": clip,
+							"activation_protocol": [['gauss',2],['std',4]],
+							"downsample": int(self.downsample_le.text())
+						}
 
-		if corrected_stack:
-			self.viewer = StackVisualizer(
-										  stack=corrected_stack[0],
-										  window_title='Corrected channel',
-										  target_channel=self.channels_cb.currentIndex(),
-										  frame_slider = True,
-										  contrast_slider = True
-										 )
-			self.viewer.show()
+		self.job = ProgressWindow(BackgroundCorrectionProcess, parent_window=self, title="Background Correction", position_info=False, process_args=process_args)
+		result = self.job.exec_()
+		
+		if result == QDialog.Accepted:
+			temp_path = os.path.join(self.attr_parent.exp_dir, "temp_corrected_stack.tif")
+			if os.path.exists(temp_path):
+				corrected_stack = imread(temp_path)
+				os.remove(temp_path)
+				
+				self.viewer = StackVisualizer(
+											  stack=corrected_stack,
+											  window_title='Corrected channel',
+											  target_channel=self.channels_cb.currentIndex(),
+											  frame_slider = True,
+											  contrast_slider = True
+											 )
+				self.viewer.show()
+			else:
+				print("Corrected stack could not be generated... No stack available...")
 		else:
-			print("Corrected stack could not be generated... No stack available...")
+			print("Background correction cancelled.")
 
 
 

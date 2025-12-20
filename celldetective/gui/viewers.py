@@ -5,12 +5,13 @@ from celldetective.measure import contour_of_instance_segmentation, extract_blob
 from celldetective.utils import _get_img_num_per_channel, estimate_unreliable_edge, is_integer_array
 from tifffile import imread
 import matplotlib.pyplot as plt 
+import matplotlib.gridspec as gridspec
 from pathlib import Path
 from natsort import natsorted
 from glob import glob
 import os
 
-from PyQt5.QtWidgets import QHBoxLayout, QMessageBox, QPushButton, QLabel, QComboBox, QLineEdit, QListWidget, QShortcut
+from PyQt5.QtWidgets import QHBoxLayout, QCheckBox, QMessageBox, QPushButton, QLabel, QComboBox, QLineEdit, QListWidget, QShortcut, QAction
 from PyQt5.QtCore import Qt, QSize
 from PyQt5.QtGui import QKeySequence, QDoubleValidator
 from celldetective.gui.gui_utils import FigureCanvas, QuickSliderLayout, QHSeperationLine, ThresholdLineEdit, PreprocessingLayout2
@@ -20,7 +21,9 @@ from superqt.fonticon import icon
 from fonticon_mdi6 import MDI6
 from matplotlib_scalebar.scalebar import ScaleBar
 import gc
-from scipy.ndimage import shift
+from scipy.ndimage import shift, map_coordinates
+from matplotlib.widgets import RectangleSelector
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 class StackVisualizer(CelldetectiveWidget):
 
@@ -79,6 +82,10 @@ class StackVisualizer(CelldetectiveWidget):
 		self.PxToUm = PxToUm
 		self.init_contrast = False
 		self.channel_trigger = False
+		self.roi_mode = False
+		self.line_mode = False
+		self.line_artist = None
+		self.ax_profile = None
 
 		self.load_stack() # need to get stack, frame etc
 		self.generate_figure_canvas()
@@ -88,9 +95,364 @@ class StackVisualizer(CelldetectiveWidget):
 			self.generate_contrast_slider()
 		if self.create_frame_slider:
 			self.generate_frame_slider()
+		
+
+		self.line_color = "orange"
+		self.generate_custom_tools()
 
 		self.canvas.layout.setContentsMargins(15,15,15,30)
 		#center_window(self)
+
+	def generate_custom_tools(self):
+		
+		tools_layout = QHBoxLayout()
+		tools_layout.setContentsMargins(15, 0, 15, 0)
+
+		# ROI Tool
+		# self.roi_btn = QPushButton("ROI (Mean)")
+		# self.roi_btn.setCheckable(True)
+		# self.roi_btn.setStyleSheet(self.button_select_all)
+		# self.roi_btn.clicked.connect(self.toggle_roi_mode)
+		# self.roi_btn.setToolTip("Draw a rectangle to calculate mean and std intensity.")
+		# tools_layout.addWidget(self.roi_btn)
+
+		# ROI Tool
+		# self.roi_btn = QPushButton("ROI (Mean)")
+		# self.roi_btn.setCheckable(True)
+		# self.roi_btn.setStyleSheet(self.button_select_all)
+		# self.roi_btn.clicked.connect(self.toggle_roi_mode)
+		# self.roi_btn.setToolTip("Draw a rectangle to calculate mean and std intensity.")
+		# tools_layout.addWidget(self.roi_btn)
+
+		# Add Line Profile to Toolbar
+		# Insert after standard buttons (usually around index 6 or 7)
+		# Or find "Zoom" or "Pan" action and insert after
+		actions = self.canvas.toolbar.actions()
+		
+		# Create the action
+		self.line_action = QAction(icon(MDI6.chart_line, color='black'), "Line Profile", self.canvas.toolbar)
+		self.line_action.setCheckable(True)
+		self.line_action.setToolTip("Draw a line to plot intensity profile.")
+		self.line_action.triggered.connect(self.toggle_line_mode)
+		
+		# Lock Y-Axis Action
+		self.lock_y_action = QAction(icon(MDI6.lock, color='black'), "Lock Y-Axis", self.canvas.toolbar)
+		self.lock_y_action.setCheckable(True)
+		self.lock_y_action.setToolTip("Lock the Y-axis min/max values for the profile plot.")
+		# Lock Y-Axis Action
+		self.lock_y_action = QAction(icon(MDI6.lock, color='black'), "Lock Y-Axis", self.canvas.toolbar)
+		self.lock_y_action.setCheckable(True)
+		self.lock_y_action.setToolTip("Lock the Y-axis min/max values for the profile plot.")
+		self.lock_y_action.setEnabled(False) # Enable only when line mode is active
+
+
+
+		# Attempt to insert after Zoom
+		target_action = None
+		for action in actions:
+			if "Zoom" in action.text() or "Pan" in action.text():
+				target_action = action
+		
+		if target_action:
+			insert_before = None
+			for action in actions:
+				if "Subplots" in action.text() or "Configure" in action.text():
+					insert_before = action
+					break
+			
+			if insert_before:
+				self.canvas.toolbar.insertAction(insert_before, self.line_action)
+				self.canvas.toolbar.insertAction(insert_before, self.lock_y_action)
+			else:
+				if len(actions) > 5:
+					self.canvas.toolbar.insertAction(actions[5], self.line_action)
+					self.canvas.toolbar.insertAction(actions[5], self.line_action)
+					self.canvas.toolbar.insertAction(actions[5], self.lock_y_action)
+				else:
+					self.canvas.toolbar.addAction(self.line_action)
+					self.canvas.toolbar.addAction(self.lock_y_action)
+		
+		# Info Label
+		self.info_lbl = QLabel("")
+		tools_layout.addWidget(self.info_lbl)
+		
+		self.canvas.layout.addLayout(tools_layout)
+
+	def toggle_roi_mode(self):
+		pass
+		
+		# if self.roi_btn.isChecked():
+		# 	# Disable other modes
+		# 	self.line_action.setChecked(False)
+		# 	self.toggle_line_mode()
+
+		# 	self.roi_selector = RectangleSelector(
+		# 		self.ax, self.on_select_roi,
+		# 		useblit=True,
+		# 		button=[1],  # Left mouse button
+		# 		minspanx=5, minspany=5,
+		# 		spancoords='pixels',
+		# 		interactive=True
+		# 	)
+		# 	self.roi_mode = True
+		# 	self.canvas.toolbar.mode = '' # Disable toolbar zoom/pan to avoid conflict
+		# else:
+		# 	if hasattr(self, 'roi_selector'):
+		# 		self.roi_selector.set_active(False)
+		# 	self.roi_mode = False
+		# 	self.info_lbl.setText("")
+
+	def on_select_roi(self, eclick, erelease):
+		pass
+		
+		# if not self.roi_mode: return
+
+		# x1, y1 = int(eclick.xdata), int(eclick.ydata)
+		# x2, y2 = int(erelease.xdata), int(erelease.ydata)
+		
+		# # Handle boundaries
+		# x_start, x_end = sorted([x1, x2])
+		# y_start, y_end = sorted([y1, y2])
+		
+		# x_start = max(0, x_start)
+		# y_start = max(0, y_start)
+		# x_end = min(self.init_frame.shape[1], x_end)
+		# y_end = min(self.init_frame.shape[0], y_end)
+
+		# roi = self.init_frame[y_start:y_end, x_start:x_end]
+		
+		# if roi.size > 0:
+		# 	mean_val = np.mean(roi)
+		# 	std_val = np.std(roi)
+		# 	self.info_lbl.setText(f"ROI: Mean={mean_val:.2f}, Std={std_val:.2f}, Size={roi.size}px")
+		
+	def toggle_line_mode(self):
+		
+		if self.line_action.isChecked():
+			# Disable other modes
+			# self.roi_btn.setChecked(False)
+			# self.toggle_roi_mode()
+
+			self.line_mode = True
+			self.lock_y_action.setEnabled(True)
+			self.canvas.toolbar.mode = ''
+
+			# Connect events
+			self.cid_press = self.fig.canvas.mpl_connect('button_press_event', self.on_line_press)
+			self.cid_move = self.fig.canvas.mpl_connect('motion_notify_event', self.on_line_drag)
+			self.cid_release = self.fig.canvas.mpl_connect('button_release_event', self.on_line_release)
+			
+			# Save original position if not saved
+			if not hasattr(self, 'ax_original_pos'):
+				self.ax_original_pos = self.ax.get_position()
+			
+			# Disable tight_layout/layout engine to prevent fighting manual positioning
+			if hasattr(self.fig, 'set_layout_engine'):
+				self.fig.set_layout_engine('none')
+			else:
+				self.fig.set_tight_layout(False)
+
+			# Use GridSpec for robust layout
+			# 2 rows: Main Image (top, ~75%), Profile (bottom, ~25%)
+			# Add margins to ensure axis labels and text are visible
+			gs = gridspec.GridSpec(2, 1, height_ratios=[3, 1], hspace=0.3, 
+								 left=0.15, right=0.85, bottom=0.1, top=0.95)
+			
+			# Move main axes to top slot
+			self.ax.set_subplotspec(gs[0])
+			self.ax.set_position(gs[0].get_position(self.fig))
+
+			# create profile axes as a subplot in the bottom slot
+			if self.ax_profile is None:
+				self.ax_profile = self.fig.add_subplot(gs[1])
+			else:
+				self.ax_profile.set_subplotspec(gs[1])
+				self.ax_profile.set_position(gs[1].get_position(self.fig))
+			
+			self.ax_profile.set_visible(True)
+			self.ax_profile.set_facecolor('none')
+			self.ax_profile.tick_params(axis='y', which='major', labelsize=8)
+			self.ax_profile.set_xticks([])
+			self.ax_profile.set_xlabel('')
+			self.ax_profile.set_ylabel('Intensity', fontsize=8)
+			
+			# Hide spines initially
+			self.ax_profile.spines['top'].set_visible(False)
+			self.ax_profile.spines['right'].set_visible(False)
+			self.ax_profile.spines['bottom'].set_color('black')
+			self.ax_profile.spines['left'].set_color('black')
+			
+			self.canvas.draw()
+
+		else:
+			self.line_mode = False
+			self.lock_y_action.setChecked(False)
+			self.lock_y_action.setEnabled(False)
+			# Disconnect events
+			if hasattr(self, 'cid_press'):
+				self.fig.canvas.mpl_disconnect(self.cid_press)
+				self.fig.canvas.mpl_disconnect(self.cid_move)
+				self.fig.canvas.mpl_disconnect(self.cid_release)
+			
+
+
+			# Remove line artist
+			if self.line_artist:
+				self.line_artist.remove()
+				self.line_artist = None
+			
+			if hasattr(self, 'line_text') and self.line_text:
+				self.line_text.remove()
+				self.line_text = None
+			
+			# Remove profile axes and restore space
+			if self.ax_profile is not None:
+				self.ax_profile.remove()
+				self.ax_profile = None
+			
+			# Restore original layout
+			if hasattr(self, 'ax_original_pos'):
+				# standard 1x1 GridSpec or manual restore
+				gs = gridspec.GridSpec(1, 1)
+				self.ax.set_subplotspec(gs[0])
+				self.ax.set_position(gs[0].get_position(self.fig))
+				self.fig.subplots_adjust(top=1, bottom=0, right=1, left=0, hspace=0, wspace=0)
+				# self.ax.set_position(self.ax_original_pos) # tight layout should fix it
+
+			self.canvas.draw()
+			self.info_lbl.setText("")
+
+	def on_line_press(self, event):
+		if event.inaxes != self.ax: return
+		if self.canvas.toolbar.mode: return # Don't draw if zooming/panning
+		
+		self.line_x = [event.xdata]
+		self.line_y = [event.ydata]
+		self.is_drawing_line = True
+		
+		if self.line_artist:
+			self.line_artist.remove()
+		self.line_artist, = self.ax.plot(self.line_x, self.line_y, color=self.line_color, linestyle='-', linewidth=2.5)
+		self.canvas.draw()
+
+	def on_line_drag(self, event):
+		if not getattr(self, 'is_drawing_line', False) or event.inaxes != self.ax: return
+		
+		self.line_x = [self.line_x[0], event.xdata]
+		self.line_y = [self.line_y[0], event.ydata]
+		self.line_artist.set_data(self.line_x, self.line_y)
+		self.canvas.draw()
+
+	def update_profile(self):
+		if not self.line_mode or not hasattr(self, 'line_x') or not self.line_x: return
+		
+		# Calculate profile
+		x0, y0 = self.line_x[0], self.line_y[0]
+		x1, y1 = self.line_x[1], self.line_y[1]
+		length_px = np.hypot(x1-x0, y1-y0)
+		if length_px == 0: return
+		
+		num_points = int(length_px)
+		if num_points < 2: num_points = 2
+
+		x, y = np.linspace(x0, x1, num_points), np.linspace(y0, y1, num_points)
+		
+		# Use self.init_frame as self.im.get_array() might be unreliable or cached
+		if hasattr(self, 'init_frame') and self.init_frame is not None:
+			profile = map_coordinates(self.init_frame, np.vstack((y, x)))
+		else:
+			return
+
+		# Distance in microns if available
+		dist_axis = np.arange(num_points)
+		x_label = 'Distance (px)'
+		
+		# Only show pixel length, rounded to integer
+		title_str = f"{int(round(length_px))} px"
+		
+		# Handle Y-Axis Locking
+		current_ylim = None
+		if self.lock_y_action.isChecked():
+			current_ylim = self.ax_profile.get_ylim()
+
+		# Plot profile
+		self.ax_profile.clear()
+		self.ax_profile.set_facecolor('none')
+		if hasattr(self, 'profile_line') and self.profile_line:
+			try:
+				self.profile_line.remove()
+			except:
+				pass
+		self.profile_line, = self.ax_profile.plot(dist_axis, profile, color="black", linestyle='-') 
+		self.ax_profile.set_xlabel('')
+		self.ax_profile.set_xticks([])
+		self.ax_profile.set_ylabel('Intensity', fontsize=8)
+		self.ax_profile.tick_params(axis='y', which='major', labelsize=6)
+		# self.ax_profile.grid(True)
+		
+		# Hide spines
+		self.ax_profile.spines['top'].set_visible(False)
+		self.ax_profile.spines['right'].set_visible(False)
+		self.ax_profile.spines['bottom'].set_color('black')
+		self.ax_profile.spines['left'].set_color('black')
+
+		# Display length on the image itself
+		mx, my = (x0 + x1) / 2, (y0 + y1) / 2
+		
+		# Calculate angle in degrees
+		dx = x1 - x0
+		dy = y1 - y0
+		# Inverted Y axis correction: -dy
+		angle = np.degrees(np.arctan2(-dy, dx))
+		
+		# Keep text upright
+		if angle < -90:
+			angle += 180
+		elif angle > 90:
+			angle -= 180
+
+		# Apply offset "above" the line (perpendicular shift)
+		# Image coordinates: Y increases downwards. "Above" means lower Y.
+		# Perpendicular vector to (dx, dy) is (dy, -dx) for "upward" shift in inverted Y
+		# scale = 15 pixels offset
+		offset = 2
+		length = np.hypot(dx, dy)
+		if length > 0:
+			mx += (dy / length) * offset
+			my += (-dx / length) * offset
+
+		if hasattr(self, 'line_text') and self.line_text:
+			self.line_text.remove()
+		
+		# Use contrasting color or background box for visibility
+		self.line_text = self.ax.text(mx, my, title_str, color=self.line_color, 
+									fontsize=12, ha='center', va='bottom',
+									rotation=angle, rotation_mode='anchor',
+									bbox=dict(facecolor='white', alpha=0.5, edgecolor='none', pad=1))
+		
+		# Ensure figure background is transparent just in case
+		self.fig.set_facecolor('none')
+
+		if current_ylim:
+			self.ax_profile.set_ylim(current_ylim)
+
+		self.fig.canvas.draw_idle()
+
+	def on_line_release(self, event):
+		if not getattr(self, 'is_drawing_line', False): return
+		self.is_drawing_line = False
+		
+		if event.inaxes != self.ax: return
+
+		# Final update
+		self.line_x = [self.line_x[0], event.xdata]
+		self.line_y = [self.line_y[0], event.ydata]
+		self.line_artist.set_data(self.line_x, self.line_y) 
+		
+		self.update_profile()
+		self.canvas.draw()
+
+
 
 	def show(self):
 		# Display the widget
@@ -99,7 +461,6 @@ class StackVisualizer(CelldetectiveWidget):
 	def load_stack(self):
 		# Load the stack of images
 		if self.stack is not None:
-
 			if isinstance(self.stack, list):
 				self.stack = np.array(self.stack)
 
@@ -137,7 +498,11 @@ class StackVisualizer(CelldetectiveWidget):
 	def generate_figure_canvas(self):
 		# Generate the figure canvas for displaying images
 
-		self.fig, self.ax = plt.subplots(figsize=(5,5),tight_layout=True) #figsize=(5, 5)
+		self.fig, self.ax = plt.subplots(figsize=(5,5)) #figsize=(5, 5)
+		# Manual Layout to avoid tight_layout conflicts
+		self.fig.subplots_adjust(top=1, bottom=0, right=1, left=0, hspace=0, wspace=0)
+		self.ax.margins(0)
+		self.fig.patch.set_alpha(0)
 		self.canvas = FigureCanvas(self.fig, title=self.window_title, interactive=True)
 		self.ax.clear()
 		self.im = self.ax.imshow(self.init_frame, cmap='gray', interpolation='none', zorder=0, **self.imshow_kwargs)
@@ -150,150 +515,118 @@ class StackVisualizer(CelldetectiveWidget):
 								box_alpha=0.95,
 								color='white',
 								box_color='black',
-								)
-			if self.PxToUm==1:
-				scalebar = ScaleBar(1,
-								"px",
-								dimension="pixel-length",
-								length_fraction=0.25,
-								location='upper right',
-								border_pad=0.4,
-								box_alpha=0.95,
-								color='white',
-								box_color='black',
+								font_properties={'weight':'bold', 'size':10}
 								)
 			self.ax.add_artist(scalebar)
-		self.ax.set_xticks([])
-		self.ax.set_yticks([])
-		self.fig.set_facecolor('none')  # or 'None'
-		self.fig.canvas.setStyleSheet(f"background-color: {self.background_color};")
-		self.canvas.canvas.draw()
+		self.ax.axis('off')
 
 	def generate_channel_cb(self):
 		# Generate the channel dropdown if enabled
 
-		assert self.channel_names is not None
-		assert len(self.channel_names)==self.n_channels
-
-		channel_layout = QHBoxLayout()
-		channel_layout.setContentsMargins(15,0,15,0)
-		channel_layout.addWidget(QLabel('Channel: '), 25)
-
-		self.channels_cb = QComboBox()
-		self.channels_cb.addItems(self.channel_names)
-		self.channels_cb.currentIndexChanged.connect(self.set_channel_index)
-		channel_layout.addWidget(self.channels_cb, 75)
-		self.canvas.layout.addLayout(channel_layout)
+		self.channel_cb = QComboBox()
+		if self.channel_names is not None and len(self.channel_names) > 0:
+			for name in self.channel_names:
+				self.channel_cb.addItem(name)
+		else:
+			for i in range(self.n_channels):
+				self.channel_cb.addItem(f"Channel {i}")
+		self.channel_cb.currentIndexChanged.connect(self.set_channel_index)
+		# Add to layout below the plot
+		layout = QHBoxLayout()
+		layout.addWidget(QLabel("Channel"))
+		layout.addWidget(self.channel_cb)
+		self.canvas.layout.addLayout(layout)
 
 	def set_contrast_decimals(self):
 		if is_integer_array(self.init_frame):
-			self.contrast_slider.setDecimals(0)
-			self.contrast_slider.setSingleStep(1.0)
-			self.contrast_slider.setTickInterval(1.0)
+			self.contrast_decimals = 0
 		else:
-			self.contrast_slider.setDecimals(3)
-			self.contrast_slider.setSingleStep(1.0E-03)
-			self.contrast_slider.setTickInterval(1.0E-03)
+			self.contrast_decimals = 2
 
 	def generate_contrast_slider(self):
 		# Generate the contrast slider if enabled
-		
-		self.contrast_slider = QLabeledDoubleRangeSlider()
-		contrast_layout = QuickSliderLayout(
-											label='Contrast: ',
-											slider=self.contrast_slider,
-											slider_initial_value=[np.nanpercentile(self.init_frame, 0.1),np.nanpercentile(self.init_frame, 99.99)],
-											slider_range=(np.nanmin(self.init_frame),np.nanmax(self.init_frame)),
-											decimal_option=True,
-											precision=2,
-											)
-		self.set_contrast_decimals()
 
-		contrast_layout.setContentsMargins(15,0,15,0)
-		self.im.set_clim(vmin=np.nanpercentile(self.init_frame, 0.1),vmax=np.nanpercentile(self.init_frame, 99.99))
+		layout = QHBoxLayout()
+		self.set_contrast_decimals()
+		self.contrast_slider = QLabeledDoubleRangeSlider(Qt.Horizontal)
+		self.contrast_slider.setRange(np.min(self.init_frame), np.max(self.init_frame))
+		
+		# Set initial value to percentiles to avoid outliers
+		p01 = np.nanpercentile(self.init_frame, 0.1)
+		p99 = np.nanpercentile(self.init_frame, 99.9)
+		if p99 > p01:
+			self.contrast_slider.setValue((p01, p99))
+		else:
+			self.contrast_slider.setValue((np.min(self.init_frame), np.max(self.init_frame)))
+		self.contrast_slider.setEdgeLabelMode(QLabeledDoubleRangeSlider.EdgeLabelMode.NoLabel)
+		self.contrast_slider.setDecimals(self.contrast_decimals)
+						
 		self.contrast_slider.valueChanged.connect(self.change_contrast)
-		self.canvas.layout.addLayout(contrast_layout)
+		layout.addWidget(QLabel("Contrast"))
+		layout.addWidget(self.contrast_slider)
+		self.canvas.layout.addLayout(layout)
 
 	def generate_frame_slider(self):
 		# Generate the frame slider if enabled
-	
-		self.frame_slider = QLabeledSlider()
-		frame_layout = QuickSliderLayout(
-										label='Frame: ',
-										slider=self.frame_slider,
-										slider_initial_value=int(self.mid_time),
-										slider_range=(0,self.stack_length-1),
-										decimal_option=False,
-										)
-		frame_layout.setContentsMargins(15,0,15,0)
+
+		layout = QHBoxLayout()
+		self.frame_slider = QLabeledSlider(Qt.Horizontal)
+		self.frame_slider.setRange(0, self.stack_length-1)
+		self.frame_slider.setValue(self.mid_time)
 		self.frame_slider.valueChanged.connect(self.change_frame)
-		self.canvas.layout.addLayout(frame_layout)
+		layout.addWidget(QLabel("Time"))
+		layout.addWidget(self.frame_slider)
+		self.canvas.layout.addLayout(layout)
 
 	def set_target_channel(self, value):
-		# Set the target channel
-		
 		self.target_channel = value
-		self.change_frame(self.frame_slider.value())
+		self.init_frame = self.stack[self.mid_time,:,:,self.target_channel]
+		self.im.set_data(self.init_frame)
+		self.canvas.draw()
+		self.update_profile()
 
 	def change_contrast(self, value):
 		# Change contrast based on slider value
-
-		vmin = value[0]
-		vmax = value[1]
-		self.im.set_clim(vmin=vmin, vmax=vmax)
-		self.fig.canvas.draw_idle()
+		if not self.init_contrast:
+			self.im.set_clim(vmin=value[0], vmax=value[1])
+			self.canvas.draw()
 
 	def set_channel_index(self, value):
-		# Set the channel index based on dropdown value
-
 		self.target_channel = value
-		self.init_contrast = True
-		if self.mode == 'direct':
-			self.last_frame = self.stack[-1,:,:,self.target_channel]
-		elif self.mode == 'virtual':
-			self.last_frame = load_frames(self.img_num_per_channel[self.target_channel, self.stack_length-1], 
-										  self.stack_path,
-										  normalize_input=False).astype(float)[:,:,0]
-		self.change_frame_from_channel_switch(self.frame_slider.value())
-		self.channel_trigger = False
-		self.init_contrast = False
-
-		self.set_contrast_decimals()
+		self.channel_trigger = True
+		if self.create_frame_slider:
+			self.change_frame_from_channel_switch(self.frame_slider.value())
+		else:
+			# If no frame slider, we assume single timepoint, just switch channel in stack
+			if self.stack is not None and self.stack.ndim == 4:
+				self.init_frame = self.stack[self.mid_time,:,:,self.target_channel]
+				self.im.set_data(self.init_frame)
+				self.im.set_clim(vmax=np.percentile(self.init_frame,99.99))
+				self.canvas.draw()
+				self.update_profile()
 
 	def change_frame_from_channel_switch(self, value):
-		
-		self.channel_trigger = True
 		self.change_frame(value)
+		if self.channel_trigger:
+			self.im.set_clim(vmax=np.percentile(self.init_frame,99.99))
+			self.channel_trigger = False
+			self.canvas.draw()
 
 	def change_frame(self, value):
-
 		# Change the displayed frame based on slider value
-		if self.channel_trigger:
-			self.switch_from_channel = True
-		else:
-			self.switch_from_channel = False
-
-		if self.mode=='virtual':
-
+		
+		# Update self.init_frame
+		if self.mode == 'direct':
+			self.init_frame = self.stack[value,:,:,self.target_channel]
+		
+		elif self.mode == 'virtual':
 			self.init_frame = load_frames(self.img_num_per_channel[self.target_channel, value], 
-								self.stack_path,
-								normalize_input=False
-								).astype(float)[:,:,0]
-		elif self.mode=='direct':
-			self.init_frame = self.stack[value,:,:,self.target_channel].copy()
-		
-		self.im.set_data(self.init_frame)
-		
-		if self.init_contrast:
-			imgs = np.array([self.init_frame,self.last_frame])
-			vmin = np.nanpercentile(imgs.flatten(), 1.0)
-			vmax = np.nanpercentile(imgs.flatten(), 99.99)
-			self.contrast_slider.setRange(np.nanmin(imgs),np.nanmax(imgs))
-			self.contrast_slider.setValue((vmin,vmax))
-			self.im.set_clim(vmin,vmax)
+										  self.stack_path,
+										  normalize_input=False).astype(float)[:,:,0]
 
-		if self.create_contrast_slider:
-			self.change_contrast(self.contrast_slider.value())
+		self.im.set_data(self.init_frame)
+		self.canvas.draw()
+		self.update_profile()
 
 
 	def closeEvent(self, event):
@@ -1104,36 +1437,32 @@ class ChannelOffsetViewer(StackVisualizer):
 		self.overlay_target_channel = -1
 		self.shift_vertical = 0
 		self.shift_horizontal = 0
+		self.overlay_init_contrast = False
+		self._shortcut_shift_step = 1
 		super().__init__(*args, **kwargs)
 
 		self.load_stack()
 		self.canvas.layout.addWidget(QHSeperationLine())
 		
 		self.generate_overlay_channel_cb()
-		self.generate_overlay_imshow()
-		
 		self.generate_overlay_alpha_slider()
-		self.generate_overlay_contrast_slider()
+		self.generate_overlay_imshow()
+
+		# Overlay image is kept hidden but used for data storage/shifting logic if needed, 
+		# though we could optimize later. For now, we hide it.
+		self.im_overlay.set_visible(False)
 
 		self.generate_overlay_shift()
 		self.generate_add_to_parent_btn()
-
-		if self.overlay_target_channel==-1:
-			index = len(self.channel_names) -1
-		else:
-			index = self.overlay_target_channel
-		self.channels_overlay_cb.setCurrentIndex(index)
-		self.frame_slider.valueChanged.connect(self.change_overlay_frame)
+		
+		# Initial Render
+		self.shift_generic()
+		self.canvas.setFocus()
 
 		self.define_keyboard_shortcuts()
+		self.contrast_slider.hide()
 
-		self.channels_overlay_cb.setCurrentIndex(self.parent_window.channels_cb.currentIndex())
-		self.set_channel_index(0)
-
-		self.setAttribute(Qt.WA_DeleteOnClose)
-
-	def generate_overlay_imshow(self):
-		self.im_overlay = self.ax.imshow(self.overlay_init_frame, cmap='Blues', interpolation='none',alpha=0.5, **self.imshow_kwargs)
+		self.change_frame(0)
 
 	def generate_overlay_alpha_slider(self):
 		# Generate the contrast slider if enabled
@@ -1151,29 +1480,68 @@ class ChannelOffsetViewer(StackVisualizer):
 		self.overlay_alpha_slider.valueChanged.connect(self.change_alpha_overlay)
 		self.canvas.layout.addLayout(alpha_layout)
 
+	def change_alpha_overlay(self, value):
+		# Change contrast based on slider value
 
-	def generate_overlay_contrast_slider(self):
-		# Generate the contrast slider if enabled
+		if not hasattr(self, 'im_overlay'):
+			return
+
+		alpha = value
+		self.im_overlay.set_alpha(alpha)
+		self.fig.canvas.draw_idle()
+
+	def define_keyboard_shortcuts(self):
 		
-		self.overlay_contrast_slider = QLabeledDoubleRangeSlider()
-		contrast_layout = QuickSliderLayout(
-											label='Overlay contrast: ',
-											slider=self.overlay_contrast_slider,
-											slider_initial_value=[np.nanpercentile(self.overlay_init_frame, 0.1),np.nanpercentile(self.overlay_init_frame, 99.99)],
-											slider_range=(np.nanmin(self.overlay_init_frame),np.nanmax(self.overlay_init_frame)),
-											decimal_option=True,
-											precision=5,
-											)
-		contrast_layout.setContentsMargins(15,0,15,0)
-		self.im_overlay.set_clim(vmin=np.nanpercentile(self.overlay_init_frame, 0.1),vmax=np.nanpercentile(self.overlay_init_frame, 99.99))
-		self.overlay_contrast_slider.valueChanged.connect(self.change_contrast_overlay)
-		self.canvas.layout.addLayout(contrast_layout)
+		self.shift_up_shortcut = QShortcut(QKeySequence(Qt.Key_Up), self.canvas)
+		self.shift_up_shortcut.activated.connect(self.shift_overlay_up)
+		
+		self.shift_down_shortcut = QShortcut(QKeySequence(Qt.Key_Down), self.canvas)
+		self.shift_down_shortcut.activated.connect(self.shift_overlay_down)
+
+		self.shift_left_shortcut = QShortcut(QKeySequence(Qt.Key_Left), self.canvas)
+		self.shift_left_shortcut.activated.connect(self.shift_overlay_left)
+		
+		self.shift_right_shortcut = QShortcut(QKeySequence(Qt.Key_Right), self.canvas)
+		self.shift_right_shortcut.activated.connect(self.shift_overlay_right)
+
+	def shift_overlay_up(self):
+		self.shift_vertical -= self._shortcut_shift_step
+		self.vertical_shift_le.set_threshold(self.shift_vertical)
+		#self.shift_generic()
+		self.apply_shift_btn.click()
+
+	def shift_overlay_down(self):
+		self.shift_vertical += self._shortcut_shift_step
+		self.vertical_shift_le.set_threshold(self.shift_vertical)
+		#self.shift_generic()
+		self.apply_shift_btn.click()
+
+	def shift_overlay_left(self):
+		self.shift_horizontal -= self._shortcut_shift_step
+		self.horizontal_shift_le.set_threshold(self.shift_horizontal)
+		#self.shift_generic()
+		self.apply_shift_btn.click()
+
+	def shift_overlay_right(self):
+		self.shift_horizontal += self._shortcut_shift_step
+		self.horizontal_shift_le.set_threshold(self.shift_horizontal)
+		#self.shift_generic()
+		self.apply_shift_btn.click()
+
+	def shift_generic(self):
+		self.shift_vertical = self.vertical_shift_le.get_threshold()
+		self.shift_horizontal = self.horizontal_shift_le.get_threshold()
+		self.shifted_frame = shift(self.overlay_init_frame, [self.shift_vertical, self.shift_horizontal],prefilter=False)
+		self.im_overlay.set_data(self.shifted_frame)
+		self.fig.canvas.draw_idle()
+
+	def generate_overlay_imshow(self):
+		self.im_overlay = self.ax.imshow(self.overlay_init_frame, cmap='Blues', interpolation='none',alpha=self.overlay_alpha_slider.value(), **self.imshow_kwargs)
 
 	def set_overlay_channel_index(self, value):
 		# Set the channel index based on dropdown value
 
 		self.overlay_target_channel = value
-		self.overlay_init_contrast = True
 		if self.mode == 'direct':
 			self.overlay_last_frame = self.stack[-1,:,:,self.overlay_target_channel]
 		elif self.mode == 'virtual':
@@ -1181,7 +1549,6 @@ class ChannelOffsetViewer(StackVisualizer):
 										  self.stack_path,
 										  normalize_input=False).astype(float)[:,:,0]
 		self.change_overlay_frame(self.frame_slider.value())
-		self.overlay_init_contrast = False
 
 	def generate_overlay_channel_cb(self):
 
@@ -1195,6 +1562,7 @@ class ChannelOffsetViewer(StackVisualizer):
 		self.channels_overlay_cb = QComboBox()
 		self.channels_overlay_cb.addItems(self.channel_names)
 		self.channels_overlay_cb.currentIndexChanged.connect(self.set_overlay_channel_index)
+		self.channels_overlay_cb.setFocusPolicy(Qt.NoFocus)
 		channel_layout.addWidget(self.channels_overlay_cb, 75)
 		self.canvas.layout.addLayout(channel_layout)
 
@@ -1208,8 +1576,10 @@ class ChannelOffsetViewer(StackVisualizer):
 		self.apply_shift_btn.setStyleSheet(self.button_style_sheet_2)
 		self.apply_shift_btn.setToolTip('Apply the shift to the overlay channel.')
 		self.apply_shift_btn.clicked.connect(self.shift_generic)
+		self.apply_shift_btn.setFocusPolicy(Qt.NoFocus)
 
 		self.set_shift_btn = QPushButton('Set')
+		self.set_shift_btn.setFocusPolicy(Qt.NoFocus)
 
 		self.horizontal_shift_le = ThresholdLineEdit(init_value=self.shift_horizontal, connected_buttons=[self.apply_shift_btn, self.set_shift_btn],placeholder='horizontal shift [pixels]', value_type='float')
 		shift_layout.addWidget(self.horizontal_shift_le, 20)
@@ -1236,16 +1606,18 @@ class ChannelOffsetViewer(StackVisualizer):
 		elif self.mode=='direct':
 			self.overlay_init_frame = self.stack[value,:,:,self.overlay_target_channel].copy()
 		
-		self.im_overlay.set_data(self.overlay_init_frame)
-		
-		if self.overlay_init_contrast:
-			self.im_overlay.autoscale()
-			I_min, I_max = self.im_overlay.get_clim()
-			self.overlay_contrast_slider.setRange(np.nanmin([self.overlay_init_frame,self.overlay_last_frame]),np.nanmax([self.overlay_init_frame,self.overlay_last_frame]))
-			self.overlay_contrast_slider.setValue((I_min,I_max))
-
-		if self.create_contrast_slider:
-			self.change_contrast_overlay(self.overlay_contrast_slider.value())
+		self.overlay_init_frame = self.auto_contrast(self.overlay_init_frame)
+		self.shift_generic()
+	
+	def auto_contrast(self, frame):
+		p5 = np.nanpercentile(frame, 1)
+		p95 = np.nanpercentile(frame, 99)
+		if p95 - p5 == 0:
+			return frame - p5 
+		norm =  (frame - p5) / (p95 - p5)
+		norm[norm>1] = 1
+		norm[norm<0] = 0
+		return norm*255
 	
 	def locate_image_virtual(self):
 		# Locate the stack of images if provided as a file
@@ -1272,22 +1644,6 @@ class ChannelOffsetViewer(StackVisualizer):
 									  self.stack_path,
 									  normalize_input=False).astype(float)[:,:,0]
 	
-	def change_contrast_overlay(self, value):
-		# Change contrast based on slider value
-
-		vmin = value[0]
-		vmax = value[1]
-		self.im_overlay.set_clim(vmin=vmin, vmax=vmax)
-		self.fig.canvas.draw_idle()
-
-	def change_alpha_overlay(self, value):
-		# Change contrast based on slider value
-
-		alpha = value
-		self.im_overlay.set_alpha(alpha)
-		self.fig.canvas.draw_idle()
-
-
 	def define_keyboard_shortcuts(self):
 		
 		self.shift_up_shortcut = QShortcut(QKeySequence(Qt.Key_Up), self.canvas)
@@ -1327,11 +1683,30 @@ class ChannelOffsetViewer(StackVisualizer):
 		#self.shift_generic()
 		self.apply_shift_btn.click()
 
+
 	def shift_generic(self):
 		self.shift_vertical = self.vertical_shift_le.get_threshold()
 		self.shift_horizontal = self.horizontal_shift_le.get_threshold()
 		self.shifted_frame = shift(self.overlay_init_frame, [self.shift_vertical, self.shift_horizontal],prefilter=False)
-		self.im_overlay.set_data(self.shifted_frame)
+		
+		def norm(img):
+			mn = np.nanmin(img)
+			mx = np.nanmax(img)
+			if mx - mn == 0:
+				return img - mn 
+			return (img - mn) / (mx - mn)
+
+		# Composite View: Red/Cyan anaglyph
+		norm_init = norm(self.init_frame)
+		norm_shifted = norm(self.shifted_frame)
+		
+		shape = self.init_frame.shape
+		rgb = np.zeros((*shape, 3))
+		rgb[..., 0] = norm_init      # Red
+		rgb[..., 1] = norm_shifted   # Green
+		rgb[..., 2] = norm_shifted   # Blue (Green+Blue = Cyan)
+		
+		self.im.set_data(rgb)
 		self.fig.canvas.draw_idle()
 
 	def generate_add_to_parent_btn(self):
@@ -1346,9 +1721,15 @@ class ChannelOffsetViewer(StackVisualizer):
 		self.canvas.layout.addLayout(add_hbox)
 
 	def set_parent_attributes(self):
-
 		idx = self.channels_overlay_cb.currentIndex()
 		self.parent_window.channels_cb.setCurrentIndex(idx)
 		self.parent_window.vertical_shift_le.set_threshold(self.vertical_shift_le.get_threshold())
 		self.parent_window.horizontal_shift_le.set_threshold(self.horizontal_shift_le.get_threshold())
 		self.close()
+
+	def change_frame(self, value):
+		super().change_frame(value)
+		self.init_frame = self.auto_contrast(self.init_frame)
+		self.im.set_data(self.init_frame)
+
+		self.shift_generic()

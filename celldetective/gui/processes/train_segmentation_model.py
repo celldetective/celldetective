@@ -16,6 +16,25 @@ from distutils.dir_util import copy_tree
 from csbdeep.utils import save_json
 
 
+from tensorflow.keras.callbacks import Callback
+
+class ProgressCallback(Callback):
+
+	def __init__(self, queue=None, epochs=100):
+		super().__init__()
+		self.queue = queue
+		self.epochs = epochs
+		self.t0 = time.time()
+
+	def on_epoch_end(self, epoch, logs=None):
+		
+		# Send signal for progress bar
+		sum_done = (epoch+1)/self.epochs*100
+		mean_exec_per_step = (time.time() - self.t0) / (epoch+1)
+		pred_time = (self.epochs - (epoch+1)) * mean_exec_per_step
+		if self.queue is not None:
+			self.queue.put([sum_done, pred_time])
+
 class TrainSegModelProcess(Process):
 
 	def __init__(self, queue=None, process_args=None, *args, **kwargs):
@@ -47,6 +66,8 @@ class TrainSegModelProcess(Process):
 			self.abort_process()
 
 	def run(self):
+
+		self.queue.put("Loading dataset...")
 
 		if self.model_type=="cellpose":
 			self.train_cellpose_model()
@@ -118,9 +139,9 @@ class TrainSegModelProcess(Process):
 			print("WARNING: median object size larger than field of view of the neural network.")
 
 		if self.augmentation_factor==1.0:
-			model.train(self.X_trn, self.Y_trn, validation_data=(self.X_val,self.Y_val))
+			model.train(self.X_trn, self.Y_trn, validation_data=(self.X_val,self.Y_val), epochs=self.epochs, callbacks=[ProgressCallback(queue=self.queue, epochs=self.epochs)])
 		else:
-			model.train(self.X_trn, self.Y_trn, validation_data=(self.X_val,self.Y_val), augmenter=augmenter)
+			model.train(self.X_trn, self.Y_trn, validation_data=(self.X_val,self.Y_val), augmenter=augmenter, epochs=self.epochs, callbacks=[ProgressCallback(queue=self.queue, epochs=self.epochs)])
 		model.optimize_thresholds(self.X_val,self.Y_val)
 
 		config_inputs = {"channels": self.target_channels, 'normalization_percentile': self.normalization_percentile,
