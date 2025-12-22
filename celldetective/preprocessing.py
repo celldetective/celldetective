@@ -10,6 +10,8 @@ from celldetective.io import get_config, get_experiment_wells, interpret_wells_a
 from celldetective.utils import interpolate_nan, estimate_unreliable_edge, unpad, config_section_to_dict, _extract_channel_indices_from_config, _extract_nbr_channels_from_config, _get_img_num_per_channel
 from celldetective.segmentation import filter_image, threshold_image
 from gc import collect
+import logging
+logger = logging.getLogger("celldetective")
 
 
 def estimate_background_per_condition(experiment, threshold_on_std=1, well_option='*', target_channel="channel_name", frame_range=[0,5], mode="timeseries", activation_protocol=[['gauss',2],['std',4]], show_progress_per_pos=False, show_progress_per_well=True, offset=None, fix_nan: bool = False):
@@ -86,7 +88,7 @@ def estimate_background_per_condition(experiment, threshold_on_std=1, well_optio
 		well_idx = well_indices[k]
 		
 		positions = get_positions_in_well(well_path)
-		print(f"Reconstruct a background in well {well_name} from positions: {[extract_position_name(p) for p in positions]}...")
+		logger.info(f"Reconstruct a background in well {well_name} from positions: {[extract_position_name(p) for p in positions]}...")
 
 		frame_mean_per_position = []
 
@@ -139,7 +141,7 @@ def estimate_background_per_condition(experiment, threshold_on_std=1, well_optio
 					
 					frame = np.nanmedian(new_frames, axis=0)
 			else:
-				print(f'Stack not found for position {pos_path}...')
+				logger.info(f'Stack not found for position {pos_path}...')
 				frame = []
 
 			# store
@@ -153,9 +155,9 @@ def estimate_background_per_condition(experiment, threshold_on_std=1, well_optio
 			if fix_nan:
 				background = interpolate_nan(background.copy().astype(float))
 			backgrounds.append({"bg": background, "well": well_path})
-			print(f"Background successfully computed for well {well_name}...")
+			logger.info(f"Background successfully computed for well {well_name}...")
 		except Exception as e:
-			print(e)
+			logger.error(e)
 			backgrounds.append(None)		
 
 	return backgrounds
@@ -268,7 +270,7 @@ def correct_background_model_free(
 			background = background[0]
 			background = background['bg']
 		except Exception as e:
-			print(f'Background could not be estimated due to error "{e}"... Skipping well {well_name}...')
+			logger.error(f'Background could not be estimated due to error "{e}"... Skipping well {well_name}...')
 			continue
 
 		positions = get_positions_in_well(well_path)
@@ -279,7 +281,7 @@ def correct_background_model_free(
 		for pidx,pos_path in enumerate(tqdm(selection, disable=not show_progress_per_pos)):
 			
 			stack_path = get_position_movie_path(pos_path, prefix=movie_prefix)
-			print(f'Applying the correction to position {extract_position_name(pos_path)}...')
+			logger.info(f'Applying the correction to position {extract_position_name(pos_path)}...')
 			if stack_path is not None:
 				len_movie_auto = auto_load_number_of_frames(stack_path)
 				if len_movie_auto is not None:
@@ -303,7 +305,7 @@ def correct_background_model_free(
 															activation_protocol = activation_protocol,
 															prefix = export_prefix,
 														  )
-				print('Correction successful.')
+				logger.info('Correction successful.')
 				if return_stacks:
 					stacks.append(corrected_stack)
 				else:
@@ -377,7 +379,7 @@ def apply_background_to_stack(stack_path, background, target_channel_index=0, nb
 	if stack_length is None:
 		stack_length = auto_load_number_of_frames(stack_path)
 		if stack_length is None:
-			print('stack length not provided')
+			logger.error('stack length not provided')
 			return None
 
 	if optimize_option:
@@ -426,7 +428,7 @@ def apply_background_to_stack(stack_path, background, target_channel_index=0, nb
 				loss.append(s)
 
 			c = coefficients[np.argmin(loss)]
-			print(f"IFD {i}; optimal coefficient: {c}...")
+			logger.info(f"IFD {i}; optimal coefficient: {c}...")
 			# if c==min(coefficients) or c==max(coefficients):
 			# 	print('Warning... The optimal coefficient is beyond the range provided... Please adjust your coefficient range...')	
 		else:
@@ -444,7 +446,7 @@ def apply_background_to_stack(stack_path, background, target_channel_index=0, nb
 			if clip:
 				correction[correction<=0.] = 0.
 		else:
-			print("Operation not supported... Abort.")
+			logger.error("Operation not supported... Abort.")
 			return
 
 		correction[~np.isfinite(correction)] = np.nan
@@ -828,10 +830,10 @@ def correct_background_model(
 			
 			stack_path = get_position_movie_path(pos_path, prefix=movie_prefix)
 			if stack_path is None:
-				print(f"No stack could be found in {pos_path}... Skip...")
+				logger.warning(f"No stack could be found in {pos_path}... Skip...")
 				continue
 
-			print(f'Applying the correction to position {extract_position_name(pos_path)}...')
+			logger.info(f'Applying the correction to position {extract_position_name(pos_path)}...')
 			len_movie_auto = auto_load_number_of_frames(stack_path)
 			if len_movie_auto is not None:
 				len_movie = len_movie_auto
@@ -852,7 +854,7 @@ def correct_background_model(
 														progress_callback=progress_callback,
 														downsample=downsample
 													  )
-			print('Correction successful.')
+			logger.info('Correction successful.')
 			if return_stacks:
 				stacks.append(corrected_stack)
 			else:
@@ -930,7 +932,7 @@ def fit_and_apply_model_background_to_stack(stack_path,
 
 	stack_length_auto = auto_load_number_of_frames(stack_path)
 	if stack_length_auto is None and stack_length is None:
-		print('Stack length not provided...')
+		logger.error('Stack length not provided...')
 		return None
 	if stack_length_auto is not None:
 		stack_length = stack_length_auto
@@ -1158,7 +1160,7 @@ def correct_channel_offset(
 		for pidx,pos_path in enumerate(tqdm(selection, disable=not show_progress_per_pos)):
 			
 			stack_path = get_position_movie_path(pos_path, prefix=movie_prefix)
-			print(f'Applying the correction to position {extract_position_name(pos_path)}...')
+			logger.info(f'Applying the correction to position {extract_position_name(pos_path)}...')
 			len_movie_auto = auto_load_number_of_frames(stack_path)
 			if len_movie_auto is not None:
 				len_movie = len_movie_auto
@@ -1174,7 +1176,7 @@ def correct_channel_offset(
 														prefix=export_prefix,
 														return_stacks = return_stacks,
 													  )
-			print('Correction successful.')
+			logger.info('Correction successful.')
 			if return_stacks:
 				stacks.append(corrected_stack)
 			else:
@@ -1200,7 +1202,7 @@ def correct_channel_offset_single_stack(stack_path,
 
 	stack_length_auto = auto_load_number_of_frames(stack_path)
 	if stack_length_auto is None and stack_length is None:
-		print('Stack length not provided...')
+		logger.error('Stack length not provided...')
 		return None
 	if stack_length_auto is not None:
 		stack_length = stack_length_auto

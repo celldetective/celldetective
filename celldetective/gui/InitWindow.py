@@ -127,8 +127,8 @@ class AppInitWindow(CelldetectiveMainWindow):
 		OptionsMenu = QMenu("Options", self)
 		OptionsMenu.addAction(self.MemoryAndThreadsAction)
 		OptionsMenu.addSeparator()
-		OptionsMenu.addAction(self.ReplaySessionAction)
-		OptionsMenu.addAction(self.OpenLogsAction)
+		# OptionsMenu.addAction(self.ReplaySessionAction)
+		# OptionsMenu.addAction(self.OpenLogsAction)
 		menuBar.addMenu(OptionsMenu)
 
 		PluginsMenu = QMenu("Plugins", self)
@@ -163,8 +163,8 @@ class AppInitWindow(CelldetectiveMainWindow):
 
 		self.MemoryAndThreadsAction = QAction('Threads')
 		
-		self.ReplaySessionAction = QAction("Replay Session...", self)
-		self.OpenLogsAction = QAction("Open Session Logs", self)
+		# self.ReplaySessionAction = QAction("Replay Session...", self)
+		# self.OpenLogsAction = QAction("Open Session Logs", self)
 
 		self.CorrectAnnotationAction = QAction('Correct a segmentation annotation')
 
@@ -194,8 +194,8 @@ class AppInitWindow(CelldetectiveMainWindow):
 		self.openModels.triggered.connect(self.open_models_folder)
 		self.AboutAction.triggered.connect(self.open_about_window)
 		self.MemoryAndThreadsAction.triggered.connect(self.set_memory_and_threads)
-		self.ReplaySessionAction.triggered.connect(self.replay_session)
-		self.OpenLogsAction.triggered.connect(self.open_session_logs)
+		# self.ReplaySessionAction.triggered.connect(self.replay_session)
+		# self.OpenLogsAction.triggered.connect(self.open_session_logs)
 		self.CorrectAnnotationAction.triggered.connect(self.correct_seg_annotation)
 		self.DocumentationAction.triggered.connect(self.open_documentation)
 

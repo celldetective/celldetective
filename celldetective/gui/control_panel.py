@@ -3,7 +3,7 @@ from PyQt5.QtWidgets import QPushButton, QHBoxLayout, QLabel, QGridLayout, QFram
 from celldetective.gui import CelldetectiveMainWindow, CelldetectiveWidget
 
 from PyQt5.QtCore import Qt, QSize
-from celldetective.gui.gui_utils import center_window, QHSeperationLine, QCheckableComboBox, generic_message
+from celldetective.gui.gui_utils import QHSeperationLine, QCheckableComboBox, generic_message
 from celldetective.utils import _extract_labels_from_config, config_section_to_dict, extract_identity_col
 from celldetective.gui import ConfigEditor, ProcessPanel, PreprocessingPanel, AnalysisPanel, NeighPanel
 from celldetective.io import extract_position_name, get_experiment_wells, get_config, get_spatial_calibration, get_temporal_calibration, get_experiment_concentrations, get_experiment_cell_types, get_experiment_antibodies, get_experiment_pharmaceutical_agents, get_experiment_populations, extract_well_name_and_number

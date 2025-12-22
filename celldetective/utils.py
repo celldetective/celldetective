@@ -2751,12 +2751,12 @@ def load_image_dataset(datasets, channels, train_spatial_calibration=None, mask_
 	X = []; Y = []; files = [];
 
 	for ds in datasets:
-		print(f'Loading data from dataset {ds}...')
+		logger.info(f'Loading data from dataset {ds}...')
 		if not ds.endswith(os.sep):
 			ds+=os.sep
 		img_paths = list(set(glob(ds+'*.tif')) - set(glob(ds+f'*_{mask_suffix}.tif')))
 		for im in img_paths:
-			print(f'{im=}')
+			logger.info(f'{im=}')
 			mask_path = os.sep.join([os.path.split(im)[0],os.path.split(im)[-1].replace('.tif', f'_{mask_suffix}.tif')])
 			if os.path.exists(mask_path):
 				# load image and mask

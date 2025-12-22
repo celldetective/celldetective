@@ -36,10 +36,11 @@ from scipy.signal import find_peaks, peak_widths
 from celldetective.segmentation import filter_image
 from celldetective.regionprops import regionprops_table
 from celldetective.utils import pretty_table
+import logging
+logger = logging.getLogger("celldetective")
+
 
 abs_path = os.sep.join([os.path.split(os.path.dirname(os.path.realpath(__file__)))[0], 'celldetective'])
-
-
 
 def measure(stack=None, labels=None, trajectories=None, channel_names=None,
 			features=None, intensity_measurement_radii=None, isotropic_operations=['mean'], border_distances=None,
@@ -109,10 +110,8 @@ def measure(stack=None, labels=None, trajectories=None, channel_names=None,
 
 	"""
 
-
 	do_iso_intensities = True
 	do_features = True
-
 
 	# Check that conditions are satisfied to perform measurements
 	assert (labels is not None) or (stack is not None),'Please pass a stack and/or labels... Abort.'
@@ -123,14 +122,14 @@ def measure(stack=None, labels=None, trajectories=None, channel_names=None,
 	if labels is None:
 		do_features = False
 		nbr_frames = len(stack)
-		print('No labels were provided... Features will not be computed...')
+		logger.warning('No labels were provided... Features will not be computed...')
 	else:
 		nbr_frames = len(labels)
 
 	# Condition to compute isotropic intensities
 	if (stack is None) or (trajectories is None) or (intensity_measurement_radii is None):
 		do_iso_intensities = False
-		print('Either no image, no positions or no radii were provided... Isotropic intensities will not be computed...')
+		logger.warning('Either no image, no positions or no radii were provided... Isotropic intensities will not be computed...')
 
 	# Compensate for non provided channel names
 	if (stack is not None)*(channel_names is None):
@@ -211,7 +210,7 @@ def measure(stack=None, labels=None, trajectories=None, channel_names=None,
 			measurements_at_t['radial_distance'] = np.sqrt((measurements_at_t[column_labels['x']] - img.shape[0] / 2) ** 2 + (
 					measurements_at_t[column_labels['y']] - img.shape[1] / 2) ** 2)
 		except Exception as e:
-			print(f"{e=}")
+			logger.error(f"{e=}")
 
 		timestep_dataframes.append(measurements_at_t)
 
@@ -330,7 +329,7 @@ def measure_features(img, label, features=['area', 'intensity_mean'], channels=N
 	measure_mean_intensities = False
 	if img is None:
 		if verbose:
-			print('No image was provided... Skip intensity measurements.')
+			logger.warning('No image was provided... Skip intensity measurements.')
 		border_dist = None;
 		haralick_options = None;
 		features = drop_tonal_features(features)
@@ -378,7 +377,7 @@ def measure_features(img, label, features=['area', 'intensity_mean'], channels=N
 		import celldetective.extra_properties as extra_props
 		extraprops = True
 	except Exception as e:
-		print(f"The module extra_properties seems corrupted: {e}... Skip...")
+		logger.error(f"The module extra_properties seems corrupted: {e}... Skip...")
 		extraprops = False
 
 	if extraprops:
@@ -424,7 +423,7 @@ def measure_features(img, label, features=['area', 'intensity_mean'], channels=N
 
 		if len(intensity_features) == 0:
 			if verbose:
-				print('No intensity feature was passed... Adding mean intensity for edge measurement...')
+				logger.warning('No intensity feature was passed... Adding mean intensity for edge measurement...')
 			intensity_features = np.append(intensity_features, 'intensity_mean')
 		intensity_features = list(np.append(intensity_features, 'label'))
 
@@ -469,7 +468,7 @@ def measure_features(img, label, features=['area', 'intensity_mean'], channels=N
 				df_props = df_props.merge(df_haralick, how='outer', on='label', suffixes=('_delme', ''))
 				df_props = df_props[[c for c in df_props.columns if not c.endswith('_delme')]]
 		except Exception as e:
-			print(e)
+			logger.error(e)
 			pass
 
 	if channels is not None:
@@ -543,7 +542,7 @@ def compute_haralick_features(img, labels, channels=None, target_channel=0, scal
 		elif isinstance(channels, str):
 			modality = channels
 		else:
-			print('Channel name unrecognized...')
+			logger.error('Channel name unrecognized...')
 			modality=''
 	elif img.ndim==3:
 		assert target_channel is not None,"The image is multichannel. Please provide a target channel to compute the Haralick features. Abort."
@@ -703,7 +702,7 @@ def measure_isotropic_intensity(positions, # Dataframe of cell positions @ t
 			channels = [channels]
 		else:
 			if verbose:
-				print('Channel name unrecognized...')
+				logger.error('Channel name unrecognized...')
 			channels=['intensity']
 	elif img.ndim==3:
 		assert channels is not None,"The image is multichannel. Please provide the list of channel names. Abort."
@@ -859,7 +858,7 @@ def normalise_by_cell(image, labels, distance=5, model='median', operation='subt
 		import celldetective.extra_properties as extra_props
 		extraprops = True
 	except Exception as e:
-		print(f"The module extra_properties seems corrupted: {e}... Skip...")
+		logger.error(f"The module extra_properties seems corrupted: {e}... Skip...")
 		extraprops = False
 
 	border = contour_of_instance_segmentation(label=labels, distance=distance * (-1))
@@ -1188,7 +1187,7 @@ def classify_transient_events(data, class_attr, pre_event=None):
 		df = df.drop(columns=['inst_'+stat_col])
 	df = df.rename(columns={stat_col: 'inst_'+stat_col})
 	df = df.rename(columns={continuous_stat_col: stat_col})
-	print("Classes: ",df.loc[df['FRAME']==0,class_attr].value_counts())
+	logger.info("Classes: ",df.loc[df['FRAME']==0,class_attr].value_counts())
 
 	return df
 
@@ -1283,19 +1282,19 @@ def classify_irreversible_events(data, class_attr, r2_threshold=0.5, percentile_
 			# ambiguity, possible transition, use `unique_state` technique after
 			df.loc[indices, class_attr] = 2
 
-	print("Number of cells per class after the initial pass: ")
+	logger.info("Number of cells per class after the initial pass: ")
 	pretty_table(df.loc[df['FRAME']==0,class_attr].value_counts().to_dict())
 
 	df.loc[df[class_attr]!=2, class_attr.replace('class', 't')] = -1
 	# Try to fit time on class 2 cells (ambiguous)
 	df = estimate_time(df, class_attr, model='step_function', class_of_interest=[2], r2_threshold=r2_threshold)
 	
-	print("Number of cells per class after conditional signal fit: ")
+	logger.info("Number of cells per class after conditional signal fit: ")
 	pretty_table(df.loc[df['FRAME']==0,class_attr].value_counts().to_dict())
 
 	# Revisit class 2 cells to classify as neg/pos with percentile tolerance
 	df.loc[df[class_attr]==2,:] = classify_unique_states(df.loc[df[class_attr]==2,:].copy(), class_attr, percentile_recovery)
-	print("Number of cells per class after recovery pass (median state): ")
+	logger.info("Number of cells per class after recovery pass (median state): ")
 	pretty_table(df.loc[df['FRAME']==0,class_attr].value_counts().to_dict())
 	
 	return df
@@ -1445,7 +1444,7 @@ def classify_cells_from_query(df, status_attr, query):
 	df[status_attr] = df[status_attr].astype(float)
 	
 	cols = extract_cols_from_query(query)
-	print(f"The following DataFrame measurements were identified in the query: {cols=}...")
+	logger.info(f"The following DataFrame measurements were identified in the query: {cols=}...")
 	
 	if query.strip() == "":
 		raise EmptyQueryError("The provided query is empty.")
@@ -1487,7 +1486,7 @@ def measure_radial_distance_to_center(df, volume, column_labels={'track': "TRACK
 	try:
 		df['radial_distance'] = np.sqrt((df[column_labels['x']] - volume[0] / 2) ** 2 + (df[column_labels['y']] - volume[1] / 2) ** 2)
 	except Exception as e:
-		print(f"{e=}")
+		logger.error(f"{e=}")
 
 	return df
 

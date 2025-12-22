@@ -14,7 +14,7 @@ import os
 from PyQt5.QtWidgets import QHBoxLayout, QCheckBox, QMessageBox, QPushButton, QLabel, QComboBox, QLineEdit, QListWidget, QShortcut, QAction
 from PyQt5.QtCore import Qt, QSize
 from PyQt5.QtGui import QKeySequence, QDoubleValidator
-from celldetective.gui.gui_utils import FigureCanvas, QuickSliderLayout, QHSeperationLine, ThresholdLineEdit, PreprocessingLayout2
+from celldetective.gui.gui_utils import FigureCanvas, QuickSliderLayout, QHSeperationLine, ThresholdLineEdit, PreprocessingLayout2, center_window
 from celldetective.gui import CelldetectiveWidget
 from superqt import QLabeledDoubleSlider, QLabeledSlider, QLabeledDoubleRangeSlider
 from superqt.fonticon import icon
@@ -24,6 +24,7 @@ import gc
 from scipy.ndimage import shift, map_coordinates
 from matplotlib.widgets import RectangleSelector
 from mpl_toolkits.axes_grid1 import make_axes_locatable
+import time
 
 class StackVisualizer(CelldetectiveWidget):
 
@@ -86,8 +87,10 @@ class StackVisualizer(CelldetectiveWidget):
 		self.line_mode = False
 		self.line_artist = None
 		self.ax_profile = None
+		self._min = 0
+		self._max = 0
 
-		self.load_stack() # need to get stack, frame etc
+		self.load_stack()
 		self.generate_figure_canvas()
 		if self.create_channel_cb:
 			self.generate_channel_cb()
@@ -96,37 +99,19 @@ class StackVisualizer(CelldetectiveWidget):
 		if self.create_frame_slider:
 			self.generate_frame_slider()
 		
-
 		self.line_color = "orange"
 		self.generate_custom_tools()
 
 		self.canvas.layout.setContentsMargins(15,15,15,30)
-		#center_window(self)
+		
+		center_window(self)
+
 
 	def generate_custom_tools(self):
 		
 		tools_layout = QHBoxLayout()
 		tools_layout.setContentsMargins(15, 0, 15, 0)
 
-		# ROI Tool
-		# self.roi_btn = QPushButton("ROI (Mean)")
-		# self.roi_btn.setCheckable(True)
-		# self.roi_btn.setStyleSheet(self.button_select_all)
-		# self.roi_btn.clicked.connect(self.toggle_roi_mode)
-		# self.roi_btn.setToolTip("Draw a rectangle to calculate mean and std intensity.")
-		# tools_layout.addWidget(self.roi_btn)
-
-		# ROI Tool
-		# self.roi_btn = QPushButton("ROI (Mean)")
-		# self.roi_btn.setCheckable(True)
-		# self.roi_btn.setStyleSheet(self.button_select_all)
-		# self.roi_btn.clicked.connect(self.toggle_roi_mode)
-		# self.roi_btn.setToolTip("Draw a rectangle to calculate mean and std intensity.")
-		# tools_layout.addWidget(self.roi_btn)
-
-		# Add Line Profile to Toolbar
-		# Insert after standard buttons (usually around index 6 or 7)
-		# Or find "Zoom" or "Pan" action and insert after
 		actions = self.canvas.toolbar.actions()
 		
 		# Create the action
@@ -134,20 +119,13 @@ class StackVisualizer(CelldetectiveWidget):
 		self.line_action.setCheckable(True)
 		self.line_action.setToolTip("Draw a line to plot intensity profile.")
 		self.line_action.triggered.connect(self.toggle_line_mode)
-		
-		# Lock Y-Axis Action
-		self.lock_y_action = QAction(icon(MDI6.lock, color='black'), "Lock Y-Axis", self.canvas.toolbar)
-		self.lock_y_action.setCheckable(True)
-		self.lock_y_action.setToolTip("Lock the Y-axis min/max values for the profile plot.")
+
 		# Lock Y-Axis Action
 		self.lock_y_action = QAction(icon(MDI6.lock, color='black'), "Lock Y-Axis", self.canvas.toolbar)
 		self.lock_y_action.setCheckable(True)
 		self.lock_y_action.setToolTip("Lock the Y-axis min/max values for the profile plot.")
 		self.lock_y_action.setEnabled(False) # Enable only when line mode is active
 
-
-
-		# Attempt to insert after Zoom
 		target_action = None
 		for action in actions:
 			if "Zoom" in action.text() or "Pan" in action.text():
@@ -172,66 +150,14 @@ class StackVisualizer(CelldetectiveWidget):
 					self.canvas.toolbar.addAction(self.line_action)
 					self.canvas.toolbar.addAction(self.lock_y_action)
 		
-		# Info Label
 		self.info_lbl = QLabel("")
 		tools_layout.addWidget(self.info_lbl)
 		
 		self.canvas.layout.addLayout(tools_layout)
 
-	def toggle_roi_mode(self):
-		pass
-		
-		# if self.roi_btn.isChecked():
-		# 	# Disable other modes
-		# 	self.line_action.setChecked(False)
-		# 	self.toggle_line_mode()
-
-		# 	self.roi_selector = RectangleSelector(
-		# 		self.ax, self.on_select_roi,
-		# 		useblit=True,
-		# 		button=[1],  # Left mouse button
-		# 		minspanx=5, minspany=5,
-		# 		spancoords='pixels',
-		# 		interactive=True
-		# 	)
-		# 	self.roi_mode = True
-		# 	self.canvas.toolbar.mode = '' # Disable toolbar zoom/pan to avoid conflict
-		# else:
-		# 	if hasattr(self, 'roi_selector'):
-		# 		self.roi_selector.set_active(False)
-		# 	self.roi_mode = False
-		# 	self.info_lbl.setText("")
-
-	def on_select_roi(self, eclick, erelease):
-		pass
-		
-		# if not self.roi_mode: return
-
-		# x1, y1 = int(eclick.xdata), int(eclick.ydata)
-		# x2, y2 = int(erelease.xdata), int(erelease.ydata)
-		
-		# # Handle boundaries
-		# x_start, x_end = sorted([x1, x2])
-		# y_start, y_end = sorted([y1, y2])
-		
-		# x_start = max(0, x_start)
-		# y_start = max(0, y_start)
-		# x_end = min(self.init_frame.shape[1], x_end)
-		# y_end = min(self.init_frame.shape[0], y_end)
-
-		# roi = self.init_frame[y_start:y_end, x_start:x_end]
-		
-		# if roi.size > 0:
-		# 	mean_val = np.mean(roi)
-		# 	std_val = np.std(roi)
-		# 	self.info_lbl.setText(f"ROI: Mean={mean_val:.2f}, Std={std_val:.2f}, Size={roi.size}px")
-		
 	def toggle_line_mode(self):
 		
 		if self.line_action.isChecked():
-			# Disable other modes
-			# self.roi_btn.setChecked(False)
-			# self.toggle_roi_mode()
 
 			self.line_mode = True
 			self.lock_y_action.setEnabled(True)
@@ -255,8 +181,8 @@ class StackVisualizer(CelldetectiveWidget):
 			# Use GridSpec for robust layout
 			# 2 rows: Main Image (top, ~75%), Profile (bottom, ~25%)
 			# Add margins to ensure axis labels and text are visible
-			gs = gridspec.GridSpec(2, 1, height_ratios=[3, 1], hspace=0.3, 
-								 left=0.15, right=0.85, bottom=0.1, top=0.95)
+			gs = gridspec.GridSpec(2, 1, height_ratios=[3, 1], hspace=0.05,
+								 left=0.1, right=0.9, bottom=0.05, top=1)
 			
 			# Move main axes to top slot
 			self.ax.set_subplotspec(gs[0])
@@ -283,7 +209,6 @@ class StackVisualizer(CelldetectiveWidget):
 			self.ax_profile.spines['left'].set_color('black')
 			
 			self.canvas.draw()
-
 		else:
 			self.line_mode = False
 			self.lock_y_action.setChecked(False)
@@ -294,8 +219,6 @@ class StackVisualizer(CelldetectiveWidget):
 				self.fig.canvas.mpl_disconnect(self.cid_move)
 				self.fig.canvas.mpl_disconnect(self.cid_release)
 			
-
-
 			# Remove line artist
 			if self.line_artist:
 				self.line_artist.remove()
@@ -324,7 +247,7 @@ class StackVisualizer(CelldetectiveWidget):
 
 	def on_line_press(self, event):
 		if event.inaxes != self.ax: return
-		if self.canvas.toolbar.mode: return # Don't draw if zooming/panning
+		if self.canvas.toolbar.mode: return
 		
 		self.line_x = [event.xdata]
 		self.line_y = [event.ydata]
@@ -332,7 +255,7 @@ class StackVisualizer(CelldetectiveWidget):
 		
 		if self.line_artist:
 			self.line_artist.remove()
-		self.line_artist, = self.ax.plot(self.line_x, self.line_y, color=self.line_color, linestyle='-', linewidth=2.5)
+		self.line_artist, = self.ax.plot(self.line_x, self.line_y, color=self.line_color, linestyle='-', linewidth=3)
 		self.canvas.draw()
 
 	def on_line_drag(self, event):
@@ -362,13 +285,12 @@ class StackVisualizer(CelldetectiveWidget):
 			profile = map_coordinates(self.init_frame, np.vstack((y, x)))
 		else:
 			return
-
 		# Distance in microns if available
 		dist_axis = np.arange(num_points)
 		x_label = 'Distance (px)'
-		
+
 		# Only show pixel length, rounded to integer
-		title_str = f"{int(round(length_px))} px"
+		title_str = f"{round(length_px,2)} [px] | {round(length_px*self.PxToUm,3)} [µm]"
 		
 		# Handle Y-Axis Locking
 		current_ylim = None
@@ -383,10 +305,14 @@ class StackVisualizer(CelldetectiveWidget):
 				self.profile_line.remove()
 			except:
 				pass
+		
+		# Distance in microns if available
+		dist_axis = np.arange(num_points)
+
 		self.profile_line, = self.ax_profile.plot(dist_axis, profile, color="black", linestyle='-') 
-		self.ax_profile.set_xlabel('')
 		self.ax_profile.set_xticks([])
 		self.ax_profile.set_ylabel('Intensity', fontsize=8)
+		self.ax_profile.set_xlabel(title_str, fontsize=8)
 		self.ax_profile.tick_params(axis='y', which='major', labelsize=6)
 		# self.ax_profile.grid(True)
 		
@@ -397,38 +323,38 @@ class StackVisualizer(CelldetectiveWidget):
 		self.ax_profile.spines['left'].set_color('black')
 
 		# Display length on the image itself
-		mx, my = (x0 + x1) / 2, (y0 + y1) / 2
+		# mx, my = (x0 + x1) / 2, (y0 + y1) / 2
 		
-		# Calculate angle in degrees
-		dx = x1 - x0
-		dy = y1 - y0
-		# Inverted Y axis correction: -dy
-		angle = np.degrees(np.arctan2(-dy, dx))
+		# # Calculate angle in degrees
+		# dx = x1 - x0
+		# dy = y1 - y0
+		# # Inverted Y axis correction: -dy
+		# angle = np.degrees(np.arctan2(-dy, dx))
 		
-		# Keep text upright
-		if angle < -90:
-			angle += 180
-		elif angle > 90:
-			angle -= 180
+		# # Keep text upright
+		# if angle < -90:
+		# 	angle += 180
+		# elif angle > 90:
+		# 	angle -= 180
 
-		# Apply offset "above" the line (perpendicular shift)
-		# Image coordinates: Y increases downwards. "Above" means lower Y.
-		# Perpendicular vector to (dx, dy) is (dy, -dx) for "upward" shift in inverted Y
-		# scale = 15 pixels offset
-		offset = 2
-		length = np.hypot(dx, dy)
-		if length > 0:
-			mx += (dy / length) * offset
-			my += (-dx / length) * offset
+		# # Apply offset "above" the line (perpendicular shift)
+		# # Image coordinates: Y increases downwards. "Above" means lower Y.
+		# # Perpendicular vector to (dx, dy) is (dy, -dx) for "upward" shift in inverted Y
+		# # scale = 15 pixels offset
+		# offset = 2
+		# length = np.hypot(dx, dy)
+		# if length > 0:
+		# 	mx += (dy / length) * offset
+		# 	my += (-dx / length) * offset
 
-		if hasattr(self, 'line_text') and self.line_text:
-			self.line_text.remove()
+		# if hasattr(self, 'line_text') and self.line_text:
+		# 	self.line_text.remove()
 		
-		# Use contrasting color or background box for visibility
-		self.line_text = self.ax.text(mx, my, title_str, color=self.line_color, 
-									fontsize=12, ha='center', va='bottom',
-									rotation=angle, rotation_mode='anchor',
-									bbox=dict(facecolor='white', alpha=0.5, edgecolor='none', pad=1))
+		# # Use contrasting color or background box for visibility
+		# self.line_text = self.ax.text(mx, my, title_str, color=self.line_color, 
+		# 							fontsize=12, ha='center', va='bottom',
+		# 							rotation=angle, rotation_mode='anchor',
+		# 							bbox=dict(facecolor='white', alpha=0.5, edgecolor='none', pad=1))
 		
 		# Ensure figure background is transparent just in case
 		self.fig.set_facecolor('none')
@@ -496,16 +422,18 @@ class StackVisualizer(CelldetectiveWidget):
 
 
 	def generate_figure_canvas(self):
-		# Generate the figure canvas for displaying images
 
-		self.fig, self.ax = plt.subplots(figsize=(5,5)) #figsize=(5, 5)
-		# Manual Layout to avoid tight_layout conflicts
+		p01 = np.nanpercentile(self.init_frame, 0.1)
+		p99 = np.nanpercentile(self.init_frame, 99.9)
+
+		self.fig, self.ax = plt.subplots(figsize=(5,5))
+
 		self.fig.subplots_adjust(top=1, bottom=0, right=1, left=0, hspace=0, wspace=0)
 		self.ax.margins(0)
 		self.fig.patch.set_alpha(0)
 		self.canvas = FigureCanvas(self.fig, title=self.window_title, interactive=True)
 		self.ax.clear()
-		self.im = self.ax.imshow(self.init_frame, cmap='gray', interpolation='none', zorder=0, **self.imshow_kwargs)
+		self.im = self.ax.imshow(self.init_frame, cmap='gray', interpolation='none', zorder=0, vmin=p01, vmax=p99, **self.imshow_kwargs)
 		if self.PxToUm is not None:
 			scalebar = ScaleBar(self.PxToUm,
 								"um",
@@ -521,7 +449,6 @@ class StackVisualizer(CelldetectiveWidget):
 		self.ax.axis('off')
 
 	def generate_channel_cb(self):
-		# Generate the channel dropdown if enabled
 
 		self.channel_cb = QComboBox()
 		if self.channel_names is not None and len(self.channel_names) > 0:
@@ -531,10 +458,10 @@ class StackVisualizer(CelldetectiveWidget):
 			for i in range(self.n_channels):
 				self.channel_cb.addItem(f"Channel {i}")
 		self.channel_cb.currentIndexChanged.connect(self.set_channel_index)
-		# Add to layout below the plot
+
 		layout = QHBoxLayout()
-		layout.addWidget(QLabel("Channel"))
-		layout.addWidget(self.channel_cb)
+		layout.addWidget(QLabel("Channel: "), 15)
+		layout.addWidget(self.channel_cb, 85)
 		self.canvas.layout.addLayout(layout)
 
 	def set_contrast_decimals(self):
@@ -558,12 +485,13 @@ class StackVisualizer(CelldetectiveWidget):
 			self.contrast_slider.setValue((p01, p99))
 		else:
 			self.contrast_slider.setValue((np.min(self.init_frame), np.max(self.init_frame)))
+		
 		self.contrast_slider.setEdgeLabelMode(QLabeledDoubleRangeSlider.EdgeLabelMode.NoLabel)
 		self.contrast_slider.setDecimals(self.contrast_decimals)
 						
 		self.contrast_slider.valueChanged.connect(self.change_contrast)
-		layout.addWidget(QLabel("Contrast"))
-		layout.addWidget(self.contrast_slider)
+		layout.addWidget(QLabel("Contrast: "), 15)
+		layout.addWidget(self.contrast_slider, 85)
 		self.canvas.layout.addLayout(layout)
 
 	def generate_frame_slider(self):
@@ -574,8 +502,8 @@ class StackVisualizer(CelldetectiveWidget):
 		self.frame_slider.setRange(0, self.stack_length-1)
 		self.frame_slider.setValue(self.mid_time)
 		self.frame_slider.valueChanged.connect(self.change_frame)
-		layout.addWidget(QLabel("Time"))
-		layout.addWidget(self.frame_slider)
+		layout.addWidget(QLabel("Time: "), 15)
+		layout.addWidget(self.frame_slider, 85)
 		self.canvas.layout.addLayout(layout)
 
 	def set_target_channel(self, value):
@@ -597,25 +525,28 @@ class StackVisualizer(CelldetectiveWidget):
 		if self.create_frame_slider:
 			self.change_frame_from_channel_switch(self.frame_slider.value())
 		else:
-			# If no frame slider, we assume single timepoint, just switch channel in stack
 			if self.stack is not None and self.stack.ndim == 4:
 				self.init_frame = self.stack[self.mid_time,:,:,self.target_channel]
 				self.im.set_data(self.init_frame)
-				self.im.set_clim(vmax=np.percentile(self.init_frame,99.99))
+				p01 = np.nanpercentile(self.init_frame, 0.1)
+				p99 = np.nanpercentile(self.init_frame, 99.9)
 				self.canvas.draw()
 				self.update_profile()
 
 	def change_frame_from_channel_switch(self, value):
+		self._min = 0
+		self._max = 0
 		self.change_frame(value)
 		if self.channel_trigger:
-			self.im.set_clim(vmax=np.percentile(self.init_frame,99.99))
+			p01 = np.nanpercentile(self.init_frame, 0.1)
+			p99 = np.nanpercentile(self.init_frame, 99.9)
+			self.im.set_clim(vmin=p01, vmax=p99)
+			self.contrast_slider.setValue((p01, p99))
 			self.channel_trigger = False
 			self.canvas.draw()
 
 	def change_frame(self, value):
-		# Change the displayed frame based on slider value
-		
-		# Update self.init_frame
+
 		if self.mode == 'direct':
 			self.init_frame = self.stack[value,:,:,self.target_channel]
 		
@@ -625,6 +556,16 @@ class StackVisualizer(CelldetectiveWidget):
 										  normalize_input=False).astype(float)[:,:,0]
 
 		self.im.set_data(self.init_frame)
+		rescale_contrast = False
+		if np.amin(self.init_frame) < self._min:
+			self._min = np.amin(self.init_frame)
+			rescale_constrast = True
+		if np.amax(self.init_frame) > self._max:
+			self._max = np.amax(self.init_frame)
+			rescale_contrast = True
+
+		if rescale_contrast:
+			self.contrast_slider.setRange(self._min, self._max)
 		self.canvas.draw()
 		self.update_profile()
 

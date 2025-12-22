@@ -4,7 +4,6 @@ from PyQt5.QtWidgets import QApplication, QSplashScreen
 from PyQt5.QtGui import QPixmap
 from os import sep
 
-
 #os.environ['QT_DEBUG_PLUGINS'] = '1'
 
 if __name__ == "__main__":
@@ -19,32 +18,32 @@ if __name__ == "__main__":
 	App.setStyle("Fusion")
 
 	# --- Recorder Setup ---
-	try:
-		from celldetective.gui.recorder import ActionRecorder
-		import shutil
-		import os
+	# try:
+	# 	# from celldetective.gui.recorder import ActionRecorder
+	# 	import shutil
+	# 	import os
 
-		home_dir = os.path.expanduser("~")
-		session_dir = os.path.join(home_dir, ".celldetective", "sessions")
-		if not os.path.exists(session_dir):
-			os.makedirs(session_dir)
+	# 	home_dir = os.path.expanduser("~")
+	# 	session_dir = os.path.join(home_dir, ".celldetective", "sessions")
+	# 	if not os.path.exists(session_dir):
+	# 		os.makedirs(session_dir)
 
-		# Old rotation logic removed in favor of timestamped logs and auto-cleanup
-		recorder = ActionRecorder(output_dir=session_dir)
-		recorder.start()
+	# 	# Old rotation logic removed in favor of timestamped logs and auto-cleanup
+	# 	# recorder = ActionRecorder(output_dir=session_dir)
+	# 	# recorder.start()
 
-		# Save on exit
-		App.aboutToQuit.connect(lambda: recorder.save())
+	# 	# Save on exit
+	# 	# App.aboutToQuit.connect(lambda: recorder.save())
 
-		# Save on crash
-		sys_excepthook = sys.excepthook
-		def hook(exctype, value, traceback):
-			logger.error("Unhandled exception!", exc_info=(exctype, value, traceback))
-			recorder.save()
-			sys_excepthook(exctype, value, traceback)
-		sys.excepthook = hook
-	except Exception as e:
-		logger.error(f"Failed to initialize recorder: {e}")
+	# 	# Save on crash
+	# 	sys_excepthook = sys.excepthook
+	# 	def hook(exctype, value, traceback):
+	# 		logger.error("Unhandled exception!", exc_info=(exctype, value, traceback))
+	# 		recorder.save()
+	# 		sys_excepthook(exctype, value, traceback)
+	# 	sys.excepthook = hook
+	# except Exception as e:
+	# 	logger.error(f"Failed to initialize recorder: {e}")
 	# ----------------------
 
 	software_location = get_software_location()
@@ -78,7 +77,7 @@ if __name__ == "__main__":
 			if latest_version_num > current_version_num:
 				logger.warning('Update is available...\nPlease update using `pip install --upgrade celldetective`...')
 		except Exception as e:
-			logger.error(f"Update check failed: {e}")
+			logger.error(f"Update check failed... Please check your internet connection: {e}")
 
 	import threading
 	update_thread = threading.Thread(target=check_update)

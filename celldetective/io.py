@@ -41,6 +41,8 @@ import re
 
 from typing import List, Tuple, Union
 import numbers
+import logging
+logger = logging.getLogger("celldetective")
 
 def extract_experiment_from_well(well_path):
 
@@ -200,7 +202,7 @@ def collect_experiment_metadata(pos_path=None, well_path=None):
 			well_path += os.sep
 		experiment = extract_experiment_from_well(well_path)
 	else:
-		print("Please provide a position or well path...")
+		logger.error("Please provide a position or well path...")
 		return None
 		
 	wells = list(get_experiment_wells(experiment))
@@ -232,7 +234,7 @@ def collect_experiment_metadata(pos_path=None, well_path=None):
 		try:
 			dico.update({k: values[idx]})
 		except Exception as e:
-			print(f"{e=}")
+			logger.error(f"{e=}")
 
 	return dico
 
@@ -668,7 +670,7 @@ def interpret_wells_and_positions(experiment: str, well_option: Union[str,int,Li
 	elif isinstance(well_option, list):
 		well_indices = well_option
 	else:
-		print("Well indices could not be interpreted...")
+		logger.error("Well indices could not be interpreted...")
 		return None
 
 	if position_option == '*':
@@ -678,7 +680,7 @@ def interpret_wells_and_positions(experiment: str, well_option: Union[str,int,Li
 	elif isinstance(position_option, list):
 		position_indices = position_option
 	else:
-		print("Position indices could not be interpreted...")
+		logger.error("Position indices could not be interpreted...")
 		return None
 
 	return well_indices, position_indices
@@ -811,7 +813,7 @@ def get_position_table(pos, population, return_path=False):
 		try:
 			df_pos = pd.read_csv(table, low_memory=False)
 		except Exception as e:
-			print(e)
+			logger.error(e)
 			df_pos = None
 	else:
 		df_pos = None
@@ -1012,7 +1014,7 @@ def load_experiment_tables(experiment, population='targets', well_option='*', po
 			try:
 				positions = positions[position_indices]
 			except Exception as e:
-				print(e)
+				logger.error(e)
 				continue
 
 		real_pos_index = 0
@@ -1040,7 +1042,7 @@ def load_experiment_tables(experiment, population='targets', well_option='*', po
 					try:
 						df_pos[k] = values[widx]
 					except Exception as e:
-						print(f"{e=}")
+						logger.error(f"{e=}")
 
 				if metadata is not None:
 					keys = list(metadata.keys())
@@ -1272,7 +1274,7 @@ def locate_labels(position, population='target', frames=None, lazy=False):
 			else:
 				labels.append(np.array(imread(label_path[idx].replace('\\', '/'))))
 	else:
-		print('Frames argument must be None, int or list...')
+		logger.error('Frames argument must be None, int or list...')
 
 	return labels
 
@@ -1531,7 +1533,7 @@ def auto_load_number_of_frames(stack_path):
 		del stack
 	gc.collect()
 
-	print(f'Automatically detected stack length: {len_movie}...')
+	logger.info(f'Automatically detected stack length: {len_movie}...')
 
 	return len_movie if 'len_movie' in locals() else None
 
@@ -1867,7 +1869,7 @@ def locate_signal_model(name, path=None, pairs=False):
 	modelpath = os.sep.join([main_dir, "models", "signal_detection", os.sep])
 	if pairs:
 		modelpath = os.sep.join([main_dir, "models", "pair_signal_detection", os.sep])
-	print(f'Looking for {name} in {modelpath}')
+	logger.info(f'Looking for {name} in {modelpath}')
 	models = glob(modelpath + f'*{os.sep}')
 	if path is not None:
 		if not path.endswith(os.sep):
@@ -1934,7 +1936,7 @@ def locate_pair_signal_model(name, path=None):
 
 	main_dir = os.sep.join([os.path.split(os.path.dirname(os.path.realpath(__file__)))[0], "celldetective"])
 	modelpath = os.sep.join([main_dir, "models", "pair_signal_detection", os.sep])
-	print(f'Looking for {name} in {modelpath}')
+	logger.info(f'Looking for {name} in {modelpath}')
 	models = glob(modelpath + f'*{os.sep}')
 	if path is not None:
 		if not path.endswith(os.sep):
@@ -2066,11 +2068,11 @@ def relabel_segmentation(labels, df, exclude_nans=True, column_labels={'track': 
 		results = executor.map(rewrite_labels, chunks) #list(map(lambda x: executor.submit(self.parallel_job, x), chunks))
 		try:
 			for i,return_value in enumerate(results):
-				print(f"Thread {i} output check: ",return_value)
+				logger.info(f"Thread {i} output check: ",return_value)
 		except Exception as e:
-			print("Exception: ", e)
+			logger.error("Exception: ", e)
 
-	print("\nDone.")
+	logger.info("\nDone.")
 
 	return new_labels
 
@@ -2307,12 +2309,12 @@ def view_tracks_in_napari(position, population, stack=None, labels=None, relabel
 
 	df, df_path = get_position_table(position, population=population, return_path=True)
 	if df is None:
-		print('Please compute trajectories first... Abort...')
+		logger.error('Please compute trajectories first... Abort...')
 		return None
 	shared_data = {"df": df, "path": df_path, "position": position, "population": population, 'selected_frame': None}
 
 	if (labels is not None) * relabel:
-		print('Replacing the cell mask labels with the track ID...')
+		logger.info('Replacing the cell mask labels with the track ID...')
 		if lazy:
 			labels = relabel_segmentation_lazy(labels, df)
 		else:
@@ -2362,20 +2364,19 @@ def view_tracks_in_napari(position, population, stack=None, labels=None, relabel
 
 		experiment = extract_experiment_from_position(position)
 		instruction_file = "/".join([experiment,"configs", f"tracking_instructions_{population}.json"])
-		print(f"{instruction_file=}")
+		logger.info(f"{instruction_file=}")
 		if os.path.exists(instruction_file):
-			print('Tracking configuration file found...')
+			logger.info('Tracking configuration file found...')
 			with open(instruction_file, 'r') as f:
 				instructions = json.load(f)			
 				if 'post_processing_options' in instructions:
 					post_processing_options = instructions['post_processing_options']
-					print(f'Applying the following track postprocessing: {post_processing_options}...')
+					logger.info(f'Applying the following track postprocessing: {post_processing_options}...')
 					df = clean_trajectories(df.copy(),**post_processing_options)
 		unnamed_cols = [c for c in list(df.columns) if c.startswith('Unnamed')]
 		df = df.drop(unnamed_cols, axis=1)
-		print(f"{list(df.columns)=}")
 		df.to_csv(shared_data['path'], index=False)
-		print('Done...')
+		logger.info('Done...')
 
 	@magicgui(call_button='Export the modified\ntracks...')
 	def export_table_widget():
@@ -2406,7 +2407,7 @@ def view_tracks_in_napari(position, population, stack=None, labels=None, relabel
 			if value_under==0:
 				return None
 		except:
-			print('Invalid mask value...')
+			logger.error('Invalid mask value...')
 			return None
 
 		target_track_id = viewer.layers['segmentation'].selected_label
@@ -2699,10 +2700,10 @@ def control_segmentation_napari(position, prefix='Aligned', population="target",
 			try:
 				im = auto_correct_masks(im)
 			except Exception as e:
-				print(e)
+				logger.error(e)
 
 			save_tiff_imagej_compatible(output_folder + f"{str(t).zfill(4)}.tif", im.astype(np.int16), axes='YX')
-		print("The labels have been successfully rewritten.")
+		logger.info("The labels have been successfully rewritten.")
 
 	def export_annotation():
 
@@ -2725,7 +2726,7 @@ def control_segmentation_napari(position, prefix='Aligned', population="target",
 			try:
 				info.update({k: values[well_idx]})
 			except Exception as e:
-				print(f"{e=}")
+				logger.error(f"{e=}")
 
 		if metadata_info is not None:
 			keys = list(metadata_info.keys())
@@ -2739,14 +2740,14 @@ def control_segmentation_napari(position, prefix='Aligned', population="target",
 		if not os.path.exists(annotation_folder):
 			os.mkdir(annotation_folder)
 
-		print('Exporting!')
+		logger.info('Exporting!')
 		t = viewer.dims.current_step[0]
 		labels_layer = viewer.layers['segmentation'].data[t]  # at current time
 
 		try:
 			labels_layer = auto_correct_masks(labels_layer)
 		except Exception as e:
-			print(e)
+			logger.error(e)
 
 		fov_export = True
 
@@ -2756,13 +2757,13 @@ def control_segmentation_napari(position, prefix='Aligned', population="target",
 			squares = np.array(squares)
 			squares = squares[test_in_frame]
 			nbr_squares = len(squares)
-			print(f"Found {nbr_squares} ROIs...")
+			logger.info(f"Found {nbr_squares} ROIs...")
 			if nbr_squares > 0:
 				# deactivate field of view mode
 				fov_export = False
 
 			for k, sq in enumerate(squares):
-				print(f"ROI: {sq}")
+				logger.info(f"ROI: {sq}")
 				pad_to_256=False
 
 				xmin = int(sq[0, 1])
@@ -2773,11 +2774,11 @@ def control_segmentation_napari(position, prefix='Aligned', population="target",
 				ymax = int(sq[1, 2])
 				if ymax < ymin:
 					ymax, ymin = ymin, ymax
-				print(f"{xmin=};{xmax=};{ymin=};{ymax=}")
+				logger.info(f"{xmin=};{xmax=};{ymin=};{ymax=}")
 				frame = viewer.layers['Image'].data[t][xmin:xmax, ymin:ymax]
 				if frame.shape[1] < 256 or frame.shape[0] < 256:
 					pad_to_256 = True
-					print("Crop too small! Padding with zeros to reach 256*256 pixels...")
+					logger.info("Crop too small! Padding with zeros to reach 256*256 pixels...")
 					#continue
 				multichannel = [frame]
 				for i in range(len(channel_indices) - 1):
@@ -2829,7 +2830,7 @@ def control_segmentation_napari(position, prefix='Aligned', population="target",
 			with open(info_name, 'w') as f:
 				json.dump(info, f, indent=4)
 		
-		print('Done.')
+		logger.info('Done.')
 
 	@magicgui(call_button='Save the modified labels')
 	def save_widget():
@@ -2843,7 +2844,7 @@ def control_segmentation_napari(position, prefix='Aligned', population="target",
 
 	stack, labels = locate_stack_and_labels(position, prefix=prefix, population=population, lazy=lazy)
 	output_folder = position + f'labels_{population}{os.sep}'
-	print(f"Shape of the loaded image stack: {stack.shape}...")
+	logger.info(f"Shape of the loaded image stack: {stack.shape}...")
 
 	viewer = napari.Viewer()
 	viewer.add_image(stack, channel_axis=-1, colormap=["gray"] * stack.shape[-1])
@@ -2886,13 +2887,15 @@ def control_segmentation_napari(position, prefix='Aligned', population="target",
 		del labels
 		gc.collect()
 
-	print("napari viewer was successfully closed...")
+	logger.info("napari viewer was successfully closed...")
 
 def correct_annotation(filename):
 
 	"""
 	New function to reannotate an annotation image in post, using napari and save update inplace.
 	"""
+
+	from celldetective.gui import Styles
 
 	def export_labels():
 		labels_layer = viewer.layers['segmentation'].data
@@ -2901,10 +2904,10 @@ def correct_annotation(filename):
 			try:
 				im = auto_correct_masks(im)
 			except Exception as e:
-				print(e)
+				logger.error(e)
 
 			save_tiff_imagej_compatible(existing_lbl, im.astype(np.int16), axes='YX')
-		print("The labels have been successfully rewritten.")
+		logger.info("The labels have been successfully rewritten.")
 
 	@magicgui(call_button='Save the modified labels')
 	def save_widget():
@@ -2933,7 +2936,15 @@ def correct_annotation(filename):
 	viewer = napari.Viewer()
 	viewer.add_image(stack,channel_axis=-1,colormap=["gray"]*stack.shape[-1])
 	viewer.add_labels(labels, name='segmentation',opacity=0.4)
-	viewer.window.add_dock_widget(save_widget, area='right')
+	
+	button_container = QWidget()
+	layout = QVBoxLayout(button_container)
+	layout.setSpacing(10)
+	layout.addWidget(save_widget.native)
+	viewer.window.add_dock_widget(button_container, area='right')
+
+	save_widget.native.setStyleSheet(Styles().button_style_sheet)
+	
 	viewer.show(block=True)
 
 	# temporary fix for slight napari memory leak
@@ -3205,7 +3216,7 @@ def locate_segmentation_dataset(name):
 
 	main_dir = os.sep.join([os.path.split(os.path.dirname(os.path.realpath(__file__)))[0], "celldetective"])
 	modelpath = os.sep.join([main_dir, "datasets", "segmentation_annotations", os.sep])
-	print(f'Looking for {name} in {modelpath}')
+	logger.info(f'Looking for {name} in {modelpath}')
 	models = glob(modelpath + f'*{os.sep}')
 
 	match = None
@@ -3297,7 +3308,7 @@ def locate_signal_dataset(name):
 
 	main_dir = os.sep.join([os.path.split(os.path.dirname(os.path.realpath(__file__)))[0], "celldetective"])
 	modelpath = os.sep.join([main_dir, "datasets", "signal_annotations", os.sep])
-	print(f'Looking for {name} in {modelpath}')
+	logger.info(f'Looking for {name} in {modelpath}')
 	models = glob(modelpath + f'*{os.sep}')
 
 	match = None
@@ -3544,13 +3555,13 @@ def load_frames(img_nums, stack_path, scale=None, normalize_input=True, dtype=np
 	try:
 		frames = imageio.imread(stack_path, key=img_nums)
 	except Exception as e:
-		print(
+		logger.error(
 			f'Error in loading the frame {img_nums} {e}. Please check that the experiment channel information is consistent with the movie being read.')
 		return None
 	try:
 		frames[np.isinf(frames)] = np.nan
 	except Exception as e:
-		print(e)
+		logger.error(e)
 
 	frames = _rearrange_multichannel_frame(frames)
 

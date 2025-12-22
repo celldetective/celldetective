@@ -16,6 +16,8 @@ from csbdeep.io import save_tiff_imagej_compatible
 from celldetective.segmentation import segment_frame_from_thresholds, merge_instance_segmentation
 import gc
 from art import tprint
+import logging
+logger = logging.getLogger("celldetective")
 
 import concurrent.futures
 
@@ -36,9 +38,9 @@ class BaseSegmentProcess(Process):
 		# Experiment
 		self.locate_experiment_config()
 
-		print(f"Position: {extract_position_name(self.pos)}...")
-		print("Configuration file: ",self.config)
-		print(f"Population: {self.mode}...")
+		logger.info(f"Position: {extract_position_name(self.pos)}...")
+		#logger.info("Configuration file: ",self.config)
+		logger.info(f"Population: {self.mode}...")
 		self.instruction_file = os.sep.join(["configs", f"segmentation_instructions_{self.mode}.json"])
 		
 		self.read_instructions()
@@ -47,13 +49,13 @@ class BaseSegmentProcess(Process):
 		self.write_folders()
 	
 	def read_instructions(self):
-		print('Looking for instruction file...')
+		logger.info('Looking for instruction file...')
 		instr_path = PurePath(self.exp_dir,Path(f"{self.instruction_file}"))
 		if os.path.exists(instr_path):
 			with open(instr_path, 'r') as f:
 				_instructions = json.load(f)
-				print(f"Measurement instruction file successfully loaded...")
-				print(f"Instructions: {_instructions}...")
+				logger.info(f"Measurement instruction file successfully loaded...")
+				logger.info(f"Instructions: {_instructions}...")
 			self.flip = _instructions.get("flip", False)
 		else:
 			self.flip = False
@@ -65,10 +67,10 @@ class BaseSegmentProcess(Process):
 		self.label_folder = f"labels_{self.mode}"
 
 		if os.path.exists(self.pos+self.label_folder):
-			print('Erasing the previous labels folder...')
+			logger.info('Erasing the previous labels folder...')
 			rmtree(self.pos+self.label_folder)
 		os.mkdir(self.pos+self.label_folder)
-		print(f'Labels folder successfully generated...')
+		logger.info(f'Labels folder successfully generated...')
 
 
 	def extract_experiment_parameters(self):
@@ -86,7 +88,7 @@ class BaseSegmentProcess(Process):
 		self.config = PurePath(self.exp_dir,Path("config.ini"))
 
 		if not os.path.exists(self.config):
-			print('The configuration file for the experiment could not be located. Abort.')
+			logger.error('The configuration file for the experiment could not be located. Abort.')
 			self.abort_process()
 
 	def detect_movie_length(self):
@@ -94,7 +96,7 @@ class BaseSegmentProcess(Process):
 		try:
 			self.file = glob(self.pos+f"movie/{self.movie_prefix}*.tif")[0]
 		except Exception as e:
-			print(f'Error {e}.\nMovie could not be found. Check the prefix.')
+			logger.error(f'Error {e}.\nMovie could not be found. Check the prefix.')
 			self.abort_process()
 
 		len_movie_auto = auto_load_number_of_frames(self.file)
@@ -146,7 +148,7 @@ class SegmentCellDLProcess(BaseSegmentProcess):
 
 		self.model_type = self.input_config['model_type']
 		self.required_spatial_calibration = self.input_config['spatial_calibration']
-		print(f'Spatial calibration expected by the model: {self.required_spatial_calibration}...')
+		logger.info(f'Spatial calibration expected by the model: {self.required_spatial_calibration}...')
 		
 		if self.model_type=='cellpose':
 			self.diameter = self.input_config['diameter']
@@ -163,13 +165,13 @@ class SegmentCellDLProcess(BaseSegmentProcess):
 	def detect_channels(self):
 		
 		self.channel_indices = _extract_channel_indices_from_config(self.config, self.required_channels)
-		print(f'Required channels: {self.required_channels} located at channel indices {self.channel_indices}.')
+		logger.info(f'Required channels: {self.required_channels} located at channel indices {self.channel_indices}.')
 		self.img_num_channels = _get_img_num_per_channel(self.channel_indices, int(self.len_movie), self.nbr_channels)
 
 	def detect_rescaling(self):
 
 		self.scale = _estimate_scale_factor(self.spatial_calibration, self.required_spatial_calibration)
-		print(f"Scale: {self.scale}...")
+		logger.info(f"Scale: {self.scale} [None = 1]...")
 
 		if self.target_cell_size is not None and self.scale is not None:
 			self.scale *= self.cell_size / self.target_cell_size
@@ -177,19 +179,19 @@ class SegmentCellDLProcess(BaseSegmentProcess):
 			if self.target_cell_size != self.cell_size:
 				self.scale = self.cell_size / self.target_cell_size
 
-		print(f"Scale accounting for expected cell size: {self.scale}...")
+		logger.info(f"Scale accounting for expected cell size: {self.scale} [None = 1]...")
 
 	def locate_model_path(self):
 
 		self.model_complete_path = locate_segmentation_model(self.model_name)
 		if self.model_complete_path is None:
-			print('Model could not be found. Abort.')
+			logger.error('Model could not be found. Abort.')
 			self.abort_process()
 		else:
-			print(f'Model path: {self.model_complete_path}...')
+			logger.info(f'Model path: {self.model_complete_path}...')
 		
 		if not os.path.exists(self.model_complete_path+"config_input.json"):
-			print('The configuration for the inputs to the model could not be located. Abort.')
+			logger.error('The configuration for the inputs to the model could not be located. Abort.')
 			self.abort_process()
 
 		with open(self.model_complete_path+"config_input.json") as config_file:
@@ -231,12 +233,14 @@ class SegmentCellDLProcess(BaseSegmentProcess):
 
 				save_tiff_imagej_compatible(self.pos+os.sep.join([self.label_folder,f"{str(t).zfill(4)}.tif"]), Y_pred, axes='YX')
 				
-				del f;
-				del Y_pred;
+				del f
+				del Y_pred
 				gc.collect()
 				
 				# Send signal for progress bar
 				self.sum_done+=1/self.len_movie*100
+				if self.flip:
+					t = self.len_movie - t
 				mean_exec_per_step = (time.time() - self.t0) / (t+1)
 				pred_time = (self.len_movie - (t+1)) * mean_exec_per_step
 				self.queue.put([self.sum_done, pred_time])
@@ -250,7 +254,7 @@ class SegmentCellDLProcess(BaseSegmentProcess):
 			pass		
 		
 		gc.collect()
-		print("Done.")
+		logger.info("Segmentation task is done.")
 
 		# Send end signal
 		self.queue.put("finished")
@@ -297,7 +301,7 @@ class SegmentCellThresholdProcess(BaseSegmentProcess):
 				with open(inst, 'r') as f:
 					self.instructions.append(json.load(f))
 			else:
-				print('The configuration path is not valid. Abort.')
+				logger.error('The configuration path is not valid. Abort.')
 				self.abort_process()
 
 	def extract_threshold_parameters(self):
@@ -327,7 +331,7 @@ class SegmentCellThresholdProcess(BaseSegmentProcess):
 		for i in range(len(self.instructions)):
 			
 			self.channel_indices = _extract_channel_indices_from_config(self.config, self.required_channels[i])
-			print(f'Required channels: {self.required_channels[i]} located at channel indices {self.channel_indices}.')
+			logger.info(f'Required channels: {self.required_channels[i]} located at channel indices {self.channel_indices}.')
 			self.instructions[i].update({'target_channel': self.channel_indices[0]})
 			self.instructions[i].update({'channel_names': self.channel_names})
 		
@@ -384,7 +388,7 @@ class SegmentCellThresholdProcess(BaseSegmentProcess):
 			except Exception as e:
 				print("Exception: ", e)
 
-		print('Done.')
+		logger.info('Done.')
 		# Send end signal
 		self.queue.put("finished")
 		self.queue.close()

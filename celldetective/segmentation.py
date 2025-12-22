@@ -24,7 +24,6 @@ import logging
 
 logger = logging.getLogger("celldetective")
 
-
 abs_path = os.sep.join([os.path.split(os.path.dirname(os.path.realpath(__file__)))[0],'celldetective'])
 
 def segment(stack, model_name, channels=None, spatial_calibration=None, view_on_napari=False,
@@ -73,10 +72,10 @@ def segment(stack, model_name, channels=None, spatial_calibration=None, view_on_
 	input_config = model_path+'config_input.json'
 	if os.path.exists(input_config):
 		with open(input_config) as config:
-			print("Loading input configuration from 'config_input.json'.")
+			logger.info("Loading input configuration from 'config_input.json'.")
 			input_config = json.load(config)
 	else:
-		print('Model input configuration could not be located...')
+		logger.error('Model input configuration could not be located...')
 		return None
 
 	if not use_gpu:
@@ -111,7 +110,7 @@ def segment(stack, model_name, channels=None, spatial_calibration=None, view_on_
 			flow_threshold = input_config['flow_threshold']
 
 	scale = _estimate_scale_factor(spatial_calibration, required_spatial_calibration)
-	print(f"{spatial_calibration=} {required_spatial_calibration=} Scale = {scale}...")
+	logger.info(f"{spatial_calibration=} {required_spatial_calibration=} Scale = {scale}...")
 
 	if model_type=='stardist':
 		model, scale_model = _prep_stardist_model(model_name, Path(model_path).parent, use_gpu=use_gpu, scale=scale)
@@ -371,7 +370,7 @@ def filter_on_property(labels, intensity_image=None, queries=None, channel_names
 			try:
 				properties = properties.query(f'not ({query})')
 			except Exception as e:
-				print(f'Query {query} could not be applied. Ensure that the feature exists. {e}')
+				logger.error(f'Query {query} could not be applied. Ensure that the feature exists. {e}')
 		else:
 			pass
 
