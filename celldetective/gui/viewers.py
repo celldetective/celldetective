@@ -290,7 +290,9 @@ class StackVisualizer(CelldetectiveWidget):
 		x_label = 'Distance (px)'
 
 		# Only show pixel length, rounded to integer
-		title_str = f"{round(length_px,2)} [px] | {round(length_px*self.PxToUm,3)} [µm]"
+		title_str = f"{round(length_px,2)} [px]"
+		if self.PxToUm is not None:
+			title_str += f" | {round(length_px*self.PxToUm,3)} [µm]"
 		
 		# Handle Y-Axis Locking
 		current_ylim = None

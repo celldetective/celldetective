@@ -18,7 +18,8 @@ import subprocess
 from celldetective.gui.viewers import StackVisualizer
 from celldetective.utils import extract_experiment_channels
 import pandas as pd
-
+import logging
+logger = logging.getLogger("celldetective")
 
 class ControlPanel(CelldetectiveMainWindow):
 
@@ -307,7 +308,7 @@ class ControlPanel(CelldetectiveMainWindow):
 		This methods load the configuration read in the config.ini file of the experiment.
 		'''
 
-		print('Reading experiment configuration...')
+		logger.info('Reading experiment configuration...')
 		self.exp_config = get_config(self.exp_dir)
 
 		self.populations = get_experiment_populations(self.exp_dir)
@@ -333,7 +334,7 @@ class ControlPanel(CelldetectiveMainWindow):
 		self.pharmaceutical_agents = get_experiment_pharmaceutical_agents(self.exp_dir)
 
 		self.metadata = config_section_to_dict(self.exp_config, "Metadata")
-		print('Experiment configuration successfully read...')
+		logger.info('Experiment configuration successfully read...')
 
 	def closeEvent(self, event):
 
