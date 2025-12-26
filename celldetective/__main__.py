@@ -1,8 +1,14 @@
 #!/usr/bin/env python3
 import sys
+import os
+import ctypes
 from PyQt5.QtWidgets import QApplication, QSplashScreen
 from PyQt5.QtGui import QPixmap
 from os import sep
+
+if os.name == "nt":
+    myappid = "celldetective.celldetective.1.0"
+    ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
 
 # os.environ['QT_DEBUG_PLUGINS'] = '1'
 
