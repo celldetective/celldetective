@@ -14,8 +14,6 @@ import os
 from glob import glob
 from datetime import datetime
 from pandas.api.types import is_numeric_dtype
-from celldetective.gui.processes.train_signal_model import TrainSignalModelProcess
-from celldetective.gui.workers import ProgressWindow
 from celldetective.gui.settings._settings_base import CelldetectiveSettingsPanel
 
 class SettingsEventDetectionModelTraining(CelldetectiveSettingsPanel):
