@@ -5,6 +5,9 @@ from PyQt5.QtCore import QRunnable, QObject, pyqtSignal, QThreadPool, QSize, Qt
 from celldetective.gui.base_components import CelldetectiveDialog
 from celldetective.gui.gui_utils import center_window
 import math
+from celldetective.log_manager import get_logger
+
+logger = get_logger(__name__)
 
 
 class ProgressWindow(CelldetectiveDialog):
@@ -21,7 +24,7 @@ class ProgressWindow(CelldetectiveDialog):
         super().__init__()
         # QDialog.__init__(self)
 
-        self.setWindowTitle(f"{title} Progress")
+        self.setWindowTitle(f"{title}")
         self.__process = process
         self.parent_window = parent_window
 
@@ -55,6 +58,7 @@ class ProgressWindow(CelldetectiveDialog):
             process=self.__process,
             process_args=process_args,
         )
+        logger.info("Runner initialized...")
         self.pool = QThreadPool.globalInstance()
 
         self.__btn_stp.clicked.connect(self.__stp_net)
@@ -69,6 +73,7 @@ class ProgressWindow(CelldetectiveDialog):
 
         self.__runner.signals.update_frame.connect(self.frame_progress_bar.setValue)
         self.__runner.signals.update_frame_time.connect(self.frame_time_lbl.setText)
+        self.__runner.signals.update_status.connect(self.__label.setText)
 
         self.__btn_stp.setDisabled(True)
 
@@ -108,7 +113,7 @@ class ProgressWindow(CelldetectiveDialog):
 
     def __stp_net(self):
         self.__runner.close()
-        print("\n Job cancelled... Abort.")
+        logger.info("\n Job cancelled... Abort.")
         self.reject()
 
     def __on_finished(self):
@@ -133,12 +138,13 @@ class Runner(QRunnable):
     ):
         QRunnable.__init__(self)
 
-        print(f"{process_args=}")
+        logger.info(f"{process_args=}")
         self.__queue = Queue()
         self.__process = process(self.__queue, process_args=process_args)
         self.signals = RunnerSignal()
 
     def run(self):
+        logger.info("Starting Process (runner-side)...")
         self.__process.start()
         while True:
             try:
@@ -167,6 +173,8 @@ class Runner(QRunnable):
                             break
                         elif data["status"] == "error":
                             self.signals.error.emit()
+                        else:
+                            self.signals.update_status.emit(data["status"])
 
                 # Simple fallback for legacy list [progress, time] -> map to POS progress
                 elif isinstance(data, list) and len(data) == 2:
@@ -180,7 +188,7 @@ class Runner(QRunnable):
                     self.signals.error.emit()
 
             except Exception as e:
-                print(e)
+                logger.error(e)
                 pass
 
     def close(self):
@@ -197,6 +205,7 @@ class RunnerSignal(QObject):
 
     update_frame = pyqtSignal(int)
     update_frame_time = pyqtSignal(str)
+    update_status = pyqtSignal(str)
 
     finished = pyqtSignal()
     error = pyqtSignal()

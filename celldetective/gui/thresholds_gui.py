@@ -3,6 +3,7 @@ import os
 from glob import glob
 
 import matplotlib.pyplot as plt
+from matplotlib.figure import Figure
 import numpy as np
 import pandas as pd
 import scipy.ndimage as ndi
@@ -46,6 +47,9 @@ from celldetective.utils import (
     extract_experiment_channels,
     rename_intensity_column,
 )
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class ThresholdConfigWizard(CelldetectiveMainWindow):
@@ -89,6 +93,7 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
         ]
         self.edge = None
         self.filters = []
+        self.fill_holes = True
 
         self.locate_stack()
         self.generate_viewer()
@@ -173,11 +178,22 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
         threshold_title_grid = QHBoxLayout()
         section_threshold = QLabel("Threshold")
         section_threshold.setStyleSheet("font-weight: bold;")
-        threshold_title_grid.addWidget(section_threshold, 90, alignment=Qt.AlignCenter)
+        threshold_title_grid.addWidget(section_threshold, 80, alignment=Qt.AlignCenter)
+
+        self.fill_holes_btn = QPushButton("")
+        self.fill_holes_btn.setIcon(icon(MDI6.format_color_fill, color="white"))
+        self.fill_holes_btn.setIconSize(QSize(20, 20))
+        self.fill_holes_btn.setStyleSheet(self.button_select_all)
+        self.fill_holes_btn.setToolTip("Fill holes in binary mask")
+        self.fill_holes_btn.setCheckable(True)
+        self.fill_holes_btn.setChecked(True)
+        self.fill_holes_btn.clicked.connect(self.toggle_fill_holes)
+        threshold_title_grid.addWidget(self.fill_holes_btn, 5)
 
         self.ylog_check = QPushButton("")
         self.ylog_check.setIcon(icon(MDI6.math_log, color="black"))
         self.ylog_check.setStyleSheet(self.button_select_all)
+        self.ylog_check.setCheckable(True)
         self.ylog_check.clicked.connect(self.switch_to_log)
         threshold_title_grid.addWidget(self.ylog_check, 5)
 
@@ -204,7 +220,7 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
             np.amax(self.img[self.img == self.img]),
         )
         self.threshold_slider.setValue(
-            [np.percentile(self.img.flatten(), 90), np.amax(self.img)]
+            [np.percentile(self.img.ravel(), 90), np.amax(self.img)]
         )
         self.threshold_slider.valueChanged.connect(self.threshold_changed)
 
@@ -398,6 +414,7 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
             target_channel=0,
             PxToUm=None,
             initial_threshold=None,
+            fill_holes=self.fill_holes,
         )
 
     def populate_right_panel(self):
@@ -440,7 +457,8 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
         Define properties scatter.
         """
 
-        self.fig_props, self.ax_props = plt.subplots(tight_layout=True)
+        self.fig_props = Figure(tight_layout=True)
+        self.ax_props = self.fig_props.add_subplot(111)
         self.propscanvas = FigureCanvas(self.fig_props, interactive=True)
         self.fig_props.set_facecolor("none")
         self.fig_props.canvas.setStyleSheet("background-color: transparent;")
@@ -452,7 +470,8 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
 
         self.img = self.viewer.init_frame
 
-        self.fig_hist, self.ax_hist = plt.subplots(tight_layout=True)
+        self.fig_hist = Figure(tight_layout=True)
+        self.ax_hist = self.fig_hist.add_subplot(111)
         self.canvas_hist = FigureCanvas(self.fig_hist, interactive=False)
         self.fig_hist.set_facecolor("none")
         self.fig_hist.canvas.setStyleSheet("background-color: transparent;")
@@ -461,7 +480,7 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
         # self.ax_hist.cla()
         self.ax_hist.patch.set_facecolor("none")
         self.hist_y, x, _ = self.ax_hist.hist(
-            self.img.flatten(), density=True, bins=300, color="k"
+            self.img.ravel(), density=True, bins=300, color="k"
         )
         # self.ax_hist.set_xlim(np.amin(self.img),np.amax(self.img))
         self.ax_hist.set_xlabel("intensity [a.u.]")
@@ -479,7 +498,7 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
             np.amax(self.img[self.img == self.img]),
         )
         self.threshold_slider.setValue(
-            [np.nanpercentile(self.img.flatten(), 90), np.amax(self.img)]
+            [np.nanpercentile(self.img.ravel(), 90), np.amax(self.img)]
         )
         self.add_hist_threshold()
 
@@ -496,7 +515,7 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
         self.ax_hist.clear()
         self.ax_hist.patch.set_facecolor("none")
         self.hist_y, x, _ = self.ax_hist.hist(
-            self.img.flatten(), density=True, bins=300, color="k"
+            self.img.ravel(), density=True, bins=300, color="k"
         )
         self.ax_hist.set_xlabel("intensity [a.u.]")
         self.ax_hist.spines["top"].set_visible(False)
@@ -515,7 +534,7 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
             np.amax(self.img[self.img == self.img]),
         )
         self.threshold_slider.setValue(
-            [np.nanpercentile(self.img.flatten(), 90), np.amax(self.img)]
+            [np.nanpercentile(self.img.ravel(), 90), np.amax(self.img)]
         )
         self.threshold_changed(self.threshold_slider.value())
 
@@ -575,12 +594,24 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
 
         if self.ax_hist.get_yscale() == "linear":
             self.ax_hist.set_yscale("log")
+            self.ylog_check.setIcon(icon(MDI6.math_log, color="white"))
         else:
             self.ax_hist.set_yscale("linear")
+            self.ylog_check.setIcon(icon(MDI6.math_log, color="black"))
 
         # self.ax_hist.autoscale()
         self.ax_hist.set_ylim(0, self.hist_y.max())
         self.canvas_hist.canvas.draw_idle()
+
+        self.ax_hist.set_ylim(0, self.hist_y.max())
+        self.canvas_hist.canvas.draw_idle()
+
+    def toggle_fill_holes(self):
+        self.fill_holes = self.fill_holes_btn.isChecked()
+        self.viewer.fill_holes = self.fill_holes
+        self.viewer.change_threshold(self.threshold_slider.value())
+        color = "white" if self.fill_holes else "black"
+        self.fill_holes_btn.setIcon(icon(MDI6.format_color_fill, color=color))
 
     def set_footprint(self):
         self.footprint = self.footprint_slider.value()
@@ -618,11 +649,14 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
     def apply_watershed_to_selection(self):
 
         if self.marker_option.isChecked():
-            self.labels = apply_watershed(self.viewer.mask, self.coords, self.edt_map)
+            self.labels = apply_watershed(
+                self.viewer.mask, self.coords, self.edt_map, fill_holes=self.fill_holes
+            )
         else:
             self.labels, _ = ndi.label(self.viewer.mask.astype(int))
 
-        self.viewer.change_frame(self.viewer.frame_slider.value())
+        self.viewer.channel_trigger = True
+        self.viewer.change_frame_from_channel_switch(self.viewer.frame_slider.value())
         self.viewer.im_mask.set_cmap("tab20c")
         self.viewer.im_mask.set_data(
             np.ma.masked_where(self.labels == 0.0, self.labels)
@@ -709,7 +743,7 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
                 )
         self.propscanvas.canvas.draw_idle()
         self.viewer.canvas.canvas.draw()
-        print(f"Update markers for {len(self.props)} objects.")
+        logger.info(f"Update markers for {len(self.props)} objects.")
 
     def prep_cell_properties(self):
 
@@ -724,11 +758,11 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
         self.props["class"] = 1
 
         if query == "":
-            print("empty query")
+            logger.warning("empty query")
         else:
             try:
                 self.selection = self.props.query(query).index
-                print(self.selection)
+                logger.info(self.selection)
                 self.props.loc[self.selection, "class"] = 0
             except Exception as e:
                 generic_message(
@@ -772,9 +806,10 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
                 self.viewer.frame_slider.value(),
             ],
             "do_watershed": self.marker_option.isChecked(),
+            "fill_holes": self.fill_holes,
         }
 
-        print("The following instructions will be written: ", instructions)
+        logger.info("The following instructions will be written: ", instructions)
         self.instruction_file = QFileDialog.getSaveFileName(
             self,
             "Save File",
@@ -785,7 +820,7 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
             json_object = json.dumps(instructions, indent=4)
             with open(self.instruction_file, "w") as outfile:
                 outfile.write(json_object)
-            print("Configuration successfully written in ", self.instruction_file)
+            logger.info("Configuration successfully written in ", self.instruction_file)
 
             self.parent_window.filename = self.instruction_file
             self.parent_window.file_label.setText(self.instruction_file[:16] + "...")
@@ -793,7 +828,7 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
 
             self.close()
         else:
-            print("The instruction file could not be written...")
+            logger.error("The instruction file could not be written...")
 
     def activate_histogram_equalizer(self):
 

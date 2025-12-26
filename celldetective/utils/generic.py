@@ -16,9 +16,18 @@ import tempfile
 import re
 from pathlib import PosixPath, PurePath, PurePosixPath, WindowsPath, Path
 from typing import List, Dict, Union, Optional
-import logging
+from celldetective.log_manager import get_logger
 
-logger = logging.getLogger("celldetective")
+logger = get_logger(__name__)
+
+from .common import (
+    get_config,
+    config_section_to_dict,
+    extract_experiment_channels,
+    _extract_channels_from_config,
+    _extract_channel_indices,
+    _extract_channel_indices_from_config,
+)
 
 
 def is_integer_array(arr: np.ndarray) -> bool:
@@ -31,55 +40,6 @@ def is_integer_array(arr: np.ndarray) -> bool:
         return True
     else:
         return False
-
-
-def get_config(experiment: Union[str, Path]) -> str:
-    """
-    Retrieves the path to the configuration file for a given experiment.
-
-    Parameters
-    ----------
-    experiment : str
-            The file system path to the directory of the experiment project.
-
-    Returns
-    -------
-    str
-            The full path to the configuration file (`config.ini`) within the experiment directory.
-
-    Raises
-    ------
-    AssertionError
-            If the `config.ini` file does not exist in the specified experiment directory.
-
-    Notes
-    -----
-    - The function ensures that the provided experiment path ends with the appropriate file separator (`os.sep`)
-      before appending `config.ini` to locate the configuration file.
-    - The configuration file is expected to be named `config.ini` and located at the root of the experiment directory.
-
-    Example
-    -------
-    >>> experiment = "/path/to/experiment"
-    >>> config_path = get_config(experiment)
-    >>> print(config_path)
-    '/path/to/experiment/config.ini'
-
-    """
-
-    if isinstance(experiment, (PosixPath, PurePosixPath, WindowsPath)):
-        experiment = str(experiment)
-
-    if not experiment.endswith(os.sep):
-        experiment += os.sep
-
-    config = experiment + "config.ini"
-    config = rf"{config}"
-
-    assert os.path.exists(
-        config
-    ), "The experiment configuration could not be located..."
-    return config
 
 
 def _remove_invalid_cols(df: pd.DataFrame) -> pd.DataFrame:
@@ -104,7 +64,7 @@ def _remove_invalid_cols(df: pd.DataFrame) -> pd.DataFrame:
     invalid_cols = [c for c in list(df.columns) if c.startswith("Unnamed")]
     if len(invalid_cols) > 0:
         df = df.drop(invalid_cols, axis=1)
-    df = df.dropna(axis=1, how="all")
+    # df = df.dropna(axis=1, how="all")
     return df
 
 
@@ -466,6 +426,15 @@ def _prep_cellpose_model(model_name, path, use_gpu=False, n_channels=2, scale=No
     return model, scale_model
 
 
+def _prep_event_detection_model(model_name=None, use_gpu=True):
+    from celldetective.signals import SignalDetectionModel
+    from celldetective.io import locate_signal_model
+
+    model_path = locate_signal_model(model_name)
+    signal_model = SignalDetectionModel(pretrained=model_path)
+    return signal_model
+
+
 def _get_normalize_kwargs_from_config(config):
 
     if isinstance(config, str):
@@ -696,68 +665,121 @@ def safe_log(array):
     return result.item() if np.isscalar(array) else result
 
 
-def contour_of_instance_segmentation(label, distance):
+def contour_of_instance_segmentation(label, distance, sdf=None, voronoi_map=None):
     """
 
     Generate an instance mask containing the contour of the segmented objects.
+
+    This updated version uses a Signed Distance Field (SDF) and Voronoi tessellation approach
+    Generic enough to handle Inner contours, Outer contours, and arbitrary "stripes" (annuli).
 
     Parameters
     ----------
     label : ndarray
             The instance segmentation labels.
-    distance : int, float, list, or tuple
-            The distance or range of distances from the edge of each instance to include in the contour.
-            If a single value is provided, it represents the maximum distance. If a tuple or list is provided,
-            it represents the minimum and maximum distances.
+    distance : int, float, list, tuple, or str
+            The distance specification.
+            - Scalar > 0: Inner contour (Erosion) from boundary to 'distance' pixels inside. Range [0, distance].
+            - Scalar < 0: Outer contour (Dilation) from 'distance' pixels outside to boundary. Range [distance, 0].
+            - Tuple/List (a, b): Explicit range in SDF space.
+               - Positive values are inside the object.
+               - Negative values are outside methods.
+               - Example: (5, 10) -> Inner ring 5 to 10px deep.
+               - Example: (-10, -5) -> Outer ring 5 to 10px away.
+            - String "rad1-rad2": Interpretation for Batch Measurements (Outer Rings).
+               - Interpreted as an annular region OUTSIDE the object.
+               - "5-10" -> Range [-10, -5] in SDF space (5 to 10px away).
+    sdf : ndarray, optional
+            Pre-computed Signed Distance Field (dist_in - dist_out).
+            If provided, avoids recomputing EDT.
+    voronoi_map : ndarray, optional
+            Pre-computed Voronoi map of instance labels.
+            Required if sdf is provided and outer contours are needed.
 
     Returns
     -------
     border_label : ndarray
             An instance mask containing the contour of the segmented objects.
-
-    Notes
-    -----
-    This function generates an instance mask representing the contour of the segmented instances in the label image.
-    It use the distance_transform_edt function from the scipy.ndimage module to compute the Euclidean distance transform.
-    The contour is defined based on the specified distance(s) from the edge of each instance.
-    The resulting mask, `border_label`, contains the contour regions, while the interior regions are set to zero.
-
-    Examples
-    --------
-    >>> border_label = contour_of_instance_segmentation(label, distance=3)
-    # Generate a binary mask containing the contour of the segmented instances with a maximum distance of 3 pixels.
+            Outer contours preserve instance identity via Voronoi propagation.
 
     """
-    if isinstance(distance, (list, tuple)) or distance >= 0:
+    from scipy.ndimage import distance_transform_edt
 
-        from scipy.ndimage.morphology import distance_transform_edt
+    # helper to parse string "rad1-rad2"
+    if isinstance(distance, str):
+        try:
+            # Check for stringified tuple "(a, b)"
+            distance = distance.strip()
+            if distance.startswith("(") and distance.endswith(")"):
+                import ast
 
-        edt = distance_transform_edt(label)
+                val_tuple = ast.literal_eval(distance)
+                if isinstance(val_tuple, (list, tuple)) and len(val_tuple) == 2:
+                    min_r = val_tuple[0]
+                    max_r = val_tuple[1]
+                else:
+                    raise ValueError("Tuple string must have 2 elements")
+            else:
+                try:
+                    val = float(distance)
+                    # It's a scalar string like "5" or "-5"
+                    if val >= 0:
+                        min_r = 0
+                        max_r = val
+                    else:
+                        min_r = val
+                        max_r = 0
+                except ValueError:
+                    # It's a range string "5-10"
+                    parts = distance.split("-")
+                    # Assumption: "A-B" where A, B positive radii for OUTER annulus.
+                    r1 = float(parts[0])
+                    r2 = float(parts[1])
+                    min_r = -max(r1, r2)
+                    max_r = -min(r1, r2)
 
-        if isinstance(distance, list) or isinstance(distance, tuple):
-            min_distance = distance[0]
-            max_distance = distance[1]
+        except Exception:
+            logger.warning(
+                f"Could not parse contour string '{distance}'. returning empty."
+            )
+            return np.zeros_like(label)
 
-        elif isinstance(distance, (int, float)):
-            min_distance = 0
-            max_distance = distance
+    elif isinstance(distance, (list, tuple)):
+        min_r = distance[0]
+        max_r = distance[1]
 
-        thresholded = (edt <= max_distance) * (edt > min_distance)
-        border_label = np.copy(label)
-        border_label[np.where(thresholded == 0)] = 0
-
+    elif isinstance(distance, (int, float)):
+        if distance >= 0:
+            min_r = 0
+            max_r = distance
+        else:
+            min_r = distance
+            max_r = 0
     else:
-        size = (2 * abs(int(distance)) + 1, 2 * abs(int(distance)) + 1)
-        import scipy.ndimage as ndimage
-        from skimage.morphology import disk
+        return np.zeros_like(label)
 
-        dilated_image = ndimage.grey_dilation(
-            label, footprint=disk(int(abs(distance)))
-        )  # size=size,
-        border_label = np.copy(dilated_image)
-        matching_cells = np.logical_and(dilated_image != 0, label == dilated_image)
-        border_label[np.where(matching_cells == True)] = 0
-        border_label[label != 0] = 0.0
+    if sdf is None or voronoi_map is None:
+        # Compute SDF maps
+        # We need SDF = dist_in - dist_out
+        # inside > 0, outside < 0
+
+        # 1. Dist In (Inside object)
+        dist_in = distance_transform_edt(label > 0)
+
+        # 2. Dist Out (Outside object) + Voronoi
+        dist_out, indices = distance_transform_edt(label == 0, return_indices=True)
+
+        # Voronoi Map
+        voronoi_map = label[indices[0], indices[1]]
+
+        # Composite SDF
+        sdf = dist_in - dist_out
+
+    # Create Mask
+    mask = (sdf >= min_r) & (sdf <= max_r)
+
+    # Result
+    border_label = voronoi_map * mask
 
     return border_label
 
@@ -1923,122 +1945,6 @@ def _extract_channel_indices(channels, required_channels):
     return channel_indices
 
 
-def config_section_to_dict(
-    path: Union[str, PurePath, Path], section: str
-) -> Union[Dict, None]:
-    """
-    Parse the config file to extract experiment parameters
-    following https://wiki.python.org/moin/ConfigParserExamples
-
-    Parameters
-    ----------
-
-    path: str
-                    path to the config.ini file
-
-    section: str
-                    name of the section that contains the parameter
-
-    Returns
-    -------
-
-    dict1: dictionary
-
-    Examples
-    --------
-    >>> config = "path/to/config_file.ini"
-    >>> section = "Channels"
-    >>> channel_dictionary = config_section_to_dict(config,section)
-    >>> print(channel_dictionary)
-    # {'brightfield_channel': '0',
-    #  'live_nuclei_channel': 'nan',
-    #  'dead_nuclei_channel': 'nan',
-    #  'effector_fluo_channel': 'nan',
-    #  'adhesion_channel': '1',
-    #  'fluo_channel_1': 'nan',
-    #  'fluo_channel_2': 'nan',
-    #  'fitc_channel': '2',
-    #  'cy5_channel': '3'}
-    """
-
-    Config = configparser.ConfigParser(interpolation=None)
-    Config.read(path)
-    dict1 = {}
-    try:
-        options = Config.options(section)
-    except:
-        return None
-    for option in options:
-        try:
-            dict1[option] = Config.get(section, option)
-            if dict1[option] == -1:
-                logger.debug("skip: %s" % option)
-        except:
-            logger.error("exception on %s!" % option)
-            dict1[option] = None
-    return dict1
-
-
-def _extract_channel_indices_from_config(config, channels_to_extract):
-    """
-    Extracts the indices of specified channels from a configuration object.
-
-    This function attempts to map required channel names to their respective indices as specified in a
-    configuration file. It supports two versions of configuration parsing: a primary method (V2) and a
-    fallback legacy method. If the required channels are not found using the primary method, the function
-    attempts to find them using the legacy configuration settings.
-
-    Parameters
-    ----------
-    config : ConfigParser object
-            The configuration object parsed from a .ini or similar configuration file that includes channel settings.
-    channels_to_extract : list of str
-            A list of channel names for which indices are to be extracted from the configuration settings.
-
-    Returns
-    -------
-    list of int or None
-            A list containing the indices of the specified channels as found in the configuration settings.
-            If a channel cannot be found, None is appended in its place. If an error occurs during the extraction
-            process, the function returns None.
-
-    Notes
-    -----
-    - This function is designed to be flexible, accommodating changes in configuration file structure by
-      checking multiple sections for the required information.
-    - The configuration file is expected to contain either "Channels" or "MovieSettings" sections with mappings
-      from channel names to indices.
-    - An error message is printed if a required channel cannot be found, advising the user to check the
-      configuration file.
-
-    Examples
-    --------
-    >>> config = "path/to/config_file.ini"
-    >>> channels_to_extract = ['adhesion_channel', 'brightfield_channel']
-    >>> channel_indices = _extract_channel_indices_from_config(config, channels_to_extract)
-    >>> print(channel_indices)
-    # [1, 0] or None if an error occurs or the channels are not found.
-    """
-
-    if isinstance(channels_to_extract, str):
-        channels_to_extract = [channels_to_extract]
-
-    channels = []
-    for c in channels_to_extract:
-        try:
-            c1 = int(config_section_to_dict(config, "Channels")[c])
-            channels.append(c1)
-        except Exception as e:
-            logger.warning(
-                f"Warning: The channel {c} required by the model is not available in your data..."
-            )
-            channels.append(None)
-    if np.all([c is None for c in channels]):
-        channels = None
-
-    return channels
-
-
 def _extract_nbr_channels_from_config(config, return_names=False):
     """
 
@@ -2261,56 +2167,6 @@ def _extract_labels_from_config(config, number_of_wells):
         labels = np.linspace(0, number_of_wells - 1, number_of_wells, dtype=str)
 
     return labels
-
-
-def _extract_channels_from_config(config):
-    """
-    Extracts channel names and their indices from an experiment configuration.
-
-    Parameters
-    ----------
-    config : path to config file (.ini)
-            The configuration object parsed from an experiment's .ini or similar configuration file.
-
-    Returns
-    -------
-    tuple
-            A tuple containing two numpy arrays: `channel_names` and `channel_indices`. `channel_names` includes
-            the names of the channels as specified in the configuration, and `channel_indices` includes their
-            corresponding indices. Both arrays are ordered according to the channel indices.
-
-    Examples
-    --------
-    >>> config = "path/to/config_file.ini"
-    >>> channels, indices = _extract_channels_from_config(config)
-    >>> print(channels)
-    # array(['brightfield_channel', 'adhesion_channel', 'fitc_channel',
-    #    'cy5_channel'], dtype='<U19')
-    >>> print(indices)
-    # array([0, 1, 2, 3])
-    """
-
-    channel_names = []
-    channel_indices = []
-    try:
-        fields = config_section_to_dict(config, "Channels")
-        for c in fields:
-            try:
-                idx = int(config_section_to_dict(config, "Channels")[c])
-                channel_names.append(c)
-                channel_indices.append(idx)
-            except:
-                pass
-    except:
-        pass
-
-    channel_indices = np.array(channel_indices)
-    channel_names = np.array(channel_names)
-    reorder = np.argsort(channel_indices)
-    channel_indices = channel_indices[reorder]
-    channel_names = channel_names[reorder]
-
-    return channel_names, channel_indices
 
 
 def extract_experiment_channels(experiment):
@@ -3106,14 +2962,7 @@ def download_url_to_file(url, dst, progress=True):
 
 def get_zenodo_files(cat=None):
 
-    zenodo_json = os.sep.join(
-        [
-            os.path.split(os.path.dirname(os.path.realpath(__file__)))[0],
-            "celldetective",
-            "links",
-            "zenodo.json",
-        ]
-    )
+    zenodo_json = str(Path(__file__).parent.parent / "links" / "zenodo.json")
     with open(zenodo_json, "r") as f:
         zenodo_json = json.load(f)
     all_files = list(zenodo_json["files"]["entries"].keys())
@@ -3158,14 +3007,7 @@ def get_zenodo_files(cat=None):
 
 def download_zenodo_file(file, output_dir):
 
-    zenodo_json = os.sep.join(
-        [
-            os.path.split(os.path.dirname(os.path.realpath(__file__)))[0],
-            "celldetective",
-            "links",
-            "zenodo.json",
-        ]
-    )
+    zenodo_json = str(Path(__file__).parent.parent / "links" / "zenodo.json")
     with open(zenodo_json, "r") as f:
         zenodo_json = json.load(f)
     all_files = list(zenodo_json["files"]["entries"].keys())

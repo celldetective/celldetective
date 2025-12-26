@@ -40,10 +40,11 @@ from celldetective.segmentation import (
 import gc
 from art import tprint
 import logging
-
-logger = logging.getLogger("celldetective")
-
 import concurrent.futures
+
+from celldetective.log_manager import get_logger
+
+logger = get_logger(__name__)
 
 
 class BaseSegmentProcess(Process):
@@ -58,13 +59,6 @@ class BaseSegmentProcess(Process):
             for key, value in process_args.items():
                 setattr(self, key, value)
 
-        if hasattr(self, "batch_structure"):
-            logger.info(
-                f"DEBUG: Batch Structure Keys: {list(self.batch_structure.keys())}"
-            )
-            for k, v in self.batch_structure.items():
-                logger.info(f"DEBUG: Well {k}: {len(v['positions'])} positions")
-
         # Handle batch of positions or single pos
         if hasattr(self, "batch_structure"):
             # Flatten positions from structure for compatibility
@@ -77,8 +71,6 @@ class BaseSegmentProcess(Process):
             else:
                 self.positions = []
                 logger.error("No positions provided to segmentation process.")
-
-        tprint("Segment")
 
         # Experiment
         self.locate_experiment_config()
@@ -189,13 +181,15 @@ class SegmentCellDLProcess(BaseSegmentProcess):
         # Model
         self.locate_model_path()
         self.extract_model_input_parameters()
-        self.detect_channels()
         self.detect_rescaling()
-
-        self.write_log()
 
         self.sum_done = 0
         self.t0 = time.time()
+
+    def setup_for_position(self, pos_path):
+        super().setup_for_position(pos_path)
+        self.detect_channels()
+        self.write_log()
 
     def extract_model_input_parameters(self):
 
@@ -283,6 +277,88 @@ class SegmentCellDLProcess(BaseSegmentProcess):
         if not self.use_gpu:
             os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
+    def process_position(self, model=None, scale_model=None):
+
+        tprint("Segment")
+
+        list_indices = range(self.len_movie)
+        if self.flip:
+            list_indices = reversed(list_indices)
+
+        # Reset counter for this position
+        self.loop_count = 0
+        self.t0_frame = time.time()
+
+        for t in tqdm(list_indices, desc="frame"):
+
+            f = _load_frames_to_segment(
+                self.file,
+                self.img_num_channels[:, t],
+                scale_model=scale_model,
+                normalize_kwargs=self.normalize_kwargs,
+            )
+
+            if self.model_type == "stardist":
+                Y_pred = _segment_image_with_stardist_model(
+                    f, model=model, return_details=False
+                )
+
+            elif self.model_type == "cellpose":
+                Y_pred = _segment_image_with_cellpose_model(
+                    f,
+                    model=model,
+                    diameter=self.diameter,
+                    cellprob_threshold=self.cellprob_threshold,
+                    flow_threshold=self.flow_threshold,
+                )
+
+            if self.scale is not None:
+                Y_pred = _rescale_labels(Y_pred, scale_model=scale_model)
+
+            Y_pred = _check_label_dims(Y_pred, file=self.file)
+
+            save_tiff_imagej_compatible(
+                self.pos + os.sep.join([self.label_folder, f"{str(t).zfill(4)}.tif"]),
+                Y_pred,
+                axes="YX",
+            )
+
+            del f
+            del Y_pred
+            gc.collect()
+
+            # Send signal for progress bar
+            # Triple progress bar logic
+
+            if self.loop_count == 0:
+                self.t0_frame = time.time()
+
+            frame_progress = ((self.loop_count + 1) / self.len_movie) * 100
+            if frame_progress > 100:
+                frame_progress = 100
+
+            data = {}
+            data["frame_progress"] = frame_progress
+
+            # Frame time estimation (skip first)
+            elapsed = time.time() - getattr(self, "t0_frame", time.time())
+            measured_count = self.loop_count
+
+            if measured_count > 0:
+                avg = elapsed / measured_count
+                rem = self.len_movie - (self.loop_count + 1)
+                rem_t = rem * avg
+                mins = int(rem_t // 60)
+                secs = int(rem_t % 60)
+                data["frame_time"] = f"Segmentation: {mins} m {secs} s"
+            else:
+                data["frame_time"] = (
+                    f"Segmentation: {self.loop_count + 1}/{int(self.len_movie)} frames"
+                )
+
+            self.queue.put(data)
+            self.loop_count += 1
+
     def run(self):
 
         try:
@@ -310,18 +386,33 @@ class SegmentCellDLProcess(BaseSegmentProcess):
                     0: {"well_name": "Batch", "positions": self.positions}
                 }
 
+            self.t0_well = time.time()
             # Loop over Wells
             for w_i, (w_idx, well_data) in enumerate(self.batch_structure.items()):
                 positions = well_data["positions"]
+
+                # Well Time Estimation
+                elapsed = time.time() - self.t0_well
+                if w_i > 0:
+                    avg_well = elapsed / w_i
+                    rem_well = (len(self.batch_structure) - w_i) * avg_well
+                    mins_w = int(rem_well // 60)
+                    secs_w = int(rem_well % 60)
+                    well_str = f"Well {w_i + 1}/{len(self.batch_structure)} - {mins_w} m {secs_w} s left"
+                else:
+                    well_str = (
+                        f"Processing well {w_i + 1}/{len(self.batch_structure)}..."
+                    )
 
                 # Update Well Progress
                 self.queue.put(
                     {
                         "well_progress": (w_i / len(self.batch_structure)) * 100,
-                        "well_time": f"Processing well {w_i + 1}/{len(self.batch_structure)}...",
+                        "well_time": well_str,
                     }
                 )
 
+                self.t0_pos = time.time()
                 # Loop over positions in this well
                 for pos_idx, pos_path in enumerate(positions):
 
@@ -332,89 +423,20 @@ class SegmentCellDLProcess(BaseSegmentProcess):
                     if self.flip:
                         list_indices = reversed(list_indices)
 
-                    # Reset counter for this position
-                    self.loop_count = 0
-                    self.t0_frame = time.time()
-
-                    self.queue.put(
-                        {
-                            "pos_progress": (pos_idx / len(positions)) * 100,
-                            "pos_time": f"Processing position {pos_idx + 1}/{len(positions)}...",
-                        }
-                    )
-
-                    for t in tqdm(list_indices, desc="frame"):
-
-                        f = _load_frames_to_segment(
-                            self.file,
-                            self.img_num_channels[:, t],
-                            scale_model=scale_model,
-                            normalize_kwargs=self.normalize_kwargs,
+                    # Position Time Estimation relative to current well
+                    elapsed_pos = time.time() - self.t0_pos
+                    if pos_idx > 0:
+                        avg_pos = elapsed_pos / pos_idx
+                        rem_pos = (len(positions) - pos_idx) * avg_pos
+                        mins_p = int(rem_pos // 60)
+                        secs_p = int(rem_pos % 60)
+                        pos_str = f"Pos {pos_idx + 1}/{len(positions)} - {mins_p} m {secs_p} s left"
+                    else:
+                        pos_str = (
+                            f"Processing position {pos_idx + 1}/{len(positions)}..."
                         )
 
-                        if self.model_type == "stardist":
-                            Y_pred = _segment_image_with_stardist_model(
-                                f, model=model, return_details=False
-                            )
-
-                        elif self.model_type == "cellpose":
-                            Y_pred = _segment_image_with_cellpose_model(
-                                f,
-                                model=model,
-                                diameter=self.diameter,
-                                cellprob_threshold=self.cellprob_threshold,
-                                flow_threshold=self.flow_threshold,
-                            )
-
-                        if self.scale is not None:
-                            Y_pred = _rescale_labels(Y_pred, scale_model=scale_model)
-
-                        Y_pred = _check_label_dims(Y_pred, file=self.file)
-
-                        save_tiff_imagej_compatible(
-                            self.pos
-                            + os.sep.join(
-                                [self.label_folder, f"{str(t).zfill(4)}.tif"]
-                            ),
-                            Y_pred,
-                            axes="YX",
-                        )
-
-                        del f
-                        del Y_pred
-                        gc.collect()
-
-                        # Send signal for progress bar
-                        # Triple progress bar logic
-
-                        if self.loop_count == 0:
-                            self.t0_frame = time.time()
-
-                        frame_progress = ((self.loop_count + 1) / self.len_movie) * 100
-                        if frame_progress > 100:
-                            frame_progress = 100
-
-                        data = {}
-                        data["frame_progress"] = frame_progress
-
-                        # Frame time estimation (skip first)
-                        elapsed = time.time() - getattr(self, "t0_frame", time.time())
-                        measured_count = self.loop_count
-
-                        if measured_count > 0:
-                            avg = elapsed / measured_count
-                            rem = self.len_movie - (self.loop_count + 1)
-                            rem_t = rem * avg
-                            mins = int(rem_t // 60)
-                            secs = int(rem_t % 60)
-                            data["frame_time"] = f"{mins} m {secs} s"
-                        else:
-                            data["frame_time"] = (
-                                f"{self.loop_count + 1}/{int(self.len_movie)} frames"
-                            )
-
-                        self.queue.put(data)
-                        self.loop_count += 1
+                    self.process_position(model=model, scale_model=scale_model)
 
                     # End of position loop
                     self.queue.put(
@@ -427,7 +449,7 @@ class SegmentCellDLProcess(BaseSegmentProcess):
                 )
 
         except Exception as e:
-            print(e)
+            logger.error(e)
 
         try:
             del model
@@ -451,10 +473,6 @@ class SegmentCellThresholdProcess(BaseSegmentProcess):
         self.equalize = False
 
         # Model
-
-        self.load_threshold_config()
-        self.extract_threshold_parameters()
-        self.detect_channels()
         # self.prepare_equalize() and self.write_log() moved to run() loop for batch support
 
         self.sum_done = 0
@@ -582,16 +600,49 @@ class SegmentCellThresholdProcess(BaseSegmentProcess):
                     rem_t = rem * avg
                     mins = int(rem_t // 60)
                     secs = int(rem_t % 60)
-                    data["frame_time"] = f"{mins} m {secs} s"
+                    data["frame_time"] = f"Segmentation: {mins} m {secs} s"
                 else:
-                    data["frame_time"] = f"Measuring..."
+                    data["frame_time"] = f"Segmentation..."
 
                 self.queue.put(data)
 
         except Exception as e:
-            print(e)
+            logger.error(e)
 
         return
+
+    def process_position(self):
+
+        tprint("Segment")
+
+        # Re-initialize threshold specific stuff (depends on channel indices which depend on metadata)
+        self.load_threshold_config()
+        self.extract_threshold_parameters()
+        self.detect_channels()
+        self.prepare_equalize()
+        self.write_log()  # Log start of segmentation for this pos
+
+        self.indices = list(range(self.img_num_channels.shape[1]))
+        if self.flip:
+            self.indices = np.array(list(reversed(self.indices)))
+
+        chunks = np.array_split(self.indices, self.n_threads)
+
+        self.t0_frame = time.time()  # Reset timer for accurate frame timing
+        self.sum_done = 0  # Reset progress for this pos
+
+        with concurrent.futures.ThreadPoolExecutor(
+            max_workers=self.n_threads
+        ) as executor:
+            results = results = executor.map(
+                self.parallel_job, chunks
+            )  # list(map(lambda x: executor.submit(self.parallel_job, x), chunks))
+            try:
+                for i, return_value in enumerate(results):
+                    pass
+            except Exception as e:
+                logger.error("Exception: ", e)
+                raise e
 
     def run(self):
 
@@ -601,59 +652,38 @@ class SegmentCellThresholdProcess(BaseSegmentProcess):
                 0: {"well_name": "Batch", "positions": self.positions}
             }
 
+        self.t0_well = time.time()
         # Loop over Wells
         for w_i, (w_idx, well_data) in enumerate(self.batch_structure.items()):
             positions = well_data["positions"]
+
+            # Well Time Estimation
+            elapsed = time.time() - self.t0_well
+            if w_i > 0:
+                avg_well = elapsed / w_i
+                rem_well = (len(self.batch_structure) - w_i) * avg_well
+                mins_w = int(rem_well // 60)
+                secs_w = int(rem_well % 60)
+                well_str = f"Well {w_i + 1}/{len(self.batch_structure)} - {mins_w} m {secs_w} s left"
+            else:
+                well_str = f"Processing well {w_i + 1}/{len(self.batch_structure)}..."
 
             # Update Well Progress
             self.queue.put(
                 {
                     "well_progress": (w_i / len(self.batch_structure)) * 100,
-                    "well_time": f"Processing well {w_i + 1}/{len(self.batch_structure)}...",
+                    "well_time": well_str,
                 }
             )
 
+            self.t0_pos = time.time()
             # Loop over positions in this well
             for pos_idx, pos_path in enumerate(positions):
 
                 # Setup specific variables for this position
                 self.setup_for_position(pos_path)
 
-                # Re-initialize threshold specific stuff (depends on channel indices which depend on metadata)
-                self.load_threshold_config()
-                self.extract_threshold_parameters()
-                self.detect_channels()
-                self.prepare_equalize()
-                self.write_log()  # Log start of segmentation for this pos
-
-                self.indices = list(range(self.img_num_channels.shape[1]))
-                if self.flip:
-                    self.indices = np.array(list(reversed(self.indices)))
-
-                chunks = np.array_split(self.indices, self.n_threads)
-
-                self.t0_frame = time.time()  # Reset timer for accurate frame timing
-                self.sum_done = 0  # Reset progress for this pos
-
-                self.queue.put(
-                    {
-                        "pos_progress": (pos_idx / len(positions)) * 100,
-                        "pos_time": f"Processing position {pos_idx + 1}/{len(positions)}...",
-                    }
-                )
-
-                with concurrent.futures.ThreadPoolExecutor(
-                    max_workers=self.n_threads
-                ) as executor:
-                    results = results = executor.map(
-                        self.parallel_job, chunks
-                    )  # list(map(lambda x: executor.submit(self.parallel_job, x), chunks))
-                    try:
-                        for i, return_value in enumerate(results):
-                            pass
-                            # print(f"Thread {i} output check: ", return_value)
-                    except Exception as e:
-                        print("Exception: ", e)
+                self.process_position()
 
                 # End of position loop
                 self.queue.put({"pos_progress": ((pos_idx + 1) / len(positions)) * 100})

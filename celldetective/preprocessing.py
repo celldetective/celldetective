@@ -32,9 +32,9 @@ from celldetective.utils import (
 from celldetective.segmentation import filter_image, threshold_image
 from gc import collect
 
-import logging
+from celldetective.log_manager import get_logger
 
-logger = logging.getLogger("celldetective")
+logger = get_logger(__name__)
 
 
 def estimate_background_per_condition(

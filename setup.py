@@ -3,7 +3,6 @@ import setuptools
 import pip
 import os
 import re
-from pip._internal.req import parse_requirements
 from pathlib import Path
 
 this_directory = Path(__file__).parent
@@ -21,12 +20,24 @@ else:
 links = []
 requires = []
 
-requirements = parse_requirements('requirements.txt', session='hack')
-requirements = list(requirements) 
-try:
-    requirements = [str(ir.req) for ir in requirements]
-except:
-    requirements = [str(ir.requirement) for ir in requirements]
+# Function to load requirements
+def load_requirements(filename):
+    with open(filename, "r") as f:
+        reqs = f.read().splitlines()
+    # Filter out comments and empty lines
+    return [r for r in reqs if r and not r.startswith("#")]
+
+requirements = load_requirements("requirements.txt")
+test_requirements = load_requirements("requirements_test.txt")
+doc_requirements = load_requirements("requirements_docs.txt")
+
+extras = {
+    'test': test_requirements,
+    'doc': doc_requirements,
+}
+
+extras['all'] = extras['test'] + extras['doc']
+
 
 setup(name='celldetective',
 			version=verstr,
@@ -46,6 +57,7 @@ setup(name='celldetective',
 					'celldetective = celldetective.__main__:main'],
 			},
 			install_requires = requirements,
+			extras_require = extras,
 			#dependency_links = links
 			)
 

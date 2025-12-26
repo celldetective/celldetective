@@ -15,8 +15,8 @@ from PyQt5.QtWidgets import (
     QSpacerItem,
     QGridLayout,
 )
-from celldetective.gui.processes.measure_cells import MeasurementProcess
-from celldetective.gui.processes.background_correction import (
+from celldetective.processes.measure_cells import MeasurementProcess
+from celldetective.processes.background_correction import (
     BackgroundCorrectionProcess,
 )
 from celldetective.gui.workers import ProgressWindow

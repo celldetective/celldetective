@@ -2,7 +2,6 @@ from multiprocessing import Process
 import time
 import os
 from pathlib import PurePath, Path
-import numpy as np
 from tifffile import imwrite
 from celldetective.preprocessing import (
     correct_background_model,
@@ -12,6 +11,9 @@ from celldetective.preprocessing import (
     _extract_channel_indices_from_config,
 )
 from celldetective.utils import config_section_to_dict, extract_experiment_channels
+from celldetective.log_manager import get_logger
+
+logger = get_logger(__name__)
 
 
 class BackgroundCorrectionProcess(Process):
@@ -31,7 +33,7 @@ class BackgroundCorrectionProcess(Process):
 
     def run(self):
 
-        print("Start background correction process...")
+        logger.info("Start background correction process...")
 
         try:
             # Load config to get movie length for progress estimation
@@ -47,25 +49,12 @@ class BackgroundCorrectionProcess(Process):
                 channel_indices, self.len_movie, self.nbr_channels
             )
 
-            # Safer calculation of total frames
-            n_pos = (
-                len(self.position_option)
-                if hasattr(self.position_option, "__len__")
-                else 1
-            )
-            n_wells = (
-                len(self.well_option) if hasattr(self.well_option, "__len__") else 1
-            )
-            self.total_frames = self.len_movie * n_pos * n_wells
-            print(f"Process initialized. Total frames: {self.total_frames}")
+            logger.info("Process initialized.")
 
         except Exception as e:
-            print(f"Error initializing process: {e}")
+            logger.error(f"Error initializing process: {e}")
             self.queue.put("error")
             return
-
-        self.count = 0
-        self.t0 = time.time()
 
         export = getattr(self, "export", False)
         return_stacks = getattr(self, "return_stacks", True)
@@ -113,11 +102,9 @@ class BackgroundCorrectionProcess(Process):
                 self.count_pos = 0
 
             elif level == "position":
-                # Overall progress based on positions inside well
-                # iteration is pidx within well (0-indexed)
+
                 self.count_pos = iteration
 
-                # Reset timer if stage changes or if it's the first item
                 current_stage = getattr(self, "current_stage", None)
                 reset_timer = False
                 if stage != current_stage:
@@ -134,11 +121,6 @@ class BackgroundCorrectionProcess(Process):
                     pos_progress = 100
                 data["pos_progress"] = pos_progress
 
-                # We calculate average speed based on items completed SINCE reset
-                # If we reset at iteration 0 (end of item 0), then at iteration 1 (end of item 1):
-                # elapsed = time(item 1). count = 1.
-                # So we use 'iteration' as the count of items measured by 'elapsed' (if reset at 0).
-
                 elapsed = current_time - self.t0_pos
 
                 measured_count = iteration
@@ -153,7 +135,6 @@ class BackgroundCorrectionProcess(Process):
                     data["pos_time"] = f"{stage}..."
 
             elif level == "frame":
-                # Sub-progress for frames
                 if iteration == 0:
                     self.t0_frame = current_time
 
@@ -163,8 +144,6 @@ class BackgroundCorrectionProcess(Process):
                 data["frame_progress"] = frame_progress
 
                 elapsed = current_time - getattr(self, "t0_frame", current_time)
-                # iteration 0: t0 set.
-                # iteration 1: elapsed = frame 1 dur. measured_count = 1.
                 measured_count = iteration
 
                 if measured_count > 0:
@@ -176,24 +155,6 @@ class BackgroundCorrectionProcess(Process):
                     data["frame_time"] = f"{mins} m {secs} s"
                 else:
                     data["frame_time"] = f"{iteration + 1}/{total} frames"
-
-            elif level is None:
-                # Fallback for old style logic - maintain compatibility just in case
-                self.count += 1
-                if self.count > self.total_frames:
-                    self.count = self.total_frames
-
-                self.sum_done = (self.count / self.total_frames) * 100
-
-                # We map this to position progress as main
-                data["pos_progress"] = self.sum_done
-                if self.count > 0:
-                    elapsed = current_time - self.t0
-                    avg = elapsed / self.count
-                    rem = (self.total_frames - self.count) * avg
-                    mins = int(rem // 60)
-                    secs = int(rem % 60)
-                    data["pos_time"] = f"{mins} m {secs} s"
 
             if data:
                 self.queue.put(data)
@@ -246,14 +207,12 @@ class BackgroundCorrectionProcess(Process):
                 )
 
             if return_stacks and corrected_stacks and len(corrected_stacks) > 0:
-                # Save to temp file for the main process to pick up
-                # We assume single position for preview
                 temp_path = os.path.join(self.exp_dir, "temp_corrected_stack.tif")
                 try:
                     imwrite(temp_path, corrected_stacks[0])
-                    print(f"Saved temp stack to {temp_path}")
+                    logger.info(f"Saved temp stack to {temp_path}")
                 except Exception as temp_e:
-                    print(f"Failed to save temp stack: {temp_e}")
+                    logger.error(f"Failed to save temp stack: {temp_e}")
 
             self.queue.put(
                 {
@@ -265,7 +224,7 @@ class BackgroundCorrectionProcess(Process):
             )
 
         except Exception as e:
-            print(f"Error in background correction process: {e}")
+            logger.error(f"Error in background correction process: {e}")
             self.queue.put("error")
             return
 

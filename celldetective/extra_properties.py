@@ -186,7 +186,7 @@ def area_detected_in_intensity(regionmask, intensity_image, target_channel='adhe
 	return float(np.sum(lbl))
 
 
-def area_dark_intensity(regionmask, intensity_image, target_channel='adhesion_channel', fill_holes=True, threshold=0.95): #, target_channel='adhesion_channel'
+def area_dark_intensity(regionmask, intensity_image, target_channel='adhesion_channel', fill_holes=False, threshold=0.95): #, target_channel='adhesion_channel'
 	
 	"""
 	Computes the absolute area within the regionmask where the intensity is below a given threshold.
@@ -234,7 +234,7 @@ def area_dark_intensity(regionmask, intensity_image, target_channel='adhesion_ch
 	return float(np.sum(subregion))
 
 
-def fraction_of_area_dark_intensity(regionmask, intensity_image, target_channel='adhesion_channel', fill_holes=True, threshold=0.95): #, target_channel='adhesion_channel'
+def fraction_of_area_dark_intensity(regionmask, intensity_image, target_channel='adhesion_channel', fill_holes=False, threshold=0.95): #, target_channel='adhesion_channel'
 	
 	subregion = (intensity_image < threshold)*regionmask # under one, under 0.8, under 0.6, whatever value!
 	if fill_holes:

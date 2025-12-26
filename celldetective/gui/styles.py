@@ -2,30 +2,31 @@ from celldetective.utils import get_software_location
 from PyQt5.QtGui import QIcon
 import os
 
+
 class Styles(object):
 
-	def __init__(self):
+    def __init__(self):
 
-		self.init_button_styles()
-		self.init_tab_styles()
-		self.init_label_styles()
+        self.init_button_styles()
+        self.init_tab_styles()
+        self.init_label_styles()
 
-		self.help_color = "#1958b7" 
+        self.help_color = "#1958b7"
 
-		
-		self.celldetective_blue = "#1565c0"
-		self.celldetective_logo_path = os.sep.join([get_software_location(),'celldetective','icons','logo.png'])
-		self.celldetective_icon = QIcon(self.celldetective_logo_path)
+        self.celldetective_blue = "#1565c0"
+        self.celldetective_logo_path = os.sep.join(
+            [get_software_location(), "celldetective", "icons", "logo.png"]
+        )
+        self.celldetective_icon = QIcon(self.celldetective_logo_path)
 
-		self.action_lbl_style_sheet = """
+        self.action_lbl_style_sheet = """
 			font-size: 10px;
 			padding-left: 10px;
 			"""
 
-	def init_button_styles(self):
+    def init_button_styles(self):
 
-
-		self.button_style_sheet = '''
+        self.button_style_sheet = """
 			QPushButton {
 				background-color: #1565c0;
 				color: white;
@@ -49,9 +50,9 @@ class Styles(object):
 				font-weight: bold;
 				font-size: 12px;
 			}
-		'''
+		"""
 
-		self.button_style_sheet_2 = '''
+        self.button_style_sheet_2 = """
 			QPushButton {
 				background-color: transparent;
 				border: 3px solid #1565c0;
@@ -73,9 +74,9 @@ class Styles(object):
 				color: rgba(21, 101, 192, 0.50);
 			}
 
-		'''
+		"""
 
-		self.button_style_sheet_5 = '''
+        self.button_style_sheet_5 = """
 			QPushButton {
 				background-color: transparent;
 				border: 3px solid #1565c0;
@@ -96,10 +97,9 @@ class Styles(object):
 				color: rgba(21, 101, 192, 0.50);
 			}
 
-		'''
+		"""
 
-
-		self.button_style_sheet_2_not_done = '''
+        self.button_style_sheet_2_not_done = """
 			QPushButton {
 				background-color: transparent;
 				border: 3px solid #d14334;
@@ -115,9 +115,9 @@ class Styles(object):
 			QPushButton:pressed {
 				background-color: #ff8a00;
 			}
-		'''
+		"""
 
-		self.button_style_sheet_3 = '''
+        self.button_style_sheet_3 = """
 			QPushButton {
 				background-color: #eeeeee;
 				color: black;
@@ -132,9 +132,9 @@ class Styles(object):
 			QPushButton:pressed {
 				background-color: #ff8a00;
 			}
-		'''
+		"""
 
-		self.button_select_all = '''
+        self.button_select_all = """
 			QPushButton {
 				background-color: transparent;
 				color: black;
@@ -148,9 +148,13 @@ class Styles(object):
 			QPushButton:pressed {
 				background-color: #ff8a00;
 			}
-		'''
+			QPushButton:checked {
+				background-color: #1565c0;
+				color: white;
+			}
+		"""
 
-		self.menu_check_style = '''
+        self.menu_check_style = """
 			QCheckBox {
 				font-size: 10px;
 				padding-left: 10px;
@@ -160,9 +164,9 @@ class Styles(object):
 				background-color : rgba(189, 189, 189, 1);
 				opacity : 0.3;
 			}
-		'''
+		"""
 
-		self.button_add = '''
+        self.button_add = """
 			QPushButton {
 				background-color: transparent;
 				color: black;
@@ -177,11 +181,11 @@ class Styles(object):
 			QPushButton:pressed {
 				background-color: #ff8a00;
 			}
-		'''
+		"""
 
-	def init_tab_styles(self):
+    def init_tab_styles(self):
 
-		self.qtab_style = """
+        self.qtab_style = """
 			QTabWidget::pane {
 			border: 1px solid #B8B8B8;
 			background: white;
@@ -271,9 +275,9 @@ class Styles(object):
 		}
 		"""
 
-	def init_label_styles(self):
+    def init_label_styles(self):
 
-		self.block_title = '''
+        self.block_title = """
 			font-weight: bold;
 			padding: 0px;
-		'''
+		"""

@@ -7,6 +7,7 @@ from contextlib import contextmanager
 CONSOLE_FORMAT = "[%(levelname)s] %(message)s"
 FILE_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 
+
 def setup_global_logging(level=logging.INFO, log_file=None):
     """
     Sets up the global logger for the application.
@@ -20,7 +21,7 @@ def setup_global_logging(level=logging.INFO, log_file=None):
         root_logger.handlers.clear()
 
     # Console Handler
-    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler = logging.StreamHandler(sys.__stdout__)
     console_handler.setFormatter(logging.Formatter(CONSOLE_FORMAT))
     root_logger.addHandler(console_handler)
 
@@ -31,7 +32,25 @@ def setup_global_logging(level=logging.INFO, log_file=None):
         file_handler.setFormatter(logging.Formatter(FILE_FORMAT))
         root_logger.addHandler(file_handler)
 
+        for lib in ["trackpy", "btrack", "cellpose", "stardist"]:
+            lib_logger = logging.getLogger(lib)
+            lib_logger.setLevel(logging.INFO)
+            if file_handler not in lib_logger.handlers:
+                lib_logger.addHandler(file_handler)
+
+    # Hook to capture uncaught exceptions
+    def handle_exception(exc_type, exc_value, exc_traceback):
+        if issubclass(exc_type, KeyboardInterrupt):
+            sys.__excepthook__(exc_type, exc_value, exc_traceback)
+            return
+        root_logger.error(
+            "Uncaught exception", exc_info=(exc_type, exc_value, exc_traceback)
+        )
+
+    sys.excepthook = handle_exception
+
     return root_logger
+
 
 def get_logger(name="celldetective"):
     """
@@ -39,30 +58,31 @@ def get_logger(name="celldetective"):
     """
     return logging.getLogger(name)
 
+
 @contextmanager
 def PositionLogger(position_path, logger_name="celldetective"):
     """
     Context manager to dynamically route logs to a file within a specific position folder.
-    
+
     Args:
         position_path (str): Path to the position folder.
         logger_name (str): Name of the logger to attach the handler to.
     """
     logger = logging.getLogger(logger_name)
-    
+
     # Ensure logs/ directory exists in the position folder
     log_dir = os.path.join(position_path, "logs")
     os.makedirs(log_dir, exist_ok=True)
-    
+
     log_file = os.path.join(log_dir, "process.log")
-    
+
     # Create file handler
     file_handler = logging.FileHandler(log_file)
     file_handler.setFormatter(logging.Formatter(FILE_FORMAT))
-    
+
     # Add handler
     logger.addHandler(file_handler)
-    
+
     try:
         yield logger
     finally:

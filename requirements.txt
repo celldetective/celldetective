@@ -1,17 +1,11 @@
 wheel
-nbsphinx
-nbsphinx_link
-sphinx_rtd_theme
-sphinx #==5.0.2
-jinja2 #<3.1
+jinja2
 ipykernel
 stardist
 cellpose<3
 scikit-learn
 btrack
 tensorflow~=2.15.0
-#tensorflow #<=2.12.1
-#keras==2.15.0
 napari<0.6.0
 tqdm
 mahotas
@@ -22,16 +16,13 @@ setuptools
 scipy
 seaborn
 opencv-python-headless==4.7.0.72
-PyQt5 #==5.15.7
+PyQt5
 liblapack
 gputools
-lmfit #~=1.2.2
-superqt[cmap] #>= 0.6.1
-setuptools
+lmfit
+superqt[cmap]
 matplotlib_scalebar
 numpy==1.26.4
-pytest
-pytest-qt
 h5py
 cliffs_delta
 requests
@@ -40,4 +31,3 @@ prettyprint
 pandas
 matplotlib
 prettytable
-
