@@ -435,6 +435,7 @@ class SegmentationModelLoader(CelldetectiveWidget):
             idx = self.parent_window.parent_window.populations.index(self.mode)
             self.parent_window.threshold_configs[idx] = self.filename
             self.parent_window.seg_model_list.setCurrentText("Threshold")
+            self.parent_window.segment_action.setChecked(True)
             self.close()
 
     def generate_input_config(self):

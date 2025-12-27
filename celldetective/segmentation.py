@@ -102,6 +102,12 @@ def segment(
     """
 
     model_path = locate_segmentation_model(model_name)
+    if model_path is None:
+        logger.error(
+            f"Model {model_name} could not be found via locate_segmentation_model."
+        )
+        return None
+
     input_config = model_path + "config_input.json"
     if os.path.exists(input_config):
         with open(input_config) as config:
@@ -178,8 +184,15 @@ def segment(
         none_channel_indices = np.where(channel_indices == None)[0]
         channel_indices[channel_indices == None] = 0
 
-        frame = stack[t]
-        frame = _rearrange_multichannel_frame(frame).astype(float)
+        frame = stack[t].astype(float)
+
+        # fix infs
+        try:
+            frame[np.isinf(frame)] = np.nan
+        except Exception as e:
+            logger.error(e)
+
+        frame = _rearrange_multichannel_frame(frame)
 
         frame_to_segment = np.zeros(
             (frame.shape[0], frame.shape[1], len(required_channels))

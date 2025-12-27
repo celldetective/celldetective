@@ -388,50 +388,42 @@ def measure_features(
     spot_detection=None,
 ):
     """
-
     Measure features within segmented regions of an image.
 
     Parameters
     ----------
     img : ndarray
-            The input image as a NumPy array.
+        The input image as a NumPy array.
     label : ndarray
-            The segmentation labels corresponding to the image regions.
+        The segmentation labels corresponding to the image regions.
     features : list, optional
-            The list of features to measure within the segmented regions. The default is ['area', 'intensity_mean'].
+        The list of features to measure within the segmented regions. The default is ['area', 'intensity_mean'].
     channels : list, optional
-            The list of channel names in the image. The default is ["brightfield_channel", "dead_nuclei_channel", "live_nuclei_channel"].
+        The list of channel names in the image. The default is ["brightfield_channel", "dead_nuclei_channel", "live_nuclei_channel"].
     border_dist : int, float, or list, optional
-            The distance(s) in pixels from the edge of each segmented region to measure features. The default is None.
+        The distance(s) in pixels from the edge of each segmented region to measure features. The default is None.
     haralick_options : dict, optional
-            The options for computing Haralick features. The default is None.
+        The options for computing Haralick features. The default is None.
+    verbose : bool, optional
+        If True, warnings will be logged.
+    normalisation_list : list of dict, optional
+        List of normalization operations to apply.
+    radial_intensity : Any, optional
+        Deprecated/Unused parameter.
+    radial_channel : Any, optional
+        Deprecated/Unused parameter.
+    spot_detection : dict, optional
+        Options for spot detection.
 
     Returns
     -------
     df_props : DataFrame
-            A pandas DataFrame containing the measured features for each segmented region.
-
-    Notes
-    -----
-    This function measures features within segmented regions of an image.
-    It utilizes the regionprops_table function from the skimage.measure module for feature extraction.
-    The features to measure can be specified using the 'features' parameter.
-    Optional parameters such as 'channels' and 'border_dist' allow for additional measurements.
-    If provided, Haralick features can be computed using the 'haralick_options' parameter.
-    The results are returned as a pandas DataFrame.
-
-    Examples
-    --------
-    >>> df_props = measure_features(img, label, features=['area', 'intensity_mean'], channels=["brightfield_channel", "dead_nuclei_channel", "live_nuclei_channel"])
-    # Measure area and mean intensity within segmented regions of the image.
-
+        A pandas DataFrame containing the measured features for each segmented region.
     """
-
-    if isinstance(features, list):
-        features = features.copy()
-
     if features is None:
         features = []
+    elif isinstance(features, list):
+        features = features.copy()
 
     measure_mean_intensities = False
     if img is None:
@@ -452,54 +444,69 @@ def measure_features(
     if img is not None:
         if img.ndim == 2:
             img = img[:, :, np.newaxis]
+
         if channels is None:
             channels = [f"intensity-{k}" for k in range(img.shape[-1])]
-        if (channels is not None) * (img.ndim == 3):
+
+        if img.ndim == 3 and channels is not None:
             assert (
                 len(channels) == img.shape[-1]
             ), "Mismatch between the provided channel names and the shape of the image"
 
         if spot_detection is not None:
-            for index, channel in enumerate(channels):
-                if channel == spot_detection["channel"]:
-                    ind = index
-                    if "image_preprocessing" not in spot_detection:
-                        spot_detection.update({"image_preprocessing": None})
-                    df_spots = blob_detection(
-                        img,
-                        label,
-                        diameter=spot_detection["diameter"],
-                        threshold=spot_detection["threshold"],
-                        channel_name=spot_detection["channel"],
-                        target_channel=ind,
-                        image_preprocessing=spot_detection["image_preprocessing"],
-                    )
+            detection_channel = spot_detection.get("channel")
+            if detection_channel in channels:
+                ind = channels.index(detection_channel)
+                if "image_preprocessing" not in spot_detection:
+                    spot_detection.update({"image_preprocessing": None})
+
+                df_spots = blob_detection(
+                    img,
+                    label,
+                    diameter=spot_detection["diameter"],
+                    threshold=spot_detection["threshold"],
+                    channel_name=detection_channel,
+                    target_channel=ind,
+                    image_preprocessing=spot_detection["image_preprocessing"],
+                )
+            else:
+                logger.warning(
+                    f"Spot detection channel '{detection_channel}' not found in channels."
+                )
+                df_spots = None
 
         if normalisation_list:
             for norm in normalisation_list:
-                for index, channel in enumerate(channels):
-                    if channel == norm["target_channel"]:
-                        ind = index
-                if norm["correction_type"] == "local":
-                    normalised_image = normalise_by_cell(
-                        img[:, :, ind].copy(),
-                        label,
-                        distance=int(norm["distance"]),
-                        model=norm["model"],
-                        operation=norm["operation"],
-                        clip=norm["clip"],
-                    )
-                    img[:, :, ind] = normalised_image
-                else:
-                    corrected_image = field_correction(
-                        img[:, :, ind].copy(),
-                        threshold_on_std=norm["threshold_on_std"],
-                        operation=norm["operation"],
-                        model=norm["model"],
-                        clip=norm["clip"],
-                    )
-                    img[:, :, ind] = corrected_image
+                target = norm.get("target_channel")
+                if target in channels:
+                    ind = channels.index(target)
 
+                    if norm["correction_type"] == "local":
+                        normalised_image = normalise_by_cell(
+                            img[:, :, ind].copy(),
+                            label,
+                            distance=int(norm["distance"]),
+                            model=norm["model"],
+                            operation=norm["operation"],
+                            clip=norm["clip"],
+                        )
+                        img[:, :, ind] = normalised_image
+                    else:
+                        corrected_image = field_correction(
+                            img[:, :, ind].copy(),
+                            threshold_on_std=norm["threshold_on_std"],
+                            operation=norm["operation"],
+                            model=norm["model"],
+                            clip=norm["clip"],
+                        )
+                        img[:, :, ind] = corrected_image
+                else:
+                    logger.warning(
+                        f"Normalization target '{target}' not found in channels."
+                    )
+
+    # Initialize extra properties list and name check list
+    extra = []  # Ensure 'extra' is defined regardless of import success
     try:
         import celldetective.extra_properties as extra_props
 
@@ -508,138 +515,118 @@ def measure_features(
         logger.error(f"The module extra_properties seems corrupted: {e}... Skip...")
         extraprops = False
 
-    if extraprops:
-        extra = getmembers(extra_props, isfunction)
-        extra = [extra[i][0] for i in range(len(extra))]
+    extra_props_list = []
 
-        extra_props_list = []
-        feats = features.copy()
-        for f in features:
+    if extraprops:
+        # Get list of function names in extra_properties
+        extra = [name for name, _ in getmembers(extra_props, isfunction)]
+
+        feats_temp = features.copy()
+        for f in feats_temp:
             if f in extra:
-                feats.remove(f)
+                features.remove(f)
                 extra_props_list.append(getattr(extra_props, f))
 
         # Add intensity nan mean if need to measure mean intensities
         if measure_mean_intensities:
             extra_props_list.append(getattr(extra_props, "intensity_nanmean"))
 
-        if len(extra_props_list) == 0:
-            extra_props_list = None
-        else:
-            extra_props_list = tuple(extra_props_list)
+    if not extra_props_list:
+        extra_props_list = None
     else:
-        extra_props_list = []
-        feats = features.copy()
+        extra_props_list = tuple(extra_props_list)
 
     props = regionprops_table(
         label,
         intensity_image=img,
-        properties=feats,
+        properties=features,
         extra_properties=extra_props_list,
         channel_names=channels,
     )
     df_props = pd.DataFrame(props)
-    if spot_detection is not None:
-        if df_spots is not None:
-            df_props = df_props.merge(
-                df_spots, how="outer", on="label", suffixes=("_delme", "")
-            )
-            df_props = df_props[
-                [c for c in df_props.columns if not c.endswith("_delme")]
-            ]
+
+    if spot_detection is not None and df_spots is not None:
+        df_props = df_props.merge(
+            df_spots, how="outer", on="label", suffixes=("_delme", "")
+        )
+        df_props = df_props[[c for c in df_props.columns if not c.endswith("_delme")]]
 
     if border_dist is not None:
-        # automatically drop all non intensity features
-        intensity_features_test = [
-            ("intensity" in s and "centroid" not in s and "peripheral" not in s)
-            for s in features
+        # Filter for features containing "intensity" but not "centroid" or "peripheral"
+        intensity_features = [
+            f
+            for f in (features + extra)
+            if "intensity" in f and "centroid" not in f and "peripheral" not in f
         ]
-        intensity_features = list(np.array(features)[np.array(intensity_features_test)])
 
+        # Prepare extra properties for intensity features on borders
         intensity_extra = []
-        if measure_mean_intensities:
+        if measure_mean_intensities and extraprops:
             intensity_extra.append(getattr(extra_props, "intensity_nanmean"))
+
+        clean_intensity_features = []
         for s in intensity_features:
             if s in extra:
                 intensity_extra.append(getattr(extra_props, s))
-                intensity_features.remove(s)
+            else:
+                clean_intensity_features.append(s)
 
-        if len(intensity_extra) == 0:
+        if not intensity_extra and not clean_intensity_features:
             logger.warning(
                 "No intensity feature was passed... Adding mean intensity for edge measurement..."
             )
-            intensity_extra.append(getattr(extra_props, "intensity_nanmean"))
+            if extraprops:
+                intensity_extra.append(getattr(extra_props, "intensity_nanmean"))
 
-        intensity_features = list(np.append(intensity_features, "label"))
+        # Always include label for merging
+        clean_intensity_features.append("label")
 
-        new_intensity_features = intensity_features.copy()
-        for int_feat in intensity_features:
-            if int_feat in extra:
-                new_intensity_features.remove(int_feat)
-        intensity_features = new_intensity_features
+        # Helper to format suffix
+        def get_suffix(d):
+            d_str = str(d)
+            d_clean = (
+                d_str.replace("(", "")
+                .replace(")", "")
+                .replace(", ", "_")
+                .replace(",", "_")
+            )
+            if "-" in d_str or "," in d_str:
+                return f"_slice_{d_clean.replace('-', 'm')}px"
+            else:
+                return f"_edge_{d_clean}px"
 
-        # if isinstance(border_dist, (int, float, str)):
-        #     border_label = contour_of_instance_segmentation(label, border_dist)
-        #     props_border = regionprops_table(
-        #         border_label,
-        #         intensity_image=img,
-        #         properties=intensity_features,
-        #         channel_names=channels,
-        #     )
-        #     df_props_border = pd.DataFrame(props_border)
-        #     for c in df_props_border.columns:
-        #         if "intensity" in c:
-        #             d_str = str(border_dist)
-        #             d_clean = (
-        #                 d_str.replace("(", "")
-        #                 .replace(")", "")
-        #                 .replace(", ", "_")
-        #                 .replace(",", "_")
-        #             )
-        #             suffix = f"_edge_{d_clean}px"
-        #             if "-" in d_str or "," in d_str:
-        #                 suffix = f"_outer_edge_{d_clean}px"
-        #             df_props_border = df_props_border.rename({c: c + suffix}, axis=1)
+        # Ensure border_dist is a list for uniform processing
+        dist_list = (
+            [border_dist] if isinstance(border_dist, (int, float, str)) else border_dist
+        )
 
-        if isinstance(border_dist, list):
-            df_props_border_list = []
-            for d in border_dist:
-                border_label = contour_of_instance_segmentation(label, d)
-                props_border = regionprops_table(
-                    border_label,
-                    intensity_image=img,
-                    properties=intensity_features,
-                    extra_properties=intensity_extra,
-                    channel_names=channels,
-                )
-                df_props_border_d = pd.DataFrame(props_border)
+        df_props_border_list = []
+        for d in dist_list:
+            border_label = contour_of_instance_segmentation(label, d)
+            props_border = regionprops_table(
+                border_label,
+                intensity_image=img,
+                properties=clean_intensity_features,
+                extra_properties=intensity_extra,
+                channel_names=channels,
+            )
+            df_props_border_d = pd.DataFrame(props_border)
 
-                for c in df_props_border_d.columns:
-                    if "intensity" in c:
-                        d_str = str(d)
-                        d_clean = (
-                            d_str.replace("(", "")
-                            .replace(")", "")
-                            .replace(", ", "_")
-                            .replace(",", "_")
-                        )
-                        if "-" in d_str or "," in d_str:
-                            df_props_border_d = df_props_border_d.rename(
-                                {c: c + f"_slice_{d_clean.replace("-","m")}px"}, axis=1
-                            )
-                        else:
-                            df_props_border_d = df_props_border_d.rename(
-                                {c: c + f"_edge_{d_clean}px"}, axis=1
-                            )
+            # Rename columns with suffix
+            rename_dict = {}
+            for c in df_props_border_d.columns:
+                if "intensity" in c:
+                    rename_dict[c] = c + get_suffix(d)
 
-                df_props_border_list.append(df_props_border_d)
+            df_props_border_d = df_props_border_d.rename(columns=rename_dict)
+            df_props_border_list.append(df_props_border_d)
 
+        if df_props_border_list:
             df_props_border = reduce(
                 lambda left, right: pd.merge(left, right, on=["label"], how="outer"),
                 df_props_border_list,
             )
-
-        df_props = df_props.merge(df_props_border, how="outer", on="label")
+            df_props = df_props.merge(df_props_border, how="outer", on="label")
 
     if haralick_options is not None:
         try:
@@ -655,7 +642,7 @@ def measure_features(
                     [c for c in df_props.columns if not c.endswith("_delme")]
                 ]
         except Exception as e:
-            logger.error(e)
+            logger.error(f"Haralick computation failed: {e}")
             pass
 
     if channels is not None:
