@@ -41,7 +41,7 @@ import numpy as np
 import seaborn as sns
 import matplotlib.cm as mcm
 import os
-from celldetective.gui import CelldetectiveWidget, CelldetectiveMainWindow
+from celldetective.gui.base.components import CelldetectiveWidget, CelldetectiveMainWindow
 from superqt import QColormapComboBox, QLabeledSlider, QSearchableComboBox
 from superqt.fonticon import icon
 from fonticon_mdi6 import MDI6

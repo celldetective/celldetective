@@ -1,3 +1,5 @@
+import sys
+import subprocess
 from PyQt5.QtWidgets import (
     QDialog,
     QFrame,
@@ -11,7 +13,7 @@ from PyQt5.QtWidgets import (
     QCheckBox,
     QMessageBox,
 )
-from PyQt5.QtCore import Qt, QSize
+from PyQt5.QtCore import Qt, QSize, QTimer
 from superqt.fonticon import icon
 from fonticon_mdi6 import MDI6
 import gc
@@ -33,14 +35,13 @@ from celldetective.io import (
     fix_missing_labels,
     locate_signal_model,
 )
-from celldetective.gui import (
-    SegmentationModelLoader,
-    ClassifierWidget,
-    EventAnnotator,
-    TableUI,
-    CelldetectiveWidget,
-    PairEventAnnotator,
-)
+
+from celldetective.gui.seg_model_loader import SegmentationModelLoader
+from celldetective.gui.classifier_widget import ClassifierWidget
+from celldetective.gui.event_annotator import EventAnnotator
+from celldetective.gui.tableUI import TableUI
+from celldetective.gui.base.components import CelldetectiveWidget
+from celldetective.gui.pair_event_annotator import PairEventAnnotator
 
 from celldetective.gui.settings import (
     SettingsSegmentation,
@@ -83,7 +84,7 @@ from celldetective.gui.layouts import (
     BackgroundFitCorrectionLayout,
     ChannelOffsetOptionsLayout,
 )
-from celldetective.gui import Styles
+from celldetective.gui.base.styles import Styles
 from celldetective.utils import get_software_location
 
 from celldetective.gui.workers import ProgressWindow
@@ -93,6 +94,9 @@ from celldetective.processes.segment_cells import (
 )
 from celldetective.processes.track_cells import TrackingProcess
 from celldetective.processes.measure_cells import MeasurementProcess
+import logging
+
+logger = logging.getLogger("celldetective")
 
 
 class ProcessPanel(QFrame, Styles):
@@ -203,30 +207,7 @@ class ProcessPanel(QFrame, Styles):
             self.parent_window.scroll.setMinimumHeight(
                 min(int(930), int(0.9 * self.parent_window.screen_height))
             )
-
-    # def help_population(self):
-
-    # 	"""
-    # 	Helper to choose a proper cell population structure.
-    # 	"""
-
-    # 	dict_path = os.sep.join([get_software_location(),'celldetective','gui','help','cell-populations.json'])
-
-    # 	with open(dict_path) as f:
-    # 		d = json.load(f)
-
-    # 	suggestion = help_generic(d)
-    # 	if isinstance(suggestion, str):
-    # 		print(f"{suggestion=}")
-    # 		msgBox = QMessageBox()
-    # 		msgBox.setIcon(QMessageBox.Information)
-    # 		msgBox.setTextFormat(Qt.RichText)
-    # 		msgBox.setText(suggestion)
-    # 		msgBox.setWindowTitle("Info")
-    # 		msgBox.setStandardButtons(QMessageBox.Ok)
-    # 		returnValue = msgBox.exec()
-    # 		if returnValue == QMessageBox.Ok:
-    # 			return None
+            QTimer.singleShot(10, lambda: center_window(self.window()))
 
     def populate_contents(self):
         self.ContentsFrame = QFrame()
@@ -253,6 +234,26 @@ class ProcessPanel(QFrame, Styles):
         self.submit_btn.setStyleSheet(self.button_style_sheet)
         self.submit_btn.clicked.connect(self.process_population)
         self.grid_contents.addWidget(self.submit_btn, 11, 0, 1, 4)
+
+        for action in [
+            self.segment_action,
+            self.track_action,
+            self.measure_action,
+            self.signal_analysis_action,
+        ]:
+            action.toggled.connect(self.check_readiness)
+        self.check_readiness()
+
+    def check_readiness(self):
+        if (
+            self.segment_action.isChecked()
+            or self.track_action.isChecked()
+            or self.measure_action.isChecked()
+            or self.signal_analysis_action.isChecked()
+        ):
+            self.submit_btn.setEnabled(True)
+        else:
+            self.submit_btn.setEnabled(False)
 
     def generate_measure_options(self):
 
@@ -649,7 +650,7 @@ class ProcessPanel(QFrame, Styles):
 
         suggestion = help_generic(d)
         if isinstance(suggestion, str):
-            print(f"{suggestion=}")
+            logger.info(f"{suggestion=}")
             msgBox = QMessageBox()
             msgBox.setIcon(QMessageBox.Information)
             msgBox.setTextFormat(Qt.RichText)
@@ -682,7 +683,7 @@ class ProcessPanel(QFrame, Styles):
 
         suggestion = help_generic(d)
         if isinstance(suggestion, str):
-            print(f"{suggestion=}")
+            logger.info(f"{suggestion=}")
             msgBox = QMessageBox()
             msgBox.setIcon(QMessageBox.Information)
             msgBox.setText(f"The suggested technique is {suggestion}.")
@@ -706,7 +707,7 @@ class ProcessPanel(QFrame, Styles):
 
         suggestion = help_generic(d)
         if isinstance(suggestion, str):
-            print(f"{suggestion=}")
+            logger.info(f"{suggestion=}")
             msgBox = QMessageBox()
             msgBox.setIcon(QMessageBox.Information)
             msgBox.setTextFormat(Qt.RichText)
@@ -754,7 +755,7 @@ class ProcessPanel(QFrame, Styles):
         test = self.parent_window.locate_selected_position()
         if test:
             # print('Memory use: ', dict(psutil.virtual_memory()._asdict()))
-            print(f"Loading images and labels into napari...")
+            logger.info(f"Loading images and labels into napari...")
             try:
                 control_segmentation_napari(
                     self.parent_window.pos,
@@ -771,7 +772,7 @@ class ProcessPanel(QFrame, Styles):
                 _ = msgBox.exec()
                 return
             except Exception as e:
-                print(f"Task unsuccessful... Exception {e}...")
+                logger.error(f"Task unsuccessful... Exception {e}...")
                 msgBox = QMessageBox()
                 msgBox.setIcon(QMessageBox.Warning)
                 msgBox.setText(str(e))
@@ -790,7 +791,7 @@ class ProcessPanel(QFrame, Styles):
                 )
                 returnValue = msgBox.exec()
                 if returnValue == QMessageBox.Yes:
-                    print("Fixing the missing labels...")
+                    logger.info("Fixing the missing labels...")
                     fix_missing_labels(
                         self.parent_window.pos,
                         prefix=self.parent_window.movie_prefix,
@@ -804,7 +805,7 @@ class ProcessPanel(QFrame, Styles):
                             flush_memory=True,
                         )
                     except Exception as e:
-                        print(f"Error {e}")
+                        logger.error(f"Error {e}")
                         return None
                 else:
                     return None
@@ -883,19 +884,19 @@ class ProcessPanel(QFrame, Styles):
     # 		self.all_ticked = True
 
     def upload_segmentation_model(self):
-        print("Load a segmentation model or pipeline...")
+        logger.info("Load a segmentation model or pipeline...")
         self.seg_model_loader = SegmentationModelLoader(self)
         self.seg_model_loader.show()
         center_window(self.seg_model_loader)
 
     def open_tracking_configuration_ui(self):
-        print("Set the tracking parameters...")
+        logger.info("Set the tracking parameters...")
         self.settings_tracking = SettingsTracking(self)
         self.settings_tracking.show()
         center_window(self.settings_tracking)
 
     def open_signal_model_config_ui(self):
-        print("Set the training parameters for new signal models...")
+        logger.info("Set the training parameters for new signal models...")
         self.settings_event_detection_training = SettingsEventDetectionModelTraining(
             self
         )
@@ -903,19 +904,19 @@ class ProcessPanel(QFrame, Styles):
         center_window(self.settings_event_detection_training)
 
     def open_segmentation_model_config_ui(self):
-        print("Set the training parameters for a new segmentation model...")
+        logger.info("Set the training parameters for a new segmentation model...")
         self.settings_segmentation_training = SettingsSegmentationModelTraining(self)
         self.settings_segmentation_training.show()
         center_window(self.settings_segmentation_training)
 
     def open_measurement_configuration_ui(self):
-        print("Set the measurements to be performed...")
+        logger.info("Set the measurements to be performed...")
         self.settings_measurements = SettingsMeasurements(self)
         self.settings_measurements.show()
         center_window(self.settings_measurements)
 
     def open_segmentation_configuration_ui(self):
-        print("Set the segmentation settings to be performed...")
+        logger.info("Set the segmentation settings to be performed...")
         self.settings_segmentation = SettingsSegmentation(self)
         self.settings_segmentation.show()
 
@@ -970,7 +971,7 @@ class ProcessPanel(QFrame, Styles):
             else:
                 return None
 
-        print(f"Processing {self.parent_window.well_list.currentText()}...")
+        logger.info(f"Processing {self.parent_window.well_list.currentText()}...")
 
         # self.freeze()
         # QApplication.setOverrideCursor(Qt.WaitCursor)
@@ -996,7 +997,7 @@ class ProcessPanel(QFrame, Styles):
             elif returnValue == QMessageBox.Cancel:
                 return None
             else:
-                print("erase tabs!")
+                logger.info("erase tabs!")
                 tabs = [
                     pos
                     + os.sep.join(["output", "tables", f"trajectories_{self.mode}.csv"])
@@ -1297,7 +1298,7 @@ class ProcessPanel(QFrame, Styles):
         self.reset_signals()
 
     def open_napari_tracking(self):
-        print(
+        logger.info(
             f"View the tracks before post-processing for position {self.parent_window.pos} in napari..."
         )
         try:
@@ -1318,7 +1319,7 @@ class ProcessPanel(QFrame, Styles):
 
     def view_table_ui(self):
 
-        print("Load table...")
+        logger.info("Load table...")
         self.load_available_tables()
 
         if self.df is not None:
@@ -1335,7 +1336,7 @@ class ProcessPanel(QFrame, Styles):
             self.tab_ui.show()
             center_window(self.tab_ui)
         else:
-            print("Table could not be loaded...")
+            logger.info("Table could not be loaded...")
             msgBox = QMessageBox()
             msgBox.setIcon(QMessageBox.Warning)
             msgBox.setText("No table could be loaded...")
@@ -1365,7 +1366,7 @@ class ProcessPanel(QFrame, Styles):
         if self.df is not None:
             self.signals = list(self.df.columns)
         if self.df is None:
-            print("No table could be found for the selected position(s)...")
+            logger.info("No table could be found for the selected position(s)...")
 
     def set_cellpose_scale(self):
 
@@ -1398,7 +1399,7 @@ class ProcessPanel(QFrame, Styles):
             json.dump(input_config, f, indent=4)
 
         self.cellpose_calibrated = True
-        print("model scale automatically computed: ", scale)
+        logger.info(f"model scale automatically computed: {scale}")
         self.diamWidget.close()
         self.process_population()
 
@@ -1544,6 +1545,7 @@ class NeighPanel(QFrame, Styles):
             self.parent_window.scroll.setMinimumHeight(
                 min(int(1000), int(0.9 * self.parent_window.screen_height))
             )
+            QTimer.singleShot(10, lambda: center_window(self.window()))
 
     def populate_contents(self):
 
@@ -1810,7 +1812,7 @@ class NeighPanel(QFrame, Styles):
 
         suggestion = help_generic(d)
         if isinstance(suggestion, str):
-            print(f"{suggestion=}")
+            logger.info(f"{suggestion=}")
             msgBox = QMessageBox()
             msgBox.setIcon(QMessageBox.Information)
             msgBox.setTextFormat(Qt.RichText)
@@ -1840,11 +1842,11 @@ class NeighPanel(QFrame, Styles):
             return_pos_info=True,
         )
         if self.df is None:
-            print("No table could be found...")
+            logger.info("No table could be found...")
 
     def view_table_ui(self):
 
-        print("Load table...")
+        logger.info("Load table...")
         self.load_available_tables()
 
         if self.df is not None:
@@ -1859,7 +1861,7 @@ class NeighPanel(QFrame, Styles):
             self.tab_ui.show()
             center_window(self.tab_ui)
         else:
-            print("Table could not be loaded...")
+            logger.info("Table could not be loaded...")
             msgBox = QMessageBox()
             msgBox.setIcon(QMessageBox.Warning)
             msgBox.setText("No table could be loaded...")
@@ -1941,7 +1943,7 @@ class NeighPanel(QFrame, Styles):
         # 	self.well_index = np.linspace(0,len(self.wells)-1,len(self.wells),dtype=int)
         # else:
         self.well_index = self.parent_window.well_list.getSelectedIndices()
-        print(f"Processing well {self.parent_window.well_list.currentText()}...")
+        logger.info(f"Processing well {self.parent_window.well_list.currentText()}...")
 
         # self.freeze()
         # QApplication.setOverrideCursor(Qt.WaitCursor)
@@ -1976,7 +1978,7 @@ class NeighPanel(QFrame, Styles):
                     )
                 )[pos_idx]
                 self.pos_name = extract_position_name(self.pos)
-                print(f"Position {self.pos}...\nLoading stack movie...")
+                logger.info(f"Position {self.pos}...\nLoading stack movie...")
 
                 if not os.path.exists(self.pos + "output" + os.sep):
                     os.mkdir(self.pos + "output" + os.sep)
@@ -2030,7 +2032,7 @@ class NeighPanel(QFrame, Styles):
             if action.isChecked():
                 action.setChecked(False)
 
-        print("Done.")
+        logger.info("Done.")
 
     def check_signals2(self):
 
@@ -2125,6 +2127,7 @@ class PreprocessingPanel(QFrame, Styles):
             self.parent_window.scroll.setMinimumHeight(
                 min(int(930), int(0.9 * self.parent_window.screen_height))
             )
+            QTimer.singleShot(10, lambda: center_window(self.window()))
 
     def populate_contents(self):
 
@@ -2185,7 +2188,7 @@ class PreprocessingPanel(QFrame, Styles):
         self.grid_contents.addWidget(self.submit_preprocessing_btn, 1, 0, 1, 4)
 
     def add_offset_instructions_to_parent_list(self):
-        print("adding instructions")
+        logger.info("adding instructions")
 
     def launch_preprocessing(self):
 
@@ -2220,7 +2223,7 @@ class PreprocessingPanel(QFrame, Styles):
             if returnValue == QMessageBox.No:
                 return None
 
-        print("Proceed with correction...")
+        logger.info("Proceed with correction...")
 
         # if self.parent_window.well_list.currentText()=='*':
         # 	well_option = "*"
@@ -2269,7 +2272,7 @@ class PreprocessingPanel(QFrame, Styles):
                     **correction_protocol,
                 )
             elif correction_protocol["correction_type"] == "offset":
-                print(
+                logger.info(
                     f"Offset correction; {movie_prefix=} {export_prefix=} {correction_protocol=}"
                 )
                 correct_channel_offset(
@@ -2284,14 +2287,14 @@ class PreprocessingPanel(QFrame, Styles):
                     export_prefix=export_prefix,
                     **correction_protocol,
                 )
-        print("Done.")
+        logger.info("Done.")
 
     def locate_image(self):
         """
         Load the first frame of the first movie found in the experiment folder as a sample.
         """
 
-        print(f"{self.parent_window.pos}")
+        logger.info(f"{self.parent_window.pos}")
         movies = glob(
             self.parent_window.pos
             + os.sep.join(["movie", f"{self.parent_window.movie_prefix}*.tif"])
@@ -2330,7 +2333,7 @@ class PreprocessingPanel(QFrame, Styles):
 
         suggestion = help_generic(d)
         if isinstance(suggestion, str):
-            print(f"{suggestion=}")
+            logger.info(f"{suggestion=}")
             msgBox = QMessageBox()
             msgBox.setIcon(QMessageBox.Information)
             msgBox.setTextFormat(Qt.RichText)

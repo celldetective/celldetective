@@ -14,7 +14,7 @@ from PyQt5.QtCore import Qt, QSize
 from celldetective.gui.base.components import generic_message
 from celldetective.gui.base.utils import center_window
 from celldetective.gui.layouts import ChannelNormGenerator
-from celldetective.gui import ThresholdConfigWizard
+from celldetective.gui.thresholds_gui import ThresholdConfigWizard
 from celldetective.gui.base.components import CelldetectiveWidget
 from PyQt5.QtGui import QDoubleValidator
 from superqt.fonticon import icon
@@ -286,10 +286,14 @@ class SegmentationModelLoader(CelldetectiveWidget):
                     self.destination = self.folder_dest + f"/{self.modelname}"
 
         else:
+            start_dir = self.parent_window.exp_dir
+            if os.path.isdir(os.path.join(start_dir, "configs")):
+                start_dir = os.path.join(start_dir, "configs")
+
             self.filename, _ = QFileDialog.getOpenFileNames(
                 None,
                 "Load threshold configuration(s)...",
-                "",
+                start_dir,
                 "Json Configs (*.json)",
             )
             if self.filename:

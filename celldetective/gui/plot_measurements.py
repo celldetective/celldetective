@@ -14,7 +14,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QRect
 from PyQt5.QtGui import QDoubleValidator
 
-from celldetective.gui import CelldetectiveWidget
+from celldetective.gui.base.components import CelldetectiveWidget
 from celldetective.gui.gui_utils import FigureCanvas
 from celldetective.gui.base.utils import center_window
 

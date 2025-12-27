@@ -38,7 +38,8 @@ from celldetective.gui.viewers import (
     CellSizeViewer,
     ChannelOffsetViewer,
 )
-from celldetective.gui import Styles, CelldetectiveWidget
+from celldetective.gui.base.styles import Styles
+from celldetective.gui.base.components import CelldetectiveWidget
 from celldetective.preprocessing import (
     correct_background_model,
     correct_background_model_free,

@@ -25,11 +25,14 @@ from fonticon_mdi6 import MDI6
 from configparser import ConfigParser
 import os
 from functools import partial
+import logging
 import numpy as np
 from celldetective.gui.base.components import (
     CelldetectiveMainWindow,
     CelldetectiveWidget,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class ConfigNewExperiment(CelldetectiveMainWindow):
@@ -247,7 +250,8 @@ class ConfigNewExperiment(CelldetectiveMainWindow):
 
         suggestion = help_generic(d)
         if isinstance(suggestion, str):
-            print(f"{suggestion=}")
+            logger.info(f"{suggestion=}")
+            msgBox = QMessageBox()
             msgBox = QMessageBox()
             msgBox.setIcon(QMessageBox.Information)
             msgBox.setTextFormat(Qt.RichText)
@@ -344,8 +348,7 @@ class ConfigNewExperiment(CelldetectiveMainWindow):
         layout.addWidget(self.createBtn)
         center_window(self.CustomChannelWidget)
         self.CustomChannelWidget.show()
-
-        print("new channel added")
+        logger.info("new channel added")
 
     def write_custom_channel(self):
 
@@ -535,7 +538,7 @@ class ConfigNewExperiment(CelldetectiveMainWindow):
 
         sorted_list = set(channel_indices)
         expected_list = set(np.arange(max(sorted_list) + 1))
-        print(sorted_list, expected_list, sorted_list == expected_list)
+        logger.debug(f"{sorted_list} {expected_list} {sorted_list==expected_list}")
 
         if not sorted_list == expected_list:
             msgBox = QMessageBox()
@@ -651,7 +654,9 @@ class ConfigNewExperiment(CelldetectiveMainWindow):
             config.write(configfile)
 
         self.parent_window.set_experiment_path(self.directory)
-        print(f"New experiment successfully configured in folder {self.directory}...")
+        logger.info(
+            f"New experiment successfully configured in folder {self.directory}..."
+        )
         self.close()
 
 

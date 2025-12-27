@@ -29,7 +29,7 @@ plt.rcParams["svg.fonttype"] = "none"
 from glob import glob
 from natsort import natsorted
 import math
-from celldetective.gui import CelldetectiveWidget
+from celldetective.gui.base.components import CelldetectiveWidget
 from matplotlib import colormaps
 import matplotlib.cm
 from celldetective.relative_measurements import expand_pair_table

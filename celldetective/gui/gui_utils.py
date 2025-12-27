@@ -23,7 +23,8 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QSize, QAbstractTableModel, QEvent, pyqtSignal
 from PyQt5.QtGui import QDoubleValidator, QIntValidator, QStandardItemModel, QPalette
 
-from celldetective.gui import Styles, CelldetectiveWidget
+from celldetective.gui.base.styles import Styles
+from celldetective.gui.base.components import CelldetectiveWidget
 from superqt.fonticon import icon
 from fonticon_mdi6 import MDI6
 

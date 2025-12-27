@@ -24,7 +24,8 @@ import matplotlib.pyplot as plt
 
 plt.rcParams["svg.fonttype"] = "none"
 from glob import glob
-from celldetective.gui import Styles, CelldetectiveWidget
+from celldetective.gui.base.styles import Styles
+from celldetective.gui.base.components import CelldetectiveWidget
 from matplotlib import colormaps
 from celldetective.events import compute_survival
 from celldetective.relative_measurements import expand_pair_table

@@ -13,7 +13,7 @@ from PyQt5.QtWidgets import (
 from fonticon_mdi6 import MDI6
 from superqt.fonticon import icon
 
-from celldetective.gui import CelldetectiveWidget
+from celldetective.gui.base.components import CelldetectiveWidget
 from celldetective.gui.gui_utils import PandasModel
 from celldetective.gui.base.utils import center_window
 

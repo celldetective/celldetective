@@ -20,19 +20,15 @@ from celldetective.gui.gui_utils import (
     QCheckableComboBox,
 )
 from celldetective.gui.base.components import generic_message
-from celldetective.gui.base.utils import center_window
 from celldetective.utils import (
     _extract_labels_from_config,
     config_section_to_dict,
     extract_identity_col,
 )
-from celldetective.gui import (
-    ConfigEditor,
-    ProcessPanel,
-    PreprocessingPanel,
-    AnalysisPanel,
-    NeighPanel,
-)
+from celldetective.gui.json_readers import ConfigEditor
+from celldetective.gui.process_block import ProcessPanel, PreprocessingPanel, NeighPanel
+from celldetective.gui.analyze_block import AnalysisPanel
+
 from celldetective.io import (
     extract_position_name,
     get_experiment_wells,
@@ -57,6 +53,9 @@ import subprocess
 from celldetective.gui.viewers import StackVisualizer
 from celldetective.utils import extract_experiment_channels
 import pandas as pd
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class ControlPanel(CelldetectiveMainWindow):
@@ -144,9 +143,11 @@ class ControlPanel(CelldetectiveMainWindow):
             self.exp_dir
         )  # natsorted(glob(self.exp_dir + "W*" + os.sep))
         self.positions = []
+        self.position_paths = []
         for w in self.wells:
             well_name, well_nbr = extract_well_name_and_number(w)
             positions_path = natsorted(glob(os.sep.join([w, f"{well_nbr}*", os.sep])))
+            self.position_paths.append(positions_path)
             self.positions.append(
                 [extract_position_name(pos) for pos in positions_path]
             )
@@ -351,7 +352,7 @@ class ControlPanel(CelldetectiveMainWindow):
         This methods load the configuration read in the config.ini file of the experiment.
         """
 
-        print("Reading experiment configuration...")
+        logger.info("Reading experiment configuration...")
         self.exp_config = get_config(self.exp_dir)
 
         self.populations = get_experiment_populations(self.exp_dir)
@@ -384,7 +385,7 @@ class ControlPanel(CelldetectiveMainWindow):
         self.pharmaceutical_agents = get_experiment_pharmaceutical_agents(self.exp_dir)
 
         self.metadata = config_section_to_dict(self.exp_config, "Metadata")
-        print("Experiment configuration successfully read...")
+        logger.info("Experiment configuration successfully read...")
 
     def closeEvent(self, event):
         """
@@ -496,12 +497,7 @@ class ControlPanel(CelldetectiveMainWindow):
 
             for pos_idx in pos_indices:
 
-                self.pos = natsorted(
-                    glob(
-                        well
-                        + f"{os.path.split(well)[-1].replace('W','').replace(os.sep,'')}*{os.sep}"
-                    )
-                )[pos_idx]
+                self.pos = self.position_paths[w_idx][pos_idx]
                 if not os.path.exists(self.pos + "output"):
                     os.mkdir(self.pos + "output")
                 if not os.path.exists(self.pos + os.sep.join(["output", "tables"])):
@@ -569,7 +565,7 @@ class ControlPanel(CelldetectiveMainWindow):
                         )
                     ):
                         try:
-                            df = pd.read_csv(
+                            cols = pd.read_csv(
                                 os.sep.join(
                                     [
                                         self.pos,
@@ -578,11 +574,17 @@ class ControlPanel(CelldetectiveMainWindow):
                                         f"trajectories_{self.populations[i]}.csv",
                                     ]
                                 ),
-                                nrows=1,
-                            )
+                                nrows=0,
+                            ).columns
                         except Exception as e:
                             continue
-                        id_col = extract_identity_col(df)
+
+                        if "TRACK_ID" in cols:
+                            id_col = "TRACK_ID"
+                        elif "ID" in cols:
+                            id_col = "ID"
+                        else:
+                            id_col = None
                         p.check_measurements_btn.setEnabled(True)
 
                         if id_col == "TRACK_ID":

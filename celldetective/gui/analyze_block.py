@@ -8,9 +8,10 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, QSize
 from PyQt5.QtGui import QIcon
-from celldetective.gui import ConfigSurvival, ConfigSignalPlot
+from celldetective.gui.survival_ui import ConfigSurvival
+from celldetective.gui.plot_signals_ui import ConfigSignalPlot
 import os
-from celldetective.gui import Styles
+from celldetective.gui.base.styles import Styles
 from glob import glob
 
 from celldetective.gui.base.components import generic_message

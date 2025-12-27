@@ -31,7 +31,8 @@ from stardist.models import StarDist2D
 from cellpose.models import CellposeModel
 from pathlib import PosixPath, PurePath, PurePosixPath, WindowsPath, Path
 from prettytable import PrettyTable
-from typing import List, Dict, Union, Optional
+from typing import List, Dict, Union, Optional, Tuple
+
 
 def is_integer_array(arr: np.ndarray) -> bool:
 
@@ -344,7 +345,7 @@ def zoom_multiframes(frames: np.ndarray, zoom_factor: float) -> np.ndarray:
 	frames = np.moveaxis(frames,0,-1)
 	return frames
 
-def _prep_stardist_model(model_name, path, use_gpu=False, scale=1):
+def _prep_stardist_model(model_name: str, path: Union[str, Path], use_gpu: bool=False, scale: float=1):
 
 	"""
 	Prepares and loads a StarDist2D model for segmentation tasks.
@@ -388,7 +389,7 @@ def _prep_stardist_model(model_name, path, use_gpu=False, scale=1):
 	print(f"StarDist model {model_name} successfully loaded...")
 	return model, scale_model
 
-def _prep_cellpose_model(model_name, path, use_gpu=False, n_channels=2, scale=None):
+def _prep_cellpose_model(model_name: str, path: Union[str, Path], use_gpu: bool=False, n_channels: int=2, scale: Optional[float]=None):
 
 	"""
 	Prepares and loads a Cellpose model for segmentation tasks.
@@ -649,7 +650,7 @@ def safe_log(array):
 
 	return result.item() if np.isscalar(array) else result
 
-def contour_of_instance_segmentation(label, distance):
+def contour_of_instance_segmentation(label: np.ndarray, distance: Union[int, List[int], Tuple[int]]):
 
 	"""
 

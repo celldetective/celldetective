@@ -9,7 +9,7 @@ import configparser
 from fonticon_mdi6 import MDI6
 from superqt.fonticon import icon
 
-from celldetective.gui import CelldetectiveWidget
+from celldetective.gui.base.components import CelldetectiveWidget
 
 
 class ConfigEditor(CelldetectiveWidget):

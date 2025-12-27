@@ -19,7 +19,7 @@ import os
 from glob import glob
 import pandas as pd
 from celldetective.gui.viewers import CellSizeViewer, CellEdgeVisualizer
-from celldetective.gui import CelldetectiveWidget
+from celldetective.gui.base.components import CelldetectiveWidget
 
 
 class SettingsNeighborhood(CelldetectiveWidget):

@@ -2716,7 +2716,7 @@ def control_segmentation_napari(position, prefix='Aligned', population="target",
 	def export_widget():
 		return export_annotation()
 
-	from celldetective.gui import Styles
+	from celldetective.gui.base.styles import Styles
 
 	stack, labels = locate_stack_and_labels(position, prefix=prefix, population=population)
 	output_folder = position + f'labels_{population}{os.sep}'
