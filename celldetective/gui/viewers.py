@@ -39,6 +39,9 @@ import os
 from glob import glob
 from pathlib import Path
 from natsort import natsorted
+from celldetective import get_logger
+
+logger = get_logger()
 
 
 class StackVisualizer(CelldetectiveWidget):
@@ -484,12 +487,12 @@ class StackVisualizer(CelldetectiveWidget):
             self.img_num_per_channel[self.target_channel, self.mid_time],
             self.stack_path,
             normalize_input=False,
-        ).astype(float)[:, :, 0]
+        )[:, :, 0]
         self.last_frame = load_frames(
             self.img_num_per_channel[self.target_channel, self.stack_length - 1],
             self.stack_path,
             normalize_input=False,
-        ).astype(float)[:, :, 0]
+        )[:, :, 0]
 
     def generate_figure_canvas(self):
 
@@ -651,7 +654,7 @@ class StackVisualizer(CelldetectiveWidget):
                     self.img_num_per_channel[self.target_channel, value],
                     self.stack_path,
                     normalize_input=False,
-                ).astype(float)[:, :, 0]
+                )[:, :, 0]
 
                 # Add to cache
                 self.frame_cache[cache_key] = self.init_frame
@@ -1332,7 +1335,7 @@ class SpotDetectionVisualizer(StackVisualizer):
                 self.img_num_per_channel[self.detection_channel, value],
                 self.stack_path,
                 normalize_input=False,
-            ).astype(float)[:, :, 0]
+            )[:, :, 0]
         elif self.mode == "direct":
             self.init_label = self.labels[value, :, :]
             self.target_img = self.stack[value, :, :, self.detection_channel].copy()
