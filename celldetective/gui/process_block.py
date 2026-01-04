@@ -1,5 +1,3 @@
-import sys
-import subprocess
 from PyQt5.QtWidgets import (
     QDialog,
     QFrame,
@@ -19,81 +17,42 @@ from fonticon_mdi6 import MDI6
 import gc
 from PyQt5.QtGui import QDoubleValidator, QIntValidator
 
-from celldetective.processes.compute_neighborhood import NeighborhoodProcess
-from celldetective.gui.event_annotator import MeasureAnnotator
-from celldetective.io import (
-    get_segmentation_models_list,
-    control_segmentation_napari,
+from celldetective.utils.model_getters import (
     get_signal_models_list,
-    control_tracks,
-    load_experiment_tables,
     get_pair_signal_models_list,
+    get_segmentation_models_list,
 )
-from celldetective.io import (
-    locate_segmentation_model,
-    extract_position_name,
-    fix_missing_labels,
+from celldetective.utils.data_loaders import load_experiment_tables
+from celldetective.utils.model_loaders import (
     locate_signal_model,
+    locate_segmentation_model,
+)
+from celldetective.utils.image_loaders import fix_missing_labels
+from celldetective.utils.experiment import (
+    extract_position_name,
+    extract_experiment_channels,
 )
 
-from celldetective.gui.seg_model_loader import SegmentationModelLoader
-from celldetective.gui.classifier_widget import ClassifierWidget
-from celldetective.gui.event_annotator import EventAnnotator
-from celldetective.gui.tableUI import TableUI
-from celldetective.gui.base.components import CelldetectiveWidget
-from celldetective.gui.pair_event_annotator import PairEventAnnotator
+from celldetective.gui.base.components import CelldetectiveWidget, QHSeperationLine
 
-from celldetective.gui.settings import (
-    SettingsSegmentation,
-    SettingsMeasurements,
-    SettingsTracking,
-    SettingsSignalAnnotator,
-    SettingsNeighborhood,
-    SettingsSegmentationModelTraining,
-    SettingsEventDetectionModelTraining,
-)
-
-from celldetective.gui.gui_utils import QHSeperationLine
-from celldetective.relative_measurements import rel_measure_at_position
-from celldetective.signals import (
-    analyze_signals_at_position,
-    analyze_pair_signals_at_position,
-)
-from celldetective.utils import extract_experiment_channels, remove_file_if_exists
 import numpy as np
 from glob import glob
 from natsort import natsorted
 import os
-import pandas as pd
-from celldetective.gui.base.utils import center_window
+
+from celldetective.gui.base.utils import center_window, remove_file_if_exists
 from tifffile import imwrite
 import json
-from celldetective.preprocessing import (
-    correct_background_model_free,
-    correct_background_model,
-    correct_channel_offset,
-)
 from celldetective.gui.gui_utils import help_generic
 from celldetective.gui.layouts import (
-    SignalModelParamsWidget,
-    SegModelParamsWidget,
-    CellposeParamsWidget,
-    StarDistParamsWidget,
     BackgroundModelFreeCorrectionLayout,
     ProtocolDesignerLayout,
     BackgroundFitCorrectionLayout,
     ChannelOffsetOptionsLayout,
 )
 from celldetective.gui.base.styles import Styles
-from celldetective.utils import get_software_location
+from celldetective import get_software_location
 
-from celldetective.gui.workers import ProgressWindow
-from celldetective.processes.segment_cells import (
-    SegmentCellThresholdProcess,
-    SegmentCellDLProcess,
-)
-from celldetective.processes.track_cells import TrackingProcess
-from celldetective.processes.measure_cells import MeasurementProcess
 import logging
 
 logger = logging.getLogger("celldetective")
@@ -719,6 +678,7 @@ class ProcessPanel(QFrame, Styles):
                 return None
 
     def check_segmentation(self):
+        from celldetective.napari.utils import control_segmentation_napari
 
         if not os.path.exists(
             os.sep.join([self.parent_window.pos, f"labels_{self.mode}", os.sep])
@@ -813,6 +773,7 @@ class ProcessPanel(QFrame, Styles):
             gc.collect()
 
     def check_signals(self):
+        from celldetective.gui.event_annotator import EventAnnotator
 
         test = self.parent_window.locate_selected_position()
         if test:
@@ -821,6 +782,7 @@ class ProcessPanel(QFrame, Styles):
             center_window(self.event_annotator)
 
     def check_measurements(self):
+        from celldetective.gui.event_annotator import MeasureAnnotator
 
         test = self.parent_window.locate_selected_position()
         if test:
@@ -884,18 +846,26 @@ class ProcessPanel(QFrame, Styles):
     # 		self.all_ticked = True
 
     def upload_segmentation_model(self):
+        from celldetective.gui.seg_model_loader import SegmentationModelLoader
+
         logger.info("Load a segmentation model or pipeline...")
         self.seg_model_loader = SegmentationModelLoader(self)
         self.seg_model_loader.show()
         center_window(self.seg_model_loader)
 
     def open_tracking_configuration_ui(self):
+        from celldetective.gui.settings._settings_tracking import SettingsTracking
+
         logger.info("Set the tracking parameters...")
         self.settings_tracking = SettingsTracking(self)
         self.settings_tracking.show()
         center_window(self.settings_tracking)
 
     def open_signal_model_config_ui(self):
+        from celldetective.gui.settings._settings_event_detection_model_training import (
+            SettingsEventDetectionModelTraining,
+        )
+
         logger.info("Set the training parameters for new signal models...")
         self.settings_event_detection_training = SettingsEventDetectionModelTraining(
             self
@@ -904,23 +874,36 @@ class ProcessPanel(QFrame, Styles):
         center_window(self.settings_event_detection_training)
 
     def open_segmentation_model_config_ui(self):
+        from celldetective.gui.settings._settings_segmentation_model_training import (
+            SettingsSegmentationModelTraining,
+        )
+
         logger.info("Set the training parameters for a new segmentation model...")
         self.settings_segmentation_training = SettingsSegmentationModelTraining(self)
         self.settings_segmentation_training.show()
         center_window(self.settings_segmentation_training)
 
     def open_measurement_configuration_ui(self):
+        from celldetective.gui.settings._settings_measurements import (
+            SettingsMeasurements,
+        )
+
         logger.info("Set the measurements to be performed...")
         self.settings_measurements = SettingsMeasurements(self)
         self.settings_measurements.show()
         center_window(self.settings_measurements)
 
     def open_segmentation_configuration_ui(self):
+        from celldetective.gui.settings._settings_segmentation import (
+            SettingsSegmentation,
+        )
+
         logger.info("Set the segmentation settings to be performed...")
         self.settings_segmentation = SettingsSegmentation(self)
         self.settings_segmentation.show()
 
     def open_classifier_ui(self):
+        from celldetective.gui.classifier_widget import ClassifierWidget
 
         self.load_available_tables()
         if self.df is None:
@@ -941,6 +924,10 @@ class ProcessPanel(QFrame, Styles):
             center_window(self.ClassifierWidget)
 
     def open_signal_annotator_configuration_ui(self):
+        from celldetective.gui.settings._settings_signal_annotator import (
+            SettingsSignalAnnotator,
+        )
+
         self.settings_signal_annotator = SettingsSignalAnnotator(self)
         self.settings_signal_annotator.show()
 
@@ -953,6 +940,26 @@ class ProcessPanel(QFrame, Styles):
         self.signalChannelsSet = False
 
     def process_population(self):
+        from celldetective.gui.workers import ProgressWindow
+        from celldetective.processes.segment_cells import (
+            SegmentCellThresholdProcess,
+            SegmentCellDLProcess,
+        )
+        from celldetective.processes.track_cells import TrackingProcess
+        from celldetective.processes.measure_cells import MeasurementProcess
+        from celldetective.signals import analyze_signals_at_position
+        from celldetective.gui.settings._event_detection_model_params import (
+            SignalModelParamsWidget,
+        )
+        from celldetective.gui.settings._cellpose_model_params import (
+            CellposeParamsWidget,
+        )
+        from celldetective.gui.settings._stardist_model_params import (
+            StarDistParamsWidget,
+        )
+        from celldetective.gui.settings._segmentation_model_params import (
+            SegModelParamsWidget,
+        )
 
         # if self.parent_window.well_list.currentText().startswith('Multiple'):
         # 	self.well_index = np.linspace(0,len(self.wells)-1,len(self.wells),dtype=int)
@@ -1256,6 +1263,8 @@ class ProcessPanel(QFrame, Styles):
                     [self.pos, "output", "tables", f"trajectories_{self.mode}.csv"]
                 )
                 if self.signal_analysis_action.isChecked() and os.path.exists(table):
+                    import pandas as pd
+
                     table = pd.read_csv(table)
                     cols = list(table.columns)
                     if "class_color" in cols:
@@ -1298,6 +1307,8 @@ class ProcessPanel(QFrame, Styles):
         self.reset_signals()
 
     def open_napari_tracking(self):
+        from celldetective.napari.utils import control_tracks
+
         logger.info(
             f"View the tracks before post-processing for position {self.parent_window.pos} in napari..."
         )
@@ -1318,6 +1329,7 @@ class ProcessPanel(QFrame, Styles):
             return
 
     def view_table_ui(self):
+        from celldetective.gui.tableUI import TableUI
 
         logger.info("Load table...")
         self.load_available_tables()
@@ -1773,6 +1785,7 @@ class NeighPanel(QFrame, Styles):
         self.neigh_action.setChecked(False)
 
     def open_classifier_ui_pairs(self):
+        from celldetective.gui.classifier_widget import ClassifierWidget
 
         self.mode = "pairs"
         self.load_available_tables()
@@ -1845,6 +1858,7 @@ class NeighPanel(QFrame, Styles):
             logger.info("No table could be found...")
 
     def view_table_ui(self):
+        from celldetective.gui.tableUI import TableUI
 
         logger.info("Load table...")
         self.load_available_tables()
@@ -1896,11 +1910,15 @@ class NeighPanel(QFrame, Styles):
         self.pair_signal_models_list.addItems(signal_models)
 
     def open_signal_annotator_configuration_ui(self):
+        from celldetective.gui.settings import SettingsSignalAnnotator
+
         self.mode = "pairs"
         self.config_signal_annotator = SettingsSignalAnnotator(self)
         self.config_signal_annotator.show()
 
     def open_signal_model_config_ui(self):
+        from celldetective.gui.settings import SettingsEventDetectionModelTraining
+
         self.settings_pair_event_detection_training = (
             SettingsEventDetectionModelTraining(self, signal_mode="pairs")
         )
@@ -1914,6 +1932,7 @@ class NeighPanel(QFrame, Styles):
             self.protocol_list.takeItem(current_item)
 
     def open_config_distance_threshold_neighborhood(self):
+        from celldetective.gui.settings import SettingsNeighborhood
 
         self.ConfigNeigh = SettingsNeighborhood(
             parent_window=self,
@@ -1923,6 +1942,7 @@ class NeighPanel(QFrame, Styles):
         self.ConfigNeigh.show()
 
     def open_config_contact_neighborhood(self):
+        from celldetective.gui.settings import SettingsNeighborhood
 
         self.ConfigNeigh = SettingsNeighborhood(
             parent_window=self,
@@ -1938,6 +1958,10 @@ class NeighPanel(QFrame, Styles):
             self.pair_signal_models_list.setEnabled(False)
 
     def process_neighborhood(self):
+        from celldetective.gui.workers import ProgressWindow
+        from celldetective.processes.compute_neighborhood import NeighborhoodProcess
+        from celldetective.signals import analyze_pair_signals_at_position
+        from celldetective.relative_measurements import rel_measure_at_position
 
         # if self.parent_window.well_list.currentText().startswith('Multiple'):
         # 	self.well_index = np.linspace(0,len(self.wells)-1,len(self.wells),dtype=int)
@@ -2035,6 +2059,7 @@ class NeighPanel(QFrame, Styles):
         logger.info("Done.")
 
     def check_signals2(self):
+        from celldetective.gui.pair_event_annotator import PairEventAnnotator
 
         test = self.parent_window.locate_selected_position()
         if test:
@@ -2191,6 +2216,11 @@ class PreprocessingPanel(QFrame, Styles):
         logger.info("adding instructions")
 
     def launch_preprocessing(self):
+        from celldetective.preprocessing import (
+            correct_background_model_free,
+            correct_background_model,
+            correct_channel_offset,
+        )
 
         msgBox1 = QMessageBox()
         msgBox1.setIcon(QMessageBox.Question)

@@ -1,23 +1,11 @@
-from celldetective.io import auto_load_number_of_frames, load_frames
-from celldetective.filters import *
-from celldetective.segmentation import filter_image, threshold_image
-from celldetective.measure import (
-    contour_of_instance_segmentation,
-    extract_blobs_in_image,
-)
-from celldetective.utils import (
+from celldetective.utils.image_loaders import (
+    auto_load_number_of_frames,
+    load_frames,
     _get_img_num_per_channel,
-    estimate_unreliable_edge,
-    is_integer_array,
 )
+
 from celldetective.gui.base.utils import center_window
-from tifffile import imread
-import matplotlib.pyplot as plt
-import matplotlib.gridspec as gridspec
-from pathlib import Path
-from natsort import natsorted
-from glob import glob
-import os
+
 
 from PyQt5.QtWidgets import (
     QHBoxLayout,
@@ -32,20 +20,28 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, QSize
 from PyQt5.QtGui import QKeySequence, QDoubleValidator
-from celldetective.gui.gui_utils import FigureCanvas, QuickSliderLayout, QHSeperationLine, ThresholdLineEdit, \
-    PreprocessingLayout2
-from celldetective.gui.base.components import CelldetectiveWidget
+from celldetective.gui.gui_utils import (
+    QuickSliderLayout,
+    ThresholdLineEdit,
+    PreprocessingLayout2,
+)
+from celldetective.gui.base.components import CelldetectiveWidget, QHSeperationLine
 from superqt import QLabeledDoubleSlider, QLabeledSlider, QLabeledDoubleRangeSlider
 from superqt.fonticon import icon
 from fonticon_mdi6 import MDI6
-from matplotlib_scalebar.scalebar import ScaleBar
+
 import gc
-from scipy.ndimage import shift, map_coordinates
+
+# from scipy.ndimage import shift, map_coordinates
 from collections import OrderedDict
+import numpy as np
+import os
+from glob import glob
+from pathlib import Path
+from natsort import natsorted
 
 
 class StackVisualizer(CelldetectiveWidget):
-
     """
     A widget for visualizing image stacks with interactive sliders and channel selection.
 
@@ -234,6 +230,8 @@ class StackVisualizer(CelldetectiveWidget):
             # Use GridSpec for robust layout
             # 2 rows: Main Image (top, ~75%), Profile (bottom, ~25%)
             # Add margins to ensure axis labels and text are visible
+            import matplotlib.gridspec as gridspec
+
             gs = gridspec.GridSpec(
                 2,
                 1,
@@ -297,6 +295,8 @@ class StackVisualizer(CelldetectiveWidget):
             # Restore original layout
             if hasattr(self, "ax_original_pos"):
                 # standard 1x1 GridSpec or manual restore
+                import matplotlib.gridspec as gridspec
+
                 gs = gridspec.GridSpec(1, 1)
                 self.ax.set_subplotspec(gs[0])
                 self.ax.set_position(gs[0].get_position(self.fig))
@@ -372,6 +372,8 @@ class StackVisualizer(CelldetectiveWidget):
 
         # Use self.init_frame as self.im.get_array() might be unreliable or cached
         if hasattr(self, "init_frame") and self.init_frame is not None:
+            from scipy.ndimage import map_coordinates
+
             profile = map_coordinates(self.init_frame, np.vstack((y, x)))
         else:
             return
@@ -494,6 +496,9 @@ class StackVisualizer(CelldetectiveWidget):
         p01 = np.nanpercentile(self.init_frame, 0.1)
         p99 = np.nanpercentile(self.init_frame, 99.9)
 
+        import matplotlib.pyplot as plt
+        from celldetective.gui.gui_utils import FigureCanvas
+
         self.fig, self.ax = plt.subplots(figsize=(5, 5))
 
         self.fig.subplots_adjust(top=1, bottom=0, right=1, left=0, hspace=0, wspace=0)
@@ -511,6 +516,8 @@ class StackVisualizer(CelldetectiveWidget):
             **self.imshow_kwargs,
         )
         if self.PxToUm is not None:
+            from matplotlib_scalebar.scalebar import ScaleBar
+
             scalebar = ScaleBar(
                 self.PxToUm,
                 "um",
@@ -542,6 +549,8 @@ class StackVisualizer(CelldetectiveWidget):
         self.canvas.layout.addLayout(layout)
 
     def set_contrast_decimals(self):
+        from celldetective.utils.types import is_integer_array
+
         if is_integer_array(self.init_frame):
             self.contrast_decimals = 0
         else:
@@ -609,8 +618,6 @@ class StackVisualizer(CelldetectiveWidget):
             if self.stack is not None and self.stack.ndim == 4:
                 self.init_frame = self.stack[self.mid_time, :, :, self.target_channel]
                 self.im.set_data(self.init_frame)
-                p01 = np.nanpercentile(self.init_frame, 0.1)
-                p99 = np.nanpercentile(self.init_frame, 99.9)
                 self.canvas.draw()
                 self.update_profile()
 
@@ -741,6 +748,7 @@ class ThresholdedStackVisualizer(StackVisualizer):
 
         # Cache for processed images
         self.processed_cache = OrderedDict()
+        self.processed_image = None
         self.max_processed_cache_size = 128
 
         self.generate_threshold_slider()
@@ -784,6 +792,9 @@ class ThresholdedStackVisualizer(StackVisualizer):
             np.ma.masked_where(self.mask == 0, self.mask),
             alpha=self.mask_alpha,
             interpolation="none",
+            vmin=0,
+            vmax=1,
+            cmap="spring",
         )
         self.canvas.canvas.draw()
 
@@ -795,6 +806,8 @@ class ThresholdedStackVisualizer(StackVisualizer):
         self.threshold_slider = QLabeledDoubleSlider()
         if self.thresh is None:
             init_value = 1.0e5
+        elif isinstance(self.thresh, (list, tuple, np.ndarray)):
+            init_value = self.thresh[0]
         else:
             init_value = self.thresh
         thresh_layout = QuickSliderLayout(
@@ -835,6 +848,24 @@ class ThresholdedStackVisualizer(StackVisualizer):
     def change_threshold(self, value):
         # Change the threshold value
         self.thresh = value
+
+        # Sync slider if value came from external source (like Wizard)
+        # to prevent slider from being "stale" and overwriting with old value later
+        if hasattr(self, "threshold_slider"):
+            display_val = value
+            if isinstance(value, (list, tuple, np.ndarray)):
+                display_val = value[0]
+
+            try:
+                current_val = self.threshold_slider.value()
+                # Update slider if significant difference
+                if abs(current_val - float(display_val)) > 1e-5:
+                    self.threshold_slider.blockSignals(True)
+                    self.threshold_slider.setValue(float(display_val))
+                    self.threshold_slider.blockSignals(False)
+            except Exception:
+                pass
+
         if self.thresh is not None:
             self.compute_mask(self.thresh)
             mask = np.ma.masked_where(self.mask == 0, self.mask)
@@ -846,15 +877,35 @@ class ThresholdedStackVisualizer(StackVisualizer):
         if self.thresholded:
             self.init_contrast = True
         super().change_frame(value)
-        self.change_threshold(self.threshold_slider.value())
+        self.processed_image = None
+
+        if self.thresh is not None:
+            self.change_threshold(self.thresh)
+        else:
+            self.change_threshold(self.threshold_slider.value())
+
         if self.thresholded:
             self.thresholded = False
             self.init_contrast = False
 
     def compute_mask(self, threshold_value):
         # Compute the mask based on the threshold value
-        self.preprocess_image()
+        if self.processed_image is None:
+            self.preprocess_image()
+
+        from celldetective.utils.image_transforms import (
+            estimate_unreliable_edge,
+            threshold_image,
+        )
+
         edge = estimate_unreliable_edge(self.preprocessing)
+
+        print(f"DEBUG: compute_mask threshold_value={threshold_value}")
+        if self.processed_image is not None:
+            print(
+                f"DEBUG: processed_image min={np.min(self.processed_image)}, max={np.max(self.processed_image)}"
+            )
+
         if isinstance(threshold_value, (list, np.ndarray, tuple)):
             self.mask = threshold_image(
                 self.processed_image,
@@ -894,6 +945,8 @@ class ThresholdedStackVisualizer(StackVisualizer):
         # Compute
         if self.preprocessing is not None:
             assert isinstance(self.preprocessing, list)
+            from celldetective.segmentation import filter_image
+
             self.processed_image = filter_image(
                 self.init_frame.copy().astype(float), filters=self.preprocessing
             )
@@ -942,7 +995,6 @@ class ThresholdedStackVisualizer(StackVisualizer):
 
 
 class CellEdgeVisualizer(StackVisualizer):
-
     """
     A widget for visualizing cell edges with interactive sliders and channel selection.
 
@@ -977,7 +1029,19 @@ class CellEdgeVisualizer(StackVisualizer):
       with interactive sliders for edge size adjustment and mask opacity control.
     """
 
-    def __init__(self, cell_type="effectors", edge_range=(-30,30), invert=False, parent_list_widget=None, parent_le=None, labels=None, initial_edge=5, initial_mask_alpha=0.5, *args, **kwargs):
+    def __init__(
+        self,
+        cell_type="effectors",
+        edge_range=(-30, 30),
+        invert=False,
+        parent_list_widget=None,
+        parent_le=None,
+        labels=None,
+        initial_edge=5,
+        initial_mask_alpha=0.5,
+        *args,
+        **kwargs,
+    ):
 
         # Initialize the widget and its attributes
         super().__init__(*args, **kwargs)
@@ -1007,15 +1071,17 @@ class CellEdgeVisualizer(StackVisualizer):
             if isinstance(self.labels, list):
                 self.labels = np.array(self.labels)
 
-            assert self.labels.ndim==3,'Wrong dimensions for the provided labels, expect TXY'
-            assert len(self.labels)==self.stack_length
+            assert (
+                self.labels.ndim == 3
+            ), "Wrong dimensions for the provided labels, expect TXY"
+            assert len(self.labels) == self.stack_length
 
-            self.mode = 'direct'
-            self.init_label = self.labels[self.mid_time,:,:]
+            self.mode = "direct"
+            self.init_label = self.labels[self.mid_time, :, :]
         else:
-            self.mode = 'virtual'
+            self.mode = "virtual"
             assert isinstance(self.stack_path, str)
-            assert self.stack_path.endswith('.tif')
+            assert self.stack_path.endswith(".tif")
             self.locate_labels_virtual()
 
         self.compute_edge_labels()
@@ -1023,8 +1089,13 @@ class CellEdgeVisualizer(StackVisualizer):
     def locate_labels_virtual(self):
         # Locate virtual labels
 
-        labels_path = str(Path(self.stack_path).parent.parent) + os.sep + f'labels_{self.cell_type}' + os.sep
-        self.mask_paths = natsorted(glob(labels_path + '*.tif'))
+        labels_path = (
+            str(Path(self.stack_path).parent.parent)
+            + os.sep
+            + f"labels_{self.cell_type}"
+            + os.sep
+        )
+        self.mask_paths = natsorted(glob(labels_path + "*.tif"))
 
         if len(self.mask_paths) == 0:
 
@@ -1036,32 +1107,34 @@ class CellEdgeVisualizer(StackVisualizer):
             returnValue = msgBox.exec()
             self.close()
 
+        from tifffile import imread
+
         self.init_label = imread(self.mask_paths[self.frame_slider.value()])
 
     def generate_add_to_list_btn(self):
         # Generate the add to list button
 
         add_hbox = QHBoxLayout()
-        self.add_measurement_btn = QPushButton('Add measurement')
+        self.add_measurement_btn = QPushButton("Add measurement")
         self.add_measurement_btn.clicked.connect(self.set_measurement_in_parent_list)
-        self.add_measurement_btn.setIcon(icon(MDI6.plus,color="white"))
+        self.add_measurement_btn.setIcon(icon(MDI6.plus, color="white"))
         self.add_measurement_btn.setIconSize(QSize(20, 20))
         self.add_measurement_btn.setStyleSheet(self.button_style_sheet)
-        add_hbox.addWidget(QLabel(''),33)
+        add_hbox.addWidget(QLabel(""), 33)
         add_hbox.addWidget(self.add_measurement_btn, 33)
-        add_hbox.addWidget(QLabel(''),33)
+        add_hbox.addWidget(QLabel(""), 33)
         self.canvas.layout.addLayout(add_hbox)
 
     def generate_add_to_le_btn(self):
         # Generate the set measurement button for QLineEdit
 
         add_hbox = QHBoxLayout()
-        self.set_measurement_btn = QPushButton('Set')
+        self.set_measurement_btn = QPushButton("Set")
         self.set_measurement_btn.clicked.connect(self.set_measurement_in_parent_le)
         self.set_measurement_btn.setStyleSheet(self.button_style_sheet)
-        add_hbox.addWidget(QLabel(''),33)
+        add_hbox.addWidget(QLabel(""), 33)
         add_hbox.addWidget(self.set_measurement_btn, 33)
-        add_hbox.addWidget(QLabel(''),33)
+        add_hbox.addWidget(QLabel(""), 33)
         self.canvas.layout.addLayout(add_hbox)
 
     def set_measurement_in_parent_le(self):
@@ -1079,20 +1152,26 @@ class CellEdgeVisualizer(StackVisualizer):
     def generate_label_imshow(self):
         # Generate the label imshow
 
-        self.im_mask = self.ax.imshow(np.ma.masked_where(self.edge_labels==0, self.edge_labels), alpha=self.mask_alpha, interpolation='none', cmap="viridis")
+        self.im_mask = self.ax.imshow(
+            np.ma.masked_where(self.edge_labels == 0, self.edge_labels),
+            alpha=self.mask_alpha,
+            interpolation="none",
+            cmap="viridis",
+        )
         self.canvas.canvas.draw()
 
     def generate_edge_slider(self):
         # Generate the edge size slider
 
         self.edge_slider = QLabeledSlider()
-        edge_layout = QuickSliderLayout(label='Edge: ',
-                                        slider=self.edge_slider,
-                                        slider_initial_value=self.edge_size,
-                                        slider_range=self.edge_range,
-                                        decimal_option=False,
-                                        )
-        edge_layout.setContentsMargins(15,0,15,0)
+        edge_layout = QuickSliderLayout(
+            label="Edge: ",
+            slider=self.edge_slider,
+            slider_initial_value=self.edge_size,
+            slider_range=self.edge_range,
+            decimal_option=False,
+        )
+        edge_layout.setContentsMargins(15, 0, 15, 0)
         self.edge_slider.valueChanged.connect(self.change_edge_size)
         self.canvas.layout.addLayout(edge_layout)
 
@@ -1100,14 +1179,15 @@ class CellEdgeVisualizer(StackVisualizer):
         # Generate the opacity slider for the mask
 
         self.opacity_slider = QLabeledDoubleSlider()
-        opacity_layout = QuickSliderLayout(label='Opacity: ',
-                                        slider=self.opacity_slider,
-                                        slider_initial_value=0.5,
-                                        slider_range=(0,1),
-                                        decimal_option=True,
-                                        precision=3,
-                                        )
-        opacity_layout.setContentsMargins(15,0,15,0)
+        opacity_layout = QuickSliderLayout(
+            label="Opacity: ",
+            slider=self.opacity_slider,
+            slider_initial_value=0.5,
+            slider_range=(0, 1),
+            decimal_option=True,
+            precision=3,
+        )
+        opacity_layout.setContentsMargins(15, 0, 15, 0)
         self.opacity_slider.valueChanged.connect(self.change_mask_opacity)
         self.canvas.layout.addLayout(opacity_layout)
 
@@ -1132,10 +1212,12 @@ class CellEdgeVisualizer(StackVisualizer):
 
         super().change_frame(value)
 
-        if self.mode=='virtual':
+        if self.mode == "virtual":
+            from tifffile import imread
+
             self.init_label = imread(self.mask_paths[value])
-        elif self.mode=='direct':
-            self.init_label = self.labels[value,:,:]
+        elif self.mode == "direct":
+            self.init_label = self.labels[value, :, :]
 
         self.compute_edge_labels()
         mask = np.ma.masked_where(self.edge_labels == 0, self.edge_labels)
@@ -1145,21 +1227,35 @@ class CellEdgeVisualizer(StackVisualizer):
         # Compute the edge labels
 
         if self.invert:
-            edge_size = - self.edge_size
+            edge_size = -self.edge_size
         else:
             edge_size = self.edge_size
 
+        from celldetective.utils.masks import contour_of_instance_segmentation
+
         self.edge_labels = contour_of_instance_segmentation(self.init_label, edge_size)
+
 
 class SpotDetectionVisualizer(StackVisualizer):
 
-    def __init__(self, parent_channel_cb=None, parent_diameter_le=None, parent_threshold_le=None, parent_preprocessing_list=None, cell_type='targets', labels=None, *args, **kwargs):
+    def __init__(
+        self,
+        parent_channel_cb=None,
+        parent_diameter_le=None,
+        parent_threshold_le=None,
+        parent_preprocessing_list=None,
+        cell_type="targets",
+        labels=None,
+        *args,
+        **kwargs,
+    ):
 
         super().__init__(*args, **kwargs)
 
         self.cell_type = cell_type
         self.labels = labels
         self.detection_channel = self.target_channel
+        self.switch_from_channel = False
 
         self.parent_channel_cb = parent_channel_cb
         self.parent_diameter_le = parent_diameter_le
@@ -1178,13 +1274,13 @@ class SpotDetectionVisualizer(StackVisualizer):
         self.load_labels()
         self.change_frame(self.mid_time)
 
-        self.ax.callbacks.connect('xlim_changed', self.update_marker_sizes)
-        self.ax.callbacks.connect('ylim_changed', self.update_marker_sizes)
+        self.ax.callbacks.connect("xlim_changed", self.update_marker_sizes)
+        self.ax.callbacks.connect("ylim_changed", self.update_marker_sizes)
 
         self.apply_diam_btn.clicked.connect(self.detect_and_display_spots)
         self.apply_thresh_btn.clicked.connect(self.detect_and_display_spots)
 
-        self.channels_cb.setCurrentIndex(self.target_channel)
+        self.channel_cb.setCurrentIndex(self.target_channel)
         self.detection_channel_cb.setCurrentIndex(self.target_channel)
 
     def update_marker_sizes(self, event=None):
@@ -1195,7 +1291,7 @@ class SpotDetectionVisualizer(StackVisualizer):
 
         # Data-to-pixel scale
         ax_width_in_pixels = self.ax.bbox.width
-        ax_height_in_pixels =self.ax.bbox.height
+        ax_height_in_pixels = self.ax.bbox.height
 
         x_scale = (float(xlim[1]) - float(xlim[0])) / ax_width_in_pixels
         y_scale = (float(ylim[1]) - float(ylim[0])) / ax_height_in_pixels
@@ -1204,20 +1300,22 @@ class SpotDetectionVisualizer(StackVisualizer):
         scale = min(x_scale, y_scale)
 
         # Convert radius_px to data units
-        if len(self.spot_sizes)>0:
+        if len(self.spot_sizes) > 0:
 
             radius_data_units = self.spot_sizes / float(scale)
 
             # Convert to scatter `s` size (points squared)
-            radius_pts = radius_data_units * (72. / self.fig.dpi )
-            size = np.pi * (radius_pts ** 2)
+            radius_pts = radius_data_units * (72.0 / self.fig.dpi)
+            size = np.pi * (radius_pts**2)
 
             # Update scatter sizes
             self.spot_scat.set_sizes(size)
             self.fig.canvas.draw_idle()
 
     def init_scatter(self):
-        self.spot_scat = self.ax.scatter([],[], s=50, facecolors='none', edgecolors='tab:red',zorder=100)
+        self.spot_scat = self.ax.scatter(
+            [], [], s=50, facecolors="none", edgecolors="tab:red", zorder=100
+        )
         self.canvas.canvas.draw()
 
     def change_frame(self, value):
@@ -1226,39 +1324,54 @@ class SpotDetectionVisualizer(StackVisualizer):
         if not self.switch_from_channel:
             self.reset_detection()
 
-        if self.mode=='virtual':
+        if self.mode == "virtual":
+            from tifffile import imread
+
             self.init_label = imread(self.mask_paths[value])
-            self.target_img = load_frames(self.img_num_per_channel[self.detection_channel, value],
-                                self.stack_path,normalize_input=False).astype(float)[:,:,0]
-        elif self.mode=='direct':
-            self.init_label = self.labels[value,:,:]
-            self.target_img = self.stack[value,:,:,self.detection_channel].copy()
+            self.target_img = load_frames(
+                self.img_num_per_channel[self.detection_channel, value],
+                self.stack_path,
+                normalize_input=False,
+            ).astype(float)[:, :, 0]
+        elif self.mode == "direct":
+            self.init_label = self.labels[value, :, :]
+            self.target_img = self.stack[value, :, :, self.detection_channel].copy()
 
     def detect_and_display_spots(self):
 
         self.reset_detection()
-        self.control_valid_parameters() # set current diam and threshold
-        #self.change_frame(self.frame_slider.value())
-        #self.set_detection_channel_index(self.detection_channel_cb.currentIndex())
+        self.control_valid_parameters()  # set current diam and threshold
+        # self.change_frame(self.frame_slider.value())
+        # self.set_detection_channel_index(self.detection_channel_cb.currentIndex())
 
         image_preprocessing = self.preprocessing.list.items
-        if image_preprocessing==[]:
+        if image_preprocessing == []:
             image_preprocessing = None
 
-        blobs_filtered = extract_blobs_in_image(self.target_img, self.init_label,threshold=self.thresh, diameter=self.diameter, image_preprocessing=image_preprocessing)
+        from celldetective.measure import extract_blobs_in_image
+
+        blobs_filtered = extract_blobs_in_image(
+            self.target_img,
+            self.init_label,
+            threshold=self.thresh,
+            diameter=self.diameter,
+            image_preprocessing=image_preprocessing,
+        )
         if blobs_filtered is not None:
-            self.spot_positions = np.array([[x,y] for y,x,_ in blobs_filtered])
-            if len(self.spot_positions)>0:
-                self.spot_sizes = np.sqrt(2)*np.array([sig for _,_,sig in blobs_filtered])
-            #radius_pts = self.spot_sizes * (self.fig.dpi / 72.0)
-            #sizes = np.pi*(radius_pts**2)
-            if len(self.spot_positions)>0:
+            self.spot_positions = np.array([[x, y] for y, x, _ in blobs_filtered])
+            if len(self.spot_positions) > 0:
+                self.spot_sizes = np.sqrt(2) * np.array(
+                    [sig for _, _, sig in blobs_filtered]
+                )
+            # radius_pts = self.spot_sizes * (self.fig.dpi / 72.0)
+            # sizes = np.pi*(radius_pts**2)
+            if len(self.spot_positions) > 0:
                 self.spot_scat.set_offsets(self.spot_positions)
             else:
                 empty_offset = np.ma.masked_array([0, 0], mask=True)
                 self.spot_scat.set_offsets(empty_offset)
-            #self.spot_scat.set_sizes(sizes)
-            if len(self.spot_positions)>0:
+            # self.spot_scat.set_sizes(sizes)
+            if len(self.spot_positions) > 0:
                 self.update_marker_sizes()
             self.canvas.canvas.draw()
 
@@ -1277,22 +1390,29 @@ class SpotDetectionVisualizer(StackVisualizer):
             if isinstance(self.labels, list):
                 self.labels = np.array(self.labels)
 
-            assert self.labels.ndim==3,'Wrong dimensions for the provided labels, expect TXY'
-            assert len(self.labels)==self.stack_length
+            assert (
+                self.labels.ndim == 3
+            ), "Wrong dimensions for the provided labels, expect TXY"
+            assert len(self.labels) == self.stack_length
 
-            self.mode = 'direct'
-            self.init_label = self.labels[self.mid_time,:,:]
+            self.mode = "direct"
+            self.init_label = self.labels[self.mid_time, :, :]
         else:
-            self.mode = 'virtual'
+            self.mode = "virtual"
             assert isinstance(self.stack_path, str)
-            assert self.stack_path.endswith('.tif')
+            assert self.stack_path.endswith(".tif")
             self.locate_labels_virtual()
 
     def locate_labels_virtual(self):
         # Locate virtual labels
 
-        labels_path = str(Path(self.stack_path).parent.parent) + os.sep + f'labels_{self.cell_type}' + os.sep
-        self.mask_paths = natsorted(glob(labels_path + '*.tif'))
+        labels_path = (
+            str(Path(self.stack_path).parent.parent)
+            + os.sep
+            + f"labels_{self.cell_type}"
+            + os.sep
+        )
+        self.mask_paths = natsorted(glob(labels_path + "*.tif"))
 
         if len(self.mask_paths) == 0:
 
@@ -1304,20 +1424,24 @@ class SpotDetectionVisualizer(StackVisualizer):
             returnValue = msgBox.exec()
             self.close()
 
+        from tifffile import imread
+
         self.init_label = imread(self.mask_paths[self.frame_slider.value()])
 
     def generate_detection_channel(self):
 
         assert self.channel_names is not None
-        assert len(self.channel_names)==self.n_channels
+        assert len(self.channel_names) == self.n_channels
 
         channel_layout = QHBoxLayout()
-        channel_layout.setContentsMargins(15,0,15,0)
-        channel_layout.addWidget(QLabel('Detection\nchannel: '), 25)
+        channel_layout.setContentsMargins(15, 0, 15, 0)
+        channel_layout.addWidget(QLabel("Detection\nchannel: "), 25)
 
         self.detection_channel_cb = QComboBox()
         self.detection_channel_cb.addItems(self.channel_names)
-        self.detection_channel_cb.currentIndexChanged.connect(self.set_detection_channel_index)
+        self.detection_channel_cb.currentIndexChanged.connect(
+            self.set_detection_channel_index
+        )
         channel_layout.addWidget(self.detection_channel_cb, 75)
 
         # self.invert_check = QCheckBox('invert')
@@ -1329,9 +1453,8 @@ class SpotDetectionVisualizer(StackVisualizer):
         self.canvas.layout.addLayout(channel_layout)
 
         self.preprocessing = PreprocessingLayout2(fraction=25, parent_window=self)
-        self.preprocessing.setContentsMargins(15,0,15,0)
+        self.preprocessing.setContentsMargins(15, 0, 15, 0)
         self.canvas.layout.addLayout(self.preprocessing)
-
 
     # def set_invert(self):
     # 	if self.invert_check.isChecked():
@@ -1342,37 +1465,42 @@ class SpotDetectionVisualizer(StackVisualizer):
     def set_detection_channel_index(self, value):
 
         self.detection_channel = value
-        if self.mode == 'direct':
-            self.target_img = self.stack[-1,:,:,self.detection_channel]
-        elif self.mode == 'virtual':
-            self.target_img = load_frames(self.img_num_per_channel[self.detection_channel, self.frame_slider.value()],
-                                          self.stack_path,normalize_input=False).astype(float)[:,:,0]
+        if self.mode == "direct":
+            self.target_img = self.stack[-1, :, :, self.detection_channel]
+        elif self.mode == "virtual":
+            self.target_img = load_frames(
+                self.img_num_per_channel[
+                    self.detection_channel, self.frame_slider.value()
+                ],
+                self.stack_path,
+                normalize_input=False,
+            ).astype(float)[:, :, 0]
 
     def generate_spot_detection_params(self):
 
-        self.spot_diam_le = QLineEdit('1')
+        self.spot_diam_le = QLineEdit("1")
         self.spot_diam_le.setValidator(self.floatValidator)
-        self.apply_diam_btn = QPushButton('Set')
+        self.apply_diam_btn = QPushButton("Set")
         self.apply_diam_btn.setStyleSheet(self.button_style_sheet_2)
 
-        self.spot_thresh_le = QLineEdit('0')
+        self.spot_thresh_le = QLineEdit("0")
         self.spot_thresh_le.setValidator(self.floatValidator)
-        self.apply_thresh_btn = QPushButton('Set')
+        self.apply_thresh_btn = QPushButton("Set")
         self.apply_thresh_btn.setStyleSheet(self.button_style_sheet_2)
 
         self.spot_diam_le.textChanged.connect(self.control_valid_parameters)
         self.spot_thresh_le.textChanged.connect(self.control_valid_parameters)
 
         spot_diam_layout = QHBoxLayout()
-        spot_diam_layout.setContentsMargins(15,0,15,0)
-        spot_diam_layout.addWidget(QLabel('Spot diameter: '), 25)
+        spot_diam_layout.setContentsMargins(15, 0, 15, 0)
+        spot_diam_layout.addWidget(QLabel("Spot diameter: "), 25)
         spot_diam_layout.addWidget(self.spot_diam_le, 65)
         spot_diam_layout.addWidget(self.apply_diam_btn, 10)
         self.canvas.layout.addLayout(spot_diam_layout)
 
         spot_thresh_layout = QHBoxLayout()
-        spot_thresh_layout.setContentsMargins(15,0,15,0)
-        spot_thresh_layout.addWidget(QLabel('Detection\nthreshold: '), 25)
+        spot_thresh_layout.setContentsMargins(15, 0, 15, 0)
+        spot_thresh_layout.addWidget(QLabel("Detection\nthreshold: "), 25)
         spot_thresh_layout.addWidget(self.spot_thresh_le, 65)
         spot_thresh_layout.addWidget(self.apply_thresh_btn, 10)
         self.canvas.layout.addLayout(spot_thresh_layout)
@@ -1380,28 +1508,28 @@ class SpotDetectionVisualizer(StackVisualizer):
     def generate_add_measurement_btn(self):
 
         add_hbox = QHBoxLayout()
-        self.add_measurement_btn = QPushButton('Add measurement')
+        self.add_measurement_btn = QPushButton("Add measurement")
         self.add_measurement_btn.clicked.connect(self.set_measurement_in_parent_list)
-        self.add_measurement_btn.setIcon(icon(MDI6.plus,color="white"))
+        self.add_measurement_btn.setIcon(icon(MDI6.plus, color="white"))
         self.add_measurement_btn.setIconSize(QSize(20, 20))
         self.add_measurement_btn.setStyleSheet(self.button_style_sheet)
-        add_hbox.addWidget(QLabel(''),33)
+        add_hbox.addWidget(QLabel(""), 33)
         add_hbox.addWidget(self.add_measurement_btn, 33)
-        add_hbox.addWidget(QLabel(''),33)
+        add_hbox.addWidget(QLabel(""), 33)
         self.canvas.layout.addLayout(add_hbox)
 
     def control_valid_parameters(self):
 
         valid_diam = False
         try:
-            self.diameter = float(self.spot_diam_le.text().replace(',','.'))
+            self.diameter = float(self.spot_diam_le.text().replace(",", "."))
             valid_diam = True
         except:
             valid_diam = False
 
         valid_thresh = False
         try:
-            self.thresh = float(self.spot_thresh_le.text().replace(',','.'))
+            self.thresh = float(self.spot_thresh_le.text().replace(",", "."))
             valid_thresh = True
         except:
             valid_thresh = False
@@ -1431,8 +1559,8 @@ class SpotDetectionVisualizer(StackVisualizer):
             self.parent_preprocessing_list.items = self.preprocessing.list.items
         self.close()
 
-class CellSizeViewer(StackVisualizer):
 
+class CellSizeViewer(StackVisualizer):
     """
     A widget for visualizing cell size with interactive sliders and circle display.
 
@@ -1459,7 +1587,16 @@ class CellSizeViewer(StackVisualizer):
       with interactive sliders for diameter adjustment and circle display.
     """
 
-    def __init__(self, initial_diameter=40, set_radius_in_list=False, diameter_slider_range=(0,500), parent_le=None, parent_list_widget=None, *args, **kwargs):
+    def __init__(
+        self,
+        initial_diameter=40,
+        set_radius_in_list=False,
+        diameter_slider_range=(0, 500),
+        parent_le=None,
+        parent_list_widget=None,
+        *args,
+        **kwargs,
+    ):
         # Initialize the widget and its attributes
 
         super().__init__(*args, **kwargs)
@@ -1479,31 +1616,38 @@ class CellSizeViewer(StackVisualizer):
     def generate_circle(self):
         # Generate the circle for visualization
 
-        self.circ = plt.Circle((self.init_frame.shape[0]//2,self.init_frame.shape[1]//2), self.diameter//2 / self.PxToUm, ec="tab:red",fill=False)
+        import matplotlib.pyplot as plt
+
+        self.circ = plt.Circle(
+            (self.init_frame.shape[0] // 2, self.init_frame.shape[1] // 2),
+            self.diameter // 2 / self.PxToUm,
+            ec="tab:red",
+            fill=False,
+        )
         self.ax.add_patch(self.circ)
 
-        self.ax.callbacks.connect('xlim_changed',self.on_xlims_or_ylims_change)
-        self.ax.callbacks.connect('ylim_changed', self.on_xlims_or_ylims_change)
+        self.ax.callbacks.connect("xlim_changed", self.on_xlims_or_ylims_change)
+        self.ax.callbacks.connect("ylim_changed", self.on_xlims_or_ylims_change)
 
     def generate_add_to_list_btn(self):
         # Generate the add to list button
 
         add_hbox = QHBoxLayout()
-        self.add_measurement_btn = QPushButton('Add measurement')
+        self.add_measurement_btn = QPushButton("Add measurement")
         self.add_measurement_btn.clicked.connect(self.set_measurement_in_parent_list)
-        self.add_measurement_btn.setIcon(icon(MDI6.plus,color="white"))
+        self.add_measurement_btn.setIcon(icon(MDI6.plus, color="white"))
         self.add_measurement_btn.setIconSize(QSize(20, 20))
         self.add_measurement_btn.setStyleSheet(self.button_style_sheet)
-        add_hbox.addWidget(QLabel(''),33)
+        add_hbox.addWidget(QLabel(""), 33)
         add_hbox.addWidget(self.add_measurement_btn, 33)
-        add_hbox.addWidget(QLabel(''),33)
+        add_hbox.addWidget(QLabel(""), 33)
         self.canvas.layout.addLayout(add_hbox)
 
     def set_measurement_in_parent_list(self):
         # Add the diameter to the parent QListWidget
 
         if self.set_radius_in_list:
-            val = int(self.diameter_slider.value()//2)
+            val = int(self.diameter_slider.value() // 2)
         else:
             val = int(self.diameter_slider.value())
 
@@ -1513,20 +1657,20 @@ class CellSizeViewer(StackVisualizer):
     def on_xlims_or_ylims_change(self, event_ax):
         # Update the circle position on axis limits change
 
-        xmin,xmax = event_ax.get_xlim()
-        ymin,ymax = event_ax.get_ylim()
-        self.circ.center = np.mean([xmin,xmax]), np.mean([ymin,ymax])
+        xmin, xmax = event_ax.get_xlim()
+        ymin, ymax = event_ax.get_ylim()
+        self.circ.center = np.mean([xmin, xmax]), np.mean([ymin, ymax])
 
     def generate_set_btn(self):
         # Generate the set button for QLineEdit
 
         apply_hbox = QHBoxLayout()
-        self.apply_threshold_btn = QPushButton('Set')
+        self.apply_threshold_btn = QPushButton("Set")
         self.apply_threshold_btn.clicked.connect(self.set_threshold_in_parent_le)
         self.apply_threshold_btn.setStyleSheet(self.button_style_sheet)
-        apply_hbox.addWidget(QLabel(''),33)
+        apply_hbox.addWidget(QLabel(""), 33)
         apply_hbox.addWidget(self.apply_threshold_btn, 33)
-        apply_hbox.addWidget(QLabel(''),33)
+        apply_hbox.addWidget(QLabel(""), 33)
         self.canvas.layout.addLayout(apply_hbox)
 
     def set_threshold_in_parent_le(self):
@@ -1539,21 +1683,22 @@ class CellSizeViewer(StackVisualizer):
         # Generate the diameter slider
 
         self.diameter_slider = QLabeledDoubleSlider()
-        diameter_layout = QuickSliderLayout(label='Diameter: ',
-                                        slider=self.diameter_slider,
-                                        slider_initial_value=self.diameter,
-                                        slider_range=self.diameter_slider_range,
-                                        decimal_option=True,
-                                        precision=5,
-                                        )
-        diameter_layout.setContentsMargins(15,0,15,0)
+        diameter_layout = QuickSliderLayout(
+            label="Diameter: ",
+            slider=self.diameter_slider,
+            slider_initial_value=self.diameter,
+            slider_range=self.diameter_slider_range,
+            decimal_option=True,
+            precision=5,
+        )
+        diameter_layout.setContentsMargins(15, 0, 15, 0)
         self.diameter_slider.valueChanged.connect(self.change_diameter)
         self.canvas.layout.addLayout(diameter_layout)
 
     def change_diameter(self, value):
         # Change the diameter of the circle
         self.diameter = value
-        self.circ.set_radius(self.diameter//2 / self.PxToUm)
+        self.circ.set_radius(self.diameter // 2 / self.PxToUm)
         self.canvas.canvas.draw_idle()
 
 
@@ -1579,8 +1724,8 @@ class ChannelOffsetViewer(StackVisualizer):
         self.generate_overlay_shift()
         self.generate_add_to_parent_btn()
 
-        if self.overlay_target_channel==-1:
-            index = len(self.channel_names) -1
+        if self.overlay_target_channel == -1:
+            index = len(self.channel_names) - 1
         else:
             index = self.overlay_target_channel
         self.channels_overlay_cb.setCurrentIndex(index)
@@ -1588,45 +1733,61 @@ class ChannelOffsetViewer(StackVisualizer):
 
         self.define_keyboard_shortcuts()
 
-        self.channels_overlay_cb.setCurrentIndex(self.parent_window.channels_cb.currentIndex())
+        self.channels_overlay_cb.setCurrentIndex(
+            self.parent_window.channels_cb.currentIndex()
+        )
         self.set_channel_index(0)
 
         self.setAttribute(Qt.WA_DeleteOnClose)
 
     def generate_overlay_imshow(self):
-        self.im_overlay = self.ax.imshow(self.overlay_init_frame, cmap='Blues', interpolation='none',alpha=0.5, **self.imshow_kwargs)
+        self.im_overlay = self.ax.imshow(
+            self.overlay_init_frame,
+            cmap="Blues",
+            interpolation="none",
+            alpha=0.5,
+            **self.imshow_kwargs,
+        )
 
     def generate_overlay_alpha_slider(self):
         # Generate the contrast slider if enabled
 
         self.overlay_alpha_slider = QLabeledDoubleSlider()
         alpha_layout = QuickSliderLayout(
-                                            label='Overlay\ntransparency: ',
-                                            slider=self.overlay_alpha_slider,
-                                            slider_initial_value=0.5,
-                                            slider_range=(0,1.0),
-                                            decimal_option=True,
-                                            precision=5,
-                                            )
-        alpha_layout.setContentsMargins(15,0,15,0)
+            label="Overlay\ntransparency: ",
+            slider=self.overlay_alpha_slider,
+            slider_initial_value=0.5,
+            slider_range=(0, 1.0),
+            decimal_option=True,
+            precision=5,
+        )
+        alpha_layout.setContentsMargins(15, 0, 15, 0)
         self.overlay_alpha_slider.valueChanged.connect(self.change_alpha_overlay)
         self.canvas.layout.addLayout(alpha_layout)
-
 
     def generate_overlay_contrast_slider(self):
         # Generate the contrast slider if enabled
 
         self.overlay_contrast_slider = QLabeledDoubleRangeSlider()
         contrast_layout = QuickSliderLayout(
-                                            label='Overlay contrast: ',
-                                            slider=self.overlay_contrast_slider,
-                                            slider_initial_value=[np.nanpercentile(self.overlay_init_frame, 0.1),np.nanpercentile(self.overlay_init_frame, 99.99)],
-                                            slider_range=(np.nanmin(self.overlay_init_frame),np.nanmax(self.overlay_init_frame)),
-                                            decimal_option=True,
-                                            precision=5,
-                                            )
-        contrast_layout.setContentsMargins(15,0,15,0)
-        self.im_overlay.set_clim(vmin=np.nanpercentile(self.overlay_init_frame, 0.1),vmax=np.nanpercentile(self.overlay_init_frame, 99.99))
+            label="Overlay contrast: ",
+            slider=self.overlay_contrast_slider,
+            slider_initial_value=[
+                np.nanpercentile(self.overlay_init_frame, 0.1),
+                np.nanpercentile(self.overlay_init_frame, 99.99),
+            ],
+            slider_range=(
+                np.nanmin(self.overlay_init_frame),
+                np.nanmax(self.overlay_init_frame),
+            ),
+            decimal_option=True,
+            precision=5,
+        )
+        contrast_layout.setContentsMargins(15, 0, 15, 0)
+        self.im_overlay.set_clim(
+            vmin=np.nanpercentile(self.overlay_init_frame, 0.1),
+            vmax=np.nanpercentile(self.overlay_init_frame, 99.99),
+        )
         self.overlay_contrast_slider.valueChanged.connect(self.change_contrast_overlay)
         self.canvas.layout.addLayout(contrast_layout)
 
@@ -1635,75 +1796,96 @@ class ChannelOffsetViewer(StackVisualizer):
 
         self.overlay_target_channel = value
         self.overlay_init_contrast = True
-        if self.mode == 'direct':
-            self.overlay_last_frame = self.stack[-1,:,:,self.overlay_target_channel]
-        elif self.mode == 'virtual':
-            self.overlay_last_frame = load_frames(self.img_num_per_channel[self.overlay_target_channel, self.stack_length-1],
-                                          self.stack_path,
-                                          normalize_input=False).astype(float)[:,:,0]
+        if self.mode == "direct":
+            self.overlay_last_frame = self.stack[-1, :, :, self.overlay_target_channel]
+        elif self.mode == "virtual":
+            self.overlay_last_frame = load_frames(
+                self.img_num_per_channel[
+                    self.overlay_target_channel, self.stack_length - 1
+                ],
+                self.stack_path,
+                normalize_input=False,
+            ).astype(float)[:, :, 0]
         self.change_overlay_frame(self.frame_slider.value())
         self.overlay_init_contrast = False
 
     def generate_overlay_channel_cb(self):
 
         assert self.channel_names is not None
-        assert len(self.channel_names)==self.n_channels
+        assert len(self.channel_names) == self.n_channels
 
         channel_layout = QHBoxLayout()
-        channel_layout.setContentsMargins(15,0,15,0)
-        channel_layout.addWidget(QLabel('Overlay channel: '), 25)
+        channel_layout.setContentsMargins(15, 0, 15, 0)
+        channel_layout.addWidget(QLabel("Overlay channel: "), 25)
 
         self.channels_overlay_cb = QComboBox()
         self.channels_overlay_cb.addItems(self.channel_names)
-        self.channels_overlay_cb.currentIndexChanged.connect(self.set_overlay_channel_index)
+        self.channels_overlay_cb.currentIndexChanged.connect(
+            self.set_overlay_channel_index
+        )
         channel_layout.addWidget(self.channels_overlay_cb, 75)
         self.canvas.layout.addLayout(channel_layout)
 
     def generate_overlay_shift(self):
 
         shift_layout = QHBoxLayout()
-        shift_layout.setContentsMargins(15,0,15,0)
-        shift_layout.addWidget(QLabel('shift (h): '), 20, alignment=Qt.AlignRight)
+        shift_layout.setContentsMargins(15, 0, 15, 0)
+        shift_layout.addWidget(QLabel("shift (h): "), 20, alignment=Qt.AlignRight)
 
-        self.apply_shift_btn = QPushButton('Apply')
+        self.apply_shift_btn = QPushButton("Apply")
         self.apply_shift_btn.setStyleSheet(self.button_style_sheet_2)
-        self.apply_shift_btn.setToolTip('Apply the shift to the overlay channel.')
+        self.apply_shift_btn.setToolTip("Apply the shift to the overlay channel.")
         self.apply_shift_btn.clicked.connect(self.shift_generic)
 
-        self.set_shift_btn = QPushButton('Set')
+        self.set_shift_btn = QPushButton("Set")
 
-        self.horizontal_shift_le = ThresholdLineEdit(init_value=self.shift_horizontal, connected_buttons=[self.apply_shift_btn, self.set_shift_btn],placeholder='horizontal shift [pixels]', value_type='float')
+        self.horizontal_shift_le = ThresholdLineEdit(
+            init_value=self.shift_horizontal,
+            connected_buttons=[self.apply_shift_btn, self.set_shift_btn],
+            placeholder="horizontal shift [pixels]",
+            value_type="float",
+        )
         shift_layout.addWidget(self.horizontal_shift_le, 20)
 
-        shift_layout.addWidget(QLabel('shift (v): '), 20, alignment=Qt.AlignRight)
+        shift_layout.addWidget(QLabel("shift (v): "), 20, alignment=Qt.AlignRight)
 
-        self.vertical_shift_le = ThresholdLineEdit(init_value=self.shift_vertical, connected_buttons=[self.apply_shift_btn, self.set_shift_btn],placeholder='vertical shift [pixels]', value_type='float')
+        self.vertical_shift_le = ThresholdLineEdit(
+            init_value=self.shift_vertical,
+            connected_buttons=[self.apply_shift_btn, self.set_shift_btn],
+            placeholder="vertical shift [pixels]",
+            value_type="float",
+        )
         shift_layout.addWidget(self.vertical_shift_le, 20)
 
         shift_layout.addWidget(self.apply_shift_btn, 20)
 
         self.canvas.layout.addLayout(shift_layout)
 
-
     def change_overlay_frame(self, value):
         # Change the displayed frame based on slider value
 
-        if self.mode=='virtual':
+        if self.mode == "virtual":
 
-            self.overlay_init_frame = load_frames(self.img_num_per_channel[self.overlay_target_channel, value],
-                                self.stack_path,
-                                normalize_input=False
-                                ).astype(float)[:,:,0]
-        elif self.mode=='direct':
-            self.overlay_init_frame = self.stack[value,:,:,self.overlay_target_channel].copy()
+            self.overlay_init_frame = load_frames(
+                self.img_num_per_channel[self.overlay_target_channel, value],
+                self.stack_path,
+                normalize_input=False,
+            ).astype(float)[:, :, 0]
+        elif self.mode == "direct":
+            self.overlay_init_frame = self.stack[
+                value, :, :, self.overlay_target_channel
+            ].copy()
 
         self.im_overlay.set_data(self.overlay_init_frame)
 
         if self.overlay_init_contrast:
             self.im_overlay.autoscale()
             I_min, I_max = self.im_overlay.get_clim()
-            self.overlay_contrast_slider.setRange(np.nanmin([self.overlay_init_frame,self.overlay_last_frame]),np.nanmax([self.overlay_init_frame,self.overlay_last_frame]))
-            self.overlay_contrast_slider.setValue((I_min,I_max))
+            self.overlay_contrast_slider.setRange(
+                np.nanmin([self.overlay_init_frame, self.overlay_last_frame]),
+                np.nanmax([self.overlay_init_frame, self.overlay_last_frame]),
+            )
+            self.overlay_contrast_slider.setValue((I_min, I_max))
 
         if self.create_contrast_slider:
             self.change_contrast_overlay(self.overlay_contrast_slider.value())
@@ -1718,20 +1900,32 @@ class ChannelOffsetViewer(StackVisualizer):
             gc.collect()
 
         self.mid_time = self.stack_length // 2
-        self.img_num_per_channel = _get_img_num_per_channel(np.arange(self.n_channels), self.stack_length, self.n_channels)
+        self.img_num_per_channel = _get_img_num_per_channel(
+            np.arange(self.n_channels), self.stack_length, self.n_channels
+        )
 
-        self.init_frame = load_frames(self.img_num_per_channel[self.target_channel, self.mid_time],
-                                      self.stack_path,
-                                      normalize_input=False).astype(float)[:,:,0]
-        self.last_frame = load_frames(self.img_num_per_channel[self.target_channel, self.stack_length-1],
-                                      self.stack_path,
-                                      normalize_input=False).astype(float)[:,:,0]
-        self.overlay_init_frame = load_frames(self.img_num_per_channel[self.overlay_target_channel, self.mid_time],
-                                      self.stack_path,
-                                      normalize_input=False).astype(float)[:,:,0]
-        self.overlay_last_frame = load_frames(self.img_num_per_channel[self.overlay_target_channel, self.stack_length-1],
-                                      self.stack_path,
-                                      normalize_input=False).astype(float)[:,:,0]
+        self.init_frame = load_frames(
+            self.img_num_per_channel[self.target_channel, self.mid_time],
+            self.stack_path,
+            normalize_input=False,
+        ).astype(float)[:, :, 0]
+        self.last_frame = load_frames(
+            self.img_num_per_channel[self.target_channel, self.stack_length - 1],
+            self.stack_path,
+            normalize_input=False,
+        ).astype(float)[:, :, 0]
+        self.overlay_init_frame = load_frames(
+            self.img_num_per_channel[self.overlay_target_channel, self.mid_time],
+            self.stack_path,
+            normalize_input=False,
+        ).astype(float)[:, :, 0]
+        self.overlay_last_frame = load_frames(
+            self.img_num_per_channel[
+                self.overlay_target_channel, self.stack_length - 1
+            ],
+            self.stack_path,
+            normalize_input=False,
+        ).astype(float)[:, :, 0]
 
     def change_contrast_overlay(self, value):
         # Change contrast based on slider value
@@ -1748,7 +1942,6 @@ class ChannelOffsetViewer(StackVisualizer):
         self.im_overlay.set_alpha(alpha)
         self.fig.canvas.draw_idle()
 
-
     def define_keyboard_shortcuts(self):
 
         self.shift_up_shortcut = QShortcut(QKeySequence(Qt.Key_Up), self.canvas)
@@ -1763,53 +1956,60 @@ class ChannelOffsetViewer(StackVisualizer):
         self.shift_right_shortcut = QShortcut(QKeySequence(Qt.Key_Right), self.canvas)
         self.shift_right_shortcut.activated.connect(self.shift_overlay_right)
 
-
     def shift_overlay_up(self):
         self.shift_vertical -= 2
         self.vertical_shift_le.set_threshold(self.shift_vertical)
-        #self.shift_generic()
+        # self.shift_generic()
         self.apply_shift_btn.click()
 
     def shift_overlay_down(self):
         self.shift_vertical += 2
         self.vertical_shift_le.set_threshold(self.shift_vertical)
-        #self.shift_generic()
+        # self.shift_generic()
         self.apply_shift_btn.click()
 
     def shift_overlay_left(self):
         self.shift_horizontal -= 2
         self.horizontal_shift_le.set_threshold(self.shift_horizontal)
-        #self.shift_generic()
+        # self.shift_generic()
         self.apply_shift_btn.click()
 
     def shift_overlay_right(self):
         self.shift_horizontal += 2
         self.horizontal_shift_le.set_threshold(self.shift_horizontal)
-        #self.shift_generic()
+        # self.shift_generic()
         self.apply_shift_btn.click()
 
     def shift_generic(self):
         self.shift_vertical = self.vertical_shift_le.get_threshold()
         self.shift_horizontal = self.horizontal_shift_le.get_threshold()
-        self.shifted_frame = shift(self.overlay_init_frame, [self.shift_vertical, self.shift_horizontal],prefilter=False)
+        self.shifted_frame = shift(
+            self.overlay_init_frame,
+            [self.shift_vertical, self.shift_horizontal],
+            prefilter=False,
+        )
         self.im_overlay.set_data(self.shifted_frame)
         self.fig.canvas.draw_idle()
 
     def generate_add_to_parent_btn(self):
 
         add_hbox = QHBoxLayout()
-        add_hbox.setContentsMargins(0,5,0,5)
+        add_hbox.setContentsMargins(0, 5, 0, 5)
         self.set_shift_btn.clicked.connect(self.set_parent_attributes)
         self.set_shift_btn.setStyleSheet(self.button_style_sheet)
-        add_hbox.addWidget(QLabel(''),33)
+        add_hbox.addWidget(QLabel(""), 33)
         add_hbox.addWidget(self.set_shift_btn, 33)
-        add_hbox.addWidget(QLabel(''),33)
+        add_hbox.addWidget(QLabel(""), 33)
         self.canvas.layout.addLayout(add_hbox)
 
     def set_parent_attributes(self):
 
         idx = self.channels_overlay_cb.currentIndex()
         self.parent_window.channels_cb.setCurrentIndex(idx)
-        self.parent_window.vertical_shift_le.set_threshold(self.vertical_shift_le.get_threshold())
-        self.parent_window.horizontal_shift_le.set_threshold(self.horizontal_shift_le.get_threshold())
+        self.parent_window.vertical_shift_le.set_threshold(
+            self.vertical_shift_le.get_threshold()
+        )
+        self.parent_window.horizontal_shift_le.set_threshold(
+            self.horizontal_shift_le.get_threshold()
+        )
         self.close()

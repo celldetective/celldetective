@@ -16,14 +16,16 @@ from PyQt5.QtCore import Qt, QSize
 from PyQt5.QtGui import QKeySequence, QIntValidator
 
 from celldetective.gui.gui_utils import color_from_state
-from celldetective.gui.base.utils import center_window
+from celldetective.gui.base.utils import center_window, pretty_table
 from superqt import QLabeledDoubleSlider, QLabeledDoubleRangeSlider, QSearchableComboBox
-from celldetective.utils import _get_img_num_per_channel
-from celldetective.io import (
+from celldetective.utils.image_loaders import (
+    locate_labels,
     load_frames,
+    _get_img_num_per_channel,
+)
+from celldetective.utils.experiment import (
     get_experiment_metadata,
     get_experiment_labels,
-    locate_labels,
 )
 from celldetective.gui.gui_utils import (
     FigureCanvas,
@@ -42,8 +44,7 @@ from matplotlib.cm import tab10
 import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
 from celldetective.gui.base.components import CelldetectiveWidget
-from celldetective.measure import contour_of_instance_segmentation
-from celldetective.utils import pretty_table
+from celldetective.utils.masks import contour_of_instance_segmentation
 from celldetective.gui.base_annotator import BaseAnnotator
 
 

@@ -32,13 +32,12 @@ from celldetective.gui.base.components import (
     CelldetectiveWidget,
     CelldetectiveMainWindow,
 )
-from celldetective.utils import get_software_location
-from celldetective.io import (
-    auto_load_number_of_frames,
+from celldetective import get_software_location
+from celldetective.utils.image_loaders import auto_load_number_of_frames, load_frames
+from celldetective.utils.experiment import (
     extract_experiment_channels,
     get_experiment_metadata,
     get_experiment_labels,
-    load_frames,
 )
 from celldetective.gui.gui_utils import (
     FigureCanvas,

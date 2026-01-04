@@ -1,4 +1,9 @@
+import os
+from pathlib import Path
+from typing import Union
+
 from PyQt5.QtWidgets import QApplication
+from prettytable import PrettyTable
 
 
 def center_window(window):
@@ -22,3 +27,19 @@ def center_window(window):
     centerPoint = QApplication.desktop().screenGeometry(screen).center()
     frameGm.moveCenter(centerPoint)
     window.move(frameGm.topLeft())
+
+
+def remove_file_if_exists(file: Union[str, Path]):
+    if os.path.exists(file):
+        try:
+            os.remove(file)
+        except Exception as e:
+            print(e)
+
+
+def pretty_table(dct: dict):
+    table = PrettyTable()
+    for c in dct.keys():
+        table.add_column(str(c), [])
+    table.add_row([dct.get(c, "") for c in dct.keys()])
+    print(table)

@@ -2,6 +2,7 @@ import gc
 import json
 import os
 import threading
+import time
 from glob import glob
 from subprocess import Popen, check_output
 
@@ -28,7 +29,7 @@ from celldetective.gui.base.components import (
     CelldetectiveMainWindow,
     generic_message,
 )
-from celldetective.gui.base.utils import center_window
+from celldetective.gui.base.utils import center_window, pretty_table
 from celldetective.log_manager import get_logger
 
 logger = get_logger("celldetective")
@@ -253,7 +254,7 @@ class AppInitWindow(CelldetectiveMainWindow):
         self.validate_button.click()
 
     def download_cytotoxicity_assay_demo(self):
-        from celldetective.utils import download_zenodo_file
+        from celldetective.utils.downloaders import download_zenodo_file
 
         self.target_dir = str(
             QFileDialog.getExistingDirectory(self, "Select Folder for Download")
@@ -304,7 +305,7 @@ class AppInitWindow(CelldetectiveMainWindow):
                 )
 
     def correct_seg_annotation(self):
-        from celldetective.io import correct_annotation
+        from celldetective.napari.utils import correct_annotation
 
         self.filename, _ = QFileDialog.getOpenFileName(
             self, "Open Image", "/home/", "TIF Files (*.tif)"
@@ -431,8 +432,9 @@ class AppInitWindow(CelldetectiveMainWindow):
         self.new_exp_window.show()
 
     def open_directory(self):
-        from celldetective.io import extract_well_name_and_number
-        from celldetective.utils import pretty_table
+        self.t_ref = time.time()
+
+        from celldetective.utils.experiment import extract_well_name_and_number
 
         self.exp_dir = self.experiment_path_selection.text().replace("/", os.sep)
         logger.info(f"Setting current directory to {self.exp_dir}...")
@@ -451,18 +453,23 @@ class AppInitWindow(CelldetectiveMainWindow):
             elif self.number_of_wells > 1:
                 logger.info(f"Found {self.number_of_wells} wells...")
 
-            number_pos = {}
-            for w in wells:
-                well_name, well_nbr = extract_well_name_and_number(w)
-                position_folders = glob(os.sep.join([w, f"{well_nbr}*", os.sep]))
-                number_pos.update({well_name: len(position_folders)})
-            logger.info(f"Number of positions per well:")
-            pretty_table(number_pos)
+            def log_position_stats(wells_list):
+                number_pos = {}
+                for w in wells_list:
+                    well_name, well_nbr = extract_well_name_and_number(w)
+                    position_folders = glob(os.sep.join([w, f"{well_nbr}*", os.sep]))
+                    number_pos.update({well_name: len(position_folders)})
+                logger.info(f"Number of positions per well:")
+                pretty_table(number_pos)
 
-            with open(
-                os.sep.join([self.soft_path, "celldetective", "recent.txt"]), "a+"
-            ) as f:
-                f.write(self.exp_dir + "\n")
+                with open(
+                    os.sep.join([self.soft_path, "celldetective", "recent.txt"]), "a+"
+                ) as f:
+                    f.write(self.exp_dir + "\n")
+
+            threading.Thread(
+                target=log_position_stats, args=(wells,), daemon=True
+            ).start()
 
             from celldetective.gui.control_panel import ControlPanel
 

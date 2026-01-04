@@ -1,3 +1,5 @@
+import time
+
 from PyQt5.QtWidgets import (
     QPushButton,
     QHBoxLayout,
@@ -12,27 +14,24 @@ from PyQt5.QtWidgets import (
 from celldetective.gui.base.components import (
     CelldetectiveMainWindow,
     CelldetectiveWidget,
+    QCheckableComboBox,
+    QHSeperationLine,
 )
 
-from PyQt5.QtCore import Qt, QSize
-from celldetective.gui.gui_utils import (
-    QHSeperationLine,
-    QCheckableComboBox,
-)
+from PyQt5.QtCore import Qt, QSize, QThread
 from celldetective.gui.base.components import generic_message
-from celldetective.utils import (
-    _extract_labels_from_config,
+from celldetective.utils.parsing import (
     config_section_to_dict,
-    extract_identity_col,
+    _extract_labels_from_config,
 )
-from celldetective.gui.json_readers import ConfigEditor
 from celldetective.gui.process_block import ProcessPanel, PreprocessingPanel, NeighPanel
 from celldetective.gui.analyze_block import AnalysisPanel
 
-from celldetective.io import (
-    extract_position_name,
+from celldetective.utils.experiment import (
     get_experiment_wells,
-    get_config,
+    extract_well_name_and_number,
+    extract_position_name,
+    extract_experiment_channels,
     get_spatial_calibration,
     get_temporal_calibration,
     get_experiment_concentrations,
@@ -40,7 +39,7 @@ from celldetective.io import (
     get_experiment_antibodies,
     get_experiment_pharmaceutical_agents,
     get_experiment_populations,
-    extract_well_name_and_number,
+    get_config,
 )
 from natsort import natsorted
 from glob import glob
@@ -50,12 +49,39 @@ from superqt.fonticon import icon
 from fonticon_mdi6 import MDI6
 import gc
 import subprocess
-from celldetective.gui.viewers import StackVisualizer
-from celldetective.utils import extract_experiment_channels
-import pandas as pd
+
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+class BackgroundLoader(QThread):
+    def run(self):
+        logger.info("Loading background packages...")
+        try:
+            import pandas
+            import matplotlib.pyplot
+            import scipy.ndimage
+            import skimage.measure
+            import skimage.segmentation
+            import skimage.filters
+            import skimage.feature
+            import skimage.exposure
+
+            # Pre-load celldetective modules that are lazily imported
+            import celldetective.segmentation
+            import celldetective.utils.image_transforms
+            import celldetective.filters
+
+            try:
+                import cellpose
+            except Exception:
+                logger.error("cellpose not loaded...")
+            import tifffile
+            import seaborn
+        except Exception:
+            logger.error("Background packages not loaded...")
+        logger.info("Background packages loaded...")
 
 
 class ControlPanel(CelldetectiveMainWindow):
@@ -133,6 +159,12 @@ class ControlPanel(CelldetectiveMainWindow):
 
         self.well_list.setCurrentIndex(0)
         # self.position_list.setCurrentIndex(0)
+
+        t_loaded = time.time()
+        print(f"Launch time: {t_loaded - self.parent_window.t_ref} s...")
+
+        self.bg_loader = BackgroundLoader()
+        self.bg_loader.start()
 
     def init_wells_and_positions(self):
         """
@@ -323,6 +355,8 @@ class ControlPanel(CelldetectiveMainWindow):
 
     def view_current_stack(self):
 
+        from celldetective.gui.viewers import StackVisualizer
+
         self.locate_image()
         if self.current_stack is not None:
             self.viewer = StackVisualizer(
@@ -466,6 +500,8 @@ class ControlPanel(CelldetectiveMainWindow):
         self.update_position_options()
 
     def open_config_editor(self):
+        from celldetective.gui.json_readers import ConfigEditor
+
         self.cfg_editor = ConfigEditor(self)
         self.cfg_editor.show()
 
@@ -565,6 +601,8 @@ class ControlPanel(CelldetectiveMainWindow):
                         )
                     ):
                         try:
+                            import pandas as pd
+
                             cols = pd.read_csv(
                                 os.sep.join(
                                     [

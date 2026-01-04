@@ -14,12 +14,12 @@ from celldetective.gui.base.components import generic_message
 from celldetective.gui.base.utils import center_window
 from celldetective.gui.generic_signal_plot import GenericSignalPlotWidget
 from superqt import QLabeledSlider, QColormapComboBox, QSearchableComboBox
-from celldetective.utils import (
+from celldetective import (
     get_software_location,
-    _extract_labels_from_config,
-    extract_cols_from_table_list,
 )
-from celldetective.io import load_experiment_tables
+from celldetective.utils.data_cleaning import extract_cols_from_table_list
+from celldetective.utils.parsing import _extract_labels_from_config
+from celldetective.utils.data_loaders import load_experiment_tables
 from celldetective.signals import mean_signal
 import numpy as np
 import os

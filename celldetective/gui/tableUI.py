@@ -16,39 +16,27 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QBrush, QColor, QDoubleValidator
-import pandas as pd
-import matplotlib.pyplot as plt
 
-from celldetective.gui.table_ops.merge_groups import MergeGroupWidget
-
-plt.rcParams["svg.fonttype"] = "none"
 from celldetective.gui.gui_utils import (
     FigureCanvas,
-    QHSeperationLine,
     GenericOpColWidget,
     PandasModel,
 )
 from celldetective.gui.base.utils import center_window
-from celldetective.utils import (
-    differentiate_per_track,
-    collapse_trajectories_by_status,
-    test_2samp_generic,
-    safe_log,
-)
-from celldetective.neighborhood import extract_neighborhood_in_pair_table
-from celldetective.relative_measurements import expand_pair_table
+from celldetective.utils.data_cleaning import collapse_trajectories_by_status
+from celldetective.utils.maths import differentiate_per_track, safe_log
+from celldetective.utils.stats import test_2samp_generic
 import numpy as np
-import seaborn as sns
-import matplotlib.cm as mcm
 import os
-from celldetective.gui.base.components import CelldetectiveWidget, CelldetectiveMainWindow
+from celldetective.gui.base.components import (
+    CelldetectiveWidget,
+    CelldetectiveMainWindow,
+    QHSeperationLine,
+)
 from superqt import QColormapComboBox, QLabeledSlider, QSearchableComboBox
 from superqt.fonticon import icon
 from fonticon_mdi6 import MDI6
 from math import floor
-
-from matplotlib import colormaps
-import matplotlib.cm
 
 
 class QueryWidget(CelldetectiveWidget):
@@ -643,6 +631,10 @@ class TableUI(CelldetectiveMainWindow):
 
         # Set the model for the table view
 
+        import matplotlib.pyplot as plt
+
+        plt.rcParams["svg.fonttype"] = "none"
+
         self.model = PandasModel(data)
         self.table_view.setModel(self.model)
         self.table_view.resizeColumnsToContents()
@@ -859,6 +851,8 @@ class TableUI(CelldetectiveMainWindow):
                 neighbor_pop = "effectors"
             if ref_pop == "effectors":
                 neighbor_pop = "targets"
+
+        from celldetective.neighborhood import extract_neighborhood_in_pair_table
 
         data = extract_neighborhood_in_pair_table(
             self.data,
@@ -1136,6 +1130,9 @@ class TableUI(CelldetectiveMainWindow):
             if len(col_idx) > 0:
                 selected_cols = cols[col_idx]
                 col_selection.extend(selected_cols)
+
+        # Lazy load MergeGroupWidget
+        from celldetective.gui.table_ops.merge_groups import MergeGroupWidget
 
         self.merge_classification_widget = MergeGroupWidget(self, columns=col_selection)
         self.merge_classification_widget.show()
@@ -1438,6 +1435,9 @@ class TableUI(CelldetectiveMainWindow):
         hbox.addWidget(self.hue_cb, 66)
         layout.addLayout(hbox)
 
+        from matplotlib import colormaps
+        import matplotlib.cm
+
         self.cmap_cb = QColormapComboBox()
         all_cms = list(colormaps)
         for cm in all_cms:
@@ -1466,6 +1466,10 @@ class TableUI(CelldetectiveMainWindow):
         if self.x_cb.currentText() != "--":
             self.x_option = True
             self.x = self.x_cb.currentText()
+
+        import matplotlib.pyplot as plt
+        import seaborn as sns
+        import matplotlib.cm as mcm
 
         self.fig, self.ax = plt.subplots(1, 1, figsize=(4, 3))
         self.plot1dWindow = FigureCanvas(self.fig, title="scatter")

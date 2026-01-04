@@ -16,7 +16,7 @@ from PyQt5.QtGui import QDoubleValidator
 from celldetective.gui.gui_utils import FigureCanvas, ExportPlotBtn, QuickSliderLayout
 from celldetective.gui.base.utils import center_window
 from celldetective.gui.tableUI import TableUI
-from celldetective.io import collect_experiment_metadata
+from celldetective.utils.experiment import collect_experiment_metadata
 
 from superqt.fonticon import icon
 from superqt import QLabeledSlider, QLabeledDoubleSlider

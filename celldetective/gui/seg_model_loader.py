@@ -14,7 +14,6 @@ from PyQt5.QtCore import Qt, QSize
 from celldetective.gui.base.components import generic_message
 from celldetective.gui.base.utils import center_window
 from celldetective.gui.layouts import ChannelNormGenerator
-from celldetective.gui.thresholds_gui import ThresholdConfigWizard
 from celldetective.gui.base.components import CelldetectiveWidget
 from PyQt5.QtGui import QDoubleValidator
 from superqt.fonticon import icon
@@ -25,7 +24,6 @@ import os
 import json
 import shutil
 import gc
-from cellpose.models import CellposeModel
 
 
 class SegmentationModelLoader(CelldetectiveWidget):
@@ -405,6 +403,8 @@ class SegmentationModelLoader(CelldetectiveWidget):
                     )
                     return None
                 try:
+                    from cellpose.models import CellposeModel
+
                     model = CellposeModel(
                         pretrained_model=self.destination,
                         model_type=None,
@@ -571,6 +571,8 @@ class SegmentationModelLoader(CelldetectiveWidget):
         if self.parent_window.parent_window.current_stack is None:
             return None
         else:
+            from celldetective.gui.thresholds_gui import ThresholdConfigWizard
+
             self.thresh_wizard = ThresholdConfigWizard(self)
             self.thresh_wizard.show()
             center_window(self.thresh_wizard)

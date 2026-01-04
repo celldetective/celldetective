@@ -3,27 +3,33 @@ import time
 import datetime
 import os
 import json
-from celldetective.io import (
-    extract_position_name,
-    locate_segmentation_model,
+from celldetective.utils.model_loaders import locate_segmentation_model
+from celldetective.utils.image_loaders import (
     auto_load_number_of_frames,
-    load_frames,
-    _check_label_dims,
     _load_frames_to_segment,
-)
-from celldetective.utils import (
-    _rescale_labels,
-    _segment_image_with_stardist_model,
-    _segment_image_with_cellpose_model,
-    _prep_stardist_model,
-    _prep_cellpose_model,
-    _get_normalize_kwargs_from_config,
-    extract_experiment_channels,
-    _estimate_scale_factor,
-    _extract_channel_indices_from_config,
-    config_section_to_dict,
-    _extract_nbr_channels_from_config,
+    load_frames,
     _get_img_num_per_channel,
+)
+from celldetective.utils.mask_cleaning import _check_label_dims
+from celldetective.utils.experiment import (
+    extract_position_name,
+    extract_experiment_channels,
+)
+from celldetective.utils.stardist import (
+    _prep_stardist_model,
+    _segment_image_with_stardist_model,
+)
+from celldetective.utils.cellpose import (
+    _segment_image_with_cellpose_model,
+    _prep_cellpose_model,
+)
+from celldetective.utils.mask_transforms import _rescale_labels
+from celldetective.utils.image_transforms import _estimate_scale_factor
+from celldetective.utils.parsing import (
+    _get_normalize_kwargs_from_config,
+    config_section_to_dict,
+    _extract_channel_indices_from_config,
+    _extract_nbr_channels_from_config,
 )
 
 from pathlib import Path, PurePath

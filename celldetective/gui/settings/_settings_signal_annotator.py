@@ -14,10 +14,11 @@ from PyQt5.QtWidgets import (
     QHBoxLayout,
 )
 from PyQt5.QtCore import Qt, QSize
-from celldetective.gui.gui_utils import QHSeperationLine
+from celldetective.gui.base.components import QHSeperationLine
 from celldetective.gui.base.utils import center_window
 from superqt import QLabeledDoubleSlider, QLabeledSlider
-from celldetective.utils import extract_experiment_channels, get_software_location
+from celldetective import get_software_location
+from celldetective.utils.experiment import extract_experiment_channels
 import json
 import numpy as np
 from superqt.fonticon import icon

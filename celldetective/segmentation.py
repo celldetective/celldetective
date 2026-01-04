@@ -6,33 +6,41 @@ import json
 import os
 from typing import List, Optional, Union
 
-from .io import locate_segmentation_model, normalize_multichannel
-from .utils import _estimate_scale_factor, _extract_channel_indices
+from celldetective.utils.model_loaders import locate_segmentation_model
+from celldetective.utils.normalization import normalize_multichannel
 from pathlib import Path
 from tqdm import tqdm
-from celldetective.io import (
-    locate_labels,
+from celldetective.utils.image_loaders import (
     locate_stack,
-    _view_on_napari,
-    _check_label_dims,
-    auto_correct_masks,
-)
-from celldetective.filters import *
-from celldetective.utils import (
-    interpolate_nan_multichannel,
+    locate_labels,
     _rearrange_multichannel_frame,
-    _fix_no_contrast,
     zoom_multiframes,
-    _rescale_labels,
-    rename_intensity_column,
-    mask_edges,
-    _prep_stardist_model,
-    _prep_cellpose_model,
-    estimate_unreliable_edge,
-    _get_normalize_kwargs_from_config,
-    _segment_image_with_stardist_model,
-    _segment_image_with_cellpose_model,
+    _extract_channel_indices,
 )
+from celldetective.utils.mask_cleaning import _check_label_dims, auto_correct_masks
+from celldetective.utils.image_cleaning import (
+    _fix_no_contrast,
+    interpolate_nan_multichannel,
+)
+from celldetective.napari.utils import _view_on_napari
+from celldetective.filters import *
+from celldetective.utils.stardist import (
+    _prep_stardist_model,
+    _segment_image_with_stardist_model,
+)
+from celldetective.utils.cellpose import (
+    _segment_image_with_cellpose_model,
+    _prep_cellpose_model,
+)
+from celldetective.utils.mask_transforms import _rescale_labels
+from celldetective.utils.image_transforms import (
+    estimate_unreliable_edge,
+    mask_edges,
+    _estimate_scale_factor,
+    threshold_image,
+)
+from celldetective.utils.data_cleaning import rename_intensity_column
+from celldetective.utils.parsing import _get_normalize_kwargs_from_config
 
 import scipy.ndimage as ndi
 from skimage.segmentation import watershed
@@ -49,16 +57,17 @@ abs_path = os.sep.join(
     [os.path.split(os.path.dirname(os.path.realpath(__file__)))[0], "celldetective"]
 )
 
+
 def segment(
-    stack: Union[np.ndarray,List],
+    stack: Union[np.ndarray, List],
     model_name: str,
-    channels: Optional[List[str]]=None,
-    spatial_calibration: Optional[float]=None,
-    view_on_napari: bool=False,
-    use_gpu: bool=True,
-    channel_axis: int=-1,
-    cellprob_threshold: float=None,
-    flow_threshold: float=None,
+    channels: Optional[List[str]] = None,
+    spatial_calibration: Optional[float] = None,
+    view_on_napari: bool = False,
+    use_gpu: bool = True,
+    channel_axis: int = -1,
+    cellprob_threshold: float = None,
+    flow_threshold: float = None,
 ):
     """
 
@@ -81,11 +90,11 @@ def segment(
     use_gpu : bool, optional
             Whether to use GPU acceleration if available. Default is True.
     channel_axis : int, optional
-    		Channel axis in the input array. Default is the last (-1).
+                Channel axis in the input array. Default is the last (-1).
     cellprob_threshold : float, optional
-    		Cell probability threshold for Cellpose mask computation. Default is None.
+                Cell probability threshold for Cellpose mask computation. Default is None.
     flow_threshold : float, optional
-    		Flow threshold for Cellpose mask computation. Default is None.
+                Flow threshold for Cellpose mask computation. Default is None.
 
     Returns
     -------
@@ -624,64 +633,6 @@ def identify_markers_from_binary(
         return coords, distance
     else:
         return coords
-
-
-def threshold_image(
-    img,
-    min_threshold,
-    max_threshold,
-    foreground_value=255.0,
-    fill_holes=True,
-    edge_exclusion=None,
-):
-    """
-
-    Threshold the input image to create a binary mask.
-
-    Parameters
-    ----------
-    img : ndarray
-            The input image to be thresholded.
-    min_threshold : float
-            The minimum threshold value.
-    max_threshold : float
-            The maximum threshold value.
-    foreground_value : float, optional
-            The value assigned to foreground pixels in the binary mask. Default is 255.
-    fill_holes : bool, optional
-            Whether to fill holes in the binary mask. If True, the binary mask will be processed to fill any holes.
-            If False, the binary mask will not be modified. Default is True.
-
-    Returns
-    -------
-    ndarray
-            The binary mask after thresholding.
-
-    Notes
-    -----
-    This function applies a threshold to the input image to create a binary mask. Pixels with values within the specified
-    threshold range are considered as foreground and assigned the `foreground_value`, while pixels outside the range are
-    considered as background and assigned 0. If `fill_holes` is True, the binary mask will be processed to fill any holes
-    using morphological operations.
-
-    Examples
-    --------
-    >>> image = np.random.rand(256, 256)
-    >>> binary_mask = threshold_image(image, 0.2, 0.8, foreground_value=1., fill_holes=True)
-
-    """
-
-    binary = np.zeros_like(img).astype(bool)
-    binary[img == img] = (
-        (img[img == img] >= min_threshold)
-        * (img[img == img] <= max_threshold)
-        * foreground_value
-    )
-    if isinstance(edge_exclusion, (int, np.int_)):
-        binary = mask_edges(binary, edge_exclusion)
-    if fill_holes:
-        binary = ndi.binary_fill_holes(binary.astype(int))
-    return binary
 
 
 def filter_image(img, filters=None):

@@ -3,8 +3,6 @@ import os
 from PyQt5.QtWidgets import (
     QGridLayout,
     QMessageBox,
-    QFrame,
-    QSizePolicy,
     QLineEdit,
     QListWidget,
     QVBoxLayout,
@@ -14,34 +12,19 @@ from PyQt5.QtWidgets import (
     QHBoxLayout,
     QCheckBox,
     QFileDialog,
-    QToolButton,
-    QMenu,
-    QStylePainter,
-    QStyleOptionComboBox,
-    QStyle,
 )
-from PyQt5.QtCore import Qt, QSize, QAbstractTableModel, QEvent, pyqtSignal
-from PyQt5.QtGui import QDoubleValidator, QIntValidator, QStandardItemModel, QPalette
+from PyQt5.QtCore import Qt, QSize, QAbstractTableModel
+from PyQt5.QtGui import QDoubleValidator, QIntValidator
 
 from celldetective.gui.base.styles import Styles
 from celldetective.gui.base.components import CelldetectiveWidget
 from superqt.fonticon import icon
 from fonticon_mdi6 import MDI6
 
-from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
-from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT
-import matplotlib.pyplot as plt
 
 from celldetective.gui.base.utils import center_window
-from celldetective.utils import get_software_location
+from celldetective import get_software_location
 
-try:
-    import celldetective.extra_properties as extra_properties
-
-    extra_props = True
-except Exception as e:
-    print(f"The module extra_properties seems corrupted: {e}... Skip...")
-    extra_props = False
 
 from inspect import getmembers, isfunction
 from celldetective.filters import *
@@ -173,159 +156,6 @@ class PreprocessingLayout2(PreprocessingLayout):
         list_grid.setColumnStretch(2, 0)
 
         self.addLayout(main_layout)
-
-
-class QCheckableComboBox(QComboBox):
-    """
-    adapted from https://stackoverflow.com/questions/22775095/pyqt-how-to-set-combobox-items-be-checkable
-    """
-
-    activated = pyqtSignal(str)
-
-    def __init__(self, obj="", parent_window=None, *args, **kwargs):
-
-        super().__init__(parent_window, *args, **kwargs)
-
-        self.setTitle("")
-        self.setModel(QStandardItemModel(self))
-        self.obj = obj
-        self.toolButton = QToolButton(parent_window)
-        self.toolButton.setText("")
-        self.toolMenu = QMenu(parent_window)
-        self.toolButton.setMenu(self.toolMenu)
-        self.toolButton.setPopupMode(QToolButton.InstantPopup)
-        self.anySelected = False
-
-        self.view().viewport().installEventFilter(self)
-        self.view().pressed.connect(self.handleItemPressed)
-
-    def clear(self):
-
-        self.unselectAll()
-        self.toolMenu.clear()
-        super().clear()
-
-    def handleItemPressed(self, index):
-
-        idx = index.row()
-        actions = self.toolMenu.actions()
-
-        item = self.model().itemFromIndex(index)
-        if item.checkState() == Qt.Checked:
-            item.setCheckState(Qt.Unchecked)
-            actions[idx].setChecked(False)
-        else:
-            item.setCheckState(Qt.Checked)
-            actions[idx].setChecked(True)
-            self.anySelected = True
-
-        options_checked = np.array([a.isChecked() for a in actions])
-        if len(options_checked[options_checked]) > 1:
-            self.setTitle(f'Multiple {self.obj+"s"} selected...')
-        elif len(options_checked[options_checked]) == 1:
-            idx_selected = np.where(options_checked)[0][0]
-            if idx_selected != idx:
-                item = self.model().item(idx_selected)
-            self.setTitle(item.text())
-        elif len(options_checked[options_checked]) == 0:
-            self.setTitle(f"No {self.obj} selected...")
-            self.anySelected = False
-
-        self.activated.emit(self.title())
-
-    def setCurrentIndex(self, index):
-
-        super().setCurrentIndex(index)
-
-        item = self.model().item(index)
-        modelIndex = self.model().indexFromItem(item)
-
-        self.handleItemPressed(modelIndex)
-
-    def selectAll(self):
-
-        actions = self.toolMenu.actions()
-        for i, a in enumerate(actions):
-            if not a.isChecked():
-                self.setCurrentIndex(i)
-        self.anySelected = True
-
-    def unselectAll(self):
-
-        actions = self.toolMenu.actions()
-        for i, a in enumerate(actions):
-            if a.isChecked():
-                self.setCurrentIndex(i)
-        self.anySelected = False
-
-    def title(self):
-        return self._title
-
-    def setTitle(self, title):
-        self._title = title
-        self.update()
-        self.repaint()
-
-    def paintEvent(self, event):
-
-        painter = QStylePainter(self)
-        painter.setPen(self.palette().color(QPalette.Text))
-        opt = QStyleOptionComboBox()
-        self.initStyleOption(opt)
-        opt.currentText = self._title
-        painter.drawComplexControl(QStyle.CC_ComboBox, opt)
-        painter.drawControl(QStyle.CE_ComboBoxLabel, opt)
-
-    def addItem(self, item, tooltip=None):
-
-        super().addItem(item)
-        idx = self.findText(item)
-        if tooltip is not None:
-            self.setItemData(idx, tooltip, Qt.ToolTipRole)
-        item2 = self.model().item(idx, 0)
-        item2.setCheckState(Qt.Unchecked)
-        action = self.toolMenu.addAction(item)
-        action.setCheckable(True)
-
-    def addItems(self, items):
-
-        super().addItems(items)
-
-        for item in items:
-
-            idx = self.findText(item)
-            item2 = self.model().item(idx, 0)
-            item2.setCheckState(Qt.Unchecked)
-            action = self.toolMenu.addAction(item)
-            action.setCheckable(True)
-
-    def getSelectedIndices(self):
-
-        actions = self.toolMenu.actions()
-        options_checked = np.array([a.isChecked() for a in actions])
-        idx_selected = np.where(options_checked)[0]
-
-        return list(idx_selected)
-
-    def currentText(self):
-        return self.title()
-
-    def isMultipleSelection(self):
-        return self.currentText().startswith("Multiple")
-
-    def isSingleSelection(self):
-        return not self.currentText().startswith(
-            "Multiple"
-        ) and not self.title().startswith("No")
-
-    def isAnySelected(self):
-        return not self.title().startswith("No")
-
-    def eventFilter(self, source, event):
-        if source is self.view().viewport():
-            if event.type() == QEvent.MouseButtonRelease:
-                return True  # Prevent the popup from closing
-        return super().eventFilter(source, event)
 
 
 class PandasModel(QAbstractTableModel):
@@ -558,20 +388,6 @@ class ExportPlotBtn(QPushButton, Styles):
             self.fig.savefig(fileName, bbox_inches="tight", dpi=300)
 
 
-class QHSeperationLine(QFrame):
-    """
-    a horizontal seperation line\n
-    """
-
-    def __init__(self):
-        super().__init__()
-        self.setMinimumWidth(1)
-        self.setFixedHeight(20)
-        self.setFrameShape(QFrame.HLine)
-        self.setFrameShadow(QFrame.Sunken)
-        self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Minimum)
-
-
 class FeatureChoice(CelldetectiveWidget):
 
     def __init__(self, parent_window):
@@ -601,6 +417,14 @@ class FeatureChoice(CelldetectiveWidget):
             "intensity_max",
             "intensity_min",
         ]
+
+        try:
+            import celldetective.extra_properties as extra_properties
+
+            extra_props = True
+        except Exception as e:
+            print(f"The module extra_properties seems corrupted: {e}... Skip...")
+            extra_props = False
 
         if extra_props:
             members = getmembers(extra_properties, isfunction)
@@ -1011,9 +835,13 @@ class FigureCanvas(CelldetectiveWidget):
         super().__init__()
         self.fig = fig
         self.setWindowTitle(title)
+        from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
+
         self.canvas = FigureCanvasQTAgg(self.fig)
         self.canvas.setStyleSheet("background-color: transparent;")
         if interactive:
+            from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT
+
             self.toolbar = NavigationToolbar2QT(self.canvas)
         self.layout = QVBoxLayout(self)
         self.layout.addWidget(self.canvas, 90)
@@ -1037,7 +865,10 @@ class FigureCanvas(CelldetectiveWidget):
     def closeEvent(self, event):
         """Delete figure on closing window."""
         # self.canvas.ax.cla() # ****
+        # self.canvas.ax.cla() # ****
         self.fig.clf()  # ****
+        import matplotlib.pyplot as plt
+
         plt.close(self.fig)
         super(FigureCanvas, self).closeEvent(event)
 
@@ -1238,6 +1069,8 @@ def color_from_state(state, recently_modified=False):
         elif value == 99:
             color_map[value] = "k"
         else:
+            import matplotlib.pyplot as plt
+
             color_map[value] = plt.cm.tab20(value / 20.0)
 
     return color_map

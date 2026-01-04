@@ -1,8 +1,14 @@
-import configparser
 import os
 from subprocess import Popen
 
-from PyQt5.QtWidgets import QVBoxLayout, QScrollArea, QLabel, QHBoxLayout, QLineEdit, QPushButton
+from PyQt5.QtWidgets import (
+    QVBoxLayout,
+    QScrollArea,
+    QLabel,
+    QHBoxLayout,
+    QLineEdit,
+    QPushButton,
+)
 from PyQt5.QtCore import Qt, QSize
 import configparser
 
@@ -13,9 +19,8 @@ from celldetective.gui.base.components import CelldetectiveWidget
 
 
 class ConfigEditor(CelldetectiveWidget):
-    
-    def __init__(self, parent_window):
 
+    def __init__(self, parent_window):
         """
         Load and edit the experiment config.
         """
@@ -25,7 +30,7 @@ class ConfigEditor(CelldetectiveWidget):
         self.parent_window = parent_window
         self.config_path = self.parent_window.exp_config
 
-        self.setGeometry(500,200,400,700)
+        self.setGeometry(500, 200, 400, 700)
 
         self.setWindowTitle("Configuration")
 
@@ -66,7 +71,7 @@ class ConfigEditor(CelldetectiveWidget):
     def edit_in_text_editor(self):
         path = self.config_path
         try:
-            Popen(f'explorer {os.path.realpath(path)}')
+            Popen(f"explorer {os.path.realpath(path)}")
         except:
 
             try:
@@ -76,7 +81,7 @@ class ConfigEditor(CelldetectiveWidget):
 
     def load_config(self):
         file_name = self.config_path
-        #self.file_edit.setText(file_name)
+        # self.file_edit.setText(file_name)
 
         config = configparser.ConfigParser(interpolation=None)
         config.read(file_name)
@@ -84,7 +89,7 @@ class ConfigEditor(CelldetectiveWidget):
         # Create a layout for each section of the config file
         for section in config.sections():
             section_layout = QVBoxLayout()
-            section_label = QLabel('[{}]'.format(section))
+            section_label = QLabel("[{}]".format(section))
             self.labels.append(section_label)
 
             # Create an editor box for each parameter in the section
@@ -105,13 +110,13 @@ class ConfigEditor(CelldetectiveWidget):
 
         # Add a save button
         save_layout = QHBoxLayout()
-        save_button = QPushButton('Save')
+        save_button = QPushButton("Save")
         save_button.setStyleSheet(self.button_style_sheet)
         save_button.clicked.connect(self.save_config)
         save_button.setShortcut("Return")
-        #save_button.setIcon(QIcon_from_svg(self.parent.abs_path+f"/icons/save.svg", color='white'))
+        # save_button.setIcon(QIcon_from_svg(self.parent.abs_path+f"/icons/save.svg", color='white'))
 
-        #save_layout.addStretch()
+        # save_layout.addStretch()
         save_layout.addWidget(save_button, alignment=Qt.AlignTop)
 
         # Add the save button to the main layout
@@ -121,7 +126,7 @@ class ConfigEditor(CelldetectiveWidget):
     def save_config(self):
         # Save the configuration to the file
         file_name = self.config_path
-            
+
         config = configparser.ConfigParser(interpolation=None)
 
         # Update the values in the config object
@@ -132,7 +137,7 @@ class ConfigEditor(CelldetectiveWidget):
             config.set(section, key, edit_box.text())
 
         # Write the config object to the file
-        with open(file_name, 'w') as f:
+        with open(file_name, "w") as f:
             config.write(f)
 
         self.parent_window.load_configuration()

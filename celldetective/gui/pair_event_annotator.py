@@ -22,16 +22,18 @@ from celldetective.gui.base.components import (
 )
 from celldetective.gui.base.utils import center_window
 from superqt import QLabeledDoubleRangeSlider, QSearchableComboBox
-from celldetective.utils import (
-    extract_experiment_channels,
+from celldetective import (
     get_software_location,
-    _get_img_num_per_channel,
 )
-from celldetective.io import (
-    auto_load_number_of_frames,
-    load_frames,
+from celldetective.utils.experiment import (
+    extract_experiment_channels,
     get_experiment_metadata,
     get_experiment_labels,
+)
+from celldetective.utils.image_loaders import (
+    auto_load_number_of_frames,
+    load_frames,
+    _get_img_num_per_channel,
 )
 from celldetective.gui.gui_utils import (
     FigureCanvas,

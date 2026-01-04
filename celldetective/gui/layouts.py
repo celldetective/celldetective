@@ -16,13 +16,11 @@ from PyQt5.QtWidgets import (
     QGridLayout,
 )
 from celldetective.gui.gui_utils import ThresholdLineEdit, QuickSliderLayout
-from celldetective.gui.base.utils import center_window
 from PyQt5.QtCore import Qt, QSize
 from PyQt5.QtGui import QIntValidator, QDoubleValidator
 
 from superqt import (
     QLabeledRangeSlider,
-    QLabeledDoubleSlider,
     QLabeledSlider,
     QLabeledDoubleRangeSlider,
     QSearchableComboBox,
@@ -30,515 +28,15 @@ from superqt import (
 
 from superqt.fonticon import icon
 from fonticon_mdi6 import MDI6
-from celldetective.utils import _extract_channel_indices_from_config
-from celldetective.gui.viewers import (
-    ThresholdedStackVisualizer,
-    CellEdgeVisualizer,
-    StackVisualizer,
-    CellSizeViewer,
-    ChannelOffsetViewer,
-)
+from celldetective.utils.parsing import _extract_channel_indices_from_config
 from celldetective.gui.base.styles import Styles
 from celldetective.gui.base.components import CelldetectiveWidget
-from celldetective.preprocessing import (
-    correct_background_model,
-    correct_background_model_free,
-    estimate_background_per_condition,
-)
+
 from functools import partial
 from glob import glob
 import os
-import pandas as pd
+
 import numpy as np
-from celldetective.io import locate_segmentation_model, locate_signal_model
-import json
-
-
-class SignalModelParamsWidget(CelldetectiveWidget):
-
-    def __init__(self, parent_window=None, model_name=None, *args, **kwargs):
-
-        super().__init__(*args)
-        self.setWindowTitle("Signals")
-        self.parent_window = parent_window
-        self.model_name = model_name
-        self.locate_model_path()
-        self.required_channels = self.input_config["channels"]
-        self.onlyFloat = QDoubleValidator()
-
-        # Setting up references to parent window attributes
-        if hasattr(self.parent_window.parent_window, "locate_image"):
-            self.attr_parent = self.parent_window.parent_window
-        elif hasattr(self.parent_window.parent_window.parent_window, "locate_image"):
-            self.attr_parent = self.parent_window.parent_window.parent_window
-        else:
-            self.attr_parent = (
-                self.parent_window.parent_window.parent_window.parent_window
-            )
-
-        # Set up layout and widgets
-        self.layout = QVBoxLayout()
-        self.populate_widgets()
-        self.setLayout(self.layout)
-        center_window(self)
-
-    def locate_model_path(self):
-
-        self.model_complete_path = locate_signal_model(self.model_name)
-        if self.model_complete_path is None:
-            print("Model could not be found. Abort.")
-            self.abort_process()
-        else:
-            print(f"Model path: {self.model_complete_path}...")
-
-        if not os.path.exists(self.model_complete_path + "config_input.json"):
-            print(
-                "The configuration for the inputs to the model could not be located. Abort."
-            )
-            self.abort_process()
-
-        with open(self.model_complete_path + "config_input.json") as config_file:
-            self.input_config = json.load(config_file)
-
-    def populate_widgets(self):
-
-        self.n_channels = len(self.required_channels)
-        self.channel_cbs = [QComboBox() for i in range(self.n_channels)]
-
-        self.parent_window.load_available_tables()
-        available_channels = list(self.parent_window.signals) + ["None"]
-        # Populate the comboboxes with available channels from the experiment
-        for k in range(self.n_channels):
-            hbox_channel = QHBoxLayout()
-            hbox_channel.addWidget(QLabel(f"channel {k+1}: "), 33)
-
-            ch_vbox = QVBoxLayout()
-            ch_vbox.addWidget(
-                QLabel(f"Req: {self.required_channels[k]}"), alignment=Qt.AlignLeft
-            )
-            ch_vbox.addWidget(self.channel_cbs[k])
-
-            self.channel_cbs[k].addItems(
-                available_channels
-            )  # Give none option for more than one channel input
-            idx = self.channel_cbs[k].findText(self.required_channels[k])
-
-            if idx >= 0:
-                self.channel_cbs[k].setCurrentIndex(idx)
-            else:
-                self.channel_cbs[k].setCurrentIndex(len(available_channels) - 1)
-
-            hbox_channel.addLayout(ch_vbox, 66)
-            self.layout.addLayout(hbox_channel)
-
-        # Button to apply the StarDist settings
-        self.set_btn = QPushButton("set")
-        self.set_btn.setStyleSheet(self.button_style_sheet)
-        self.set_btn.clicked.connect(
-            self.parent_window.set_selected_signals_for_event_detection
-        )
-        self.layout.addWidget(self.set_btn)
-
-
-class SegModelParamsWidget(CelldetectiveWidget):
-
-    def __init__(
-        self, parent_window=None, model_name="SD_versatile_fluo", *args, **kwargs
-    ):
-
-        super().__init__(*args)
-        self.setWindowTitle("Channels")
-        self.parent_window = parent_window
-        self.model_name = model_name
-        self.locate_model_path()
-        self.required_channels = self.input_config["channels"]
-        self.onlyFloat = QDoubleValidator()
-
-        # Setting up references to parent window attributes
-        if hasattr(self.parent_window.parent_window, "locate_image"):
-            self.attr_parent = self.parent_window.parent_window
-        elif hasattr(self.parent_window.parent_window.parent_window, "locate_image"):
-            self.attr_parent = self.parent_window.parent_window.parent_window
-        else:
-            self.attr_parent = (
-                self.parent_window.parent_window.parent_window.parent_window
-            )
-
-        # Set up layout and widgets
-        self.layout = QVBoxLayout()
-        self.populate_widgets()
-        self.setLayout(self.layout)
-        center_window(self)
-
-    def locate_model_path(self):
-
-        self.model_complete_path = locate_segmentation_model(self.model_name)
-        if self.model_complete_path is None:
-            print("Model could not be found. Abort.")
-            self.abort_process()
-        else:
-            print(f"Model path: {self.model_complete_path}...")
-
-        if not os.path.exists(self.model_complete_path + "config_input.json"):
-            print(
-                "The configuration for the inputs to the model could not be located. Abort."
-            )
-            self.abort_process()
-
-        with open(self.model_complete_path + "config_input.json") as config_file:
-            self.input_config = json.load(config_file)
-
-    def populate_widgets(self):
-
-        self.n_channels = len(self.required_channels)
-        self.channel_cbs = [QComboBox() for i in range(self.n_channels)]
-
-        # Button to view the current stack with a scale bar
-        self.view_diameter_btn = QPushButton()
-        self.view_diameter_btn.setStyleSheet(self.button_select_all)
-        self.view_diameter_btn.setIcon(icon(MDI6.image_check, color="black"))
-        self.view_diameter_btn.setToolTip("View stack.")
-        self.view_diameter_btn.setIconSize(QSize(20, 20))
-        self.view_diameter_btn.clicked.connect(self.view_current_stack_with_scale_bar)
-
-        # Line edit for entering cell diameter
-        self.diameter_le = ThresholdLineEdit(
-            init_value=40,
-            connected_buttons=[self.view_diameter_btn],
-            placeholder="cell diameter in µm",
-            value_type="float",
-        )
-
-        available_channels = list(self.attr_parent.exp_channels) + ["None"]
-        # Populate the comboboxes with available channels from the experiment
-        for k in range(self.n_channels):
-            hbox_channel = QHBoxLayout()
-            hbox_channel.addWidget(QLabel(f"channel {k+1}: "), 33)
-
-            ch_vbox = QVBoxLayout()
-            ch_vbox.addWidget(
-                QLabel(f"Req: {self.required_channels[k]}"), alignment=Qt.AlignLeft
-            )
-            ch_vbox.addWidget(self.channel_cbs[k])
-
-            self.channel_cbs[k].addItems(
-                available_channels
-            )  # Give none option for more than one channel input
-            idx = self.channel_cbs[k].findText(self.required_channels[k])
-
-            if idx >= 0:
-                self.channel_cbs[k].setCurrentIndex(idx)
-            else:
-                self.channel_cbs[k].setCurrentIndex(len(available_channels) - 1)
-
-            hbox_channel.addLayout(ch_vbox, 66)
-            self.layout.addLayout(hbox_channel)
-
-        if "cell_size_um" in self.input_config:
-
-            # Layout for diameter input and button
-            hbox = QHBoxLayout()
-            hbox.addWidget(QLabel("cell size [µm]: "), 33)
-            hbox.addWidget(self.diameter_le, 61)
-            hbox.addWidget(self.view_diameter_btn)
-            self.layout.addLayout(hbox)
-
-            self.diameter_le.set_threshold(self.input_config["cell_size_um"])
-
-            # size_hbox = QHBoxLayout()
-            # size_hbox.addWidget(QLabel('cell size [µm]: '), 33)
-            # self.size_le = QLineEdit(str(self.input_config['cell_size_um']).replace('.',','))
-            # self.size_le.setValidator(self.onlyFloat)
-            # size_hbox.addWidget(self.size_le, 66)
-            # self.layout.addLayout(size_hbox)
-
-        # Button to apply the StarDist settings
-        self.set_btn = QPushButton("set")
-        self.set_btn.setStyleSheet(self.button_style_sheet)
-        self.set_btn.clicked.connect(
-            self.parent_window.set_selected_channels_for_segmentation
-        )
-        self.layout.addWidget(self.set_btn)
-
-    def view_current_stack_with_scale_bar(self):
-        """
-        Displays the current image stack with a scale bar, allowing users to visually estimate cell diameters.
-        """
-
-        self.attr_parent.locate_image()
-        if self.attr_parent.current_stack is not None:
-            max_size = np.amax([self.attr_parent.shape_x, self.attr_parent.shape_y])
-            self.viewer = CellSizeViewer(
-                initial_diameter=float(self.diameter_le.text().replace(",", ".")),
-                parent_le=self.diameter_le,
-                stack_path=self.attr_parent.current_stack,
-                window_title=f"Position {self.attr_parent.position_list.currentText()}",
-                diameter_slider_range=(0, max_size * self.attr_parent.PxToUm),
-                frame_slider=True,
-                contrast_slider=True,
-                channel_cb=True,
-                channel_names=self.attr_parent.exp_channels,
-                n_channels=self.attr_parent.nbr_channels,
-                PxToUm=self.attr_parent.PxToUm,
-            )
-            self.viewer.show()
-
-
-class StarDistParamsWidget(CelldetectiveWidget):
-    """
-    A widget to configure parameters for StarDist segmentation.
-
-    This widget allows the user to select specific imaging channels for segmentation and adjust
-    parameters for StarDist, a neural network-based image segmentation tool designed to segment
-    star-convex shapes (typically nuclei).
-
-    Parameters
-    ----------
-    parent_window : QWidget, optional
-            The parent window hosting this widget (default is None).
-    model_name : str, optional
-            The name of the StarDist model being used, typically 'SD_versatile_fluo' for versatile
-            fluorescence or 'SD_versatile_he' for H&E-stained images (default is 'SD_versatile_fluo').
-    """
-
-    def __init__(
-        self, parent_window=None, model_name="SD_versatile_fluo", *args, **kwargs
-    ):
-
-        super().__init__(*args)
-        self.setWindowTitle("Channels")
-        self.parent_window = parent_window
-        self.model_name = model_name
-
-        # Setting up references to parent window attributes
-        if hasattr(self.parent_window.parent_window, "locate_image"):
-            self.attr_parent = self.parent_window.parent_window
-        elif hasattr(self.parent_window.parent_window.parent_window, "locate_image"):
-            self.attr_parent = self.parent_window.parent_window.parent_window
-        else:
-            self.attr_parent = (
-                self.parent_window.parent_window.parent_window.parent_window
-            )
-
-        # Set up layout and widgets
-        self.layout = QVBoxLayout()
-        self.populate_widgets()
-        self.setLayout(self.layout)
-        center_window(self)
-
-    def populate_widgets(self):
-        """
-        Populates the widget with channel selection comboboxes and a 'set' button to configure
-        the StarDist segmentation settings. Handles different models by adjusting the number of
-        available channels.
-        """
-
-        # Initialize comboboxes based on the selected model
-        self.stardist_channel_cb = [QComboBox() for i in range(1)]
-        self.stardist_channel_template = ["live_nuclei_channel"]
-        max_i = 1
-
-        # If the H&E model is selected, update the combobox configuration
-        if self.model_name == "SD_versatile_he":
-            self.stardist_channel_template = ["H&E_1", "H&E_2", "H&E_3"]
-            self.stardist_channel_cb = [QComboBox() for i in range(3)]
-            max_i = 3
-
-        # Populate the comboboxes with available channels from the experiment
-        for k in range(max_i):
-            hbox_channel = QHBoxLayout()
-            hbox_channel.addWidget(QLabel(f"channel {k+1}: "))
-            hbox_channel.addWidget(self.stardist_channel_cb[k])
-            if k == 1:
-                self.stardist_channel_cb[k].addItems(
-                    list(self.attr_parent.exp_channels) + ["None"]
-                )
-            else:
-                self.stardist_channel_cb[k].addItems(
-                    list(self.attr_parent.exp_channels)
-                )
-
-            # Set the default channel based on the template or fallback to the first option
-            idx = self.stardist_channel_cb[k].findText(
-                self.stardist_channel_template[k]
-            )
-            if idx > 0:
-                self.stardist_channel_cb[k].setCurrentIndex(idx)
-            else:
-                self.stardist_channel_cb[k].setCurrentIndex(0)
-
-            self.layout.addLayout(hbox_channel)
-
-        # Button to apply the StarDist settings
-        self.set_stardist_scale_btn = QPushButton("set")
-        self.set_stardist_scale_btn.setStyleSheet(self.button_style_sheet)
-        self.set_stardist_scale_btn.clicked.connect(
-            self.parent_window.set_stardist_scale
-        )
-        self.layout.addWidget(self.set_stardist_scale_btn)
-
-
-class CellposeParamsWidget(CelldetectiveWidget):
-    """
-    A widget to configure parameters for Cellpose segmentation, allowing users to set the cell diameter,
-    select imaging channels, and adjust flow and cell probability thresholds for cell detection.
-
-    This widget is designed for estimating cell diameters and configuring parameters for Cellpose,
-    a deep learning-based segmentation tool. It also provides functionality to preview the image stack with a scale bar.
-
-    Parameters
-    ----------
-    parent_window : QWidget, optional
-            The parent window that hosts the widget (default is None).
-    model_name : str, optional
-            The name of the Cellpose model being used, typically 'CP_cyto2' for cytoplasm or 'CP_nuclei' for nuclei segmentation
-            (default is 'CP_cyto2').
-
-    Notes
-    -----
-    - This widget assumes that the parent window or one of its ancestor windows has access to the experiment channels
-      and can locate the current image stack via `locate_image()`.
-    - This class integrates sliders for flow and cell probability thresholds, as well as a channel selection for running
-      Cellpose segmentation.
-    - The `view_current_stack_with_scale_bar()` method opens a new window where the user can visually inspect the
-      image stack with a superimposed scale bar, to better estimate the cell diameter.
-
-    """
-
-    def __init__(self, parent_window=None, model_name="CP_cyto2", *args, **kwargs):
-
-        super().__init__(*args)
-        self.setWindowTitle("Estimate diameter")
-        self.parent_window = parent_window
-        self.model_name = model_name
-
-        # Setting up references to parent window attributes
-        if hasattr(self.parent_window.parent_window, "locate_image"):
-            self.attr_parent = self.parent_window.parent_window
-        elif hasattr(self.parent_window.parent_window.parent_window, "locate_image"):
-            self.attr_parent = self.parent_window.parent_window.parent_window
-        else:
-            self.attr_parent = (
-                self.parent_window.parent_window.parent_window.parent_window
-            )
-
-        # Layout and widgets setup
-        self.layout = QVBoxLayout()
-        self.populate_widgets()
-        self.setLayout(self.layout)
-        center_window(self)
-
-    def populate_widgets(self):
-        """
-        Populates the widget with UI elements such as buttons, sliders, and comboboxes to allow configuration
-        of Cellpose segmentation parameters.
-        """
-
-        # Button to view the current stack with a scale bar
-        self.view_diameter_btn = QPushButton()
-        self.view_diameter_btn.setStyleSheet(self.button_select_all)
-        self.view_diameter_btn.setIcon(icon(MDI6.image_check, color="black"))
-        self.view_diameter_btn.setToolTip("View stack.")
-        self.view_diameter_btn.setIconSize(QSize(20, 20))
-        self.view_diameter_btn.clicked.connect(self.view_current_stack_with_scale_bar)
-
-        # Line edit for entering cell diameter
-        self.diameter_le = ThresholdLineEdit(
-            init_value=40,
-            connected_buttons=[self.view_diameter_btn],
-            placeholder="cell diameter in pixels",
-            value_type="float",
-        )
-
-        # Comboboxes for selecting imaging channels
-        self.cellpose_channel_cb = [QComboBox() for i in range(2)]
-        self.cellpose_channel_template = ["brightfield_channel", "live_nuclei_channel"]
-        if self.model_name == "CP_nuclei":
-            self.cellpose_channel_template = ["live_nuclei_channel", "None"]
-
-        for k in range(2):
-            hbox_channel = QHBoxLayout()
-            hbox_channel.addWidget(QLabel(f"channel {k+1}: "))
-            hbox_channel.addWidget(self.cellpose_channel_cb[k])
-            if k == 1:
-                self.cellpose_channel_cb[k].addItems(
-                    list(self.attr_parent.exp_channels) + ["None"]
-                )
-            else:
-                self.cellpose_channel_cb[k].addItems(
-                    list(self.attr_parent.exp_channels)
-                )
-            idx = self.cellpose_channel_cb[k].findText(
-                self.cellpose_channel_template[k]
-            )
-            if idx > 0:
-                self.cellpose_channel_cb[k].setCurrentIndex(idx)
-            else:
-                self.cellpose_channel_cb[k].setCurrentIndex(0)
-
-            if k == 1:
-                idx = self.cellpose_channel_cb[k].findText("None")
-                self.cellpose_channel_cb[k].setCurrentIndex(idx)
-
-            self.layout.addLayout(hbox_channel)
-
-        # Layout for diameter input and button
-        hbox = QHBoxLayout()
-        hbox.addWidget(QLabel("diameter [px]: "), 33)
-        hbox.addWidget(self.diameter_le, 61)
-        hbox.addWidget(self.view_diameter_btn)
-        self.layout.addLayout(hbox)
-
-        # Flow threshold slider
-        self.flow_slider = QLabeledDoubleSlider()
-        self.flow_slider.setOrientation(Qt.Horizontal)
-        self.flow_slider.setRange(-6, 6)
-        self.flow_slider.setValue(0.4)
-        hbox = QHBoxLayout()
-        hbox.addWidget(QLabel("flow threshold: "), 33)
-        hbox.addWidget(self.flow_slider, 66)
-        self.layout.addLayout(hbox)
-
-        # Cell probability threshold slider
-        self.cellprob_slider = QLabeledDoubleSlider()
-        self.cellprob_slider.setOrientation(Qt.Horizontal)
-        self.cellprob_slider.setRange(-6, 6)
-        self.cellprob_slider.setValue(0.0)
-        hbox = QHBoxLayout()
-        hbox.addWidget(QLabel("cellprob threshold: "), 33)
-        hbox.addWidget(self.cellprob_slider, 66)
-        self.layout.addLayout(hbox)
-
-        # Button to set the scale for Cellpose segmentation
-        self.set_cellpose_scale_btn = QPushButton("set")
-        self.set_cellpose_scale_btn.setStyleSheet(self.button_style_sheet)
-        self.set_cellpose_scale_btn.clicked.connect(
-            self.parent_window.set_cellpose_scale
-        )
-        self.layout.addWidget(self.set_cellpose_scale_btn)
-
-    def view_current_stack_with_scale_bar(self):
-        """
-        Displays the current image stack with a scale bar, allowing users to visually estimate cell diameters.
-        """
-
-        self.attr_parent.locate_image()
-        if self.attr_parent.current_stack is not None:
-            max_size = np.amax([self.attr_parent.shape_x, self.attr_parent.shape_y])
-            self.viewer = CellSizeViewer(
-                initial_diameter=float(self.diameter_le.text().replace(",", ".")),
-                parent_le=self.diameter_le,
-                stack_path=self.attr_parent.current_stack,
-                window_title=f"Position {self.attr_parent.position_list.currentText()}",
-                diameter_slider_range=(0, max_size),
-                frame_slider=True,
-                contrast_slider=True,
-                channel_cb=True,
-                channel_names=self.attr_parent.exp_channels,
-                n_channels=self.attr_parent.nbr_channels,
-                PxToUm=1,
-            )
-            self.viewer.show()
 
 
 class ChannelNormGenerator(QVBoxLayout, Styles):
@@ -630,6 +128,8 @@ class ChannelNormGenerator(QVBoxLayout, Styles):
             )
             all_measurements = []
             for tab in tables:
+                import pandas as pd
+
                 cols = pd.read_csv(tab, nrows=1).columns.tolist()
                 all_measurements.extend(cols)
             all_measurements = np.unique(all_measurements)
@@ -1005,6 +505,7 @@ class BackgroundFitCorrectionLayout(QGridLayout, Styles):
         self.target_channel = channel_indices[0]
 
     def set_threshold_graphically(self):
+        from celldetective.gui.viewers import ThresholdedStackVisualizer
 
         self.attr_parent.locate_image()
         self.set_target_channel()
@@ -1023,6 +524,8 @@ class BackgroundFitCorrectionLayout(QGridLayout, Styles):
             self.viewer.show()
 
     def preview_correction(self):
+        from celldetective.preprocessing import correct_background_model
+        from celldetective.gui.viewers import StackVisualizer
 
         if (
             self.attr_parent.well_list.isMultipleSelection()
@@ -1120,6 +623,7 @@ class LocalCorrectionLayout(BackgroundFitCorrectionLayout):
         self.corrected_stack_viewer.hide()
 
     def set_distance_graphically(self):
+        from celldetective.gui.viewers import CellEdgeVisualizer
 
         self.attr_parent.locate_image()
         self.set_target_channel()
@@ -1429,6 +933,7 @@ class ChannelOffsetOptionsLayout(QVBoxLayout, Styles):
         self.target_channel = channel_indices[0]
 
     def open_offset_viewer(self):
+        from celldetective.gui.viewers import ChannelOffsetViewer
 
         self.attr_parent.locate_image()
         self.set_target_channel()
@@ -1478,9 +983,6 @@ class BackgroundModelFreeCorrectionLayout(QGridLayout, Styles):
         self.tiles_rb = QRadioButton("tiles")
         self.acq_mode_group.addButton(self.timeseries_rb, 0)
         self.acq_mode_group.addButton(self.tiles_rb, 1)
-
-        from PyQt5.QtWidgets import QSlider
-        from superqt import QRangeSlider
 
         self.frame_range_slider = QLabeledRangeSlider(parent=None)
 
@@ -1714,6 +1216,7 @@ class BackgroundModelFreeCorrectionLayout(QGridLayout, Styles):
         self.target_channel = channel_indices[0]
 
     def set_threshold_graphically(self):
+        from celldetective.gui.viewers import ThresholdedStackVisualizer
 
         self.attr_parent.locate_image()
         self.set_target_channel()
@@ -1732,6 +1235,8 @@ class BackgroundModelFreeCorrectionLayout(QGridLayout, Styles):
             self.viewer.show()
 
     def preview_correction(self):
+        from celldetective.preprocessing import correct_background_model_free
+        from celldetective.gui.viewers import StackVisualizer
 
         if (
             self.attr_parent.well_list.isMultipleSelection()
@@ -1824,6 +1329,8 @@ class BackgroundModelFreeCorrectionLayout(QGridLayout, Styles):
                 c.setEnabled(False)
 
     def estimate_bg(self):
+        from celldetective.preprocessing import estimate_background_per_condition
+        from celldetective.gui.viewers import StackVisualizer
 
         if self.timeseries_rb.isChecked():
             mode = "timeseries"

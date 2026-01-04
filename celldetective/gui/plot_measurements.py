@@ -20,14 +20,15 @@ from celldetective.gui.base.utils import center_window
 
 from superqt.fonticon import icon
 from fonticon_mdi6 import MDI6
-from celldetective.utils import get_software_location, _extract_labels_from_config
-from celldetective.io import (
-    load_experiment_tables,
-    get_experiment_antibodies,
-    get_experiment_cell_types,
-    get_experiment_concentrations,
-    get_positions_in_well,
+from celldetective import get_software_location
+from celldetective.utils.parsing import _extract_labels_from_config
+from celldetective.utils.data_loaders import load_experiment_tables
+from celldetective.utils.experiment import (
     get_experiment_wells,
+    get_experiment_concentrations,
+    get_experiment_cell_types,
+    get_experiment_antibodies,
+    get_positions_in_well,
 )
 import numpy as np
 import json

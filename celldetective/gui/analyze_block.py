@@ -8,8 +8,6 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, QSize
 from PyQt5.QtGui import QIcon
-from celldetective.gui.survival_ui import ConfigSurvival
-from celldetective.gui.plot_signals_ui import ConfigSignalPlot
 import os
 from celldetective.gui.base.styles import Styles
 from glob import glob
@@ -110,6 +108,7 @@ class AnalysisPanel(QFrame, Styles):
                 self.pop_exists = True
 
     def configure_survival(self):
+        from celldetective.gui.survival_ui import ConfigSurvival
 
         self.check_for_tables()
         if self.pop_exists:
@@ -121,6 +120,7 @@ class AnalysisPanel(QFrame, Styles):
             return None
 
     def configure_plot_signals(self):
+        from celldetective.gui.plot_signals_ui import ConfigSignalPlot
 
         self.check_for_tables()
         if self.pop_exists:

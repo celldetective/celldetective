@@ -17,13 +17,13 @@ from celldetective.gui.layouts import ChannelNormGenerator
 from superqt import QLabeledDoubleSlider, QLabeledSlider
 from superqt.fonticon import icon
 from fonticon_mdi6 import MDI6
-from celldetective.io import (
-    get_segmentation_datasets_list,
-    locate_segmentation_dataset,
+from celldetective.utils.model_getters import (
     get_segmentation_models_list,
+    get_segmentation_datasets_list,
 )
-from celldetective.segmentation import train_segmentation_model
-from celldetective.gui.layouts import CellposeParamsWidget
+from celldetective.utils.model_loaders import locate_segmentation_dataset
+
+from celldetective.gui.settings._cellpose_model_params import CellposeParamsWidget
 import numpy as np
 import json
 import os
@@ -675,6 +675,8 @@ class SettingsSegmentationModelTraining(CelldetectiveSettingsPanel):
         # 	pass
         # elif result == QDialog.Rejected:
         # 	return None
+
+        from celldetective.segmentation import train_segmentation_model
 
         train_segmentation_model(
             self.instructions,

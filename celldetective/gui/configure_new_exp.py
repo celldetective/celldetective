@@ -15,7 +15,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtGui import QIntValidator, QDoubleValidator
 from celldetective.gui.gui_utils import help_generic
 from celldetective.gui.base.utils import center_window
-from celldetective.utils import get_software_location
+from celldetective import get_software_location
 import json
 
 from superqt import QLabeledSlider

@@ -2,10 +2,7 @@ import json
 import os
 from glob import glob
 
-from matplotlib.figure import Figure
 import numpy as np
-import pandas as pd
-import scipy.ndimage as ndi
 from PyQt5.QtCore import Qt, QSize
 from PyQt5.QtGui import QDoubleValidator, QIntValidator
 from PyQt5.QtWidgets import (
@@ -26,21 +23,25 @@ from PyQt5.QtWidgets import (
     QButtonGroup,
 )
 from fonticon_mdi6 import MDI6
-from skimage.measure import regionprops_table
+
 from superqt import QLabeledSlider, QLabeledDoubleRangeSlider
 from superqt.fonticon import icon
 
 from celldetective.gui.gui_utils import PreprocessingLayout
-from celldetective.gui.base.components import generic_message, CelldetectiveMainWindow, CelldetectiveWidget
+from celldetective.gui.base.components import (
+    generic_message,
+    CelldetectiveMainWindow,
+    CelldetectiveWidget,
+)
 from celldetective.gui.gui_utils import FigureCanvas, color_from_class, help_generic
 from celldetective.gui.viewers import ThresholdedStackVisualizer
-from celldetective.io import load_frames
-from celldetective.segmentation import identify_markers_from_binary, apply_watershed
-from celldetective.utils import (
+from celldetective.utils.image_loaders import load_frames
+
+from celldetective import (
     get_software_location,
-    extract_experiment_channels,
-    rename_intensity_column,
 )
+from celldetective.utils.data_cleaning import rename_intensity_column
+from celldetective.utils.experiment import extract_experiment_channels
 import logging
 
 logger = logging.getLogger(__name__)
@@ -451,6 +452,8 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
         Define properties scatter.
         """
 
+        from matplotlib.figure import Figure
+
         self.fig_props = Figure(tight_layout=True)
         self.ax_props = self.fig_props.add_subplot(111)
         self.propscanvas = FigureCanvas(self.fig_props, interactive=True)
@@ -463,6 +466,8 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
     def initialize_histogram(self):
 
         self.img = self.viewer.init_frame
+
+        from matplotlib.figure import Figure
 
         self.fig_hist = Figure(tight_layout=True)
         self.ax_hist = self.fig_hist.add_subplot(111)
@@ -572,7 +577,7 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
         """
         Move the threshold values on histogram, when slider is moved.
         """
-
+        print(f"DEBUG: Wizard threshold_changed value: {value}, type: {type(value)}")
         self.clear_post_threshold_options()
         self.viewer.change_threshold(value)
 
@@ -624,6 +629,8 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
         if self.viewer.mask.ndim == 3:
             self.viewer.mask = np.squeeze(self.viewer.mask)
 
+        from celldetective.segmentation import identify_markers_from_binary
+
         self.coords, self.edt_map = identify_markers_from_binary(
             self.viewer.mask,
             self.min_dist,
@@ -641,6 +648,9 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
             self.watershed_btn.setEnabled(False)
 
     def apply_watershed_to_selection(self):
+
+        import scipy.ndimage as ndi
+        from celldetective.segmentation import apply_watershed
 
         if self.marker_option.isChecked():
             self.labels = apply_watershed(
@@ -666,6 +676,9 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
             self.features_cb[i].currentTextChanged.connect(self.update_props_scatter)
 
     def compute_features(self):
+
+        import pandas as pd
+        from skimage.measure import regionprops_table
 
         # Run regionprops to have properties for filtering
         intensity_image_idx = [self.nbr_channels * self.viewer.frame_slider.value()]

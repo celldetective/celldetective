@@ -2,7 +2,7 @@ import pytest
 from PyQt5 import QtCore
 from PyQt5.QtWidgets import QApplication
 from celldetective.gui.InitWindow import AppInitWindow
-from celldetective.utils import get_software_location
+from celldetective import get_software_location
 import os
 from unittest.mock import patch
 import shutil

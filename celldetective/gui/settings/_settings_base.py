@@ -7,9 +7,12 @@ from PyQt5.QtWidgets import (
     QPushButton,
 )
 from PyQt5.QtCore import Qt
-from celldetective.utils import get_software_location
+from celldetective import get_software_location
 from celldetective.gui.base.utils import center_window
-from celldetective.gui.base.components import CelldetectiveMainWindow, CelldetectiveWidget
+from celldetective.gui.base.components import (
+    CelldetectiveMainWindow,
+    CelldetectiveWidget,
+)
 from PyQt5.QtGui import QDoubleValidator, QIntValidator
 
 

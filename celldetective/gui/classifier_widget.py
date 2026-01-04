@@ -23,7 +23,7 @@ import json
 from celldetective.exceptions import EmptyQueryError, MissingColumnsError, QueryError
 from celldetective.gui.gui_utils import FigureCanvas, color_from_status, help_generic
 from celldetective.gui.base.components import CelldetectiveWidget
-from celldetective.utils import get_software_location
+from celldetective import get_software_location
 from celldetective.measure import (
     classify_cells_from_query,
     interpret_track_classification,
