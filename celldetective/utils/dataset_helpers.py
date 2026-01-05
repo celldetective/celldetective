@@ -1,5 +1,7 @@
 import numpy as np
-from sklearn.utils import compute_class_weight
+from celldetective import get_logger
+
+logger = get_logger()
 
 
 def split_by_ratio(arr, *ratios):
@@ -88,6 +90,7 @@ def compute_weights(y):
     # Compute class weights for the multi-class labels.
 
     """
+    from sklearn.utils import compute_class_weight
 
     class_weights = compute_class_weight(
         class_weight="balanced",
@@ -141,7 +144,7 @@ def train_test_split(
     """
 
     if data_class is not None:
-        print(
+        logger.info(
             f"Unique classes: {np.sort(np.argmax(np.unique(data_class,axis=0),axis=1))}"
         )
 

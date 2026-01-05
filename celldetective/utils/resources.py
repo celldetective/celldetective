@@ -1,4 +1,4 @@
-from tensorflow.python.framework.config import list_physical_devices
+from tensorflow.config import list_physical_devices
 
 
 def auto_find_gpu():

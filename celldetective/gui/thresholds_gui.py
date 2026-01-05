@@ -250,6 +250,9 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
         for p in self.properties_box_widgets:
             p.setEnabled(False)
 
+        # Force initial update after all UI elements are created
+        self.threshold_changed(self.threshold_slider.value())
+
     def help_prefilter(self):
         """
         Helper for prefiltering strategy
@@ -577,7 +580,6 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
         """
         Move the threshold values on histogram, when slider is moved.
         """
-        print(f"DEBUG: Wizard threshold_changed value: {value}, type: {type(value)}")
         self.clear_post_threshold_options()
         self.viewer.change_threshold(value)
 
@@ -599,10 +601,8 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
             self.ylog_check.setIcon(icon(MDI6.math_log, color="black"))
 
         # self.ax_hist.autoscale()
-        self.ax_hist.set_ylim(0, self.hist_y.max())
-        self.canvas_hist.canvas.draw_idle()
-
-        self.ax_hist.set_ylim(0, self.hist_y.max())
+        ymin = 0 if self.ax_hist.get_yscale() == "linear" else 1e-1
+        self.ax_hist.set_ylim(ymin, self.hist_y.max())
         self.canvas_hist.canvas.draw_idle()
 
     def toggle_fill_holes(self):

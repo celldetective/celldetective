@@ -6,7 +6,7 @@ import time
 from glob import glob
 from subprocess import Popen, check_output
 
-from PyQt5.QtCore import QUrl, Qt
+from PyQt5.QtCore import QUrl, Qt, QThread
 from PyQt5.QtGui import QDesktopServices, QIntValidator
 from PyQt5.QtWidgets import (
     QAction,
@@ -33,6 +33,23 @@ from celldetective.gui.base.utils import center_window, pretty_table
 from celldetective.log_manager import get_logger
 
 logger = get_logger("celldetective")
+
+
+class BackgroundLoader(QThread):
+    def run(self):
+        logger.info("Loading background packages...")
+        try:
+            from celldetective.gui.control_panel import ControlPanel
+            from celldetective.gui.about import AboutWidget
+            from celldetective.processes.downloader import DownloadProcess
+            from celldetective.gui.configure_new_exp import ConfigNewExperiment
+            import pandas
+            import matplotlib.pyplot
+            import scipy.ndimage
+            import tifffile
+        except Exception:
+            logger.error("Background packages not loaded...")
+        logger.info("Background packages loaded...")
 
 
 class AppInitWindow(CelldetectiveMainWindow):
@@ -75,6 +92,9 @@ class AppInitWindow(CelldetectiveMainWindow):
         self.adjustSize()
         self.setFixedSize(self.size())
         self.show()
+
+        self.bg_loader = BackgroundLoader()
+        self.bg_loader.start()
 
     def closeEvent(self, event):
 
@@ -345,8 +365,8 @@ class AppInitWindow(CelldetectiveMainWindow):
         self.validate_thread_btn.setStyleSheet(self.button_style_sheet)
         self.validate_thread_btn.clicked.connect(self.set_threads)
         layout.addWidget(self.validate_thread_btn)
-        center_window(self.threads_widget)
         self.threads_widget.show()
+        center_window(self.threads_widget)
 
     def set_threads(self):
         self.n_threads = int(self.threads_le.text())
@@ -430,6 +450,7 @@ class AppInitWindow(CelldetectiveMainWindow):
         logger.info("Configuring new experiment...")
         self.new_exp_window = ConfigNewExperiment(self)
         self.new_exp_window.show()
+        center_window(self.new_exp_window)
 
     def open_directory(self):
         self.t_ref = time.time()

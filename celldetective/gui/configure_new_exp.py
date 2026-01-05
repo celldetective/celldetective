@@ -42,40 +42,30 @@ class ConfigNewExperiment(CelldetectiveMainWindow):
         super().__init__()
         self.parent_window = parent_window
         self.setWindowTitle("New experiment")
-        center_window(self)
         self.setFixedWidth(500)
         self.setMaximumHeight(int(0.8 * self.parent_window.screen_height))
         self.onlyFloat = QDoubleValidator()
-
         self.newExpFolder = str(
             QFileDialog.getExistingDirectory(self, "Select directory")
         )
-        self.populate_widget()
+        self.init_widgets()
+        self.add_to_layout()
+        self.connect_signals()
+        QApplication.processEvents()
+        self.adjustScrollArea()
 
-    def populate_widget(self):
-
-        # Create button widget and layout
+    def init_widgets(self):
         self.scroll_area = QScrollArea(self)
-        button_widget = CelldetectiveWidget()
         self.grid = QGridLayout()
-        button_widget.setLayout(self.grid)
 
-        self.grid.setContentsMargins(30, 30, 30, 30)
-        self.grid.addWidget(QLabel("Folder:"), 0, 0, 1, 3)
         self.supFolder = QLineEdit()
         self.supFolder.setAlignment(Qt.AlignLeft)
         self.supFolder.setEnabled(True)
         self.supFolder.setText(self.newExpFolder)
-        self.grid.addWidget(self.supFolder, 1, 0, 1, 1)
 
         self.browse_button = QPushButton("Browse...")
-        self.browse_button.clicked.connect(self.browse_experiment_folder)
         self.browse_button.setIcon(icon(MDI6.folder, color="white"))
         self.browse_button.setStyleSheet(self.button_style_sheet)
-        # self.browse_button.setIcon(QIcon_from_svg(abs_path+f"/icons/browse.svg", color='white'))
-        self.grid.addWidget(self.browse_button, 1, 1, 1, 1)
-
-        self.grid.addWidget(QLabel("Experiment name:"), 2, 0, 1, 3)
 
         self.expName = QLineEdit()
         self.expName.setPlaceholderText("folder_name_for_the_experiment")
@@ -83,9 +73,32 @@ class ConfigNewExperiment(CelldetectiveMainWindow):
         self.expName.setEnabled(True)
         self.expName.setFixedWidth(400)
         self.expName.setText("Untitled_Experiment")
-        self.grid.addWidget(self.expName, 3, 0, 1, 3)
 
         self.generate_movie_settings()
+
+        self.validate_button = QPushButton("Submit")
+        self.validate_button.setStyleSheet(self.button_style_sheet)
+
+    def connect_signals(self):
+        self.browse_button.clicked.connect(self.browse_experiment_folder)
+        self.validate_button.clicked.connect(self.create_config)
+
+    def add_to_layout(self):
+
+        button_widget = CelldetectiveWidget()
+        button_widget.setLayout(self.grid)
+
+        self.grid.setContentsMargins(30, 30, 30, 30)
+        self.grid.addWidget(QLabel("Folder:"), 0, 0, 1, 3)
+
+        self.grid.addWidget(self.supFolder, 1, 0, 1, 1)
+
+        self.grid.addWidget(self.browse_button, 1, 1, 1, 1)
+
+        self.grid.addWidget(QLabel("Experiment name:"), 2, 0, 1, 3)
+
+        self.grid.addWidget(self.expName, 3, 0, 1, 3)
+
         self.grid.addLayout(self.ms_grid, 29, 0, 1, 3)
 
         self.generate_channel_params_box()
@@ -93,11 +106,6 @@ class ConfigNewExperiment(CelldetectiveMainWindow):
 
         self.generate_population_params_box()
         self.grid.addLayout(self.population_grid, 31, 0, 1, 3)
-
-        self.validate_button = QPushButton("Submit")
-        self.validate_button.clicked.connect(self.create_config)
-        self.validate_button.setStyleSheet(self.button_style_sheet)
-        # self.validate_button.setIcon(QIcon_from_svg(abs_path+f"/icons/process.svg", color='white'))
 
         self.grid.addWidget(self.validate_button, 32, 0, 1, 3, alignment=Qt.AlignBottom)
         button_widget.adjustSize()
@@ -109,9 +117,6 @@ class ConfigNewExperiment(CelldetectiveMainWindow):
         self.scroll_area.setWidgetResizable(True)
         self.setCentralWidget(self.scroll_area)
         self.show()
-
-        QApplication.processEvents()
-        self.adjustScrollArea()
 
     def adjustScrollArea(self):
         """
@@ -561,7 +566,7 @@ class ConfigNewExperiment(CelldetectiveMainWindow):
             name = str(self.expName.text())
             name = name.replace(" ", "")
 
-            self.directory = os.sep.join([folder, name])
+            self.directory = "/".join([folder, name])
             os.mkdir(self.directory)
             os.chdir(self.directory)
             self.create_subfolders()

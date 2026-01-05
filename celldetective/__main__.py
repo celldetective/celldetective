@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
 import sys
+import os
+
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+
 from PyQt5.QtWidgets import QApplication, QSplashScreen
 from PyQt5.QtGui import QPixmap
 from os import sep

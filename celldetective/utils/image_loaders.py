@@ -8,7 +8,6 @@ import numpy as np
 from csbdeep.io import save_tiff_imagej_compatible
 from imageio import v2 as imageio
 from natsort import natsorted
-from natsort import natsorted
 from tifffile import imread, TiffFile
 
 from celldetective.utils.image_cleaning import (
@@ -16,6 +15,9 @@ from celldetective.utils.image_cleaning import (
     interpolate_nan_multichannel,
 )
 from celldetective.utils.normalization import normalize_multichannel
+from celldetective import get_logger
+
+logger = get_logger(__name__)
 
 
 def locate_stack(position, prefix="Aligned"):
@@ -342,7 +344,7 @@ def auto_load_number_of_frames(stack_path):
         del stack
     gc.collect()
 
-    print(f"Automatically detected stack length: {len_movie}...")
+    logger.info(f"Automatically detected stack length: {len_movie}...")
 
     return len_movie if "len_movie" in locals() else None
 

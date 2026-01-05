@@ -17,7 +17,6 @@ from PyQt5.QtCore import Qt, QSize
 from celldetective.gui.gui_utils import (
     FeatureChoice,
     ListWidget,
-    ListWidget,
     # FigureCanvas,
     GeometryChoice,
     OperationChoice,

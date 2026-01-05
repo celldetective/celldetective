@@ -59,26 +59,9 @@ class BackgroundLoader(QThread):
     def run(self):
         logger.info("Loading background packages...")
         try:
-            import pandas
-            import matplotlib.pyplot
-            import scipy.ndimage
-            import skimage.measure
-            import skimage.segmentation
-            import skimage.filters
-            import skimage.feature
-            import skimage.exposure
-
-            # Pre-load celldetective modules that are lazily imported
             import celldetective.segmentation
-            import celldetective.utils.image_transforms
-            import celldetective.filters
-
-            try:
-                import cellpose
-            except Exception:
-                logger.error("cellpose not loaded...")
-            import tifffile
-            import seaborn
+            import celldetective.tracking
+            import celldetective.measure
         except Exception:
             logger.error("Background packages not loaded...")
         logger.info("Background packages loaded...")

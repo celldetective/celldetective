@@ -794,7 +794,7 @@ class ThresholdedStackVisualizer(StackVisualizer):
             interpolation="none",
             vmin=0,
             vmax=1,
-            cmap="spring",
+            cmap="Purples",
         )
         self.canvas.canvas.draw()
 
@@ -899,12 +899,6 @@ class ThresholdedStackVisualizer(StackVisualizer):
         )
 
         edge = estimate_unreliable_edge(self.preprocessing)
-
-        print(f"DEBUG: compute_mask threshold_value={threshold_value}")
-        if self.processed_image is not None:
-            print(
-                f"DEBUG: processed_image min={np.min(self.processed_image)}, max={np.max(self.processed_image)}"
-            )
 
         if isinstance(threshold_value, (list, np.ndarray, tuple)):
             self.mask = threshold_image(
@@ -1891,6 +1885,8 @@ class ChannelOffsetViewer(StackVisualizer):
             self.change_contrast_overlay(self.overlay_contrast_slider.value())
 
     def locate_image_virtual(self):
+        from tifffile import imread
+
         # Locate the stack of images if provided as a file
         self.stack_length = auto_load_number_of_frames(self.stack_path)
         if self.stack_length is None:
@@ -1981,6 +1977,8 @@ class ChannelOffsetViewer(StackVisualizer):
         self.apply_shift_btn.click()
 
     def shift_generic(self):
+        from scipy.ndimage import shift
+
         self.shift_vertical = self.vertical_shift_le.get_threshold()
         self.shift_horizontal = self.horizontal_shift_le.get_threshold()
         self.shifted_frame = shift(

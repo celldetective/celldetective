@@ -4,7 +4,7 @@ import numpy as np
 
 
 from tqdm import tqdm
-
+from celldetective import get_logger
 from celldetective.utils.image_loaders import locate_stack_and_labels
 from celldetective.utils.experiment import (
     get_config,
@@ -21,6 +21,8 @@ from celldetective.utils.parsing import (
     config_section_to_dict,
     _extract_labels_from_config,
 )
+
+logger = get_logger()
 
 
 def get_position_table(pos, population, return_path=False):
@@ -73,7 +75,7 @@ def get_position_table(pos, population, return_path=False):
         try:
             df_pos = pd.read_csv(table, low_memory=False)
         except Exception as e:
-            print(e)
+            logger.error(e)
             df_pos = None
     else:
         df_pos = None
@@ -236,7 +238,7 @@ def load_experiment_tables(
             try:
                 positions = positions[position_indices]
             except Exception as e:
-                print(e)
+                logger.error(e)
                 continue
 
         real_pos_index = 0
@@ -268,7 +270,7 @@ def load_experiment_tables(
                     try:
                         df_pos[k] = values[widx]
                     except Exception as e:
-                        print(f"{e=}")
+                        logger.error(f"{e=}")
 
                 if metadata is not None:
                     keys = list(metadata.keys())
@@ -428,7 +430,7 @@ def interpret_tracking_configuration(config):
             modelpath = os.sep.join(
                 [
                     os.path.split(os.path.dirname(os.path.realpath(__file__)))[0],
-                    "celldetective",
+                    # "celldetective",
                     "models",
                     "tracking_configs",
                     os.sep,

@@ -62,7 +62,7 @@ def locate_signal_model(name, path=None, pairs=False):
     """
 
     main_dir = os.sep.join(
-        [os.path.split(os.path.dirname(os.path.realpath(__file__)))[0], "celldetective"]
+        [os.path.split(os.path.dirname(os.path.realpath(__file__)))[0]]
     )
     modelpath = os.sep.join([main_dir, "models", "signal_detection", os.sep])
     if pairs:
@@ -132,7 +132,7 @@ def locate_pair_signal_model(name, path=None):
     """
 
     main_dir = os.sep.join(
-        [os.path.split(os.path.dirname(os.path.realpath(__file__)))[0], "celldetective"]
+        [os.path.split(os.path.dirname(os.path.realpath(__file__)))[0]]
     )
     modelpath = os.sep.join([main_dir, "models", "pair_signal_detection", os.sep])
     print(f"Looking for {name} in {modelpath}")
@@ -173,7 +173,7 @@ def locate_segmentation_model(name, download=True):
     """
 
     main_dir = os.sep.join(
-        [os.path.split(os.path.dirname(os.path.realpath(__file__)))[0], "celldetective"]
+        [os.path.split(os.path.dirname(os.path.realpath(__file__)))[0]]
     )
     modelpath = os.sep.join([main_dir, "models", "segmentation*"]) + os.sep
     # print(f'Looking for {name} in {modelpath}')
@@ -225,7 +225,7 @@ def locate_segmentation_dataset(name):
     """
 
     main_dir = os.sep.join(
-        [os.path.split(os.path.dirname(os.path.realpath(__file__)))[0], "celldetective"]
+        [os.path.split(os.path.dirname(os.path.realpath(__file__)))[0]]
     )
     modelpath = os.sep.join([main_dir, "datasets", "segmentation_annotations", os.sep])
     print(f"Looking for {name} in {modelpath}")
@@ -275,7 +275,7 @@ def locate_signal_dataset(name):
     """
 
     main_dir = os.sep.join(
-        [os.path.split(os.path.dirname(os.path.realpath(__file__)))[0], "celldetective"]
+        [os.path.split(os.path.dirname(os.path.realpath(__file__)))[0]]
     )
     modelpath = os.sep.join([main_dir, "datasets", "signal_annotations", os.sep])
     print(f"Looking for {name} in {modelpath}")

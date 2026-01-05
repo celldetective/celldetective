@@ -9,7 +9,10 @@ from urllib.request import urlopen
 import numpy as np
 from tqdm import tqdm
 
-from celldetective.gui.base.utils import remove_file_if_exists
+from celldetective.utils.io import remove_file_if_exists
+from celldetective import get_logger
+
+logger = get_logger()
 
 
 def get_zenodo_files(cat=None):
@@ -70,7 +73,7 @@ def download_url_to_file(url, dst, progress=True):
     Args:
             url (string): URL of the object to download
             dst (string): Full path where object will be saved, e.g. `/tmp/temporary_file`
-            progress (bool, optional): whether or not to display a progress bar to stderr
+            progress (bool, optional): whether to display a progress bar to stderr
                     Default: True
 
     """
@@ -113,14 +116,16 @@ def download_url_to_file(url, dst, progress=True):
 
 def download_zenodo_file(file, output_dir):
 
+    logger.info(f"{file=} {output_dir=}")
     zenodo_json = os.sep.join(
         [
             os.path.split(os.path.dirname(os.path.realpath(__file__)))[0],
-            "celldetective",
+            # "celldetective",
             "links",
             "zenodo.json",
         ]
     )
+    logger.info(f"{zenodo_json=}")
     with open(zenodo_json, "r") as f:
         zenodo_json = json.load(f)
     all_files = list(zenodo_json["files"]["entries"].keys())

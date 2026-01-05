@@ -7,7 +7,7 @@ from celldetective.utils.image_loaders import (
     _get_img_num_per_channel,
 )
 from celldetective.utils.data_cleaning import _mask_intensity_measurements
-from celldetective.gui.base.utils import remove_file_if_exists
+from celldetective.utils.io import remove_file_if_exists
 from celldetective.utils.parsing import config_section_to_dict
 from pathlib import Path, PurePath
 from glob import glob

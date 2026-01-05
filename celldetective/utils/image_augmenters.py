@@ -1,11 +1,9 @@
 import random
 
-import numpy
 import numpy as np
 from scipy.ndimage import shift
-from skimage._shared.filters import gaussian
+from skimage.filters import gaussian
 from skimage.util import random_noise
-
 
 def augmenter(
     x,

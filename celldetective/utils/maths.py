@@ -1,6 +1,4 @@
 from typing import Union, List
-
-import numpy
 import numpy as np
 
 

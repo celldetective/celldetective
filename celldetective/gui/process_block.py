@@ -40,7 +40,8 @@ from glob import glob
 from natsort import natsorted
 import os
 
-from celldetective.gui.base.utils import center_window, remove_file_if_exists
+from celldetective.gui.base.utils import center_window
+from celldetective.utils.io import remove_file_if_exists
 from tifffile import imwrite
 import json
 from celldetective.gui.gui_utils import help_generic
