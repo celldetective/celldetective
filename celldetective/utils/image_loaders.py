@@ -437,22 +437,24 @@ def load_frames(
         )
         return None
     try:
-        frames[np.isinf(frames)] = np.nan
+        if np.any(np.isinf(frames)):
+            frames = frames.astype(float)
+            frames[np.isinf(frames)] = np.nan
     except Exception as e:
         print(e)
 
     frames = _rearrange_multichannel_frame(frames)
 
     if normalize_input:
-        frames = normalize_multichannel(frames, **normalize_kwargs)
+        frames = normalize_multichannel(frames.astype(float), **normalize_kwargs)
 
     if scale is not None:
-        frames = zoom_multiframes(frames, scale)
+        frames = zoom_multiframes(frames.astype(float), scale)
 
     # add a fake pixel to prevent auto normalization errors on images that are uniform
     frames = _fix_no_contrast(frames)
 
-    return frames.astype(dtype)
+    return frames #.astype(dtype)
 
 
 def _rearrange_multichannel_frame(
