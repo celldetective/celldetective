@@ -3,49 +3,27 @@ import time
 import datetime
 import os
 import json
-from celldetective.utils.model_loaders import locate_segmentation_model
-from celldetective.utils.image_loaders import (
-    auto_load_number_of_frames,
-    _load_frames_to_segment,
-    load_frames,
-    _get_img_num_per_channel,
-)
-from celldetective.utils.mask_cleaning import _check_label_dims
-from celldetective.utils.experiment import (
-    extract_position_name,
-    extract_experiment_channels,
-)
-from celldetective.utils.stardist import (
-    _prep_stardist_model,
-    _segment_image_with_stardist_model,
-)
-from celldetective.utils.cellpose import (
-    _segment_image_with_cellpose_model,
-    _prep_cellpose_model,
-)
-from celldetective.utils.mask_transforms import _rescale_labels
-from celldetective.utils.image_transforms import _estimate_scale_factor
-from celldetective.utils.parsing import (
-    _get_normalize_kwargs_from_config,
-    config_section_to_dict,
-    _extract_channel_indices_from_config,
-    _extract_nbr_channels_from_config,
-)
-
 from pathlib import Path, PurePath
 from glob import glob
 from shutil import rmtree
 from tqdm import tqdm
 import numpy as np
-from csbdeep.io import save_tiff_imagej_compatible
-from celldetective.segmentation import (
-    segment_frame_from_thresholds,
-    merge_instance_segmentation,
-)
 import gc
 from art import tprint
-
 import concurrent.futures
+
+from celldetective.log_manager import get_logger
+from celldetective.utils.experiment import extract_position_name, extract_experiment_channels
+from celldetective.utils.image_loaders import auto_load_number_of_frames, _get_img_num_per_channel, \
+    _load_frames_to_segment, load_frames
+from celldetective.utils.image_transforms import _estimate_scale_factor
+from celldetective.utils.mask_cleaning import _check_label_dims
+from celldetective.utils.mask_transforms import _rescale_labels
+from celldetective.utils.model_loaders import locate_segmentation_model
+from celldetective.utils.parsing import config_section_to_dict, _extract_nbr_channels_from_config, \
+    _get_normalize_kwargs_from_config, _extract_channel_indices_from_config
+
+logger = get_logger(__name__)
 
 
 class BaseSegmentProcess(Process):
@@ -60,31 +38,43 @@ class BaseSegmentProcess(Process):
             for key, value in process_args.items():
                 setattr(self, key, value)
 
-        tprint("Segment")
+        # Handle batch of positions or single pos
+        if hasattr(self, "batch_structure"):
+            # Flatten positions from structure for compatibility
+            self.positions = []
+            for w_idx, data in self.batch_structure.items():
+                self.positions.extend(data["positions"])
+        elif not hasattr(self, "positions"):
+            if hasattr(self, "pos"):
+                self.positions = [self.pos]
+            else:
+                self.positions = []
+                logger.error("No positions provided to segmentation process.")
 
         # Experiment
         self.locate_experiment_config()
-
-        print(f"Position: {extract_position_name(self.pos)}...")
-        print("Configuration file: ", self.config)
-        print(f"Population: {self.mode}...")
         self.instruction_file = os.sep.join(
             ["configs", f"segmentation_instructions_{self.mode}.json"]
         )
-
         self.read_instructions()
         self.extract_experiment_parameters()
+
+    def setup_for_position(self, pos_path):
+        self.pos = pos_path
+        logger.info(f"Position: {extract_position_name(self.pos)}...")
+        logger.info(f"Population: {self.mode}...")
+
         self.detect_movie_length()
         self.write_folders()
 
     def read_instructions(self):
-        print("Looking for instruction file...")
+        logger.info("Looking for instruction file...")
         instr_path = PurePath(self.exp_dir, Path(f"{self.instruction_file}"))
         if os.path.exists(instr_path):
             with open(instr_path, "r") as f:
                 _instructions = json.load(f)
-                print(f"Measurement instruction file successfully loaded...")
-                print(f"Instructions: {_instructions}...")
+                logger.info(f"Measurement instruction file successfully loaded...")
+                logger.info(f"Instructions: {_instructions}...")
             self.flip = _instructions.get("flip", False)
         else:
             self.flip = False
@@ -95,10 +85,10 @@ class BaseSegmentProcess(Process):
         self.label_folder = f"labels_{self.mode}"
 
         if os.path.exists(self.pos + self.label_folder):
-            print("Erasing the previous labels folder...")
+            logger.info("Erasing the previous labels folder...")
             rmtree(self.pos + self.label_folder)
         os.mkdir(self.pos + self.label_folder)
-        print(f"Labels folder successfully generated...")
+        logger.info(f"Labels folder successfully generated...")
 
     def extract_experiment_parameters(self):
 
@@ -118,12 +108,20 @@ class BaseSegmentProcess(Process):
 
     def locate_experiment_config(self):
 
-        parent1 = Path(self.pos).parent
+        if hasattr(self, "pos"):
+            p = self.pos
+        elif hasattr(self, "positions") and len(self.positions) > 0:
+            p = self.positions[0]
+        else:
+            logger.error("No position available to locate experiment config.")
+            return
+
+        parent1 = Path(p).parent
         self.exp_dir = parent1.parent
         self.config = PurePath(self.exp_dir, Path("config.ini"))
 
         if not os.path.exists(self.config):
-            print(
+            logger.error(
                 "The configuration file for the experiment could not be located. Abort."
             )
             self.abort_process()
@@ -133,7 +131,7 @@ class BaseSegmentProcess(Process):
         try:
             self.file = glob(self.pos + f"movie/{self.movie_prefix}*.tif")[0]
         except Exception as e:
-            print(f"Error {e}.\nMovie could not be found. Check the prefix.")
+            logger.error(f"Error {e}.\nMovie could not be found. Check the prefix.")
             self.abort_process()
 
         len_movie_auto = auto_load_number_of_frames(self.file)
@@ -162,13 +160,15 @@ class SegmentCellDLProcess(BaseSegmentProcess):
         # Model
         self.locate_model_path()
         self.extract_model_input_parameters()
-        self.detect_channels()
         self.detect_rescaling()
-
-        self.write_log()
 
         self.sum_done = 0
         self.t0 = time.time()
+
+    def setup_for_position(self, pos_path):
+        super().setup_for_position(pos_path)
+        self.detect_channels()
+        self.write_log()
 
     def extract_model_input_parameters(self):
 
@@ -188,7 +188,7 @@ class SegmentCellDLProcess(BaseSegmentProcess):
 
         self.model_type = self.input_config["model_type"]
         self.required_spatial_calibration = self.input_config["spatial_calibration"]
-        print(
+        logger.info(
             f"Spatial calibration expected by the model: {self.required_spatial_calibration}..."
         )
 
@@ -209,7 +209,7 @@ class SegmentCellDLProcess(BaseSegmentProcess):
         self.channel_indices = _extract_channel_indices_from_config(
             self.config, self.required_channels
         )
-        print(
+        logger.info(
             f"Required channels: {self.required_channels} located at channel indices {self.channel_indices}."
         )
         self.img_num_channels = _get_img_num_per_channel(
@@ -221,7 +221,7 @@ class SegmentCellDLProcess(BaseSegmentProcess):
         self.scale = _estimate_scale_factor(
             self.spatial_calibration, self.required_spatial_calibration
         )
-        print(f"Scale: {self.scale}...")
+        logger.info(f"Scale: {self.scale} [None = 1]...")
 
         if self.target_cell_size is not None and self.scale is not None:
             self.scale *= self.cell_size / self.target_cell_size
@@ -229,19 +229,21 @@ class SegmentCellDLProcess(BaseSegmentProcess):
             if self.target_cell_size != self.cell_size:
                 self.scale = self.cell_size / self.target_cell_size
 
-        print(f"Scale accounting for expected cell size: {self.scale}...")
+        logger.info(
+            f"Scale accounting for expected cell size: {self.scale} [None = 1]..."
+        )
 
     def locate_model_path(self):
 
         self.model_complete_path = locate_segmentation_model(self.model_name)
         if self.model_complete_path is None:
-            print("Model could not be found. Abort.")
+            logger.error("Model could not be found. Abort.")
             self.abort_process()
         else:
-            print(f"Model path: {self.model_complete_path}...")
+            logger.info(f"Model path: {self.model_complete_path}...")
 
         if not os.path.exists(self.model_complete_path + "config_input.json"):
-            print(
+            logger.error(
                 "The configuration for the inputs to the model could not be located. Abort."
             )
             self.abort_process()
@@ -254,11 +256,98 @@ class SegmentCellDLProcess(BaseSegmentProcess):
         if not self.use_gpu:
             os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
+    def process_position(self, model=None, scale_model=None):
+
+        tprint("Segment")
+
+        list_indices = range(self.len_movie)
+        if self.flip:
+            list_indices = reversed(list_indices)
+
+        # Reset counter for this position
+        self.loop_count = 0
+        self.t0_frame = time.time()
+
+        for t in tqdm(list_indices, desc="frame"):
+
+            f = _load_frames_to_segment(
+                self.file,
+                self.img_num_channels[:, t],
+                scale_model=scale_model,
+                normalize_kwargs=self.normalize_kwargs,
+            )
+
+            if self.model_type == "stardist":
+                from celldetective.utils.stardist import _segment_image_with_stardist_model
+                Y_pred = _segment_image_with_stardist_model(
+                    f, model=model, return_details=False
+                )
+
+            elif self.model_type == "cellpose":
+                from celldetective.utils.cellpose import _segment_image_with_cellpose_model
+                Y_pred = _segment_image_with_cellpose_model(
+                    f,
+                    model=model,
+                    diameter=self.diameter,
+                    cellprob_threshold=self.cellprob_threshold,
+                    flow_threshold=self.flow_threshold,
+                )
+
+            if self.scale is not None:
+                Y_pred = _rescale_labels(Y_pred, scale_model=scale_model)
+
+            Y_pred = _check_label_dims(Y_pred, file=self.file)
+
+            from csbdeep.io import save_tiff_imagej_compatible
+
+            save_tiff_imagej_compatible(
+                self.pos + os.sep.join([self.label_folder, f"{str(t).zfill(4)}.tif"]),
+                Y_pred,
+                axes="YX",
+            )
+
+            del f
+            del Y_pred
+            gc.collect()
+
+            # Send signal for progress bar
+            # Triple progress bar logic
+
+            if self.loop_count == 0:
+                self.t0_frame = time.time()
+
+            frame_progress = ((self.loop_count + 1) / self.len_movie) * 100
+            if frame_progress > 100:
+                frame_progress = 100
+
+            data = {}
+            data["frame_progress"] = frame_progress
+
+            # Frame time estimation (skip first)
+            elapsed = time.time() - getattr(self, "t0_frame", time.time())
+            measured_count = self.loop_count
+
+            if measured_count > 0:
+                avg = elapsed / measured_count
+                rem = self.len_movie - (self.loop_count + 1)
+                rem_t = rem * avg
+                mins = int(rem_t // 60)
+                secs = int(rem_t % 60)
+                data["frame_time"] = f"Segmentation: {mins} m {secs} s"
+            else:
+                data["frame_time"] = (
+                    f"Segmentation: {self.loop_count + 1}/{int(self.len_movie)} frames"
+                )
+
+            self.queue.put(data)
+            self.loop_count += 1
+
     def run(self):
 
         try:
 
             if self.model_type == "stardist":
+                from celldetective.utils.stardist import _prep_stardist_model
                 model, scale_model = _prep_stardist_model(
                     self.model_name,
                     Path(self.model_complete_path).parent,
@@ -267,6 +356,7 @@ class SegmentCellDLProcess(BaseSegmentProcess):
                 )
 
             elif self.model_type == "cellpose":
+                from celldetective.utils.cellpose import _prep_cellpose_model
                 model, scale_model = _prep_cellpose_model(
                     self.model_name,
                     self.model_complete_path,
@@ -275,57 +365,76 @@ class SegmentCellDLProcess(BaseSegmentProcess):
                     scale=self.scale,
                 )
 
-            list_indices = range(self.len_movie)
-            if self.flip:
-                list_indices = reversed(list_indices)
+            # Wrapper for single-position compatibility if batch_structure is missing
+            if not hasattr(self, "batch_structure"):
+                self.batch_structure = {
+                    0: {"well_name": "Batch", "positions": self.positions}
+                }
 
-            for t in tqdm(list_indices, desc="frame"):
+            self.t0_well = time.time()
+            # Loop over Wells
+            for w_i, (w_idx, well_data) in enumerate(self.batch_structure.items()):
+                positions = well_data["positions"]
 
-                f = _load_frames_to_segment(
-                    self.file,
-                    self.img_num_channels[:, t],
-                    scale_model=scale_model,
-                    normalize_kwargs=self.normalize_kwargs,
-                )
-
-                if self.model_type == "stardist":
-                    Y_pred = _segment_image_with_stardist_model(
-                        f, model=model, return_details=False
+                # Well Time Estimation
+                elapsed = time.time() - self.t0_well
+                if w_i > 0:
+                    avg_well = elapsed / w_i
+                    rem_well = (len(self.batch_structure) - w_i) * avg_well
+                    mins_w = int(rem_well // 60)
+                    secs_w = int(rem_well % 60)
+                    well_str = f"Well {w_i + 1}/{len(self.batch_structure)} - {mins_w} m {secs_w} s left"
+                else:
+                    well_str = (
+                        f"Processing well {w_i + 1}/{len(self.batch_structure)}..."
                     )
 
-                elif self.model_type == "cellpose":
-                    Y_pred = _segment_image_with_cellpose_model(
-                        f,
-                        model=model,
-                        diameter=self.diameter,
-                        cellprob_threshold=self.cellprob_threshold,
-                        flow_threshold=self.flow_threshold,
-                    )
-
-                if self.scale is not None:
-                    Y_pred = _rescale_labels(Y_pred, scale_model=scale_model)
-
-                Y_pred = _check_label_dims(Y_pred, file=self.file)
-
-                save_tiff_imagej_compatible(
-                    self.pos
-                    + os.sep.join([self.label_folder, f"{str(t).zfill(4)}.tif"]),
-                    Y_pred,
-                    axes="YX",
+                # Update Well Progress
+                self.queue.put(
+                    {
+                        "well_progress": (w_i / len(self.batch_structure)) * 100,
+                        "well_time": well_str,
+                    }
                 )
 
-                del f
-                del Y_pred
-                gc.collect()
+                self.t0_pos = time.time()
+                # Loop over positions in this well
+                for pos_idx, pos_path in enumerate(positions):
 
-                # Send signal for progress bar
-                self.sum_done += 1 / self.len_movie * 100
-                mean_exec_per_step = (time.time() - self.t0) / (t + 1)
-                pred_time = (self.len_movie - (t + 1)) * mean_exec_per_step
-                self.queue.put([self.sum_done, pred_time])
+                    # Setup specific variables for this position (folders, length, etc.)
+                    self.setup_for_position(pos_path)
+
+                    list_indices = range(self.len_movie)
+                    if self.flip:
+                        list_indices = reversed(list_indices)
+
+                    # Position Time Estimation relative to current well
+                    elapsed_pos = time.time() - self.t0_pos
+                    if pos_idx > 0:
+                        avg_pos = elapsed_pos / pos_idx
+                        rem_pos = (len(positions) - pos_idx) * avg_pos
+                        mins_p = int(rem_pos // 60)
+                        secs_p = int(rem_pos % 60)
+                        pos_str = f"Pos {pos_idx + 1}/{len(positions)} - {mins_p} m {secs_p} s left"
+                    else:
+                        pos_str = (
+                            f"Processing position {pos_idx + 1}/{len(positions)}..."
+                        )
+
+                    self.process_position(model=model, scale_model=scale_model)
+
+                    # End of position loop
+                    self.queue.put(
+                        {"pos_progress": ((pos_idx + 1) / len(positions)) * 100}
+                    )
+
+                # End of Well loop
+                self.queue.put(
+                    {"well_progress": ((w_i + 1) / len(self.batch_structure)) * 100}
+                )
 
         except Exception as e:
-            print(e)
+            logger.error(e)
 
         try:
             del model
@@ -333,7 +442,7 @@ class SegmentCellDLProcess(BaseSegmentProcess):
             pass
 
         gc.collect()
-        print("Done.")
+        logger.info("Segmentation task is done.")
 
         # Send end signal
         self.queue.put("finished")
@@ -349,13 +458,7 @@ class SegmentCellThresholdProcess(BaseSegmentProcess):
         self.equalize = False
 
         # Model
-
-        self.load_threshold_config()
-        self.extract_threshold_parameters()
-        self.detect_channels()
-        self.prepare_equalize()
-
-        self.write_log()
+        # self.prepare_equalize() and self.write_log() moved to run() loop for batch support
 
         self.sum_done = 0
         self.t0 = time.time()
@@ -385,7 +488,7 @@ class SegmentCellThresholdProcess(BaseSegmentProcess):
                 with open(inst, "r") as f:
                     self.instructions.append(json.load(f))
             else:
-                print("The configuration path is not valid. Abort.")
+                logger.error("The configuration path is not valid. Abort.")
                 self.abort_process()
 
     def extract_threshold_parameters(self):
@@ -417,7 +520,7 @@ class SegmentCellThresholdProcess(BaseSegmentProcess):
             self.channel_indices = _extract_channel_indices_from_config(
                 self.config, self.required_channels[i]
             )
-            print(
+            logger.info(
                 f"Required channels: {self.required_channels[i]} located at channel indices {self.channel_indices}."
             )
             self.instructions[i].update({"target_channel": self.channel_indices[0]})
@@ -444,12 +547,15 @@ class SegmentCellThresholdProcess(BaseSegmentProcess):
                         scale=None,
                         normalize_input=False,
                     )
+                    from celldetective.segmentation import segment_frame_from_thresholds, merge_instance_segmentation
                     mask = segment_frame_from_thresholds(f, **self.instructions[i])
                     # print(f'Frame {t}; segment with {self.instructions[i]=}...')
                     masks.append(mask)
 
                 if len(self.instructions) > 1:
                     mask = merge_instance_segmentation(masks, mode="OR")
+
+                from csbdeep.io import save_tiff_imagej_compatible
 
                 save_tiff_imagej_compatible(
                     os.sep.join(
@@ -465,26 +571,53 @@ class SegmentCellThresholdProcess(BaseSegmentProcess):
 
                 # Send signal for progress bar
                 self.sum_done += 1 / self.len_movie * 100
-                mean_exec_per_step = (time.time() - self.t0) / (
-                    self.sum_done * self.len_movie / 100 + 1
-                )
-                pred_time = (
-                    self.len_movie - (self.sum_done * self.len_movie / 100 + 1)
-                ) * mean_exec_per_step
-                self.queue.put([self.sum_done, pred_time])
+
+                # Triple progress bar logic
+                data = {}
+                data["frame_progress"] = self.sum_done
+
+                # Frame time estimation
+                elapsed = time.time() - getattr(self, "t0_frame", time.time())
+                measured_count = int((self.sum_done / 100) * self.len_movie)
+
+                if measured_count > 0:
+                    avg = elapsed / measured_count
+                    rem = self.len_movie - measured_count
+                    if rem < 0:
+                        rem = 0
+                    rem_t = rem * avg
+                    mins = int(rem_t // 60)
+                    secs = int(rem_t % 60)
+                    data["frame_time"] = f"Segmentation: {mins} m {secs} s"
+                else:
+                    data["frame_time"] = f"Segmentation..."
+
+                self.queue.put(data)
 
         except Exception as e:
-            print(e)
+            logger.error(e)
 
         return
 
-    def run(self):
+    def process_position(self):
+
+        tprint("Segment")
+
+        # Re-initialize threshold specific stuff (depends on channel indices which depend on metadata)
+        self.load_threshold_config()
+        self.extract_threshold_parameters()
+        self.detect_channels()
+        self.prepare_equalize()
+        self.write_log()  # Log start of segmentation for this pos
 
         self.indices = list(range(self.img_num_channels.shape[1]))
         if self.flip:
             self.indices = np.array(list(reversed(self.indices)))
 
         chunks = np.array_split(self.indices, self.n_threads)
+
+        self.t0_frame = time.time()  # Reset timer for accurate frame timing
+        self.sum_done = 0  # Reset progress for this pos
 
         with concurrent.futures.ThreadPoolExecutor(
             max_workers=self.n_threads
@@ -494,11 +627,61 @@ class SegmentCellThresholdProcess(BaseSegmentProcess):
             )  # list(map(lambda x: executor.submit(self.parallel_job, x), chunks))
             try:
                 for i, return_value in enumerate(results):
-                    print(f"Thread {i} output check: ", return_value)
+                    pass
             except Exception as e:
-                print("Exception: ", e)
+                logger.error("Exception: ", e)
+                raise e
 
-        print("Done.")
+    def run(self):
+
+        # Wrapper for single-position compatibility if batch_structure is missing
+        if not hasattr(self, "batch_structure"):
+            self.batch_structure = {
+                0: {"well_name": "Batch", "positions": self.positions}
+            }
+
+        self.t0_well = time.time()
+        # Loop over Wells
+        for w_i, (w_idx, well_data) in enumerate(self.batch_structure.items()):
+            positions = well_data["positions"]
+
+            # Well Time Estimation
+            elapsed = time.time() - self.t0_well
+            if w_i > 0:
+                avg_well = elapsed / w_i
+                rem_well = (len(self.batch_structure) - w_i) * avg_well
+                mins_w = int(rem_well // 60)
+                secs_w = int(rem_well % 60)
+                well_str = f"Well {w_i + 1}/{len(self.batch_structure)} - {mins_w} m {secs_w} s left"
+            else:
+                well_str = f"Processing well {w_i + 1}/{len(self.batch_structure)}..."
+
+            # Update Well Progress
+            self.queue.put(
+                {
+                    "well_progress": (w_i / len(self.batch_structure)) * 100,
+                    "well_time": well_str,
+                }
+            )
+
+            self.t0_pos = time.time()
+            # Loop over positions in this well
+            for pos_idx, pos_path in enumerate(positions):
+
+                # Setup specific variables for this position
+                self.setup_for_position(pos_path)
+
+                self.process_position()
+
+                # End of position loop
+                self.queue.put({"pos_progress": ((pos_idx + 1) / len(positions)) * 100})
+
+            # End of Well loop
+            self.queue.put(
+                {"well_progress": ((w_i + 1) / len(self.batch_structure)) * 100}
+            )
+
+        logger.info("Done.")
         # Send end signal
         self.queue.put("finished")
         self.queue.close()

@@ -14,7 +14,6 @@ from celldetective.utils.image_loaders import (
 from celldetective.utils.experiment import extract_experiment_channels
 from celldetective.utils.parsing import config_section_to_dict
 from celldetective.utils.data_cleaning import (
-    _remove_invalid_cols,
     _extract_coordinates_from_features,
     remove_trajectory_measurements,
 )

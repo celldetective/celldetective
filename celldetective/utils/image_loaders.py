@@ -803,6 +803,8 @@ def load_image_dataset(
     # Loads DAPI and GFP channels from specified datasets, rescaling images to match a spatial calibration of 0.65.
     """
 
+    from scipy.ndimage import zoom
+
     if isinstance(channels, str):
         channels = [channels]
 

@@ -53,6 +53,7 @@ from celldetective.gui.layouts import (
 )
 from celldetective.gui.base.styles import Styles
 from celldetective import get_software_location
+import pandas as pd
 
 import logging
 
@@ -863,7 +864,7 @@ class ProcessPanel(QFrame, Styles):
         center_window(self.settings_tracking)
 
     def open_signal_model_config_ui(self):
-        from celldetective.gui.settings._settings_event_detection_model_training import (
+        from celldetective.gui.settings._settings_event_model_training import (
             SettingsEventDetectionModelTraining,
         )
 
@@ -941,26 +942,8 @@ class ProcessPanel(QFrame, Styles):
         self.signalChannelsSet = False
 
     def process_population(self):
+        from celldetective.processes.unified_process import UnifiedBatchProcess
         from celldetective.gui.workers import ProgressWindow
-        from celldetective.processes.segment_cells import (
-            SegmentCellThresholdProcess,
-            SegmentCellDLProcess,
-        )
-        from celldetective.processes.track_cells import TrackingProcess
-        from celldetective.processes.measure_cells import MeasurementProcess
-        from celldetective.signals import analyze_signals_at_position
-        from celldetective.gui.settings._event_detection_model_params import (
-            SignalModelParamsWidget,
-        )
-        from celldetective.gui.settings._cellpose_model_params import (
-            CellposeParamsWidget,
-        )
-        from celldetective.gui.settings._stardist_model_params import (
-            StarDistParamsWidget,
-        )
-        from celldetective.gui.settings._segmentation_model_params import (
-            SegModelParamsWidget,
-        )
 
         # if self.parent_window.well_list.currentText().startswith('Multiple'):
         # 	self.well_index = np.linspace(0,len(self.wells)-1,len(self.wells),dtype=int)
@@ -1027,6 +1010,62 @@ class ProcessPanel(QFrame, Styles):
                         pass
         loop_iter = 0
 
+        if self.seg_model_list.currentIndex() > self.n_specific_seg_models:
+            self.model_name = self.seg_models[self.seg_model_list.currentIndex() - 1]
+        else:
+            self.model_name = self.seg_models[self.seg_model_list.currentIndex()]
+
+        if (
+            self.segment_action.isChecked()
+            and self.model_name.startswith("CP")
+            and self.model_name in self.seg_models_generic
+            and not self.cellpose_calibrated
+        ):
+            from celldetective.gui.settings._cellpose_model_params import CellposeParamsWidget
+
+            self.diamWidget = CellposeParamsWidget(self, model_name=self.model_name)
+            self.diamWidget.show()
+            return None
+
+        elif (
+            self.segment_action.isChecked()
+            and self.model_name.startswith("SD")
+            and self.model_name in self.seg_models_generic
+            and not self.stardist_calibrated
+        ):
+            from celldetective.gui.settings._stardist_model_params import StarDistParamsWidget
+
+            self.diamWidget = StarDistParamsWidget(self, model_name=self.model_name)
+            self.diamWidget.show()
+            return None
+
+        elif (
+            self.segment_action.isChecked()
+            and self.model_name in self.seg_models_specific
+            and not self.segChannelsSet
+        ):
+            from celldetective.gui.settings._segmentation_model_params import SegModelParamsWidget
+
+            self.segChannelWidget = SegModelParamsWidget(
+                self, model_name=self.model_name
+            )
+            self.segChannelWidget.show()
+            return None
+
+        if self.signal_analysis_action.isChecked() and not self.signalChannelsSet:
+            from celldetective.gui.settings._event_detection_model_params import SignalModelParamsWidget
+
+            self.signal_model_name = self.signal_models[
+                self.signal_models_list.currentIndex()
+            ]
+            self.signalChannelWidget = SignalModelParamsWidget(
+                self, model_name=self.signal_model_name
+            )
+            self.signalChannelWidget.show()
+            return None
+
+        self.movie_prefix = self.parent_window.movie_prefix
+
         if self.parent_window.position_list.isMultipleSelection():
             msgBox = QMessageBox()
             msgBox.setIcon(QMessageBox.Question)
@@ -1039,241 +1078,159 @@ class ProcessPanel(QFrame, Styles):
             if returnValue == QMessageBox.No:
                 return None
 
-        if self.seg_model_list.currentIndex() > self.n_specific_seg_models:
-            self.model_name = self.seg_models[self.seg_model_list.currentIndex() - 1]
-        else:
-            self.model_name = self.seg_models[self.seg_model_list.currentIndex()]
-
-        if (
-            self.segment_action.isChecked()
-            and self.model_name.startswith("CP")
-            and self.model_name in self.seg_models_generic
-            and not self.cellpose_calibrated
-        ):
-
-            self.diamWidget = CellposeParamsWidget(self, model_name=self.model_name)
-            self.diamWidget.show()
-            return None
-
-        elif (
-            self.segment_action.isChecked()
-            and self.model_name.startswith("SD")
-            and self.model_name in self.seg_models_generic
-            and not self.stardist_calibrated
-        ):
-
-            self.diamWidget = StarDistParamsWidget(self, model_name=self.model_name)
-            self.diamWidget.show()
-            return None
-
-        elif (
-            self.segment_action.isChecked()
-            and self.model_name in self.seg_models_specific
-            and not self.segChannelsSet
-        ):
-
-            self.segChannelWidget = SegModelParamsWidget(
-                self, model_name=self.model_name
-            )
-            self.segChannelWidget.show()
-            return None
-
-        if self.signal_analysis_action.isChecked() and not self.signalChannelsSet:
-            self.signal_model_name = self.signal_models[
-                self.signal_models_list.currentIndex()
-            ]
-            self.signalChannelWidget = SignalModelParamsWidget(
-                self, model_name=self.signal_model_name
-            )
-            self.signalChannelWidget.show()
-            return None
-
         self.movie_prefix = self.parent_window.movie_prefix
 
+        # COLLECT POSITIONS
+        batch_structure = {}
+        all_positions_flat = (
+            []
+        )  # Keep flat list for legacy check logic or easy counting
+
         for w_idx in self.well_index:
-
-            pos = self.parent_window.positions[w_idx]
-            pos_indices = self.parent_window.position_list.getSelectedIndices()
-            # print(f"Processing position {self.parent_window.position_list.currentText()}...")
-
             well = self.parent_window.wells[w_idx]
 
-            for pos_idx in pos_indices:
+            batch_structure[w_idx] = {"well_name": well, "positions": []}
 
-                self.pos = natsorted(
-                    glob(
-                        well
-                        + f"{os.path.split(well)[-1].replace('W','').replace(os.sep,'')}*/"
-                    )
-                )[pos_idx]
-                print(f"Position {self.pos}...\nLoading stack movie...")
-                self.pos_name = extract_position_name(self.pos)
-
-                if not os.path.exists(self.pos + "output/"):
-                    os.mkdir(self.pos + "output/")
-                if not os.path.exists(self.pos + "output/tables/"):
-                    os.mkdir(self.pos + "output/tables/")
-
-                if self.segment_action.isChecked():
-
-                    if (
-                        len(
-                            glob(
-                                os.sep.join([self.pos, f"labels_{self.mode}", "*.tif"])
-                            )
-                        )
-                        > 0
-                        and not self.parent_window.position_list.isMultipleSelection()
-                    ):
-                        msgBox = QMessageBox()
-                        msgBox.setIcon(QMessageBox.Question)
-                        msgBox.setText(
-                            "Labels have already been produced for this position. Do you want to segment again?"
-                        )
-                        msgBox.setWindowTitle("Info")
-                        msgBox.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
-                        returnValue = msgBox.exec()
-                        if returnValue == QMessageBox.No:
-                            return None
-
-                    if self.seg_model_list.currentText() == "Threshold":
-                        if self.threshold_config is None:
-                            msgBox = QMessageBox()
-                            msgBox.setIcon(QMessageBox.Warning)
-                            msgBox.setText(
-                                "Please set a threshold configuration from the upload menu first. Abort."
-                            )
-                            msgBox.setWindowTitle("Warning")
-                            msgBox.setStandardButtons(QMessageBox.Ok)
-                            returnValue = msgBox.exec()
-                            if returnValue == QMessageBox.Ok:
-                                return None
-                        else:
-                            print(
-                                f"Segmentation from threshold config: {self.threshold_config}"
-                            )
-                            process_args = {
-                                "pos": self.pos,
-                                "mode": self.mode,
-                                "n_threads": self.n_threads,
-                                "threshold_instructions": self.threshold_config,
-                                "use_gpu": self.use_gpu,
-                            }
-                            self.job = ProgressWindow(
-                                SegmentCellThresholdProcess,
-                                parent_window=self,
-                                title="Segment",
-                                process_args=process_args,
-                            )
-                            result = self.job.exec_()
-                            if result == QDialog.Accepted:
-                                pass
-                            elif result == QDialog.Rejected:
-                                self.reset_generalist_setup(0)
-                                return None
-                            # segment_from_threshold_at_position(self.pos, self.mode, self.threshold_config, threads=self.parent_window.parent_window.n_threads)
-                    else:
-                        # model = locate_segmentation_model(self.model_name)
-                        # if model is None:
-                        # 	process = {"output_dir": self.output_dir, "file": self.model_name}
-                        # 	self.download_model_job = ProgressWindow(DownloadProcess, parent_window=self, title="Download", process_args = args)
-
-                        process_args = {
-                            "pos": self.pos,
-                            "mode": self.mode,
-                            "n_threads": self.n_threads,
-                            "model_name": self.model_name,
-                            "use_gpu": self.use_gpu,
-                        }
-                        self.job = ProgressWindow(
-                            SegmentCellDLProcess,
-                            parent_window=self,
-                            title="Segment",
-                            process_args=process_args,
-                        )
-                        result = self.job.exec_()
-                        if result == QDialog.Accepted:
-                            pass
-                        elif result == QDialog.Rejected:
-                            self.reset_generalist_setup(0)
-                            return None
-
-                if self.track_action.isChecked():
-                    if (
-                        os.path.exists(
-                            os.sep.join(
-                                [
-                                    self.pos,
-                                    "output",
-                                    "tables",
-                                    f"trajectories_{self.mode}.csv",
-                                ]
-                            )
-                        )
-                        and not self.parent_window.position_list.isMultipleSelection()
-                    ):
-                        msgBox = QMessageBox()
-                        msgBox.setIcon(QMessageBox.Question)
-                        msgBox.setText(
-                            "A measurement table already exists. Previously annotated data for\nthis position will be lost. Do you want to proceed?"
-                        )
-                        msgBox.setWindowTitle("Info")
-                        msgBox.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
-                        returnValue = msgBox.exec()
-                        if returnValue == QMessageBox.No:
-                            return None
-
-                    process_args = {
-                        "pos": self.pos,
-                        "mode": self.mode,
-                        "n_threads": self.n_threads,
-                    }
-                    self.job = ProgressWindow(
-                        TrackingProcess,
-                        parent_window=self,
-                        title="Tracking",
-                        process_args=process_args,
-                    )
-                    result = self.job.exec_()
-                    if result == QDialog.Accepted:
-                        pass
-                    elif result == QDialog.Rejected:
-                        return None
-                    # track_at_position(self.pos, self.mode, threads=self.parent_window.parent_window.n_threads)
-
-                if self.measure_action.isChecked():
-                    process_args = {
-                        "pos": self.pos,
-                        "mode": self.mode,
-                        "n_threads": self.n_threads,
-                    }
-                    self.job = ProgressWindow(
-                        MeasurementProcess,
-                        parent_window=self,
-                        title="Measurement",
-                        process_args=process_args,
-                    )
-                    result = self.job.exec_()
-                    if result == QDialog.Accepted:
-                        pass
-                    elif result == QDialog.Rejected:
-                        return None
-                    # measure_at_position(self.pos, self.mode, threads=self.parent_window.parent_window.n_threads)
-
-                table = os.sep.join(
-                    [self.pos, "output", "tables", f"trajectories_{self.mode}.csv"]
+            pos_indices = self.parent_window.position_list.getSelectedIndices()
+            # Optimization: Glob once per well
+            all_well_positions = natsorted(
+                glob(
+                    well
+                    + f"{os.path.split(well)[-1].replace('W','').replace(os.sep,'')}*/"
                 )
-                if self.signal_analysis_action.isChecked() and os.path.exists(table):
-                    import pandas as pd
+            )
+            for pos_idx in pos_indices:
+                if pos_idx < len(all_well_positions):
+                    pos = all_well_positions[pos_idx]
+                else:
+                    logger.warning(
+                        f"Position index {pos_idx} out of range for well {well}"
+                    )
+                    continue
 
-                    table = pd.read_csv(table)
-                    cols = list(table.columns)
-                    if "class_color" in cols:
-                        colors = list(table["class_color"].to_numpy())
-                        if "tab:orange" in colors or "tab:cyan" in colors:
-                            if (
-                                not self.parent_window.position_list.isMultipleSelection()
-                            ):
+                batch_structure[w_idx]["positions"].append(pos)
+                all_positions_flat.append(pos)
+
+                # Check output folders creation
+                if not os.path.exists(pos + "output/"):
+                    os.mkdir(pos + "output/")
+                if not os.path.exists(pos + "output/tables/"):
+                    os.mkdir(pos + "output/tables/")
+
+        # BATCH SEGMENTATION
+        # --- UNIFIED BATCH PROCESS SETUP ---
+
+        run_segmentation = self.segment_action.isChecked()
+        run_tracking = self.track_action.isChecked()
+        run_measurement = self.measure_action.isChecked()
+        run_signals = self.signal_analysis_action.isChecked()
+
+        seg_args = {}
+        track_args = {}
+        measure_args = {}
+        signal_args = {}
+
+        # 1. SEGMENTATION CHECKS & ARGS
+        if run_segmentation:
+            # Single-position overwrite check
+            if (
+                len(all_positions_flat) == 1
+                and not self.parent_window.position_list.isMultipleSelection()
+            ):
+                p = all_positions_flat[0]
+                if len(glob(os.sep.join([p, f"labels_{self.mode}", "*.tif"]))) > 0:
+                    msgBox = QMessageBox()
+                    msgBox.setIcon(QMessageBox.Question)
+                    msgBox.setText(
+                        "Labels have already been produced for this position. Do you want to segment again?"
+                    )
+                    msgBox.setWindowTitle("Info")
+                    msgBox.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+                    if msgBox.exec() == QMessageBox.No:
+                        run_segmentation = False
+
+            # Threshold config check
+            if run_segmentation and self.seg_model_list.currentText() == "Threshold":
+                if self.threshold_config is None:
+                    msgBox = QMessageBox()
+                    msgBox.setIcon(QMessageBox.Warning)
+                    msgBox.setText(
+                        "Please set a threshold configuration from the upload menu first. Abort."
+                    )
+                    msgBox.setWindowTitle("Warning")
+                    msgBox.setStandardButtons(QMessageBox.Ok)
+                    msgBox.exec()
+                    return None
+
+                seg_args = {
+                    "mode": self.mode,
+                    "n_threads": self.n_threads,
+                    "threshold_instructions": self.threshold_config,
+                    "use_gpu": self.use_gpu,
+                }
+            elif run_segmentation:  # Deep Learning
+                # Prepare representative position for process initialization
+                first_pos = None
+                if all_positions_flat and isinstance(all_positions_flat[0], str):
+                    first_pos = all_positions_flat[0]
+
+                seg_args = {
+                    "mode": self.mode,
+                    "pos": first_pos,
+                    "n_threads": self.n_threads,
+                    "model_name": self.model_name,
+                    "use_gpu": self.use_gpu,
+                }
+
+        # 2. TRACKING CHECKS & ARGS
+        if run_tracking:
+            # Single-position overwrite check
+            if (
+                len(all_positions_flat) == 1
+                and not self.parent_window.position_list.isMultipleSelection()
+            ):
+                p = all_positions_flat[0]
+                table_path = os.sep.join(
+                    [p, "output", "tables", f"trajectories_{self.mode}.csv"]
+                )
+                if os.path.exists(table_path):
+                    msgBox = QMessageBox()
+                    msgBox.setIcon(QMessageBox.Question)
+                    msgBox.setText(
+                        "A measurement table already exists. Previously annotated data for\nthis position will be lost. Do you want to proceed?"
+                    )
+                    msgBox.setWindowTitle("Info")
+                    msgBox.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+                    if msgBox.exec() == QMessageBox.No:
+                        run_tracking = False
+
+            if run_tracking:
+                track_args = {"mode": self.mode, "n_threads": self.n_threads}
+
+        # 3. MEASUREMENT ARGS
+        if run_measurement:
+            measure_args = {"mode": self.mode, "n_threads": self.n_threads}
+
+        # 4. SIGNAL ANALYSIS CHECKS & ARGS
+        if run_signals:
+            if (
+                len(all_positions_flat) == 1
+                and not self.parent_window.position_list.isMultipleSelection()
+            ):
+                p = all_positions_flat[0]
+                table_path = os.sep.join(
+                    [p, "output", "tables", f"trajectories_{self.mode}.csv"]
+                )
+                if os.path.exists(table_path):
+                    # Check for annotations (logic from original code)
+                    try:
+                        # Optimized reading: Check header first, then read interesting column
+                        header = pd.read_csv(table_path, nrows=0).columns
+                        if "class_color" in list(header):
+                            colors = pd.read_csv(table_path, usecols=["class_color"])[
+                                "class_color"
+                            ].unique()
+                            if "tab:orange" in colors or "tab:cyan" in colors:
                                 msgBox = QMessageBox()
                                 msgBox.setIcon(QMessageBox.Question)
                                 msgBox.setText(
@@ -1283,18 +1240,116 @@ class ProcessPanel(QFrame, Styles):
                                 msgBox.setStandardButtons(
                                     QMessageBox.Yes | QMessageBox.No
                                 )
-                                returnValue = msgBox.exec()
-                                if returnValue == QMessageBox.No:
-                                    return None
-                    self.signal_model_name = self.signal_models[
-                        self.signal_models_list.currentIndex()
-                    ]
-                    analyze_signals_at_position(
-                        self.pos, self.signal_model_name, self.mode
+                                if msgBox.exec() == QMessageBox.No:
+                                    run_signals = False
+                    except Exception as e:
+                        logger.warning(f"Could not check table for annotations: {e}")
+
+            if run_signals:
+                self.signal_model_name = self.signal_models[
+                    self.signal_models_list.currentIndex()
+                ]
+
+                model_complete_path = locate_signal_model(self.signal_model_name)
+                input_config_path = os.path.join(
+                    model_complete_path, "config_input.json"
+                )
+                with open(input_config_path) as config_file:
+                    input_config = json.load(config_file)
+
+                channels = input_config.get(
+                    "selected_channels", input_config.get("channels", [])
+                )
+
+                signal_args = {
+                    "model_name": self.signal_model_name,
+                    "mode": self.mode,
+                    "channels": channels,
+                }
+
+        # --- EXECUTE UNIFIED PROCESS ---
+        if any([run_segmentation, run_tracking, run_measurement, run_signals]):
+
+            process_args = {
+                "batch_structure": batch_structure,
+                "run_segmentation": run_segmentation,
+                "run_tracking": run_tracking,
+                "run_measurement": run_measurement,
+                "run_signals": run_signals,
+                "seg_args": seg_args,
+                "track_args": track_args,
+                "measure_args": measure_args,
+                "signal_args": signal_args,
+                "log_file": getattr(self.parent_window.parent_window, "log_file", None),
+            }
+
+            self.job = ProgressWindow(
+                UnifiedBatchProcess,
+                parent_window=self,
+                title=f"Processing {self.mode}",
+                process_args=process_args,
+            )
+            result = self.job.exec_()
+
+            if result == QDialog.Rejected:
+                self.reset_generalist_setup(0)
+                return None
+
+            # Post-Process actions (like updating list)
+            if run_signals:
+                from celldetective.gui.interactive_plots import InteractiveEventViewer
+
+                self.parent_window.update_position_options()
+
+                if len(all_positions_flat) == 1:
+                    p = all_positions_flat[0]
+                    mode_fixed = self.mode
+                    if self.mode.lower() in ["target", "targets"]:
+                        mode_fixed = "targets"
+                    elif self.mode.lower() in ["effector", "effectors"]:
+                        mode_fixed = "effectors"
+
+                    table_path = os.sep.join(
+                        [p, "output", "tables", f"trajectories_{mode_fixed}.csv"]
                     )
 
-            # self.stack = None
-        self.parent_window.update_position_options()
+                    if os.path.exists(table_path):
+                        # Determine event label
+                        event_label = None
+                        signal_name = None
+                        try:
+                            if hasattr(self, "signal_model_name"):
+                                model_complete_path = locate_signal_model(
+                                    self.signal_model_name
+                                )
+                                input_config_path = os.path.join(
+                                    model_complete_path, "config_input.json"
+                                )
+                                if os.path.exists(input_config_path):
+                                    with open(input_config_path) as f:
+                                        conf = json.load(f)
+                                    event_label = conf.get("label", None)
+                                    channels = conf.get("channels", [])
+                                    if channels:
+                                        signal_name = channels[0]
+                        except Exception as e:
+                            logger.warning(f"Could not determine event label: {e}")
+
+                        logger.info(
+                            f"Launching Interactive Event Viewer for {table_path} with label {event_label}"
+                        )
+                        self.viewer = InteractiveEventViewer(
+                            table_path,
+                            signal_name=signal_name,
+                            event_label=event_label,
+                            parent=self,
+                        )
+                        self.viewer.show()
+                        center_window(self.viewer)
+                    else:
+                        logger.warning(
+                            f"Could not find table for interactive viewer: {table_path}"
+                        )
         for action in [
             self.segment_action,
             self.track_action,
@@ -1911,14 +1966,14 @@ class NeighPanel(QFrame, Styles):
         self.pair_signal_models_list.addItems(signal_models)
 
     def open_signal_annotator_configuration_ui(self):
-        from celldetective.gui.settings import SettingsSignalAnnotator
+        from celldetective.gui.settings._settings_signal_annotator import SettingsSignalAnnotator
 
         self.mode = "pairs"
         self.config_signal_annotator = SettingsSignalAnnotator(self)
         self.config_signal_annotator.show()
 
     def open_signal_model_config_ui(self):
-        from celldetective.gui.settings import SettingsEventDetectionModelTraining
+        from celldetective.gui.settings._settings_event_model_training import SettingsEventDetectionModelTraining
 
         self.settings_pair_event_detection_training = (
             SettingsEventDetectionModelTraining(self, signal_mode="pairs")
@@ -1933,7 +1988,9 @@ class NeighPanel(QFrame, Styles):
             self.protocol_list.takeItem(current_item)
 
     def open_config_distance_threshold_neighborhood(self):
-        from celldetective.gui.settings import SettingsNeighborhood
+        from celldetective.gui.settings._settings_neighborhood import (
+            SettingsNeighborhood,
+        )
 
         self.ConfigNeigh = SettingsNeighborhood(
             parent_window=self,
@@ -1943,7 +2000,9 @@ class NeighPanel(QFrame, Styles):
         self.ConfigNeigh.show()
 
     def open_config_contact_neighborhood(self):
-        from celldetective.gui.settings import SettingsNeighborhood
+        from celldetective.gui.settings._settings_neighborhood import (
+            SettingsNeighborhood,
+        )
 
         self.ConfigNeigh = SettingsNeighborhood(
             parent_window=self,
@@ -1973,6 +2032,161 @@ class NeighPanel(QFrame, Styles):
         # self.freeze()
         # QApplication.setOverrideCursor(Qt.WaitCursor)
 
+        loop_iter = 0
+
+        if self.parent_window.position_list.isMultipleSelection():
+            msgBox = QMessageBox()
+            msgBox.setIcon(QMessageBox.Question)
+            msgBox.setText(
+                "If you continue, all positions will be processed.\nDo you want to proceed?"
+            )
+            msgBox.setWindowTitle("Info")
+            msgBox.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+            returnValue = msgBox.exec()
+            if returnValue == QMessageBox.No:
+                return None
+
+        for w_idx in self.well_index:
+
+            pos = self.parent_window.positions[w_idx]
+            pos_indices = self.parent_window.position_list.getSelectedIndices()
+
+            well = self.parent_window.wells[w_idx]
+
+            # Optimization: Glob once per well
+            all_well_positions = natsorted(
+                glob(
+                    well
+                    + f"{os.path.split(well)[-1].replace('W','').replace(os.sep,'')}*{os.sep}"
+                )
+            )
+
+            for pos_idx in pos_indices:
+                if pos_idx < len(all_well_positions):
+                    self.pos = all_well_positions[pos_idx]
+                else:
+                    continue
+                self.pos_name = extract_position_name(self.pos)
+                logger.info(f"Position {self.pos}...\nLoading stack movie...")
+
+                if not os.path.exists(self.pos + "output" + os.sep):
+                    os.mkdir(self.pos + "output" + os.sep)
+                if not os.path.exists(
+                    self.pos + os.sep.join(["output", "tables"]) + os.sep
+                ):
+                    os.mkdir(self.pos + os.sep.join(["output", "tables"]) + os.sep)
+
+                if self.neigh_action.isChecked():
+                    for protocol in self.protocols:
+
+                        process_args = {
+                            "pos": self.pos,
+                            "pos_name": self.pos_name,
+                            "protocol": protocol,
+                            "img_shape": (
+                                self.parent_window.shape_x,
+                                self.parent_window.shape_y,
+                            ),
+                            "log_file": getattr(
+                                self.parent_window.parent_window, "log_file", None
+                            ),
+                        }  # "n_threads": self.n_threads
+                        self.job = ProgressWindow(
+                            NeighborhoodProcess,
+                            parent_window=self,
+                            title="Neighborhood",
+                            process_args=process_args,
+                        )
+                        result = self.job.exec_()
+                        if result == QDialog.Accepted:
+                            pass
+                        elif result == QDialog.Rejected:
+                            return None
+
+                if self.measure_pairs_action.isChecked():
+                    rel_measure_at_position(self.pos)
+
+                if self.signal_analysis_action.isChecked():
+
+                    analyze_pair_signals_at_position(
+                        self.pos,
+                        self.pair_signal_models_list.currentText(),
+                        use_gpu=self.parent_window.parent_window.use_gpu,
+                        populations=self.parent_window.populations,
+                    )
+
+        self.parent_window.update_position_options()
+        for action in [
+            self.neigh_action,
+            self.measure_pairs_action,
+            self.signal_analysis_action,
+        ]:
+            if action.isChecked():
+                action.setChecked(False)
+
+        logger.info("Done.")
+        # 	self.well_index = np.linspace(0,len(self.wells)-1,len(self.wells),dtype=int)
+        # else:
+
+        self.well_index = self.parent_window.well_list.getSelectedIndices()
+        if len(self.well_index) == 0:
+            msgBox = QMessageBox()
+            msgBox.setIcon(QMessageBox.Warning)
+            msgBox.setText("Please select at least one well first...")
+            msgBox.setWindowTitle("Warning")
+            msgBox.setStandardButtons(QMessageBox.Ok)
+            returnValue = msgBox.exec()
+            if returnValue == QMessageBox.Ok:
+                return None
+            else:
+                return None
+
+        logger.info(f"Processing {self.parent_window.well_list.currentText()}...")
+
+        # self.freeze()
+        # QApplication.setOverrideCursor(Qt.WaitCursor)
+
+        idx = self.parent_window.populations.index(self.mode)
+        self.threshold_config = self.threshold_configs[idx]
+
+        self.load_available_tables()
+
+        if self.df is not None and self.segment_action.isChecked():
+            msgBox = QMessageBox()
+            msgBox.setIcon(QMessageBox.Question)
+            msgBox.setText(
+                "Measurement tables have been found... Re-segmenting may create mismatches between the cell labels and the associated measurements. Do you want to erase the tables post-segmentation?"
+            )
+            msgBox.setWindowTitle("Info")
+            msgBox.setStandardButtons(
+                QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel
+            )
+            returnValue = msgBox.exec()
+            if returnValue == QMessageBox.No:
+                pass
+            elif returnValue == QMessageBox.Cancel:
+                return None
+            else:
+                logger.info("erase tabs!")
+                tabs = [
+                    pos
+                    + os.sep.join(["output", "tables", f"trajectories_{self.mode}.csv"])
+                    for pos in self.df_pos_info["pos_path"].unique()
+                ]
+                # tabs += [pos+os.sep.join(['output', 'tables', f'trajectories_pairs.csv']) for pos in self.df_pos_info['pos_path'].unique()]
+                tabs += [
+                    pos
+                    + os.sep.join(
+                        ["output", "tables", f"napari_{self.mode}_trajectories.npy"]
+                    )
+                    for pos in self.df_pos_info["pos_path"].unique()
+                ]
+                for t in tabs:
+                    remove_file_if_exists(t.replace(".csv", ".pkl"))
+                    try:
+                        os.remove(t)
+                    except:
+                        pass
         loop_iter = 0
 
         if self.parent_window.position_list.isMultipleSelection():

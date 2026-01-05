@@ -1,3 +1,4 @@
+from distutils.dir_util import copy_tree
 from multiprocessing import Process
 import time
 import os
@@ -14,7 +15,6 @@ from celldetective.utils.image_cleaning import interpolate_nan
 from celldetective.utils.normalization import normalize_multichannel
 from stardist import fill_label_holes
 from art import tprint
-from distutils.dir_util import copy_tree
 from csbdeep.utils import save_json
 
 
