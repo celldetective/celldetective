@@ -1,4 +1,81 @@
+import collections
+
 import numpy as np
+
+
+def consume(iterator):
+    """
+    adapted from https://github.com/CSBDeep/CSBDeep/blob/main/csbdeep/utils/utils.py
+    """
+    collections.deque(iterator, maxlen=0)
+
+
+def axes_check_and_normalize(axes, length=None, disallowed=None, return_allowed=False):
+    """
+    adapted from https://github.com/CSBDeep/CSBDeep/blob/main/csbdeep/utils/utils.py
+    S(ample), T(ime), C(hannel), Z, Y, X
+    """
+    allowed = "STCZYX"
+    assert axes is not None,ValueError("axis cannot be None.")
+    axes = str(axes).upper()
+    consume(a in allowed for a in axes)
+    disallowed is None or consume(a not in disallowed for a in axes)
+    consume(axes.count(a) == 1 for a in axes)
+    length is None or len(axes) == length
+    return (axes, allowed) if return_allowed else axes
+
+
+def axes_dict(axes):
+    """
+    adapted from https://github.com/CSBDeep/CSBDeep/blob/main/csbdeep/utils/utils.py
+    from axes string to dict
+    """
+    axes, allowed = axes_check_and_normalize(axes, return_allowed=True)
+    return {a: None if axes.find(a) == -1 else axes.find(a) for a in allowed}
+    # return collections.namedtuple('Axes',list(allowed))(*[None if axes.find(a) == -1 else axes.find(a) for a in allowed ])
+
+
+def move_image_axes(x, fr, to, adjust_singletons=False):
+    """
+    adapted from https://github.com/CSBDeep/CSBDeep/blob/main/csbdeep/utils/utils.py
+    x: ndarray
+    fr,to: axes string (see `axes_dict`)
+    """
+    fr = axes_check_and_normalize(fr, length=x.ndim)
+    to = axes_check_and_normalize(to)
+
+    fr_initial = fr
+    x_shape_initial = x.shape
+    adjust_singletons = bool(adjust_singletons)
+    if adjust_singletons:
+        # remove axes not present in 'to'
+        slices = [slice(None) for _ in x.shape]
+        for i, a in enumerate(fr):
+            if (a not in to) and (x.shape[i] == 1):
+                # remove singleton axis
+                slices[i] = 0
+                fr = fr.replace(a, "")
+        x = x[tuple(slices)]
+        # add dummy axes present in 'to'
+        for i, a in enumerate(to):
+            if a not in fr:
+                # add singleton axis
+                x = np.expand_dims(x, -1)
+                fr += a
+
+    if set(fr) != set(to):
+        _adjusted = (
+            "(adjusted to %s and %s) " % (x.shape, fr) if adjust_singletons else ""
+        )
+        raise ValueError(
+            "image with shape %s and axes %s %snot compatible with target axes %s."
+            % (x_shape_initial, fr_initial, _adjusted, to)
+        )
+
+    ax_from, ax_to = axes_dict(fr), axes_dict(to)
+    if fr == to:
+        return x
+    return np.moveaxis(x, [ax_from[a] for a in fr], [ax_to[a] for a in fr])
 
 
 def estimate_unreliable_edge(activation_protocol=[["gauss", 2], ["std", 4]]):

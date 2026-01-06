@@ -40,7 +40,7 @@ def contour_of_instance_segmentation(
     # Generate a binary mask containing the contour of the segmented instances with a maximum distance of 3 pixels.
 
     """
-    if isinstance(distance, (list, tuple)) or distance >= 0:
+    if isinstance(distance, (list, tuple)):
 
         edt = distance_transform_edt(label)
 

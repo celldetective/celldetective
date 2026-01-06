@@ -1,7 +1,26 @@
 import gc
 
 import numpy as np
-from csbdeep.utils import normalize_mi_ma
+
+
+def normalize_mi_ma(x, mi, ma, clip=False, eps=1e-20, dtype=np.float32):
+    # from csbdeep https://github.com/CSBDeep/CSBDeep/blob/main/csbdeep/utils/utils.py
+    if dtype is not None:
+        x = x.astype(dtype, copy=False)
+        mi = dtype(mi) if np.isscalar(mi) else mi.astype(dtype, copy=False)
+        ma = dtype(ma) if np.isscalar(ma) else ma.astype(dtype, copy=False)
+        eps = dtype(eps)
+    try:
+        import numexpr
+
+        x = numexpr.evaluate("(x - mi) / ( ma - mi + eps )")
+    except ImportError:
+        x = (x - mi) / (ma - mi + eps)
+
+    if clip:
+        x = np.clip(x, 0, 1)
+
+    return x
 
 
 def normalize(

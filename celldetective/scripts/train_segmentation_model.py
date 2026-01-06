@@ -15,10 +15,15 @@ from celldetective.utils.image_augmenters import augmenter
 from celldetective.utils.image_loaders import load_image_dataset
 from celldetective.utils.image_cleaning import interpolate_nan
 from celldetective.utils.normalization import normalize_multichannel
-from stardist import fill_label_holes
+from celldetective.utils.mask_cleaning import fill_label_holes
 from art import tprint
 from distutils.dir_util import copy_tree
-from csbdeep.utils import save_json
+
+
+def save_json(data, fpath, **kwargs):
+    with open(fpath, "w") as f:
+        f.write(json.dumps(data, **kwargs))
+
 
 tprint("Train")
 

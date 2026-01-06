@@ -1,14 +1,5 @@
 from multiprocessing import Process
 import time
-from celldetective.utils.image_loaders import (
-    locate_labels,
-    auto_load_number_of_frames,
-    _load_frames_to_measure,
-    _get_img_num_per_channel,
-)
-from celldetective.utils.data_cleaning import _mask_intensity_measurements
-from celldetective.utils.io import remove_file_if_exists
-from celldetective.utils.parsing import config_section_to_dict
 from pathlib import Path, PurePath
 from glob import glob
 from tqdm import tqdm
@@ -18,13 +9,24 @@ import concurrent.futures
 import datetime
 import os
 import json
-from celldetective.utils.data_loaders import interpret_tracking_configuration
-from celldetective.utils.experiment import extract_experiment_channels
 from celldetective.measure import drop_tonal_features, measure_features
 from celldetective.tracking import track
 import pandas as pd
 from natsort import natsorted
 from art import tprint
+from celldetective.log_manager import get_logger
+import traceback
+from skimage.io import imread
+
+from celldetective.utils.data_cleaning import _mask_intensity_measurements
+from celldetective.utils.data_loaders import interpret_tracking_configuration
+from celldetective.utils.experiment import extract_experiment_channels
+from celldetective.utils.image_loaders import _get_img_num_per_channel, auto_load_number_of_frames, \
+    _load_frames_to_measure
+from celldetective.utils.io import remove_file_if_exists
+from celldetective.utils.parsing import config_section_to_dict
+
+logger = get_logger(__name__)
 
 
 class TrackingProcess(Process):
@@ -39,24 +41,7 @@ class TrackingProcess(Process):
             for key, value in process_args.items():
                 setattr(self, key, value)
 
-        tprint("Track")
         self.timestep_dataframes = []
-
-        # Experiment
-        self.prepare_folders()
-
-        self.locate_experiment_config()
-        self.extract_experiment_parameters()
-        self.read_tracking_instructions()
-        self.detect_movie_and_labels()
-        self.detect_channels()
-
-        self.write_log()
-
-        if not self.btrack_option:
-            self.features = []
-            self.channel_names = None
-            self.haralick_options = None
 
         self.sum_done = 0
         self.t0 = time.time()
@@ -65,7 +50,7 @@ class TrackingProcess(Process):
 
         instr_path = PurePath(self.exp_dir, Path(f"{self.instruction_file}"))
         if os.path.exists(instr_path):
-            print(
+            logger.info(
                 f"Tracking instructions for the {self.mode} population have been successfully loaded..."
             )
             with open(instr_path, "r") as f:
@@ -107,7 +92,7 @@ class TrackingProcess(Process):
             if "memory" in self.instructions:
                 self.memory = self.instructions["memory"]
         else:
-            print(
+            logger.info(
                 "Tracking instructions could not be located... Using a standard bTrack motion model instead..."
             )
             self.btrack_config = interpret_tracking_configuration(None)
@@ -212,7 +197,7 @@ class TrackingProcess(Process):
         self.config = PurePath(self.exp_dir, Path("config.ini"))
 
         if not os.path.exists(self.config):
-            print("The configuration file for the experiment was not found...")
+            logger.info("The configuration file for the experiment was not found...")
             self.abort_process()
 
     def detect_movie_and_labels(self):
@@ -221,9 +206,18 @@ class TrackingProcess(Process):
             glob(self.pos + f"{self.label_folder}" + os.sep + "*.tif")
         )
         if len(self.label_path) > 0:
-            print(f"Found {len(self.label_path)} segmented frames...")
+            logger.info(f"Found {len(self.label_path)} segmented frames...")
+            # Optimize: Create a map of frame index to file path
+            self.label_map = {}
+            for path in self.label_path:
+                try:
+                    # Assumes format ####.tif, e.g., 0001.tif
+                    frame_idx = int(os.path.basename(path).split(".")[0])
+                    self.label_map[frame_idx] = path
+                except ValueError:
+                    continue
         else:
-            print(
+            logger.error(
                 f"No segmented frames have been found. Please run segmentation first. Abort..."
             )
             self.abort_process()
@@ -234,7 +228,7 @@ class TrackingProcess(Process):
             self.file = None
             self.haralick_option = None
             self.features = drop_tonal_features(self.features)
-            print("Movie could not be found. Check the prefix.")
+            logger.warning("Movie could not be found. Check the prefix.")
 
         len_movie_auto = auto_load_number_of_frames(self.file)
         if len_movie_auto is not None:
@@ -252,8 +246,16 @@ class TrackingProcess(Process):
                 img = _load_frames_to_measure(
                     self.file, indices=self.img_num_channels[:, t]
                 )
-                lbl = locate_labels(self.pos, population=self.mode, frames=t)
-                if lbl is None:
+                # Optimize: Direct lookup instead of glob
+                if t in self.label_map:
+                    try:
+                        # Load image from path in map
+                        lbl = np.array(imread(self.label_map[t]))
+                    except Exception as e:
+                        logger.error(f"Failed to load label for frame {t}: {e}")
+                        continue
+                else:
+                    # Fallback or skip if not in map
                     continue
 
                 df_props = measure_features(
@@ -272,41 +274,80 @@ class TrackingProcess(Process):
 
                 props.append(df_props)
 
-                self.sum_done += 1 / self.len_movie * 50
-                mean_exec_per_step = (time.time() - self.t0) / (
-                    self.sum_done * self.len_movie / 50 + 1
-                )
-                pred_time = (
-                    self.len_movie - (self.sum_done * self.len_movie / 50 + 1)
-                ) * mean_exec_per_step + 30
-                self.queue.put([self.sum_done, pred_time])
+                # Progress Update
+                self.loop_count += 1
+
+                data = {}
+
+                # Frame Progress
+                frame_progress = (self.loop_count / self.len_movie) * 100
+                if frame_progress > 100:
+                    frame_progress = 100
+                data["frame_progress"] = frame_progress
+
+                # Frame Time Estimation
+                elapsed = time.time() - getattr(self, "t0_frame", time.time())
+                if self.loop_count > 0:
+                    avg = elapsed / self.loop_count
+                    rem = self.len_movie - self.loop_count
+                    rem_t = rem * avg
+                    mins = int(rem_t // 60)
+                    secs = int(rem_t % 60)
+                    data["frame_time"] = f"Tracking: {mins} m {secs} s"
+                else:
+                    data["frame_time"] = "Tracking..."
+
+                self.queue.put(data)
 
         except Exception as e:
-            print(e)
+            logger.error(e)
+            traceback.print_exc()
 
         return props
 
-    def run(self):
+    def setup_for_position(self, pos):
+
+        self.pos = pos
+        # Experiment
+        self.prepare_folders()
+        self.locate_experiment_config()
+        self.extract_experiment_parameters()
+        self.read_tracking_instructions()
+        self.detect_movie_and_labels()
+        self.detect_channels()
+        self.write_log()
+
+    def process_position(self):
+
+        tprint("Track")
 
         self.indices = list(range(self.img_num_channels.shape[1]))
         chunks = np.array_split(self.indices, self.n_threads)
 
         self.timestep_dataframes = []
+        self.t0_frame = time.time()
+        self.loop_count = 0
+
         with concurrent.futures.ThreadPoolExecutor(
             max_workers=self.n_threads
         ) as executor:
             results = executor.map(self.parallel_job, chunks)
             try:
                 for i, return_value in enumerate(results):
-                    print(f"Thread {i} completed...")
-                    # print(f"Thread {i} output check: ",return_value)
+                    logger.info(f"Thread {i} completed...")
                     self.timestep_dataframes.extend(return_value)
             except Exception as e:
-                print("Exception: ", e)
+                logger.error("Exception: ", e)
 
-        print("Features successfully measured...")
+        logger.info("Features successfully measured...")
+
+        if not self.timestep_dataframes:
+            raise ValueError("No cells detected in any frame. Skipping position.")
 
         df = pd.concat(self.timestep_dataframes)
+        if df.empty:
+            raise ValueError("Dataframe is empty. Skipping position.")
+
         df = df.replace([np.inf, -np.inf], np.nan)
 
         df.reset_index(inplace=True, drop=True)
@@ -318,23 +359,31 @@ class TrackingProcess(Process):
         else:
             tracker = "trackpy"
 
-        # do tracking
-        trajectories, napari_data = track(
-            None,
-            configuration=self.btrack_config,
-            objects=df,
-            spatial_calibration=self.spatial_calibration,
-            channel_names=self.channel_names,
-            return_napari_data=True,
-            optimizer_options={"tm_lim": int(12e4)},
-            track_kwargs={"step_size": 100},
-            clean_trajectories_kwargs=self.post_processing_options,
-            volume=(self.shape_x, self.shape_y),
-            btrack_option=self.btrack_option,
-            search_range=self.search_range,
-            memory=self.memory,
-        )
-        print(f"Tracking successfully performed...")
+        try:
+            trajectories, napari_data = track(
+                None,
+                configuration=self.btrack_config,
+                objects=df,
+                spatial_calibration=self.spatial_calibration,
+                channel_names=self.channel_names,
+                return_napari_data=True,
+                optimizer_options={"tm_lim": int(12e4)},
+                track_kwargs={"step_size": 100},
+                clean_trajectories_kwargs=self.post_processing_options,
+                volume=(self.shape_x, self.shape_y),
+                btrack_option=self.btrack_option,
+                search_range=self.search_range,
+                memory=self.memory,
+            )
+        except Exception as e:
+            logger.error(f"Tracking failed: {e}")
+            if "search_range" in str(e) or "SubnetOversizeException" in str(e):
+                logger.error(
+                    "Suggestion: Try reducing the 'search_range' (maxdisp) in your tracking configuration."
+                )
+            raise e
+
+        logger.info("Tracking successfully performed...")
 
         # out trajectory table, create POSITION_X_um, POSITION_Y_um, TIME_min (new ones)
         # Save napari data
@@ -347,7 +396,7 @@ class TrackingProcess(Process):
         trajectories.to_csv(
             self.pos + os.sep.join(["output", "tables", self.table_name]), index=False
         )
-        print(
+        logger.info(
             f"Trajectory table successfully exported in {os.sep.join(['output', 'tables'])}..."
         )
 
@@ -360,10 +409,12 @@ class TrackingProcess(Process):
         del napari_data
         gc.collect()
 
-        # Send end signal
-        self.queue.put([100, 0])
-        time.sleep(1)
+    def run(self):
 
+        self.setup_for_position(self.pos)
+        self.process_position()
+
+        # Send end signal
         self.queue.put("finished")
         self.queue.close()
 

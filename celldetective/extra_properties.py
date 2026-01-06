@@ -1,45 +1,45 @@
 """
-Copyright © 2022 Laboratoire Adhesion et Inflammation  
+Copyright © 2022 Laboratoire Adhesion et Inflammation
 Authored by R. Torro, K. Dervanova, L. Limozin
 
-This module defines additional measurement functions for use with `regionprops` via `measure_features`.  
+This module defines additional measurement functions for use with `regionprops` via `measure_features`.
 
 Usage
 -----
 Each function must follow these conventions:
 
-- **First argument:** `regionmask` (numpy array)  
+- **First argument:** `regionmask` (numpy array)
   A binary mask of the cell of interest, as provided by `regionprops`.
-- **Optional second argument:** `intensity_image` (numpy array)  
-  An image crop/bounding box associated with the cell (single-channel at a time).  
+- **Optional second argument:** `intensity_image` (numpy array)
+  An image crop/bounding box associated with the cell (single-channel at a time).
 
-Unlike the default `regionprops` from `scikit-image`, the cell image is **not** masked with zeros outside its boundaries.  
-This allows thresholding techniques to be used in measurements.  
+Unlike the default `regionprops` from `scikit-image`, the cell image is **not** masked with zeros outside its boundaries.
+This allows thresholding techniques to be used in measurements.
 
 Naming Conventions & Indexing
 ------------------------------
-- The measurement name is derived from the function name.  
-- If a function returns multiple values (e.g., for multichannel images), outputs are labeled sequentially:  
-  `function-0`, `function-1`, etc.  
-- To rename these outputs, use `rename_intensity_column` from `celldetective.utils`.  
-- `"intensity"` in function names is automatically replaced with the actual channel name:  
-  - Example: `"intensity-0"` → `"brightfield_channel"`.  
-- **Avoid digits smaller than the number of channels in function names** to prevent indexing conflicts.  
-  Prefer text-based names instead:  
+- The measurement name is derived from the function name.
+- If a function returns multiple values (e.g., for multichannel images), outputs are labeled sequentially:
+  `function-0`, `function-1`, etc.
+- To rename these outputs, use `rename_intensity_column` from `celldetective.utils`.
+- `"intensity"` in function names is automatically replaced with the actual channel name:
+  - Example: `"intensity-0"` → `"brightfield_channel"`.
+- **Avoid digits smaller than the number of channels in function names** to prevent indexing conflicts.
+  Prefer text-based names instead:
 
   .. code-block:: python
 
-	  # Bad practice:
-	  def intensity2(regionmask, intensity_image):
-		  pass
+          # Bad practice:
+          def intensity2(regionmask, intensity_image):
+                  pass
 
-	  # Recommended:
-	  def intensity_two(regionmask, intensity_image):
-		  pass
+          # Recommended:
+          def intensity_two(regionmask, intensity_image):
+                  pass
 
 GUI Integration
 ---------------
-New functions are **automatically** added to the list of available measurements in the graphical interface.  
+New functions are **automatically** added to the list of available measurements in the graphical interface.
 """
 
 import warnings
@@ -50,7 +50,7 @@ from scipy.spatial.distance import euclidean
 from celldetective.utils.masks import contour_of_instance_segmentation
 from celldetective.utils.image_cleaning import interpolate_nan
 import skimage.measure as skm
-from stardist import fill_label_holes
+from celldetective.utils.mask_cleaning import fill_label_holes
 from celldetective.segmentation import segment_frame_from_thresholds
 from sklearn.metrics import r2_score
 

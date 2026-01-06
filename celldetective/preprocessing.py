@@ -579,7 +579,7 @@ def apply_background_to_stack(
     corrected_stack = np.array(corrected_stack)
 
     if export:
-        from csbdeep.io import save_tiff_imagej_compatible
+        from celldetective.utils.io import save_tiff_imagej_compatible
 
         save_tiff_imagej_compatible(
             os.sep.join([path, newfile]), corrected_stack, axes="TYXC"

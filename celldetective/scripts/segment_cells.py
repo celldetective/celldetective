@@ -35,7 +35,7 @@ from glob import glob
 from shutil import rmtree
 from tqdm import tqdm
 import numpy as np
-from csbdeep.io import save_tiff_imagej_compatible
+from celldetective.utils.io import save_tiff_imagej_compatible
 import gc
 from art import tprint
 import concurrent.futures

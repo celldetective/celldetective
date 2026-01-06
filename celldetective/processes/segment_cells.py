@@ -298,7 +298,7 @@ class SegmentCellDLProcess(BaseSegmentProcess):
 
             Y_pred = _check_label_dims(Y_pred, file=self.file)
 
-            from csbdeep.io import save_tiff_imagej_compatible
+            from celldetective.utils.io import save_tiff_imagej_compatible
 
             save_tiff_imagej_compatible(
                 self.pos + os.sep.join([self.label_folder, f"{str(t).zfill(4)}.tif"]),
@@ -555,7 +555,7 @@ class SegmentCellThresholdProcess(BaseSegmentProcess):
                 if len(self.instructions) > 1:
                     mask = merge_instance_segmentation(masks, mode="OR")
 
-                from csbdeep.io import save_tiff_imagej_compatible
+                from celldetective.utils.io import save_tiff_imagej_compatible
 
                 save_tiff_imagej_compatible(
                     os.sep.join(

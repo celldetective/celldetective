@@ -572,7 +572,7 @@ def apply_watershed(binary_image, coords, distance, fill_holes=True):
     labels = watershed(-distance, markers, mask=binary_image)
     if fill_holes:
         try:
-            from stardist import fill_label_holes
+            from celldetective.utils.mask_cleaning import fill_label_holes
 
             labels = fill_label_holes(labels)
         except ImportError as ie:

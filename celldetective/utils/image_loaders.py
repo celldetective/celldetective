@@ -5,7 +5,7 @@ from glob import glob
 from typing import Optional
 
 import numpy as np
-from csbdeep.io import save_tiff_imagej_compatible
+from celldetective.utils.io import save_tiff_imagej_compatible
 from imageio import v2 as imageio
 from natsort import natsorted
 from tifffile import imread, TiffFile

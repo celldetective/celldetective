@@ -84,8 +84,8 @@ class UnifiedBatchProcess(Process):
                 )
 
                 if seg_worker.model_type == "stardist":
+                    logger.info("Loading the StarDist library...")
                     from celldetective.utils.stardist import _prep_stardist_model
-
                     model, scale_model = _prep_stardist_model(
                         seg_worker.model_name,
                         Path(seg_worker.model_complete_path).parent,
@@ -93,6 +93,7 @@ class UnifiedBatchProcess(Process):
                         scale=seg_worker.scale,
                     )
                 elif seg_worker.model_type == "cellpose":
+                    logger.info("Loading the cellpose library...")
                     from celldetective.utils.cellpose import _prep_cellpose_model
 
                     model, scale_model = _prep_cellpose_model(

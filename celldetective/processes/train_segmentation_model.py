@@ -13,9 +13,9 @@ from celldetective.utils.image_augmenters import augmenter
 from celldetective.utils.image_loaders import load_image_dataset
 from celldetective.utils.image_cleaning import interpolate_nan
 from celldetective.utils.normalization import normalize_multichannel
-from stardist import fill_label_holes
+from celldetective.utils.mask_cleaning import fill_label_holes
 from art import tprint
-from csbdeep.utils import save_json
+from celldetective.utils.io import save_json
 
 
 class TrainSegModelProcess(Process):

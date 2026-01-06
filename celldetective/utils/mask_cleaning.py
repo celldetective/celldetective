@@ -5,10 +5,42 @@ import numpy as np
 import pandas as pd
 from skimage.measure import regionprops_table, label
 from skimage.transform import resize
-from stardist import fill_label_holes
 from tqdm import tqdm
 
 from celldetective.utils.image_loaders import load_frames
+from scipy.ndimage import binary_fill_holes
+from scipy.ndimage import find_objects
+
+def fill_label_holes(lbl_img, **kwargs):
+    """Fill small holes in label image.
+    from https://github.com/stardist/stardist/blob/main/stardist/utils.py
+    """
+
+    # TODO: refactor 'fill_label_holes' and 'edt_prob' to share code
+    def grow(sl, interior):
+        return tuple(
+            slice(s.start - int(w[0]), s.stop + int(w[1])) for s, w in zip(sl, interior)
+        )
+
+    def shrink(interior):
+        return tuple(slice(int(w[0]), (-1 if w[1] else None)) for w in interior)
+
+    objects = find_objects(lbl_img)
+    lbl_img_filled = np.zeros_like(lbl_img)
+    for i, sl in enumerate(objects, 1):
+        if sl is None:
+            continue
+        interior = [(s.start > 0, s.stop < sz) for s, sz in zip(sl, lbl_img.shape)]
+        shrink_slice = shrink(interior)
+        grown_mask = lbl_img[grow(sl, interior)] == i
+        mask_filled = binary_fill_holes(grown_mask, **kwargs)[shrink_slice]
+        lbl_img_filled[sl][mask_filled] = i
+    if lbl_img.min() < 0:
+        # preserve (and fill holes in) negative labels ('find_objects' ignores these)
+        lbl_neg_filled = -fill_label_holes(-np.minimum(lbl_img, 0))
+        mask = lbl_neg_filled < 0
+        lbl_img_filled[mask] = lbl_neg_filled[mask]
+    return lbl_img_filled
 
 
 def _check_label_dims(lbl, file=None, template=None):

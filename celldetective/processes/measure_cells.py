@@ -6,7 +6,6 @@ import json
 from pathlib import Path, PurePath
 
 from celldetective.utils.image_loaders import (
-    locate_labels,
     auto_load_number_of_frames,
     load_frames,
     _get_img_num_per_channel,
@@ -17,19 +16,10 @@ from celldetective.utils.data_cleaning import (
     _extract_coordinates_from_features,
     remove_trajectory_measurements,
 )
-from celldetective.measure import (
-    drop_tonal_features,
-    measure_features,
-    measure_isotropic_intensity,
-    measure_radial_distance_to_center,
-    center_of_mass_to_abs_coordinates,
-)
-
 from glob import glob
 from tqdm import tqdm
 import numpy as np
 import concurrent.futures
-import pandas as pd
 from natsort import natsorted
 from art import tprint
 from typing import Optional, Union
@@ -247,6 +237,7 @@ class MeasurementProcess(Process):
             self.abort_process()
 
     def detect_tracks(self):
+        import pandas as pd
 
         # Load trajectories, add centroid if not in trajectory
         self.trajectories = self.pos + os.sep.join(
@@ -296,6 +287,7 @@ class MeasurementProcess(Process):
                 self.pos + os.sep.join(["movie", f"{self.movie_prefix}*.tif"])
             )[0]
         except IndexError:
+            from celldetective.measure import drop_tonal_features
             self.file = None
             self.haralick_option = None
             self.features = drop_tonal_features(self.features)
@@ -305,6 +297,7 @@ class MeasurementProcess(Process):
             self.len_movie = len_movie_auto
 
     def parallel_job(self, indices):
+        import pandas as pd
 
         measurements = []
 
@@ -319,7 +312,7 @@ class MeasurementProcess(Process):
                 )
 
             if self.label_path is not None:
-
+                from celldetective.utils.image_loaders import locate_labels
                 lbl = locate_labels(self.pos, population=self.mode, frames=t)
                 if lbl is None:
                     continue
@@ -336,7 +329,7 @@ class MeasurementProcess(Process):
                     ].copy()
 
             if self.do_features:
-
+                from celldetective.measure import measure_features
                 feature_table = measure_features(
                     img,
                     lbl,
@@ -364,6 +357,7 @@ class MeasurementProcess(Process):
                 )
 
             if self.do_iso_intensities and not self.trajectories is None:
+                from celldetective.measure import measure_isotropic_intensity
                 iso_table = measure_isotropic_intensity(
                     positions_at_t,
                     img,
@@ -399,7 +393,10 @@ class MeasurementProcess(Process):
                     [c for c in measurements_at_t.columns if not c.endswith("_delme")]
                 ]
 
+            from celldetective.measure import center_of_mass_to_abs_coordinates
             measurements_at_t = center_of_mass_to_abs_coordinates(measurements_at_t)
+
+            from celldetective.measure import measure_radial_distance_to_center
             measurements_at_t = measure_radial_distance_to_center(
                 measurements_at_t, volume=img.shape, column_labels=self.column_labels
             )
@@ -451,6 +448,7 @@ class MeasurementProcess(Process):
         self.write_log()
 
     def process_position(self):
+        import pandas as pd
 
         tprint("Measure")
 
