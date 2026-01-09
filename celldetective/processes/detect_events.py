@@ -61,6 +61,12 @@ class SignalAnalysisProcess(Process):
 
             trajectories = pd.read_csv(trajectories_path)
 
+            if self.column_labels["track"] not in trajectories.columns:
+                logger.warning(
+                    f"Column {self.column_labels['track']} not found in {trajectories_path}. Skipping position."
+                )
+                return
+
             # --- Logic adapted from analyze_signals to include progress ---
 
             # Configuration checks (similar to analyze_signals)

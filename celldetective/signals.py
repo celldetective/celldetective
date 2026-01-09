@@ -851,6 +851,7 @@ class SignalDetectionModel(object):
         # load config
         with open(os.sep.join([self.pretrained, "config_input.json"])) as config_file:
             model_config = json.load(config_file)
+        self.config = model_config
 
         req_channels = model_config["channels"]
         print(f"Required channels read from pretrained model: {req_channels}")

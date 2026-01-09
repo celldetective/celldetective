@@ -21,8 +21,11 @@ from skimage.io import imread
 from celldetective.utils.data_cleaning import _mask_intensity_measurements
 from celldetective.utils.data_loaders import interpret_tracking_configuration
 from celldetective.utils.experiment import extract_experiment_channels
-from celldetective.utils.image_loaders import _get_img_num_per_channel, auto_load_number_of_frames, \
-    _load_frames_to_measure
+from celldetective.utils.image_loaders import (
+    _get_img_num_per_channel,
+    auto_load_number_of_frames,
+    _load_frames_to_measure,
+)
 from celldetective.utils.io import remove_file_if_exists
 from celldetective.utils.parsing import config_section_to_dict
 
@@ -342,11 +345,13 @@ class TrackingProcess(Process):
         logger.info("Features successfully measured...")
 
         if not self.timestep_dataframes:
-            raise ValueError("No cells detected in any frame. Skipping position.")
+            logger.warning("No cells detected in any frame. Skipping position.")
+            return
 
         df = pd.concat(self.timestep_dataframes)
         if df.empty:
-            raise ValueError("Dataframe is empty. Skipping position.")
+            logger.warning("Dataframe is empty. Skipping position.")
+            return
 
         df = df.replace([np.inf, -np.inf], np.nan)
 
@@ -379,8 +384,9 @@ class TrackingProcess(Process):
             logger.error(f"Tracking failed: {e}")
             if "search_range" in str(e) or "SubnetOversizeException" in str(e):
                 logger.error(
-                    "Suggestion: Try reducing the 'search_range' (maxdisp) in your tracking configuration."
+                    "Suggestion: Try reducing the 'search_range' (maxdisp) in your tracking configuration. Skipping tracking for this position."
                 )
+                return
             raise e
 
         logger.info("Tracking successfully performed...")

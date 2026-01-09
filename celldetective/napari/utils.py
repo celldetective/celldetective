@@ -7,6 +7,7 @@ import napari
 import numpy as np
 import pandas as pd
 from PyQt5.QtWidgets import QMessageBox, QWidget, QVBoxLayout
+import PyQt5.QtSvg
 from celldetective.utils.io import save_tiff_imagej_compatible
 from magicgui import magicgui
 from skimage.measure import regionprops_table
@@ -19,12 +20,16 @@ from celldetective.utils.image_loaders import locate_labels, locate_stack_and_la
 from celldetective.utils.data_loaders import get_position_table, load_tracking_data
 from celldetective.utils.experiment import (
     extract_experiment_from_position,
+    _get_contrast_limits,
     get_experiment_wells,
     get_experiment_labels,
     get_experiment_metadata,
     extract_experiment_channels,
 )
 from celldetective.utils.parsing import config_section_to_dict
+from celldetective import get_logger
+
+logger = get_logger()
 
 
 def control_tracks(
@@ -138,9 +143,16 @@ def view_tracks_in_napari(
 
     vertices, tracks, properties, graph = tracks_to_napari(df, exclude_nans=True)
 
+    contrast_limits = _get_contrast_limits(stack)
+
     viewer = napari.Viewer()
     if stack is not None:
-        viewer.add_image(stack, channel_axis=-1, colormap=["gray"] * stack.shape[-1])
+        viewer.add_image(
+            stack,
+            channel_axis=-1,
+            colormap=["gray"] * stack.shape[-1],
+            contrast_limits=contrast_limits,
+        )
     if labels is not None:
         labels_layer = viewer.add_labels(
             labels.astype(int), name="segmentation", opacity=0.4
@@ -727,11 +739,18 @@ def control_segmentation_napari(
     stack, labels = locate_stack_and_labels(
         position, prefix=prefix, population=population
     )
+    contrast_limits = _get_contrast_limits(stack)
+
     output_folder = position + f"labels_{population}{os.sep}"
-    print(f"Shape of the loaded image stack: {stack.shape}...")
+    logger.info(f"Shape of the loaded image stack: {stack.shape}...")
 
     viewer = napari.Viewer()
-    viewer.add_image(stack, channel_axis=-1, colormap=["gray"] * stack.shape[-1])
+    viewer.add_image(
+        stack,
+        channel_axis=-1,
+        colormap=["gray"] * stack.shape[-1],
+        contrast_limits=contrast_limits,
+    )
     viewer.add_labels(labels.astype(int), name="segmentation", opacity=0.4)
 
     button_container = QWidget()
@@ -770,7 +789,7 @@ def control_segmentation_napari(
         del labels
         gc.collect()
 
-    print("napari viewer was successfully closed...")
+    logger.info("napari viewer was successfully closed...")
 
 
 def correct_annotation(filename):
@@ -813,9 +832,14 @@ def correct_annotation(filename):
         labels = np.zeros_like(img[:, :, 0]).astype(int)[np.newaxis, :, :]
 
     stack = img[np.newaxis, :, :, :]
-
+    contrast_limits = _get_contrast_limits(stack)
     viewer = napari.Viewer()
-    viewer.add_image(stack, channel_axis=-1, colormap=["gray"] * stack.shape[-1])
+    viewer.add_image(
+        stack,
+        channel_axis=-1,
+        colormap=["gray"] * stack.shape[-1],
+        constrast_limits=contrast_limits,
+    )
     viewer.add_labels(labels, name="segmentation", opacity=0.4)
     viewer.window.add_dock_widget(save_widget, area="right")
     viewer.show(block=True)
@@ -869,8 +893,14 @@ def _view_on_napari(tracks=None, stack=None, labels=None):
     """
 
     viewer = napari.Viewer()
+    contrast_limits = _get_contrast_limits(stack)
     if stack is not None:
-        viewer.add_image(stack, channel_axis=-1, colormap=["gray"] * stack.shape[-1])
+        viewer.add_image(
+            stack,
+            channel_axis=-1,
+            colormap=["gray"] * stack.shape[-1],
+            contrast_limits=contrast_limits,
+        )
     if labels is not None:
         viewer.add_labels(labels, name="segmentation", opacity=0.4)
     if tracks is not None:

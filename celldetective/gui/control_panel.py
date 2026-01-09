@@ -59,9 +59,10 @@ class BackgroundLoader(QThread):
     def run(self):
         logger.info("Loading background packages...")
         try:
-            import celldetective.segmentation
-            import celldetective.tracking
-            import celldetective.measure
+            pass
+            #import celldetective.segmentation
+            #import celldetective.tracking
+            #import celldetective.measure
         except Exception:
             logger.error("Background packages not loaded...")
         logger.info("Background packages loaded...")
@@ -144,7 +145,7 @@ class ControlPanel(CelldetectiveMainWindow):
         # self.position_list.setCurrentIndex(0)
 
         t_loaded = time.time()
-        print(f"Launch time: {t_loaded - self.parent_window.t_ref} s...")
+        logger.info(f"Launch time: {t_loaded - self.parent_window.t_ref} s...")
 
         self.bg_loader = BackgroundLoader()
         self.bg_loader.start()

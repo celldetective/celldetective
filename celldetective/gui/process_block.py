@@ -945,10 +945,7 @@ class ProcessPanel(QFrame, Styles):
         from celldetective.processes.unified_process import UnifiedBatchProcess
         from celldetective.gui.workers import ProgressWindow
 
-        # if self.parent_window.well_list.currentText().startswith('Multiple'):
-        # 	self.well_index = np.linspace(0,len(self.wells)-1,len(self.wells),dtype=int)
-        # else:
-
+        # Check positions/wells
         self.well_index = self.parent_window.well_list.getSelectedIndices()
         if len(self.well_index) == 0:
             msgBox = QMessageBox()
@@ -964,14 +961,12 @@ class ProcessPanel(QFrame, Styles):
 
         logger.info(f"Processing {self.parent_window.well_list.currentText()}...")
 
-        # self.freeze()
-        # QApplication.setOverrideCursor(Qt.WaitCursor)
-
         idx = self.parent_window.populations.index(self.mode)
         self.threshold_config = self.threshold_configs[idx]
 
         self.load_available_tables()
 
+        # Checks for segmentation action
         if self.df is not None and self.segment_action.isChecked():
             msgBox = QMessageBox()
             msgBox.setIcon(QMessageBox.Question)
@@ -1008,7 +1003,6 @@ class ProcessPanel(QFrame, Styles):
                         os.remove(t)
                     except:
                         pass
-        loop_iter = 0
 
         if self.seg_model_list.currentIndex() > self.n_specific_seg_models:
             self.model_name = self.seg_models[self.seg_model_list.currentIndex() - 1]
@@ -1021,22 +1015,30 @@ class ProcessPanel(QFrame, Styles):
             and self.model_name in self.seg_models_generic
             and not self.cellpose_calibrated
         ):
-            from celldetective.gui.settings._cellpose_model_params import CellposeParamsWidget
+            from celldetective.gui.settings._cellpose_model_params import (
+                CellposeParamsWidget,
+            )
 
             self.diamWidget = CellposeParamsWidget(self, model_name=self.model_name)
             self.diamWidget.show()
-            return None
 
+            from celldetective.processes.segment_cells import SegmentCellDLProcess
+
+            return None
         elif (
             self.segment_action.isChecked()
             and self.model_name.startswith("SD")
             and self.model_name in self.seg_models_generic
             and not self.stardist_calibrated
         ):
-            from celldetective.gui.settings._stardist_model_params import StarDistParamsWidget
+            from celldetective.gui.settings._stardist_model_params import (
+                StarDistParamsWidget,
+            )
 
             self.diamWidget = StarDistParamsWidget(self, model_name=self.model_name)
             self.diamWidget.show()
+            from celldetective.processes.segment_cells import SegmentCellDLProcess
+
             return None
 
         elif (
@@ -1044,16 +1046,22 @@ class ProcessPanel(QFrame, Styles):
             and self.model_name in self.seg_models_specific
             and not self.segChannelsSet
         ):
-            from celldetective.gui.settings._segmentation_model_params import SegModelParamsWidget
+            from celldetective.gui.settings._segmentation_model_params import (
+                SegModelParamsWidget,
+            )
 
             self.segChannelWidget = SegModelParamsWidget(
                 self, model_name=self.model_name
             )
             self.segChannelWidget.show()
+            from celldetective.processes.segment_cells import SegmentCellDLProcess
+
             return None
 
         if self.signal_analysis_action.isChecked() and not self.signalChannelsSet:
-            from celldetective.gui.settings._event_detection_model_params import SignalModelParamsWidget
+            from celldetective.gui.settings._event_detection_model_params import (
+                SignalModelParamsWidget,
+            )
 
             self.signal_model_name = self.signal_models[
                 self.signal_models_list.currentIndex()
@@ -1062,6 +1070,9 @@ class ProcessPanel(QFrame, Styles):
                 self, model_name=self.signal_model_name
             )
             self.signalChannelWidget.show()
+            
+            from celldetective.processes.detect_events import SignalAnalysisProcess
+
             return None
 
         self.movie_prefix = self.parent_window.movie_prefix
@@ -1161,6 +1172,9 @@ class ProcessPanel(QFrame, Styles):
                     msgBox.setStandardButtons(QMessageBox.Ok)
                     msgBox.exec()
                     return None
+                from celldetective.processes.segment_cells import (
+                    SegmentCellThresholdProcess,
+                )
 
                 seg_args = {
                     "mode": self.mode,
@@ -1184,6 +1198,8 @@ class ProcessPanel(QFrame, Styles):
 
         # 2. TRACKING CHECKS & ARGS
         if run_tracking:
+            from celldetective.processes.track_cells import TrackingProcess
+
             # Single-position overwrite check
             if (
                 len(all_positions_flat) == 1
@@ -1209,6 +1225,8 @@ class ProcessPanel(QFrame, Styles):
 
         # 3. MEASUREMENT ARGS
         if run_measurement:
+            from celldetective.processes.measure_cells import MeasurementProcess
+
             measure_args = {"mode": self.mode, "n_threads": self.n_threads}
 
         # 4. SIGNAL ANALYSIS CHECKS & ARGS
@@ -1966,14 +1984,18 @@ class NeighPanel(QFrame, Styles):
         self.pair_signal_models_list.addItems(signal_models)
 
     def open_signal_annotator_configuration_ui(self):
-        from celldetective.gui.settings._settings_signal_annotator import SettingsSignalAnnotator
+        from celldetective.gui.settings._settings_signal_annotator import (
+            SettingsSignalAnnotator,
+        )
 
         self.mode = "pairs"
         self.config_signal_annotator = SettingsSignalAnnotator(self)
         self.config_signal_annotator.show()
 
     def open_signal_model_config_ui(self):
-        from celldetective.gui.settings._settings_event_model_training import SettingsEventDetectionModelTraining
+        from celldetective.gui.settings._settings_event_model_training import (
+            SettingsEventDetectionModelTraining,
+        )
 
         self.settings_pair_event_detection_training = (
             SettingsEventDetectionModelTraining(self, signal_mode="pairs")

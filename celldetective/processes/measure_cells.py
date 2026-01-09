@@ -24,6 +24,16 @@ from natsort import natsorted
 from art import tprint
 from typing import Optional, Union
 import gc
+from celldetective.measure import (
+    measure_features,
+    measure_isotropic_intensity,
+    center_of_mass_to_abs_coordinates,
+    measure_radial_distance_to_center,
+    drop_tonal_features,
+)
+import pandas as pd
+from celldetective.utils.image_loaders import locate_labels
+
 from celldetective.log_manager import get_logger
 
 logger = get_logger(__name__)
@@ -237,7 +247,6 @@ class MeasurementProcess(Process):
             self.abort_process()
 
     def detect_tracks(self):
-        import pandas as pd
 
         # Load trajectories, add centroid if not in trajectory
         self.trajectories = self.pos + os.sep.join(
@@ -287,7 +296,6 @@ class MeasurementProcess(Process):
                 self.pos + os.sep.join(["movie", f"{self.movie_prefix}*.tif"])
             )[0]
         except IndexError:
-            from celldetective.measure import drop_tonal_features
             self.file = None
             self.haralick_option = None
             self.features = drop_tonal_features(self.features)
@@ -297,7 +305,6 @@ class MeasurementProcess(Process):
             self.len_movie = len_movie_auto
 
     def parallel_job(self, indices):
-        import pandas as pd
 
         measurements = []
 
@@ -312,24 +319,27 @@ class MeasurementProcess(Process):
                 )
 
             if self.label_path is not None:
-                from celldetective.utils.image_loaders import locate_labels
                 lbl = locate_labels(self.pos, population=self.mode, frames=t)
                 if lbl is None:
                     continue
 
             if self.trajectories is not None:
-
-                if self.trajectories_groups is not None:
-                    positions_at_t = self.trajectories_groups.get(
-                        t, pd.DataFrame(columns=self.trajectories.columns)
-                    ).copy()
+                # Optimized access
+                if self.frame_slices is not None:
+                    # Check if frame t is in our precomputed slices
+                    if t in self.frame_slices:
+                        start, end = self.frame_slices[t]
+                        positions_at_t = self.trajectories.iloc[start:end].copy()
+                    else:
+                        # Empty frame for trajectories
+                        positions_at_t = pd.DataFrame(columns=self.trajectories.columns)
                 else:
+                    # Fallback or original method (should not be reached if optimized)
                     positions_at_t = self.trajectories.loc[
                         self.trajectories[self.column_labels["time"]] == t
                     ].copy()
 
             if self.do_features:
-                from celldetective.measure import measure_features
                 feature_table = measure_features(
                     img,
                     lbl,
@@ -357,7 +367,6 @@ class MeasurementProcess(Process):
                 )
 
             if self.do_iso_intensities and not self.trajectories is None:
-                from celldetective.measure import measure_isotropic_intensity
                 iso_table = measure_isotropic_intensity(
                     positions_at_t,
                     img,
@@ -393,10 +402,8 @@ class MeasurementProcess(Process):
                     [c for c in measurements_at_t.columns if not c.endswith("_delme")]
                 ]
 
-            from celldetective.measure import center_of_mass_to_abs_coordinates
             measurements_at_t = center_of_mass_to_abs_coordinates(measurements_at_t)
 
-            from celldetective.measure import measure_radial_distance_to_center
             measurements_at_t = measure_radial_distance_to_center(
                 measurements_at_t, volume=img.shape, column_labels=self.column_labels
             )
@@ -448,8 +455,6 @@ class MeasurementProcess(Process):
         self.write_log()
 
     def process_position(self):
-        import pandas as pd
-
         tprint("Measure")
 
         self.indices = list(range(self.img_num_channels.shape[1]))
@@ -460,22 +465,47 @@ class MeasurementProcess(Process):
         self.sum_done = 0
 
         # Optimize: Group trajectories by frame for O(1) access inside the loop
-        self.trajectories_groups = None
+        self.frame_slices = None
         if self.trajectories is not None:
-            # Create dict of dataframes keyed by frame
-            self.trajectories_groups = dict(
-                list(self.trajectories.groupby(self.column_labels["time"]))
+            # Sort by FRAME to enable searchsorted
+            self.trajectories = self.trajectories.sort_values(
+                self.column_labels["time"]
             )
+            frames = self.trajectories[self.column_labels["time"]].values
 
-        with concurrent.futures.ThreadPoolExecutor(
-            max_workers=self.n_threads
-        ) as executor:
-            results = executor.map(
-                self.parallel_job, chunks
-            )  # list(map(lambda x: executor.submit(self.parallel_job, x), chunks))
+            # Find unique frames and their indices
+            unique_frames = np.unique(frames)
+
+            # searchsorted returns the indices where elements should be inserted to maintain order
+            # 'left' gives the start index, 'right' gives the end index
+            start_indices = np.searchsorted(frames, unique_frames, side="left")
+            end_indices = np.searchsorted(frames, unique_frames, side="right")
+
+            self.frame_slices = {
+                frame: (start, end)
+                for frame, start, end in zip(unique_frames, start_indices, end_indices)
+            }
+
+        if self.n_threads > 1:
+            with concurrent.futures.ThreadPoolExecutor(
+                max_workers=self.n_threads
+            ) as executor:
+                results = executor.map(
+                    self.parallel_job, chunks
+                )  # list(map(lambda x: executor.submit(self.parallel_job, x), chunks))
+                try:
+                    for i, return_value in enumerate(results):
+                        logger.info(f"Thread {i} completed...")
+                        self.timestep_dataframes.extend(return_value)
+                except Exception as e:
+                    logger.error("Exception: ", e)
+                    raise e
+        else:
             try:
+                # Avoid thread pool overhead for single thread
+                results = [self.parallel_job(chunks[0])]
                 for i, return_value in enumerate(results):
-                    logger.info(f"Thread {i} completed...")
+                    logger.info(f"Job {i} completed...")
                     self.timestep_dataframes.extend(return_value)
             except Exception as e:
                 logger.error("Exception: ", e)

@@ -13,15 +13,26 @@ from art import tprint
 import concurrent.futures
 
 from celldetective.log_manager import get_logger
-from celldetective.utils.experiment import extract_position_name, extract_experiment_channels
-from celldetective.utils.image_loaders import auto_load_number_of_frames, _get_img_num_per_channel, \
-    _load_frames_to_segment, load_frames
+from celldetective.utils.experiment import (
+    extract_position_name,
+    extract_experiment_channels,
+)
+from celldetective.utils.image_loaders import (
+    auto_load_number_of_frames,
+    _get_img_num_per_channel,
+    _load_frames_to_segment,
+    load_frames,
+)
 from celldetective.utils.image_transforms import _estimate_scale_factor
 from celldetective.utils.mask_cleaning import _check_label_dims
 from celldetective.utils.mask_transforms import _rescale_labels
 from celldetective.utils.model_loaders import locate_segmentation_model
-from celldetective.utils.parsing import config_section_to_dict, _extract_nbr_channels_from_config, \
-    _get_normalize_kwargs_from_config, _extract_channel_indices_from_config
+from celldetective.utils.parsing import (
+    config_section_to_dict,
+    _extract_nbr_channels_from_config,
+    _get_normalize_kwargs_from_config,
+    _extract_channel_indices_from_config,
+)
 
 logger = get_logger(__name__)
 
@@ -53,6 +64,9 @@ class BaseSegmentProcess(Process):
 
         # Experiment
         self.locate_experiment_config()
+
+        logger.info(f"Configuration file: {self.config}")
+        logger.info(f"Population: {self.mode}...")
         self.instruction_file = os.sep.join(
             ["configs", f"segmentation_instructions_{self.mode}.json"]
         )
@@ -278,13 +292,19 @@ class SegmentCellDLProcess(BaseSegmentProcess):
             )
 
             if self.model_type == "stardist":
-                from celldetective.utils.stardist import _segment_image_with_stardist_model
+                from celldetective.utils.stardist import (
+                    _segment_image_with_stardist_model,
+                )
+
                 Y_pred = _segment_image_with_stardist_model(
                     f, model=model, return_details=False
                 )
 
             elif self.model_type == "cellpose":
-                from celldetective.utils.cellpose import _segment_image_with_cellpose_model
+                from celldetective.utils.cellpose import (
+                    _segment_image_with_cellpose_model,
+                )
+
                 Y_pred = _segment_image_with_cellpose_model(
                     f,
                     model=model,
@@ -348,6 +368,7 @@ class SegmentCellDLProcess(BaseSegmentProcess):
 
             if self.model_type == "stardist":
                 from celldetective.utils.stardist import _prep_stardist_model
+
                 model, scale_model = _prep_stardist_model(
                     self.model_name,
                     Path(self.model_complete_path).parent,
@@ -357,6 +378,7 @@ class SegmentCellDLProcess(BaseSegmentProcess):
 
             elif self.model_type == "cellpose":
                 from celldetective.utils.cellpose import _prep_cellpose_model
+
                 model, scale_model = _prep_cellpose_model(
                     self.model_name,
                     self.model_complete_path,
@@ -457,9 +479,6 @@ class SegmentCellThresholdProcess(BaseSegmentProcess):
 
         self.equalize = False
 
-        # Model
-        # self.prepare_equalize() and self.write_log() moved to run() loop for batch support
-
         self.sum_done = 0
         self.t0 = time.time()
 
@@ -533,6 +552,10 @@ class SegmentCellThresholdProcess(BaseSegmentProcess):
     def parallel_job(self, indices):
 
         try:
+            from celldetective.segmentation import (
+                segment_frame_from_thresholds,
+                merge_instance_segmentation,
+            )
 
             for t in tqdm(
                 indices, desc="frame"
@@ -547,7 +570,7 @@ class SegmentCellThresholdProcess(BaseSegmentProcess):
                         scale=None,
                         normalize_input=False,
                     )
-                    from celldetective.segmentation import segment_frame_from_thresholds, merge_instance_segmentation
+
                     mask = segment_frame_from_thresholds(f, **self.instructions[i])
                     # print(f'Frame {t}; segment with {self.instructions[i]=}...')
                     masks.append(mask)

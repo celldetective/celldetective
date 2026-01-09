@@ -41,28 +41,17 @@ class UnifiedBatchProcess(Process):
 
         logger.info("Starting Unified Batch Process...")
 
-        # Initialize individual workers (but don't start them as processes, used as classes)
-        # We will manually trigger their logic to keep everything in this process
-        # so we can control the flow and progress updates tightly.
-        # However, some might be heavy to re-init.
-        # Actually, the original design uses Process for each.
-        # To unify progress, we can either:
-        # A. Run them sequentially in THIS process (blocking) -> best for detailed control
-        # B. Spawn them and wait -> harder to get granular step progress unless they share queue
-
-        # Strategy A: Instantiate the logic classes, not starting process.
-        # But existing classes inherit from Process.
-        # We will instantiate them and call their internal `process_position` methods if available,
-        # or `run` logic adapted.
-        # Looking at SegmentCellThresholdProcess, it has a run() that loops over positions from args.
-        # We want to invert that: Loop over positions here, and call processing for that position.
-
-        # Fortunately, the refactored processes in the antigravity branch (assumed) supports `process_position`.
-        # Let's assume standard `process_position(pos_path)` availability or similar.
-        # If not, we might need to adjust. Based on the "worker" usage in `process_block.py` snippet,
-        # it seems we can instantiate them with queue and args.
-
         # Initialize Workers
+        # Propagate batch structure to sub-processes so they can locate experiment config
+        for args_dict in [
+            self.seg_args,
+            self.track_args,
+            self.measure_args,
+            self.signal_args,
+        ]:
+            if isinstance(args_dict, dict):
+                args_dict["batch_structure"] = self.batch_structure
+
         seg_worker = None
         model = None
         scale_model = None
@@ -71,8 +60,11 @@ class UnifiedBatchProcess(Process):
             logger.info("Initializing the segmentation worker...")
             self.queue.put({"status": "Initializing segmentation..."})
 
-            if "Threshold" in self.seg_args.get("model_name", ""):
-                from celldetective.processes.segment_cells import SegmentCellThresholdProcess
+            if "threshold_instructions" in self.seg_args:
+                from celldetective.processes.segment_cells import (
+                    SegmentCellThresholdProcess,
+                )
+
                 seg_worker = SegmentCellThresholdProcess(
                     queue=self.queue, process_args=self.seg_args
                 )
@@ -86,6 +78,7 @@ class UnifiedBatchProcess(Process):
                 if seg_worker.model_type == "stardist":
                     logger.info("Loading the StarDist library...")
                     from celldetective.utils.stardist import _prep_stardist_model
+
                     model, scale_model = _prep_stardist_model(
                         seg_worker.model_name,
                         Path(seg_worker.model_complete_path).parent,
@@ -116,7 +109,9 @@ class UnifiedBatchProcess(Process):
 
         measure_worker = None
         if self.run_measurement:
+            logger.info("Loading the measurement libraries...")
             from celldetective.processes.measure_cells import MeasurementProcess
+
             logger.info("Initializing the measurement worker...")
             self.queue.put({"status": "Initializing measurements..."})
             measure_worker = MeasurementProcess(
@@ -128,6 +123,7 @@ class UnifiedBatchProcess(Process):
 
         if self.run_signals:
             from celldetective.utils.event_detection import _prep_event_detection_model
+
             try:
                 logger.info("Loading the event detection model...")
                 self.queue.put({"status": "Loading event detection model..."})
@@ -220,7 +216,8 @@ class UnifiedBatchProcess(Process):
                         self.queue.put({"status": msg})
 
                         seg_worker.setup_for_position(pos_path)
-                        if isinstance(seg_worker, SegmentCellDLProcess):
+
+                        if not "threshold_instructions" in self.seg_args:
                             seg_worker.process_position(
                                 model=model, scale_model=scale_model
                             )

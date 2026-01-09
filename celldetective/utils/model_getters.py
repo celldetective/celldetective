@@ -107,6 +107,11 @@ def get_signal_models_list(return_path=False):
 
     available_models = glob(modelpath + f"*{os.sep}")
     available_models = [m.replace("\\", "/").split("/")[-2] for m in available_models]
+    available_models = [
+        m
+        for m in available_models
+        if os.path.exists(os.path.join(modelpath, m, "config_input.json"))
+    ]
     for rm in repository_models:
         if rm not in available_models:
             available_models.append(rm)

@@ -42,18 +42,17 @@ class SignalModelParamsWidget(CelldetectiveWidget):
 
         self.model_complete_path = locate_signal_model(self.model_name)
         if self.model_complete_path is None:
-            print("Model could not be found. Abort.")
-            self.abort_process()
+            raise ValueError(f"Model {self.model_name} could not be found.")
         else:
             print(f"Model path: {self.model_complete_path}...")
 
-        if not os.path.exists(self.model_complete_path + "config_input.json"):
-            print(
-                "The configuration for the inputs to the model could not be located. Abort."
+        config_path = os.path.join(self.model_complete_path, "config_input.json")
+        if not os.path.exists(config_path):
+            raise ValueError(
+                f"The configuration for the inputs to the model could not be located at {config_path}."
             )
-            self.abort_process()
 
-        with open(self.model_complete_path + "config_input.json") as config_file:
+        with open(config_path) as config_file:
             self.input_config = json.load(config_file)
 
     def populate_widgets(self):
