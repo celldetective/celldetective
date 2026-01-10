@@ -31,6 +31,10 @@ from celldetective.utils.parsing import (
     _extract_nbr_channels_from_config,
 )
 from gc import collect
+from tqdm import tqdm
+from celldetective import get_logger
+
+logger = get_logger(__name__)
 
 
 def estimate_background_per_condition(
@@ -45,6 +49,7 @@ def estimate_background_per_condition(
     show_progress_per_well=True,
     offset=None,
     fix_nan: bool = False,
+    progress_callback=None,
 ):
     """
     Estimate the background for each condition in an experiment.
@@ -74,6 +79,8 @@ def estimate_background_per_condition(
             Whether to show progress for each position (default is False).
     show_progress_per_well : bool, optional
             Whether to show progress for each well (default is True).
+    progress_callback : callable, optional
+            A callback function to be called at each step of the process (default is None).
 
     Returns
     -------
@@ -115,10 +122,6 @@ def estimate_background_per_condition(
 
     backgrounds = []
 
-    backgrounds = []
-
-    from tqdm import tqdm
-
     for k, well_path in enumerate(
         tqdm(wells[well_indices], disable=not show_progress_per_well)
     ):
@@ -127,7 +130,7 @@ def estimate_background_per_condition(
         well_idx = well_indices[k]
 
         positions = get_positions_in_well(well_path)
-        print(
+        logger.info(
             f"Reconstruct a background in well {well_name} from positions: {[extract_position_name(p) for p in positions]}..."
         )
 
@@ -212,6 +215,11 @@ def estimate_background_per_condition(
             # store
             frame_mean_per_position.append(frame)
 
+            if progress_callback:
+                progress_callback(
+                    level="position", iter=l, total=len(positions), stage="estimating"
+                )
+
         try:
             background = np.nanmedian(frame_mean_per_position, axis=0)
             if offset is not None:
@@ -220,9 +228,9 @@ def estimate_background_per_condition(
             if fix_nan:
                 background = interpolate_nan(background.copy().astype(float))
             backgrounds.append({"bg": background, "well": well_path})
-            print(f"Background successfully computed for well {well_name}...")
+            logger.info(f"Background successfully computed for well {well_name}...")
         except Exception as e:
-            print(e)
+            logger.error(e)
             backgrounds.append(None)
 
     return backgrounds
@@ -250,6 +258,7 @@ def correct_background_model_free(
     fix_nan=False,
     activation_protocol=[["gauss", 2], ["std", 4]],
     export_prefix="Corrected",
+    progress_callback=None,
     **kwargs,
 ):
     """
@@ -293,6 +302,8 @@ def correct_background_model_free(
             If True, export the corrected stacks to files. Defaults to False.
     return_stacks : bool, optional
             If True, return the corrected stacks as a list of numpy arrays. Defaults to False.
+    progress_callback : callable, optional
+            A callback function to be called at each step of the process (default is None).
 
     Returns
     -------
@@ -330,13 +341,18 @@ def correct_background_model_free(
 
     stacks = []
 
+    total_wells = len(wells[well_indices])
+
     for k, well_path in enumerate(
         tqdm(wells[well_indices], disable=not show_progress_per_well)
     ):
+        if progress_callback:
+            progress_callback(level="well", iter=k, total=total_wells)
 
         well_name, _ = extract_well_name_and_number(well_path)
 
         try:
+            # Estimate background
             background = estimate_background_per_condition(
                 experiment,
                 threshold_on_std=threshold_on_std,
@@ -349,13 +365,16 @@ def correct_background_model_free(
                 activation_protocol=activation_protocol,
                 offset=offset,
                 fix_nan=fix_nan,
+                progress_callback=progress_callback,
             )
             background = background[0]
             background = background["bg"]
         except Exception as e:
-            print(
+            logger.error(
                 f'Background could not be estimated due to error "{e}"... Skipping well {well_name}...'
             )
+            if progress_callback:
+                progress_callback(level="well", iter=k + 1, total=total_wells)
             continue
 
         positions = get_positions_in_well(well_path)
@@ -363,21 +382,23 @@ def correct_background_model_free(
         if isinstance(selection[0], np.ndarray):
             selection = selection[0]
 
+        total_pos_in_well = len(selection)
+
         for pidx, pos_path in enumerate(
             tqdm(selection, disable=not show_progress_per_pos)
         ):
 
             stack_path = get_position_movie_path(pos_path, prefix=movie_prefix)
-            print(
+            logger.info(
                 f"Applying the correction to position {extract_position_name(pos_path)}..."
             )
             if stack_path is not None:
                 len_movie_auto = auto_load_number_of_frames(stack_path)
                 if len_movie_auto is not None:
                     len_movie = len_movie_auto
-                    img_num_channels = _get_img_num_per_channel(
-                        channel_indices, int(len_movie), nbr_channels
-                    )
+                img_num_channels = _get_img_num_per_channel(
+                    channel_indices, int(len_movie), nbr_channels
+                )
 
                 corrected_stack = apply_background_to_stack(
                     stack_path,
@@ -396,8 +417,9 @@ def correct_background_model_free(
                     fix_nan=fix_nan,
                     activation_protocol=activation_protocol,
                     prefix=export_prefix,
+                    progress_callback=progress_callback,
                 )
-                print("Correction successful.")
+                logger.info("Correction successful.")
                 if return_stacks:
                     stacks.append(corrected_stack)
                 else:
@@ -405,6 +427,17 @@ def correct_background_model_free(
                 collect()
             else:
                 stacks.append(None)
+
+            if progress_callback:
+                progress_callback(
+                    level="position",
+                    iter=pidx,
+                    total=total_pos_in_well,
+                    stage="correcting",
+                )
+
+        if progress_callback:
+            progress_callback(level="well", iter=k + 1, total=total_wells)
 
     if return_stacks:
         return stacks
@@ -427,6 +460,7 @@ def apply_background_to_stack(
     export=False,
     prefix="Corrected",
     fix_nan=False,
+    progress_callback=None,
 ):
     """
     Apply background correction to an image stack.
@@ -463,6 +497,8 @@ def apply_background_to_stack(
             If True, export the corrected stack to a file. Defaults to False.
     prefix : str, optional
             The prefix for the exported file name. Defaults to "Corrected".
+    progress_callback : callable, optional
+            A callback function to be called at each step of the process (default is None).
 
     Returns
     -------
@@ -478,11 +514,13 @@ def apply_background_to_stack(
     (44, 512, 512, 3)
 
     """
+    import os
+    import numpy as np
 
     if stack_length is None:
         stack_length = auto_load_number_of_frames(stack_path)
         if stack_length is None:
-            print("stack length not provided")
+            logger.error("stack length not provided")
             return None
 
     if optimize_option:
@@ -510,8 +548,6 @@ def apply_background_to_stack(
             target_img -= offset
 
         if optimize_option:
-
-            target_copy = target_img.copy()
 
             target_copy = target_img.copy()
 
@@ -545,7 +581,7 @@ def apply_background_to_stack(
                 loss.append(s)
 
             c = coefficients[np.argmin(loss)]
-            print(f"IFD {i}; optimal coefficient: {c}...")
+            logger.info(f"IFD {i}; optimal coefficient: {c}...")
             # if c==min(coefficients) or c==max(coefficients):
             # 	print('Warning... The optimal coefficient is beyond the range provided... Please adjust your coefficient range...')
         else:
@@ -567,7 +603,7 @@ def apply_background_to_stack(
             if clip:
                 correction[correction <= 0.0] = 0.0
         else:
-            print("Operation not supported... Abort.")
+            logger.error("Operation not supported... Abort.")
             return
 
         correction[~np.isfinite(correction)] = np.nan
@@ -575,6 +611,14 @@ def apply_background_to_stack(
             correction = interpolate_nan(correction.copy())
         frames[:, :, target_channel_index] = correction
         corrected_stack.append(frames)
+
+        if progress_callback:
+            progress_callback(
+                level="frame",
+                iter=i,
+                total=int(stack_length * nbr_channels),
+                stage="correcting",
+            )
 
     corrected_stack = np.array(corrected_stack)
 
@@ -747,7 +791,7 @@ def fit_plane(image, cell_masks=None, edge_exclusion=None):
     return plane(xx, yy, **result.params)
 
 
-def fit_paraboloid(image, cell_masks=None, edge_exclusion=None):
+def fit_paraboloid(image, cell_masks=None, edge_exclusion=None, downsample=10):
     """
     Fit a paraboloid to the given image data.
 
@@ -765,6 +809,9 @@ def fit_paraboloid(image, cell_masks=None, edge_exclusion=None):
             will be excluded from the fitting process (default is None).
     edge_exclusion : int, optional
             The size of the edge to exclude from the fitting process (default is None).
+    downsample : int, optional
+            The downsampling factor to reduce the number of points used for fitting.
+            Default is 10.
 
     Returns
     -------
@@ -777,6 +824,8 @@ def fit_paraboloid(image, cell_masks=None, edge_exclusion=None):
       the fitting process.
     - The `edge_exclusion` parameter allows excluding edges of the specified size
       from the fitting process to avoid boundary effects.
+    - Downsampling significantly speeds up the fitting process for large images
+      without compromising the accuracy of the low-frequency background estimate.
 
     See Also
     --------
@@ -810,14 +859,26 @@ def fit_paraboloid(image, cell_masks=None, edge_exclusion=None):
         weights = unpad(weights, edge_exclusion)
         image = unpad(image, edge_exclusion)
 
-    result = model.fit(image, x=xx, y=yy, weights=weights, params=params, max_nfev=3000)
+    # Downsample for faster fitting
+    if downsample > 1:
+        image_fit = image[::downsample, ::downsample]
+        xx_fit = xx[::downsample, ::downsample]
+        yy_fit = yy[::downsample, ::downsample]
+        weights_fit = weights[::downsample, ::downsample]
+    else:
+        image_fit = image
+        xx_fit = xx
+        yy_fit = yy
+        weights_fit = weights
+
+    result = model.fit(
+        image_fit, x=xx_fit, y=yy_fit, weights=weights_fit, params=params, max_nfev=3000
+    )
 
     del model
     collect()
 
     xx, yy = np.meshgrid(x, y)
-
-    return paraboloid(xx, yy, **result.params)
 
     return paraboloid(xx, yy, **result.params)
 
@@ -839,6 +900,8 @@ def correct_background_model(
     activation_protocol=[["gauss", 2], ["std", 4]],
     export_prefix="Corrected",
     return_stack=True,
+    progress_callback=None,
+    downsample=10,
     **kwargs,
 ):
     """
@@ -917,9 +980,12 @@ def correct_background_model(
 
     stacks = []
 
+    total_wells = len(wells[well_indices])
     for k, well_path in enumerate(
         tqdm(wells[well_indices], disable=not show_progress_per_well)
     ):
+        if progress_callback:
+            progress_callback(level="well", iter=k, total=total_wells)
 
         well_name, _ = extract_well_name_and_number(well_path)
         positions = get_positions_in_well(well_path)
@@ -927,16 +993,18 @@ def correct_background_model(
         if isinstance(selection[0], np.ndarray):
             selection = selection[0]
 
+        total_pos_in_well = len(selection)
+
         for pidx, pos_path in enumerate(
             tqdm(selection, disable=not show_progress_per_pos)
         ):
 
             stack_path = get_position_movie_path(pos_path, prefix=movie_prefix)
             if stack_path is None:
-                print(f"No stack could be found in {pos_path}... Skip...")
+                logger.warning(f"No stack could be found in {pos_path}... Skip...")
                 continue
 
-            print(
+            logger.info(
                 f"Applying the correction to position {extract_position_name(pos_path)}..."
             )
             len_movie_auto = auto_load_number_of_frames(stack_path)
@@ -959,13 +1027,26 @@ def correct_background_model(
                 prefix=export_prefix,
                 activation_protocol=activation_protocol,
                 return_stacks=return_stacks,
+                progress_callback=progress_callback,
+                downsample=downsample,
             )
-            print("Correction successful.")
+            logger.info("Correction successful.")
             if return_stacks:
                 stacks.append(corrected_stack)
             else:
                 del corrected_stack
             collect()
+
+            if progress_callback:
+                progress_callback(
+                    level="position",
+                    iter=pidx,
+                    total=total_pos_in_well,
+                    stage="correcting",
+                )
+
+        if progress_callback:
+            progress_callback(level="well", iter=k + 1, total=total_wells)
 
     if return_stacks:
         return stacks
@@ -984,6 +1065,8 @@ def fit_and_apply_model_background_to_stack(
     activation_protocol=[["gauss", 2], ["std", 4]],
     prefix="Corrected",
     return_stacks=True,
+    progress_callback=None,
+    downsample=10,
 ):
     """
     Fit and apply a background correction model to an image stack.
@@ -1035,9 +1118,11 @@ def fit_and_apply_model_background_to_stack(
     field_correction : Function to apply background correction to an image.
     """
 
+    from tqdm import tqdm
+
     stack_length_auto = auto_load_number_of_frames(stack_path)
     if stack_length_auto is None and stack_length is None:
-        print("Stack length not provided...")
+        logger.error("Stack length not provided...")
         return None
     if stack_length_auto is not None:
         stack_length = stack_length_auto
@@ -1057,8 +1142,6 @@ def fit_and_apply_model_background_to_stack(
             os.sep.join([path, newfile]), imagej=True, bigtiff=True
         ) as tif:
 
-            from tqdm import tqdm
-
             for i in tqdm(range(0, int(stack_length * nbr_channels), nbr_channels)):
 
                 frames = load_frames(
@@ -1075,6 +1158,7 @@ def fit_and_apply_model_background_to_stack(
                     model=model,
                     clip=clip,
                     activation_protocol=activation_protocol,
+                    downsample=downsample,
                 )
                 frames[:, :, target_channel_index] = correction.copy()
 
@@ -1090,6 +1174,14 @@ def fit_and_apply_model_background_to_stack(
                 del target_img
                 del correction
                 collect()
+
+                if progress_callback:
+                    progress_callback(
+                        level="frame",
+                        iter=int(i // nbr_channels),
+                        total=stack_length,
+                        stage="correcting",
+                    )
 
         if prefix is None:
             os.replace(os.sep.join([path, newfile]), os.sep.join([path, file]))
@@ -1110,6 +1202,7 @@ def fit_and_apply_model_background_to_stack(
                 model=model,
                 clip=clip,
                 activation_protocol=activation_protocol,
+                downsample=downsample,
             )
             frames[:, :, target_channel_index] = correction.copy()
 
@@ -1119,6 +1212,14 @@ def fit_and_apply_model_background_to_stack(
             del target_img
             del correction
             collect()
+
+            if progress_callback:
+                progress_callback(
+                    level="frame",
+                    iter=int(i // nbr_channels),
+                    total=stack_length,
+                    stage="correcting",
+                )
 
     if return_stacks:
         return np.array(corrected_stack)
@@ -1134,6 +1235,7 @@ def field_correction(
     clip: bool = False,
     return_bg: bool = False,
     activation_protocol: List[List] = [["gauss", 2], ["std", 4]],
+    downsample: int = 10,
 ):
     """
     Apply field correction to an image.
@@ -1183,13 +1285,15 @@ def field_correction(
     if np.percentile(target_copy.flatten(), 99.9) == 0.0:
         return target_copy
 
+    from celldetective.segmentation import filter_image
+
     std_frame = filter_image(target_copy, filters=activation_protocol)
     edge = estimate_unreliable_edge(activation_protocol)
     mask = threshold_image(
         std_frame, threshold, np.inf, foreground_value=1, edge_exclusion=edge
     ).astype(int)
     background = fit_background_model(
-        img, cell_masks=mask, model=model, edge_exclusion=edge
+        img, cell_masks=mask, model=model, edge_exclusion=edge, downsample=downsample
     )
 
     if operation == "divide":
@@ -1214,7 +1318,9 @@ def field_correction(
     return correction.copy()
 
 
-def fit_background_model(img, cell_masks=None, model="paraboloid", edge_exclusion=None):
+def fit_background_model(
+    img, cell_masks=None, model="paraboloid", edge_exclusion=None, downsample=10
+):
     """
     Fit a background model to the given image.
 
@@ -1251,7 +1357,10 @@ def fit_background_model(img, cell_masks=None, model="paraboloid", edge_exclusio
 
     if model == "paraboloid":
         bg = fit_paraboloid(
-            img.astype(float), cell_masks=cell_masks, edge_exclusion=edge_exclusion
+            img.astype(float),
+            cell_masks=cell_masks,
+            edge_exclusion=edge_exclusion,
+            downsample=downsample,
         ).astype(float)
     elif model == "plane":
         bg = fit_plane(
@@ -1313,7 +1422,7 @@ def correct_channel_offset(
         ):
 
             stack_path = get_position_movie_path(pos_path, prefix=movie_prefix)
-            print(
+            logger.info(
                 f"Applying the correction to position {extract_position_name(pos_path)}..."
             )
             len_movie_auto = auto_load_number_of_frames(stack_path)
@@ -1334,7 +1443,7 @@ def correct_channel_offset(
                 prefix=export_prefix,
                 return_stacks=return_stacks,
             )
-            print("Correction successful.")
+            logger.info("Correction successful.")
             if return_stacks:
                 stacks.append(corrected_stack)
             else:
@@ -1361,9 +1470,13 @@ def correct_channel_offset_single_stack(
         stack_path
     ), f"The stack {stack_path} does not exist... Abort."
 
+    from tqdm import tqdm
+    import tifffile.tifffile as tiff
+    from scipy.ndimage import shift
+
     stack_length_auto = auto_load_number_of_frames(stack_path)
     if stack_length_auto is None and stack_length is None:
-        print("Stack length not provided...")
+        logger.error("Stack length not provided...")
         return None
     if stack_length_auto is not None:
         stack_length = stack_length_auto
@@ -1377,14 +1490,9 @@ def correct_channel_offset_single_stack(
         else:
             newfile = "_".join([prefix, file])
 
-        import tifffile.tifffile as tiff
-
         with tiff.TiffWriter(
             os.sep.join([path, newfile]), bigtiff=True, imagej=True
         ) as tif:
-
-            from tqdm import tqdm
-
             for i in tqdm(range(0, int(stack_length * nbr_channels), nbr_channels)):
 
                 frames = load_frames(
