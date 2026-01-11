@@ -1,5 +1,5 @@
 import numpy as np
-from PyQt5.QtGui import QStandardItemModel, QPalette
+from PyQt5.QtGui import QStandardItemModel, QPalette, QFontMetrics
 from PyQt5.QtWidgets import (
     QMainWindow,
     QWidget,
@@ -13,6 +13,7 @@ from PyQt5.QtWidgets import (
     QStyle,
     QFrame,
     QSizePolicy,
+    QProgressDialog,
 )
 from PyQt5.QtCore import Qt, pyqtSignal, QEvent
 from celldetective.gui.base.styles import Styles
@@ -36,6 +37,33 @@ class CelldetectiveDialog(QDialog, Styles):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.setWindowIcon(self.celldetective_icon)
+
+
+class CelldetectiveProgressDialog(QProgressDialog, Styles):
+    def __init__(
+        self,
+        label_text,
+        cancel_button_text="Cancel",
+        minimum=0,
+        maximum=100,
+        parent=None,
+        window_title="Please wait",
+    ):
+        super().__init__(label_text, cancel_button_text, minimum, maximum, parent)
+        self.setWindowIcon(self.celldetective_icon)
+        self.setWindowTitle(window_title)
+        self.setWindowModality(Qt.WindowModal)
+        self.setWindowFlags(
+            self.windowFlags()
+            & ~Qt.WindowContextHelpButtonHint
+            & ~Qt.WindowCloseButtonHint
+        )
+        self.setMinimumDuration(0)
+        self.setValue(0)
+
+        fm = QFontMetrics(self.font())
+        width = max(350, fm.horizontalAdvance(window_title) + 120)
+        self.setMinimumWidth(width)
 
 
 def generic_message(message, msg_type="warning"):

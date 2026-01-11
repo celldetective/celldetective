@@ -1,7 +1,9 @@
 from multiprocessing import Queue
 from PyQt5.QtWidgets import QPushButton, QVBoxLayout, QHBoxLayout, QLabel, QProgressBar
 from PyQt5.QtCore import QRunnable, QObject, pyqtSignal, QThreadPool, QSize, Qt
+from PyQt5.QtGui import QPixmap, QImage
 import math
+import numpy as np
 
 from celldetective.gui.base.components import CelldetectiveDialog
 from celldetective.gui.base.utils import center_window
@@ -74,29 +76,45 @@ class ProgressWindow(CelldetectiveDialog):
         self.__runner.signals.update_frame.connect(self.frame_progress_bar.setValue)
         self.__runner.signals.update_frame_time.connect(self.frame_time_lbl.setText)
         self.__runner.signals.update_status.connect(self.__label.setText)
+        self.__runner.signals.update_image.connect(self.update_image)
+
+        self.image_label = QLabel()
+        self.image_label.setFixedSize(250, 250)
+        self.image_label.setAlignment(Qt.AlignCenter)
+        # self.image_label.setScaledContents(True)
+        self.image_label.hide()
 
         self.__btn_stp.setDisabled(True)
 
-        self.layout = QVBoxLayout()
+        self.progress_layout = QVBoxLayout()
         if self.position_info:
-            self.layout.addWidget(self.position_label)
+            self.progress_layout.addWidget(self.position_label)
 
-        self.layout.addWidget(self.well_time_lbl)
-        self.layout.addWidget(self.well_progress_bar)
+        self.progress_layout.addWidget(self.well_time_lbl)
+        self.progress_layout.addWidget(self.well_progress_bar)
 
-        self.layout.addWidget(self.pos_time_lbl)
-        self.layout.addWidget(self.pos_progress_bar)
+        self.progress_layout.addWidget(self.pos_time_lbl)
+        self.progress_layout.addWidget(self.pos_progress_bar)
 
-        self.layout.addWidget(self.frame_time_lbl)
-        self.layout.addWidget(self.frame_progress_bar)
+        self.progress_layout.addWidget(self.frame_time_lbl)
+        self.progress_layout.addWidget(self.frame_progress_bar)
 
         self.btn_layout = QHBoxLayout()
         self.btn_layout.addWidget(self.__btn_stp)
         self.btn_layout.addWidget(self.__label)
-        self.layout.addLayout(self.btn_layout)
 
-        self.setLayout(self.layout)
-        self.setFixedSize(QSize(400, 250))
+        # Left Column Layout (Bars + Buttons)
+        self.left_layout = QVBoxLayout()
+        self.left_layout.addLayout(self.progress_layout)
+        self.left_layout.addLayout(self.btn_layout)
+
+        # Main Root Layout (Left Column + Image)
+        self.root_layout = QHBoxLayout()
+        self.root_layout.addLayout(self.left_layout)
+        self.root_layout.addWidget(self.image_label)
+
+        self.setLayout(self.root_layout)
+        self.setFixedSize(QSize(400, 220))
         self.show()
         self.raise_()
         self.activateWindow()
@@ -143,6 +161,61 @@ class ProgressWindow(CelldetectiveDialog):
 
         self.reject()
 
+    def update_image(self, img_data):
+        try:
+            if img_data is None:
+                return
+
+            if self.image_label.isHidden():
+                self.image_label.show()
+                # Expand window width and height to accommodate image
+                self.setFixedSize(QSize(750, 320))
+            # Normalize for display
+            img = img_data.astype(float)
+            img = np.nan_to_num(img)
+
+            min_val = np.min(img)
+            max_val = np.max(img)
+
+            if max_val > min_val:
+                img = (img - min_val) / (max_val - min_val) * 255
+            else:
+                img = np.zeros_like(img)
+
+            img = img.astype(np.uint8)
+            img = np.require(
+                img, np.uint8, "C"
+            )  # Maintain strict C-contiguity for Qt stability
+
+            height, width = img.shape[:2]
+
+            # Grayscale or RGB
+            if img.ndim == 3:
+                # RGB
+                bytes_per_line = 3 * width
+                q_img = QImage(
+                    img.data, width, height, bytes_per_line, QImage.Format_RGB888
+                )
+            else:
+                # Grayscale
+                bytes_per_line = width
+                q_img = QImage(
+                    img.data, width, height, bytes_per_line, QImage.Format_Grayscale8
+                )
+
+            # Use .copy() ensures deep copy of data into QPixmap so we don't depend on volatile memory
+            pixmap = QPixmap.fromImage(q_img.copy())
+            # Scale with Aspect Ratio preserved to avoid cutting or distortion
+            scaled_pixmap = pixmap.scaled(
+                self.image_label.size()
+                - QSize(20, 20),  # Add 10px padding on all sides
+                Qt.KeepAspectRatio,
+                Qt.SmoothTransformation,
+            )
+            self.image_label.setPixmap(scaled_pixmap)
+        except Exception as e:
+            logger.error(f"Image update failed: {e}")
+
 
 class Runner(QRunnable):
 
@@ -181,6 +254,11 @@ class Runner(QRunnable):
                         self.signals.update_frame.emit(int(data["frame_progress"]))
                     if "frame_time" in data:
                         self.signals.update_frame_time.emit(data["frame_time"])
+
+                    if "image_preview" in data:
+                        self.signals.update_image.emit(data["image_preview"])
+                    elif "bg_image" in data:  # Backward compatibility
+                        self.signals.update_image.emit(data["bg_image"])
 
                     if "status" in data:  # Moved this block out of frame_time check
                         logger.info(
@@ -225,6 +303,7 @@ class RunnerSignal(QObject):
 
     update_frame = pyqtSignal(int)
     update_frame_time = pyqtSignal(str)
+    update_image = pyqtSignal(object)
     update_status = pyqtSignal(str)
 
     finished = pyqtSignal()

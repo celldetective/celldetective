@@ -10,12 +10,13 @@ from PyQt5.QtWidgets import (
     QHBoxLayout,
     QCheckBox,
     QMessageBox,
+    QProgressDialog,
 )
-from PyQt5.QtCore import Qt, QSize, QTimer
+from PyQt5.QtCore import Qt, QSize, QTimer, QThread, pyqtSignal, QObject
 from superqt.fonticon import icon
 from fonticon_mdi6 import MDI6
 import gc
-from PyQt5.QtGui import QDoubleValidator, QIntValidator
+from PyQt5.QtGui import QDoubleValidator, QIntValidator, QFontMetrics
 
 from celldetective.utils.model_getters import (
     get_signal_models_list,
@@ -33,10 +34,58 @@ from celldetective.utils.experiment import (
     extract_experiment_channels,
 )
 
-from celldetective.gui.base.components import CelldetectiveWidget, QHSeperationLine
+from celldetective.gui.base.components import (
+    CelldetectiveWidget,
+    CelldetectiveProgressDialog,
+    QHSeperationLine,
+)
 
 import numpy as np
 from glob import glob
+from celldetective import get_logger
+
+logger = get_logger()
+
+
+class NapariLoaderThread(QThread):
+    progress = pyqtSignal(int)
+    status = pyqtSignal(str)
+    finished_with_result = pyqtSignal(object)
+
+    def __init__(self, pos, prefix, population, threads):
+        super().__init__()
+        self.pos = pos
+        self.prefix = prefix
+        self.population = population
+        self.threads = threads
+        self._is_cancelled = False
+
+    def stop(self):
+        self._is_cancelled = True
+
+    def run(self):
+        from celldetective.napari.utils import control_tracks
+
+        def callback(p):
+            if self._is_cancelled:
+                return False
+            self.progress.emit(p)
+            return True
+
+        try:
+            res = control_tracks(
+                self.pos,
+                prefix=self.prefix,
+                population=self.population,
+                threads=self.threads,
+                progress_callback=callback,
+                prepare_only=True,
+            )
+            self.finished_with_result.emit(res)
+        except Exception as e:
+            self.finished_with_result.emit(e)
+
+
 from natsort import natsorted
 import os
 
@@ -775,13 +824,42 @@ class ProcessPanel(QFrame, Styles):
             gc.collect()
 
     def check_signals(self):
-        from celldetective.gui.event_annotator import EventAnnotator
+        from celldetective.gui.event_annotator import EventAnnotator, StackLoaderThread
 
         test = self.parent_window.locate_selected_position()
         if test:
-            self.event_annotator = EventAnnotator(self)
-            self.event_annotator.show()
-            center_window(self.event_annotator)
+            self.event_annotator = EventAnnotator(self, lazy_load=True)
+
+            if not getattr(self.event_annotator, "proceed", True):
+                return
+
+            self.signal_loader = StackLoaderThread(self.event_annotator)
+
+            self.signal_progress = CelldetectiveProgressDialog(
+                "Loading data...", "Cancel", 0, 100, self, window_title="Please wait"
+            )
+
+            self.signal_progress.setValue(0)
+
+            self.signal_loader.progress.connect(self.signal_progress.setValue)
+            self.signal_loader.status_update.connect(self.signal_progress.setLabelText)
+            self.signal_progress.canceled.connect(self.signal_loader.stop)
+
+            def on_finished():
+                self.signal_progress.blockSignals(True)
+                self.signal_progress.close()
+                if not self.signal_loader._is_cancelled:
+                    try:
+                        self.event_annotator.finalize_init()
+                        self.event_annotator.show()
+                        center_window(self.event_annotator)
+                    except Exception as e:
+                        print(f"Error finalizing annotator: {e}")
+                else:
+                    self.event_annotator.close()
+
+            self.signal_loader.finished.connect(on_finished)
+            self.signal_loader.start()
 
     def check_measurements(self):
         from celldetective.gui.event_annotator import MeasureAnnotator
@@ -1381,26 +1459,69 @@ class ProcessPanel(QFrame, Styles):
         self.reset_signals()
 
     def open_napari_tracking(self):
-        from celldetective.napari.utils import control_tracks
 
         logger.info(
             f"View the tracks before post-processing for position {self.parent_window.pos} in napari..."
         )
-        try:
-            control_tracks(
-                self.parent_window.pos,
-                prefix=self.parent_window.movie_prefix,
-                population=self.mode,
-                threads=self.parent_window.parent_window.n_threads,
-            )
-        except FileNotFoundError as e:
-            msgBox = QMessageBox()
-            msgBox.setIcon(QMessageBox.Warning)
-            msgBox.setText(str(e))
-            msgBox.setWindowTitle("Warning")
-            msgBox.setStandardButtons(QMessageBox.Ok)
-            _ = msgBox.exec()
-            return
+
+        self.napari_loader = NapariLoaderThread(
+            self.parent_window.pos,
+            self.parent_window.movie_prefix,
+            self.mode,
+            self.parent_window.parent_window.n_threads,
+        )
+
+        self.napari_progress = CelldetectiveProgressDialog(
+            "Loading images, tracks and relabeling masks...",
+            "Cancel",
+            0,
+            100,
+            self,
+            window_title="Preparing the napari viewer...",
+        )
+
+        self.napari_progress.setValue(0)
+        self.napari_loader.progress.connect(self.napari_progress.setValue)
+        self.napari_loader.status.connect(self.napari_progress.setLabelText)
+        self.napari_progress.canceled.connect(self.napari_loader.stop)
+
+        def on_finished(result):
+            from celldetective.napari.utils import launch_napari_viewer
+
+            self.napari_progress.blockSignals(True)
+            self.napari_progress.close()
+            if self.napari_loader._is_cancelled:
+                logger.info("Task was cancelled...")
+                return
+
+            if isinstance(result, Exception):
+                logger.error(f"napari loading error: {result}")
+                msgBox = QMessageBox()
+                msgBox.setIcon(QMessageBox.Warning)
+                msgBox.setText(str(result))
+                msgBox.setWindowTitle("Warning")
+                msgBox.setStandardButtons(QMessageBox.Ok)
+                _ = msgBox.exec()
+                return
+
+            if result:
+                logger.info("Launching the napari viewer with tracks...")
+                try:
+                    launch_napari_viewer(**result)
+                    logger.info("napari viewer was closed...")
+                except Exception as e:
+                    logger.error(f"Failed to launch Napari: {e}")
+                    QMessageBox.warning(self, "Error", f"Failed to launch Napari: {e}")
+            else:
+                logger.warning("napari loading returned None (likely no trajectories found).")
+                QMessageBox.warning(
+                    self,
+                    "Warning",
+                    "Could not load tracks. Please ensure trajectories are computed.",
+                )
+
+        self.napari_loader.finished_with_result.connect(on_finished)
+        self.napari_loader.start()
 
     def view_table_ui(self):
         from celldetective.gui.tableUI import TableUI

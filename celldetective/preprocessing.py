@@ -230,6 +230,9 @@ def estimate_background_per_condition(
 
         try:
             background = np.nanmedian(frame_mean_per_position, axis=0)
+            if progress_callback:
+                progress_callback(image_preview=background)
+
             if offset is not None:
                 # print("The offset is applied to background...")
                 background -= offset
@@ -359,6 +362,9 @@ def correct_background_model_free(
 
         well_name, _ = extract_well_name_and_number(well_path)
 
+        if progress_callback:
+            progress_callback(status="Reconstructing background...")
+
         try:
             # Estimate background
             background = estimate_background_per_condition(
@@ -383,7 +389,14 @@ def correct_background_model_free(
             )
             if progress_callback:
                 progress_callback(level="well", iter=k + 1, total=total_wells)
+            if progress_callback:
+                progress_callback(level="well", iter=k + 1, total=total_wells)
             continue
+
+        if progress_callback:
+            progress_callback(
+                level="position", iter=-1, total=1, status="Applying background..."
+            )
 
         positions = get_positions_in_well(well_path)
         selection = positions[position_indices]

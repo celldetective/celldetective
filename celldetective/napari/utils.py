@@ -39,6 +39,8 @@ def control_tracks(
     relabel=True,
     flush_memory=True,
     threads=1,
+    progress_callback=None,
+    prepare_only=False,
 ):
     """
     Controls the tracking of cells or objects within a given position by locating the relevant image stack and label data,
@@ -90,7 +92,7 @@ def control_tracks(
         position, prefix=prefix, population=population
     )
 
-    view_tracks_in_napari(
+    return view_tracks_in_napari(
         position,
         population,
         labels=labels,
@@ -98,6 +100,8 @@ def control_tracks(
         relabel=relabel,
         flush_memory=flush_memory,
         threads=threads,
+        progress_callback=progress_callback,
+        prepare_only=prepare_only,
     )
 
 
@@ -120,6 +124,8 @@ def view_tracks_in_napari(
     relabel=True,
     flush_memory=True,
     threads=1,
+    progress_callback=None,
+    prepare_only=False,
 ):
     """
     Updated
@@ -139,11 +145,49 @@ def view_tracks_in_napari(
 
     if (labels is not None) * relabel:
         print("Replacing the cell mask labels with the track ID...")
-        labels = relabel_segmentation(labels, df, exclude_nans=True, threads=threads)
+        labels = relabel_segmentation(
+            labels,
+            df,
+            exclude_nans=True,
+            threads=threads,
+            progress_callback=progress_callback,
+        )
+        if labels is None:
+            return None
 
     vertices, tracks, properties, graph = tracks_to_napari(df, exclude_nans=True)
 
     contrast_limits = _get_contrast_limits(stack)
+
+    data = {
+        "stack": stack,
+        "labels": labels,
+        "vertices": vertices,
+        "tracks": tracks,
+        "properties": properties,
+        "graph": graph,
+        "shared_data": shared_data,
+        "contrast_limits": contrast_limits,
+        "flush_memory": flush_memory,
+    }
+
+    if prepare_only:
+        return data
+
+    return launch_napari_viewer(**data)
+
+
+def launch_napari_viewer(
+    stack,
+    labels,
+    vertices,
+    tracks,
+    properties,
+    graph,
+    shared_data,
+    contrast_limits,
+    flush_memory=True,
+):
 
     viewer = napari.Viewer()
     if stack is not None:
@@ -230,6 +274,10 @@ def view_tracks_in_napari(
     @magicgui(call_button="Export the modified\ntracks...")
     def export_table_widget():
         return export_modifications()
+
+    from celldetective.gui.base.styles import Styles
+
+    export_table_widget.native.setStyleSheet(Styles().button_style_sheet)
 
     def label_changed(event):
 
@@ -745,6 +793,10 @@ def control_segmentation_napari(
     logger.info(f"Shape of the loaded image stack: {stack.shape}...")
 
     viewer = napari.Viewer()
+    try:
+        viewer.window._qt_window.setWindowIcon(Styles().celldetective_icon)
+    except Exception as e:
+        pass
     viewer.add_image(
         stack,
         channel_axis=-1,

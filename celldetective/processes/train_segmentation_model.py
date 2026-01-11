@@ -5,6 +5,8 @@ import os
 import shutil
 from glob import glob
 import json
+
+from tensorflow.python.keras.callbacks import Callback
 from tqdm import tqdm
 import numpy as np
 import random
@@ -15,7 +17,28 @@ from celldetective.utils.image_cleaning import interpolate_nan
 from celldetective.utils.normalization import normalize_multichannel
 from celldetective.utils.mask_cleaning import fill_label_holes
 from art import tprint
-from celldetective.utils.io import save_json
+from csbdeep.utils import save_json
+from celldetective import get_logger
+
+logger = get_logger(__name__)
+
+
+class ProgressCallback(Callback):
+
+    def __init__(self, queue=None, epochs=100):
+        super().__init__()
+        self.queue = queue
+        self.epochs = epochs
+        self.t0 = time.time()
+
+    def on_epoch_end(self, epoch, logs=None):
+
+        # Send signal for progress bar
+        sum_done = (epoch + 1) / self.epochs * 100
+        mean_exec_per_step = (time.time() - self.t0) / (epoch + 1)
+        pred_time = (self.epochs - (epoch + 1)) * mean_exec_per_step
+        if self.queue is not None:
+            self.queue.put([sum_done, pred_time])
 
 
 class TrainSegModelProcess(Process):
@@ -45,10 +68,12 @@ class TrainSegModelProcess(Process):
             with open(self.instructions, "r") as f:
                 self.training_instructions = json.load(f)
         else:
-            print("Training instructions could not be found. Abort.")
+            logger.error("Training instructions could not be found. Abort.")
             self.abort_process()
 
     def run(self):
+
+        self.queue.put("Loading dataset...")
 
         if self.model_type == "cellpose":
             self.train_cellpose_model()
@@ -64,7 +89,7 @@ class TrainSegModelProcess(Process):
         from stardist.models import Config2D, StarDist2D
 
         n_rays = 32
-        print(gputools_available())
+        logger.info(gputools_available())
 
         n_channel = self.X_trn[0].shape[-1]
 
@@ -161,7 +186,7 @@ class TrainSegModelProcess(Process):
                 "patience": 10,
                 "min_delta": 0,
             }
-            print(f"{model.config=}")
+            logger.info(f"{model.config=}")
 
             save_json(
                 vars(model.config),
@@ -170,16 +195,20 @@ class TrainSegModelProcess(Process):
 
         median_size = calculate_extents(list(self.Y_trn), np.mean)
         fov = np.array(model._axes_tile_overlap("YX"))
-        print(f"median object size:      {median_size}")
-        print(f"network field of view :  {fov}")
+        logger.info(f"median object size:      {median_size}")
+        logger.info(f"network field of view :  {fov}")
         if any(median_size > fov):
-            print(
+            logger.warning(
                 "WARNING: median object size larger than field of view of the neural network."
             )
 
         if self.augmentation_factor == 1.0:
             model.train(
-                self.X_trn, self.Y_trn, validation_data=(self.X_val, self.Y_val)
+                self.X_trn,
+                self.Y_trn,
+                validation_data=(self.X_val, self.Y_val),
+                epochs=self.epochs,
+                callbacks=[ProgressCallback(queue=self.queue, epochs=self.epochs)],
             )
         else:
             model.train(
@@ -187,6 +216,8 @@ class TrainSegModelProcess(Process):
                 self.Y_trn,
                 validation_data=(self.X_val, self.Y_val),
                 augmenter=augmenter,
+                epochs=self.epochs,
+                callbacks=[ProgressCallback(queue=self.queue, epochs=self.epochs)],
             )
         model.optimize_thresholds(self.X_val, self.Y_val)
 
@@ -214,7 +245,7 @@ class TrainSegModelProcess(Process):
         Y_aug = []
         n_val = max(1, int(round(self.augmentation_factor * len(self.X_trn))))
         indices = random.choices(list(np.arange(len(self.X_trn))), k=n_val)
-        print("Performing image augmentation pre-training...")
+        logger.info("Performing image augmentation pre-training...")
         for i in tqdm(indices):
             x_aug, y_aug = augmenter(self.X_trn[i], self.Y_trn[i])
             X_aug.append(x_aug)
@@ -223,20 +254,20 @@ class TrainSegModelProcess(Process):
         # Channel axis in front for cellpose
         X_aug = [np.moveaxis(x, -1, 0) for x in X_aug]
         self.X_val = [np.moveaxis(x, -1, 0) for x in self.X_val]
-        print("number of augmented images: %3d" % len(X_aug))
+        logger.info("number of augmented images: %3d" % len(X_aug))
 
         from cellpose.models import CellposeModel
         from cellpose.io import logger_setup
         import torch
 
         if not self.use_gpu:
-            print("Using CPU for training...")
+            logger.info("Using CPU for training...")
             device = torch.device("cpu")
         else:
-            print("Using GPU for training...")
+            logger.info("Using GPU for training...")
 
         logger, log_file = logger_setup()
-        print(f"Pretrained model: ", self.pretrained)
+        logger.info(f"Pretrained model: ", self.pretrained)
         if self.pretrained is not None:
             pretrained_path = os.sep.join(
                 [self.pretrained, os.path.split(self.pretrained)[-1]]
@@ -312,7 +343,7 @@ class TrainSegModelProcess(Process):
     def split_test_train(self):
 
         if not len(self.X) > 1:
-            print("Not enough training data")
+            logger.error("Not enough training data")
             self.abort_process()
 
         rng = np.random.RandomState()
@@ -329,9 +360,9 @@ class TrainSegModelProcess(Process):
         self.files_train = [self.filenames[i] for i in ind_train]
         self.files_val = [self.filenames[i] for i in ind_val]
 
-        print("number of images: %3d" % len(self.X))
-        print("- training:       %3d" % len(self.X_trn))
-        print("- validation:     %3d" % len(self.X_val))
+        logger.info("number of images: %3d" % len(self.X))
+        logger.info("- training:       %3d" % len(self.X_trn))
+        logger.info("- validation:     %3d" % len(self.X_val))
 
     def extract_training_params(self):
 
@@ -359,14 +390,14 @@ class TrainSegModelProcess(Process):
 
     def load_dataset(self):
 
-        print(f"Datasets: {self.datasets}")
+        logger.info(f"Datasets: {self.datasets}")
         self.X, self.Y, self.filenames = load_image_dataset(
             self.datasets,
             self.target_channels,
             train_spatial_calibration=self.spatial_calibration,
             mask_suffix="labelled",
         )
-        print("Dataset loaded...")
+        logger.info("Dataset loaded...")
 
         self.values = []
         self.percentiles = []

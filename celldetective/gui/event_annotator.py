@@ -12,7 +12,7 @@ from PyQt5.QtWidgets import (
     QLineEdit,
     QSlider,
 )
-from PyQt5.QtCore import Qt, QSize
+from PyQt5.QtCore import Qt, QSize, QThread, pyqtSignal
 from PyQt5.QtGui import QKeySequence, QIntValidator
 
 from celldetective.gui.gui_utils import color_from_state
@@ -48,14 +48,44 @@ from celldetective.utils.masks import contour_of_instance_segmentation
 from celldetective.gui.base_annotator import BaseAnnotator
 
 
+class StackLoaderThread(QThread):
+    progress = pyqtSignal(int)
+    status_update = pyqtSignal(str)
+    finished = pyqtSignal()
+
+    def __init__(self, annotator):
+        super().__init__()
+        self.annotator = annotator
+        self._is_cancelled = False
+
+    def stop(self):
+        self._is_cancelled = True
+
+    def run(self):
+        def callback(progress, status=""):
+            if self._is_cancelled:
+                return False
+            self.progress.emit(progress)
+            if status:
+                self.status_update.emit(status)
+            return True
+
+        try:
+            self.annotator.prepare_stack(progress_callback=callback)
+            if not self._is_cancelled:
+                self.finished.emit()
+        except Exception as e:
+            print(f"Error in loader thread: {e}")
+            self.finished.emit()
+
+
 class EventAnnotator(BaseAnnotator):
     """
     UI to set tracking parameters for bTrack.
 
     """
 
-    def __init__(self, *args, **kwargs):
-
+    def __init__(self, *args, lazy_load=False, **kwargs):
         super().__init__(*args, **kwargs)
         self.setWindowTitle("Signal annotator")
 
@@ -70,18 +100,22 @@ class EventAnnotator(BaseAnnotator):
         else:
             # self.load_annotator_config()
             # self.locate_tracks()
-            self.prepare_stack()
 
-            self.frame_lbl = QLabel("frame: ")
-            self.looped_animation()
-            self.init_event_buttons()
-            self.populate_window()
+            if not lazy_load:
+                self.prepare_stack()
+                self.finalize_init()
 
-            self.outliers_check.hide()
-            if hasattr(self, "contrast_slider"):
-                self.im.set_clim(
-                    self.contrast_slider.value()[0], self.contrast_slider.value()[1]
-                )
+    def finalize_init(self):
+        self.frame_lbl = QLabel("frame: ")
+        self.looped_animation()
+        self.init_event_buttons()
+        self.populate_window()
+
+        self.outliers_check.hide()
+        if hasattr(self, "contrast_slider"):
+            self.im.set_clim(
+                self.contrast_slider.value()[0], self.contrast_slider.value()[1]
+            )
 
     def init_event_buttons(self):
 
@@ -684,13 +718,25 @@ class EventAnnotator(BaseAnnotator):
     # 		self.fraction = 0.25
     # 		self.anim_interval = 1
 
-    def prepare_stack(self):
+    def prepare_stack(self, progress_callback=None):
 
         self.img_num_channels = _get_img_num_per_channel(
             self.channels, self.len_movie, self.nbr_channels
         )
         self.stack = []
         disable_tqdm = not len(self.target_channels) > 1
+
+        # Calculate total frames for progress
+        total_frames = 0
+        for ch in self.target_channels:
+            target_ch_name = ch[0]
+            indices = self.img_num_channels[
+                self.channels[np.where(self.channel_names == target_ch_name)][0]
+            ]
+            total_frames += len(indices)
+
+        current_frame = 0
+
         for ch in tqdm(self.target_channels, desc="channel", disable=disable_tqdm):
             target_ch_name = ch[0]
             if self.percentile_mode:
@@ -705,7 +751,21 @@ class EventAnnotator(BaseAnnotator):
             indices = self.img_num_channels[
                 self.channels[np.where(self.channel_names == target_ch_name)][0]
             ]
+
+            if progress_callback:
+                if not progress_callback(
+                    int((current_frame / total_frames) * 100),
+                    f"Loading channel {target_ch_name}...",
+                ):
+                    return
+
             for t in tqdm(range(len(indices)), desc="frame"):
+
+                if progress_callback:
+                    if not progress_callback(int((current_frame / total_frames) * 100)):
+                        return
+                    current_frame += 1
+
                 if self.rgb_mode:
                     f = load_frames(
                         indices[t],

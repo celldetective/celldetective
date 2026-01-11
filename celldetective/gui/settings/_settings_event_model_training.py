@@ -2,6 +2,7 @@ from pathlib import Path
 
 from PyQt5.QtWidgets import (
     QMessageBox,
+    QDialog,
     QComboBox,
     QFrame,
     QCheckBox,
@@ -18,17 +19,20 @@ from celldetective.gui.layouts import ChannelNormGenerator
 from superqt import QLabeledDoubleSlider, QLabeledSlider, QSearchableComboBox
 from superqt.fonticon import icon
 from fonticon_mdi6 import MDI6
-from celldetective.utils.model_getters import get_signal_datasets_list
-from celldetective.utils.model_loaders import locate_signal_dataset
-from celldetective.utils.data_loaders import load_experiment_tables
-from celldetective.signals import train_signal_model
 import numpy as np
 import json
 import os
 from glob import glob
 from datetime import datetime
 from pandas.api.types import is_numeric_dtype
+from celldetective.processes.train_signal_model import TrainSignalModelProcess
+from celldetective.gui.workers import Runner
+from celldetective.gui.base.components import CelldetectiveProgressDialog
+from PyQt5.QtCore import QThreadPool
 from celldetective.gui.settings._settings_base import CelldetectiveSettingsPanel
+from celldetective.utils.data_loaders import load_experiment_tables
+from celldetective.utils.model_getters import get_signal_datasets_list
+from celldetective.utils.model_loaders import locate_signal_dataset
 
 
 class SettingsEventDetectionModelTraining(CelldetectiveSettingsPanel):
@@ -78,6 +82,7 @@ class SettingsEventDetectionModelTraining(CelldetectiveSettingsPanel):
         self._layout.addWidget(self.data_frame)
         self._layout.addWidget(self.hyper_frame)
         self._layout.addWidget(self.submit_btn)
+        self._layout.addWidget(self.warning_label)
 
     def _create_widgets(self):
         """
@@ -101,6 +106,11 @@ class SettingsEventDetectionModelTraining(CelldetectiveSettingsPanel):
 
         self.submit_btn.setEnabled(False)
         self.submit_btn.setText("Train")
+
+        self.warning_label = QLabel("")
+        self.warning_label.setStyleSheet("color: red; font-weight: bold;")
+        self.warning_label.setAlignment(Qt.AlignCenter)
+        self.check_readiness()
 
     def populate_hyper_frame(self):
         """
@@ -228,6 +238,7 @@ class SettingsEventDetectionModelTraining(CelldetectiveSettingsPanel):
         signal_datasets = ["--"] + available_datasets
 
         self.dataset_cb.addItems(signal_datasets)
+        self.dataset_cb.currentTextChanged.connect(self.check_readiness)
         include_dataset_layout.addWidget(self.dataset_cb, 70)
         layout.addLayout(include_dataset_layout)
 
@@ -454,12 +465,16 @@ class SettingsEventDetectionModelTraining(CelldetectiveSettingsPanel):
                 print(f"found {len(subfiles)} files in folder")
                 self.data_folder_label.setText(self.dataset_folder[:16] + "...")
                 self.data_folder_label.setToolTip(self.dataset_folder)
+                self.data_folder_label.setToolTip(self.dataset_folder)
                 self.cancel_dataset.setVisible(True)
+                self.check_readiness()
             else:
                 self.data_folder_label.setText("No folder chosen")
                 self.data_folder_label.setToolTip("")
                 self.dataset_folder = None
+                self.dataset_folder = None
                 self.cancel_dataset.setVisible(False)
+                self.check_readiness()
 
     def clear_pretrained(self):
 
@@ -476,12 +491,22 @@ class SettingsEventDetectionModelTraining(CelldetectiveSettingsPanel):
             f"Untitled_model_{datetime.today().strftime('%Y-%m-%d')}"
         )
 
+    def check_readiness(self):
+        if self.dataset_folder is None and self.dataset_cb.currentText() == "--":
+            self.submit_btn.setEnabled(False)
+            self.warning_label.setText("Please provide a dataset to train the model.")
+        else:
+            self.submit_btn.setEnabled(True)
+            self.warning_label.setText("")
+
     def clear_dataset(self):
 
         self.dataset_folder = None
         self.data_folder_label.setText("No folder chosen")
         self.data_folder_label.setToolTip("")
+        self.data_folder_label.setToolTip("")
         self.cancel_dataset.setVisible(False)
+        self.check_readiness()
 
     def load_pretrained_config(self):
 
@@ -612,17 +637,55 @@ class SettingsEventDetectionModelTraining(CelldetectiveSettingsPanel):
         with open(model_folder + "training_instructions.json", "w") as f:
             json.dump(training_instructions, f, indent=4)
 
-        # self.instructions = model_folder+"training_instructions.json"
-        # process_args = {"instructions": self.instructions} # "use_gpu": self.use_gpu
-        # self.job = ProgressWindow(TrainSignalModelProcess, parent_window=self, title="Training", position_info=False, process_args=process_args)
-        # result = self.job.exec_()
-        # if result == QDialog.Accepted:
-        # 	pass
-        # elif result == QDialog.Rejected:
-        # 	return None
+        self.instructions = model_folder + "training_instructions.json"
 
-        train_signal_model(model_folder + "training_instructions.json")
+        # Simple Progress Window implementation
+        process_args = {"instructions": self.instructions}
+
+        self.progress_dialog = CelldetectiveProgressDialog(
+            label_text="Training model (Epochs)...",
+            cancel_button_text="Cancel",
+            minimum=0,
+            maximum=100,
+            parent=self,
+            window_title="Training Event Model",
+        )
+        self.progress_dialog.setMinimumDuration(0)
+
+        # Create Runner (Thread Logic)
+        self.runner = Runner(process=TrainSignalModelProcess, process_args=process_args)
+
+        # Connect Signals
+        self.runner.signals.update_pos.connect(self.progress_dialog.setValue)
+        self.runner.signals.update_pos_time.connect(
+            lambda t: self.progress_dialog.setLabelText(f"Training model... {t}")
+        )
+        self.runner.signals.finished.connect(self.on_training_finished)
+        self.runner.signals.error.connect(self.on_training_error)
+
+        # Handle Cancel
+        self.progress_dialog.canceled.connect(self.on_training_cancel)
+
+        # Start
+        self.pool = QThreadPool.globalInstance()
+        self.pool.start(self.runner)
+        self.progress_dialog.exec_()
+
+    def on_training_finished(self):
+        self.progress_dialog.close()
         self.parent_window.refresh_signal_models()
+        QMessageBox.information(
+            self, "Success", "Model training completed successfully."
+        )
+
+    def on_training_error(self, message):
+        self.progress_dialog.close()
+        QMessageBox.critical(self, "Error", f"Training failed: {message}")
+
+    def on_training_cancel(self):
+        self.runner.close()
+        # self.progress_dialog.close() # handled by exec return usually, but explicit close is safe
+        print("Training cancelled.")
 
     def _load_previous_instructions(self):
         pass

@@ -977,6 +977,7 @@ class SignalDetectionModel(object):
         loss_reg="mse",
         loss_class=CategoricalCrossentropy(from_logits=False),
         show_plots=True,
+        callbacks=None,
     ):
         """
         Trains the model using data from specified directories.
@@ -988,6 +989,8 @@ class SignalDetectionModel(object):
         ----------
         ds_folders : list of str
                 List of directories containing the dataset files for training.
+        callbacks : list, optional
+                List of Keras callbacks to apply during training.
         normalize : bool, optional
                 Whether to normalize the input signals (default is True).
         normalization_percentile : list or None, optional
@@ -1036,6 +1039,7 @@ class SignalDetectionModel(object):
         if not hasattr(self, "normalization_clip"):
             self.normalization_clip = normalization_clip
 
+        self.callbacks = callbacks
         self.normalize = normalize
         (
             self.normalization_percentile,
@@ -1592,9 +1596,12 @@ class SignalDetectionModel(object):
         )
         self.model_class.load_weights(os.sep.join([self.model_folder, "classifier.h5"]))
 
+        time_callback = next(
+            (cb for cb in self.cb if isinstance(cb, TimeHistory)), None
+        )
         self.dico = {
             "history_classifier": self.history_classifier,
-            "execution_time_classifier": self.cb[-1].times,
+            "execution_time_classifier": time_callback.times if time_callback else [],
         }
 
         if hasattr(self, "x_test"):
@@ -1786,10 +1793,15 @@ class SignalDetectionModel(object):
 
         if self.show_plots:
             self.plot_model_history(mode="regressor")
+        time_callback = next(
+            (cb for cb in self.cb if isinstance(cb, TimeHistory)), None
+        )
         self.dico.update(
             {
                 "history_regressor": self.history_regressor,
-                "execution_time_regressor": self.cb[-1].times,
+                "execution_time_regressor": (
+                    time_callback.times if time_callback else []
+                ),
             }
         )
 
@@ -2022,6 +2034,9 @@ class SignalDetectionModel(object):
 
         cb_time = TimeHistory()
         self.cb.append(cb_time)
+
+        if hasattr(self, "callbacks") and self.callbacks is not None:
+            self.cb.extend(self.callbacks)
 
     def prepare_sets(self):
         """

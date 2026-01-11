@@ -76,7 +76,19 @@ class BackgroundCorrectionProcess(Process):
             stage = kwargs.get("stage", "")
 
             current_time = time.time()
+            status = kwargs.get("status", None)
+            image_preview = kwargs.get("image_preview", None)
+            # Legacy support
+            if image_preview is None:
+                image_preview = kwargs.get("bg_image", None)
+
             data = {}
+
+            if status:
+                data["status"] = status
+
+            if image_preview is not None:
+                data["image_preview"] = image_preview
 
             if level == "well":
                 if iteration == 0:

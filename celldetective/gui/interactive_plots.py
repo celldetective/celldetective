@@ -282,11 +282,29 @@ class InteractiveEventViewer(QDialog, Styles):
         if event.key() == Qt.Key_Left:
             # Shift curve LEFT: Increase t0 -> x decreases
             self.df.loc[mask, self.time_col] += step
+
+            # Recompute status if column exists
+            if self.status_col and self.status_col in self.df.columns:
+                # status is 1 if time >= t0, else 0
+                self.df.loc[mask, self.status_col] = (
+                    self.df.loc[mask, self.time_axis_col]
+                    >= self.df.loc[mask, self.time_col]
+                ).astype(int)
+
             self.plot_signals()
             self.notify_update()
         elif event.key() == Qt.Key_Right:
             # Shift curve RIGHT: Decrease t0 -> x increases
             self.df.loc[mask, self.time_col] -= step
+
+            # Recompute status if column exists
+            if self.status_col and self.status_col in self.df.columns:
+                # status is 1 if time >= t0, else 0
+                self.df.loc[mask, self.status_col] = (
+                    self.df.loc[mask, self.time_axis_col]
+                    >= self.df.loc[mask, self.time_col]
+                ).astype(int)
+
             self.plot_signals()
             self.notify_update()
         else:
@@ -362,6 +380,8 @@ class InteractiveEventViewer(QDialog, Styles):
             spancoords="pixels",
             interactive=True,
         )
+
+        self.ax.grid(True)
 
         self.canvas.draw()
 

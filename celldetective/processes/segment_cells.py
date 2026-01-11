@@ -37,6 +37,40 @@ from celldetective.utils.parsing import (
 logger = get_logger(__name__)
 
 
+def _create_preview_overlay(image, mask):
+    # If image has channels (C, Y, X), take max projection or first channel
+    if image.ndim == 3:
+        image = np.max(image, axis=0)
+
+    # Robust handling for shape mismatch (e.g. transpose or scale issues)
+    if image.shape != mask.shape:
+        # Try transpose match
+        if image.T.shape == mask.shape:
+            image = image.T
+        else:
+            # Resize image to fit mask (mask is the truth for segmentation result)
+            from skimage.transform import resize
+
+            # normalize to float 0-1 before resize to avoid artifacts
+            image = image.astype(float)
+            image = resize(image, mask.shape, preserve_range=True)
+
+    # Normalize image to dim range 0-150 (uint8)
+    img = image.copy().astype(float)
+    img = np.nan_to_num(img)
+    min_v, max_v = np.min(img), np.max(img)
+    if max_v > min_v:
+        img = (img - min_v) / (max_v - min_v) * 150  # Darker context
+    else:
+        img = np.zeros_like(img)
+    img = img.astype(np.uint8)
+
+    # Overlay: Set mask region to 255 (Bright White)
+    img[mask > 0] = 255
+
+    return img  # Returns 2D uint8, handled robustly by workers.py
+
+
 class BaseSegmentProcess(Process):
 
     def __init__(self, queue=None, process_args=None, *args, **kwargs):
@@ -326,9 +360,9 @@ class SegmentCellDLProcess(BaseSegmentProcess):
                 axes="YX",
             )
 
-            del f
-            del Y_pred
-            gc.collect()
+            # del f
+            # del Y_pred
+            # gc.collect()
 
             # Send signal for progress bar
             # Triple progress bar logic
@@ -359,8 +393,16 @@ class SegmentCellDLProcess(BaseSegmentProcess):
                     f"Segmentation: {self.loop_count + 1}/{int(self.len_movie)} frames"
                 )
 
+            # Saturate preview: Convert labels to binary (0/1) so all cells are visible
+            # data["image_preview"] = Y_pred > 0
+            # Saturate preview: Convert labels to binary (0/1) so all cells are visible
+            data["image_preview"] = (Y_pred > 0).astype(np.uint8)
             self.queue.put(data)
             self.loop_count += 1
+
+            del f
+            del Y_pred
+            gc.collect()
 
     def run(self):
 
@@ -588,9 +630,9 @@ class SegmentCellThresholdProcess(BaseSegmentProcess):
                     axes="YX",
                 )
 
-                del f
-                del mask
-                gc.collect()
+                # del f
+                # del mask
+                # gc.collect()
 
                 # Send signal for progress bar
                 self.sum_done += 1 / self.len_movie * 100
@@ -615,7 +657,15 @@ class SegmentCellThresholdProcess(BaseSegmentProcess):
                 else:
                     data["frame_time"] = f"Segmentation..."
 
+                # Saturate preview: Convert labels to binary (0/1)
+                # data["image_preview"] = mask > 0
+                # Saturate preview: Convert labels to binary (0/1)
+                data["image_preview"] = (mask > 0).astype(np.uint8)
                 self.queue.put(data)
+
+                del f
+                del mask
+                gc.collect()
 
         except Exception as e:
             logger.error(e)

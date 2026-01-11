@@ -15,7 +15,6 @@ from PyQt5.QtWidgets import (
     QSpacerItem,
     QGridLayout,
     QDialog,
-    QProgressDialog,
 )
 from tifffile import imread
 
@@ -25,7 +24,6 @@ from PyQt5.QtGui import QIntValidator, QDoubleValidator
 
 from superqt import (
     QLabeledRangeSlider,
-    QLabeledDoubleSlider,
     QLabeledSlider,
     QLabeledDoubleRangeSlider,
     QSearchableComboBox,
@@ -37,7 +35,13 @@ from fonticon_mdi6 import MDI6
 from celldetective.processes.background_correction import BackgroundCorrectionProcess
 from celldetective.utils.parsing import _extract_channel_indices_from_config
 from celldetective.gui.base.styles import Styles
-from celldetective.gui.base.components import CelldetectiveWidget
+from celldetective.gui.base.components import (
+    CelldetectiveWidget,
+    CelldetectiveProgressDialog,
+)
+from celldetective import get_logger
+
+logger = get_logger()
 
 
 class BackgroundEstimatorThread(QThread):
@@ -560,7 +564,6 @@ class BackgroundFitCorrectionLayout(QGridLayout, Styles):
             operation = "subtract"
         else:
             operation = "divide"
-            clip = None
 
         if (
             self.operation_layout.clip_btn.isChecked()
@@ -630,7 +633,6 @@ class BackgroundFitCorrectionLayout(QGridLayout, Styles):
             operation = "subtract"
         else:
             operation = "divide"
-            clip = None
 
         if (
             self.operation_layout.clip_btn.isChecked()
@@ -648,7 +650,6 @@ class BackgroundFitCorrectionLayout(QGridLayout, Styles):
             "model": self.models_cb.currentText(),
             "threshold_on_std": self.threshold_le.get_threshold(),
             "operation": operation,
-            "clip": clip,
             "clip": clip,
             "activation_protocol": [["gauss", 2], ["std", 4]],
             "downsample": int(self.downsample_le.text()),
@@ -1360,6 +1361,8 @@ class BackgroundModelFreeCorrectionLayout(QGridLayout, Styles):
             mode = "timeseries"
         elif self.tiles_rb.isChecked():
             mode = "tiles"
+        else:
+            mode = "tiles"
 
         if self.regress_cb.isChecked():
             optimize_option = True
@@ -1457,15 +1460,14 @@ class BackgroundModelFreeCorrectionLayout(QGridLayout, Styles):
             mode = "timeseries"
         elif self.tiles_rb.isChecked():
             mode = "tiles"
+        else:
+            mode = "tiles"
 
         # Create progress dialog
-        self.bg_progress = QProgressDialog(
-            "Loading libraries...", "Cancel", 0, 100, None
+        window_title = "Background reconstruction"
+        self.bg_progress = CelldetectiveProgressDialog(
+            "Loading libraries...", "Cancel", 0, 100, None, window_title=window_title
         )
-        self.bg_progress.setWindowTitle("Please wait")
-        self.bg_progress.setWindowModality(Qt.WindowModal)
-        self.bg_progress.setMinimumDuration(0)  # Show immediately
-        self.bg_progress.setValue(0)
 
         self.bg_worker = BackgroundEstimatorThread(
             self.attr_parent.exp_dir,
@@ -1484,7 +1486,7 @@ class BackgroundModelFreeCorrectionLayout(QGridLayout, Styles):
             self.bg_progress.blockSignals(True)
             self.bg_progress.close()
             if self.bg_worker._is_cancelled:
-                print("Background estimation cancelled.")
+                logger.info("Background estimation cancelled.")
                 return
 
             if bg and len(bg) > 0:

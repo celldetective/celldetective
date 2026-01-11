@@ -5,8 +5,67 @@ import json
 from glob import glob
 import numpy as np
 from art import tprint
+from tensorflow.python.keras.callbacks import Callback
+
 from celldetective.signals import SignalDetectionModel
+from celldetective.log_manager import get_logger
 from celldetective.utils.model_loaders import locate_signal_model
+
+logger = get_logger(__name__)
+
+
+class ProgressCallback(Callback):
+
+    def __init__(self, queue=None, total_epochs=100):
+        super().__init__()
+        self.queue = queue
+        self.total_epochs = total_epochs
+        self.current_step = 0
+        self.t0 = time.time()
+
+    def on_epoch_begin(self, epoch, logs=None):
+        self.epoch_start_time = time.time()
+
+    def on_batch_end(self, batch, logs=None):
+        # Update frame bar (bottom bar) for batch progress
+        # logs has 'size' and 'batch'
+        # We need total batches. Keras doesn't always pass it easily in logs unless we know steps_per_epoch.
+        # But self.params['steps'] should have it if available.
+        if self.params and "steps" in self.params:
+            total_steps = self.params["steps"]
+            batch_progress = ((batch + 1) / total_steps) * 100
+            if self.queue is not None:
+                # Send generic batch update (frequent)
+                self.queue.put(
+                    {
+                        "frame_progress": batch_progress,
+                        "frame_time": f"Batch {batch + 1}/{total_steps}",
+                    }
+                )
+
+    def on_epoch_end(self, epoch, logs=None):
+        self.current_step += 1
+        # Send signal for progress bar
+        sum_done = (self.current_step) / self.total_epochs * 100
+        mean_exec_per_step = (time.time() - self.t0) / (self.current_step)
+        pred_time = (self.total_epochs - self.current_step) * mean_exec_per_step
+
+        # Format time string
+        if pred_time > 60:
+            time_str = f"{pred_time/60:.1f} min"
+        else:
+            time_str = f"{pred_time:.1f} s"
+
+        if self.queue is not None:
+            # Update Position bar (middle) for Epoch progress
+            self.queue.put(
+                {
+                    "pos_progress": sum_done,
+                    "pos_time": f"Epoch {self.current_step}/{self.total_epochs} (ETA: {time_str})",
+                    "frame_progress": 0,  # Reset batch bar
+                    "frame_time": "Batch 0/0",
+                }
+            )
 
 
 class TrainSignalModelProcess(Process):
@@ -21,7 +80,7 @@ class TrainSignalModelProcess(Process):
             for key, value in process_args.items():
                 setattr(self, key, value)
 
-        tprint("Train segmentation")
+        tprint("Train event detection")
         self.read_instructions()
         self.extract_training_params()
 
@@ -34,7 +93,7 @@ class TrainSignalModelProcess(Process):
             with open(self.instructions, "r") as f:
                 self.training_instructions = json.load(f)
         else:
-            print("Training instructions could not be found. Abort.")
+            logger.error("Training instructions could not be found. Abort.")
             self.abort_process()
 
         all_classes = []
@@ -113,9 +172,15 @@ class TrainSignalModelProcess(Process):
                     outfile.write(json_string)
 
     def run(self):
-
+        self.queue.put("Loading dataset...")
         model = SignalDetectionModel(**self.model_params)
-        model.fit_from_directory(self.training_instructions["ds"], **self.train_params)
+
+        total_epochs = self.train_params["epochs"] * 3
+        cb = ProgressCallback(queue=self.queue, total_epochs=total_epochs)
+
+        model.fit_from_directory(
+            self.training_instructions["ds"], callbacks=[cb], **self.train_params
+        )
         self.neighborhood_postprocessing()
         self.queue.put("finished")
         self.queue.close()

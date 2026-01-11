@@ -11,6 +11,7 @@ from celldetective.utils.image_loaders import load_frames
 from scipy.ndimage import binary_fill_holes
 from scipy.ndimage import find_objects
 
+
 def fill_label_holes(lbl_img, **kwargs):
     """Fill small holes in label image.
     from https://github.com/stardist/stardist/blob/main/stardist/utils.py
@@ -177,6 +178,7 @@ def relabel_segmentation(
         "label": "class_id",
     },
     threads=1,
+    progress_callback=None,
 ):
     """
     Relabel the segmentation labels with the tracking IDs from the tracks.
@@ -253,11 +255,37 @@ def relabel_segmentation(
     new_labels = np.zeros_like(labels)
     shared_data = {"s": 0}
 
+    # Progress tracking
+    shared_progress = {"val": 0, "lock": threading.Lock()}
+    total_frames = len(df[column_labels["frame"]].dropna().unique())
+
     def rewrite_labels(indices):
 
         all_track_ids = df[column_labels["track"]].dropna().unique()
 
-        for t in tqdm(indices):
+        # Check for cancellation
+        if progress_callback:
+            with shared_progress["lock"]:
+                if shared_progress.get("cancelled", False):
+                    return
+
+        disable_tqdm = progress_callback is not None
+
+        for t in tqdm(indices, disable=disable_tqdm):
+
+            # Cancellation check inside loop
+            if progress_callback:
+                with shared_progress["lock"]:
+                    if shared_progress.get("cancelled", False):
+                        return
+
+                    shared_progress["val"] += 1
+                    p = int((shared_progress["val"] / total_frames) * 100)
+
+                if not progress_callback(p):
+                    with shared_progress["lock"]:
+                        shared_progress["cancelled"] = True
+                    return
 
             f = int(t)
             cells = df.loc[
@@ -306,9 +334,14 @@ def relabel_segmentation(
         )  # list(map(lambda x: executor.submit(self.parallel_job, x), chunks))
         try:
             for i, return_value in enumerate(results):
-                print(f"Thread {i} output check: ", return_value)
+                # print(f"Thread {i} output check: ", return_value)
+                pass
         except Exception as e:
             print("Exception: ", e)
+
+    if shared_progress.get("cancelled", False):
+        print("Relabeling cancelled.")
+        return None
 
     print("\nDone.")
 
