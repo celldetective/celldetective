@@ -5,7 +5,6 @@ from PyQt5.QtWidgets import (
     QAction,
     QMenu,
     QFileDialog,
-    QLineEdit,
     QHBoxLayout,
     QPushButton,
     QVBoxLayout,
@@ -15,16 +14,20 @@ from PyQt5.QtWidgets import (
     QMessageBox,
 )
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QBrush, QColor, QDoubleValidator
+from PyQt5.QtGui import QBrush, QColor
 
 from celldetective.gui.gui_utils import (
     FigureCanvas,
-    GenericOpColWidget,
     PandasModel,
 )
 from celldetective.gui.base.utils import center_window
+from celldetective.gui.table_ops._maths import DifferentiateColWidget, OperationOnColsWidget, CalibrateColWidget, \
+    AbsColWidget, LogColWidget
+from celldetective.gui.table_ops._merge_one_hot import MergeOneHotWidget
+from celldetective.gui.table_ops._query_table import QueryWidget
+from celldetective.gui.table_ops._rename_col import RenameColWidget
+from celldetective.relative_measurements import expand_pair_table
 from celldetective.utils.data_cleaning import collapse_trajectories_by_status
-from celldetective.utils.maths import differentiate_per_track, safe_log
 from celldetective.utils.stats import test_2samp_generic
 import numpy as np
 import os
@@ -33,441 +36,12 @@ from celldetective.gui.base.components import (
     CelldetectiveMainWindow,
     QHSeperationLine,
 )
-from superqt import QColormapComboBox, QLabeledSlider, QSearchableComboBox
-from superqt.fonticon import icon
-from fonticon_mdi6 import MDI6
+from superqt import QColormapComboBox, QSearchableComboBox
 from math import floor
+from celldetective import get_logger
+from celldetective.utils.types import test_bool_array
 
-
-class QueryWidget(CelldetectiveWidget):
-
-    def __init__(self, parent_window):
-
-        super().__init__()
-        self.parent_window = parent_window
-
-        self.setWindowTitle("Filter table")
-        # Create the QComboBox and add some items
-
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(30, 30, 30, 30)
-        self.query_le = QLineEdit()
-        layout.addWidget(self.query_le, 70)
-
-        self.submit_btn = QPushButton("submit")
-        self.submit_btn.clicked.connect(self.filter_table)
-        layout.addWidget(self.submit_btn, 30)
-        center_window(self)
-
-    def filter_table(self):
-        try:
-            query_text = self.query_le.text()  # .replace('class', '`class`')
-            tab = self.parent_window.data.query(query_text)
-            self.subtable = TableUI(
-                tab,
-                query_text,
-                plot_mode="static",
-                population=self.parent_window.population,
-            )
-            self.subtable.show()
-            self.close()
-        except Exception as e:
-            print(e)
-            return None
-
-
-class MergeOneHotWidget(CelldetectiveWidget):
-
-    def __init__(self, parent_window, selected_columns=None):
-
-        super().__init__()
-        self.parent_window = parent_window
-        self.selected_columns = selected_columns
-
-        self.setWindowTitle("Merge one-hot encoded columns...")
-        # Create the QComboBox and add some items
-        center_window(self)
-
-        self.layout = QVBoxLayout(self)
-        self.layout.setContentsMargins(30, 30, 30, 30)
-
-        if self.selected_columns is not None:
-            n_cols = len(self.selected_columns)
-        else:
-            n_cols = 2
-
-        name_hbox = QHBoxLayout()
-        name_hbox.addWidget(QLabel("New categorical column: "), 33)
-        self.new_col_le = QLineEdit()
-        self.new_col_le.setText("categorical_")
-        self.new_col_le.textChanged.connect(self.allow_merge)
-        name_hbox.addWidget(self.new_col_le, 66)
-        self.layout.addLayout(name_hbox)
-
-        self.layout.addWidget(QLabel("Source columns: "))
-
-        self.cbs = [QSearchableComboBox() for i in range(n_cols)]
-        self.cbs_layout = QVBoxLayout()
-
-        for i in range(n_cols):
-            lay = QHBoxLayout()
-            lay.addWidget(QLabel(f"column {i}: "), 33)
-            self.cbs[i].addItems(["--"] + list(self.parent_window.data.columns))
-            if self.selected_columns is not None:
-                self.cbs[i].setCurrentText(self.selected_columns[i])
-            lay.addWidget(self.cbs[i], 66)
-            self.cbs_layout.addLayout(lay)
-
-        self.layout.addLayout(self.cbs_layout)
-
-        hbox = QHBoxLayout()
-        self.add_col_btn = QPushButton("Add column")
-        self.add_col_btn.clicked.connect(self.add_col)
-        self.add_col_btn.setStyleSheet(self.button_add)
-        self.add_col_btn.setIcon(icon(MDI6.plus, color="black"))
-
-        hbox.addWidget(QLabel(""), 50)
-        hbox.addWidget(self.add_col_btn, 50, alignment=Qt.AlignRight)
-        self.layout.addLayout(hbox)
-
-        self.submit_btn = QPushButton("Merge")
-        self.submit_btn.setStyleSheet(self.button_style_sheet)
-        self.submit_btn.clicked.connect(self.merge_cols)
-        self.layout.addWidget(self.submit_btn, 30)
-
-        self.setAttribute(Qt.WA_DeleteOnClose)
-
-    def add_col(self):
-        self.cbs.append(QSearchableComboBox())
-        self.cbs[-1].addItems(["--"] + list(self.parent_window.data.columns))
-        lay = QHBoxLayout()
-        lay.addWidget(QLabel(f"column {len(self.cbs)-1}: "), 33)
-        lay.addWidget(self.cbs[-1], 66)
-        self.cbs_layout.addLayout(lay)
-
-    def merge_cols(self):
-
-        self.parent_window.data[self.new_col_le.text()] = self.parent_window.data.loc[
-            :, list(self.selected_columns)
-        ].idxmax(axis=1)
-        self.parent_window.model = PandasModel(self.parent_window.data)
-        self.parent_window.table_view.setModel(self.parent_window.model)
-        self.close()
-
-    def allow_merge(self):
-
-        if self.new_col_le.text() == "":
-            self.submit_btn.setEnabled(False)
-        else:
-            self.submit_btn.setEnabled(True)
-
-
-class DifferentiateColWidget(CelldetectiveWidget):
-
-    def __init__(self, parent_window, column=None):
-
-        super().__init__()
-        self.parent_window = parent_window
-        self.column = column
-
-        self.setWindowTitle("d/dt")
-        # Create the QComboBox and add some items
-        center_window(self)
-
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(30, 30, 30, 30)
-
-        self.measurements_cb = QComboBox()
-        self.measurements_cb.addItems(list(self.parent_window.data.columns))
-        if self.column is not None:
-            idx = self.measurements_cb.findText(self.column)
-            self.measurements_cb.setCurrentIndex(idx)
-
-        measurement_layout = QHBoxLayout()
-        measurement_layout.addWidget(QLabel("measurements: "), 25)
-        measurement_layout.addWidget(self.measurements_cb, 75)
-        layout.addLayout(measurement_layout)
-
-        self.window_size_slider = QLabeledSlider()
-        self.window_size_slider.setRange(
-            1, int(np.nanmax(self.parent_window.data.FRAME.to_numpy()))
-        )
-        self.window_size_slider.setValue(3)
-        window_layout = QHBoxLayout()
-        window_layout.addWidget(QLabel("window size: "), 25)
-        window_layout.addWidget(self.window_size_slider, 75)
-        layout.addLayout(window_layout)
-
-        self.backward_btn = QRadioButton("backward")
-        self.bi_btn = QRadioButton("bi")
-        self.bi_btn.click()
-        self.forward_btn = QRadioButton("forward")
-        self.mode_btn_group = QButtonGroup()
-        self.mode_btn_group.addButton(self.backward_btn)
-        self.mode_btn_group.addButton(self.bi_btn)
-        self.mode_btn_group.addButton(self.forward_btn)
-
-        mode_layout = QHBoxLayout()
-        mode_layout.addWidget(QLabel("mode: "), 25)
-        mode_sublayout = QHBoxLayout()
-        mode_sublayout.addWidget(self.backward_btn, 33, alignment=Qt.AlignCenter)
-        mode_sublayout.addWidget(self.bi_btn, 33, alignment=Qt.AlignCenter)
-        mode_sublayout.addWidget(self.forward_btn, 33, alignment=Qt.AlignCenter)
-        mode_layout.addLayout(mode_sublayout, 75)
-        layout.addLayout(mode_layout)
-
-        self.submit_btn = QPushButton("Compute")
-        self.submit_btn.setStyleSheet(self.button_style_sheet)
-        self.submit_btn.clicked.connect(self.compute_derivative_and_add_new_column)
-        layout.addWidget(self.submit_btn, 30)
-
-        self.setAttribute(Qt.WA_DeleteOnClose)
-
-    def compute_derivative_and_add_new_column(self):
-
-        if self.bi_btn.isChecked():
-            mode = "bi"
-        elif self.forward_btn.isChecked():
-            mode = "forward"
-        elif self.backward_btn.isChecked():
-            mode = "backward"
-        self.parent_window.data = differentiate_per_track(
-            self.parent_window.data,
-            self.measurements_cb.currentText(),
-            window_size=self.window_size_slider.value(),
-            mode=mode,
-        )
-        self.parent_window.model = PandasModel(self.parent_window.data)
-        self.parent_window.table_view.setModel(self.parent_window.model)
-        self.close()
-
-
-class OperationOnColsWidget(CelldetectiveWidget):
-
-    def __init__(self, parent_window, column1=None, column2=None, operation="divide"):
-
-        super().__init__()
-        self.parent_window = parent_window
-        self.column1 = column1
-        self.column2 = column2
-        self.operation = operation
-
-        self.setWindowTitle(self.operation)
-        # Create the QComboBox and add some items
-        center_window(self)
-
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(30, 30, 30, 30)
-
-        self.col1_cb = QComboBox()
-        self.col1_cb.addItems(list(self.parent_window.data.columns))
-        if self.column1 is not None:
-            idx = self.col1_cb.findText(self.column1)
-            self.col1_cb.setCurrentIndex(idx)
-
-        numerator_layout = QHBoxLayout()
-        numerator_layout.addWidget(QLabel("column 1: "), 25)
-        numerator_layout.addWidget(self.col1_cb, 75)
-        layout.addLayout(numerator_layout)
-
-        self.col2_cb = QComboBox()
-        self.col2_cb.addItems(list(self.parent_window.data.columns))
-        if self.column2 is not None:
-            idx = self.col2_cb.findText(self.column2)
-            self.col2_cb.setCurrentIndex(idx)
-
-        denominator_layout = QHBoxLayout()
-        denominator_layout.addWidget(QLabel("column 2: "), 25)
-        denominator_layout.addWidget(self.col2_cb, 75)
-        layout.addLayout(denominator_layout)
-
-        self.submit_btn = QPushButton("Compute")
-        self.submit_btn.setStyleSheet(self.button_style_sheet)
-        self.submit_btn.clicked.connect(self.compute)
-        layout.addWidget(self.submit_btn, 30)
-
-        self.setAttribute(Qt.WA_DeleteOnClose)
-
-    def compute(self):
-
-        test = self._check_cols_before_operation()
-        if not test:
-            msgBox = QMessageBox()
-            msgBox.setIcon(QMessageBox.Warning)
-            msgBox.setText(
-                f"Operation could not be performed, one of the column types is object..."
-            )
-            msgBox.setWindowTitle("Warning")
-            msgBox.setStandardButtons(QMessageBox.Ok)
-            returnValue = msgBox.exec()
-            if returnValue == QMessageBox.Ok:
-                return None
-            else:
-                return None
-        else:
-            if self.operation == "divide":
-                name = f"{self.col1_txt}/{self.col2_txt}"
-                with np.errstate(divide="ignore", invalid="ignore"):
-                    res = np.true_divide(self.col1, self.col2)
-                    res[res == np.inf] = np.nan
-                    res[self.col1 != self.col1] = np.nan
-                    res[self.col2 != self.col2] = np.nan
-                    self.parent_window.data[name] = res
-
-            elif self.operation == "multiply":
-                name = f"{self.col1_txt}*{self.col2_txt}"
-                res = np.multiply(self.col1, self.col2)
-
-            elif self.operation == "add":
-                name = f"{self.col1_txt}+{self.col2_txt}"
-                res = np.add(self.col1, self.col2)
-
-            elif self.operation == "subtract":
-                name = f"{self.col1_txt}-{self.col2_txt}"
-                res = np.subtract(self.col1, self.col2)
-
-            self.parent_window.data[name] = res
-            self.parent_window.model = PandasModel(self.parent_window.data)
-            self.parent_window.table_view.setModel(self.parent_window.model)
-            self.close()
-
-    def _check_cols_before_operation(self):
-
-        self.col1_txt = self.col1_cb.currentText()
-        self.col2_txt = self.col2_cb.currentText()
-
-        self.col1 = self.parent_window.data[self.col1_txt].to_numpy()
-        self.col2 = self.parent_window.data[self.col2_txt].to_numpy()
-
-        test = np.all([self.col1.dtype != "O", self.col2.dtype != "O"])
-
-        return test
-
-
-class CalibrateColWidget(GenericOpColWidget):
-
-    def __init__(self, *args, **kwargs):
-
-        super().__init__(title="Calibrate data", *args, **kwargs)
-
-        self.floatValidator = QDoubleValidator()
-        self.calibration_factor_le = QLineEdit("1")
-        self.calibration_factor_le.setPlaceholderText(
-            "multiplicative calibration factor..."
-        )
-        self.calibration_factor_le.setValidator(self.floatValidator)
-
-        self.units_le = QLineEdit("um")
-        self.units_le.setPlaceholderText("units...")
-
-        self.calibration_factor_le.textChanged.connect(self.check_valid_params)
-        self.units_le.textChanged.connect(self.check_valid_params)
-
-        calib_layout = QHBoxLayout()
-        calib_layout.addWidget(QLabel("calibration factor: "), 33)
-        calib_layout.addWidget(self.calibration_factor_le, 66)
-        self.sublayout.addLayout(calib_layout)
-
-        units_layout = QHBoxLayout()
-        units_layout.addWidget(QLabel("units: "), 33)
-        units_layout.addWidget(self.units_le, 66)
-        self.sublayout.addLayout(units_layout)
-
-        # info_layout = QHBoxLayout()
-        # info_layout.addWidget(QLabel('For reference: '))
-        # self.sublayout.addLayout(info_layout)
-
-        # info_layout2 = QHBoxLayout()
-        # info_layout2.addWidget(QLabel(f'PxToUm = {self.parent_window.parent_window.parent_window.PxToUm}'), 50)
-        # info_layout2.addWidget(QLabel(f'FrameToMin = {self.parent_window.parent_window.parent_window.FrameToMin}'), 50)
-        # self.sublayout.addLayout(info_layout2)
-
-    def check_valid_params(self):
-
-        try:
-            factor = float(self.calibration_factor_le.text().replace(",", "."))
-            factor_valid = True
-        except Exception as e:
-            factor_valid = False
-
-        if self.units_le.text() == "":
-            units_valid = False
-        else:
-            units_valid = True
-
-        if factor_valid and units_valid:
-            self.submit_btn.setEnabled(True)
-        else:
-            self.submit_btn.setEnabled(False)
-
-    def compute(self):
-        self.parent_window.data[
-            self.measurements_cb.currentText() + f"[{self.units_le.text()}]"
-        ] = self.parent_window.data[self.measurements_cb.currentText()] * float(
-            self.calibration_factor_le.text().replace(",", ".")
-        )
-
-
-class AbsColWidget(GenericOpColWidget):
-
-    def __init__(self, *args, **kwargs):
-
-        super().__init__(title="abs(.)", *args, **kwargs)
-
-    def compute(self):
-        self.parent_window.data["|" + self.measurements_cb.currentText() + "|"] = (
-            self.parent_window.data[self.measurements_cb.currentText()].abs()
-        )
-
-
-class LogColWidget(GenericOpColWidget):
-
-    def __init__(self, *args, **kwargs):
-
-        super().__init__(title="log10(.)", *args, **kwargs)
-
-    def compute(self):
-        self.parent_window.data["log10(" + self.measurements_cb.currentText() + ")"] = (
-            safe_log(self.parent_window.data[self.measurements_cb.currentText()].values)
-        )
-
-
-class RenameColWidget(CelldetectiveWidget):
-
-    def __init__(self, parent_window, column=None):
-
-        super().__init__()
-        self.parent_window = parent_window
-        self.column = column
-        if self.column is None:
-            self.column = ""
-
-        self.setWindowTitle("Rename column")
-        # Create the QComboBox and add some items
-        center_window(self)
-
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(30, 30, 30, 30)
-        self.new_col_name = QLineEdit()
-        self.new_col_name.setText(self.column)
-        layout.addWidget(self.new_col_name, 70)
-
-        self.submit_btn = QPushButton("rename")
-        self.submit_btn.clicked.connect(self.rename_col)
-        layout.addWidget(self.submit_btn, 30)
-        self.setAttribute(Qt.WA_DeleteOnClose)
-
-    def rename_col(self):
-
-        old_name = self.column
-        new_name = self.new_col_name.text()
-        self.parent_window.data = self.parent_window.data.rename(
-            columns={old_name: new_name}
-        )
-
-        self.parent_window.model = PandasModel(self.parent_window.data)
-        self.parent_window.table_view.setModel(self.parent_window.model)
-        self.close()
+logger = get_logger(__name__)
 
 
 class PivotTableUI(CelldetectiveWidget):
@@ -624,7 +198,7 @@ class TableUI(CelldetectiveMainWindow):
         self.data = data
 
         self._createMenuBar()
-        self._createActions()
+        self._create_actions()
 
         self.table_view = QTableView(self)
         self.setCentralWidget(self.table_view)
@@ -648,7 +222,7 @@ class TableUI(CelldetectiveMainWindow):
         except:
             pass
 
-    def _createActions(self):
+    def _create_actions(self):
 
         self.save_as = QAction("&Save as...", self)
         self.save_as.triggered.connect(self.save_as_csv)
@@ -934,8 +508,8 @@ class TableUI(CelldetectiveMainWindow):
         )
         msgBox.setWindowTitle("Info")
         msgBox.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
-        returnValue = msgBox.exec()
-        if returnValue == QMessageBox.No:
+        return_value = msgBox.exec()
+        if return_value == QMessageBox.No:
             return None
 
         self.data = self.data.drop(list(cols[col_idx]), axis=1)
@@ -948,12 +522,12 @@ class TableUI(CelldetectiveMainWindow):
         col_idx = np.unique(np.array([l.column() for l in x]))
 
         if len(col_idx) == 0:
-            msgBox = QMessageBox()
-            msgBox.setIcon(QMessageBox.Question)
-            msgBox.setText(f"Please select a column first.")
-            msgBox.setWindowTitle("Warning")
-            msgBox.setStandardButtons(QMessageBox.Ok)
-            returnValue = msgBox.exec()
+            msg_box = QMessageBox()
+            msg_box.setIcon(QMessageBox.Question)
+            msg_box.setText(f"Please select a column first.")
+            msg_box.setWindowTitle("Warning")
+            msg_box.setStandardButtons(QMessageBox.Ok)
+            returnValue = msg_box.exec()
             if returnValue == QMessageBox.Ok:
                 return None
             else:
@@ -1132,7 +706,7 @@ class TableUI(CelldetectiveMainWindow):
                 col_selection.extend(selected_cols)
 
         # Lazy load MergeGroupWidget
-        from celldetective.gui.table_ops.merge_groups import MergeGroupWidget
+        from celldetective.gui.table_ops._merge_groups import MergeGroupWidget
 
         self.merge_classification_widget = MergeGroupWidget(self, columns=col_selection)
         self.merge_classification_widget.show()
@@ -1897,6 +1471,7 @@ class TableUI(CelldetectiveMainWindow):
                     for k, c in enumerate(self.groupby_cols):
                         values.update({c: tid[k]})
                     new_table.append(values)
+            import pandas as pd
 
             group_table = pd.DataFrame(new_table)
             if self.population == "pairs":
@@ -1973,12 +1548,6 @@ class TableUI(CelldetectiveMainWindow):
                 self.data = self.data.drop(invalid_cols, axis=1)
             self.data.to_csv(file_name, index=False)
 
-    def test_bool(self, array):
-        if array.dtype == "bool":
-            return np.array(array, dtype=int)
-        else:
-            return array
-
     def plot_instantaneous(self):
 
         if self.plot_mode == "plot_track_signals":
@@ -1989,6 +1558,8 @@ class TableUI(CelldetectiveMainWindow):
             self.plot()
 
     def plot(self):
+        import matplotlib.pyplot as plt
+
         if self.plot_mode == "static":
 
             x = self.table_view.selectedIndexes()
@@ -2003,8 +1574,8 @@ class TableUI(CelldetectiveMainWindow):
             if len(unique_cols) == 2:
 
                 print("two columns, plot mode")
-                x1 = self.test_bool(self.data.iloc[row_idx, unique_cols[0]])
-                x2 = self.test_bool(self.data.iloc[row_idx, unique_cols[1]])
+                x1 = test_bool_array(self.data.iloc[row_idx, unique_cols[0]])
+                x2 = test_bool_array(self.data.iloc[row_idx, unique_cols[1]])
 
                 self.fig, self.ax = plt.subplots(1, 1, figsize=(4, 3))
                 self.scatter_wdw = FigureCanvas(self.fig, title="scatter")

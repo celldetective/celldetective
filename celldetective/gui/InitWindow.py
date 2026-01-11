@@ -74,8 +74,8 @@ class AppInitWindow(CelldetectiveMainWindow):
         self.soft_path = software_location
         self.onlyInt = QIntValidator()
 
-        self._createActions()
-        self._createMenuBar()
+        self._create_actions()
+        self._create_menu_bar()
 
         app = QApplication.instance()
         self.screen = app.primaryScreen()
@@ -132,7 +132,7 @@ class AppInitWindow(CelldetectiveMainWindow):
         )
         try:
             self.folder_name = os.getcwd()
-        except FileNotFoundError as e:
+        except FileNotFoundError as _:
             self.folder_name = ""
         self.experiment_path_selection.setPlaceholderText("/path/to/experiment/folder/")
         self.locate_exp_layout.addWidget(self.experiment_path_selection, 90)
@@ -144,7 +144,7 @@ class AppInitWindow(CelldetectiveMainWindow):
         self.locate_exp_layout.addWidget(self.browse_button, 10)
         self.vertical_layout.addLayout(self.locate_exp_layout)
 
-    def _createMenuBar(self):
+    def _create_menu_bar(self):
 
         menu_bar = self.menuBar()
         menu_bar.clear()
@@ -157,9 +157,9 @@ class AppInitWindow(CelldetectiveMainWindow):
 
         file_menu.addMenu(self.OpenRecentAction)
         self.OpenRecentAction.clear()
-        if len(self.recentFileActs) > 0:
-            for i in range(len(self.recentFileActs)):
-                self.OpenRecentAction.addAction(self.recentFileActs[i])
+        if len(self.recent_file_acts) > 0:
+            for i in range(len(self.recent_file_acts)):
+                self.OpenRecentAction.addAction(self.recent_file_acts[i])
 
         file_menu.addMenu(self.openDemo)
         self.openDemo.addAction(self.open_spreading_assay_demo)
@@ -170,26 +170,26 @@ class AppInitWindow(CelldetectiveMainWindow):
         file_menu.addAction(self.exit_action)
         menu_bar.addMenu(file_menu)
 
-        OptionsMenu = QMenu("Options", self)
-        OptionsMenu.addAction(self.memory_and_threads_action)
-        menu_bar.addMenu(OptionsMenu)
+        options_menu = QMenu("Options", self)
+        options_menu.addAction(self.memory_and_threads_action)
+        menu_bar.addMenu(options_menu)
 
-        PluginsMenu = QMenu("Plugins", self)
-        PluginsMenu.addAction(self.correct_annotation_action)
-        menu_bar.addMenu(PluginsMenu)
+        plugins_menu = QMenu("Plugins", self)
+        plugins_menu.addAction(self.correct_annotation_action)
+        menu_bar.addMenu(plugins_menu)
 
-        helpMenu = QMenu("Help", self)
-        helpMenu.clear()
-        helpMenu.addAction(self.documentation_action)
-        # helpMenu.addAction(self.SoftwareAction)
-        helpMenu.addSeparator()
-        helpMenu.addAction(self.about_action)
-        menu_bar.addMenu(helpMenu)
+        help_menu = QMenu("Help", self)
+        help_menu.clear()
+        help_menu.addAction(self.documentation_action)
+        # help_menu.addAction(self.SoftwareAction)
+        help_menu.addSeparator()
+        help_menu.addAction(self.about_action)
+        menu_bar.addMenu(help_menu)
 
         # editMenu = menuBar.addMenu("&Edit")
-        # helpMenu = menuBar.addMenu("&Help")
+        # help_menu = menuBar.addMenu("&Help")
 
-    def _createActions(self):
+    def _create_actions(self):
         # Creating action using the first constructor
         # self.newAction = QAction(self)
         # self.newAction.setText("&New")
@@ -292,7 +292,7 @@ class AppInitWindow(CelldetectiveMainWindow):
 
     def reload_previous_gpu_threads(self):
 
-        self.recentFileActs = []
+        self.recent_file_acts = []
         self.threads_config_path = os.sep.join(
             [self.soft_path, "celldetective", "threads.json"]
         )
@@ -309,18 +309,17 @@ class AppInitWindow(CelldetectiveMainWindow):
 
     def reload_previous_experiments(self):
 
-        recentExps = []
-        self.recentFileActs = []
+        self.recent_file_acts = []
         if os.path.exists(os.sep.join([self.soft_path, "celldetective", "recent.txt"])):
-            recentExps = open(
+            recent_exps = open(
                 os.sep.join([self.soft_path, "celldetective", "recent.txt"]), "r"
             )
-            recentExps = recentExps.readlines()
-            recentExps = [r.strip() for r in recentExps]
-            recentExps.reverse()
-            recentExps = list(dict.fromkeys(recentExps))
-            self.recentFileActs = [QAction(r, self) for r in recentExps]
-            for r in self.recentFileActs:
+            recent_exps = recent_exps.readlines()
+            recent_exps = [r.strip() for r in recent_exps]
+            recent_exps.reverse()
+            recent_exps = list(dict.fromkeys(recent_exps))
+            self.recent_file_acts = [QAction(r, self) for r in recent_exps]
+            for r in self.recent_file_acts:
                 r.triggered.connect(
                     lambda checked, item=r: self.load_recent_exp(item.text())
                 )
@@ -510,7 +509,7 @@ class AppInitWindow(CelldetectiveMainWindow):
                 return
 
             self.reload_previous_experiments()
-            self._createMenuBar()
+            self._create_menu_bar()
 
     def browse_experiment_folder(self):
         """

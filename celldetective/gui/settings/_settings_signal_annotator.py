@@ -7,17 +7,13 @@ from PyQt5.QtWidgets import (
     QLabel,
     QRadioButton,
     QLineEdit,
-    QApplication,
     QPushButton,
-    QScrollArea,
     QVBoxLayout,
     QHBoxLayout,
 )
 from PyQt5.QtCore import Qt, QSize
 from celldetective.gui.base.components import QHSeperationLine
-from celldetective.gui.base.utils import center_window
 from superqt import QLabeledDoubleSlider, QLabeledSlider
-from celldetective import get_software_location
 from celldetective.utils.experiment import extract_experiment_channels
 import json
 import numpy as np
@@ -38,6 +34,7 @@ class SettingsSignalAnnotator(CelldetectiveSettingsPanel):
         self.parent_window = parent_window
         self.mode = self.parent_window.mode
         self.exp_dir = self.parent_window.exp_dir
+        self.percentile_mode = False
 
         self.instructions_path = (
             self.parent_window.exp_dir
@@ -59,7 +56,7 @@ class SettingsSignalAnnotator(CelldetectiveSettingsPanel):
         self._add_to_layout()
         self._load_previous_instructions()
 
-        self._adjustSize()
+        self._adjust_size()
         self.resize(int(self.width()), int(self._screen_height * 0.55))
 
     def _add_to_layout(self):
@@ -142,14 +139,13 @@ class SettingsSignalAnnotator(CelldetectiveSettingsPanel):
         self.log_btn.setToolTip("Log-transform the intensities.")
         self.log_btn.setIconSize(QSize(20, 20))
 
-        self.channel_cbs = [QComboBox() for i in range(3)]
-        self.channel_cbs_lbls = [QLabel() for i in range(3)]
+        self.channel_cbs = [QComboBox() for _ in range(3)]
+        self.channel_cbs_lbls = [QLabel() for _ in range(3)]
 
-        self.min_val_les = [QLineEdit("0") for i in range(3)]
-        self.min_val_lbls = [QLabel("Min value: ") for i in range(3)]
-        self.max_val_les = [QLineEdit("10000") for i in range(3)]
-        self.max_val_lbls = [QLabel("Max value: ") for i in range(3)]
-        self.percentile_mode = False
+        self.min_val_les = [QLineEdit("0") for _ in range(3)]
+        self.min_val_lbls = [QLabel("Min value: ") for _ in range(3)]
+        self.max_val_les = [QLineEdit("10000") for _ in range(3)]
+        self.max_val_lbls = [QLabel("Max value: ") for _ in range(3)]
 
         self.rgb_text = ["R: ", "G: ", "B: "]
 

@@ -2,7 +2,6 @@ from pathlib import Path
 
 from PyQt5.QtWidgets import (
     QMessageBox,
-    QDialog,
     QComboBox,
     QFrame,
     QCheckBox,
@@ -33,6 +32,9 @@ from celldetective.gui.settings._settings_base import CelldetectiveSettingsPanel
 from celldetective.utils.data_loaders import load_experiment_tables
 from celldetective.utils.model_getters import get_signal_datasets_list
 from celldetective.utils.model_loaders import locate_signal_dataset
+from celldetective import get_logger
+
+logger = get_logger()
 
 
 class SettingsEventDetectionModelTraining(CelldetectiveSettingsPanel):
@@ -72,7 +74,7 @@ class SettingsEventDetectionModelTraining(CelldetectiveSettingsPanel):
         self._add_to_layout()
         self._load_previous_instructions()
 
-        self._adjustSize()
+        self._adjust_size()
         new_width = int(self.width() * 1.2)
         self.resize(new_width, int(self._screen_height * 0.8))
         self.setMinimumWidth(new_width)
@@ -213,7 +215,7 @@ class SettingsEventDetectionModelTraining(CelldetectiveSettingsPanel):
         train_data_layout = QHBoxLayout()
         train_data_layout.addWidget(QLabel("Training data: "), 30)
         self.select_data_folder_btn = QPushButton("Choose folder")
-        self.select_data_folder_btn.clicked.connect(self.showDialog_dataset)
+        self.select_data_folder_btn.clicked.connect(self.show_dialog_dataset)
         self.data_folder_label = QLabel("No folder chosen")
         train_data_layout.addWidget(self.select_data_folder_btn, 35)
         train_data_layout.addWidget(self.data_folder_label, 30)
@@ -300,7 +302,7 @@ class SettingsEventDetectionModelTraining(CelldetectiveSettingsPanel):
         pretrained_layout.addWidget(QLabel("Pretrained model: "), 30)
 
         self.browse_pretrained_btn = QPushButton("Choose folder")
-        self.browse_pretrained_btn.clicked.connect(self.showDialog_pretrained)
+        self.browse_pretrained_btn.clicked.connect(self.show_dialog_pretrained)
         pretrained_layout.addWidget(self.browse_pretrained_btn, 35)
 
         self.pretrained_lbl = QLabel("No folder chosen")
@@ -368,9 +370,9 @@ class SettingsEventDetectionModelTraining(CelldetectiveSettingsPanel):
             if "self" in self.current_neighborhood:
                 self.neighbor_population = self.reference_population
 
-        print(f"Current neighborhood: {self.current_neighborhood}")
-        print(f"New reference population: {self.reference_population}")
-        print(f"New neighbor population: {self.neighbor_population}")
+        logger.info(f"Current neighborhood: {self.current_neighborhood}")
+        logger.info(f"New reference population: {self.reference_population}")
+        logger.info(f"New neighbor population: {self.neighbor_population}")
 
         self.df_reference = self.dataframes[self.reference_population]
         self.df_neighbor = self.dataframes[self.neighbor_population]
@@ -421,7 +423,7 @@ class SettingsEventDetectionModelTraining(CelldetectiveSettingsPanel):
 
         self.neighborhood_choice_cb.addItems(self.neighborhood_cols)
 
-    def showDialog_pretrained(self):
+    def show_dialog_pretrained(self):
 
         self.pretrained_model = QFileDialog.getExistingDirectory(
             self,
@@ -448,9 +450,9 @@ class SettingsEventDetectionModelTraining(CelldetectiveSettingsPanel):
                 self.pretrained_lbl.setText("No folder chosen")
                 self.recompile_option.setEnabled(False)
                 self.cancel_pretrained.setVisible(False)
-        print(self.pretrained_model)
+        logger.info(self.pretrained_model)
 
-    def showDialog_dataset(self):
+    def show_dialog_dataset(self):
 
         self.dataset_folder = QFileDialog.getExistingDirectory(
             self,
@@ -462,7 +464,7 @@ class SettingsEventDetectionModelTraining(CelldetectiveSettingsPanel):
 
             subfiles = glob(os.sep.join([self.dataset_folder, "*.npy"]))
             if len(subfiles) > 0:
-                print(f"found {len(subfiles)} files in folder")
+                logger.info(f"found {len(subfiles)} files in folder")
                 self.data_folder_label.setText(self.dataset_folder[:16] + "...")
                 self.data_folder_label.setToolTip(self.dataset_folder)
                 self.data_folder_label.setToolTip(self.dataset_folder)
@@ -532,7 +534,7 @@ class SettingsEventDetectionModelTraining(CelldetectiveSettingsPanel):
                 self.ch_norm.channel_cbs[len(channels) + k].setEnabled(False)
         self.ch_norm.add_col_btn.setEnabled(False)
 
-    def adjustScrollArea(self):
+    def adjust_scroll_area(self):
         """
         Auto-adjust scroll area to fill space
         (from https://stackoverflow.com/questions/66417576/make-qscrollarea-use-all-available-space-of-qmainwindow-height-axis)
@@ -593,13 +595,13 @@ class SettingsEventDetectionModelTraining(CelldetectiveSettingsPanel):
         try:
             lr = float(self.lr_le.text().replace(",", "."))
         except:
-            msgBox = QMessageBox()
-            msgBox.setIcon(QMessageBox.Warning)
-            msgBox.setText("Invalid value encountered for the learning rate.")
-            msgBox.setWindowTitle("Warning")
-            msgBox.setStandardButtons(QMessageBox.Ok)
-            returnValue = msgBox.exec()
-            if returnValue == QMessageBox.Ok:
+            msg_box = QMessageBox()
+            msg_box.setIcon(QMessageBox.Warning)
+            msg_box.setText("Invalid value encountered for the learning rate.")
+            msg_box.setWindowTitle("Warning")
+            msg_box.setStandardButtons(QMessageBox.Ok)
+            return_value = msg_box.exec()
+            if return_value == QMessageBox.Ok:
                 return None
 
         bs = int(self.bs_le.text())
@@ -627,13 +629,13 @@ class SettingsEventDetectionModelTraining(CelldetectiveSettingsPanel):
         }
 
         model_folder = self.signal_models_dir + os.sep + model_name + os.sep
-        print(f"{self.signal_models_dir=} {model_name=}")
+        logger.info(f"{self.signal_models_dir=} {model_name=}")
         if not os.path.exists(model_folder):
             os.mkdir(model_folder)
 
         training_instructions.update({"target_directory": self.signal_models_dir})
 
-        print(f"Set of instructions: {training_instructions}")
+        logger.info(f"Set of instructions: {training_instructions}")
         with open(model_folder + "training_instructions.json", "w") as f:
             json.dump(training_instructions, f, indent=4)
 
@@ -685,7 +687,7 @@ class SettingsEventDetectionModelTraining(CelldetectiveSettingsPanel):
     def on_training_cancel(self):
         self.runner.close()
         # self.progress_dialog.close() # handled by exec return usually, but explicit close is safe
-        print("Training cancelled.")
+        logger.info("Training cancelled.")
 
     def _load_previous_instructions(self):
         pass

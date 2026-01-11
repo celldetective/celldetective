@@ -1,3 +1,5 @@
+from typing import List
+
 import numpy as np
 from PyQt5.QtCore import QSize, Qt
 from PyQt5.QtWidgets import QVBoxLayout, QPushButton, QComboBox, QHBoxLayout, QLabel
@@ -38,7 +40,16 @@ class CellposeParamsWidget(CelldetectiveWidget):
 
     """
 
-    def __init__(self, parent_window=None, model_name="CP_cyto2", *args, **kwargs):
+    view_diameter_btn: QPushButton = QPushButton()
+    diameter_le: ThresholdLineEdit
+    viewer: CellSizeViewer
+    cellpose_channel_cb: List[QComboBox]
+    cellpose_channel_template: List[str]
+    flow_slider: QLabeledDoubleSlider = QLabeledDoubleSlider()
+    set_cellpose_scale_btn: QPushButton = QPushButton("set")
+    cellprob_slider: QLabeledDoubleSlider = QLabeledDoubleSlider()
+
+    def __init__(self, parent_window=None, model_name="CP_cyto2", *args):
 
         super().__init__(*args)
         self.setWindowTitle("Estimate diameter")
@@ -68,7 +79,6 @@ class CellposeParamsWidget(CelldetectiveWidget):
         """
 
         # Button to view the current stack with a scale bar
-        self.view_diameter_btn = QPushButton()
         self.view_diameter_btn.setStyleSheet(self.button_select_all)
         self.view_diameter_btn.setIcon(icon(MDI6.image_check, color="black"))
         self.view_diameter_btn.setToolTip("View stack.")
@@ -84,7 +94,7 @@ class CellposeParamsWidget(CelldetectiveWidget):
         )
 
         # Comboboxes for selecting imaging channels
-        self.cellpose_channel_cb = [QComboBox() for i in range(2)]
+        self.cellpose_channel_cb = [QComboBox() for _ in range(2)]
         self.cellpose_channel_template = ["brightfield_channel", "live_nuclei_channel"]
         if self.model_name == "CP_nuclei":
             self.cellpose_channel_template = ["live_nuclei_channel", "None"]
@@ -123,7 +133,6 @@ class CellposeParamsWidget(CelldetectiveWidget):
         self.layout.addLayout(hbox)
 
         # Flow threshold slider
-        self.flow_slider = QLabeledDoubleSlider()
         self.flow_slider.setOrientation(Qt.Horizontal)
         self.flow_slider.setRange(-6, 6)
         self.flow_slider.setValue(0.4)
@@ -133,7 +142,6 @@ class CellposeParamsWidget(CelldetectiveWidget):
         self.layout.addLayout(hbox)
 
         # Cell probability threshold slider
-        self.cellprob_slider = QLabeledDoubleSlider()
         self.cellprob_slider.setOrientation(Qt.Horizontal)
         self.cellprob_slider.setRange(-6, 6)
         self.cellprob_slider.setValue(0.0)
@@ -143,7 +151,6 @@ class CellposeParamsWidget(CelldetectiveWidget):
         self.layout.addLayout(hbox)
 
         # Button to set the scale for Cellpose segmentation
-        self.set_cellpose_scale_btn = QPushButton("set")
         self.set_cellpose_scale_btn.setStyleSheet(self.button_style_sheet)
         self.set_cellpose_scale_btn.clicked.connect(
             self.parent_window.set_cellpose_scale

@@ -49,7 +49,7 @@ class CelldetectiveSettingsPanel(CelldetectiveMainWindow):
         geometry = screen.availableGeometry()
         self._screen_width, self._screen_height = geometry.getRect()[-2:]
 
-    def _adjustSize(self):
+    def _adjust_size(self):
         self._widget.adjustSize()
         self._scroll_area.adjustSize()
         self.adjustSize()

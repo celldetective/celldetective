@@ -19,16 +19,21 @@ from PyQt5.QtWidgets import (
     QPushButton,
 )
 from PyQt5.QtCore import Qt, QSize
+from matplotlib import pyplot as plt
+from mpl_toolkits.axes_grid1 import make_axes_locatable
+
 from celldetective.gui.gui_utils import (
     ListWidget,
     help_generic,
     FeatureChoice,
+    FigureCanvas,
 )
 from celldetective.gui.base.components import QHSeperationLine
 from superqt import QLabeledDoubleSlider, QLabeledSlider
 from superqt.fonticon import icon
 from fonticon_mdi6 import MDI6
 from celldetective import get_software_location
+from celldetective.measure import compute_haralick_features
 from celldetective.utils.experiment import extract_experiment_channels
 from celldetective.utils.data_loaders import interpret_tracking_configuration
 import numpy as np
@@ -38,6 +43,10 @@ import os
 
 from glob import glob
 from celldetective.gui.settings._settings_base import CelldetectiveSettingsPanel
+from celldetective.utils.image_loaders import load_frames
+from celldetective import get_logger
+
+logger = get_logger()
 
 
 class SettingsTracking(CelldetectiveSettingsPanel):
@@ -69,7 +78,7 @@ class SettingsTracking(CelldetectiveSettingsPanel):
         self._load_previous_instructions()
 
         self._widget.setMinimumWidth(500)
-        self._adjustSize()
+        self._adjust_size()
         self.resize(int(self.width() * 1.5), int(self._screen_height * 0.8))
 
     def _add_to_layout(self):
@@ -227,15 +236,15 @@ class SettingsTracking(CelldetectiveSettingsPanel):
 
         suggestion = help_generic(d)
         if isinstance(suggestion, str):
-            print(f"{suggestion=}")
-            msgBox = QMessageBox()
-            msgBox.setIcon(QMessageBox.Information)
-            msgBox.setTextFormat(Qt.RichText)
-            msgBox.setText(rf"{suggestion}")
-            msgBox.setWindowTitle("Info")
-            msgBox.setStandardButtons(QMessageBox.Ok)
-            returnValue = msgBox.exec()
-            if returnValue == QMessageBox.Ok:
+            logger.info(f"{suggestion=}")
+            msg_box = QMessageBox()
+            msg_box.setIcon(QMessageBox.Information)
+            msg_box.setTextFormat(Qt.RichText)
+            msg_box.setText(rf"{suggestion}")
+            msg_box.setWindowTitle("Info")
+            msg_box.setStandardButtons(QMessageBox.Ok)
+            return_value = msg_box.exec()
+            if return_value == QMessageBox.Ok:
                 return None
 
     def help_feature(self):
@@ -258,15 +267,15 @@ class SettingsTracking(CelldetectiveSettingsPanel):
 
         suggestion = help_generic(d)
         if isinstance(suggestion, str):
-            print(f"{suggestion=}")
-            msgBox = QMessageBox()
-            msgBox.setIcon(QMessageBox.Information)
-            msgBox.setTextFormat(Qt.RichText)
-            msgBox.setText(rf"{suggestion}")
-            msgBox.setWindowTitle("Info")
-            msgBox.setStandardButtons(QMessageBox.Ok)
-            returnValue = msgBox.exec()
-            if returnValue == QMessageBox.Ok:
+            logger.info(f"{suggestion=}")
+            msg_box = QMessageBox()
+            msg_box.setIcon(QMessageBox.Information)
+            msg_box.setTextFormat(Qt.RichText)
+            msg_box.setText(rf"{suggestion}")
+            msg_box.setWindowTitle("Info")
+            msg_box.setStandardButtons(QMessageBox.Ok)
+            return_value = msg_box.exec()
+            if return_value == QMessageBox.Ok:
                 return None
 
     def populate_features_frame(self):

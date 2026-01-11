@@ -7,7 +7,6 @@ import napari
 import numpy as np
 import pandas as pd
 from PyQt5.QtWidgets import QMessageBox, QWidget, QVBoxLayout
-import PyQt5.QtSvg
 from celldetective.utils.io import save_tiff_imagej_compatible
 from magicgui import magicgui
 from skimage.measure import regionprops_table

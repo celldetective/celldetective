@@ -1,4 +1,3 @@
-import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.widgets import RectangleSelector
@@ -14,9 +13,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 
 from celldetective.gui.base.styles import Styles
-from celldetective.gui.gui_utils import FigureCanvas, center_window, color_from_class
-from celldetective.utils.color_mappings import color_from_status
-import os
+from celldetective.gui.gui_utils import FigureCanvas
 import logging
 
 logger = logging.getLogger(__name__)

@@ -68,7 +68,7 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
         self.setWindowTitle("Threshold configuration wizard")
 
         self._createActions()
-        self._createMenuBar()
+        self._create_menu_bar()
 
         self.mode = self.parent_window.mode
         self.pos = self.parent_window.parent_window.parent_window.pos
@@ -104,12 +104,12 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
             self.populate_widget()
             self.setAttribute(Qt.WA_DeleteOnClose)
 
-    def _createMenuBar(self):
-        menuBar = self.menuBar()
+    def _create_menu_bar(self):
+        menu_bar = self.menuBar()
         # Creating menus using a QMenu object
-        fileMenu = QMenu("&File", self)
-        fileMenu.addAction(self.openAction)
-        menuBar.addMenu(fileMenu)
+        file_menu = QMenu("&File", self)
+        file_menu.addAction(self.openAction)
+        menu_bar.addMenu(file_menu)
 
     # Creating menus using a title
     # editMenu = menuBar.addMenu("&Edit")
@@ -376,7 +376,7 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
 
         properties_box.addWidget(self.propscanvas)
 
-        self.features_cb = [QComboBox() for i in range(2)]
+        self.features_cb = [QComboBox() for _ in range(2)]
         for i in range(2):
             hbox_feat = QHBoxLayout()
             hbox_feat.addWidget(QLabel(f"feature {i}: "), 20)
@@ -788,7 +788,7 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
         for i in range(2):
             try:
                 self.features_cb[i].disconnect()
-            except Exception as e:
+            except Exception as _:
                 pass
             self.features_cb[i].clear()
 

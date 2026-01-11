@@ -17,7 +17,6 @@ from PyQt5.QtCore import Qt, QSize
 from celldetective.gui.gui_utils import (
     FeatureChoice,
     ListWidget,
-    # FigureCanvas,
     GeometryChoice,
     OperationChoice,
 )
@@ -26,23 +25,18 @@ from superqt import QLabeledDoubleSlider
 from superqt.fonticon import icon
 from fonticon_mdi6 import MDI6
 
-from celldetective import get_software_location
 from celldetective.utils.experiment import extract_experiment_channels
 from celldetective.utils.image_loaders import auto_load_number_of_frames, load_frames
 
-# from celldetective.measure import compute_haralick_features
 import numpy as np
 import json
 import os
 
-# import matplotlib.pyplot as plt
-# from mpl_toolkits.axes_grid1 import make_axes_locatable
 from glob import glob
 from natsort import natsorted
 
 from pathlib import Path
 
-# from celldetective.gui.viewers import CellEdgeVisualizer, SpotDetectionVisualizer
 from celldetective.gui.layouts import (
     ProtocolDesignerLayout,
     BackgroundFitCorrectionLayout,
@@ -57,6 +51,11 @@ class SettingsMeasurements(CelldetectiveSettingsPanel):
     UI to set measurement instructions.
 
     """
+
+    iso_lbl: QLabel = QLabel("Position-based measurements".upper())
+    feature_lbl: QLabel = QLabel("Mask-based measurements".upper())
+    radii_lbl: QLabel = QLabel("Measurement radii (from center):")
+    op_lbl: QLabel = QLabel("Operation to perform:")
 
     def __init__(self, parent_window=None):
 
@@ -80,7 +79,7 @@ class SettingsMeasurements(CelldetectiveSettingsPanel):
         self._add_to_layout()
         self._load_previous_instructions()
 
-        self._adjustSize()
+        self._adjust_size()
         self.resize(int(self.width()), int(self._screen_height * 0.8))
 
     def _create_widgets(self):
@@ -139,7 +138,6 @@ class SettingsMeasurements(CelldetectiveSettingsPanel):
 
         grid = QGridLayout(self.iso_frame)
 
-        self.iso_lbl = QLabel("Position-based measurements".upper())
         self.iso_lbl.setStyleSheet(
             """
 			font-weight: bold;
@@ -157,7 +155,6 @@ class SettingsMeasurements(CelldetectiveSettingsPanel):
 
         grid = QGridLayout(self.features_frame)
 
-        self.feature_lbl = QLabel("Mask-based measurements".upper())
         self.feature_lbl.setStyleSheet(
             """
 			font-weight: bold;
@@ -176,7 +173,6 @@ class SettingsMeasurements(CelldetectiveSettingsPanel):
         layout.setContentsMargins(0, 0, 0, 0)
 
         radii_layout = QHBoxLayout()
-        self.radii_lbl = QLabel("Measurement radii (from center):")
         self.radii_lbl.setToolTip(
             "Define radii or donughts for intensity measurements."
         )
@@ -205,7 +201,6 @@ class SettingsMeasurements(CelldetectiveSettingsPanel):
 
         # Operation
         operation_layout = QHBoxLayout()
-        self.op_lbl = QLabel("Operation to perform:")
         self.op_lbl.setToolTip("Set the operations to perform inside the ROI.")
         operation_layout.addWidget(self.op_lbl, 90)
 
@@ -999,9 +994,6 @@ class SettingsMeasurements(CelldetectiveSettingsPanel):
             QMessageBox.No,
         )
         return response
-
-    def fun(self, x, y):
-        return x**2 + y
 
     def view_normalisation_contour(self):
         """

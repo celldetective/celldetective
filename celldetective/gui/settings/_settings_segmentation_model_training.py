@@ -59,7 +59,7 @@ class SettingsSegmentationModelTraining(CelldetectiveSettingsPanel):
         self._add_to_layout()
         self._load_previous_instructions()
 
-        self._adjustSize()
+        self._adjust_size()
         self.resize(int(self.width()), int(self._screen_height * 0.8))
 
     def _add_to_layout(self):
