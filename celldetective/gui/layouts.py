@@ -15,11 +15,12 @@ from PyQt5.QtWidgets import (
     QSpacerItem,
     QGridLayout,
     QDialog,
+    QProgressDialog,
 )
 from tifffile import imread
 
 from celldetective.gui.gui_utils import ThresholdLineEdit, QuickSliderLayout
-from PyQt5.QtCore import Qt, QSize
+from PyQt5.QtCore import Qt, QSize, QThread, pyqtSignal
 from PyQt5.QtGui import QIntValidator, QDoubleValidator
 
 from superqt import (
@@ -37,6 +38,69 @@ from celldetective.processes.background_correction import BackgroundCorrectionPr
 from celldetective.utils.parsing import _extract_channel_indices_from_config
 from celldetective.gui.base.styles import Styles
 from celldetective.gui.base.components import CelldetectiveWidget
+
+
+class BackgroundEstimatorThread(QThread):
+    progress = pyqtSignal(int)
+    finished_with_result = pyqtSignal(object)
+    status_update = pyqtSignal(str)
+
+    def __init__(self, exp_dir, well_idx, frame_range, channel, threshold, mode):
+        super().__init__()
+        self.exp_dir = exp_dir
+        self.well_idx = well_idx
+        self.frame_range = frame_range
+        self.channel = channel
+        self.threshold = threshold
+        self.mode = mode
+        self._is_cancelled = False
+
+    def stop(self):
+        self._is_cancelled = True
+
+    def run(self):
+        from celldetective.preprocessing import estimate_background_per_condition
+        from celldetective.segmentation import filter_image
+
+        self.first_update = True
+
+        def callback(**kwargs):
+            if self._is_cancelled:
+                return False
+
+            if self.first_update:
+                self.status_update.emit("Estimating background...")
+                self.first_update = False
+
+            if kwargs.get("level") == "position":
+
+                iter_ = kwargs.get("iter", 0)
+                total = kwargs.get("total", 1)
+                # Avoid division by zero
+                if total > 0:
+                    p = int((iter_ / total) * 100)
+                    self.progress.emit(p)
+            return True
+
+        try:
+            bg = estimate_background_per_condition(
+                self.exp_dir,
+                well_option=self.well_idx,
+                frame_range=self.frame_range,
+                target_channel=self.channel,
+                show_progress_per_pos=False,
+                threshold_on_std=self.threshold,
+                mode=self.mode,
+                progress_callback=callback,
+            )
+            if not self._is_cancelled:
+                self.finished_with_result.emit(bg)
+            else:
+                self.finished_with_result.emit(None)
+        except Exception as e:
+            print(f"Error in background estimation thread: {e}")
+            self.finished_with_result.emit(None)
+
 
 from functools import partial
 from glob import glob
@@ -593,7 +657,7 @@ class BackgroundFitCorrectionLayout(QGridLayout, Styles):
 
         self.job = ProgressWindow(
             BackgroundCorrectionProcess,
-            parent_window=self,
+            parent_window=None,
             title="Background Correction",
             position_info=False,
             process_args=process_args,
@@ -618,8 +682,8 @@ class BackgroundFitCorrectionLayout(QGridLayout, Styles):
                 self.viewer.show()
             else:
                 print("Corrected stack could not be generated... No stack available...")
-        else:
-            print("Background correction cancelled.")
+        elif result == QDialog.Rejected:
+            print("Background correction cancelled or failed.")
 
 
 class LocalCorrectionLayout(BackgroundFitCorrectionLayout):
@@ -1388,31 +1452,58 @@ class BackgroundModelFreeCorrectionLayout(QGridLayout, Styles):
                 c.setEnabled(False)
 
     def estimate_bg(self):
-        from celldetective.preprocessing import estimate_background_per_condition
-        from celldetective.gui.viewers import StackVisualizer
 
         if self.timeseries_rb.isChecked():
             mode = "timeseries"
         elif self.tiles_rb.isChecked():
             mode = "tiles"
 
-        bg = estimate_background_per_condition(
-            self.attr_parent.exp_dir,
-            well_option=self.well_slider.value() - 1,
-            frame_range=self.frame_range_slider.value(),
-            target_channel=self.channels_cb.currentText(),
-            show_progress_per_pos=True,
-            threshold_on_std=self.threshold_le.get_threshold(),
-            mode=mode,
+        # Create progress dialog
+        self.bg_progress = QProgressDialog(
+            "Loading libraries...", "Cancel", 0, 100, None
         )
-        bg = bg[0]
-        bg = bg["bg"]
-        print(bg)
-        if len(bg) > 0:
+        self.bg_progress.setWindowTitle("Please wait")
+        self.bg_progress.setWindowModality(Qt.WindowModal)
+        self.bg_progress.setMinimumDuration(0)  # Show immediately
+        self.bg_progress.setValue(0)
 
-            self.viewer = StackVisualizer(
-                stack=[bg],
-                window_title="Reconstructed background",
-                frame_slider=False,
-            )
-            self.viewer.show()
+        self.bg_worker = BackgroundEstimatorThread(
+            self.attr_parent.exp_dir,
+            self.well_slider.value() - 1,
+            self.frame_range_slider.value(),
+            self.channels_cb.currentText(),
+            self.threshold_le.get_threshold(),
+            mode,
+        )
+        from celldetective.gui.viewers import StackVisualizer
+
+        self.bg_worker.progress.connect(self.bg_progress.setValue)
+        self.bg_worker.status_update.connect(self.bg_progress.setLabelText)
+
+        def on_finished(bg):
+            self.bg_progress.blockSignals(True)
+            self.bg_progress.close()
+            if self.bg_worker._is_cancelled:
+                print("Background estimation cancelled.")
+                return
+
+            if bg and len(bg) > 0:
+                bg_img = bg[0]["bg"]
+                if len(bg_img) > 0:
+                    self.viewer = StackVisualizer(
+                        stack=[bg_img],
+                        window_title="Reconstructed background",
+                        frame_slider=False,
+                    )
+                    self.viewer.show()
+                else:
+                    QMessageBox.warning(
+                        None, "Warning", "Background estimation returned empty image."
+                    )
+            elif bg is None:
+                QMessageBox.critical(None, "Error", "Background estimation failed.")
+
+        self.bg_worker.finished_with_result.connect(on_finished)
+        self.bg_progress.canceled.connect(self.bg_worker.stop)
+
+        self.bg_worker.start()

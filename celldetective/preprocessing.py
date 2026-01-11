@@ -139,6 +139,13 @@ def estimate_background_per_condition(
         for l, pos_path in enumerate(
             tqdm(positions, disable=not show_progress_per_pos)
         ):
+            if progress_callback is not None:
+                should_continue = progress_callback(
+                    level="position", iter=l, total=len(positions)
+                )
+                if should_continue is False:
+                    logger.info("Background estimation cancelled by user.")
+                    return None
 
             stack_path = get_position_movie_path(pos_path, prefix=movie_prefix)
             if stack_path is not None:
@@ -148,6 +155,8 @@ def estimate_background_per_condition(
                     img_num_channels = _get_img_num_per_channel(
                         channel_indices, int(len_movie), nbr_channels
                     )
+
+                from celldetective.segmentation import filter_image
 
                 if mode == "timeseries":
 
@@ -165,7 +174,6 @@ def estimate_background_per_condition(
                     frame_mean = np.nanmean(frames, axis=0)
 
                     frame = frame_mean.copy().astype(float)
-                    from celldetective.segmentation import filter_image
 
                     std_frame = filter_image(frame.copy(), filters=activation_protocol)
                     edge = estimate_unreliable_edge(activation_protocol)
@@ -1381,12 +1389,12 @@ def correct_channel_offset(
     correction_horizontal=0,
     correction_vertical=0,
     show_progress_per_well=True,
-    show_progress_per_pos=False,
+    show_progress_per_pos=True,
     export=False,
     return_stacks=False,
     movie_prefix=None,
     export_prefix="Corrected",
-    return_stack=True,
+    progress_callback=None,
     **kwargs,
 ):
 
@@ -1407,9 +1415,13 @@ def correct_channel_offset(
 
     stacks = []
 
-    for k, well_path in enumerate(
-        tqdm(wells[well_indices], disable=not show_progress_per_well)
-    ):
+    # Well loop with progress reporting
+    total_wells = len(well_indices)
+    for k, well_path in enumerate(wells[well_indices]):
+        if progress_callback:
+            progress_callback(level="well", iter=k, total=total_wells)
+        elif show_progress_per_well:
+            print(f"Processing well {k+1}/{total_wells}...")
 
         well_name, _ = extract_well_name_and_number(well_path)
         positions = get_positions_in_well(well_path)
@@ -1417,9 +1429,17 @@ def correct_channel_offset(
         if isinstance(selection[0], np.ndarray):
             selection = selection[0]
 
-        for pidx, pos_path in enumerate(
-            tqdm(selection, disable=not show_progress_per_pos)
-        ):
+        total_pos = len(selection)
+        for pidx, pos_path in enumerate(selection):
+            if progress_callback:
+                progress_callback(
+                    level="position",
+                    iter=pidx,
+                    total=total_pos,
+                    stage=f"Pos {extract_position_name(pos_path)}",
+                )
+            elif show_progress_per_pos:
+                print(f"  Processing position {pidx+1}/{total_pos}...")
 
             stack_path = get_position_movie_path(pos_path, prefix=movie_prefix)
             logger.info(
@@ -1442,7 +1462,9 @@ def correct_channel_offset(
                 export=export,
                 prefix=export_prefix,
                 return_stacks=return_stacks,
+                progress_callback=progress_callback,
             )
+
             logger.info("Correction successful.")
             if return_stacks:
                 stacks.append(corrected_stack)
@@ -1464,6 +1486,7 @@ def correct_channel_offset_single_stack(
     export=False,
     prefix="Corrected",
     return_stacks=True,
+    progress_callback=None,
 ):
 
     assert os.path.exists(
@@ -1493,7 +1516,11 @@ def correct_channel_offset_single_stack(
         with tiff.TiffWriter(
             os.sep.join([path, newfile]), bigtiff=True, imagej=True
         ) as tif:
-            for i in tqdm(range(0, int(stack_length * nbr_channels), nbr_channels)):
+            frames_indices = range(0, int(stack_length * nbr_channels), nbr_channels)
+            total_frames = len(frames_indices)
+            for k, i in enumerate(tqdm(frames_indices)):
+                if progress_callback:
+                    progress_callback(level="frame", iter=k, total=total_frames)
 
                 frames = load_frames(
                     list(np.arange(i, (i + nbr_channels))),
@@ -1542,7 +1569,11 @@ def correct_channel_offset_single_stack(
         if prefix is None:
             os.replace(os.sep.join([path, newfile]), os.sep.join([path, file]))
     else:
-        for i in tqdm(range(0, int(stack_length * nbr_channels), nbr_channels)):
+        frames_indices = range(0, int(stack_length * nbr_channels), nbr_channels)
+        total_frames = len(frames_indices)
+        for k, i in enumerate(tqdm(frames_indices)):
+            if progress_callback:
+                progress_callback(level="frame", iter=k, total=total_frames)
 
             frames = load_frames(
                 list(np.arange(i, (i + nbr_channels))),

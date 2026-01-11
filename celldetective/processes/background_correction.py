@@ -6,6 +6,7 @@ from tifffile import imwrite
 from celldetective.preprocessing import (
     correct_background_model,
     correct_background_model_free,
+    correct_channel_offset,
     _get_img_num_per_channel,
     _extract_channel_indices_from_config,
 )
@@ -185,6 +186,23 @@ class BackgroundCorrectionProcess(Process):
                     export_prefix=export_prefix,
                     progress_callback=progress_callback,
                 )
+            elif correction_type == "offset":
+                corrected_stacks = correct_channel_offset(
+                    self.exp_dir,
+                    well_option=self.well_option,
+                    position_option=self.position_option,
+                    target_channel=self.target_channel,
+                    export=export,
+                    return_stacks=return_stacks,
+                    show_progress_per_well=False,
+                    show_progress_per_pos=False,
+                    movie_prefix=movie_prefix,
+                    export_prefix=export_prefix,
+                    progress_callback=progress_callback,
+                    correction_horizontal=getattr(self, "correction_horizontal", 0),
+                    correction_vertical=getattr(self, "correction_vertical", 0),
+                    **self.kwargs if hasattr(self, "kwargs") else {},
+                )
             else:
                 corrected_stacks = correct_background_model(
                     self.exp_dir,
@@ -225,7 +243,7 @@ class BackgroundCorrectionProcess(Process):
 
         except Exception as e:
             logger.error(f"Error in background correction process: {e}")
-            self.queue.put("error")
+            self.queue.put({"status": "error", "message": str(e)})
             return
 
         self.queue.put("finished")

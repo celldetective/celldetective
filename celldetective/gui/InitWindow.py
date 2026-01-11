@@ -19,6 +19,7 @@ from PyQt5.QtWidgets import (
     QLineEdit,
     QMenu,
     QPushButton,
+    QMessageBox,
     QVBoxLayout,
 )
 from fonticon_mdi6 import MDI6
@@ -494,11 +495,19 @@ class AppInitWindow(CelldetectiveMainWindow):
 
             from celldetective.gui.control_panel import ControlPanel
 
-            self.control_panel = ControlPanel(self, self.exp_dir)
-            self.control_panel.adjustSize()
-            self.control_panel.setFixedSize(self.control_panel.size())
-            self.control_panel.show()
-            center_window(self.control_panel)
+            try:
+                self.control_panel = ControlPanel(self, self.exp_dir)
+                self.control_panel.adjustSize()
+                self.control_panel.setFixedSize(self.control_panel.size())
+                self.control_panel.show()
+                center_window(self.control_panel)
+            except (AssertionError, FileNotFoundError) as e:
+                QMessageBox.critical(
+                    self,
+                    "Error Loading Experiment",
+                    f"Could not load experiment configuration.\n\nError: {str(e)}\n\nPlease ensure 'config.ini' exists in the selected folder.",
+                )
+                return
 
             self.reload_previous_experiments()
             self._createMenuBar()

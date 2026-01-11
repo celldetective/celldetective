@@ -17,7 +17,14 @@ from celldetective.utils.image_cleaning import (
 from celldetective.utils.normalization import normalize_multichannel
 from celldetective import get_logger
 
+import logging
+import warnings
+
 logger = get_logger(__name__)
+
+# Suppress tifffile warnings about missing files in MMStack
+logging.getLogger("tifffile").setLevel(logging.ERROR)
+warnings.filterwarnings("ignore", message=".*MMStack series is missing files.*")
 
 
 def locate_stack(position, prefix="Aligned"):
@@ -430,7 +437,13 @@ def load_frames(
     """
 
     try:
-        frames = imageio.imread(stack_path, key=img_nums)
+        import warnings
+
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore", message=".*MMStack series is missing files.*"
+            )
+            frames = imageio.imread(stack_path, key=img_nums)
     except Exception as e:
         print(
             f"Error in loading the frame {img_nums} {e}. Please check that the experiment channel information is consistent with the movie being read."
@@ -454,7 +467,7 @@ def load_frames(
     # add a fake pixel to prevent auto normalization errors on images that are uniform
     frames = _fix_no_contrast(frames)
 
-    return frames #.astype(dtype)
+    return frames  # .astype(dtype)
 
 
 def _rearrange_multichannel_frame(

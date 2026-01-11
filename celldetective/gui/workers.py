@@ -63,7 +63,7 @@ class ProgressWindow(CelldetectiveDialog):
 
         self.__btn_stp.clicked.connect(self.__stp_net)
         self.__runner.signals.finished.connect(self.__on_finished)
-        self.__runner.signals.finished.connect(self.__on_error)
+        self.__runner.signals.error.connect(self.__on_error)
 
         self.__runner.signals.update_well.connect(self.well_progress_bar.setValue)
         self.__runner.signals.update_well_time.connect(self.well_time_lbl.setText)
@@ -97,9 +97,13 @@ class ProgressWindow(CelldetectiveDialog):
 
         self.setLayout(self.layout)
         self.setFixedSize(QSize(400, 250))
+        self.show()
+        self.raise_()
+        self.activateWindow()
+        logger.info("ProgressWindow initialized and shown.")
         self.__run_net()
         self.setModal(True)
-        center_window(self)
+        # center_window(self)
 
     def closeEvent(self, evnt):
         evnt.ignore()
@@ -122,11 +126,22 @@ class ProgressWindow(CelldetectiveDialog):
         self.__runner.close()
         self.accept()
 
-    def __on_error(self):
+    def __on_error(self, message="Error"):
         self.__btn_stp.setDisabled(True)
         self.__label.setText("\nError")
         self.__runner.close()
-        self.accept()
+
+        # Show error in a message box to ensure it's seen
+        from PyQt5.QtWidgets import QMessageBox
+
+        msg = QMessageBox()
+        msg.setIcon(QMessageBox.Critical)
+        msg.setText("Process failed")
+        msg.setInformativeText(str(message))
+        msg.setWindowTitle("Error")
+        msg.exec_()
+
+        self.reject()
 
 
 class Runner(QRunnable):
@@ -167,12 +182,17 @@ class Runner(QRunnable):
                     if "frame_time" in data:
                         self.signals.update_frame_time.emit(data["frame_time"])
 
-                    if "status" in data:
+                    if "status" in data:  # Moved this block out of frame_time check
+                        logger.info(
+                            f"Runner received status: {data['status']}"
+                        )  # New log as per instruction
                         if data["status"] == "finished":
                             self.signals.finished.emit()
                             break
                         elif data["status"] == "error":
-                            self.signals.error.emit()
+                            msg = data.get("message", "Unknown error")
+                            logger.error(f"Runner received error: {msg}")
+                            self.signals.error.emit(str(msg))
                         else:
                             self.signals.update_status.emit(data["status"])
 
@@ -185,7 +205,7 @@ class Runner(QRunnable):
                     self.signals.finished.emit()
                     break
                 elif data == "error":
-                    self.signals.error.emit()
+                    self.signals.error.emit("Unknown error")
 
             except Exception as e:
                 logger.error(e)
@@ -208,4 +228,4 @@ class RunnerSignal(QObject):
     update_status = pyqtSignal(str)
 
     finished = pyqtSignal()
-    error = pyqtSignal()
+    error = pyqtSignal(str)

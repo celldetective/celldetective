@@ -377,9 +377,17 @@ class StackVisualizer(CelldetectiveWidget):
         if hasattr(self, "init_frame") and self.init_frame is not None:
             from scipy.ndimage import map_coordinates
 
-            profile = map_coordinates(self.init_frame, np.vstack((y, x)))
+            profile = map_coordinates(
+                self.init_frame, np.vstack((y, x)), order=1, mode="nearest"
+            )
         else:
             return
+
+        if np.all(np.isnan(profile)):
+            # If profile is all NaNs, we can't plot meaningful data, but we should maintain the axes
+            profile = np.zeros_like(profile)
+            profile[:] = np.nan
+
         # Distance in microns if available
         dist_axis = np.arange(num_points)
         x_label = "Distance (px)"
@@ -459,7 +467,10 @@ class StackVisualizer(CelldetectiveWidget):
                 self.stack = np.asarray(self.stack)
 
             if self.stack.ndim == 3:
-                print("No channel axis found...")
+                # Assuming stack is (T, Y, X) -> convert to (T, Y, X, 1) for consistent 4D handling
+                logger.info(
+                    "StackVisualizer: 3D stack detected (T, Y, X). Adding channel axis."
+                )
                 self.stack = self.stack[:, :, :, np.newaxis]
                 self.target_channel = 0
 
@@ -496,8 +507,16 @@ class StackVisualizer(CelldetectiveWidget):
 
     def generate_figure_canvas(self):
 
-        p01 = np.nanpercentile(self.init_frame, 0.1)
-        p99 = np.nanpercentile(self.init_frame, 99.9)
+        if np.all(np.isnan(self.init_frame)):
+            p01, p99 = 0, 1
+        else:
+            p01 = np.nanpercentile(self.init_frame, 0.1)
+            p99 = np.nanpercentile(self.init_frame, 99.9)
+
+        if np.isnan(p01):
+            p01 = 0
+        if np.isnan(p99):
+            p99 = 1
 
         import matplotlib.pyplot as plt
         from celldetective.gui.gui_utils import FigureCanvas
@@ -565,17 +584,35 @@ class StackVisualizer(CelldetectiveWidget):
         layout = QHBoxLayout()
         self.set_contrast_decimals()
         self.contrast_slider = QLabeledDoubleRangeSlider(Qt.Horizontal)
-        self.contrast_slider.setRange(np.min(self.init_frame), np.max(self.init_frame))
+        if np.all(np.isnan(self.init_frame)):
+            min_val, max_val = 0, 1
+        else:
+            min_val = np.nanmin(self.init_frame)
+            max_val = np.nanmax(self.init_frame)
+
+        if np.isnan(min_val):
+            min_val = 0
+        if np.isnan(max_val):
+            max_val = 1
+
+        self.contrast_slider.setRange(min_val, max_val)
 
         # Set initial value to percentiles to avoid outliers
-        p01 = np.nanpercentile(self.init_frame, 0.1)
-        p99 = np.nanpercentile(self.init_frame, 99.9)
+        if np.all(np.isnan(self.init_frame)):
+            p01, p99 = 0, 1
+        else:
+            p01 = np.nanpercentile(self.init_frame, 0.1)
+            p99 = np.nanpercentile(self.init_frame, 99.9)
+
+        if np.isnan(p01):
+            p01 = min_val
+        if np.isnan(p99):
+            p99 = max_val
+
         if p99 > p01:
             self.contrast_slider.setValue((p01, p99))
         else:
-            self.contrast_slider.setValue(
-                (np.min(self.init_frame), np.max(self.init_frame))
-            )
+            self.contrast_slider.setValue((min_val, max_val))
 
         self.contrast_slider.setEdgeLabelMode(
             QLabeledDoubleRangeSlider.EdgeLabelMode.NoLabel
