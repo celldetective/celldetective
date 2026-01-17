@@ -93,20 +93,62 @@ def download_url_to_file(url, dst, progress=True):
     dst = os.path.expanduser(dst)
     dst_dir = os.path.dirname(dst)
     f = tempfile.NamedTemporaryFile(delete=False, dir=dst_dir)
+
+    # GUI Check
     try:
-        with tqdm(
-            total=file_size,
-            disable=not progress,
-            unit="B",
-            unit_scale=True,
-            unit_divisor=1024,
-        ) as pbar:
+        from PyQt5.QtWidgets import QApplication, QProgressDialog
+        from PyQt5.QtCore import Qt
+
+        app = QApplication.instance()
+        use_gui = app is not None
+    except ImportError:
+        use_gui = False
+
+    try:
+        if use_gui and progress:
+            # Setup QProgressDialog
+            pd = QProgressDialog("Downloading...", "Cancel", 0, 100)
+            pd.setWindowTitle("Downloading content")
+            pd.setWindowModality(Qt.WindowModal)
+            pd.setMinimumDuration(0)
+            pd.setValue(0)
+
+            downloaded = 0
             while True:
-                buffer = u.read(8192)  # 8192
+                buffer = u.read(8192)
                 if len(buffer) == 0:
                     break
                 f.write(buffer)
-                pbar.update(len(buffer))
+                downloaded += len(buffer)
+                if file_size:
+                    perc = int(downloaded * 100 / file_size)
+                    pd.setValue(perc)
+                    pd.setLabelText(
+                        f"Downloading... {downloaded/1024/1024:.1f}/{file_size/1024/1024:.1f} MB"
+                    )
+
+                QApplication.processEvents()
+                if pd.wasCanceled():
+                    print("Download cancelled by user.")
+                    break
+            pd.close()
+
+        else:
+            # Console / TQDM fallback
+            with tqdm(
+                total=file_size,
+                disable=not progress,
+                unit="B",
+                unit_scale=True,
+                unit_divisor=1024,
+            ) as pbar:
+                while True:
+                    buffer = u.read(8192)  # 8192
+                    if len(buffer) == 0:
+                        break
+                    f.write(buffer)
+                    pbar.update(len(buffer))
+
         f.close()
         shutil.move(f.name, dst)
     finally:

@@ -49,5 +49,5 @@ def regression_plot(y_pred, y_true, savepath=None):
     plt.tight_layout()
     if savepath is not None:
         plt.savefig(savepath, bbox_inches="tight", dpi=300)
-    plt.pause(2)
+    # plt.pause(2)
     plt.close()

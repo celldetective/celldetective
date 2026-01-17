@@ -260,6 +260,12 @@ class Runner(QRunnable):
                     elif "bg_image" in data:  # Backward compatibility
                         self.signals.update_image.emit(data["bg_image"])
 
+                    if "plot_data" in data:
+                        self.signals.update_plot.emit(data["plot_data"])
+
+                    if "training_result" in data:
+                        self.signals.training_result.emit(data["training_result"])
+
                     if "status" in data:  # Moved this block out of frame_time check
                         logger.info(
                             f"Runner received status: {data['status']}"
@@ -304,6 +310,8 @@ class RunnerSignal(QObject):
     update_frame = pyqtSignal(int)
     update_frame_time = pyqtSignal(str)
     update_image = pyqtSignal(object)
+    update_plot = pyqtSignal(dict)
+    training_result = pyqtSignal(dict)
     update_status = pyqtSignal(str)
 
     finished = pyqtSignal()

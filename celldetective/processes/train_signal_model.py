@@ -16,12 +16,13 @@ logger = get_logger(__name__)
 
 class ProgressCallback(Callback):
 
-    def __init__(self, queue=None, total_epochs=100):
+    def __init__(self, queue=None, total_epochs=100, stop_event=None):
         super().__init__()
         self.queue = queue
         self.total_epochs = total_epochs
         self.current_step = 0
         self.t0 = time.time()
+        self.stop_event = stop_event
 
     def on_epoch_begin(self, epoch, logs=None):
         self.epoch_start_time = time.time()
@@ -44,6 +45,11 @@ class ProgressCallback(Callback):
                 )
 
     def on_epoch_end(self, epoch, logs=None):
+        if self.stop_event and self.stop_event.is_set():
+            logger.info("Interrupting training...")
+            self.model.stop_training = True
+            self.stop_event.clear()
+
         self.current_step += 1
         # Send signal for progress bar
         sum_done = (self.current_step) / self.total_epochs * 100
@@ -58,14 +64,37 @@ class ProgressCallback(Callback):
 
         if self.queue is not None:
             # Update Position bar (middle) for Epoch progress
-            self.queue.put(
-                {
-                    "pos_progress": sum_done,
-                    "pos_time": f"Epoch {self.current_step}/{self.total_epochs} (ETA: {time_str})",
-                    "frame_progress": 0,  # Reset batch bar
-                    "frame_time": "Batch 0/0",
+            msg = {
+                "pos_progress": sum_done,
+                "pos_time": f"Epoch {self.current_step}/{self.total_epochs} (ETA: {time_str})",
+                "frame_progress": 0,  # Reset batch bar
+                "frame_time": "Batch 0/0",
+            }
+            # Attempt to extract metrics for plotting
+            if logs:
+                # Infer model type
+                if "iou" in logs:
+                    model_name = "Classifier"
+                else:
+                    model_name = "Regressor"
+
+                # Send all scalar metrics
+                msg["plot_data"] = {
+                    "epoch": epoch + 1,  # 1-based for plot
+                    "metrics": {
+                        k: float(v) for k, v in logs.items() if not k.startswith("val_")
+                    },
+                    "val_metrics": {
+                        k: float(v) for k, v in logs.items() if k.startswith("val_")
+                    },
+                    "model_name": model_name,
+                    "total_epochs": self.params.get("epochs", self.total_epochs),
                 }
-            )
+            self.queue.put(msg)
+
+    def on_training_result(self, result):
+        if self.queue is not None:
+            self.queue.put({"training_result": result})
 
 
 class TrainSignalModelProcess(Process):
@@ -172,15 +201,35 @@ class TrainSignalModelProcess(Process):
                     outfile.write(json_string)
 
     def run(self):
-        self.queue.put("Loading dataset...")
+        self.queue.put({"status": "Loading datasets..."})
         model = SignalDetectionModel(**self.model_params)
 
         total_epochs = self.train_params["epochs"] * 3
-        cb = ProgressCallback(queue=self.queue, total_epochs=total_epochs)
+        cb = ProgressCallback(
+            queue=self.queue,
+            total_epochs=total_epochs,
+            stop_event=getattr(self, "stop_event", None),
+        )
 
         model.fit_from_directory(
             self.training_instructions["ds"], callbacks=[cb], **self.train_params
         )
+
+        # Send results to GUI
+        if hasattr(model, "dico"):
+            result_keys = [
+                "val_confusion",
+                "test_confusion",
+                "val_predictions",
+                "val_ground_truth",
+                "test_predictions",
+                "test_ground_truth",
+            ]
+            results = {k: model.dico[k] for k in result_keys if k in model.dico}
+            # Only send if we have something relevant
+            if results:
+                self.queue.put({"training_result": results})
+
         self.neighborhood_postprocessing()
         self.queue.put("finished")
         self.queue.close()
@@ -190,6 +239,7 @@ class TrainSignalModelProcess(Process):
         self.training_instructions.update(
             {"n_channels": len(self.training_instructions["channel_option"])}
         )
+        self.model_params["n_channels"] = self.training_instructions["n_channels"]
         if self.training_instructions["augmentation_factor"] > 1.0:
             self.training_instructions.update({"augment": True})
         else:

@@ -27,12 +27,14 @@ from pandas.api.types import is_numeric_dtype
 from celldetective.processes.train_signal_model import TrainSignalModelProcess
 from celldetective.gui.workers import Runner
 from celldetective.gui.base.components import CelldetectiveProgressDialog
+from celldetective.gui.interactive_plots import DynamicProgressDialog
 from PyQt5.QtCore import QThreadPool
 from celldetective.gui.settings._settings_base import CelldetectiveSettingsPanel
 from celldetective.utils.data_loaders import load_experiment_tables
 from celldetective.utils.model_getters import get_signal_datasets_list
 from celldetective.utils.model_loaders import locate_signal_dataset
 from celldetective import get_logger
+import multiprocessing
 
 logger = get_logger()
 
@@ -642,31 +644,44 @@ class SettingsEventDetectionModelTraining(CelldetectiveSettingsPanel):
         self.instructions = model_folder + "training_instructions.json"
 
         # Simple Progress Window implementation
-        process_args = {"instructions": self.instructions}
+        self.stop_event = multiprocessing.Event()
+        process_args = {
+            "instructions": self.instructions,
+            "stop_event": self.stop_event,
+        }
+        self.training_was_cancelled = False
+        self.is_finished = False
 
-        self.progress_dialog = CelldetectiveProgressDialog(
+        self.progress_dialog = DynamicProgressDialog(
             label_text="Training model (Epochs)...",
-            cancel_button_text="Cancel",
-            minimum=0,
-            maximum=100,
+            max_epochs=epochs,
             parent=self,
-            window_title="Training Event Model",
+            title="Training Event Model",
         )
-        self.progress_dialog.setMinimumDuration(0)
+        # self.progress_dialog.setMinimumDuration(0) # Standard QProgressDialog method, might not be in Dynamic
 
         # Create Runner (Thread Logic)
         self.runner = Runner(process=TrainSignalModelProcess, process_args=process_args)
 
         # Connect Signals
-        self.runner.signals.update_pos.connect(self.progress_dialog.setValue)
+        self.runner.signals.update_pos.connect(self.progress_dialog.update_progress)
         self.runner.signals.update_pos_time.connect(
-            lambda t: self.progress_dialog.setLabelText(f"Training model... {t}")
+            lambda t: self.progress_dialog.status_label.setText(
+                f"Training model... {t}"
+            )
         )
+        self.runner.signals.update_plot.connect(self.progress_dialog.update_plot)
+        self.runner.signals.training_result.connect(self.progress_dialog.show_result)
+        self.runner.signals.update_status.connect(
+            self.progress_dialog.status_label.setText
+        )
+
         self.runner.signals.finished.connect(self.on_training_finished)
         self.runner.signals.error.connect(self.on_training_error)
 
-        # Handle Cancel
+        # Handle Cancel & Interrupt
         self.progress_dialog.canceled.connect(self.on_training_cancel)
+        self.progress_dialog.interrupted.connect(self.on_training_interrupt)
 
         # Start
         self.pool = QThreadPool.globalInstance()
@@ -674,20 +689,43 @@ class SettingsEventDetectionModelTraining(CelldetectiveSettingsPanel):
         self.progress_dialog.exec_()
 
     def on_training_finished(self):
-        self.progress_dialog.close()
-        self.parent_window.refresh_signal_models()
-        QMessageBox.information(
-            self, "Success", "Model training completed successfully."
+        if self.training_was_cancelled:
+            return
+
+        self.is_finished = True  # Mark as complete
+
+        # Keep dialog open for result viewing
+        self.progress_dialog.status_label.setText(
+            "Training Finished. Result displayed."
+        )
+        self.progress_dialog.cancel_btn.setText("Close")
+        self.progress_dialog.progress_bar.setValue(
+            self.progress_dialog.progress_bar.maximum()
         )
 
+        self.runner.close()
+        self.parent_window.refresh_signal_models()
+        # MessageBox removed to allow viewing results in popup
+
     def on_training_error(self, message):
+        if self.training_was_cancelled:
+            return
         self.progress_dialog.close()
         QMessageBox.critical(self, "Error", f"Training failed: {message}")
 
     def on_training_cancel(self):
+        if self.is_finished:
+            logger.info("Training complete, dialog closed.")
+            self.runner.close()
+            return
+
+        self.training_was_cancelled = True
         self.runner.close()
-        # self.progress_dialog.close() # handled by exec return usually, but explicit close is safe
         logger.info("Training cancelled.")
+
+    def on_training_interrupt(self):
+        logger.info("Training interrupted by user (Skip Model).")
+        self.stop_event.set()
 
     def _load_previous_instructions(self):
         pass

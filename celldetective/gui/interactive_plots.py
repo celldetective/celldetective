@@ -1,5 +1,6 @@
 import pandas as pd
 import matplotlib.pyplot as plt
+from matplotlib.figure import Figure
 from matplotlib.widgets import RectangleSelector
 from PyQt5.QtWidgets import (
     QDialog,
@@ -9,12 +10,15 @@ from PyQt5.QtWidgets import (
     QLabel,
     QMessageBox,
     QComboBox,
+    QProgressBar,
+    QSizePolicy,
 )
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, pyqtSignal
 
 from celldetective.gui.base.styles import Styles
 from celldetective.gui.gui_utils import FigureCanvas
 import logging
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -453,3 +457,382 @@ class InteractiveEventViewer(QDialog, Styles):
             QMessageBox.information(self, "Saved", "Table saved successfully.")
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Could not save table: {e}")
+
+
+class DynamicProgressDialog(QDialog, Styles):
+    canceled = pyqtSignal()
+    interrupted = pyqtSignal()
+
+    def __init__(
+        self,
+        title="Training Progress",
+        label_text="Preparing model training...",
+        minimum=0,
+        maximum=100,
+        max_epochs=100,
+        parent=None,
+    ):
+        super().__init__(parent)
+        Styles.__init__(self)
+        self.setWindowTitle(title)
+        self.setWindowFlags(self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
+        self.setWindowModality(Qt.ApplicationModal)
+
+        self.progress_bar_style = f"""
+            QProgressBar {{
+                border: 1px solid #B8B8B8;
+                border-radius: 5px;
+                text-align: center;
+                background-color: white;
+                color: black;
+            }}
+            QProgressBar::chunk {{
+                background-color: {self.celldetective_blue};
+                width: 20px;
+            }}
+        """
+        self.combo_style = """
+            QComboBox {
+                border: 1px solid #B8B8B8;
+                border-radius: 5px;
+                padding: 1px 18px 1px 3px;
+                min-width: 6em;
+            }
+            QComboBox:editable {
+                background: white;
+            }
+            QComboBox:!editable, QComboBox::drop-down:editable {
+                 background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                             stop: 0 #E1E1E1, stop: 0.4 #DDDDDD,
+                                             stop: 0.5 #D8D8D8, stop: 1.0 #D3D3D3);
+            }
+            QComboBox:!editable:on, QComboBox::drop-down:editable:on {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                            stop: 0 #D3D3D3, stop: 0.4 #D8D8D8,
+                                            stop: 0.5 #DDDDDD, stop: 1.0 #E1E1E1);
+            }
+            QComboBox:on { /* shift the text when the popup opens */
+                padding-top: 3px;
+                padding-left: 4px;
+            }
+            QComboBox::drop-down {
+                subcontrol-origin: padding;
+                subcontrol-position: top right;
+                width: 15px;
+                border-left-width: 1px;
+                border-left-color: darkgray;
+                border-left-style: solid;
+                border-top-right-radius: 3px;
+                border-bottom-right-radius: 3px;
+            }
+            QComboBox::down-arrow {
+                image: url(/usr/share/icons/crystalsvg/16x16/actions/1downarrow.png);
+            }
+        """
+        self.resize(600, 500)  # Standard size
+
+        self.max_epochs = max_epochs  # Keep this from original __init__
+        self.current_epoch = 0  # Keep this from original __init__
+        self.metrics_history = (  # Keep this from original __init__
+            {}
+        )  # Struct: {metric_name: {train: [], val: [], epochs: []}}
+        self.current_model_name = None  # Keep this from original __init__
+        self.last_update_time = 0  # Keep this from original __init__
+        self.log_scale = False  # Keep this from original __init__
+
+        # Layouts
+        layout = QVBoxLayout()
+        self.setLayout(layout)
+
+        # Labels
+        self.status_label = QLabel(label_text)
+        self.status_label.setStyleSheet("color: #333; font-size: 14px;")
+        layout.addWidget(self.status_label)
+
+        # Progress Bar
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setRange(minimum, maximum)
+        self.progress_bar.setStyleSheet(self.progress_bar_style)
+        layout.addWidget(self.progress_bar)
+
+        # Plot Canvas
+        self.figure = Figure(figsize=(5, 4), dpi=100)
+        self.figure.patch.set_alpha(0.0)  # Transparent figure
+        self.canvas = FigureCanvas(self.figure)
+        self.ax = self.figure.add_subplot(111)
+        self.apply_plot_style()
+
+        # Toolbar / Controls
+        controls_layout = QHBoxLayout()
+
+        # Log Scale Button
+        self.btn_log = QPushButton("Log Scale")
+        self.btn_log.setCheckable(True)
+        self.btn_log.clicked.connect(self.toggle_log_scale)
+        self.btn_log.setStyleSheet(self.button_style_sheet)
+        controls_layout.addWidget(self.btn_log)
+
+        # Auto Scale Button
+        self.btn_auto_scale = QPushButton("Auto Contrast")
+        self.btn_auto_scale.clicked.connect(self.auto_scale)
+        self.btn_auto_scale.setStyleSheet(self.button_style_sheet)
+        controls_layout.addWidget(self.btn_auto_scale)
+
+        controls_layout.addStretch()
+
+        # Metric Selector
+        self.metric_combo = QComboBox()
+        self.metric_combo.setStyleSheet(self.combo_style)
+        self.metric_combo.currentIndexChanged.connect(self.force_update_plot)
+        controls_layout.addWidget(self.metric_combo)
+
+        layout.addLayout(controls_layout)
+
+        # Add Canvas
+        self.canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.canvas.setStyleSheet("background-color: transparent;")
+        layout.addWidget(self.canvas)
+
+        # Buttons Layout
+        btn_layout = QHBoxLayout()
+
+        # Skip Button
+        self.skip_btn = QPushButton("Skip Model")
+        self.skip_btn.setStyleSheet(self.button_style_sheet)
+        self.skip_btn.clicked.connect(self.on_skip)
+        btn_layout.addWidget(self.skip_btn)
+
+        btn_layout.addStretch()
+
+        # Cancel Button
+        self.cancel_btn = QPushButton("Cancel")
+        self.cancel_btn.setStyleSheet(self.button_style_sheet)
+        self.cancel_btn.clicked.connect(self.on_cancel)
+        btn_layout.addWidget(self.cancel_btn)
+
+        layout.addLayout(btn_layout)
+
+    def on_skip(self):
+        self.interrupted.emit()
+        self.skip_btn.setDisabled(True)
+        self.status_label.setText("Interrupting current model training...")
+
+    def apply_plot_style(self):
+        self.ax.spines["top"].set_visible(False)
+        self.ax.spines["right"].set_visible(False)
+        self.ax.patch.set_alpha(0.0)
+        self.ax.grid(True, which="both", linestyle="--", linewidth=0.5, alpha=0.7)
+        self.ax.minorticks_on()
+        if getattr(self, "log_scale", False):
+            self.ax.set_yscale("log")
+        else:
+            self.ax.set_yscale("linear")
+
+    def show_result(self, results):
+        """Display final results (Confusion Matrix or Regression Plot)"""
+        self.ax.clear()
+        self.apply_plot_style()
+        self.ax.set_yscale("linear")
+        self.ax.set_xscale("linear")
+        self.metric_combo.hide()
+        self.btn_log.hide()
+        self.btn_auto_scale.hide()
+
+        # Regression
+        if "val_predictions" in results and "val_ground_truth" in results:
+            preds = results["val_predictions"]
+            gt = results["val_ground_truth"]
+
+            self.ax.scatter(gt, preds, alpha=0.5, c="white", edgecolors="C0")
+
+            min_val = min(gt.min(), preds.min())
+            max_val = max(gt.max(), preds.max())
+            self.ax.plot([min_val, max_val], [min_val, max_val], "r--")
+
+            self.ax.set_xlabel("Ground Truth")
+            self.ax.set_ylabel("Predictions")
+            val_mse = results.get("val_mse", "N/A")
+            if isinstance(val_mse, (int, float)):
+                title_str = f"Regression Result (MSE: {val_mse:.4f})"
+            else:
+                title_str = f"Regression Result (MSE: {val_mse})"
+            self.ax.set_title(title_str)
+            self.ax.set_aspect("equal", adjustable="box")
+
+        # Classification (Confusion Matrix)
+        elif "val_confusion" in results or "test_confusion" in results:
+            cm = results.get("val_confusion", results.get("test_confusion"))
+            norm_cm = cm / cm.sum(axis=1)[:, np.newaxis]
+
+            im = self.ax.imshow(
+                norm_cm, interpolation="nearest", cmap=plt.cm.Blues, aspect="equal"
+            )
+            self.ax.set_title("Confusion Matrix (Normalized)")
+            self.ax.set_ylabel("True label")
+            self.ax.set_xlabel("Predicted label")
+
+            # Custom ticks
+            tick_marks = np.arange(len(norm_cm))
+            self.ax.set_xticks(tick_marks)
+            self.ax.set_yticks(tick_marks)
+
+            if len(norm_cm) == 3:
+                labels = ["event", "no event", "else"]
+                self.ax.set_xticklabels(labels)
+                self.ax.set_yticklabels(labels)
+
+            self.ax.grid(False)
+
+            fmt = ".2f"
+            thresh = norm_cm.max() / 2.0
+            for i in range(norm_cm.shape[0]):
+                for j in range(norm_cm.shape[1]):
+                    self.ax.text(
+                        j,
+                        i,
+                        format(norm_cm[i, j], fmt),
+                        ha="center",
+                        va="center",
+                        color="white" if norm_cm[i, j] > thresh else "black",
+                    )
+
+        else:
+            self.ax.text(
+                0.5,
+                0.5,
+                "No visualization data found.",
+                ha="center",
+                va="center",
+                transform=self.ax.transAxes,
+            )
+        self.canvas.draw()
+
+    def toggle_log_scale(self):
+        self.log_scale = self.btn_log.isChecked()
+        self.update_plot_display()
+
+    def auto_scale(self):
+        self.ax.relim()
+        self.ax.autoscale_view()
+        self.canvas.draw()
+
+    def force_update_plot(self):
+        self.update_plot_display()
+
+    def on_cancel(self):
+        self.canceled.emit()
+        self.reject()
+
+    def update_progress(self, value, text=None):
+        self.progress_bar.setValue(value)
+        if text:
+            self.status_label.setText(text)
+
+    def update_plot(self, epoch_data):
+        import time
+
+        """
+        epoch_data: dict with keys 'epoch', 'metrics' (dict), 'val_metrics' (dict), 'model_name', 'total_epochs'
+        """
+        model_name = epoch_data.get("model_name", "Unknown")
+        total_epochs = epoch_data.get("total_epochs", 100)
+        epoch = epoch_data.get("epoch", 0)
+        metrics = epoch_data.get("metrics", {})
+        val_metrics = epoch_data.get("val_metrics", {})
+
+        # Handle Model Switch
+        if model_name != self.current_model_name:
+            self.metrics_history = {}  # Clear history
+            self.current_model_name = model_name
+            self.metric_combo.blockSignals(True)
+            self.metric_combo.clear()
+            # Populate combos with keys present in metrics (assuming val_metrics shares keys usually)
+            # Find common keys or just use metrics keys for simplicity
+            potential_metrics = list(metrics.keys())
+            # Prioritize 'iou' or 'loss' if present
+            potential_metrics.sort(
+                key=lambda x: 0 if x in ["iou", "loss", "mse"] else 1
+            )
+            self.metric_combo.addItems(potential_metrics)
+            self.metric_combo.blockSignals(False)
+
+            self.status_label.setText(f"Training {model_name}...")
+            self.ax.clear()
+            self.apply_plot_style()
+            self.metric_combo.show()
+            self.btn_log.show()
+            self.btn_auto_scale.show()
+            self.ax.set_aspect("auto")
+            self.current_plot_metric = None
+            self.update_plot_display()
+
+        # Update History
+        # Initialize keys if new
+        for k, v in metrics.items():
+            if k not in self.metrics_history:
+                self.metrics_history[k] = {"train": [], "val": [], "epochs": []}
+
+            self.metrics_history[k]["epochs"].append(epoch)
+            self.metrics_history[k]["train"].append(v)
+
+            # Find corresponding val metric
+            val_key = f"val_{k}"
+            if val_key in val_metrics:
+                self.metrics_history[k]["val"].append(val_metrics[val_key])
+            else:
+                self.metrics_history[k]["val"].append(None)
+
+        # Store total epochs for limits
+        self.current_total_epochs = total_epochs
+
+        # Throttle Update (3 seconds) OR if explicit end
+        current_time = time.time()
+        if (current_time - self.last_update_time > 3.0) or (epoch >= total_epochs):
+            self.update_plot_display()
+            self.last_update_time = current_time
+
+    def update_plot_display(self):
+        target_metric = self.metric_combo.currentText()
+        if not target_metric or target_metric not in self.metrics_history:
+            return
+
+        data = self.metrics_history[target_metric]
+
+        # Check if we need to initialize the plot (new metric or first time)
+        if getattr(self, "current_plot_metric", None) != target_metric:
+            self.ax.clear()
+            self.apply_plot_style()
+            self.ax.set_title(f"Training {self.current_model_name} - {target_metric}")
+            self.ax.set_xlabel("Epoch")
+            self.ax.set_ylabel(target_metric)
+
+            # Initial X limits
+            if hasattr(self, "current_total_epochs"):
+                self.ax.set_xlim(0, self.current_total_epochs)
+
+            # Initialize lines
+            (self.train_line,) = self.ax.plot(
+                [], [], label="Train", marker=".", color="tab:blue"
+            )
+            (self.val_line,) = self.ax.plot(
+                [], [], label="Validation", marker=".", color="tab:orange"
+            )
+            self.ax.legend()
+            self.current_plot_metric = target_metric
+
+        # Update data
+        if any(v is not None for v in data["train"]):
+            self.train_line.set_data(data["epochs"], data["train"])
+
+        if any(v is not None for v in data["val"]):
+            self.val_line.set_data(data["epochs"], data["val"])
+
+        # Update limits without resetting zoom if user zoomed
+        if getattr(self, "log_scale", False):
+            self.ax.set_yscale("log")
+        else:
+            self.ax.set_yscale("linear")
+
+        self.ax.relim()
+        self.ax.autoscale_view()
+        self.canvas.draw()

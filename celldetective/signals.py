@@ -1649,7 +1649,7 @@ class SignalDetectionModel(object):
                         bbox_inches="tight",
                         dpi=300,
                     )
-                    plt.pause(3)
+                    # plt.pause(3)
                     plt.close()
                 except Exception as e:
                     print(e)
@@ -1703,12 +1703,18 @@ class SignalDetectionModel(object):
                         bbox_inches="tight",
                         dpi=300,
                     )
-                    plt.pause(3)
+                    # plt.pause(3)
                     plt.close()
                 except Exception as e:
                     print(e)
                     pass
             print("Validation set: ", classification_report(ground_truth, predictions))
+
+            # Send result to GUI and wait
+            for cb in self.cb:
+                if hasattr(cb, "on_training_result"):
+                    cb.on_training_result(self.dico)
+            time.sleep(3)
 
     def train_regressor(self):
         """
@@ -1843,7 +1849,7 @@ class SignalDetectionModel(object):
                 plt.xlabel("epoch")
                 plt.yscale("log")
                 plt.legend(["train", "val"], loc="upper left")
-                plt.pause(3)
+                # plt.pause(3)
                 plt.savefig(
                     os.sep.join([self.model_folder, "regression_loss.png"]),
                     bbox_inches="tight",
@@ -1860,7 +1866,7 @@ class SignalDetectionModel(object):
                 plt.ylabel("precision")
                 plt.xlabel("epoch")
                 plt.legend(["train", "val"], loc="upper left")
-                plt.pause(3)
+                # plt.pause(3)
                 plt.savefig(
                     os.sep.join([self.model_folder, "classification_loss.png"]),
                     bbox_inches="tight",
@@ -1938,7 +1944,20 @@ class SignalDetectionModel(object):
             print(f"MSE on validation set: {val_mse}...")
             print(f"MAE on validation set: {val_mae}...")
 
-            self.dico.update({"val_mse": val_mse, "val_mae": val_mae})
+            self.dico.update(
+                {
+                    "val_mse": val_mse,
+                    "val_mae": val_mae,
+                    "val_predictions": predictions,
+                    "val_ground_truth": ground_truth,
+                }
+            )
+
+            # Send result to GUI and wait
+            for cb in self.cb:
+                if hasattr(cb, "on_training_result"):
+                    cb.on_training_result(self.dico)
+            time.sleep(3)
 
     def gather_callbacks(self, mode):
         """
