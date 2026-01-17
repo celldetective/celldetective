@@ -10,10 +10,10 @@ from PyQt5.QtWidgets import (
     QPushButton,
     QMessageBox,
 )
-from PyQt5.QtCore import Qt, QSize
+from PyQt5.QtCore import Qt, QSize, QTimer
 from celldetective.gui.base.components import generic_message
 from celldetective.gui.base.utils import center_window
-from celldetective.gui.layouts import ChannelNormGenerator
+from celldetective.gui.base.channel_norm_generator import ChannelNormGenerator
 from celldetective.gui.base.components import CelldetectiveWidget
 from PyQt5.QtGui import QDoubleValidator
 from superqt.fonticon import icon
@@ -575,4 +575,12 @@ class SegmentationModelLoader(CelldetectiveWidget):
 
             self.thresh_wizard = ThresholdConfigWizard(self)
             self.thresh_wizard.show()
+
+            QTimer.singleShot(
+                100,
+                lambda: self.thresh_wizard.resize(
+                    self.thresh_wizard.width() + 1,
+                    self.thresh_wizard.height() + 1,
+                ),
+            )
             center_window(self.thresh_wizard)

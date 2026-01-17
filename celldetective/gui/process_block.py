@@ -852,7 +852,13 @@ class ProcessPanel(QFrame, Styles):
                     try:
                         self.event_annotator.finalize_init()
                         self.event_annotator.show()
-                        center_window(self.event_annotator)
+                        QTimer.singleShot(
+                            100,
+                            lambda: self.event_annotator.resize(
+                                self.event_annotator.width() + 1,
+                                self.event_annotator.height() + 1,
+                            ),
+                        )
                     except Exception as e:
                         print(f"Error finalizing annotator: {e}")
                 else:
@@ -1513,7 +1519,9 @@ class ProcessPanel(QFrame, Styles):
                     logger.error(f"Failed to launch Napari: {e}")
                     QMessageBox.warning(self, "Error", f"Failed to launch Napari: {e}")
             else:
-                logger.warning("napari loading returned None (likely no trajectories found).")
+                logger.warning(
+                    "napari loading returned None (likely no trajectories found)."
+                )
                 QMessageBox.warning(
                     self,
                     "Warning",

@@ -41,9 +41,17 @@ class BackgroundLoader(QThread):
         logger.info("Loading background packages...")
         try:
             from celldetective.gui.control_panel import ControlPanel
+
+            self.ControlPanel = ControlPanel
             from celldetective.gui.about import AboutWidget
+
+            self.AboutWidget = AboutWidget
             from celldetective.processes.downloader import DownloadProcess
+
+            self.DownloadProcess = DownloadProcess
             from celldetective.gui.configure_new_exp import ConfigNewExperiment
+
+            self.ConfigNewExperiment = ConfigNewExperiment
             import pandas
             import matplotlib.pyplot
             import scipy.ndimage
@@ -243,7 +251,10 @@ class AppInitWindow(CelldetectiveMainWindow):
         )
 
     def download_spreading_assay_demo(self):
-        from celldetective.processes.downloader import DownloadProcess
+        if self.bg_loader.isFinished() and hasattr(self.bg_loader, "DownloadProcess"):
+            DownloadProcess = self.bg_loader.DownloadProcess
+        else:
+            from celldetective.processes.downloader import DownloadProcess
         from celldetective.gui.workers import ProgressWindow
 
         self.target_dir = str(
@@ -389,7 +400,10 @@ class AppInitWindow(CelldetectiveMainWindow):
         self.open_directory()
 
     def open_about_window(self):
-        from celldetective.gui.about import AboutWidget
+        if self.bg_loader.isFinished() and hasattr(self.bg_loader, "AboutWidget"):
+            AboutWidget = self.bg_loader.AboutWidget
+        else:
+            from celldetective.gui.about import AboutWidget
 
         self.about_wdw = AboutWidget()
         self.about_wdw.show()
@@ -445,7 +459,12 @@ class AppInitWindow(CelldetectiveMainWindow):
 
     def create_new_experiment(self):
 
-        from celldetective.gui.configure_new_exp import ConfigNewExperiment
+        if self.bg_loader.isFinished() and hasattr(
+            self.bg_loader, "ConfigNewExperiment"
+        ):
+            ConfigNewExperiment = self.bg_loader.ConfigNewExperiment
+        else:
+            from celldetective.gui.configure_new_exp import ConfigNewExperiment
 
         logger.info("Configuring new experiment...")
         self.new_exp_window = ConfigNewExperiment(self)
@@ -492,7 +511,10 @@ class AppInitWindow(CelldetectiveMainWindow):
                 target=log_position_stats, args=(wells,), daemon=True
             ).start()
 
-            from celldetective.gui.control_panel import ControlPanel
+            if self.bg_loader.isFinished() and hasattr(self.bg_loader, "ControlPanel"):
+                ControlPanel = self.bg_loader.ControlPanel
+            else:
+                from celldetective.gui.control_panel import ControlPanel
 
             try:
                 self.control_panel = ControlPanel(self, self.exp_dir)

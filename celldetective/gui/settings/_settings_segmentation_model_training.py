@@ -12,7 +12,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, QSize
 from celldetective.gui.base.components import generic_message
-from celldetective.gui.layouts import ChannelNormGenerator
+from celldetective.gui.base.channel_norm_generator import ChannelNormGenerator
 
 from superqt import QLabeledDoubleSlider, QLabeledSlider
 from superqt.fonticon import icon

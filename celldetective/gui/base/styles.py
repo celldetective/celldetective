@@ -24,6 +24,58 @@ class Styles(object):
 			padding-left: 10px;
 			"""
 
+        self.progress_bar_style = f"""
+            QProgressBar {{
+                border: 1px solid #B8B8B8;
+                border-radius: 5px;
+                text-align: center;
+                background-color: white;
+                color: black;
+            }}
+            QProgressBar::chunk {{
+                background-color: {self.celldetective_blue};
+                width: 20px;
+            }}
+        """
+        self.combo_style = """
+            QComboBox {
+                border: 1px solid #B8B8B8;
+                border-radius: 5px;
+                padding: 1px 18px 1px 3px;
+                min-width: 6em;
+            }
+            QComboBox:editable {
+                background: white;
+            }
+            QComboBox:!editable, QComboBox::drop-down:editable {
+                 background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                             stop: 0 #E1E1E1, stop: 0.4 #DDDDDD,
+                                             stop: 0.5 #D8D8D8, stop: 1.0 #D3D3D3);
+            }
+            QComboBox:!editable:on, QComboBox::drop-down:editable:on {
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                            stop: 0 #D3D3D3, stop: 0.4 #D8D8D8,
+                                            stop: 0.5 #DDDDDD, stop: 1.0 #E1E1E1);
+            }
+            QComboBox:on { /* shift the text when the popup opens */
+                padding-top: 3px;
+                padding-left: 4px;
+            }
+            QComboBox::drop-down {
+                subcontrol-origin: padding;
+                subcontrol-position: top right;
+                width: 15px;
+                border-left-width: 1px;
+                border-left-color: darkgray;
+                border-left-style: solid;
+                border-top-right-radius: 3px;
+                border-bottom-right-radius: 3px;
+            }
+            QComboBox::down-arrow {
+                image: url(/usr/share/icons/crystalsvg/16x16/actions/1downarrow.png);
+            }
+        """
+
     def init_button_styles(self):
 
         self.button_style_sheet = """

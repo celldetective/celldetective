@@ -18,8 +18,9 @@ from celldetective.gui.base.components import (
     QHSeperationLine,
 )
 
-from PyQt5.QtCore import Qt, QSize, QThread
+from PyQt5.QtCore import Qt, QSize, QThread, QTimer
 from celldetective.gui.base.components import generic_message
+from celldetective.gui.base.utils import center_window
 from celldetective.utils.parsing import (
     config_section_to_dict,
     _extract_labels_from_config,
@@ -55,17 +56,17 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-class BackgroundLoader(QThread):
-    def run(self):
-        logger.info("Loading background packages...")
-        try:
-            pass
-            #import celldetective.segmentation
-            #import celldetective.tracking
-            #import celldetective.measure
-        except Exception:
-            logger.error("Background packages not loaded...")
-        logger.info("Background packages loaded...")
+# class BackgroundLoader(QThread):
+#     def run(self):
+#         logger.info("Loading background packages...")
+#         try:
+#             pass
+#             # import celldetective.segmentation
+#             # import celldetective.tracking
+#             # import celldetective.measure
+#         except Exception:
+#             logger.error("Background packages not loaded...")
+#         logger.info("Background packages loaded...")
 
 
 class ControlPanel(CelldetectiveMainWindow):
@@ -147,8 +148,8 @@ class ControlPanel(CelldetectiveMainWindow):
         t_loaded = time.time()
         logger.info(f"Launch time: {t_loaded - self.parent_window.t_ref} s...")
 
-        self.bg_loader = BackgroundLoader()
-        self.bg_loader.start()
+        # self.bg_loader = BackgroundLoader()
+        # self.bg_loader.start()
 
     def init_wells_and_positions(self):
         """
@@ -353,7 +354,13 @@ class ControlPanel(CelldetectiveMainWindow):
                 n_channels=self.nbr_channels,
                 PxToUm=self.PxToUm,
             )
+
+            def post_widget(widget):
+                widget.resize(widget.width() + 1, widget.height() + 1)
+                center_window(widget)
+
             self.viewer.show()
+            QTimer.singleShot(100, lambda: post_widget(self.viewer))
 
     def open_experiment_folder(self):
 

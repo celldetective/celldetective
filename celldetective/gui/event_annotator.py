@@ -12,7 +12,7 @@ from PyQt5.QtWidgets import (
     QLineEdit,
     QSlider,
 )
-from PyQt5.QtCore import Qt, QSize, QThread, pyqtSignal
+from PyQt5.QtCore import Qt, QSize, QThread, pyqtSignal, QTimer
 from PyQt5.QtGui import QKeySequence, QIntValidator
 
 from celldetective.gui.gui_utils import color_from_state
@@ -98,9 +98,6 @@ class EventAnnotator(BaseAnnotator):
         if not self.proceed:
             self.close()
         else:
-            # self.load_annotator_config()
-            # self.locate_tracks()
-
             if not lazy_load:
                 self.prepare_stack()
                 self.finalize_init()

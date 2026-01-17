@@ -1,5 +1,6 @@
 import pandas as pd
 import matplotlib.pyplot as plt
+from fonticon_mdi6 import MDI6
 from matplotlib.figure import Figure
 from matplotlib.widgets import RectangleSelector
 from PyQt5.QtWidgets import (
@@ -12,8 +13,10 @@ from PyQt5.QtWidgets import (
     QComboBox,
     QProgressBar,
     QSizePolicy,
+    QApplication,
 )
-from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtCore import Qt, pyqtSignal, QTimer
+from superqt.fonticon import icon
 
 from celldetective.gui.base.styles import Styles
 from celldetective.gui.gui_utils import FigureCanvas
@@ -466,7 +469,7 @@ class DynamicProgressDialog(QDialog, Styles):
     def __init__(
         self,
         title="Training Progress",
-        label_text="Preparing model training...",
+        label_text="Launching the training script...",
         minimum=0,
         maximum=100,
         max_epochs=100,
@@ -478,57 +481,6 @@ class DynamicProgressDialog(QDialog, Styles):
         self.setWindowFlags(self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
         self.setWindowModality(Qt.ApplicationModal)
 
-        self.progress_bar_style = f"""
-            QProgressBar {{
-                border: 1px solid #B8B8B8;
-                border-radius: 5px;
-                text-align: center;
-                background-color: white;
-                color: black;
-            }}
-            QProgressBar::chunk {{
-                background-color: {self.celldetective_blue};
-                width: 20px;
-            }}
-        """
-        self.combo_style = """
-            QComboBox {
-                border: 1px solid #B8B8B8;
-                border-radius: 5px;
-                padding: 1px 18px 1px 3px;
-                min-width: 6em;
-            }
-            QComboBox:editable {
-                background: white;
-            }
-            QComboBox:!editable, QComboBox::drop-down:editable {
-                 background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                                             stop: 0 #E1E1E1, stop: 0.4 #DDDDDD,
-                                             stop: 0.5 #D8D8D8, stop: 1.0 #D3D3D3);
-            }
-            QComboBox:!editable:on, QComboBox::drop-down:editable:on {
-                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                                            stop: 0 #D3D3D3, stop: 0.4 #D8D8D8,
-                                            stop: 0.5 #DDDDDD, stop: 1.0 #E1E1E1);
-            }
-            QComboBox:on { /* shift the text when the popup opens */
-                padding-top: 3px;
-                padding-left: 4px;
-            }
-            QComboBox::drop-down {
-                subcontrol-origin: padding;
-                subcontrol-position: top right;
-                width: 15px;
-                border-left-width: 1px;
-                border-left-color: darkgray;
-                border-left-style: solid;
-                border-top-right-radius: 3px;
-                border-bottom-right-radius: 3px;
-            }
-            QComboBox::down-arrow {
-                image: url(/usr/share/icons/crystalsvg/16x16/actions/1downarrow.png);
-            }
-        """
         self.resize(600, 500)  # Standard size
 
         self.max_epochs = max_epochs  # Keep this from original __init__
@@ -539,14 +491,16 @@ class DynamicProgressDialog(QDialog, Styles):
         self.current_model_name = None  # Keep this from original __init__
         self.last_update_time = 0  # Keep this from original __init__
         self.log_scale = False  # Keep this from original __init__
+        self.user_interrupted = False
+        self.is_percentile_scaled = False
 
         # Layouts
-        layout = QVBoxLayout()
-        self.setLayout(layout)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(30, 30, 30, 30)
 
         # Labels
         self.status_label = QLabel(label_text)
-        self.status_label.setStyleSheet("color: #333; font-size: 14px;")
+        # self.status_label.setStyleSheet("color: #333; font-size: 14px;")
         layout.addWidget(self.status_label)
 
         # Progress Bar
@@ -566,16 +520,19 @@ class DynamicProgressDialog(QDialog, Styles):
         controls_layout = QHBoxLayout()
 
         # Log Scale Button
-        self.btn_log = QPushButton("Log Scale")
+        self.btn_log = QPushButton("")
         self.btn_log.setCheckable(True)
+        self.btn_log.setIcon(icon(MDI6.math_log, color="black"))
         self.btn_log.clicked.connect(self.toggle_log_scale)
-        self.btn_log.setStyleSheet(self.button_style_sheet)
+        self.btn_log.setStyleSheet(self.button_select_all)
+        self.btn_log.setEnabled(False)
         controls_layout.addWidget(self.btn_log)
 
         # Auto Scale Button
         self.btn_auto_scale = QPushButton("Auto Contrast")
         self.btn_auto_scale.clicked.connect(self.auto_scale)
         self.btn_auto_scale.setStyleSheet(self.button_style_sheet)
+        self.btn_auto_scale.setEnabled(False)
         controls_layout.addWidget(self.btn_auto_scale)
 
         controls_layout.addStretch()
@@ -597,25 +554,39 @@ class DynamicProgressDialog(QDialog, Styles):
         btn_layout = QHBoxLayout()
 
         # Skip Button
-        self.skip_btn = QPushButton("Skip Model")
-        self.skip_btn.setStyleSheet(self.button_style_sheet)
+        self.skip_btn = QPushButton("Interrupt && Skip")
+        self.skip_btn.setStyleSheet(self.button_style_sheet_2)
+        self.skip_btn.setIcon(icon(MDI6.skip_next, color=self.celldetective_blue))
         self.skip_btn.clicked.connect(self.on_skip)
-        btn_layout.addWidget(self.skip_btn)
-
-        btn_layout.addStretch()
+        self.skip_btn.setEnabled(False)
+        btn_layout.addWidget(self.skip_btn, 50)
 
         # Cancel Button
         self.cancel_btn = QPushButton("Cancel")
         self.cancel_btn.setStyleSheet(self.button_style_sheet)
         self.cancel_btn.clicked.connect(self.on_cancel)
-        btn_layout.addWidget(self.cancel_btn)
+        btn_layout.addWidget(self.cancel_btn, 50)
 
         layout.addLayout(btn_layout)
+        self._get_screen_height()
+        self.adjustSize()
+        new_width = int(self.width() * 1.01)
+        self.resize(new_width, int(self._screen_height * 0.7))
+        self.setMinimumWidth(new_width)
+
+    def _get_screen_height(self):
+        app = QApplication.instance()
+        screen = app.primaryScreen()
+        geometry = screen.availableGeometry()
+        self._screen_width, self._screen_height = geometry.getRect()[-2:]
 
     def on_skip(self):
         self.interrupted.emit()
         self.skip_btn.setDisabled(True)
-        self.status_label.setText("Interrupting current model training...")
+        self.user_interrupted = True
+        self.status_label.setText(
+            "Interrupting current model training [effective at the end of the current epoch]..."
+        )
 
     def apply_plot_style(self):
         self.ax.spines["top"].set_visible(False)
@@ -710,10 +681,53 @@ class DynamicProgressDialog(QDialog, Styles):
     def toggle_log_scale(self):
         self.log_scale = self.btn_log.isChecked()
         self.update_plot_display()
+        self.figure.tight_layout()
+        if self.ax.get_yscale() == "linear":
+            self.btn_log.setIcon(icon(MDI6.math_log, color="black"))
+        else:
+            self.btn_log.setIcon(icon(MDI6.math_log, color="white"))
 
     def auto_scale(self):
-        self.ax.relim()
-        self.ax.autoscale_view()
+        target_metric = self.metric_combo.currentText()
+        if not target_metric or target_metric not in self.metrics_history:
+            return
+
+        # Get data once
+        data = self.metrics_history[target_metric]
+        y_values = []
+        if "train" in data:
+            y_values.extend([v for v in data["train"] if v is not None])
+        if "val" in data:
+            y_values.extend([v for v in data["val"] if v is not None])
+
+        y_values = np.array(y_values)
+        if len(y_values) == 0:
+            return
+
+        if not getattr(self, "is_percentile_scaled", False):
+            # Mode: Percentile 1-99
+            try:
+                p1, p99 = np.nanpercentile(y_values, [1, 99])
+                if p1 != p99:
+                    self.ax.set_ylim(p1, p99)
+                    self.is_percentile_scaled = True
+            except Exception as e:
+                logger.warning(f"Could not compute percentiles: {e}")
+        else:
+            # Mode: Min/Max (Standard Autoscale)
+            try:
+                min_val, max_val = np.nanmin(y_values), np.nanmax(y_values)
+                # Add a small padding (5%)
+                margin = (max_val - min_val) * 0.05
+                if margin == 0:
+                    margin = 0.1  # default padding if constant
+                self.ax.set_ylim(min_val - margin, max_val + margin)
+                self.is_percentile_scaled = False
+            except Exception as e:
+                logger.warning(f"Could not compute min/max: {e}")
+                self.ax.relim()
+                self.ax.autoscale_view()
+
         self.canvas.draw()
 
     def force_update_plot(self):
@@ -762,6 +776,8 @@ class DynamicProgressDialog(QDialog, Styles):
             self.metric_combo.show()
             self.btn_log.show()
             self.btn_auto_scale.show()
+            self.btn_log.setEnabled(True)
+            self.btn_auto_scale.setEnabled(True)
             self.ax.set_aspect("auto")
             self.current_plot_metric = None
             self.update_plot_display()
@@ -787,6 +803,10 @@ class DynamicProgressDialog(QDialog, Styles):
 
         # Throttle Update (3 seconds) OR if explicit end
         current_time = time.time()
+
+        if epoch >= 1 and not self.user_interrupted:
+            self.skip_btn.setEnabled(True)
+
         if (current_time - self.last_update_time > 3.0) or (epoch >= total_epochs):
             self.update_plot_display()
             self.last_update_time = current_time
@@ -836,3 +856,10 @@ class DynamicProgressDialog(QDialog, Styles):
         self.ax.relim()
         self.ax.autoscale_view()
         self.canvas.draw()
+
+    def update_status(self, text):
+        self.status_label.setText(text)
+        if "Loading" in text and "librar" in text.lower():
+            QTimer.singleShot(
+                1000, lambda: self.status_label.setText("Training model...")
+            )

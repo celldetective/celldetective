@@ -13,8 +13,8 @@ from PyQt5.QtWidgets import (
     QHBoxLayout,
     QPushButton,
 )
-from PyQt5.QtCore import Qt, QSize
-from celldetective.gui.layouts import ChannelNormGenerator
+from PyQt5.QtCore import Qt, QSize, QThread
+from celldetective.gui.base.channel_norm_generator import ChannelNormGenerator
 from superqt import QLabeledDoubleSlider, QLabeledSlider, QSearchableComboBox
 from superqt.fonticon import icon
 from fonticon_mdi6 import MDI6
@@ -24,9 +24,7 @@ import os
 from glob import glob
 from datetime import datetime
 from pandas.api.types import is_numeric_dtype
-from celldetective.processes.train_signal_model import TrainSignalModelProcess
 from celldetective.gui.workers import Runner
-from celldetective.gui.base.components import CelldetectiveProgressDialog
 from celldetective.gui.interactive_plots import DynamicProgressDialog
 from PyQt5.QtCore import QThreadPool
 from celldetective.gui.settings._settings_base import CelldetectiveSettingsPanel
@@ -37,6 +35,20 @@ from celldetective import get_logger
 import multiprocessing
 
 logger = get_logger()
+
+
+class BackgroundLoader(QThread):
+    def run(self):
+        logger.info("Loading libraries...")
+        try:
+            from celldetective.processes.train_signal_model import (
+                TrainSignalModelProcess,
+            )
+
+            self.TrainSignalModelProcess = TrainSignalModelProcess
+        except Exception:
+            logger.error("Librairies not loaded...")
+        logger.info("Librairies loaded...")
 
 
 class SettingsEventDetectionModelTraining(CelldetectiveSettingsPanel):
@@ -77,9 +89,12 @@ class SettingsEventDetectionModelTraining(CelldetectiveSettingsPanel):
         self._load_previous_instructions()
 
         self._adjust_size()
-        new_width = int(self.width() * 1.2)
+        new_width = int(self.width() * 1.01)
         self.resize(new_width, int(self._screen_height * 0.8))
         self.setMinimumWidth(new_width)
+
+        self.bg_loader = BackgroundLoader()
+        self.bg_loader.start()
 
     def _add_to_layout(self):
         self._layout.addWidget(self.model_frame)
@@ -550,6 +565,14 @@ class SettingsEventDetectionModelTraining(CelldetectiveSettingsPanel):
             self.resize(self.width(), self.height() + step)
 
     def _write_instructions(self):
+        if self.bg_loader.isFinished() and hasattr(
+            self.bg_loader, "TrainSignalModelProcess"
+        ):
+            TrainSignalModelProcess = self.bg_loader.TrainSignalModelProcess
+        else:
+            from celldetective.processes.train_signal_model import (
+                TrainSignalModelProcess,
+            )
 
         model_name = self.modelname_le.text()
         pretrained_model = self.pretrained_model
@@ -672,9 +695,7 @@ class SettingsEventDetectionModelTraining(CelldetectiveSettingsPanel):
         )
         self.runner.signals.update_plot.connect(self.progress_dialog.update_plot)
         self.runner.signals.training_result.connect(self.progress_dialog.show_result)
-        self.runner.signals.update_status.connect(
-            self.progress_dialog.status_label.setText
-        )
+        self.runner.signals.update_status.connect(self.progress_dialog.update_status)
 
         self.runner.signals.finished.connect(self.on_training_finished)
         self.runner.signals.error.connect(self.on_training_error)
