@@ -224,6 +224,7 @@ class TrainSignalModelProcess(Process):
                 "val_ground_truth",
                 "test_predictions",
                 "test_ground_truth",
+                "val_mse",
             ]
             results = {k: model.dico[k] for k in result_keys if k in model.dico}
             # Only send if we have something relevant

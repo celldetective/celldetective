@@ -9,11 +9,14 @@ from PyQt5.QtWidgets import (
     QLabel,
     QHBoxLayout,
     QPushButton,
+    QMessageBox,
 )
-from PyQt5.QtCore import Qt, QSize
+from PyQt5.QtCore import Qt, QSize, QThreadPool, QThread
 from celldetective.gui.base.components import generic_message
 from celldetective.gui.base.channel_norm_generator import ChannelNormGenerator
-
+import multiprocessing
+from celldetective.gui.workers import Runner
+from celldetective.gui.interactive_plots import DynamicProgressDialog
 from superqt import QLabeledDoubleSlider, QLabeledSlider
 from superqt.fonticon import icon
 from fonticon_mdi6 import MDI6
@@ -23,13 +26,29 @@ from celldetective.utils.model_getters import (
 )
 from celldetective.utils.model_loaders import locate_segmentation_dataset
 
-from celldetective.gui.settings._cellpose_model_params import CellposeParamsWidget
 import numpy as np
 import json
 import os
 from glob import glob
 from datetime import datetime
 from celldetective.gui.settings._settings_base import CelldetectiveSettingsPanel
+from celldetective import get_logger
+
+logger = get_logger(__name__)
+
+
+class BackgroundLoader(QThread):
+    def run(self):
+        logger.info("Loading libraries...")
+        try:
+            from celldetective.processes.train_segmentation_model import (
+                TrainSegModelProcess,
+            )
+
+            self.TrainSegModelProcess = TrainSegModelProcess
+        except Exception:
+            logger.error("Librairies not loaded...")
+        logger.info("Librairies loaded...")
 
 
 class SettingsSegmentationModelTraining(CelldetectiveSettingsPanel):
@@ -61,6 +80,9 @@ class SettingsSegmentationModelTraining(CelldetectiveSettingsPanel):
 
         self._adjust_size()
         self.resize(int(self.width()), int(self._screen_height * 0.8))
+
+        self.bg_loader = BackgroundLoader()
+        self.bg_loader.start()
 
     def _add_to_layout(self):
 
@@ -407,6 +429,9 @@ class SettingsSegmentationModelTraining(CelldetectiveSettingsPanel):
             self.model_name.startswith("CP")
             and self.seg_folder == "segmentation_generic"
         ):
+            from celldetective.gui.settings._cellpose_model_params import (
+                CellposeParamsWidget,
+            )
 
             self.diamWidget = CellposeParamsWidget(self, model_name=self.model_name)
             self.diamWidget.show()
@@ -577,6 +602,14 @@ class SettingsSegmentationModelTraining(CelldetectiveSettingsPanel):
         self.spatial_calib_le.setText(str(spatial_calib).replace(".", ","))
 
     def _write_instructions(self):
+        if self.bg_loader.isFinished() and hasattr(
+            self.bg_loader, "TrainSegModelProcess"
+        ):
+            TrainSegModelProcess = self.bg_loader.TrainSegModelProcess
+        else:
+            from celldetective.processes.train_signal_model import (
+                TrainSegModelProcess,
+            )
 
         model_name = self.modelname_le.text()
         pretrained_model = self.pretrained_model
@@ -668,24 +701,95 @@ class SettingsSegmentationModelTraining(CelldetectiveSettingsPanel):
         with open(model_folder + "training_instructions.json", "w") as f:
             json.dump(self.training_instructions, f, indent=4)
 
-        # process_args = {"instructions": self.instructions, "use_gpu": self.use_gpu}
-        # self.job = ProgressWindow(TrainSegModelProcess, parent_window=self, title="Training", position_info=False, process_args=process_args)
-        # result = self.job.exec_()
-        # if result == QDialog.Accepted:
-        # 	pass
-        # elif result == QDialog.Rejected:
-        # 	return None
+        # Progress Window
+        self.stop_event = multiprocessing.Event()
+        process_args = {
+            "instructions": self.instructions,
+            "stop_event": self.stop_event,
+            "use_gpu": self.use_gpu,
+        }
+        self.training_was_cancelled = False
+        self.is_finished = False
 
-        from celldetective.segmentation import train_segmentation_model
-
-        train_segmentation_model(
-            self.instructions,
-            use_gpu=self.parent_window.parent_window.parent_window.use_gpu,
+        self.progress_dialog = DynamicProgressDialog(
+            label_text="Preparing model training...",
+            max_epochs=epochs,
+            parent=self,
+            title="Training Segmentation Model",
         )
 
+        # Create Runner (Thread Logic)
+        self.runner = Runner(process=TrainSegModelProcess, process_args=process_args)
+
+        # Connect Signals
+        self.runner.signals.update_pos.connect(self.progress_dialog.update_progress)
+        self.runner.signals.update_plot.connect(self.progress_dialog.update_plot)
+        self.runner.signals.training_result.connect(self.progress_dialog.show_result)
+        self.runner.signals.update_status.connect(self.progress_dialog.update_status)
+
+        self.runner.signals.finished.connect(self.on_training_finished)
+        self.runner.signals.error.connect(self.on_training_error)
+
+        # Handle Cancel & Interrupt
+        # self.progress_dialog.canceled.connect(self.on_training_cancel)
+        self.progress_dialog.canceled.connect(self.on_training_cancel)
+        self.progress_dialog.interrupted.connect(self.on_training_interrupt)
+
+        # Start
+        self.pool = QThreadPool.globalInstance()
+        self.pool.start(self.runner)
+        self.progress_dialog.exec_()
+
+    def on_training_finished(self):
+        if self.training_was_cancelled:
+            return
+
+        self.is_finished = True  # Mark as complete
+
+        # Keep dialog open for result viewing
+        self.progress_dialog.status_label.setText("Training Finished.")
+        self.progress_dialog.cancel_btn.setText("Close")
+        self.progress_dialog.progress_bar.setValue(
+            self.progress_dialog.progress_bar.maximum()
+        )
+
+        self.runner.close()
         self.parent_window.init_seg_model_list()
-        idx = self.parent_window.seg_model_list.findText(model_name)
+        idx = self.parent_window.seg_model_list.findText(self.modelname_le.text())
         self.parent_window.seg_model_list.setCurrentIndex(idx)
+
+    def on_training_error(self, message):
+        if self.training_was_cancelled:
+            return
+        self.progress_dialog.close()
+        QMessageBox.critical(self, "Error", f"Training failed: {message}")
+
+    def on_training_cancel(self):
+        if self.is_finished:
+            self.runner.close()
+            self.progress_dialog.close()
+            return
+
+        self.training_was_cancelled = True
+        self.runner.close()
+
+        # Deep clean: Delete the model folder if cancelled
+        try:
+            import shutil
+
+            model_path = os.path.join(
+                self.parent_window.seg_models_dir, self.modelname_le.text()
+            )
+            if os.path.exists(model_path):
+                # Wait briefly for process to release file locks
+                time.sleep(0.5)
+                shutil.rmtree(model_path)
+                logger.info(f"Cancelled training. Deleted model folder: {model_path}")
+        except Exception as e:
+            logger.error(f"Could not delete model folder after cancel: {e}")
+
+    def on_training_interrupt(self):
+        self.stop_event.set()
 
     def _load_previous_instructions(self):
         pass

@@ -526,23 +526,23 @@ class DynamicProgressDialog(QDialog, Styles):
         self.btn_log.clicked.connect(self.toggle_log_scale)
         self.btn_log.setStyleSheet(self.button_select_all)
         self.btn_log.setEnabled(False)
-        controls_layout.addWidget(self.btn_log)
 
         # Auto Scale Button
-        self.btn_auto_scale = QPushButton("Auto Contrast")
-        self.btn_auto_scale.clicked.connect(self.auto_scale)
-        self.btn_auto_scale.setStyleSheet(self.button_style_sheet)
-        self.btn_auto_scale.setEnabled(False)
-        controls_layout.addWidget(self.btn_auto_scale)
-
-        controls_layout.addStretch()
+        # self.btn_auto_scale = QPushButton("Auto Contrast")
+        # self.btn_auto_scale.clicked.connect(self.auto_scale)
+        # self.btn_auto_scale.setStyleSheet(self.button_style_sheet)
+        # self.btn_auto_scale.setEnabled(False)
+        # controls_layout.addWidget(self.btn_auto_scale)
 
         # Metric Selector
+        self.metric_label = QLabel("Metric: ")
         self.metric_combo = QComboBox()
-        self.metric_combo.setStyleSheet(self.combo_style)
+        # self.metric_combo.setStyleSheet(self.combo_style)
         self.metric_combo.currentIndexChanged.connect(self.force_update_plot)
-        controls_layout.addWidget(self.metric_combo)
 
+        controls_layout.addWidget(self.metric_label, 10)
+        controls_layout.addWidget(self.metric_combo, 85)
+        controls_layout.addWidget(self.btn_log, 5, alignment=Qt.AlignRight)
         layout.addLayout(controls_layout)
 
         # Add Canvas
@@ -606,8 +606,9 @@ class DynamicProgressDialog(QDialog, Styles):
         self.ax.set_yscale("linear")
         self.ax.set_xscale("linear")
         self.metric_combo.hide()
+        self.metric_label.hide()
         self.btn_log.hide()
-        self.btn_auto_scale.hide()
+        # self.btn_auto_scale.hide()
 
         # Regression
         if "val_predictions" in results and "val_ground_truth" in results:
@@ -684,8 +685,14 @@ class DynamicProgressDialog(QDialog, Styles):
         self.figure.tight_layout()
         if self.ax.get_yscale() == "linear":
             self.btn_log.setIcon(icon(MDI6.math_log, color="black"))
+            QTimer.singleShot(
+                100, lambda: self.resize(self.width() - 1, self.height() - 1)
+            )
         else:
             self.btn_log.setIcon(icon(MDI6.math_log, color="white"))
+            QTimer.singleShot(
+                100, lambda: self.resize(self.width() + 1, self.height() + 1)
+            )
 
     def auto_scale(self):
         target_metric = self.metric_combo.currentText()
@@ -758,6 +765,7 @@ class DynamicProgressDialog(QDialog, Styles):
         if model_name != self.current_model_name:
             self.metrics_history = {}  # Clear history
             self.current_model_name = model_name
+            self.user_interrupted = False
             self.metric_combo.blockSignals(True)
             self.metric_combo.clear()
             # Populate combos with keys present in metrics (assuming val_metrics shares keys usually)
@@ -774,10 +782,11 @@ class DynamicProgressDialog(QDialog, Styles):
             self.ax.clear()
             self.apply_plot_style()
             self.metric_combo.show()
+            self.metric_label.show()
             self.btn_log.show()
-            self.btn_auto_scale.show()
+            # self.btn_auto_scale.show()
             self.btn_log.setEnabled(True)
-            self.btn_auto_scale.setEnabled(True)
+            # self.btn_auto_scale.setEnabled(True)
             self.ax.set_aspect("auto")
             self.current_plot_metric = None
             self.update_plot_display()
@@ -804,7 +813,7 @@ class DynamicProgressDialog(QDialog, Styles):
         # Throttle Update (3 seconds) OR if explicit end
         current_time = time.time()
 
-        if epoch >= 1 and not self.user_interrupted:
+        if epoch > -1 and not self.user_interrupted:
             self.skip_btn.setEnabled(True)
 
         if (current_time - self.last_update_time > 3.0) or (epoch >= total_epochs):
@@ -822,7 +831,7 @@ class DynamicProgressDialog(QDialog, Styles):
         if getattr(self, "current_plot_metric", None) != target_metric:
             self.ax.clear()
             self.apply_plot_style()
-            self.ax.set_title(f"Training {self.current_model_name} - {target_metric}")
+            # self.ax.set_title(f"Training {self.current_model_name} - {target_metric}")
             self.ax.set_xlabel("Epoch")
             self.ax.set_ylabel(target_metric)
 
@@ -857,9 +866,18 @@ class DynamicProgressDialog(QDialog, Styles):
         self.ax.autoscale_view()
         self.canvas.draw()
 
+        if max(data["epochs"]) % 2:
+            QTimer.singleShot(
+                100, lambda: self.resize(self.width() + 1, self.height() + 1)
+            )
+        else:
+            QTimer.singleShot(
+                100, lambda: self.resize(self.width() - 1, self.height() - 1)
+            )
+
     def update_status(self, text):
         self.status_label.setText(text)
         if "Loading" in text and "librar" in text.lower():
             QTimer.singleShot(
-                1000, lambda: self.status_label.setText("Training model...")
+                100, lambda: self.status_label.setText("Training model...")
             )

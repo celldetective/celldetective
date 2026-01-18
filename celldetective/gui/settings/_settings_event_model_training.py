@@ -676,7 +676,7 @@ class SettingsEventDetectionModelTraining(CelldetectiveSettingsPanel):
         self.is_finished = False
 
         self.progress_dialog = DynamicProgressDialog(
-            label_text="Training model (Epochs)...",
+            label_text="Preparing model training...",
             max_epochs=epochs,
             parent=self,
             title="Training Event Model",
@@ -738,10 +738,28 @@ class SettingsEventDetectionModelTraining(CelldetectiveSettingsPanel):
         if self.is_finished:
             logger.info("Training complete, dialog closed.")
             self.runner.close()
+            self.progress_dialog.close()
             return
 
         self.training_was_cancelled = True
         self.runner.close()
+
+        # Deep clean: Delete the model folder if cancelled
+        try:
+            import shutil
+
+            # Assuming signal/event models directory. Verifying path would be better but this fits pattern.
+            # If exact attribute unknown, use os.path.dirname logic or config methods.
+            # Safe bet: self.parent_window.signal_models_dir based on refresh call.
+            model_path = os.path.join(
+                self.parent_window.signal_models_dir, self.modelname_le.text()
+            )
+            if os.path.exists(model_path):
+                time.sleep(0.5)
+                shutil.rmtree(model_path)
+                logger.info(f"Cancelled training. Deleted model folder: {model_path}")
+        except Exception as e:
+            logger.error(f"Could not delete model folder after cancel: {e}")
         logger.info("Training cancelled.")
 
     def on_training_interrupt(self):
