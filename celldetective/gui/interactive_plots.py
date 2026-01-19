@@ -685,14 +685,20 @@ class DynamicProgressDialog(QDialog, Styles):
         self.figure.tight_layout()
         if self.ax.get_yscale() == "linear":
             self.btn_log.setIcon(icon(MDI6.math_log, color="black"))
-            QTimer.singleShot(
-                100, lambda: self.resize(self.width() - 1, self.height() - 1)
-            )
+            try:
+                QTimer.singleShot(
+                    100, lambda: self.resize(self.width() - 1, self.height() - 1)
+                )
+            except:
+                pass
         else:
             self.btn_log.setIcon(icon(MDI6.math_log, color="white"))
-            QTimer.singleShot(
-                100, lambda: self.resize(self.width() + 1, self.height() + 1)
-            )
+            try:
+                QTimer.singleShot(
+                    100, lambda: self.resize(self.width() + 1, self.height() + 1)
+                )
+            except:
+                pass
 
     def auto_scale(self):
         target_metric = self.metric_combo.currentText()
@@ -867,17 +873,26 @@ class DynamicProgressDialog(QDialog, Styles):
         self.canvas.draw()
 
         if max(data["epochs"]) % 2:
-            QTimer.singleShot(
-                100, lambda: self.resize(self.width() + 1, self.height() + 1)
-            )
+            try:
+                QTimer.singleShot(
+                    100, lambda: self.resize(self.width() + 1, self.height() + 1)
+                )
+            except:
+                pass
         else:
-            QTimer.singleShot(
-                100, lambda: self.resize(self.width() - 1, self.height() - 1)
-            )
+            try:
+                QTimer.singleShot(
+                    100, lambda: self.resize(self.width() - 1, self.height() - 1)
+                )
+            except:
+                pass
 
     def update_status(self, text):
         self.status_label.setText(text)
         if "Loading" in text and "librar" in text.lower():
-            QTimer.singleShot(
-                100, lambda: self.status_label.setText("Training model...")
-            )
+            try:
+                QTimer.singleShot(
+                    100, lambda: self.status_label.setText("Training model...")
+                )
+            except:
+                pass

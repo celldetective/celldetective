@@ -217,7 +217,10 @@ class ProcessPanel(QFrame, Styles):
             self.parent_window.scroll.setMinimumHeight(
                 min(int(930), int(0.9 * self.parent_window.screen_height))
             )
-            QTimer.singleShot(10, lambda: center_window(self.window()))
+            try:
+                QTimer.singleShot(10, lambda: center_window(self.window()))
+            except:
+                pass
 
     def populate_contents(self):
         self.ContentsFrame = QFrame()
@@ -852,13 +855,16 @@ class ProcessPanel(QFrame, Styles):
                     try:
                         self.event_annotator.finalize_init()
                         self.event_annotator.show()
-                        QTimer.singleShot(
-                            100,
-                            lambda: self.event_annotator.resize(
-                                self.event_annotator.width() + 1,
-                                self.event_annotator.height() + 1,
-                            ),
-                        )
+                        try:
+                            QTimer.singleShot(
+                                100,
+                                lambda: self.event_annotator.resize(
+                                    self.event_annotator.width() + 1,
+                                    self.event_annotator.height() + 1,
+                                ),
+                            )
+                        except:
+                            pass
                     except Exception as e:
                         print(f"Error finalizing annotator: {e}")
                 else:
@@ -1760,7 +1766,9 @@ class NeighPanel(QFrame, Styles):
             self.parent_window.scroll.setMinimumHeight(
                 min(int(1000), int(0.9 * self.parent_window.screen_height))
             )
-            QTimer.singleShot(10, lambda: center_window(self.window()))
+            try:
+                QTimer.singleShot(10, lambda: center_window(self.window()))
+            except: pass
 
     def populate_contents(self):
 
@@ -2518,7 +2526,9 @@ class PreprocessingPanel(QFrame, Styles):
             self.parent_window.scroll.setMinimumHeight(
                 min(int(930), int(0.9 * self.parent_window.screen_height))
             )
-            QTimer.singleShot(10, lambda: center_window(self.window()))
+            try:
+                QTimer.singleShot(10, lambda: center_window(self.window()))
+            except: pass
 
     def populate_contents(self):
 
