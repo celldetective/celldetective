@@ -575,14 +575,18 @@ class SegmentationModelLoader(CelldetectiveWidget):
 
             self.thresh_wizard = ThresholdConfigWizard(self)
             self.thresh_wizard.show()
-            try:
-                QTimer.singleShot(
-                    100,
-                    lambda: self.thresh_wizard.resize(
+
+            def safe_resize():
+                try:
+                    self.thresh_wizard.resize(
                         self.thresh_wizard.width() + 1,
                         self.thresh_wizard.height() + 1,
-                    ),
-                )
+                    )
+                except RuntimeError:
+                    pass
+
+            try:
+                QTimer.singleShot(100, safe_resize)
                 center_window(self.thresh_wizard)
             except:
                 pass

@@ -356,12 +356,15 @@ class ControlPanel(CelldetectiveMainWindow):
             )
 
             def post_widget(widget):
-                widget.resize(widget.width() + 1, widget.height() + 1)
-                center_window(widget)
+                try:
+                    widget.resize(widget.width() + 1, widget.height() + 1)
+                    center_window(widget)
+                except RuntimeError:
+                    pass
 
             self.viewer.show()
             try:
-                QTimer.singleShot(100, lambda: post_widget(self.viewer))
+                QTimer.singleShot(10, lambda: post_widget(self.viewer))
             except Exception:
                 pass
 

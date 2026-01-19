@@ -75,7 +75,7 @@ def test_app(app, qtbot):
         ].seg_model_loader.threshold_config_button,
         QtCore.Qt.LeftButton,
     )
-    app.control_panel.ProcessPopulations[0].seg_model_loader.ThreshWizard.close()
+    app.control_panel.ProcessPopulations[0].seg_model_loader.thresh_wizard.close()
     app.control_panel.ProcessPopulations[0].seg_model_loader.close()
 
     # Check segmentation with napari
