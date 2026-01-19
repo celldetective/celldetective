@@ -1,15 +1,26 @@
 import numpy as np
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QDoubleValidator
-from PyQt5.QtWidgets import QVBoxLayout, QComboBox, QHBoxLayout, QLabel, QRadioButton, QButtonGroup, QPushButton, \
-    QMessageBox, QLineEdit
+from PyQt5.QtWidgets import (
+    QVBoxLayout,
+    QComboBox,
+    QHBoxLayout,
+    QLabel,
+    QRadioButton,
+    QButtonGroup,
+    QPushButton,
+    QMessageBox,
+    QLineEdit,
+)
 from superqt import QLabeledSlider
 
 from celldetective.gui.base.components import CelldetectiveWidget
 from celldetective.gui.base.utils import center_window
 from celldetective.gui.gui_utils import PandasModel, GenericOpColWidget
-from celldetective.gui.tableUI import logger
+from celldetective import get_logger
 from celldetective.utils.maths import differentiate_per_track, safe_log
+
+logger = get_logger(__name__)
 
 
 class DifferentiateColWidget(CelldetectiveWidget):
