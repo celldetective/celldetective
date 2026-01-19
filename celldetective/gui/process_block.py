@@ -1768,7 +1768,8 @@ class NeighPanel(QFrame, Styles):
             )
             try:
                 QTimer.singleShot(10, lambda: center_window(self.window()))
-            except: pass
+            except:
+                pass
 
     def populate_contents(self):
 
@@ -2526,9 +2527,17 @@ class PreprocessingPanel(QFrame, Styles):
             self.parent_window.scroll.setMinimumHeight(
                 min(int(930), int(0.9 * self.parent_window.screen_height))
             )
+
+            def safe_center():
+                try:
+                    center_window(self.window())
+                except RuntimeError:
+                    pass
+
             try:
-                QTimer.singleShot(10, lambda: center_window(self.window()))
-            except: pass
+                QTimer.singleShot(10, safe_center)
+            except:
+                pass
 
     def populate_contents(self):
 
