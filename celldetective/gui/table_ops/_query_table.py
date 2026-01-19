@@ -2,7 +2,6 @@ from PyQt5.QtWidgets import QHBoxLayout, QLineEdit, QPushButton
 
 from celldetective.gui.base.components import CelldetectiveWidget
 from celldetective.gui.base.utils import center_window
-from celldetective.gui.tableUI import TableUI
 
 
 class QueryWidget(CelldetectiveWidget):
@@ -26,6 +25,8 @@ class QueryWidget(CelldetectiveWidget):
         center_window(self)
 
     def filter_table(self):
+        from celldetective.gui.tableUI import TableUI
+
         try:
             query_text = self.query_le.text()  # .replace('class', '`class`')
             tab = self.parent_window.data.query(query_text)
