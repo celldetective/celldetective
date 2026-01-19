@@ -130,7 +130,7 @@ def test_new_project(app, qtbot):
         qtbot.mouseClick(app.control_panel.view_stack_btn, QtCore.Qt.LeftButton)
         qtbot.wait(interaction_time)
 
-        app.control_panel.viewer.channels_cb.setCurrentIndex(1)
+        app.control_panel.viewer.channel_cb.setCurrentIndex(1)
         qtbot.wait(interaction_time * 2)
 
         app.control_panel.viewer.contrast_slider.setValue([200, 300])

@@ -360,7 +360,10 @@ class ControlPanel(CelldetectiveMainWindow):
                 center_window(widget)
 
             self.viewer.show()
-            QTimer.singleShot(100, lambda: post_widget(self.viewer))
+            try:
+                QTimer.singleShot(100, lambda: post_widget(self.viewer))
+            except Exception:
+                pass
 
     def open_experiment_folder(self):
 

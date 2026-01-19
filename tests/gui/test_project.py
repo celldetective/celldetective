@@ -70,11 +70,13 @@ def test_app(app, qtbot):
     )
     qtbot.wait(1000)
     qtbot.mouseClick(
-        app.control_panel.ProcessPopulations[0].SegModelLoader.threshold_config_button,
+        app.control_panel.ProcessPopulations[
+            0
+        ].seg_model_loader.threshold_config_button,
         QtCore.Qt.LeftButton,
     )
-    app.control_panel.ProcessPopulations[0].SegModelLoader.ThreshWizard.close()
-    app.control_panel.ProcessPopulations[0].SegModelLoader.close()
+    app.control_panel.ProcessPopulations[0].seg_model_loader.ThreshWizard.close()
+    app.control_panel.ProcessPopulations[0].seg_model_loader.close()
 
     # Check segmentation with napari
     # qtbot.mouseClick(app.control_panel.ProcessEffectors.check_seg_btn, QtCore.Qt.LeftButton)
