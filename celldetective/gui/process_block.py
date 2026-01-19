@@ -2206,170 +2206,34 @@ class NeighPanel(QFrame, Styles):
             if returnValue == QMessageBox.No:
                 return None
 
-        for w_idx in self.well_index:
+        total_wells = len(self.well_index)
+        for i, w_idx in enumerate(self.well_index):
+
+            well_progress = round(i / total_wells * 100)
 
             pos = self.parent_window.positions[w_idx]
             pos_indices = self.parent_window.position_list.getSelectedIndices()
 
             well = self.parent_window.wells[w_idx]
 
-            # Optimization: Glob once per well
-            all_well_positions = natsorted(
-                glob(
-                    well
-                    + f"{os.path.split(well)[-1].replace('W','').replace(os.sep,'')}*{os.sep}"
-                )
-            )
+            total_positions = len(pos_indices)
 
-            for pos_idx in pos_indices:
-                if pos_idx < len(all_well_positions):
-                    self.pos = all_well_positions[pos_idx]
-                else:
-                    continue
-                self.pos_name = extract_position_name(self.pos)
-                logger.info(f"Position {self.pos}...\nLoading stack movie...")
+            # Optimization: Glob once per well - REMOVED as per user's instruction
+            # all_well_positions = natsorted(
+            #     glob(
+            #         well
+            #         + f"{os.path.split(well)[-1].replace('W','').replace(os.sep,'')}*{os.sep}"
+            #     )
+            # )
 
-                if not os.path.exists(self.pos + "output" + os.sep):
-                    os.mkdir(self.pos + "output" + os.sep)
-                if not os.path.exists(
-                    self.pos + os.sep.join(["output", "tables"]) + os.sep
-                ):
-                    os.mkdir(self.pos + os.sep.join(["output", "tables"]) + os.sep)
+            for j, pos_idx in enumerate(pos_indices):
 
-                if self.neigh_action.isChecked():
-                    for protocol in self.protocols:
+                pos_progress = round(j / total_positions * 100)
 
-                        process_args = {
-                            "pos": self.pos,
-                            "pos_name": self.pos_name,
-                            "protocol": protocol,
-                            "img_shape": (
-                                self.parent_window.shape_x,
-                                self.parent_window.shape_y,
-                            ),
-                            "log_file": getattr(
-                                self.parent_window.parent_window, "log_file", None
-                            ),
-                        }  # "n_threads": self.n_threads
-                        self.job = ProgressWindow(
-                            NeighborhoodProcess,
-                            parent_window=self,
-                            title="Neighborhood",
-                            process_args=process_args,
-                        )
-                        result = self.job.exec_()
-                        if result == QDialog.Accepted:
-                            pass
-                        elif result == QDialog.Rejected:
-                            return None
-
-                if self.measure_pairs_action.isChecked():
-                    rel_measure_at_position(self.pos)
-
-                if self.signal_analysis_action.isChecked():
-
-                    analyze_pair_signals_at_position(
-                        self.pos,
-                        self.pair_signal_models_list.currentText(),
-                        use_gpu=self.parent_window.parent_window.use_gpu,
-                        populations=self.parent_window.populations,
-                    )
-
-        self.parent_window.update_position_options()
-        for action in [
-            self.neigh_action,
-            self.measure_pairs_action,
-            self.signal_analysis_action,
-        ]:
-            if action.isChecked():
-                action.setChecked(False)
-
-        logger.info("Done.")
-        # 	self.well_index = np.linspace(0,len(self.wells)-1,len(self.wells),dtype=int)
-        # else:
-
-        self.well_index = self.parent_window.well_list.getSelectedIndices()
-        if len(self.well_index) == 0:
-            msgBox = QMessageBox()
-            msgBox.setIcon(QMessageBox.Warning)
-            msgBox.setText("Please select at least one well first...")
-            msgBox.setWindowTitle("Warning")
-            msgBox.setStandardButtons(QMessageBox.Ok)
-            returnValue = msgBox.exec()
-            if returnValue == QMessageBox.Ok:
-                return None
-            else:
-                return None
-
-        logger.info(f"Processing {self.parent_window.well_list.currentText()}...")
-
-        # self.freeze()
-        # QApplication.setOverrideCursor(Qt.WaitCursor)
-
-        idx = self.parent_window.populations.index(self.mode)
-        self.threshold_config = self.threshold_configs[idx]
-
-        self.load_available_tables()
-
-        if self.df is not None and self.segment_action.isChecked():
-            msgBox = QMessageBox()
-            msgBox.setIcon(QMessageBox.Question)
-            msgBox.setText(
-                "Measurement tables have been found... Re-segmenting may create mismatches between the cell labels and the associated measurements. Do you want to erase the tables post-segmentation?"
-            )
-            msgBox.setWindowTitle("Info")
-            msgBox.setStandardButtons(
-                QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel
-            )
-            returnValue = msgBox.exec()
-            if returnValue == QMessageBox.No:
-                pass
-            elif returnValue == QMessageBox.Cancel:
-                return None
-            else:
-                logger.info("erase tabs!")
-                tabs = [
-                    pos
-                    + os.sep.join(["output", "tables", f"trajectories_{self.mode}.csv"])
-                    for pos in self.df_pos_info["pos_path"].unique()
-                ]
-                # tabs += [pos+os.sep.join(['output', 'tables', f'trajectories_pairs.csv']) for pos in self.df_pos_info['pos_path'].unique()]
-                tabs += [
-                    pos
-                    + os.sep.join(
-                        ["output", "tables", f"napari_{self.mode}_trajectories.npy"]
-                    )
-                    for pos in self.df_pos_info["pos_path"].unique()
-                ]
-                for t in tabs:
-                    remove_file_if_exists(t.replace(".csv", ".pkl"))
-                    try:
-                        os.remove(t)
-                    except:
-                        pass
-        loop_iter = 0
-
-        if self.parent_window.position_list.isMultipleSelection():
-            msgBox = QMessageBox()
-            msgBox.setIcon(QMessageBox.Question)
-            msgBox.setText(
-                "If you continue, all positions will be processed.\nDo you want to proceed?"
-            )
-            msgBox.setWindowTitle("Info")
-            msgBox.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
-            returnValue = msgBox.exec()
-            if returnValue == QMessageBox.No:
-                return None
-
-        for w_idx in self.well_index:
-
-            pos = self.parent_window.positions[w_idx]
-            pos_indices = self.parent_window.position_list.getSelectedIndices()
-
-            well = self.parent_window.wells[w_idx]
-
-            for pos_idx in pos_indices:
-
+                # if pos_idx < len(all_well_positions): # REMOVED as per user's instruction
+                #     self.pos = all_well_positions[pos_idx] # REMOVED as per user's instruction
+                # else: # REMOVED as per user's instruction
+                #     continue # REMOVED as per user's instruction
                 self.pos = natsorted(
                     glob(
                         well
@@ -2397,6 +2261,12 @@ class NeighPanel(QFrame, Styles):
                                 self.parent_window.shape_x,
                                 self.parent_window.shape_y,
                             ),
+                            "log_file": getattr(
+                                self.parent_window.parent_window, "log_file", None
+                            ),
+                            "well_progress": well_progress,
+                            "pos_progress": pos_progress,
+                            "measure_pairs": self.measure_pairs_action.isChecked(),
                         }  # "n_threads": self.n_threads
                         self.job = ProgressWindow(
                             NeighborhoodProcess,
@@ -2410,7 +2280,10 @@ class NeighPanel(QFrame, Styles):
                         elif result == QDialog.Rejected:
                             return None
 
-                if self.measure_pairs_action.isChecked():
+                if (
+                    self.measure_pairs_action.isChecked()
+                    and not self.neigh_action.isChecked()
+                ):
                     rel_measure_at_position(self.pos)
 
                 if self.signal_analysis_action.isChecked():
@@ -2432,6 +2305,8 @@ class NeighPanel(QFrame, Styles):
                 action.setChecked(False)
 
         logger.info("Done.")
+        # 	self.well_index = np.linspace(0,len(self.wells)-1,len(self.wells),dtype=int)
+        # else:
 
     def check_signals2(self):
         from celldetective.gui.pair_event_annotator import PairEventAnnotator

@@ -22,6 +22,7 @@ from celldetective.neighborhood import (
 )
 from celldetective.utils.data_cleaning import extract_identity_col
 from scipy.spatial.distance import cdist
+from celldetective.relative_measurements import measure_pair_signals_at_position
 
 
 class NeighborhoodProcess(Process):
@@ -44,6 +45,13 @@ class NeighborhoodProcess(Process):
         }
 
         tprint("Neighborhood")
+
+        if not hasattr(self, "well_progress"):
+            self.well_progress = 0
+        if not hasattr(self, "pos_progress"):
+            self.pos_progress = 0
+        if not hasattr(self, "measure_pairs"):
+            self.measure_pairs = False
 
         self.sum_done = 0
         self.t0 = time.time()
@@ -185,7 +193,14 @@ class NeighborhoodProcess(Process):
                 pred_time = (
                     len(timeline) - (self.sum_done * len(timeline) / 100 + 1)
                 ) * mean_exec_per_step
-                self.queue.put([self.sum_done, pred_time])
+                self.queue.put(
+                    {
+                        "frame_progress": self.sum_done,
+                        "frame_time": f"Time left: {round(pred_time, 1)}s",
+                        "well_progress": self.well_progress,
+                        "pos_progress": self.pos_progress,
+                    }
+                )
 
         return setA, setB
 
@@ -309,8 +324,14 @@ class NeighborhoodProcess(Process):
                 pred_time = (
                     len(timeline) - (self.sum_done * len(timeline) / 100 + 1)
                 ) * mean_exec_per_step
-                print(f"{self.sum_done=} {pred_time=}")
-                self.queue.put([self.sum_done, pred_time])
+                self.queue.put(
+                    {
+                        "frame_progress": self.sum_done,
+                        "frame_time": f"Time left: {round(pred_time, 1)}s",
+                        "well_progress": self.well_progress,
+                        "pos_progress": self.pos_progress,
+                    }
+                )
 
         return setA, setB
 
@@ -721,6 +742,7 @@ class NeighborhoodProcess(Process):
             return df_A, df_B
 
     def run(self):
+        self.queue.put({"status": "Computing neighborhood..."})
         print(f"Launching the neighborhood computation...")
         if self.protocol["neighborhood_type"] == "distance_threshold":
             self.compute_neighborhood_at_position(
@@ -749,6 +771,76 @@ class NeighborhoodProcess(Process):
                 neighborhood_kwargs=self.protocol["neighborhood_kwargs"],
             )
             print(f"Computation done!")
+
+        if self.measure_pairs:
+            self.queue.put({"status": "Measuring pairs..."})
+            print(f"Measuring pairs...")
+
+            distances = self.protocol["distance"]
+            if not isinstance(distances, list):
+                distances = [distances]
+
+            for d in distances:
+                # Construct the protocol dictionary expected by measure_pair_signals_at_position
+                if self.protocol["population"][0] == self.protocol["population"][1]:
+                    mode = "self"
+                else:
+                    mode = "two-pop"
+
+                if self.protocol["neighborhood_type"] == "distance_threshold":
+                    neigh_type = "circle"
+                    if mode == "two-pop":
+                        neigh_col = f"neighborhood_2_circle_{d}_px"
+                    elif mode == "self":
+                        neigh_col = f"neighborhood_self_circle_{d}_px"
+                elif self.protocol["neighborhood_type"] == "mask_contact":
+                    neigh_type = "contact"
+                    if mode == "two-pop":
+                        neigh_col = f"neighborhood_2_contact_{d}_px"
+                    elif mode == "self":
+                        neigh_col = f"neighborhood_self_contact_{d}_px"
+
+                pair_protocol = {
+                    "reference": self.protocol["population"][0],
+                    "neighbor": self.protocol["population"][1],
+                    "type": neigh_type,
+                    "distance": d,
+                    "description": neigh_col,
+                }
+
+                print(f"Processing pairs for {neigh_col}...")
+                df_pairs = measure_pair_signals_at_position(self.pos, pair_protocol)
+
+                if df_pairs is not None:
+                    if "REFERENCE_ID" in list(df_pairs.columns):
+                        previous_pair_table_path = self.pos + os.sep.join(
+                            ["output", "tables", "trajectories_pairs.csv"]
+                        )
+
+                        if os.path.exists(previous_pair_table_path):
+                            df_prev = pd.read_csv(previous_pair_table_path)
+                            cols = [
+                                c
+                                for c in list(df_prev.columns)
+                                if c in list(df_pairs.columns)
+                            ]
+                            df_pairs = pd.merge(df_prev, df_pairs, how="outer", on=cols)
+
+                        try:
+                            df_pairs = df_pairs.sort_values(
+                                by=[
+                                    "reference_population",
+                                    "neighbor_population",
+                                    "REFERENCE_ID",
+                                    "NEIGHBOR_ID",
+                                    "FRAME",
+                                ]
+                            )
+                        except KeyError:
+                            pass
+
+                        df_pairs.to_csv(previous_pair_table_path, index=False)
+                        print(f"Pair measurements saved to {previous_pair_table_path}")
 
         # self.indices = list(range(self.img_num_channels.shape[1]))
         # chunks = np.array_split(self.indices, self.n_threads)
