@@ -25,7 +25,7 @@ from glob import glob
 from datetime import datetime
 from pandas.api.types import is_numeric_dtype
 from celldetective.gui.workers import Runner
-from celldetective.gui.interactive_plots import DynamicProgressDialog
+from celldetective.gui.dynamic_progress import DynamicProgressDialog
 from PyQt5.QtCore import QThreadPool
 from celldetective.gui.settings._settings_base import CelldetectiveSettingsPanel
 from celldetective.utils.data_loaders import load_experiment_tables

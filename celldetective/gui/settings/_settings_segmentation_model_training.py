@@ -16,7 +16,7 @@ from celldetective.gui.base.components import generic_message
 from celldetective.gui.base.channel_norm_generator import ChannelNormGenerator
 import multiprocessing
 from celldetective.gui.workers import Runner
-from celldetective.gui.interactive_plots import DynamicProgressDialog
+from celldetective.gui.dynamic_progress import DynamicProgressDialog
 from superqt import QLabeledDoubleSlider, QLabeledSlider
 from superqt.fonticon import icon
 from fonticon_mdi6 import MDI6

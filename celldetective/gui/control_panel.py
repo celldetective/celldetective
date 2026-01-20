@@ -1,4 +1,5 @@
 import time
+import traceback
 
 from PyQt5.QtWidgets import (
     QPushButton,
@@ -25,7 +26,9 @@ from celldetective.utils.parsing import (
     config_section_to_dict,
     _extract_labels_from_config,
 )
-from celldetective.gui.process_block import ProcessPanel, PreprocessingPanel, NeighPanel
+from celldetective.gui.process_block import ProcessPanel
+from celldetective.gui.preprocessing_block import PreprocessingPanel
+from celldetective.gui.interactions_block import NeighPanel
 from celldetective.gui.analyze_block import AnalysisPanel
 
 from celldetective.utils.experiment import (
@@ -180,11 +183,9 @@ class ControlPanel(CelldetectiveMainWindow):
 
         name = self.exp_dir.split(os.sep)[-2]
         experiment_label = QLabel(f"Experiment:")
-        experiment_label.setStyleSheet(
-            """
+        experiment_label.setStyleSheet("""
 			font-weight: bold;
-			"""
-        )
+			""")
 
         self.folder_exp_btn = QPushButton()
         self.folder_exp_btn.setIcon(icon(MDI6.folder, color="black"))
@@ -355,18 +356,15 @@ class ControlPanel(CelldetectiveMainWindow):
                 PxToUm=self.PxToUm,
             )
 
-            def post_widget(widget):
-                try:
-                    widget.resize(widget.width() + 1, widget.height() + 1)
-                    center_window(widget)
-                except RuntimeError:
-                    pass
+            # Not working for some reason
+            # def post_widget(widget):
+            #     try:
+            #         widget.resize(widget.width() + 1, widget.height() + 1)
+            #         center_window(widget)
+            #     except Exception as e:
+            #         traceback.print_exc()
 
             self.viewer.show()
-            try:
-                QTimer.singleShot(10, lambda: post_widget(self.viewer))
-            except Exception:
-                pass
 
     def open_experiment_folder(self):
 

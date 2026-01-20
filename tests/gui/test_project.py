@@ -1,5 +1,7 @@
 import pytest
 from PyQt5 import QtCore
+
+import celldetective.gui.preprocessing_block
 from celldetective.gui.InitWindow import AppInitWindow
 from celldetective import get_software_location
 import os
@@ -31,14 +33,16 @@ def test_preprocessing_panel(app, qtbot):
     qtbot.mouseClick(app.validate_button, QtCore.Qt.LeftButton)
 
     qtbot.mouseClick(
-        app.control_panel.PreprocessingPanel.collapse_btn, QtCore.Qt.LeftButton
-    )
-    qtbot.mouseClick(
-        app.control_panel.PreprocessingPanel.fit_correction_layout.add_correction_btn,
+        celldetective.gui.preprocessing_block.PreprocessingPanel.collapse_btn,
         QtCore.Qt.LeftButton,
     )
     qtbot.mouseClick(
-        app.control_panel.PreprocessingPanel.collapse_btn, QtCore.Qt.LeftButton
+        celldetective.gui.preprocessing_block.PreprocessingPanel.fit_correction_layout.add_correction_btn,
+        QtCore.Qt.LeftButton,
+    )
+    qtbot.mouseClick(
+        celldetective.gui.preprocessing_block.PreprocessingPanel.collapse_btn,
+        QtCore.Qt.LeftButton,
     )
 
 
