@@ -17,9 +17,9 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QBrush, QColor
 
 from celldetective.gui.gui_utils import (
-    FigureCanvas,
     PandasModel,
 )
+from celldetective.gui.base.figure_canvas import FigureCanvas
 from celldetective.gui.base.utils import center_window
 from celldetective.gui.table_ops._maths import DifferentiateColWidget, OperationOnColsWidget, CalibrateColWidget, \
     AbsColWidget, LogColWidget

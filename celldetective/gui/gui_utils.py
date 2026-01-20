@@ -4,7 +4,6 @@ from PyQt5.QtWidgets import (
     QGridLayout,
     QMessageBox,
     QLineEdit,
-    QListWidget,
     QVBoxLayout,
     QComboBox,
     QPushButton,
@@ -16,6 +15,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QSize, QAbstractTableModel
 from PyQt5.QtGui import QDoubleValidator, QIntValidator
 
+from celldetective.gui.base.list_widget import ListWidget
 from celldetective.gui.base.styles import Styles
 from celldetective.gui.base.components import CelldetectiveWidget
 from superqt.fonticon import icon
@@ -25,8 +25,6 @@ from fonticon_mdi6 import MDI6
 from celldetective.gui.base.utils import center_window
 from celldetective import get_software_location
 
-
-from inspect import getmembers, isfunction
 from celldetective.filters import *
 from os import sep
 import json
@@ -388,71 +386,6 @@ class ExportPlotBtn(QPushButton, Styles):
             self.fig.savefig(fileName, bbox_inches="tight", dpi=300)
 
 
-class FeatureChoice(CelldetectiveWidget):
-
-    def __init__(self, parent_window):
-        super().__init__()
-        self.parent_window = parent_window
-        self.setWindowTitle("Add feature")
-        # Create the QComboBox and add some items
-        self.combo_box = QComboBox(self)
-
-        standard_measurements = [
-            "area",
-            "area_bbox",
-            "area_convex",
-            "area_filled",
-            "major_axis_length",
-            "minor_axis_length",
-            "eccentricity",
-            "equivalent_diameter_area",
-            "euler_number",
-            "extent",
-            "feret_diameter_max",
-            "orientation",
-            "perimeter",
-            "perimeter_crofton",
-            "solidity",
-            "intensity_mean",
-            "intensity_max",
-            "intensity_min",
-        ]
-
-        try:
-            import celldetective.extra_properties as extra_properties
-
-            extra_props = True
-        except Exception as e:
-            print(f"The module extra_properties seems corrupted: {e}... Skip...")
-            extra_props = False
-
-        if extra_props:
-            members = getmembers(extra_properties, isfunction)
-            for o in members:
-                if (
-                    isfunction(o[1])
-                    and o[1].__module__ == "celldetective.extra_properties"
-                ):
-                    standard_measurements.append(o[0])
-
-        self.combo_box.addItems(standard_measurements)
-
-        self.add_btn = QPushButton("Add")
-        self.add_btn.setStyleSheet(self.button_style_sheet)
-        self.add_btn.clicked.connect(self.add_current_feature)
-
-        # Create the layout
-        layout = QVBoxLayout(self)
-        layout.addWidget(self.combo_box)
-        layout.addWidget(self.add_btn)
-        center_window(self)
-
-    def add_current_feature(self):
-        filtername = self.combo_box.currentText()
-        self.parent_window.list_widget.addItems([filtername])
-        self.close()
-
-
 class FilterChoice(CelldetectiveWidget):
 
     def __init__(self, parent_window):
@@ -700,177 +633,6 @@ class DistanceChoice(CelldetectiveWidget):
         values = [value]
         self.parent_window.list_widget.addItems(values)
         self.close()
-
-
-class ListWidget(CelldetectiveWidget):
-    """
-    A customizable widget for displaying and managing a list of items, with the
-    ability to add and remove items interactively.
-
-    This widget is built around a `QListWidget` and allows for initialization with
-    a set of features. It also provides options to retrieve the items, add new items
-    using a custom widget, and remove selected items. The items can be parsed and
-    returned as a list, with support for various data types and formatted input (e.g.,
-    ranges specified with a dash).
-
-    Parameters
-    ----------
-    choiceWidget : QWidget
-            A custom widget that is used to add new items to the list.
-    initial_features : list
-            A list of initial items to populate the list widget.
-    dtype : type, optional
-            The data type to cast the list items to. Default is `str`.
-
-    Attributes
-    ----------
-    initial_features : list
-            The initial set of features or items displayed in the list.
-    choiceWidget : QWidget
-            The widget used to prompt the user to add new items.
-    dtype : type
-            The data type to convert items into when retrieved from the list.
-    items : list
-            A list to store the current items in the list widget.
-    list_widget : QListWidget
-            The core Qt widget that displays the list of items.
-
-    Methods
-    -------
-    addItem()
-            Opens a new window to add an item to the list using the custom `choiceWidget`.
-    getItems()
-            Retrieves the items from the list widget, parsing ranges (e.g., 'min-max')
-            into two values, and converts them to the specified `dtype`.
-    removeSel()
-            Removes the currently selected item(s) from the list widget and updates the
-            internal `items` list accordingly.
-    """
-
-    def __init__(self, choiceWidget, initial_features, dtype=str, *args, **kwargs):
-
-        super().__init__()
-        self.initial_features = initial_features
-        self.choiceWidget = choiceWidget
-        self.dtype = dtype
-        self.items = []
-
-        self.setFixedHeight(80)
-
-        # Initialize list widget
-        self.list_widget = QListWidget()
-        self.list_widget.addItems(initial_features)
-
-        # Set up layout
-        main_layout = QVBoxLayout()
-        main_layout.addWidget(self.list_widget)
-        self.setLayout(main_layout)
-        center_window(self)
-
-    def addItem(self):
-        """
-        Opens the custom choiceWidget to add a new item to the list.
-        """
-
-        self.addItemWindow = self.choiceWidget(self)
-        self.addItemWindow.show()
-
-    def addItemToList(self, item):
-        self.list_widget.addItems([item])
-
-    def getItems(self):
-        """
-        Retrieves and returns the items from the list widget.
-
-        This method parses any items that contain a range (formatted as 'min-max')
-        into a list of two values, and casts all items to the specified `dtype`.
-
-        Returns
-        -------
-        list
-                A list of the items in the list widget, with ranges split into two values.
-        """
-
-        items = []
-        for x in range(self.list_widget.count()):
-            if len(self.list_widget.item(x).text().split("-")) == 2:
-                if self.list_widget.item(x).text()[0] == "-":
-                    items.append(self.dtype(self.list_widget.item(x).text()))
-                else:
-                    minn, maxx = self.list_widget.item(x).text().split("-")
-                    to_add = [self.dtype(minn), self.dtype(maxx)]
-                    items.append(to_add)
-            else:
-                items.append(self.dtype(self.list_widget.item(x).text()))
-        return items
-
-    def clear(self):
-        self.items = []
-        self.list_widget.clear()
-
-    def removeSel(self):
-        """
-        Removes the selected item(s) from the list widget.
-
-        If there are any selected items, they are removed both from the visual list
-        and the internal `items` list that tracks the current state of the widget.
-        """
-
-        listItems = self.list_widget.selectedItems()
-        if not listItems:
-            return
-        for item in listItems:
-            idx = self.list_widget.row(item)
-            self.list_widget.takeItem(idx)
-            if self.items:
-                del self.items[idx]
-
-
-class FigureCanvas(CelldetectiveWidget):
-    """
-    Generic figure canvas.
-    """
-
-    def __init__(self, fig, title="", interactive=True):
-        super().__init__()
-        self.fig = fig
-        self.setWindowTitle(title)
-        from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
-
-        self.canvas = FigureCanvasQTAgg(self.fig)
-        self.canvas.setStyleSheet("background-color: transparent;")
-        if interactive:
-            from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT
-
-            self.toolbar = NavigationToolbar2QT(self.canvas)
-        self.layout = QVBoxLayout(self)
-        self.layout.addWidget(self.canvas, 90)
-        if interactive:
-            self.layout.addWidget(self.toolbar)
-
-        center_window(self)
-        self.setAttribute(Qt.WA_DeleteOnClose)
-
-    def resizeEvent(self, event):
-
-        super().resizeEvent(event)
-        try:
-            self.fig.tight_layout()
-        except:
-            pass
-
-    def draw(self):
-        self.canvas.draw()
-
-    def closeEvent(self, event):
-        """Delete figure on closing window."""
-        # self.canvas.ax.cla() # ****
-        # self.canvas.ax.cla() # ****
-        self.fig.clf()  # ****
-        import matplotlib.pyplot as plt
-
-        plt.close(self.fig)
-        super(FigureCanvas, self).closeEvent(event)
 
 
 class ThresholdLineEdit(QLineEdit):

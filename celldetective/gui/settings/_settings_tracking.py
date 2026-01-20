@@ -23,11 +23,11 @@ from matplotlib import pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 from celldetective.gui.gui_utils import (
-    ListWidget,
     help_generic,
-    FeatureChoice,
-    FigureCanvas,
 )
+from celldetective.gui.base.figure_canvas import FigureCanvas
+from celldetective.gui.base.list_widget import ListWidget
+from celldetective.gui.base.feature_choice import FeatureChoice
 from celldetective.gui.base.components import QHSeperationLine
 from superqt import QLabeledDoubleSlider, QLabeledSlider
 from superqt.fonticon import icon
@@ -79,7 +79,7 @@ class SettingsTracking(CelldetectiveSettingsPanel):
 
         self._widget.setMinimumWidth(500)
         self._adjust_size()
-        self.resize(int(self.width() * 1.5), int(self._screen_height * 0.8))
+        self.resize(int(self.width() * 1.1), int(self._screen_height * 0.8))
 
     def _add_to_layout(self):
 

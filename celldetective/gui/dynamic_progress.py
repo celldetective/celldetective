@@ -8,7 +8,7 @@ from matplotlib.figure import Figure
 from superqt.fonticon import icon
 
 from celldetective.gui.base.styles import Styles
-from celldetective.gui.gui_utils import FigureCanvas
+from celldetective.gui.base.figure_canvas import FigureCanvas
 from celldetective import get_logger
 
 logger = get_logger(__name__)

@@ -519,7 +519,7 @@ class StackVisualizer(CelldetectiveWidget):
             p99 = 1
 
         import matplotlib.pyplot as plt
-        from celldetective.gui.gui_utils import FigureCanvas
+        from celldetective.gui.base.figure_canvas import FigureCanvas
 
         self.fig, self.ax = plt.subplots(figsize=(5, 5))
 

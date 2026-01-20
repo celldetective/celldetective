@@ -15,11 +15,11 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QSize
 
 from celldetective.gui.gui_utils import (
-    FeatureChoice,
-    ListWidget,
     GeometryChoice,
     OperationChoice,
 )
+from celldetective.gui.base.list_widget import ListWidget
+from celldetective.gui.base.feature_choice import FeatureChoice
 from celldetective.gui.base.components import QHSeperationLine
 from superqt import QLabeledDoubleSlider
 from superqt.fonticon import icon
@@ -52,11 +52,6 @@ class SettingsMeasurements(CelldetectiveSettingsPanel):
 
     """
 
-    iso_lbl: QLabel = QLabel("Position-based measurements".upper())
-    feature_lbl: QLabel = QLabel("Mask-based measurements".upper())
-    radii_lbl: QLabel = QLabel("Measurement radii (from center):")
-    op_lbl: QLabel = QLabel("Operation to perform:")
-
     def __init__(self, parent_window=None):
 
         self.parent_window = parent_window
@@ -88,6 +83,11 @@ class SettingsMeasurements(CelldetectiveSettingsPanel):
 
         """
         super()._create_widgets()
+
+        self.iso_lbl: QLabel = QLabel("Position-based measurements".upper())
+        self.feature_lbl: QLabel = QLabel("Mask-based measurements".upper())
+        self.radii_lbl: QLabel = QLabel("Measurement radii (from center):")
+        self.op_lbl: QLabel = QLabel("Operation to perform:")
 
         self.normalisation_frame = QFrame()
         self.normalisation_frame.setFrameStyle(QFrame.StyledPanel | QFrame.Raised)
@@ -809,7 +809,7 @@ class SettingsMeasurements(CelldetectiveSettingsPanel):
         if self.test_frame is not None:
             import matplotlib.pyplot as plt
             from mpl_toolkits.axes_grid1 import make_axes_locatable
-            from celldetective.gui.gui_utils import FigureCanvas
+            from celldetective.gui.base.figure_canvas import FigureCanvas
             from celldetective.measure import compute_haralick_features
 
             digitized_img = compute_haralick_features(
@@ -848,7 +848,7 @@ class SettingsMeasurements(CelldetectiveSettingsPanel):
         self.extract_haralick_options()
         if self.test_frame is not None:
             import matplotlib.pyplot as plt
-            from celldetective.gui.gui_utils import FigureCanvas
+            from celldetective.gui.base.figure_canvas import FigureCanvas
             from celldetective.measure import compute_haralick_features
 
             norm_img = compute_haralick_features(

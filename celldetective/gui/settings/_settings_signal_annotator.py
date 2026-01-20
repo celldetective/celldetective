@@ -57,7 +57,7 @@ class SettingsSignalAnnotator(CelldetectiveSettingsPanel):
         self._load_previous_instructions()
 
         self._adjust_size()
-        self.resize(int(self.width()), int(self._screen_height * 0.55))
+        self.resize(int(self.width() * 1.4), int(self._screen_height * 0.65))
 
     def _add_to_layout(self):
 

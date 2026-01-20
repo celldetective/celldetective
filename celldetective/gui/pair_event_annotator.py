@@ -36,10 +36,10 @@ from celldetective.utils.image_loaders import (
     _get_img_num_per_channel,
 )
 from celldetective.gui.gui_utils import (
-    FigureCanvas,
     color_from_status,
     color_from_class,
 )
+from celldetective.gui.base.figure_canvas import FigureCanvas
 import json
 import numpy as np
 from superqt.fonticon import icon

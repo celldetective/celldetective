@@ -15,8 +15,6 @@ from superqt.fonticon import icon
 from fonticon_mdi6 import MDI6
 import gc
 
-import celldetective.gui.interactions_block
-import celldetective.gui.preprocessing_block
 from celldetective.utils.model_getters import (
     get_signal_models_list,
     get_segmentation_models_list,
@@ -133,10 +131,12 @@ class ProcessPanel(QFrame, Styles):
         """
 
         panel_title = QLabel(f"PROCESS {self.mode.upper()}   ")
-        panel_title.setStyleSheet("""
+        panel_title.setStyleSheet(
+            """
 			font-weight: bold;
 			padding: 0px;
-			""")
+			"""
+        )
 
         title_hbox = QHBoxLayout()
         self.grid.addWidget(panel_title, 0, 0, 1, 4, alignment=Qt.AlignCenter)
@@ -185,11 +185,9 @@ class ProcessPanel(QFrame, Styles):
             not p.ContentsFrame.isHidden()
             for p in self.parent_window.ProcessPopulations
         ]
-        interactions_open = (
-            not celldetective.gui.interactions_block.NeighPanel.ContentsFrame.isHidden()
-        )
+        interactions_open = not self.parent_window.NeighPanel.ContentsFrame.isHidden()
         preprocessing_open = (
-            not celldetective.gui.preprocessing_block.PreprocessingPanel.ContentsFrame.isHidden()
+            not self.parent_window.PreprocessingPanel.ContentsFrame.isHidden()
         )
         is_open = np.array(panels_open + [interactions_open, preprocessing_open])
 
@@ -1010,6 +1008,12 @@ class ProcessPanel(QFrame, Styles):
 
         self.settings_signal_annotator = SettingsSignalAnnotator(self)
         self.settings_signal_annotator.show()
+        try:
+            QTimer.singleShot(
+                100, lambda: center_window(self.settings_signal_annotator)
+            )
+        except Exception as _:
+            pass
 
     def reset_generalist_setup(self, index):
         self.cellpose_calibrated = False

@@ -40,11 +40,11 @@ from celldetective.utils.experiment import (
     get_experiment_labels,
 )
 from celldetective.gui.gui_utils import (
-    FigureCanvas,
     color_from_status,
     color_from_class,
     ExportPlotBtn,
 )
+from celldetective.gui.base.figure_canvas import FigureCanvas
 from celldetective.gui.base.utils import center_window
 import gc
 

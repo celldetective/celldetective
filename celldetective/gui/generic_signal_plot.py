@@ -13,7 +13,8 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QSize
 from PyQt5.QtGui import QDoubleValidator
 
-from celldetective.gui.gui_utils import FigureCanvas, ExportPlotBtn, QuickSliderLayout
+from celldetective.gui.gui_utils import ExportPlotBtn, QuickSliderLayout
+from celldetective.gui.base.figure_canvas import FigureCanvas
 from celldetective.gui.base.utils import center_window
 from celldetective.gui.tableUI import TableUI
 from celldetective.utils.experiment import collect_experiment_metadata

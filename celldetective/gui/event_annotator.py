@@ -28,10 +28,10 @@ from celldetective.utils.experiment import (
     get_experiment_labels,
 )
 from celldetective.gui.gui_utils import (
-    FigureCanvas,
     color_from_status,
     color_from_class,
 )
+from celldetective.gui.base.figure_canvas import FigureCanvas
 import numpy as np
 from superqt.fonticon import icon
 from fonticon_mdi6 import MDI6

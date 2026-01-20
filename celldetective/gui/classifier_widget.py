@@ -21,7 +21,8 @@ import matplotlib.pyplot as plt
 import json
 
 from celldetective.exceptions import EmptyQueryError, MissingColumnsError, QueryError
-from celldetective.gui.gui_utils import FigureCanvas, color_from_status, help_generic
+from celldetective.gui.gui_utils import color_from_status, help_generic
+from celldetective.gui.base.figure_canvas import FigureCanvas
 from celldetective.gui.base.components import CelldetectiveWidget
 from celldetective import get_software_location
 from celldetective.measure import (

@@ -17,7 +17,6 @@ from PyQt5.QtWidgets import (
 from fonticon_mdi6 import MDI6
 from superqt.fonticon import icon
 
-import celldetective.gui
 from celldetective import get_software_location
 from celldetective.gui.base.styles import Styles
 from celldetective.gui.base.utils import center_window
@@ -62,10 +61,12 @@ class PreprocessingPanel(QFrame, Styles):
         """
 
         panel_title = QLabel(f"PREPROCESSING")
-        panel_title.setStyleSheet("""
+        panel_title.setStyleSheet(
+            """
 			font-weight: bold;
 			padding: 0px;
-			""")
+			"""
+        )
 
         self.grid.addWidget(panel_title, 0, 0, 1, 4, alignment=Qt.AlignCenter)
 
@@ -99,9 +100,7 @@ class PreprocessingPanel(QFrame, Styles):
             not p.ContentsFrame.isHidden()
             for p in self.parent_window.ProcessPopulations
         ]
-        interactions_open = (
-            not celldetective.gui.interactions_block.NeighPanel.ContentsFrame.isHidden()
-        )
+        interactions_open = not self.parent_window.NeighPanel.ContentsFrame.isHidden()
         preprocessing_open = (
             not self.parent_window.PreprocessingPanel.ContentsFrame.isHidden()
         )
@@ -161,10 +160,12 @@ class PreprocessingPanel(QFrame, Styles):
         self.channel_offset_correction_layout = QVBoxLayout()
 
         self.channel_shift_lbl = QLabel("CHANNEL OFFSET CORRECTION")
-        self.channel_shift_lbl.setStyleSheet("""
+        self.channel_shift_lbl.setStyleSheet(
+            """
 			font-weight: bold;
 			padding: 0px;
-			""")
+			"""
+        )
         self.channel_offset_correction_layout.addWidget(
             self.channel_shift_lbl, alignment=Qt.AlignCenter
         )

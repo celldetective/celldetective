@@ -91,7 +91,7 @@ class NeighPanel(QFrame, Styles):
         ]
         interactions_open = not self.parent_window.NeighPanel.ContentsFrame.isHidden()
         preprocessing_open = (
-            not celldetective.gui.preprocessing_block.PreprocessingPanel.ContentsFrame.isHidden()
+            not self.parent_window.PreprocessingPanel.ContentsFrame.isHidden()
         )
         is_open = np.array(panels_open + [interactions_open, preprocessing_open])
 
