@@ -113,7 +113,7 @@ def test_app(app, qtbot):
         app.control_panel.ProcessPopulations[0].classify_btn, QtCore.Qt.LeftButton
     )
     qtbot.wait(1000)
-    app.control_panel.ProcessPopulations[0].ClassifierWidget.close()
+    app.control_panel.ProcessPopulations[0].classifier_widget.close()
 
     # Config signal annotator
     qtbot.mouseClick(
