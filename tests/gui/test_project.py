@@ -33,15 +33,15 @@ def test_preprocessing_panel(app, qtbot):
     qtbot.mouseClick(app.validate_button, QtCore.Qt.LeftButton)
 
     qtbot.mouseClick(
-        celldetective.gui.preprocessing_block.PreprocessingPanel.collapse_btn,
+        app.control_panel.PreprocessingPanel.collapse_btn,
         QtCore.Qt.LeftButton,
     )
     qtbot.mouseClick(
-        celldetective.gui.preprocessing_block.PreprocessingPanel.fit_correction_layout.add_correction_btn,
+        app.control_panel.PreprocessingPanel.fit_correction_layout.add_correction_btn,
         QtCore.Qt.LeftButton,
     )
     qtbot.mouseClick(
-        celldetective.gui.preprocessing_block.PreprocessingPanel.collapse_btn,
+        app.control_panel.PreprocessingPanel.collapse_btn,
         QtCore.Qt.LeftButton,
     )
 
