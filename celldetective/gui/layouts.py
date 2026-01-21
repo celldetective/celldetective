@@ -394,7 +394,7 @@ class LocalCorrectionLayout(BackgroundFitCorrectionLayout):
         self.corrected_stack_viewer.hide()
 
     def set_distance_graphically(self):
-        from celldetective.gui.viewers import CellEdgeVisualizer
+        from celldetective.gui.viewers.contour_viewer import CellEdgeVisualizer
 
         self.attr_parent.locate_image()
         self.set_target_channel()

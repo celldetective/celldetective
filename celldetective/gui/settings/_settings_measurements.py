@@ -12,8 +12,9 @@ from PyQt5.QtWidgets import (
     QHBoxLayout,
     QPushButton,
 )
-from PyQt5.QtCore import Qt, QSize
+from PyQt5.QtCore import Qt, QSize, QTimer
 
+from celldetective.gui.base.utils import center_window
 from celldetective.gui.gui_utils import (
     GeometryChoice,
     OperationChoice,
@@ -837,6 +838,7 @@ class SettingsMeasurements(CelldetectiveSettingsPanel):
             self.imshow_digit_window.canvas.draw()
             self.imshow_digit_window.show()
 
+
     def control_haralick_intensity_histogram(self):
         """
         Load an image for the first experiment movie found.
@@ -875,6 +877,11 @@ class SettingsMeasurements(CelldetectiveSettingsPanel):
             self.hist_window.canvas.draw()
             self.hist_window.show()
 
+            try:
+                QTimer.singleShot(100, lambda: center_window(self.hist_window))
+            except Exception as e:
+                pass
+
     def view_selected_contour(self):
         """
         Show the ROI for the selected contour measurement on experimental data.
@@ -884,7 +891,7 @@ class SettingsMeasurements(CelldetectiveSettingsPanel):
 
         if self.current_stack is not None:
 
-            from celldetective.gui.viewers import CellEdgeVisualizer
+            from celldetective.gui.viewers.contour_viewer import CellEdgeVisualizer
 
             self.viewer = CellEdgeVisualizer(
                 cell_type=self.mode,

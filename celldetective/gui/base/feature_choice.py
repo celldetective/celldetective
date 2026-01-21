@@ -1,7 +1,10 @@
-from inspect import getmembers, isfunction
 import ast
 import os
 from celldetective import get_software_location
+from PyQt5.QtWidgets import QComboBox, QPushButton, QVBoxLayout
+
+from celldetective.gui.base.components import CelldetectiveWidget
+from celldetective.gui.base.utils import center_window
 
 CACHED_EXTRA_PROPERTIES = None
 
@@ -32,12 +35,6 @@ def get_extra_properties_functions():
     except Exception as e:
         print(f"Failed to parse extra_properties.py: {e}")
         return []
-
-
-from PyQt5.QtWidgets import QComboBox, QPushButton, QVBoxLayout
-
-from celldetective.gui.base.components import CelldetectiveWidget
-from celldetective.gui.base.utils import center_window
 
 
 class FeatureChoice(CelldetectiveWidget):

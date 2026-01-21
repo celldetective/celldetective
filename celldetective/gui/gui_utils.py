@@ -537,7 +537,7 @@ class OperationChoice(CelldetectiveWidget):
         self.close()
 
 
-class GeometryChoice(CelldetectiveWidget):
+class GeometryChoice(CelldetectiveWidget, Styles):
 
     def __init__(self, parent_window):
 
@@ -560,6 +560,7 @@ class GeometryChoice(CelldetectiveWidget):
 
         self.add_btn = QPushButton("Add")
         self.add_btn.clicked.connect(self.add_current_feature)
+        self.add_btn.setStyleSheet(self.button_style_sheet)
 
         # Create the layout
         layout = QVBoxLayout(self)

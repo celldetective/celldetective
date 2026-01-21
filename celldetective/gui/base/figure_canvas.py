@@ -27,7 +27,7 @@ class FigureCanvas(CelldetectiveWidget):
         if interactive:
             self.layout.addWidget(self.toolbar)
 
-        center_window(self)
+        #center_window(self)
         self.setAttribute(Qt.WA_DeleteOnClose)
 
     def resizeEvent(self, event):

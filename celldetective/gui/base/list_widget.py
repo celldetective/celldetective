@@ -1,3 +1,4 @@
+from PyQt5.QtCore import QTimer
 from PyQt5.QtWidgets import QListWidget, QVBoxLayout
 
 from celldetective.gui.base.components import CelldetectiveWidget
@@ -76,6 +77,10 @@ class ListWidget(CelldetectiveWidget):
 
         self.addItemWindow = self.choiceWidget(self)
         self.addItemWindow.show()
+        try:
+            QTimer.singleShot(10, lambda: center_window(self.addItemWindow))
+        except Exception as e:
+            pass
 
     def addItemToList(self, item):
         self.list_widget.addItems([item])
