@@ -16,6 +16,7 @@ from PyQt5.QtWidgets import (
     QGridLayout,
     QDialog,
 )
+from multiprocessing import Queue
 from tifffile import imread
 
 from celldetective.gui.gui_utils import ThresholdLineEdit, QuickSliderLayout
@@ -39,6 +40,11 @@ from celldetective.gui.base.components import (
     CelldetectiveProgressDialog,
 )
 from celldetective import get_logger
+from celldetective.gui.viewers.base_viewer import StackVisualizer
+from celldetective.utils.image_loaders import auto_load_number_of_frames
+import numpy as np
+from celldetective.preprocessing import correct_background_model
+import os
 
 logger = get_logger()
 
@@ -104,7 +110,46 @@ class BackgroundEstimatorThread(QThread):
             self.finished_with_result.emit(None)
 
 
-import os
+class PreviewWorker(QThread):
+    finished = pyqtSignal()
+    result_ready = pyqtSignal(object)
+    error = pyqtSignal(str)
+
+    def __init__(self, process_class, process_args):
+        super().__init__()
+        # process_class is unused now as we call function directly
+        self.process_args = process_args
+
+    def run(self):
+        try:
+            result = correct_background_model(
+                experiment=self.process_args["exp_dir"],
+                well_option=self.process_args["well_option"],
+                position_option=self.process_args["position_option"],
+                target_channel=self.process_args["target_channel"],
+                model=self.process_args["model"],
+                threshold_on_std=self.process_args["threshold_on_std"],
+                operation=self.process_args["operation"],
+                clip=self.process_args["clip"],
+                export=False,
+                return_stacks=True,
+                activation_protocol=self.process_args["activation_protocol"],
+                downsample=self.process_args["downsample"],
+                subset_indices=self.process_args["subset_indices"],
+                show_progress_per_well=False,
+                show_progress_per_pos=False,
+            )
+
+            if result is not None and len(result) > 0:
+                self.result_ready.emit(result[0])
+
+        except Exception as e:
+            self.error.emit(str(e))
+
+        self.finished.emit()
+
+    def stop(self):
+        self.quit()
 
 
 class BackgroundFitCorrectionLayout(QGridLayout, Styles):
@@ -262,7 +307,9 @@ class BackgroundFitCorrectionLayout(QGridLayout, Styles):
         self.target_channel = channel_indices[0]
 
     def set_threshold_graphically(self):
-        from celldetective.gui.viewers.threshold_viewer import ThresholdedStackVisualizer
+        from celldetective.gui.viewers.threshold_viewer import (
+            ThresholdedStackVisualizer,
+        )
 
         self.attr_parent.locate_image()
         self.set_target_channel()
@@ -281,7 +328,6 @@ class BackgroundFitCorrectionLayout(QGridLayout, Styles):
             self.viewer.show()
 
     def preview_correction(self):
-        from celldetective.gui.viewers.base_viewer import StackVisualizer
 
         if (
             self.attr_parent.well_list.isMultipleSelection()
@@ -312,6 +358,21 @@ class BackgroundFitCorrectionLayout(QGridLayout, Styles):
         else:
             clip = False
 
+        self.attr_parent.locate_image()
+        self.set_target_channel()
+
+        subset_indices = None
+        if (
+            hasattr(self.attr_parent, "current_stack")
+            and self.attr_parent.current_stack is not None
+        ):
+
+            n_frames = auto_load_number_of_frames(self.attr_parent.current_stack)
+            if n_frames is not None:
+                midpoint = int(n_frames // 2)
+                n_channels = len(self.attr_parent.exp_channels)
+                subset_indices = [midpoint * n_channels]
+
         process_args = {
             "exp_dir": self.attr_parent.exp_dir,
             "well_option": self.attr_parent.well_list.getSelectedIndices(),
@@ -323,38 +384,75 @@ class BackgroundFitCorrectionLayout(QGridLayout, Styles):
             "clip": clip,
             "activation_protocol": [["gauss", 2], ["std", 4]],
             "downsample": int(self.downsample_le.text()),
+            "subset_indices": subset_indices,
         }
-        from celldetective.gui.workers import ProgressWindow
 
-        self.job = ProgressWindow(
-            BackgroundCorrectionProcess,
-            parent_window=None,
-            title="Background Correction",
-            position_info=False,
-            process_args=process_args,
+        self.bg_progress = CelldetectiveProgressDialog(
+            "Correcting background (Preview)...",
+            "Cancel",
+            0,
+            0,
+            None,
+            window_title="Processing",
         )
-        result = self.job.exec_()
+        self.bg_progress.setRange(0, 0)
 
-        if result == QDialog.Accepted:
-            temp_path = os.path.join(
-                self.attr_parent.exp_dir, "temp_corrected_stack.tif"
-            )
-            if os.path.exists(temp_path):
-                corrected_stack = imread(temp_path)
-                os.remove(temp_path)
+        self.preview_worker = PreviewWorker(
+            BackgroundCorrectionProcess, process_args=process_args
+        )
+
+        def on_result(corrected_stack):
+
+            if corrected_stack is not None:
+                if subset_indices is not None and len(self.channel_names) > 0:
+                    # Logic to extract the specific channel
+                    if corrected_stack.ndim == 3 and corrected_stack.shape[0] == len(
+                        self.channel_names
+                    ):
+                        # Shape likely (C, Y, X)
+                        corrected_stack = corrected_stack[
+                            self.channels_cb.currentIndex()
+                        ]
+                    elif corrected_stack.ndim == 4 and corrected_stack.shape[-1] == len(
+                        self.channel_names
+                    ):
+                        # Shape likely (T, Y, X, C)
+                        corrected_stack = corrected_stack[
+                            ..., self.channels_cb.currentIndex()
+                        ]
+
+                    # Ensure (T=1, Y, X, C=1) for display or similar that StackVisualizer likes for single channel
+                    if corrected_stack.ndim == 2:
+                        corrected_stack = corrected_stack[np.newaxis, :, :, np.newaxis]
+                    elif corrected_stack.ndim == 3:
+                        # (1, Y, X)
+                        corrected_stack = corrected_stack[:, :, :, np.newaxis]
 
                 self.viewer = StackVisualizer(
                     stack=corrected_stack,
                     window_title="Corrected channel",
-                    target_channel=self.channels_cb.currentIndex(),
+                    target_channel=0,
                     frame_slider=True,
                     contrast_slider=True,
                 )
                 self.viewer.show()
             else:
-                print("Corrected stack could not be generated... No stack available...")
-        elif result == QDialog.Rejected:
-            print("Background correction cancelled or failed.")
+                print("Corrected stack could not be generated...")
+
+        def on_finished():
+            self.bg_progress.close()
+
+        def on_error(msg):
+            self.bg_progress.close()
+            QMessageBox.critical(None, "Error", f"Correction failed: {msg}")
+
+        self.preview_worker.result_ready.connect(on_result)
+        self.preview_worker.finished.connect(on_finished)
+        self.preview_worker.error.connect(on_error)
+        self.bg_progress.canceled.connect(self.preview_worker.stop)
+
+        self.preview_worker.start()
+        self.bg_progress.exec_()
 
 
 class LocalCorrectionLayout(BackgroundFitCorrectionLayout):
@@ -987,7 +1085,9 @@ class BackgroundModelFreeCorrectionLayout(QGridLayout, Styles):
         self.target_channel = channel_indices[0]
 
     def set_threshold_graphically(self):
-        from celldetective.gui.viewers.threshold_viewer import ThresholdedStackVisualizer
+        from celldetective.gui.viewers.threshold_viewer import (
+            ThresholdedStackVisualizer,
+        )
 
         self.attr_parent.locate_image()
         self.set_target_channel()

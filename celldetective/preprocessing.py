@@ -1050,6 +1050,7 @@ def correct_background_model(
                 return_stacks=return_stacks,
                 progress_callback=progress_callback,
                 downsample=downsample,
+                subset_indices=kwargs.get("subset_indices", None),
             )
             logger.info("Correction successful.")
             if return_stacks:
@@ -1088,6 +1089,7 @@ def fit_and_apply_model_background_to_stack(
     return_stacks=True,
     progress_callback=None,
     downsample=10,
+    subset_indices=None,
 ):
     """
     Fit and apply a background correction model to an image stack.
@@ -1105,6 +1107,8 @@ def fit_and_apply_model_background_to_stack(
             The index of the target channel for background correction (default is 0).
     nbr_channels : int, optional
             The number of channels in the image stack (default is 1).
+    subset_indices : list of int, optional
+            List of absolute frame indices to process (default is None).
     stack_length : int, optional
             The length of the stack (default is 45).
     threshold_on_std : float, optional
@@ -1121,6 +1125,8 @@ def fit_and_apply_model_background_to_stack(
             The activation protocol consisting of filters and their respective parameters (default is [['gauss',2],['std',4]]).
     prefix : str, optional
             The prefix for exported corrected stacks (default is 'Corrected').
+    subset_indices : list of int, optional
+            List of absolute frame indices to process (default is None).
 
     Returns
     -------
@@ -1207,7 +1213,13 @@ def fit_and_apply_model_background_to_stack(
         if prefix is None:
             os.replace(os.sep.join([path, newfile]), os.sep.join([path, file]))
     else:
-        for i in tqdm(range(0, int(stack_length * nbr_channels), nbr_channels)):
+
+        if subset_indices is None:
+            iterator = range(0, int(stack_length * nbr_channels), nbr_channels)
+        else:
+            iterator = subset_indices
+
+        for i in tqdm(iterator):
 
             frames = load_frames(
                 list(np.arange(i, (i + nbr_channels))),

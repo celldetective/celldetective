@@ -3,16 +3,10 @@ import time
 import os
 from pathlib import PurePath, Path
 from tifffile import imwrite
-from celldetective.preprocessing import (
-    correct_background_model,
-    correct_background_model_free,
-    correct_channel_offset,
-    _get_img_num_per_channel,
-    _extract_channel_indices_from_config,
-)
 from celldetective import get_logger
 from celldetective.utils.experiment import extract_experiment_channels
-from celldetective.utils.parsing import config_section_to_dict
+from celldetective.utils.image_loaders import _get_img_num_per_channel
+from celldetective.utils.parsing import config_section_to_dict, _extract_channel_indices_from_config
 
 logger = get_logger(__name__)
 
@@ -174,6 +168,8 @@ class BackgroundCorrectionProcess(Process):
 
         try:
             if correction_type == "model-free":
+                from celldetective.preprocessing import correct_background_model_free
+
                 corrected_stacks = correct_background_model_free(
                     self.exp_dir,
                     well_option=self.well_option,
@@ -199,6 +195,8 @@ class BackgroundCorrectionProcess(Process):
                     progress_callback=progress_callback,
                 )
             elif correction_type == "offset":
+                from celldetective.preprocessing import correct_channel_offset
+
                 corrected_stacks = correct_channel_offset(
                     self.exp_dir,
                     well_option=self.well_option,
@@ -216,6 +214,8 @@ class BackgroundCorrectionProcess(Process):
                     **self.kwargs if hasattr(self, "kwargs") else {},
                 )
             else:
+                from celldetective.preprocessing import correct_background_model
+
                 corrected_stacks = correct_background_model(
                     self.exp_dir,
                     well_option=self.well_option,
@@ -234,15 +234,20 @@ class BackgroundCorrectionProcess(Process):
                     export_prefix=export_prefix,
                     progress_callback=progress_callback,
                     downsample=getattr(self, "downsample", 10),
+                    subset_indices=getattr(self, "subset_indices", None),
                 )
 
             if return_stacks and corrected_stacks and len(corrected_stacks) > 0:
-                temp_path = os.path.join(self.exp_dir, "temp_corrected_stack.tif")
-                try:
-                    imwrite(temp_path, corrected_stacks[0])
-                    logger.info(f"Saved temp stack to {temp_path}")
-                except Exception as temp_e:
-                    logger.error(f"Failed to save temp stack: {temp_e}")
+                # If doing a preview (subset_indices is set), return via queue instead of disk
+                if getattr(self, "subset_indices", None) is not None:
+                    self.queue.put({"status": "result", "data": corrected_stacks[0]})
+                else:
+                    temp_path = os.path.join(self.exp_dir, "temp_corrected_stack.tif")
+                    try:
+                        imwrite(temp_path, corrected_stacks[0])
+                        logger.info(f"Saved temp stack to {temp_path}")
+                    except Exception as temp_e:
+                        logger.error(f"Failed to save temp stack: {temp_e}")
 
             self.queue.put(
                 {
