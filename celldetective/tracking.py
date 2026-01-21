@@ -480,11 +480,6 @@ def clean_trajectories(
         by=[column_labels["track"], column_labels["time"]], inplace=True
     )
 
-    if minimum_tracklength > 0:
-        trajectories = filter_by_tracklength(
-            trajectories.copy(), minimum_tracklength, track_label=column_labels["track"]
-        )
-
     if np.any([remove_not_in_first, remove_not_in_last]):
         trajectories = filter_by_endpoints(
             trajectories.copy(),
@@ -505,10 +500,18 @@ def clean_trajectories(
         trajectories = interpolate_time_gaps(
             trajectories.copy(), column_labels=column_labels
         )
+        # interpolate_time_gaps might leave TRACK_ID in index of some rows or overall
+        trajectories.reset_index(drop=True, inplace=True)
 
     if interpolate_na:
         trajectories = interpolate_nan_properties(
             trajectories.copy(), track_label=column_labels["track"]
+        )
+        trajectories.reset_index(drop=True, inplace=True)
+
+    if minimum_tracklength > 0:
+        trajectories = filter_by_tracklength(
+            trajectories.copy(), minimum_tracklength, track_label=column_labels["track"]
         )
 
     trajectories = trajectories.sort_values(
