@@ -59,17 +59,15 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-# class BackgroundLoader(QThread):
-#     def run(self):
-#         logger.info("Loading background packages...")
-#         try:
-#             pass
-#             # import celldetective.segmentation
-#             # import celldetective.tracking
-#             # import celldetective.measure
-#         except Exception:
-#             logger.error("Background packages not loaded...")
-#         logger.info("Background packages loaded...")
+class BackgroundLoader(QThread):
+     def run(self):
+         logger.info("Loading background packages...")
+         try:
+             from celldetective.gui.viewers.base_viewer import StackVisualizer
+             self.StackVisualizer = StackVisualizer
+         except Exception:
+             logger.error("Background packages not loaded...")
+         logger.info("Background packages loaded...")
 
 
 class ControlPanel(CelldetectiveMainWindow):
@@ -151,8 +149,8 @@ class ControlPanel(CelldetectiveMainWindow):
         t_loaded = time.time()
         logger.info(f"Launch time: {t_loaded - self.parent_window.t_ref} s...")
 
-        # self.bg_loader = BackgroundLoader()
-        # self.bg_loader.start()
+        self.bg_loader = BackgroundLoader()
+        self.bg_loader.start()
 
     def init_wells_and_positions(self):
         """
@@ -341,7 +339,10 @@ class ControlPanel(CelldetectiveMainWindow):
 
     def view_current_stack(self):
 
-        from celldetective.gui.viewers.base_viewer import StackVisualizer
+        if self.bg_loader.isFinished() and hasattr(self.bg_loader, "StackVisualizer"):
+            StackVisualizer = self.bg_loader.StackVisualizer
+        else:
+            from celldetective.gui.viewers.base_viewer import StackVisualizer
 
         self.locate_image()
         if self.current_stack is not None:

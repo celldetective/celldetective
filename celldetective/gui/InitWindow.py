@@ -56,6 +56,7 @@ class BackgroundLoader(QThread):
             import matplotlib.pyplot
             import scipy.ndimage
             import tifffile
+            import numpy
         except Exception:
             logger.error("Background packages not loaded...")
         logger.info("Background packages loaded...")
