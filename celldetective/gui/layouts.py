@@ -262,7 +262,7 @@ class BackgroundFitCorrectionLayout(QGridLayout, Styles):
         self.target_channel = channel_indices[0]
 
     def set_threshold_graphically(self):
-        from celldetective.gui.viewers import ThresholdedStackVisualizer
+        from celldetective.gui.viewers.threshold_viewer import ThresholdedStackVisualizer
 
         self.attr_parent.locate_image()
         self.set_target_channel()
@@ -281,7 +281,7 @@ class BackgroundFitCorrectionLayout(QGridLayout, Styles):
             self.viewer.show()
 
     def preview_correction(self):
-        from celldetective.gui.viewers import StackVisualizer
+        from celldetective.gui.viewers.base_viewer import StackVisualizer
 
         if (
             self.attr_parent.well_list.isMultipleSelection()
@@ -704,7 +704,7 @@ class ChannelOffsetOptionsLayout(QVBoxLayout, Styles):
         self.target_channel = channel_indices[0]
 
     def open_offset_viewer(self):
-        from celldetective.gui.viewers import ChannelOffsetViewer
+        from celldetective.gui.viewers.channel_offset_viewer import ChannelOffsetViewer
 
         self.attr_parent.locate_image()
         self.set_target_channel()
@@ -987,7 +987,7 @@ class BackgroundModelFreeCorrectionLayout(QGridLayout, Styles):
         self.target_channel = channel_indices[0]
 
     def set_threshold_graphically(self):
-        from celldetective.gui.viewers import ThresholdedStackVisualizer
+        from celldetective.gui.viewers.threshold_viewer import ThresholdedStackVisualizer
 
         self.attr_parent.locate_image()
         self.set_target_channel()
@@ -1006,7 +1006,7 @@ class BackgroundModelFreeCorrectionLayout(QGridLayout, Styles):
             self.viewer.show()
 
     def preview_correction(self):
-        from celldetective.gui.viewers import StackVisualizer
+        from celldetective.gui.viewers.base_viewer import StackVisualizer
 
         if (
             self.attr_parent.well_list.isMultipleSelection()
@@ -1143,7 +1143,7 @@ class BackgroundModelFreeCorrectionLayout(QGridLayout, Styles):
             self.threshold_le.get_threshold(),
             mode,
         )
-        from celldetective.gui.viewers import StackVisualizer
+        from celldetective.gui.viewers.base_viewer import StackVisualizer
 
         self.bg_worker.progress.connect(self.bg_progress.setValue)
         self.bg_worker.status_update.connect(self.bg_progress.setLabelText)

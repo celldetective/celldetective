@@ -11,7 +11,7 @@ from superqt.fonticon import icon
 from celldetective.gui.base.components import CelldetectiveWidget
 from celldetective.gui.base.utils import center_window
 from celldetective.gui.gui_utils import ThresholdLineEdit
-from celldetective.gui.viewers import CellSizeViewer
+from celldetective.gui.viewers.size_viewer import CellSizeViewer
 from celldetective.utils.model_loaders import locate_segmentation_model
 
 

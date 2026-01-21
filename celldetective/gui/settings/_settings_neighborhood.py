@@ -19,7 +19,9 @@ import json
 import os
 from glob import glob
 import pandas as pd
-from celldetective.gui.viewers import CellSizeViewer, CellEdgeVisualizer
+from celldetective.gui.viewers.contour_viewer import CellEdgeVisualizer
+from celldetective.gui.viewers.size_viewer import CellSizeViewer
+
 from celldetective.gui.base.components import CelldetectiveWidget
 
 

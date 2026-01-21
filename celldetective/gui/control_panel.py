@@ -341,7 +341,7 @@ class ControlPanel(CelldetectiveMainWindow):
 
     def view_current_stack(self):
 
-        from celldetective.gui.viewers import StackVisualizer
+        from celldetective.gui.viewers.base_viewer import StackVisualizer
 
         self.locate_image()
         if self.current_stack is not None:

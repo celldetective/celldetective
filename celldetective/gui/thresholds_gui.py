@@ -35,7 +35,7 @@ from celldetective.gui.base.components import (
 )
 from celldetective.gui.gui_utils import color_from_class, help_generic
 from celldetective.gui.base.figure_canvas import FigureCanvas
-from celldetective.gui.viewers import ThresholdedStackVisualizer
+from celldetective.gui.viewers.threshold_viewer import ThresholdedStackVisualizer
 from celldetective.utils.image_loaders import load_frames
 
 from celldetective import (

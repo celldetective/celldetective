@@ -1012,7 +1012,7 @@ class SettingsMeasurements(CelldetectiveSettingsPanel):
 
         if self.current_stack is not None:
 
-            from celldetective.gui.viewers import CellEdgeVisualizer
+            from celldetective.gui.viewers.contour_viewer import CellEdgeVisualizer
 
             self.viewer = CellEdgeVisualizer(
                 cell_type=self.mode,
@@ -1123,7 +1123,7 @@ class SettingsMeasurements(CelldetectiveSettingsPanel):
                 # else:
                 # 	invert_value = None
 
-                from celldetective.gui.viewers import SpotDetectionVisualizer
+                from celldetective.gui.viewers.spot_detection_viewer import SpotDetectionVisualizer
 
                 self.spot_visual = SpotDetectionVisualizer(
                     frame_slider=True,
