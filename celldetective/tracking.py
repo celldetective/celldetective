@@ -475,7 +475,7 @@ def clean_trajectories(
 
     """
 
-    trajectories.reset_index
+    trajectories.reset_index(drop=True, inplace=True)
     trajectories.sort_values(
         by=[column_labels["track"], column_labels["time"]], inplace=True
     )
@@ -605,9 +605,14 @@ def interpolate_nan_properties(trajectories, track_label="TRACK_ID"):
 
     """
 
-    trajectories = trajectories.groupby(track_label, group_keys=False).apply(
+    trajectories = trajectories.groupby(track_label, group_keys=True).apply(
         interpolate_per_track
     )
+
+    if track_label in trajectories.index.names:
+        trajectories = trajectories.reset_index(
+            level=0, drop=track_label in trajectories.columns
+        )
 
     return trajectories
 
