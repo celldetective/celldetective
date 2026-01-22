@@ -510,6 +510,10 @@ def measure_features(
         if measure_mean_intensities:
             extra_props_list.append(getattr(extra_props, "intensity_nanmean"))
 
+    else:
+        if measure_mean_intensities:
+            features.append("intensity_mean")
+
     if not extra_props_list:
         extra_props_list = None
     else:
