@@ -997,8 +997,8 @@ class ProcessPanel(QFrame, Styles):
             else:
                 return None
         else:
-            self.ClassifierWidget = ClassifierWidget(self)
-            self.ClassifierWidget.show()
+            self.classifier_widget = ClassifierWidget(self)
+            self.classifier_widget.show()
             try:
 
                 def post_widget(wdg):
@@ -1008,7 +1008,7 @@ class ProcessPanel(QFrame, Styles):
                     except Exception as _:
                         pass
 
-                QTimer.singleShot(100, lambda: post_widget(self.ClassifierWidget))
+                QTimer.singleShot(100, lambda: post_widget(self.classifier_widget))
             except Exception as _:
                 pass
 

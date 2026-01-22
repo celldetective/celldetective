@@ -56,6 +56,7 @@ def _segment_image_with_cellpose_model(
         flow_threshold=flow_threshold,
         channels=None,
         normalize=False,
+        model_loaded=True,
     )
 
     return lbl.astype(np.uint16)
