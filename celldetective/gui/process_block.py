@@ -487,7 +487,12 @@ class ProcessPanel(QFrame, Styles):
                     ]
                 )
             )
-            self.parent_window.update_position_options()
+            try:
+                QTimer.singleShot(
+                    100, lambda: self.parent_window.update_position_options()
+                )
+            except Exception as _:
+                pass
         else:
             return None
 
@@ -1395,6 +1400,9 @@ class ProcessPanel(QFrame, Styles):
                 return None
 
             # Post-Process actions (like updating list)
+            if run_tracking:
+                self.parent_window.update_position_options()
+
             if run_signals:
                 from celldetective.gui.interactive_timeseries_viewer import (
                     InteractiveEventViewer,

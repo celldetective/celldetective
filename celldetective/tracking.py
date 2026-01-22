@@ -1006,7 +1006,14 @@ def extrapolate_tracks(
             [column_labels["track"], column_labels["time"]], inplace=True
         )
 
-    return trajectories
+    return trajectories[
+        [column_labels["track"], column_labels["time"]]
+        + [
+            col
+            for col in trajectories.columns
+            if col not in [column_labels["track"], column_labels["time"]]
+        ]
+    ]
 
 
 def compute_instantaneous_velocity(
