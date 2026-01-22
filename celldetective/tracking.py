@@ -851,8 +851,8 @@ def interpolate_time_gaps(
     )
     trajectories.reset_index(drop=True, inplace=True)
     trajectories[column_labels["time"]] = (
-        trajectories[column_labels["time"]].astype("int64").astype(float) / 10**9
-    )
+        trajectories[column_labels["time"]] - pd.Timestamp("1970-01-01")
+    ).dt.total_seconds()
     # trajectories[column_labels['time']] = trajectories[column_labels['time']].astype('int64')
     trajectories.sort_values(
         by=[column_labels["track"], column_labels["time"]], inplace=True
