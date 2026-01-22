@@ -2,3 +2,4 @@ from .background_model_free_layout import BackgroundModelFreeCorrectionLayout
 from .model_fit_layout import BackgroundFitCorrectionLayout
 from .channel_offset_layout import ChannelOffsetOptionsLayout
 from .protocol_designer_layout import ProtocolDesignerLayout
+from .local_correction_layout import LocalCorrectionLayout

@@ -3,7 +3,7 @@ import os
 from glob import glob
 
 import numpy as np
-from PyQt5.QtCore import Qt, QSize
+from PyQt5.QtCore import Qt, QSize, QThread
 from PyQt5.QtGui import QDoubleValidator, QIntValidator
 from PyQt5.QtWidgets import (
     QAction,
@@ -46,6 +46,22 @@ from celldetective.utils.experiment import extract_experiment_channels
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+class BackgroundLoader(QThread):
+    def run(self):
+        logger.info("Loading background packages...")
+        try:
+            from celldetective.segmentation import (
+                identify_markers_from_binary,
+                apply_watershed,
+            )
+            from scipy.ndimage._measurements import label
+            import pandas as pd
+            from celldetective.regionprops._regionprops import regionprops_table
+        except Exception:
+            logger.error("Background packages not loaded...")
+        logger.info("Background packages loaded...")
 
 
 class ThresholdConfigWizard(CelldetectiveMainWindow):
@@ -104,6 +120,9 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
             self.prep_cell_properties()
             self.populate_widget()
             self.setAttribute(Qt.WA_DeleteOnClose)
+
+        self.bg_loader = BackgroundLoader()
+        self.bg_loader.start()
 
     def _create_menu_bar(self):
         menu_bar = self.menuBar()
@@ -658,7 +677,9 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
                 self.viewer.mask, self.coords, self.edt_map, fill_holes=self.fill_holes
             )
         else:
-            self.labels, _ = ndi.label(self.viewer.mask.astype(int))
+            from scipy.ndimage._measurements import label
+
+            self.labels, _ = label(self.viewer.mask.astype(int))
 
         self.viewer.channel_trigger = True
         self.viewer.change_frame_from_channel_switch(self.viewer.frame_slider.value())
@@ -770,7 +791,7 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
         else:
             try:
                 self.selection = self.props.query(query).index
-                logger.info(self.selection)
+                logger.info(f"{self.selection}")
                 self.props.loc[self.selection, "class"] = 0
             except Exception as e:
                 generic_message(
@@ -817,7 +838,7 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
             "fill_holes": self.fill_holes,
         }
 
-        logger.info("The following instructions will be written: ", instructions)
+        logger.info(f"The following instructions will be written: {instructions}")
         self.instruction_file = QFileDialog.getSaveFileName(
             self,
             "Save File",
@@ -828,7 +849,9 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
             json_object = json.dumps(instructions, indent=4)
             with open(self.instruction_file, "w") as outfile:
                 outfile.write(json_object)
-            logger.info("Configuration successfully written in ", self.instruction_file)
+            logger.info(
+                f"Configuration successfully written in {self.instruction_file}"
+            )
 
             self.parent_window.filename = self.instruction_file
             self.parent_window.file_label.setText(self.instruction_file[:16] + "...")

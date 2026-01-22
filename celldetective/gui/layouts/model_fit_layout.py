@@ -30,20 +30,6 @@ from celldetective.gui.viewers.threshold_viewer import ThresholdedStackVisualize
 logger = get_logger(__name__)
 
 
-# class BackgroundLoader(QThread):
-#     def run(self):
-#         logger.info("Loading background packages...")
-#         try:
-#             from celldetective.gui.viewers.base_viewer import StackVisualizer
-#             self.StackVisualizer = StackVisualizer
-
-#             from celldetective.gui.viewers.threshold_viewer import ThresholdedStackVisualizer
-#             self.ThresholdedStackVisualizer = ThresholdedStackVisualizer
-#         except Exception:
-#             logger.error("Background packages not loaded...")
-#         logger.info("Background packages loaded...")
-
-
 class BackgroundFitCorrectionLayout(QGridLayout, Styles):
     """docstring for ClassName"""
 
@@ -117,9 +103,6 @@ class BackgroundFitCorrectionLayout(QGridLayout, Styles):
         )
         self.downsample_le = QLineEdit("10")
         self.downsample_le.setValidator(QIntValidator())
-
-        # self.bg_loader = BackgroundLoader()
-        # self.bg_loader.start()
 
     def add_to_layout(self):
 
@@ -202,10 +185,6 @@ class BackgroundFitCorrectionLayout(QGridLayout, Styles):
         self.target_channel = channel_indices[0]
 
     def set_threshold_graphically(self):
-        # if self.bg_loader.isFinished() and hasattr(self.bg_loader, "ThresholdedStackVisualizer"):
-        #     ThresholdedStackVisualizer = self.bg_loader.ThresholdedStackVisualizer
-        # else:
-        #     from celldetective.gui.viewers.threshold_viewer import ThresholdedStackVisualizer
 
         self.attr_parent.locate_image()
         self.set_target_channel()
@@ -298,11 +277,6 @@ class BackgroundFitCorrectionLayout(QGridLayout, Styles):
         )
 
         def on_result(corrected_stack):
-
-            # if self.bg_loader.isFinished() and hasattr(self.bg_loader, "StackVisualizer"):
-            #     StackVisualizer = self.bg_loader.StackVisualizer
-            # else:
-            #     from celldetective.gui.viewers.base_viewer import StackVisualizer
 
             if corrected_stack is not None:
                 if subset_indices is not None and len(self.channel_names) > 0:
