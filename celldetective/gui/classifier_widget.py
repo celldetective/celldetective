@@ -49,9 +49,7 @@ class ClassifierWidget(CelldetectiveWidget):
         self.mode = self.parent_window.mode
         self.df = self.parent_window.df
 
-        is_number = np.vectorize(lambda x: np.issubdtype(x, np.number))
-        is_number_test = is_number(self.df.dtypes)
-        self.cols = [col for t, col in zip(is_number_test, self.df.columns) if t]
+        self.cols = self.df.select_dtypes(include=[np.number]).columns.tolist()
 
         self.class_name = "custom"
         self.name_le = QLineEdit(self.class_name)
