@@ -33,7 +33,7 @@ def setup_global_logging(level=logging.INFO, log_file=None):
         file_handler.setFormatter(logging.Formatter(FILE_FORMAT))
         root_logger.addHandler(file_handler)
 
-        for lib in ["trackpy", "btrack", "cellpose", "stardist"]:
+        for lib in ["trackpy", "btrack", "cellpose_utils", "stardist_utils"]:
             lib_logger = logging.getLogger(lib)
             lib_logger.setLevel(logging.INFO)
             if file_handler not in lib_logger.handlers:

@@ -54,7 +54,7 @@ class SegmentationModelLoader(CelldetectiveWidget):
         # self.stardist_button.setIcon(QIcon(abs_path+f"/icons/star.png"))
 
         self.cellpose_button = QRadioButton("Cellpose")
-        # self.cellpose_button.setIcon(QIcon(abs_path+f"/icons/cellpose.png"))
+        # self.cellpose_button.setIcon(QIcon(abs_path+f"/icons/cellpose_utils.png"))
 
         self.threshold_button = QRadioButton("Threshold")
 
@@ -239,10 +239,10 @@ class SegmentationModelLoader(CelldetectiveWidget):
 
         # Set the file dialog according to the option chosen
         if self.stardist_button.isChecked():
-            self.seg_mode = "stardist"
+            self.seg_mode = "stardist_utils"
             self.file_dialog.setFileMode(QFileDialog.Directory)
         elif self.cellpose_button.isChecked():
-            self.seg_mode = "cellpose"
+            self.seg_mode = "cellpose_utils"
             self.file_dialog.setFileMode(QFileDialog.ExistingFile)
         elif self.threshold_button.isChecked():
             self.seg_mode = "threshold"
@@ -252,7 +252,7 @@ class SegmentationModelLoader(CelldetectiveWidget):
         if self.seg_mode != "threshold":
             if self.file_dialog.exec_() == QFileDialog.Accepted:
                 self.filename = self.file_dialog.selectedFiles()[0]
-                if self.seg_mode == "stardist":
+                if self.seg_mode == "stardist_utils":
                     subfiles = glob(self.filename + "/*")
                     subfiles = [s.replace("\\", "/") for s in subfiles]
                     if self.filename + "/thresholds.json" in subfiles:
@@ -272,7 +272,7 @@ class SegmentationModelLoader(CelldetectiveWidget):
                         )
                         return None
 
-                if self.seg_mode == "cellpose":
+                if self.seg_mode == "cellpose_utils":
                     self.file_label.setText(self.filename.split("/")[-1])
                     self.modelname = self.filename.split("/")[-1]
                     print(f"Transferring Cellpose model {self.filename}...")
@@ -486,7 +486,7 @@ class SegmentationModelLoader(CelldetectiveWidget):
             # for c in self.combos:
             # 	if c.currentText()!="--":
             # 		channels.append(c.currentText())
-            model_type = "stardist"
+            model_type = "stardist_utils"
             spatial_calib = float(self.spatial_calib_le.text().replace(",", "."))
             # normalize = self.normalize_checkbox.isChecked()
             dico.update(
@@ -508,8 +508,8 @@ class SegmentationModelLoader(CelldetectiveWidget):
             # 	if c.currentText()!="--":
             # 		channels.append(c.currentText())
 
-            model_type = "cellpose"
-            # cellpose requires at least two channels
+            model_type = "cellpose_utils"
+            # cellpose_utils requires at least two channels
             if len(channels) == 1:
                 channels += ["None"]
                 normalization_mode += [True]
@@ -521,7 +521,7 @@ class SegmentationModelLoader(CelldetectiveWidget):
             flow_threshold = float(self.cp_flow_le.text().replace(",", "."))
             # normalize = self.normalize_checkbox.isChecked()
             spatial_calib = float(self.spatial_calib_le.text().replace(",", "."))
-            # assume 30 px diameter in cellpose model
+            # assume 30 px diameter in cellpose_utils model
             spatial_calib = spatial_calib * diameter / self.scale_model
             diameter = 30.0
 

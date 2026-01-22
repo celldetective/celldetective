@@ -118,7 +118,7 @@ print("number of images: %3d" % len(X))
 print("- training:       %3d" % len(X_trn))
 print("- validation:     %3d" % len(X_val))
 
-if model_type == "cellpose":
+if model_type == "cellpose_utils":
 
     # do augmentation in place
     X_aug = []
@@ -131,7 +131,7 @@ if model_type == "cellpose":
         X_aug.append(x_aug)
         Y_aug.append(y_aug)
 
-    # Channel axis in front for cellpose
+    # Channel axis in front for cellpose_utils
     X_aug = [np.moveaxis(x, -1, 0) for x in X_aug]
     X_val = [np.moveaxis(x, -1, 0) for x in X_val]
     print("number of augmented images: %3d" % len(X_aug))
@@ -231,7 +231,7 @@ if model_type == "cellpose":
         "normalization_percentile": normalization_percentile,
         "normalization_clip": normalization_clip,
         "normalization_values": normalization_values,
-        "model_type": "cellpose",
+        "model_type": "cellpose_utils",
         "spatial_calibration": input_spatial_calibration,
         "cell_size_um": round(diameter * input_spatial_calibration, 4),
         "dataset": {"train": files_train, "validation": files_val},
@@ -242,7 +242,7 @@ if model_type == "cellpose":
     ) as outfile:
         outfile.write(json_input_config)
 
-elif model_type == "stardist":
+elif model_type == "stardist_utils":
 
     from stardist import calculate_extents, gputools_available
     from stardist.models import Config2D, StarDist2D
@@ -351,7 +351,7 @@ elif model_type == "stardist":
         "normalization_percentile": normalization_percentile,
         "normalization_clip": normalization_clip,
         "normalization_values": normalization_values,
-        "model_type": "stardist",
+        "model_type": "stardist_utils",
         "spatial_calibration": spatial_calibration,
         "cell_size_um": median_size * spatial_calibration,
         "dataset": {"train": files_train, "validation": files_val},

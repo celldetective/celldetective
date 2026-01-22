@@ -251,8 +251,8 @@ class TrainSignalModelProcess(Process):
 
         # self.terminate()
 
-        # if self.model_type=="stardist":
-        # 	from stardist.models import StarDist2D
+        # if self.model_type=="stardist_utils":
+        # 	from stardist_utils.models import StarDist2D
         # 	self.model = StarDist2D(None, name=self.model_name, basedir=self.target_directory)
         # 	self.model.optimize_thresholds(self.X_val,self.Y_val)
 

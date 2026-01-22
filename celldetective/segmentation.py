@@ -24,11 +24,11 @@ from celldetective.utils.image_cleaning import (
 )
 from celldetective.napari.utils import _view_on_napari
 from celldetective.filters import *
-from celldetective.utils.stardist import (
+from celldetective.utils.stardist_utils import (
     _prep_stardist_model,
     _segment_image_with_stardist_model,
 )
-from celldetective.utils.cellpose import (
+from celldetective.utils.cellpose_utils import (
     _segment_image_with_cellpose_model,
     _prep_cellpose_model,
 )
@@ -149,7 +149,7 @@ def segment(
 
     normalize_kwargs = _get_normalize_kwargs_from_config(input_config)
 
-    if model_type == "cellpose":
+    if model_type == "cellpose_utils":
         diameter = input_config["diameter"]
         # if diameter!=30:
         # 	required_spatial_calibration = None
@@ -163,12 +163,12 @@ def segment(
         f"{spatial_calibration=} {required_spatial_calibration=} Scale = {scale}..."
     )
 
-    if model_type == "stardist":
+    if model_type == "stardist_utils":
         model, scale_model = _prep_stardist_model(
             model_name, Path(model_path).parent, use_gpu=use_gpu, scale=scale
         )
 
-    elif model_type == "cellpose":
+    elif model_type == "cellpose_utils":
         model, scale_model = _prep_cellpose_model(
             model_path.split("/")[-2],
             model_path,
@@ -211,12 +211,12 @@ def segment(
         frame = interpolate_nan_multichannel(frame)
         frame[:, :, none_channel_indices] = 0.0
 
-        if model_type == "stardist":
+        if model_type == "stardist_utils":
             Y_pred = _segment_image_with_stardist_model(
                 frame, model=model, return_details=False
             )
 
-        elif model_type == "cellpose":
+        elif model_type == "cellpose_utils":
             Y_pred = _segment_image_with_cellpose_model(
                 frame,
                 model=model,

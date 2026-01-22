@@ -78,7 +78,7 @@ class QueueLoggingHandler(logging.Handler):
 
     def emit(self, record):
         if self.stop_event and self.stop_event.is_set():
-            # Can't easily stop cellpose loop from here without raising exception or hacking
+            # Can't easily stop cellpose_utils loop from here without raising exception or hacking
             # raising exception might be safest to exit training loop
             raise InterruptedError("Training interrupted")
 
@@ -144,9 +144,9 @@ class TrainSegModelProcess(Process):
 
         self.queue.put("Loading dataset...")
 
-        if self.model_type == "cellpose":
+        if self.model_type == "cellpose_utils":
             self.train_cellpose_model()
-        elif self.model_type == "stardist":
+        elif self.model_type == "stardist_utils":
             self.train_stardist_model()
 
         self.queue.put("finished")
@@ -411,7 +411,7 @@ class TrainSegModelProcess(Process):
             "normalization_percentile": self.normalization_percentile,
             "normalization_clip": self.normalization_clip,
             "normalization_values": self.normalization_values,
-            "model_type": "stardist",
+            "model_type": "stardist_utils",
             "spatial_calibration": self.spatial_calibration,
             "cell_size_um": float(median_size_scalar * self.spatial_calibration),
             "dataset": {"train": self.files_train, "validation": self.files_val},
@@ -446,7 +446,7 @@ class TrainSegModelProcess(Process):
             X_aug.append(x_aug)
             Y_aug.append(y_aug)
 
-        # Channel axis in front for cellpose
+        # Channel axis in front for cellpose_utils
         X_aug = [np.moveaxis(x, -1, 0) for x in X_aug]
         self.X_val = [np.moveaxis(x, -1, 0) for x in self.X_val]
         logger.info("number of augmented images: %3d" % len(X_aug))
@@ -461,11 +461,11 @@ class TrainSegModelProcess(Process):
         else:
             logger.info("Using GPU for training...")
 
-        # logger_setup configures console and file handlers for cellpose
+        # logger_setup configures console and file handlers for cellpose_utils
         _, log_file = logger_setup()
 
-        # Get cellpose logger explicitly to ensure we catch all cellpose logs (e.g. from models)
-        logger_cellpose = logging.getLogger("cellpose")
+        # Get cellpose_utils logger explicitly to ensure we catch all cellpose_utils logs (e.g. from models)
+        logger_cellpose = logging.getLogger("cellpose_utils")
 
         # Add custom handler
         handler = QueueLoggingHandler(
@@ -571,7 +571,7 @@ class TrainSegModelProcess(Process):
             "normalization_percentile": self.normalization_percentile,
             "normalization_clip": self.normalization_clip,
             "normalization_values": self.normalization_values,
-            "model_type": "cellpose",
+            "model_type": "cellpose_utils",
             "spatial_calibration": input_spatial_calibration,
             "cell_size_um": round(diameter * input_spatial_calibration, 4),
             "dataset": {"train": self.files_train, "validation": self.files_val},
