@@ -71,6 +71,7 @@ jobs:
           python -m pip install --upgrade pip
           pip cache purge
           pip install setuptools wheel PyQt5
+          pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
       - name: Install package
         run: |
           pip install -e "."
