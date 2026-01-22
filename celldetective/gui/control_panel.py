@@ -1,5 +1,4 @@
 import time
-import traceback
 
 from PyQt5.QtWidgets import (
     QPushButton,
@@ -19,9 +18,8 @@ from celldetective.gui.base.components import (
     QHSeperationLine,
 )
 
-from PyQt5.QtCore import Qt, QSize, QThread, QTimer
+from PyQt5.QtCore import Qt, QSize, QThread
 from celldetective.gui.base.components import generic_message
-from celldetective.gui.base.utils import center_window
 from celldetective.utils.parsing import (
     config_section_to_dict,
     _extract_labels_from_config,

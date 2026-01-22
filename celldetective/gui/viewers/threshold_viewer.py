@@ -10,6 +10,7 @@ from celldetective import get_logger
 
 logger = get_logger(__name__)
 
+
 class ThresholdedStackVisualizer(StackVisualizer):
     """
     A widget for visualizing thresholded image stacks with interactive sliders and channel selection.
@@ -259,7 +260,7 @@ class ThresholdedStackVisualizer(StackVisualizer):
         # Compute
         if self.preprocessing is not None:
             assert isinstance(self.preprocessing, list)
-            from celldetective.segmentation import filter_image
+            from celldetective.filters import filter_image
 
             self.processed_image = filter_image(
                 self.init_frame.copy().astype(float), filters=self.preprocessing

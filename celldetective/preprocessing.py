@@ -156,7 +156,7 @@ def estimate_background_per_condition(
                         channel_indices, int(len_movie), nbr_channels
                     )
 
-                from celldetective.segmentation import filter_image
+                from celldetective.filters import filter_image
 
                 if mode == "timeseries":
 
@@ -572,7 +572,8 @@ def apply_background_to_stack(
 
             target_copy = target_img.copy()
 
-            from celldetective.segmentation import filter_image, threshold_image
+            from celldetective.segmentation import threshold_image
+            from celldetective.filters import filter_image
 
             std_frame = filter_image(target_copy.copy(), filters=activation_protocol)
             edge = estimate_unreliable_edge(activation_protocol)
@@ -1318,7 +1319,7 @@ def field_correction(
     if np.percentile(target_copy.flatten(), 99.9) == 0.0:
         return target_copy
 
-    from celldetective.segmentation import filter_image
+    from celldetective.filters import filter_image
 
     std_frame = filter_image(target_copy, filters=activation_protocol)
     edge = estimate_unreliable_edge(activation_protocol)

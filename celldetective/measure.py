@@ -1159,7 +1159,7 @@ def extract_blobs_in_image(
         return None
 
     if isinstance(image_preprocessing, (list, np.ndarray)):
-        from celldetective.segmentation import filter_image
+        from celldetective.filters import filter_image
 
         image = filter_image(
             image.copy(), filters=image_preprocessing

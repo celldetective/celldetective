@@ -35,7 +35,6 @@ from celldetective.utils.cellpose import (
 from celldetective.utils.mask_transforms import _rescale_labels
 from celldetective.utils.image_transforms import (
     estimate_unreliable_edge,
-    mask_edges,
     _estimate_scale_factor,
     threshold_image,
 )
@@ -633,50 +632,6 @@ def identify_markers_from_binary(
         return coords, distance
     else:
         return coords
-
-
-def filter_image(img, filters=None):
-    """
-
-    Apply one or more image filters to the input image.
-
-    Parameters
-    ----------
-    img : ndarray
-            The input image to be filtered.
-    filters : list or None, optional
-            A list of filters to be applied to the image. Each filter is represented as a tuple or list with the first element being
-            the filter function name (minus the '_filter' extension, as listed in software.filters) and the subsequent elements being
-            the arguments for that filter function. If None, the original image is returned without any filtering applied. Default is None.
-
-    Returns
-    -------
-    ndarray
-            The filtered image.
-
-    Notes
-    -----
-    This function applies a series of image filters to the input image. The filters are specified as a list of tuples,
-    where each tuple contains the name of the filter function and its corresponding arguments. The filters are applied
-    sequentially to the image. If no filters are provided, the original image is returned unchanged.
-
-    Examples
-    --------
-    >>> image = np.random.rand(256, 256)
-    >>> filtered_image = filter_image(image, filters=[('gaussian', 3), ('median', 5)])
-
-    """
-
-    if filters is None:
-        return img
-
-    if img.ndim == 3:
-        img = np.squeeze(img)
-
-    for f in filters:
-        func = eval(f[0] + "_filter")
-        img = func(img, *f[1:])
-    return img
 
 
 def segment_at_position(
