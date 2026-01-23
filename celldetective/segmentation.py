@@ -149,7 +149,7 @@ def segment(
 
     normalize_kwargs = _get_normalize_kwargs_from_config(input_config)
 
-    if model_type == "cellpose_utils":
+    if model_type == "cellpose":
         diameter = input_config["diameter"]
         # if diameter!=30:
         # 	required_spatial_calibration = None
@@ -212,12 +212,12 @@ def segment(
         frame = interpolate_nan_multichannel(frame)
         frame[:, :, none_channel_indices] = 0.0
 
-        if model_type == "stardist_utils":
+        if model_type == "stardist":
             Y_pred = _segment_image_with_stardist_model(
                 frame, model=model, return_details=False
             )
 
-        elif model_type == "cellpose_utils":
+        elif model_type == "cellpose":
             Y_pred = _segment_image_with_cellpose_model(
                 frame,
                 model=model,
