@@ -27,6 +27,7 @@ from celldetective.utils.experiment import (
 )
 from celldetective.utils.parsing import config_section_to_dict
 from celldetective import get_logger
+from celldetective.gui.base.styles import Styles
 
 logger = get_logger()
 
@@ -273,8 +274,6 @@ def launch_napari_viewer(
     @magicgui(call_button="Export the modified\ntracks...")
     def export_table_widget():
         return export_modifications()
-
-    from celldetective.gui.base.styles import Styles
 
     export_table_widget.native.setStyleSheet(Styles().button_style_sheet)
 
@@ -781,8 +780,6 @@ def control_segmentation_napari(
     def export_widget():
         return export_annotation()
 
-    from celldetective.gui.base.styles import Styles
-
     stack, labels = locate_stack_and_labels(
         position, prefix=prefix, population=population
     )
@@ -889,10 +886,13 @@ def correct_annotation(filename):
         stack,
         channel_axis=-1,
         colormap=["gray"] * stack.shape[-1],
-        constrast_limits=contrast_limits,
+        contrast_limits=contrast_limits,
     )
     viewer.add_labels(labels, name="segmentation", opacity=0.4)
     viewer.window.add_dock_widget(save_widget, area="right")
+
+    save_widget.native.setStyleSheet(Styles().button_style_sheet)
+
     viewer.show(block=True)
 
     # temporary fix for slight napari memory leak

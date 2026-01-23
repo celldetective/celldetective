@@ -149,7 +149,7 @@ def segment(
 
     normalize_kwargs = _get_normalize_kwargs_from_config(input_config)
 
-    if model_type == "cellpose":
+    if model_type == "cellpose_utils":
         diameter = input_config["diameter"]
         # if diameter!=30:
         # 	required_spatial_calibration = None
@@ -163,6 +163,7 @@ def segment(
         f"{spatial_calibration=} {required_spatial_calibration=} Scale = {scale}..."
     )
 
+    model = None
     if model_type == "stardist":
         model, scale_model = _prep_stardist_model(
             model_name, Path(model_path).parent, use_gpu=use_gpu, scale=scale
@@ -176,7 +177,6 @@ def segment(
             n_channels=len(required_channels),
             scale=scale,
         )
-
 
     if model is None:
         logger.error(f"Could not load model {model_name}. Aborting segmentation.")
@@ -212,12 +212,12 @@ def segment(
         frame = interpolate_nan_multichannel(frame)
         frame[:, :, none_channel_indices] = 0.0
 
-        if model_type == "stardist":
+        if model_type == "stardist_utils":
             Y_pred = _segment_image_with_stardist_model(
                 frame, model=model, return_details=False
             )
 
-        elif model_type == "cellpose":
+        elif model_type == "cellpose_utils":
             Y_pred = _segment_image_with_cellpose_model(
                 frame,
                 model=model,
