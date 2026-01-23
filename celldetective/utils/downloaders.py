@@ -159,6 +159,44 @@ def download_url_to_file(url, dst, progress=True):
 def download_zenodo_file(file, output_dir):
 
     logger.info(f"{file=} {output_dir=}")
+
+    # GUI Check
+    try:
+        from PyQt5.QtWidgets import QApplication, QDialog
+
+        app = QApplication.instance()
+        use_gui = app is not None
+    except ImportError:
+        use_gui = False
+
+    if use_gui:
+        try:
+            from celldetective.gui.workers import GenericProgressWindow
+            from celldetective.processes.downloader import DownloadProcess
+
+            # Find parent window if possible, else None is fine for a dialog
+            parent = app.activeWindow()
+
+            process_args = {"output_dir": output_dir, "file": file}
+            job = GenericProgressWindow(
+                DownloadProcess,
+                parent_window=parent,
+                title="Download",
+                process_args=process_args,
+                label_text=f"Downloading {file}...",
+            )
+            result = job.exec_()
+            if result == QDialog.Accepted:
+                return  # DownloadProcess handles the file operations
+            else:
+                logger.info("Download cancelled or failed.")
+                return
+
+        except Exception as e:
+            logger.error(f"Failed to use GUI downloader: {e}. Falling back to console.")
+            # Fallback to console implementation below if GUI fails
+
+    # Console Implementation
     zenodo_json = os.sep.join(
         [
             os.path.split(os.path.dirname(os.path.realpath(__file__)))[0],
