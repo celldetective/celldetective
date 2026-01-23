@@ -176,6 +176,10 @@ def track(
             tracker.optimize(options=optimizer_options)
 
             data, properties, graph = tracker.to_napari()  # ndim=2
+            print(f"DEBUG: tracker.to_napari() returned data shape: {data.shape}")
+            print(
+                f"DEBUG: tracker.to_napari() returned properties keys: {list(properties.keys()) if properties else 'None'}"
+            )
         # do the table post processing and napari options
         if data.shape[1] == 4:
             df = pd.DataFrame(
@@ -258,7 +262,12 @@ def track(
     df = write_first_detection_class(df, img_shape=volume, column_labels=column_labels)
 
     if clean_trajectories_kwargs is not None:
+        print(
+            f"DEBUG: Calling clean_trajectories with kwargs: {clean_trajectories_kwargs}"
+        )
+        print(f"DEBUG: df shape before clean: {df.shape}")
         df = clean_trajectories(df.copy(), **clean_trajectories_kwargs)
+        print(f"DEBUG: df shape after clean: {df.shape}")
 
     df.loc[df["status_firstdetection"].isna(), "status_firstdetection"] = 0
     df["ID"] = np.arange(len(df)).astype(int)
