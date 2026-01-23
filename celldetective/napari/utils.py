@@ -890,21 +890,9 @@ def correct_annotation(filename):
     )
     viewer.add_labels(labels, name="segmentation", opacity=0.4)
     viewer.window.add_dock_widget(save_widget, area="right")
-
     save_widget.native.setStyleSheet(Styles().button_style_sheet)
 
-    viewer.show(block=True)
-
-    # temporary fix for slight napari memory leak
-    for i in range(100):
-        try:
-            viewer.layers.pop()
-        except:
-            pass
-    del viewer
-    del stack
-    del labels
-    gc.collect()
+    viewer.show(block=False)
 
 
 def _view_on_napari(tracks=None, stack=None, labels=None):
