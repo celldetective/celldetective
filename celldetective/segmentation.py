@@ -163,12 +163,12 @@ def segment(
         f"{spatial_calibration=} {required_spatial_calibration=} Scale = {scale}..."
     )
 
-    if model_type == "stardist_utils":
+    if model_type == "stardist":
         model, scale_model = _prep_stardist_model(
             model_name, Path(model_path).parent, use_gpu=use_gpu, scale=scale
         )
 
-    elif model_type == "cellpose_utils":
+    elif model_type == "cellpose":
         model, scale_model = _prep_cellpose_model(
             model_path.split("/")[-2],
             model_path,
@@ -176,6 +176,7 @@ def segment(
             n_channels=len(required_channels),
             scale=scale,
         )
+
 
     if model is None:
         logger.error(f"Could not load model {model_name}. Aborting segmentation.")
