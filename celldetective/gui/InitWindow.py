@@ -21,6 +21,7 @@ from PyQt5.QtWidgets import (
     QPushButton,
     QMessageBox,
     QVBoxLayout,
+    QProgressDialog,
 )
 from fonticon_mdi6 import MDI6
 from psutil import cpu_count
@@ -337,14 +338,33 @@ class AppInitWindow(CelldetectiveMainWindow):
                 )
 
     def correct_seg_annotation(self):
+
         from celldetective.napari.utils import correct_annotation
 
         self.filename, _ = QFileDialog.getOpenFileName(
             self, "Open Image", "/home/", "TIF Files (*.tif)"
         )
+
         if self.filename != "":
+            # 2. Show progress bar for opening the image in Napari
+            progress_open = QProgressDialog(
+                f"Opening {os.path.basename(self.filename)} in napari...",
+                None,
+                0,
+                0,
+                self,
+            )
+            progress_open.setWindowTitle("Please wait")
+            progress_open.setWindowModality(Qt.WindowModal)
+            progress_open.setMinimumDuration(0)
+            progress_open.show()
+            QApplication.processEvents()
+
             logger.info(f"Opening {self.filename} in napari...")
-            correct_annotation(self.filename)
+            try:
+                correct_annotation(self.filename)
+            finally:
+                progress_open.close()
         else:
             return None
 
