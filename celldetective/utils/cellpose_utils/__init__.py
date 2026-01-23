@@ -2,7 +2,6 @@ from pathlib import Path
 from typing import Union, Optional
 
 import numpy as np
-from cellpose.models import CellposeModel
 
 
 def _segment_image_with_cellpose_model(
@@ -111,6 +110,8 @@ def _prep_cellpose_model(
         device = torch.device("cpu")
     else:
         device = torch.device("cuda")
+
+    from cellpose.models import CellposeModel
 
     model = CellposeModel(
         gpu=use_gpu,

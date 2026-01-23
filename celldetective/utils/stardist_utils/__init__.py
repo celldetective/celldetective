@@ -6,7 +6,6 @@ os.environ["TF_CPP_MIN_VLOG_LEVEL"] = "3"
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
 import numpy as np
-from stardist.models import StarDist2D
 
 
 def _prep_stardist_model(
@@ -43,6 +42,8 @@ def _prep_stardist_model(
     - Ensure the StarDist2D package is installed and the model files are correctly stored in the provided path.
     - GPU support depends on the availability of compatible hardware and software setup.
     """
+
+    from stardist.models import StarDist2D
 
     model = StarDist2D(None, name=model_name, basedir=path)
     model.config.use_gpu = use_gpu
