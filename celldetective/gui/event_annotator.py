@@ -11,7 +11,10 @@ from PyQt5.QtWidgets import (
     QShortcut,
     QLineEdit,
     QSlider,
+    QAction,
+    QMenu,
 )
+from celldetective.gui.interactive_timeseries_viewer import InteractiveEventViewer
 from PyQt5.QtCore import Qt, QSize, QThread, pyqtSignal, QTimer
 from PyQt5.QtGui import QKeySequence, QIntValidator
 
@@ -266,66 +269,65 @@ class EventAnnotator(BaseAnnotator):
 
         QApplication.processEvents()
 
-    def write_new_event_class(self):
+        # Add Menu for Interactive Plotter
+        menubar = self.menuBar()
+        viewMenu = menubar.addMenu("View")
 
-        if self.class_name_le.text() == "":
-            self.target_class = "class"
-            self.target_time = "t0"
-        else:
-            self.target_class = "class_" + self.class_name_le.text()
-            self.target_time = "t_" + self.class_name_le.text()
+        openPlotterAct = QAction("Interactive Plotter", self)
+        openPlotterAct.setShortcut("Ctrl+P")
+        openPlotterAct.setStatusTip("Open interactive signal plotter for corrections")
+        openPlotterAct.triggered.connect(self.launch_interactive_viewer)
+        viewMenu.addAction(openPlotterAct)
 
-        if self.target_class in list(self.df_tracks.columns):
+    def launch_interactive_viewer(self):
+        if (
+            not hasattr(self, "plotter")
+            or self.plotter is None
+            or not self.plotter.isVisible()
+        ):
+            label = None
+            if hasattr(self, "class_name") and self.class_name.startswith("class_"):
+                label = self.class_name.replace("class_", "")
 
-            msgBox = QMessageBox()
-            msgBox.setIcon(QMessageBox.Warning)
-            msgBox.setText(
-                "This event name already exists. If you proceed,\nall annotated data will be rewritten. Do you wish to continue?"
+            # Create with shared DF and callback
+            self.plotter = InteractiveEventViewer(
+                self.trajectories_path,
+                df=self.df_tracks,
+                event_label=label,
+                callback=self.on_viewer_update,
+                parent=self,
             )
-            msgBox.setWindowTitle("Warning")
-            msgBox.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
-            returnValue = msgBox.exec()
-            if returnValue == QMessageBox.No:
-                return None
-            else:
-                pass
+        self.plotter.show()
+        self.plotter.activateWindow()
 
-        fill_option = np.where([c.isChecked() for c in self.class_option_rb])[0][0]
-        self.df_tracks.loc[:, self.target_class] = fill_option
-        if fill_option == 0:
-            self.df_tracks.loc[:, self.target_time] = 0.1
-        else:
-            self.df_tracks.loc[:, self.target_time] = -1
+    def on_viewer_update(self):
+        """Callback from interactive viewer to refresh annotator."""
+        self.compute_status_and_colors(0)
+        self.update_scatters_only()
+        self.fcanvas.canvas.draw_idle()
 
-        self.class_choice_cb.clear()
-        cols = np.array(self.df_tracks.columns)
-        self.class_cols = np.array(
-            [c.startswith("class") for c in list(self.df_tracks.columns)]
-        )
-        self.class_cols = list(cols[self.class_cols])
-        if "class_id" in self.class_cols:
-            self.class_cols.remove("class_id")
-        if "class_color" in self.class_cols:
-            self.class_cols.remove("class_color")
-        self.class_choice_cb.addItems(self.class_cols)
-        idx = self.class_choice_cb.findText(self.target_class)
-        self.class_choice_cb.setCurrentIndex(idx)
-
-        self.newClassWidget.close()
-
-    # def close_without_new_class(self):
-    # 	self.newClassWidget.close()
+    def update_scatters_only(self):
+        """Update only the scatters without reloading the image."""
+        self.status_scatter.set_offsets(self.positions[self.framedata])
+        self.status_scatter.set_color(self.colors[self.framedata][:, 1])
+        self.class_scatter.set_offsets(self.positions[self.framedata])
+        self.class_scatter.set_edgecolor(self.colors[self.framedata][:, 0])
 
     def compute_status_and_colors(self, i):
 
         self.class_name = self.class_choice_cb.currentText()
-        self.expected_status = "status"
+        if self.class_name == "":
+            self.class_name = "class"
+
         suffix = self.class_name.replace("class", "").replace("_", "", 1)
         if suffix != "":
-            self.expected_status += "_" + suffix
+            self.expected_status = "status_" + suffix
             self.expected_time = "t_" + suffix
         else:
+            self.expected_status = "status"
             self.expected_time = "t0"
+        self.expected_class = self.class_name
+
         self.time_name = self.expected_time
         self.status_name = self.expected_status
 
@@ -370,6 +372,9 @@ class EventAnnotator(BaseAnnotator):
             self.select_single_cell(self.selection[0][0], self.selection[0][1])
 
         self.fcanvas.canvas.draw()
+
+    # def close_without_new_class(self):
+    # 	self.newClassWidget.close()
 
     def cancel_selection(self):
 
@@ -1828,29 +1833,6 @@ class MeasureAnnotator(BaseAnnotator):
             self.status_scatter,
             self.im_mask,
         )
-
-    def compute_status_and_colors(self):
-
-        self.cancel_selection()
-
-        if self.class_choice_cb.currentText() == "":
-            pass
-        else:
-            self.status_name = self.class_choice_cb.currentText()
-
-        if self.status_name not in self.df_tracks.columns:
-            print("Creating a new status for visualization...")
-            self.make_status_column()
-        else:
-            print(f'Generating per-state colors for the status "{self.status_name}"...')
-            all_states = self.df_tracks.loc[:, self.status_name].tolist()
-            all_states = np.array(all_states)
-            self.state_color_map = color_from_state(all_states, recently_modified=False)
-            print(f'Color mapping for "{self.status_name}":')
-            pretty_table(self.state_color_map)
-            self.df_tracks["group_color"] = self.df_tracks[self.status_name].apply(
-                self.assign_color_state
-            )
 
     def make_status_column(self):
         if self.status_name == "state_firstdetection":

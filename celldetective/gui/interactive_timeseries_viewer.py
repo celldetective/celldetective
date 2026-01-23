@@ -1,6 +1,14 @@
 import pandas as pd
 from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QComboBox, QDialog, QHBoxLayout, QLabel, QMessageBox, QPushButton, QVBoxLayout
+from PyQt5.QtWidgets import (
+    QComboBox,
+    QDialog,
+    QHBoxLayout,
+    QLabel,
+    QMessageBox,
+    QPushButton,
+    QVBoxLayout,
+)
 from matplotlib import pyplot as plt
 from matplotlib.widgets import RectangleSelector
 
@@ -243,7 +251,9 @@ class InteractiveEventViewer(QDialog, Styles):
 
         # Plot
         self.fig = plt.figure(figsize=(8, 6))
+        self.fig.patch.set_alpha(0)
         self.canvas = FigureCanvas(self.fig, interactive=True)
+        self.canvas.setStyleSheet("background-color:transparent;")
         layout.addWidget(self.canvas)
 
         # Tooltip/Info
