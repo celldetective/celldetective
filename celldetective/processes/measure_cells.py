@@ -310,6 +310,9 @@ class MeasurementProcess(Process):
 
         for t in tqdm(indices, desc="frame"):
 
+            measurements_at_t = None
+            perform_measurement = True
+
             if self.file is not None:
                 img = load_frames(
                     self.img_num_channels[:, t],
@@ -321,92 +324,115 @@ class MeasurementProcess(Process):
             if self.label_path is not None:
                 lbl = locate_labels(self.pos, population=self.mode, frames=t)
                 if lbl is None:
-                    continue
+                    perform_measurement = False
 
-            if self.trajectories is not None:
-                # Optimized access
-                if self.frame_slices is not None:
-                    # Check if frame t is in our precomputed slices
-                    if t in self.frame_slices:
-                        start, end = self.frame_slices[t]
-                        positions_at_t = self.trajectories.iloc[start:end].copy()
+            if perform_measurement:
+
+                if self.trajectories is not None:
+                    # Optimized access
+                    if self.frame_slices is not None:
+                        # Check if frame t is in our precomputed slices
+                        if t in self.frame_slices:
+                            start, end = self.frame_slices[t]
+                            positions_at_t = self.trajectories.iloc[start:end].copy()
+                        else:
+                            # Empty frame for trajectories
+                            positions_at_t = pd.DataFrame(
+                                columns=self.trajectories.columns
+                            )
                     else:
-                        # Empty frame for trajectories
-                        positions_at_t = pd.DataFrame(columns=self.trajectories.columns)
-                else:
-                    # Fallback or original method (should not be reached if optimized)
-                    positions_at_t = self.trajectories.loc[
-                        self.trajectories[self.column_labels["time"]] == t
-                    ].copy()
+                        # Fallback or original method (should not be reached if optimized)
+                        positions_at_t = self.trajectories.loc[
+                            self.trajectories[self.column_labels["time"]] == t
+                        ].copy()
 
-            if self.do_features:
-                feature_table = measure_features(
-                    img,
-                    lbl,
-                    features=self.features,
-                    border_dist=self.border_distances,
-                    channels=self.channel_names,
-                    haralick_options=self.haralick_options,
-                    verbose=False,
-                    normalisation_list=self.background_correction,
-                    spot_detection=self.spot_detection,
-                )
-                if self.trajectories is None:
-                    positions_at_t = _extract_coordinates_from_features(
-                        feature_table, timepoint=t
+                if self.do_features:
+                    feature_table = measure_features(
+                        img,
+                        lbl,
+                        features=self.features,
+                        border_dist=self.border_distances,
+                        channels=self.channel_names,
+                        haralick_options=self.haralick_options,
+                        verbose=False,
+                        normalisation_list=self.background_correction,
+                        spot_detection=self.spot_detection,
                     )
-                    column_labels = {
-                        "track": "ID",
-                        "time": self.column_labels["time"],
-                        "x": self.column_labels["x"],
-                        "y": self.column_labels["y"],
-                    }
-                feature_table.rename(
-                    columns={"centroid-1": "POSITION_X", "centroid-0": "POSITION_Y"},
-                    inplace=True,
-                )
+                    if self.trajectories is None:
+                        positions_at_t = _extract_coordinates_from_features(
+                            feature_table, timepoint=t
+                        )
+                        column_labels = {
+                            "track": "ID",
+                            "time": self.column_labels["time"],
+                            "x": self.column_labels["x"],
+                            "y": self.column_labels["y"],
+                        }
+                    feature_table.rename(
+                        columns={
+                            "centroid-1": "POSITION_X",
+                            "centroid-0": "POSITION_Y",
+                        },
+                        inplace=True,
+                    )
 
-            if self.do_iso_intensities and not self.trajectories is None:
-                iso_table = measure_isotropic_intensity(
-                    positions_at_t,
-                    img,
-                    channels=self.channel_names,
-                    intensity_measurement_radii=self.intensity_measurement_radii,
+                if self.do_iso_intensities and not self.trajectories is None:
+                    iso_table = measure_isotropic_intensity(
+                        positions_at_t,
+                        img,
+                        channels=self.channel_names,
+                        intensity_measurement_radii=self.intensity_measurement_radii,
+                        column_labels=self.column_labels,
+                        operations=self.isotropic_operations,
+                        verbose=False,
+                    )
+
+                if (
+                    self.do_iso_intensities
+                    and self.do_features
+                    and not self.trajectories is None
+                ):
+                    measurements_at_t = iso_table.merge(
+                        feature_table,
+                        how="outer",
+                        on="class_id",
+                        suffixes=("_delme", ""),
+                    )
+                    measurements_at_t = measurements_at_t[
+                        [
+                            c
+                            for c in measurements_at_t.columns
+                            if not c.endswith("_delme")
+                        ]
+                    ]
+                elif (
+                    self.do_iso_intensities
+                    * (not self.do_features)
+                    * (not self.trajectories is None)
+                ):
+                    measurements_at_t = iso_table
+                elif self.do_features:
+                    measurements_at_t = positions_at_t.merge(
+                        feature_table,
+                        how="outer",
+                        on="class_id",
+                        suffixes=("_delme", ""),
+                    )
+                    measurements_at_t = measurements_at_t[
+                        [
+                            c
+                            for c in measurements_at_t.columns
+                            if not c.endswith("_delme")
+                        ]
+                    ]
+
+                measurements_at_t = center_of_mass_to_abs_coordinates(measurements_at_t)
+
+                measurements_at_t = measure_radial_distance_to_center(
+                    measurements_at_t,
+                    volume=img.shape,
                     column_labels=self.column_labels,
-                    operations=self.isotropic_operations,
-                    verbose=False,
                 )
-
-            if (
-                self.do_iso_intensities
-                and self.do_features
-                and not self.trajectories is None
-            ):
-                measurements_at_t = iso_table.merge(
-                    feature_table, how="outer", on="class_id", suffixes=("_delme", "")
-                )
-                measurements_at_t = measurements_at_t[
-                    [c for c in measurements_at_t.columns if not c.endswith("_delme")]
-                ]
-            elif (
-                self.do_iso_intensities
-                * (not self.do_features)
-                * (not self.trajectories is None)
-            ):
-                measurements_at_t = iso_table
-            elif self.do_features:
-                measurements_at_t = positions_at_t.merge(
-                    feature_table, how="outer", on="class_id", suffixes=("_delme", "")
-                )
-                measurements_at_t = measurements_at_t[
-                    [c for c in measurements_at_t.columns if not c.endswith("_delme")]
-                ]
-
-            measurements_at_t = center_of_mass_to_abs_coordinates(measurements_at_t)
-
-            measurements_at_t = measure_radial_distance_to_center(
-                measurements_at_t, volume=img.shape, column_labels=self.column_labels
-            )
 
             self.sum_done += 1
             data = {}
