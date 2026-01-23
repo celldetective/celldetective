@@ -75,7 +75,7 @@ class UnifiedBatchProcess(Process):
                     queue=self.queue, process_args=self.seg_args
                 )
 
-                if seg_worker.model_type == "stardist_utils":
+                if seg_worker.model_type == "stardist":
                     logger.info("Loading the StarDist library...")
                     from celldetective.utils.stardist_utils import _prep_stardist_model
 
@@ -85,7 +85,7 @@ class UnifiedBatchProcess(Process):
                         use_gpu=seg_worker.use_gpu,
                         scale=seg_worker.scale,
                     )
-                elif seg_worker.model_type == "cellpose_utils":
+                elif seg_worker.model_type == "cellpose":
                     logger.info("Loading the cellpose_utils library...")
                     from celldetective.utils.cellpose_utils import _prep_cellpose_model
 

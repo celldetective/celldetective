@@ -546,7 +546,7 @@ class SettingsSegmentationModelTraining(CelldetectiveSettingsPanel):
         normalization_values = data["normalization_values"]
         spatial_calib = data["spatial_calibration"]
         model_type = data["model_type"]
-        if model_type == "stardist_utils":
+        if model_type == "stardist":
             self.stardist_model.setChecked(True)
             self.cellpose_model.setChecked(False)
             self.load_stardist_train_config()
@@ -654,9 +654,9 @@ class SettingsSegmentationModelTraining(CelldetectiveSettingsPanel):
         aug_factor = round(self.augmentation_slider.value(), 2)
         val_split = round(self.validation_slider.value(), 2)
         if self.stardist_model.isChecked():
-            model_type = "stardist_utils"
+            model_type = "stardist"
         else:
-            model_type = "cellpose_utils"
+            model_type = "cellpose"
 
         try:
             lr = float(self.lr_le.text().replace(",", "."))

@@ -145,7 +145,7 @@ len_movie_auto = auto_load_number_of_frames(file)
 if len_movie_auto is not None:
     len_movie = len_movie_auto
 
-if model_type == "cellpose_utils":
+if model_type == "cellpose":
     diameter = input_config["diameter"]
     # if diameter!=30:
     # 	required_spatial_calibration = None 	# ignore spatial calibration and use diameter
@@ -177,12 +177,12 @@ with open(pos + f"log_{mode}.json", "a") as f:
 # Loop over all frames and segment
 def segment_index(indices):
 
-    if model_type == "stardist_utils":
+    if model_type == "stardist":
         model, scale_model = _prep_stardist_model(
             modelname, Path(model_complete_path).parent, use_gpu=use_gpu, scale=scale
         )
 
-    elif model_type == "cellpose_utils":
+    elif model_type == "cellpose":
         model, scale_model = _prep_cellpose_model(
             modelname,
             model_complete_path,
@@ -200,11 +200,11 @@ def segment_index(indices):
             normalize_kwargs=normalize_kwargs,
         )
 
-        if model_type == "stardist_utils":
+        if model_type == "stardist":
             Y_pred = _segment_image_with_stardist_model(
                 f, model=model, return_details=False
             )
-        elif model_type == "cellpose_utils":
+        elif model_type == "cellpose":
             Y_pred = _segment_image_with_cellpose_model(
                 f,
                 model=model,

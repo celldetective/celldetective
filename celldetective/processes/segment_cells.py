@@ -240,7 +240,7 @@ class SegmentCellDLProcess(BaseSegmentProcess):
             f"Spatial calibration expected by the model: {self.required_spatial_calibration}..."
         )
 
-        if self.model_type == "cellpose_utils":
+        if self.model_type == "cellpose":
             self.diameter = self.input_config["diameter"]
             self.cellprob_threshold = self.input_config["cellprob_threshold"]
             self.flow_threshold = self.input_config["flow_threshold"]
@@ -325,7 +325,7 @@ class SegmentCellDLProcess(BaseSegmentProcess):
                 normalize_kwargs=self.normalize_kwargs,
             )
 
-            if self.model_type == "stardist_utils":
+            if self.model_type == "stardist":
                 from celldetective.utils.stardist_utils import (
                     _segment_image_with_stardist_model,
                 )
@@ -334,7 +334,7 @@ class SegmentCellDLProcess(BaseSegmentProcess):
                     f, model=model, return_details=False
                 )
 
-            elif self.model_type == "cellpose_utils":
+            elif self.model_type == "cellpose":
                 from celldetective.utils.cellpose_utils import (
                     _segment_image_with_cellpose_model,
                 )
@@ -408,7 +408,7 @@ class SegmentCellDLProcess(BaseSegmentProcess):
 
         try:
 
-            if self.model_type == "stardist_utils":
+            if self.model_type == "stardist":
                 from celldetective.utils.stardist_utils import _prep_stardist_model
 
                 model, scale_model = _prep_stardist_model(
@@ -418,7 +418,7 @@ class SegmentCellDLProcess(BaseSegmentProcess):
                     scale=self.scale,
                 )
 
-            elif self.model_type == "cellpose_utils":
+            elif self.model_type == "cellpose":
                 from celldetective.utils.cellpose_utils import _prep_cellpose_model
 
                 model, scale_model = _prep_cellpose_model(

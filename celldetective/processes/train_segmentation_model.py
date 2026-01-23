@@ -144,9 +144,9 @@ class TrainSegModelProcess(Process):
 
         self.queue.put("Loading dataset...")
 
-        if self.model_type == "cellpose_utils":
+        if self.model_type == "cellpose":
             self.train_cellpose_model()
-        elif self.model_type == "stardist_utils":
+        elif self.model_type == "stardist":
             self.train_stardist_model()
 
         self.queue.put("finished")
@@ -411,7 +411,7 @@ class TrainSegModelProcess(Process):
             "normalization_percentile": self.normalization_percentile,
             "normalization_clip": self.normalization_clip,
             "normalization_values": self.normalization_values,
-            "model_type": "stardist_utils",
+            "model_type": "stardist",
             "spatial_calibration": self.spatial_calibration,
             "cell_size_um": float(median_size_scalar * self.spatial_calibration),
             "dataset": {"train": self.files_train, "validation": self.files_val},
@@ -465,7 +465,7 @@ class TrainSegModelProcess(Process):
         _, log_file = logger_setup()
 
         # Get cellpose_utils logger explicitly to ensure we catch all cellpose_utils logs (e.g. from models)
-        logger_cellpose = logging.getLogger("cellpose_utils")
+        logger_cellpose = logging.getLogger("cellpose")
 
         # Add custom handler
         handler = QueueLoggingHandler(
@@ -571,7 +571,7 @@ class TrainSegModelProcess(Process):
             "normalization_percentile": self.normalization_percentile,
             "normalization_clip": self.normalization_clip,
             "normalization_values": self.normalization_values,
-            "model_type": "cellpose_utils",
+            "model_type": "cellpose",
             "spatial_calibration": input_spatial_calibration,
             "cell_size_um": round(diameter * input_spatial_calibration, 4),
             "dataset": {"train": self.files_train, "validation": self.files_val},
