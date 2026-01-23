@@ -25,6 +25,7 @@ from celldetective.utils.image_loaders import (
     _get_img_num_per_channel,
     auto_load_number_of_frames,
     _load_frames_to_measure,
+    locate_labels,
 )
 from celldetective.utils.io import remove_file_if_exists
 from celldetective.utils.parsing import config_section_to_dict
@@ -210,15 +211,6 @@ class TrackingProcess(Process):
         )
         if len(self.label_path) > 0:
             logger.info(f"Found {len(self.label_path)} segmented frames...")
-            # Optimize: Create a map of frame index to file path
-            self.label_map = {}
-            for path in self.label_path:
-                try:
-                    # Assumes format ####.tif, e.g., 0001.tif
-                    frame_idx = int(os.path.basename(path).split(".")[0])
-                    self.label_map[frame_idx] = path
-                except ValueError:
-                    continue
         else:
             logger.error(
                 f"No segmented frames have been found. Please run segmentation first. Abort..."
@@ -245,37 +237,39 @@ class TrackingProcess(Process):
 
             for t in tqdm(indices, desc="frame"):
 
+                perform_tracking = True
+
                 # Load channels at time t
-                img = _load_frames_to_measure(
-                    self.file, indices=self.img_num_channels[:, t]
-                )
-                # Optimize: Direct lookup instead of glob
-                if t in self.label_map:
-                    try:
-                        # Load image from path in map
-                        lbl = np.array(imread(self.label_map[t]))
-                    except Exception as e:
-                        logger.error(f"Failed to load label for frame {t}: {e}")
-                        continue
-                else:
-                    # Fallback or skip if not in map
-                    continue
+                try:
+                    img = _load_frames_to_measure(
+                        self.file, indices=self.img_num_channels[:, t]
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to load image for frame {t}: {e}")
+                    perform_tracking = False
 
-                df_props = measure_features(
-                    img,
-                    lbl,
-                    features=self.features + ["centroid"],
-                    border_dist=None,
-                    channels=self.channel_names,
-                    haralick_options=self.haralick_options,
-                    verbose=False,
-                )
-                df_props.rename(
-                    columns={"centroid-1": "x", "centroid-0": "y"}, inplace=True
-                )
-                df_props["t"] = int(t)
+                if perform_tracking:
+                    lbl = locate_labels(self.pos, population=self.mode, frames=t)
+                    if lbl is None:
+                        logger.warning(f"Failed to load label for frame {t}")
+                        perform_tracking = False
 
-                props.append(df_props)
+                if perform_tracking:
+                    df_props = measure_features(
+                        img,
+                        lbl,
+                        features=self.features + ["centroid"],
+                        border_dist=None,
+                        channels=self.channel_names,
+                        haralick_options=self.haralick_options,
+                        verbose=False,
+                    )
+                    df_props.rename(
+                        columns={"centroid-1": "x", "centroid-0": "y"}, inplace=True
+                    )
+                    df_props["t"] = int(t)
+
+                    props.append(df_props)
 
                 # Progress Update
                 self.loop_count += 1
@@ -349,6 +343,7 @@ class TrackingProcess(Process):
             return
 
         df = pd.concat(self.timestep_dataframes)
+        logger.info(f"Aggregated DataFrame shape: {df.shape}")
         if df.empty:
             logger.warning("Dataframe is empty. Skipping position.")
             return
@@ -357,6 +352,7 @@ class TrackingProcess(Process):
 
         df.reset_index(inplace=True, drop=True)
         df = _mask_intensity_measurements(df, self.mask_channels)
+        logger.info(f"DataFrame shape after masking intensity measurements: {df.shape}")
 
         # do tracking
         if self.btrack_option:
@@ -380,6 +376,9 @@ class TrackingProcess(Process):
                 search_range=self.search_range,
                 memory=self.memory,
             )
+            logger.info(
+                f"Tracking output: Trajectories shape: {trajectories.shape} if trajectories is not None else 'None'"
+            )
         except Exception as e:
             logger.error(f"Tracking failed: {e}")
             if "search_range" in str(e) or "SubnetOversizeException" in str(e):
@@ -399,6 +398,7 @@ class TrackingProcess(Process):
             allow_pickle=True,
         )
 
+        logger.info(f"Shape of trajectories before saving: {trajectories.shape}")
         trajectories.to_csv(
             self.pos + os.sep.join(["output", "tables", self.table_name]), index=False
         )
