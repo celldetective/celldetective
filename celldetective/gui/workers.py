@@ -316,3 +316,102 @@ class RunnerSignal(QObject):
 
     finished = pyqtSignal()
     error = pyqtSignal(str)
+
+
+class GenericProgressWindow(CelldetectiveDialog):
+
+    def __init__(
+        self,
+        process=None,
+        parent_window=None,
+        title="",
+        process_args=None,
+        label_text="Progress:",
+    ):
+
+        super().__init__()
+
+        self.setWindowTitle(f"{title}")
+        self.__process = process
+        self.parent_window = parent_window
+
+        self.__btn_stp = QPushButton("Cancel")
+        self.__label = QLabel("Idle")
+        self.progress_label = QLabel(label_text)
+
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setValue(0)
+        self.progress_bar.setFormat("%p%")
+
+        self.__runner = Runner(
+            process=self.__process,
+            process_args=process_args,
+        )
+        logger.info("Runner initialized...")
+        self.pool = QThreadPool.globalInstance()
+
+        self.__btn_stp.clicked.connect(self.__stp_net)
+        self.__runner.signals.finished.connect(self.__on_finished)
+        self.__runner.signals.error.connect(self.__on_error)
+        self.__runner.signals.update_status.connect(self.__label.setText)
+
+        # Connect update_pos for generic progress (Runner maps generic list progress to update_pos)
+        self.__runner.signals.update_pos.connect(self.progress_bar.setValue)
+
+        self.__btn_stp.setDisabled(True)
+
+        self.layout = QVBoxLayout()
+        self.layout.addWidget(self.progress_label)
+        self.layout.addWidget(self.progress_bar)
+
+        self.btn_layout = QHBoxLayout()
+        self.btn_layout.addWidget(self.__btn_stp)
+        self.btn_layout.addWidget(self.__label)
+
+        self.layout.addLayout(self.btn_layout)
+
+        self.setLayout(self.layout)
+        self.setFixedSize(QSize(400, 150))
+        self.show()
+        self.raise_()
+        self.activateWindow()
+        logger.info("GenericProgressWindow initialized and shown.")
+        self.__run_net()
+        self.setModal(True)
+
+    def closeEvent(self, evnt):
+        evnt.ignore()
+        self.setWindowState(Qt.WindowMinimized)
+
+    def __run_net(self):
+        self.__btn_stp.setEnabled(True)
+        self.__label.setText("Running...")
+        self.pool.start(self.__runner)
+
+    def __stp_net(self):
+        self.__runner.close()
+        logger.info("\n Job cancelled... Abort.")
+        self.reject()
+
+    def __on_finished(self):
+        self.__btn_stp.setDisabled(True)
+        self.__label.setText("\nFinished!")
+        self.__runner.close()
+        self.accept()
+
+    def __on_error(self, message="Error"):
+        self.__btn_stp.setDisabled(True)
+        self.__label.setText("\nError")
+        self.__runner.close()
+
+        # Show error in a message box to ensure it's seen
+        from PyQt5.QtWidgets import QMessageBox
+
+        msg = QMessageBox()
+        msg.setIcon(QMessageBox.Critical)
+        msg.setText("Process failed")
+        msg.setInformativeText(str(message))
+        msg.setWindowTitle("Error")
+        msg.exec_()
+
+        self.reject()

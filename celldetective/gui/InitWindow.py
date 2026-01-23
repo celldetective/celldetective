@@ -256,7 +256,7 @@ class AppInitWindow(CelldetectiveMainWindow):
             DownloadProcess = self.bg_loader.DownloadProcess
         else:
             from celldetective.processes.downloader import DownloadProcess
-        from celldetective.gui.workers import ProgressWindow
+        from celldetective.gui.workers import GenericProgressWindow
 
         self.target_dir = str(
             QFileDialog.getExistingDirectory(self, "Select Folder for Download")
@@ -268,12 +268,12 @@ class AppInitWindow(CelldetectiveMainWindow):
             self.output_dir = self.target_dir
             self.file = "demo_ricm"
             process_args = {"output_dir": self.output_dir, "file": self.file}
-            self.job = ProgressWindow(
+            self.job = GenericProgressWindow(
                 DownloadProcess,
                 parent_window=self,
                 title="Download",
-                position_info=False,
                 process_args=process_args,
+                label_text="Downloading demo_ricm...",
             )
             result = self.job.exec_()
             if result == QDialog.Accepted:
