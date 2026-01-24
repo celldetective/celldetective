@@ -11,11 +11,13 @@ from PyQt5.QtWidgets import (
     QStylePainter,
     QStyleOptionComboBox,
     QStyle,
-    QFrame,
     QSizePolicy,
     QProgressDialog,
+    QPushButton,
+    QFrame,
 )
 from PyQt5.QtCore import Qt, pyqtSignal, QEvent
+from superqt.fonticon import icon
 from celldetective.gui.base.styles import Styles
 
 
@@ -247,3 +249,20 @@ class QHSeperationLine(QFrame):
         self.setFrameShape(QFrame.HLine)
         self.setFrameShadow(QFrame.Sunken)
         self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Minimum)
+
+
+class HoverButton(QPushButton):
+    def __init__(self, text, icon_enum, default_color="black", hover_color="white"):
+        super().__init__(text)
+        self.icon_enum = icon_enum
+        self.default_color = default_color
+        self.hover_color = hover_color
+        self.setIcon(icon(self.icon_enum, color=self.default_color))
+
+    def enterEvent(self, event):
+        self.setIcon(icon(self.icon_enum, color=self.hover_color))
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        self.setIcon(icon(self.icon_enum, color=self.default_color))
+        super().leaveEvent(event)

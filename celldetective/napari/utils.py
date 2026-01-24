@@ -88,9 +88,15 @@ def control_tracks(
         position += os.sep
 
     position = position.replace("\\", "/")
+    if progress_callback:
+        progress_callback(0)
+
     stack, labels = locate_stack_and_labels(
         position, prefix=prefix, population=population
     )
+
+    if progress_callback:
+        progress_callback(25)
 
     return view_tracks_in_napari(
         position,
@@ -131,7 +137,13 @@ def view_tracks_in_napari(
     Updated
     """
 
+    print(f"DEBUG: view_tracks_in_napari called with pos={position}, pop={population}")
     df, df_path = get_position_table(position, population=population, return_path=True)
+    print(f"DEBUG: get_position_table returned df={df is not None}")
+
+    if progress_callback:
+        progress_callback(50)
+
     if df is None:
         print("Please compute trajectories first... Abort...")
         return None
@@ -145,12 +157,18 @@ def view_tracks_in_napari(
 
     if (labels is not None) * relabel:
         print("Replacing the cell mask labels with the track ID...")
+
+        def wrapped_callback(p):
+            if progress_callback:
+                return progress_callback(50 + int(p * 0.5))
+            return True
+
         labels = relabel_segmentation(
             labels,
             df,
             exclude_nans=True,
             threads=threads,
-            progress_callback=progress_callback,
+            progress_callback=wrapped_callback,
         )
         if labels is None:
             return None
@@ -187,9 +205,12 @@ def launch_napari_viewer(
     shared_data,
     contrast_limits,
     flush_memory=True,
+    block=True,
+    progress_callback=None,
 ):
 
     viewer = napari.Viewer()
+
     if stack is not None:
         viewer.add_image(
             stack,
@@ -197,6 +218,7 @@ def launch_napari_viewer(
             colormap=["gray"] * stack.shape[-1],
             contrast_limits=contrast_limits,
         )
+
     if labels is not None:
         labels_layer = viewer.add_labels(
             labels.astype(int), name="segmentation", opacity=0.4
@@ -425,9 +447,9 @@ def launch_napari_viewer(
 
         shared_data["df"] = df
 
-    viewer.show(block=True)
+    viewer.show(block=block)
 
-    if flush_memory:
+    if flush_memory and block:
 
         # temporary fix for slight napari memory leak
         for i in range(10000):

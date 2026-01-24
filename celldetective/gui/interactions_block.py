@@ -23,7 +23,8 @@ from superqt.fonticon import icon
 
 import celldetective.gui.preprocessing_block
 from celldetective import get_software_location
-from celldetective.gui.base.components import QHSeperationLine
+from celldetective.gui.base.components import QHSeperationLine, HoverButton
+
 from celldetective.gui.base.styles import Styles
 from celldetective.gui.base.utils import center_window
 from celldetective.gui.gui_utils import help_generic
@@ -295,11 +296,12 @@ class NeighPanel(QFrame, Styles):
         self.refresh_signal_models()
         # self.to_disable.append(self.cell_models_list)
 
-        self.pair_train_signal_model_btn = QPushButton("TRAIN")
+        self.pair_train_signal_model_btn = HoverButton(
+            "TRAIN", MDI6.redo_variant, "black", "white"
+        )
         self.pair_train_signal_model_btn.setToolTip(
             "Train a cell pair event detection model."
         )
-        self.pair_train_signal_model_btn.setIcon(icon(MDI6.redo_variant, color="black"))
         self.pair_train_signal_model_btn.setIconSize(QSize(20, 20))
         self.pair_train_signal_model_btn.setStyleSheet(self.button_style_sheet_3)
         pair_model_zoo_layout.addWidget(self.pair_train_signal_model_btn, 5)

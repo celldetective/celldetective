@@ -9,6 +9,7 @@ from PyQt5.QtWidgets import (
     QHBoxLayout,
     QCheckBox,
     QMessageBox,
+    QApplication,
 )
 from PyQt5.QtCore import Qt, QSize, QTimer, QThread, pyqtSignal
 from superqt.fonticon import icon
@@ -30,13 +31,14 @@ from celldetective.gui.base.components import (
     CelldetectiveWidget,
     CelldetectiveProgressDialog,
     QHSeperationLine,
+    HoverButton,
 )
 
 import numpy as np
 from glob import glob
 from celldetective import get_logger
 
-logger = get_logger()
+logger = get_logger("celldetective")
 
 
 class NapariLoaderThread(QThread):
@@ -345,11 +347,12 @@ class ProcessPanel(QFrame, Styles):
         self.refresh_signal_models()
         # self.to_disable.append(self.cell_models_list)
 
-        self.train_signal_model_btn = QPushButton("TRAIN")
+        self.train_signal_model_btn = HoverButton(
+            "TRAIN", MDI6.redo_variant, "black", "white"
+        )
         self.train_signal_model_btn.setToolTip(
             "Train or retrain an event detection model\non newly annotated data."
         )
-        self.train_signal_model_btn.setIcon(icon(MDI6.redo_variant, color="black"))
         self.train_signal_model_btn.setIconSize(QSize(20, 20))
         self.train_signal_model_btn.setStyleSheet(self.button_style_sheet_3)
         model_zoo_layout.addWidget(self.train_signal_model_btn, 5)
@@ -557,8 +560,7 @@ class ProcessPanel(QFrame, Styles):
         self.seg_model_list.setGeometry(50, 50, 200, 30)
         self.init_seg_model_list()
 
-        self.upload_model_btn = QPushButton("UPLOAD")
-        self.upload_model_btn.setIcon(icon(MDI6.upload, color="black"))
+        self.upload_model_btn = HoverButton("UPLOAD", MDI6.upload, "black", "white")
         self.upload_model_btn.setIconSize(QSize(20, 20))
         self.upload_model_btn.setStyleSheet(self.button_style_sheet_3)
         self.upload_model_btn.setToolTip(
@@ -568,11 +570,10 @@ class ProcessPanel(QFrame, Styles):
         self.upload_model_btn.clicked.connect(self.upload_segmentation_model)
         # self.to_disable.append(self.upload_tc_model)
 
-        self.train_btn = QPushButton("TRAIN")
+        self.train_btn = HoverButton("TRAIN", MDI6.redo_variant, "black", "white")
         self.train_btn.setToolTip(
             "Train or retrain a segmentation model\non newly annotated data."
         )
-        self.train_btn.setIcon(icon(MDI6.redo_variant, color="black"))
         self.train_btn.setIconSize(QSize(20, 20))
         self.train_btn.setStyleSheet(self.button_style_sheet_3)
         self.train_btn.clicked.connect(self.open_segmentation_model_config_ui)
@@ -1493,6 +1494,9 @@ class ProcessPanel(QFrame, Styles):
             window_title="Preparing the napari viewer...",
         )
 
+        self.napari_progress.setAutoClose(False)
+        self.napari_progress.setAutoReset(False)
+
         self.napari_progress.setValue(0)
         self.napari_loader.progress.connect(self.napari_progress.setValue)
         self.napari_loader.status.connect(self.napari_progress.setLabelText)
@@ -1502,13 +1506,15 @@ class ProcessPanel(QFrame, Styles):
             from celldetective.napari.utils import launch_napari_viewer
 
             self.napari_progress.blockSignals(True)
-            self.napari_progress.close()
+            # self.napari_progress.close()
             if self.napari_loader._is_cancelled:
                 logger.info("Task was cancelled...")
+                self.napari_progress.close()
                 return
 
             if isinstance(result, Exception):
                 logger.error(f"napari loading error: {result}")
+                self.napari_progress.close()
                 msgBox = QMessageBox()
                 msgBox.setIcon(QMessageBox.Warning)
                 msgBox.setText(str(result))
@@ -1519,13 +1525,33 @@ class ProcessPanel(QFrame, Styles):
 
             if result:
                 logger.info("Launching the napari viewer with tracks...")
+                self.napari_progress.setLabelText("Initializing Napari viewer...")
+                self.napari_progress.setRange(0, 0)
+                QApplication.processEvents()
+
+                def progress_cb(msg):
+                    if isinstance(msg, str):
+                        self.napari_progress.setLabelText(msg)
+                    QApplication.processEvents()
+
+                if "flush_memory" in result:
+                    result.pop("flush_memory")
+
                 try:
-                    launch_napari_viewer(**result)
+                    launch_napari_viewer(
+                        **result,
+                        block=False,
+                        flush_memory=False,
+                        progress_callback=progress_cb,
+                    )
                     logger.info("napari viewer was closed...")
                 except Exception as e:
                     logger.error(f"Failed to launch Napari: {e}")
                     QMessageBox.warning(self, "Error", f"Failed to launch Napari: {e}")
+                finally:
+                    self.napari_progress.close()
             else:
+                self.napari_progress.close()
                 logger.warning(
                     "napari loading returned None (likely no trajectories found)."
                 )
