@@ -58,6 +58,8 @@ class BackgroundLoader(QThread):
             import scipy.ndimage
             import tifffile
             import numpy
+            import napari
+            from celldetective.napari.utils import launch_napari_viewer
         except Exception:
             logger.error("Background packages not loaded...")
         logger.info("Background packages loaded...")
