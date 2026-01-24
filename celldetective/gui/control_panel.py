@@ -58,14 +58,15 @@ logger = logging.getLogger(__name__)
 
 
 class BackgroundLoader(QThread):
-     def run(self):
-         logger.info("Loading background packages...")
-         try:
-             from celldetective.gui.viewers.base_viewer import StackVisualizer
-             self.StackVisualizer = StackVisualizer
-         except Exception:
-             logger.error("Background packages not loaded...")
-         logger.info("Background packages loaded...")
+    def run(self):
+        logger.info("Loading background packages...")
+        try:
+            from celldetective.gui.viewers.base_viewer import StackVisualizer
+
+            self.StackVisualizer = StackVisualizer
+        except Exception:
+            logger.error("Background packages not loaded...")
+        logger.info("Background packages loaded...")
 
 
 class ControlPanel(CelldetectiveMainWindow):
@@ -179,9 +180,11 @@ class ControlPanel(CelldetectiveMainWindow):
 
         name = self.exp_dir.split(os.sep)[-2]
         experiment_label = QLabel(f"Experiment:")
-        experiment_label.setStyleSheet("""
+        experiment_label.setStyleSheet(
+            """
 			font-weight: bold;
-			""")
+			"""
+        )
 
         self.folder_exp_btn = QPushButton()
         self.folder_exp_btn.setIcon(icon(MDI6.folder, color="black"))
@@ -553,16 +556,18 @@ class ControlPanel(CelldetectiveMainWindow):
             for p in self.ProcessPopulations:
                 p.check_seg_btn.setEnabled(False)
                 p.check_tracking_result_btn.setEnabled(False)
-                p.view_tab_btn.setEnabled(True)
-                p.signal_analysis_action.setEnabled(True)
+                p.view_tab_btn.setEnabled(self.position_list.isAnySelected())
+                p.signal_analysis_action.setEnabled(self.position_list.isAnySelected())
                 p.check_seg_btn.setEnabled(False)
                 p.check_tracking_result_btn.setEnabled(False)
-                p.check_measurements_btn.setEnabled(False)
-                p.check_signals_btn.setEnabled(False)
+                p.check_measurements_btn.setEnabled(self.position_list.isAnySelected())
+                p.check_signals_btn.setEnabled(self.position_list.isAnySelected())
                 p.delete_tracks_btn.hide()
 
-            self.NeighPanel.view_tab_btn.setEnabled(True)
-            self.NeighPanel.check_signals_btn.setEnabled(False)
+            self.NeighPanel.view_tab_btn.setEnabled(self.position_list.isAnySelected())
+            self.NeighPanel.check_signals_btn.setEnabled(
+                self.position_list.isAnySelected()
+            )
             self.view_stack_btn.setEnabled(False)
 
         elif self.well_list.isMultipleSelection():

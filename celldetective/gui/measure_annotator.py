@@ -101,6 +101,7 @@ class MeasureAnnotator(BaseAnnotator):
 
     def __init__(self, *args, **kwargs):
 
+        self.status_name = "group"
         super().__init__(read_config=False, *args, **kwargs)
 
         self.setWindowTitle("Static annotator")
@@ -115,11 +116,11 @@ class MeasureAnnotator(BaseAnnotator):
 
         self.current_frame = 0
         self.show_fliers = False
-        self.status_name = "group"
 
         if self.proceed:
 
             from celldetective.utils.image_loaders import fix_missing_labels
+            from celldetective.tracking import write_first_detection_class
 
             # Ensure labels match stack length
             if self.len_movie > 0:
@@ -174,13 +175,62 @@ class MeasureAnnotator(BaseAnnotator):
             cols = np.array(self.df_tracks.columns)
             self.class_cols = np.array(
                 [
-                    c.startswith("group") or c.startswith("class")
+                    c.startswith("group")
+                    or c.startswith("class")
+                    or c.startswith("status")
                     for c in list(self.df_tracks.columns)
                 ]
             )
             self.class_cols = list(cols[self.class_cols])
 
-            to_remove = ["class_id", "group_color", "class_color"]
+            to_remove = [
+                "class_id",
+                "group_color",
+                "class_color",
+                "group_id",
+                "status_color",
+                "status_id",
+            ]
+            for col in to_remove:
+                try:
+                    self.class_cols.remove(col)
+                except:
+                    pass
+
+            # Generate missing status columns from class columns
+            for c in self.class_cols:
+                if c.startswith("class_"):
+                    status_col = c.replace("class_", "status_")
+                    if status_col not in self.df_tracks.columns:
+                        if (
+                            status_col == "status_firstdetection"
+                            or c == "class_firstdetection"
+                        ):
+                            try:
+                                from celldetective.tracking import (
+                                    write_first_detection_class,
+                                )
+
+                                self.df_tracks = write_first_detection_class(
+                                    self.df_tracks
+                                )
+                            except Exception as e:
+                                logger.error(
+                                    f"Could not generate status_firstdetection: {e}"
+                                )
+                                self.df_tracks[status_col] = self.df_tracks[c]
+                        else:
+                            self.df_tracks[status_col] = self.df_tracks[c]
+
+            # Re-evaluate class_cols after generation
+            cols = np.array(self.df_tracks.columns)
+            self.class_cols = np.array(
+                [
+                    c.startswith("group") or c.startswith("status")
+                    for c in list(self.df_tracks.columns)
+                ]
+            )
+            self.class_cols = list(cols[self.class_cols])
             for col in to_remove:
                 try:
                     self.class_cols.remove(col)
@@ -188,7 +238,8 @@ class MeasureAnnotator(BaseAnnotator):
                     pass
 
             if len(self.class_cols) > 0:
-                self.status_name = self.class_cols[0]
+                if self.status_name not in self.class_cols:
+                    self.status_name = self.class_cols[0]
             else:
                 self.status_name = "group"
 
@@ -335,7 +386,13 @@ class MeasureAnnotator(BaseAnnotator):
         cols = np.array(self.df_tracks.columns)
         self.class_cols = np.array(
             [
-                c.startswith("group") or c.startswith("status")
+                c.startswith("group")
+                or c.startswith("status")
+                or (
+                    c.startswith("class")
+                    and not c.endswith("_id")
+                    and not c.endswith("_color")
+                )
                 for c in list(self.df_tracks.columns)
             ]
         )
@@ -347,14 +404,23 @@ class MeasureAnnotator(BaseAnnotator):
             "class_id",
             "class_color",
             "status_color",
+            "status_id",
         ]
         for col in to_remove:
-            try:
+            while col in self.class_cols:
                 self.class_cols.remove(col)
-            except Exception:
-                pass
+
+        # Filter to keep only group_* and status_* as requested by user, but allow 'group' if it exists
+        final_cols = []
+        for c in self.class_cols:
+            if c == "group" or c.startswith("group_") or c.startswith("status_"):
+                final_cols.append(c)
+
+        self.class_cols = final_cols
 
         self.class_choice_cb.addItems(self.class_cols)
+        if self.status_name in self.class_cols:
+            self.class_choice_cb.setCurrentText(self.status_name)
         self.class_choice_cb.currentIndexChanged.connect(self.changed_class)
 
     def populate_window(self):
@@ -678,13 +744,30 @@ class MeasureAnnotator(BaseAnnotator):
 
         try:
             cell_selected = f"cell: {self.track_of_interest}\n"
-            if "TRACK_ID" in self.df_tracks.columns:
-                cell_status = f"phenotype: {self.df_tracks.loc[(self.df_tracks['FRAME']==self.current_frame)&(self.df_tracks['TRACK_ID'] == self.track_of_interest), self.status_name].to_numpy()[0]}\n"
+            if self.status_name in self.df_tracks.columns:
+                if "TRACK_ID" in self.df_tracks.columns:
+                    val = self.df_tracks.loc[
+                        (self.df_tracks["FRAME"] == self.current_frame)
+                        & (self.df_tracks["TRACK_ID"] == self.track_of_interest),
+                        self.status_name,
+                    ].to_numpy()
+                    if len(val) > 0:
+                        cell_status = f"phenotype: {val[0]}\n"
+                    else:
+                        cell_status = "phenotype: N/A\n"
+                else:
+                    val = self.df_tracks.loc[
+                        self.df_tracks["ID"] == self.track_of_interest, self.status_name
+                    ].to_numpy()
+                    if len(val) > 0:
+                        cell_status = f"phenotype: {val[0]}\n"
+                    else:
+                        cell_status = "phenotype: N/A\n"
             else:
-                cell_status = f"phenotype: {self.df_tracks.loc[self.df_tracks['ID'] == self.track_of_interest, self.status_name].to_numpy()[0]}\n"
+                cell_status = f"phenotype: N/A (col '{self.status_name}' missing)\n"
             self.cell_info.setText(cell_selected + cell_status)
         except Exception as e:
-            logger.error(e)
+            logger.error(f"Error in give_cell_information: {e}")
 
     def create_new_event_class(self):
 
@@ -945,6 +1028,12 @@ class MeasureAnnotator(BaseAnnotator):
         self.changed_class()
 
     def modify(self):
+        if self.status_name not in self.df_tracks.columns:
+            logger.warning(
+                f"Column '{self.status_name}' not found in df_tracks. Skipping modify."
+            )
+            return
+
         all_states = self.df_tracks.loc[:, self.status_name].tolist()
         all_states = np.array(all_states)
         self.state_color_map = color_from_state(all_states, recently_modified=False)

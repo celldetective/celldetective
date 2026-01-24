@@ -820,58 +820,117 @@ class ProcessPanel(QFrame, Styles):
 
     def check_signals(self):
         from celldetective.gui.event_annotator import EventAnnotator, StackLoaderThread
+        from celldetective.utils.experiment import interpret_wells_and_positions
 
-        test = self.parent_window.locate_selected_position()
-        if test:
-            self.event_annotator = EventAnnotator(self, lazy_load=True)
+        self.well_option = self.parent_window.well_list.getSelectedIndices()
+        self.position_option = self.parent_window.position_list.getSelectedIndices()
 
-            if not getattr(self.event_annotator, "proceed", True):
-                return
+        # Count selected positions
+        well_indices, position_indices = interpret_wells_and_positions(
+            self.exp_dir, self.well_option, self.position_option
+        )
+        total_positions = 0
+        from celldetective.utils.experiment import (
+            get_positions_in_well,
+            get_experiment_wells,
+        )
 
-            self.signal_loader = StackLoaderThread(self.event_annotator)
+        wells = get_experiment_wells(self.exp_dir)
+        for widx in well_indices:
+            positions = get_positions_in_well(wells[widx])
+            if position_indices is not None:
+                total_positions += len(position_indices)
+            else:
+                total_positions += len(positions)
 
-            self.signal_progress = CelldetectiveProgressDialog(
-                "Loading data...", "Cancel", 0, 100, self, window_title="Please wait"
-            )
+        if total_positions == 1:
+            test = self.parent_window.locate_selected_position()
+            if test:
+                self.event_annotator = EventAnnotator(self, lazy_load=True)
 
-            self.signal_progress.setValue(0)
+                if not getattr(self.event_annotator, "proceed", True):
+                    return
 
-            self.signal_loader.progress.connect(self.signal_progress.setValue)
-            self.signal_loader.status_update.connect(self.signal_progress.setLabelText)
-            self.signal_progress.canceled.connect(self.signal_loader.stop)
+                self.signal_loader = StackLoaderThread(self.event_annotator)
 
-            def on_finished():
-                self.signal_progress.blockSignals(True)
-                self.signal_progress.close()
-                if not self.signal_loader._is_cancelled:
-                    try:
-                        self.event_annotator.finalize_init()
-                        self.event_annotator.show()
+                self.signal_progress = CelldetectiveProgressDialog(
+                    "Loading data...",
+                    "Cancel",
+                    0,
+                    100,
+                    self,
+                    window_title="Please wait",
+                )
+
+                self.signal_progress.setValue(0)
+
+                self.signal_loader.progress.connect(self.signal_progress.setValue)
+                self.signal_loader.status_update.connect(
+                    self.signal_progress.setLabelText
+                )
+                self.signal_progress.canceled.connect(self.signal_loader.stop)
+
+                def on_finished():
+                    self.signal_progress.blockSignals(True)
+                    self.signal_progress.close()
+                    if not self.signal_loader._is_cancelled:
                         try:
-                            QTimer.singleShot(
-                                100,
-                                lambda: self.event_annotator.resize(
-                                    self.event_annotator.width() + 1,
-                                    self.event_annotator.height() + 1,
-                                ),
-                            )
-                        except:
-                            pass
-                    except Exception as e:
-                        print(f"Error finalizing annotator: {e}")
-                else:
-                    self.event_annotator.close()
+                            self.event_annotator.finalize_init()
+                            self.event_annotator.show()
+                            try:
+                                QTimer.singleShot(
+                                    100,
+                                    lambda: self.event_annotator.resize(
+                                        self.event_annotator.width() + 1,
+                                        self.event_annotator.height() + 1,
+                                    ),
+                                )
+                            except:
+                                pass
+                        except Exception as e:
+                            print(f"Error finalizing annotator: {e}")
+                    else:
+                        self.event_annotator.close()
 
-            self.signal_loader.finished.connect(on_finished)
-            self.signal_loader.start()
+                self.signal_loader.finished.connect(on_finished)
+                self.signal_loader.start()
+        else:
+            # Multi position explorer: redirect to TableUI with progress bar
+            self.view_table_ui()
 
     def check_measurements(self):
         from celldetective.gui.measure_annotator import MeasureAnnotator
+        from celldetective.utils.experiment import interpret_wells_and_positions
 
-        test = self.parent_window.locate_selected_position()
-        if test:
-            self.measure_annotator = MeasureAnnotator(self)
-            self.measure_annotator.show()
+        self.well_option = self.parent_window.well_list.getSelectedIndices()
+        self.position_option = self.parent_window.position_list.getSelectedIndices()
+
+        # Count selected positions
+        well_indices, position_indices = interpret_wells_and_positions(
+            self.exp_dir, self.well_option, self.position_option
+        )
+        total_positions = 0
+        from celldetective.utils.experiment import (
+            get_positions_in_well,
+            get_experiment_wells,
+        )
+
+        wells = get_experiment_wells(self.exp_dir)
+        for widx in well_indices:
+            positions = get_positions_in_well(wells[widx])
+            if position_indices is not None:
+                total_positions += len(position_indices)
+            else:
+                total_positions += len(positions)
+
+        if total_positions == 1:
+            test = self.parent_window.locate_selected_position()
+            if test:
+                self.measure_annotator = MeasureAnnotator(self)
+                self.measure_annotator.show()
+        else:
+            # Multi position explorer: redirect to TableUI with progress bar
+            self.view_table_ui()
 
     def enable_segmentation_model_list(self):
         if self.segment_action.isChecked():
@@ -1568,6 +1627,7 @@ class ProcessPanel(QFrame, Styles):
         from celldetective.gui.tableUI import TableUI
         from celldetective.gui.workers import ProgressWindow
         from celldetective.processes.load_table import TableLoaderProcess
+        from celldetective.utils.experiment import interpret_wells_and_positions
 
         logger.info("Load table...")
 
@@ -1575,24 +1635,31 @@ class ProcessPanel(QFrame, Styles):
         self.well_option = self.parent_window.well_list.getSelectedIndices()
         self.position_option = self.parent_window.position_list.getSelectedIndices()
 
-        process_args = {
-            "experiment": self.exp_dir,
-            "population": self.mode,
-            "well_option": self.well_option,
-            "position_option": self.position_option,
-            "show_frame_progress": False,
-        }
+        # Count selected positions
+        well_indices, position_indices = interpret_wells_and_positions(
+            self.exp_dir, self.well_option, self.position_option
+        )
+        total_positions = 0
+        from celldetective.utils.experiment import (
+            get_positions_in_well,
+            get_experiment_wells,
+        )
 
-        self.df = None
+        wells = get_experiment_wells(self.exp_dir)
+        for widx in well_indices:
+            positions = get_positions_in_well(wells[widx])
+            if position_indices is not None:
+                total_positions += len(position_indices)
+            else:
+                total_positions += len(positions)
 
-        def on_table_loaded(df):
-            self.df = df
-            if self.df is not None:
+        def show_table(df):
+            if df is not None:
                 plot_mode = "plot_track_signals"
-                if "TRACK_ID" not in list(self.df.columns):
+                if "TRACK_ID" not in list(df.columns):
                     plot_mode = "static"
                 self.tab_ui = TableUI(
-                    self.df,
+                    df,
                     f"{self.parent_window.well_list.currentText()}; Position {self.parent_window.position_list.currentText()}",
                     population=self.mode,
                     plot_mode=plot_mode,
@@ -1607,20 +1674,46 @@ class ProcessPanel(QFrame, Styles):
                 msgBox.setText("No table could be loaded...")
                 msgBox.setWindowTitle("Info")
                 msgBox.setStandardButtons(QMessageBox.Ok)
-                returnValue = msgBox.exec()
+                msgBox.exec()
 
-        self.job = ProgressWindow(
-            TableLoaderProcess,
-            parent_window=self,
-            title="Loading tables...",
-            process_args=process_args,
-            position_info=False,
-            well_label="Wells loaded:",
-            pos_label="Positions loaded:",
-        )
-        self.job._ProgressWindow__runner.signals.result.connect(on_table_loaded)
+        if total_positions == 1:
+            # Synchronous load for single position
+            from celldetective.utils.data_loaders import load_experiment_tables
 
-        result = self.job.exec_()
+            df = load_experiment_tables(
+                self.exp_dir,
+                population=self.mode,
+                well_option=self.well_option,
+                position_option=self.position_option,
+            )
+            show_table(df)
+        else:
+            # Asynchronous load for multiple positions
+            process_args = {
+                "experiment": self.exp_dir,
+                "population": self.mode,
+                "well_option": self.well_option,
+                "position_option": self.position_option,
+                "show_frame_progress": False,
+            }
+
+            self.df = None
+
+            def on_table_loaded(df):
+                self.df = df
+                show_table(self.df)
+
+            self.job = ProgressWindow(
+                TableLoaderProcess,
+                parent_window=self,
+                title="Loading tables...",
+                process_args=process_args,
+                position_info=False,
+                well_label="Wells loaded:",
+                pos_label="Positions loaded:",
+            )
+            self.job._ProgressWindow__runner.signals.result.connect(on_table_loaded)
+            self.job.exec_()
 
     def load_available_tables(self):
         """
@@ -1641,8 +1734,87 @@ class ProcessPanel(QFrame, Styles):
         self.signals = []
         if self.df is not None:
             self.signals = list(self.df.columns)
-        if self.df is None:
-            logger.info("No table could be found for the selected position(s)...")
+        else:
+            logger.info(
+                "No table could be found for the selected position(s)... Anticipating measurements..."
+            )
+
+            from celldetective.utils.experiment import extract_experiment_channels
+
+            channel_names, _ = extract_experiment_channels(self.exp_dir)
+
+            # Standard measurements
+            self.signals = ["area"]
+            for ch in channel_names:
+                self.signals.append(f"{ch}_mean")
+
+            # Anticipate from instructions
+            instr_path = os.path.join(
+                self.exp_dir, "configs", f"measurement_instructions_{self.mode}.json"
+            )
+            if os.path.exists(instr_path):
+                try:
+                    with open(instr_path, "r") as f:
+                        instr = json.load(f)
+
+                    # 1. Features
+                    features = instr.get("features", [])
+                    if features:
+                        for f_name in features:
+                            if f_name == "intensity_mean":
+                                continue  # handled by standard
+                            if f_name == "area":
+                                continue
+
+                            # For other features, skimage/celldetective might suffix them.
+                            # If it's a generic feature, skimage usually keeps the name.
+                            # If it's multichannel, it might need channel names.
+                            # For now, let's keep it simple as requested for intensity_mean and area.
+                            pass
+
+                    # 2. Isotropic measurements
+                    radii = instr.get("intensity_measurement_radii", [])
+                    ops = instr.get("isotropic_operations", [])
+                    if radii and ops:
+                        for r in radii if isinstance(radii, list) else [radii]:
+                            for op in ops:
+                                for ch in channel_names:
+                                    if isinstance(r, list):
+                                        self.signals.append(
+                                            f"{ch}_ring_{int(min(r))}_{int(max(r))}_{op}"
+                                        )
+                                    else:
+                                        self.signals.append(
+                                            f"{ch}_circle_{int(r)}_{op}"
+                                        )
+
+                    # 3. Border distances
+                    borders = instr.get("border_distances", [])
+                    if borders:
+                        for b in borders if isinstance(borders, list) else [borders]:
+                            # Logic from measure.py for suffix
+                            b_str = (
+                                str(b)
+                                .replace("(", "")
+                                .replace(")", "")
+                                .replace(", ", "_")
+                                .replace(",", "_")
+                            )
+                            suffix = (
+                                f"_slice_{b_str.replace('-', 'm')}px"
+                                if ("-" in str(b) or "," in str(b))
+                                else f"_edge_{b_str}px"
+                            )
+                            for ch in channel_names:
+                                # In measure_features, it's {ch}_mean{suffix}
+                                self.signals.append(f"{ch}_mean{suffix}")
+
+                except Exception as e:
+                    logger.warning(f"Could not parse measurement instructions: {e}")
+
+            # Remove duplicates and keep order
+            seen = set()
+            self.signals = [x for x in self.signals if not (x in seen or seen.add(x))]
 
     def set_cellpose_scale(self):
 
