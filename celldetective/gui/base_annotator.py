@@ -47,6 +47,9 @@ from celldetective.gui.gui_utils import (
 from celldetective.gui.base.figure_canvas import FigureCanvas
 from celldetective.gui.base.utils import center_window
 import gc
+from celldetective import get_logger
+
+logger = get_logger(__name__)
 
 
 class BaseAnnotator(CelldetectiveMainWindow, Styles):
@@ -364,7 +367,7 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
         self.correct_btn.disconnect()
         self.correct_btn.clicked.connect(self.show_annotation_buttons)
 
-        print(f"{self.selection=}")
+        logger.info(f"{self.selection=}")
 
         ind = event.ind
 
@@ -711,7 +714,7 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
                 try:
                     self.df_tracks = self.df_tracks.drop([c], axis=1)
                 except Exception as e:
-                    print(e)
+                    logger.error(e)
             item_idx = self.class_choice_cb.findText(class_to_delete)
             self.class_choice_cb.removeItem(item_idx)
 
@@ -755,7 +758,7 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
                 self.log_btn.setIcon(icon(MDI6.math_log, color="black"))
                 self.log_scale = False
         except Exception as e:
-            print(e)
+            logger.error(e)
 
         # self.cell_ax.autoscale()
         self.cell_fcanvas.canvas.draw_idle()
@@ -839,9 +842,9 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
                 pathsave += ".npy"
             try:
                 np.save(pathsave, training_set)
-                print(f"File successfully written in {pathsave}.")
+                logger.info(f"File successfully written in {pathsave}.")
             except Exception as e:
-                print(f"Error {e}...")
+                logger.error(f"Error {e}...")
 
     def create_new_event_class(self):
 
@@ -897,10 +900,11 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
 
     def save_trajectories(self):
         # specific to signal/static annotator
-        print("Save trajectory function not implemented for BaseAnnotator class...")
+        logger.info(
+            "Save trajectory function not implemented for BaseAnnotator class..."
+        )
 
     def cancel_selection(self):
-        print("we are in cancel selection...")
         self.hide_annotation_buttons()
         self.correct_btn.setEnabled(False)
         self.correct_btn.setText("correct")

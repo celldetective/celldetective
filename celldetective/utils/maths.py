@@ -2,6 +2,11 @@ from typing import Union, List
 import numpy as np
 
 
+from celldetective import get_logger
+
+logger = get_logger()
+
+
 def step_function(t: Union[np.ndarray, List], t_shift: float, dt: float) -> np.ndarray:
     """
     Computes a step function using the logistic sigmoid function.
@@ -40,7 +45,15 @@ def step_function(t: Union[np.ndarray, List], t_shift: float, dt: float) -> np.n
     array([0.26894142, 0.37754067, 0.5       , 0.62245933, 0.73105858, 0.81757448])
     """
 
-    return 1 / (1 + np.exp(-(t - t_shift) / dt))
+    with np.errstate(over="raise", divide="raise"):
+        try:
+            return 1 / (1 + np.exp(-(t - t_shift) / dt))
+        except FloatingPointError as e:
+            logger.warning(
+                f"Math warning in step_function: {e}. t_shift={t_shift}, dt={dt}. Range of t: [{np.min(t)}, {np.max(t)}]"
+            )
+            with np.errstate(over="ignore", divide="ignore"):
+                return 1 / (1 + np.exp(-(t - t_shift) / dt))
 
 
 def derivative(x, timeline, window, mode="bi"):

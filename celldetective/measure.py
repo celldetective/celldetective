@@ -5,6 +5,7 @@ import subprocess
 from math import ceil
 from functools import reduce
 from inspect import getmembers, isfunction
+from celldetective.gui.base.utils import pretty_table
 
 from celldetective.exceptions import EmptyQueryError, MissingColumnsError, QueryError
 from celldetective.utils.masks import (

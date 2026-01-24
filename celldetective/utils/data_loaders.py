@@ -148,6 +148,7 @@ def load_experiment_tables(
     position_option="*",
     return_pos_info=False,
     load_pickle=False,
+    progress_callback=None,
 ):
     """
     Load tabular data for an experiment, optionally including position-level information.
@@ -225,7 +226,18 @@ def load_experiment_tables(
     df_pos_info = []
     real_well_index = 0
 
-    for k, well_path in enumerate(tqdm(wells[well_indices])):
+    total_wells = len(well_indices)
+
+    iterator = wells[well_indices]
+    if progress_callback is None:
+        iterator = tqdm(wells[well_indices])
+
+    for k, well_path in enumerate(iterator):
+
+        if progress_callback is not None:
+            well_progress = round(k / total_wells * 100)
+            # Signal keep_going logic if needed, but for now just send progress
+            # If callback returns False, we could abort, but simpler to just update for now.
 
         any_table = False  # assume no table
 
@@ -242,7 +254,15 @@ def load_experiment_tables(
                 continue
 
         real_pos_index = 0
+        total_positions = len(positions)
+
         for pidx, pos_path in enumerate(positions):
+
+            if progress_callback is not None:
+                pos_progress = round(pidx / total_positions * 100)
+                should_continue = progress_callback(well_progress, pos_progress)
+                if should_continue is False:
+                    return None, None if return_pos_info else None
 
             pos_name = extract_position_name(pos_path)
 

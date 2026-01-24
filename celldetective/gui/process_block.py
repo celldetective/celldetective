@@ -866,7 +866,7 @@ class ProcessPanel(QFrame, Styles):
             self.signal_loader.start()
 
     def check_measurements(self):
-        from celldetective.gui.event_annotator import MeasureAnnotator
+        from celldetective.gui.measure_annotator import MeasureAnnotator
 
         test = self.parent_window.locate_selected_position()
         if test:
@@ -1566,33 +1566,61 @@ class ProcessPanel(QFrame, Styles):
 
     def view_table_ui(self):
         from celldetective.gui.tableUI import TableUI
+        from celldetective.gui.workers import ProgressWindow
+        from celldetective.processes.load_table import TableLoaderProcess
 
         logger.info("Load table...")
-        self.load_available_tables()
 
-        if self.df is not None:
-            plot_mode = "plot_track_signals"
-            if "TRACK_ID" not in list(self.df.columns):
-                plot_mode = "static"
-            self.tab_ui = TableUI(
-                self.df,
-                f"{self.parent_window.well_list.currentText()}; Position {self.parent_window.position_list.currentText()}",
-                population=self.mode,
-                plot_mode=plot_mode,
-                save_inplace_option=True,
-            )
-            self.tab_ui.show()
-            center_window(self.tab_ui)
-        else:
-            logger.info("Table could not be loaded...")
-            msgBox = QMessageBox()
-            msgBox.setIcon(QMessageBox.Warning)
-            msgBox.setText("No table could be loaded...")
-            msgBox.setWindowTitle("Info")
-            msgBox.setStandardButtons(QMessageBox.Ok)
-            returnValue = msgBox.exec()
-            if returnValue == QMessageBox.Ok:
-                return None
+        # Prepare args for the process
+        self.well_option = self.parent_window.well_list.getSelectedIndices()
+        self.position_option = self.parent_window.position_list.getSelectedIndices()
+
+        process_args = {
+            "experiment": self.exp_dir,
+            "population": self.mode,
+            "well_option": self.well_option,
+            "position_option": self.position_option,
+            "show_frame_progress": False,
+        }
+
+        self.df = None
+
+        def on_table_loaded(df):
+            self.df = df
+            if self.df is not None:
+                plot_mode = "plot_track_signals"
+                if "TRACK_ID" not in list(self.df.columns):
+                    plot_mode = "static"
+                self.tab_ui = TableUI(
+                    self.df,
+                    f"{self.parent_window.well_list.currentText()}; Position {self.parent_window.position_list.currentText()}",
+                    population=self.mode,
+                    plot_mode=plot_mode,
+                    save_inplace_option=True,
+                )
+                self.tab_ui.show()
+                center_window(self.tab_ui)
+            else:
+                logger.info("Table could not be loaded...")
+                msgBox = QMessageBox()
+                msgBox.setIcon(QMessageBox.Warning)
+                msgBox.setText("No table could be loaded...")
+                msgBox.setWindowTitle("Info")
+                msgBox.setStandardButtons(QMessageBox.Ok)
+                returnValue = msgBox.exec()
+
+        self.job = ProgressWindow(
+            TableLoaderProcess,
+            parent_window=self,
+            title="Loading tables...",
+            process_args=process_args,
+            position_info=False,
+            well_label="Wells loaded:",
+            pos_label="Positions loaded:",
+        )
+        self.job._ProgressWindow__runner.signals.result.connect(on_table_loaded)
+
+        result = self.job.exec_()
 
     def load_available_tables(self):
         """

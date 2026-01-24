@@ -21,6 +21,8 @@ class ProgressWindow(CelldetectiveDialog):
         title="",
         position_info=True,
         process_args=None,
+        well_label="Well progress:",
+        pos_label="Position progress:",
     ):
 
         super().__init__()
@@ -41,20 +43,26 @@ class ProgressWindow(CelldetectiveDialog):
         self.__label = QLabel("Idle")
         self.time_left_lbl = QLabel("")
 
-        self.well_time_lbl = QLabel("Well progress:")
+        self.well_time_lbl = QLabel(well_label)
         self.well_progress_bar = QProgressBar()
         self.well_progress_bar.setValue(0)
         self.well_progress_bar.setFormat("Total (Wells): %p%")
 
-        self.pos_time_lbl = QLabel("Position progress:")
+        self.pos_time_lbl = QLabel(pos_label)
         self.pos_progress_bar = QProgressBar()
         self.pos_progress_bar.setValue(0)
         self.pos_progress_bar.setFormat("Current Well (Positions): %p%")
 
-        self.frame_time_lbl = QLabel("Frame progress:")
-        self.frame_progress_bar = QProgressBar()
-        self.frame_progress_bar.setValue(0)
-        self.frame_progress_bar.setFormat("Current Position (Frames): %p%")
+        if "show_frame_progress" in process_args:
+            self.show_frame_progress = process_args["show_frame_progress"]
+        else:
+            self.show_frame_progress = True
+
+        if self.show_frame_progress:
+            self.frame_time_lbl = QLabel("Frame progress:")
+            self.frame_progress_bar = QProgressBar()
+            self.frame_progress_bar.setValue(0)
+            self.frame_progress_bar.setFormat("Current Position (Frames): %p%")
 
         self.__runner = Runner(
             process=self.__process,
@@ -73,8 +81,10 @@ class ProgressWindow(CelldetectiveDialog):
         self.__runner.signals.update_pos.connect(self.pos_progress_bar.setValue)
         self.__runner.signals.update_pos_time.connect(self.pos_time_lbl.setText)
 
-        self.__runner.signals.update_frame.connect(self.frame_progress_bar.setValue)
-        self.__runner.signals.update_frame_time.connect(self.frame_time_lbl.setText)
+        if self.show_frame_progress:
+            self.__runner.signals.update_frame.connect(self.frame_progress_bar.setValue)
+            self.__runner.signals.update_frame_time.connect(self.frame_time_lbl.setText)
+
         self.__runner.signals.update_status.connect(self.__label.setText)
         self.__runner.signals.update_image.connect(self.update_image)
 
@@ -96,8 +106,9 @@ class ProgressWindow(CelldetectiveDialog):
         self.progress_layout.addWidget(self.pos_time_lbl)
         self.progress_layout.addWidget(self.pos_progress_bar)
 
-        self.progress_layout.addWidget(self.frame_time_lbl)
-        self.progress_layout.addWidget(self.frame_progress_bar)
+        if self.show_frame_progress:
+            self.progress_layout.addWidget(self.frame_time_lbl)
+            self.progress_layout.addWidget(self.frame_progress_bar)
 
         self.btn_layout = QHBoxLayout()
         self.btn_layout.addWidget(self.__btn_stp)
@@ -266,6 +277,9 @@ class Runner(QRunnable):
                     if "training_result" in data:
                         self.signals.training_result.emit(data["training_result"])
 
+                    if "result" in data:
+                        self.signals.result.emit(data["result"])
+
                     if "status" in data:  # Moved this block out of frame_time check
                         logger.info(
                             f"Runner received status: {data['status']}"
@@ -312,6 +326,7 @@ class RunnerSignal(QObject):
     update_image = pyqtSignal(object)
     update_plot = pyqtSignal(dict)
     training_result = pyqtSignal(dict)
+    result = pyqtSignal(object)
     update_status = pyqtSignal(str)
 
     finished = pyqtSignal()

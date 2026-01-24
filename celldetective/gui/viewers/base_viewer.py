@@ -1,7 +1,7 @@
 from collections import OrderedDict
 
 import numpy as np
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QThread, pyqtSignal, QMutex, QWaitCondition
 from PyQt5.QtWidgets import QHBoxLayout, QAction, QLabel, QComboBox
 from fonticon_mdi6 import MDI6
 from superqt import QLabeledDoubleRangeSlider, QLabeledSlider
@@ -9,10 +9,110 @@ from superqt.fonticon import icon
 
 from celldetective.gui.base.components import CelldetectiveWidget
 from celldetective.gui.base.utils import center_window
-from celldetective.utils.image_loaders import auto_load_number_of_frames, _get_img_num_per_channel, load_frames
+from celldetective.utils.image_loaders import (
+    auto_load_number_of_frames,
+    _get_img_num_per_channel,
+    load_frames,
+)
 from celldetective import get_logger
 
 logger = get_logger(__name__)
+
+
+class StackLoader(QThread):
+    frame_loaded = pyqtSignal(int, int, np.ndarray)  # channel, frame_idx, image
+
+    def __init__(self, stack_path, img_num_per_channel, n_channels):
+        super().__init__()
+        self.stack_path = stack_path
+        self.img_num_per_channel = img_num_per_channel
+        self.n_channels = n_channels
+        self.target_channel = 0
+        self.priority_frame = 0
+        self.cache_keys = set()
+        self.running = True
+        self.mutex = QMutex()
+        self.condition = QWaitCondition()
+
+    def update_priority(self, channel, frame, current_cache_keys):
+        self.mutex.lock()
+        self.target_channel = channel
+        self.priority_frame = frame
+        self.cache_keys = set(current_cache_keys)
+        self.condition.wakeAll()
+        self.mutex.unlock()
+
+    def stop(self):
+        self.running = False
+        self.condition.wakeAll()
+        self.wait()
+
+    def run(self):
+        while self.running:
+            self.mutex.lock()
+            if not self.running:
+                self.mutex.unlock()
+                break
+
+            t_ch = self.target_channel
+            p_frame = self.priority_frame
+            keys_snapshot = list(self.cache_keys)
+            self.mutex.unlock()
+
+            # Determine next frame to load
+            # Strategy: look around priority frame
+            frame_to_load = -1
+
+            # Search radius
+            radius = 10
+            found = False
+
+            # Check immediate neighbors first
+            check_order = [p_frame]
+            for r in range(1, radius + 1):
+                check_order.append(p_frame + r)
+                check_order.append(p_frame - r)
+
+            # Determine max frames
+            max_frames = self.img_num_per_channel.shape[1]
+
+            for f in check_order:
+                if 0 <= f < max_frames:
+                    if (t_ch, f) not in keys_snapshot:
+                        frame_to_load = f
+                        found = True
+                        break
+
+            if found:
+                try:
+                    # Load the frame
+                    from celldetective.utils.image_loaders import load_frames
+
+                    img = load_frames(
+                        self.img_num_per_channel[t_ch, frame_to_load],
+                        self.stack_path,
+                        normalize_input=False,
+                    )[:, :, 0]
+
+                    self.frame_loaded.emit(t_ch, frame_to_load, img)
+
+                    # Update snapshot locally to avoid reloading immediately in next loop
+                    self.mutex.lock()
+                    self.cache_keys.add((t_ch, frame_to_load))
+                    self.mutex.unlock()
+
+                except Exception as e:
+                    pass
+                    # logger.error(f"Error loading frame {frame_to_load}: {e}")
+                    # Prepare to wait to avoid spin loop on error
+                    self.msleep(100)
+
+            else:
+                # If nothing to load, wait
+                self.mutex.lock()
+                self.condition.wait(self.mutex, 500)  # Wait 500ms or until new priority
+                self.mutex.unlock()
+
 
 class StackVisualizer(CelldetectiveWidget):
     """
@@ -96,6 +196,7 @@ class StackVisualizer(CelldetectiveWidget):
         self._min = 0
         self._max = 0
 
+        self.loader_thread = None
         self.load_stack()
         self.generate_figure_canvas()
         if self.create_channel_cb:
@@ -113,7 +214,7 @@ class StackVisualizer(CelldetectiveWidget):
         self.is_drawing_line = False
         self.generate_custom_tools()
 
-        self.canvas.layout.setContentsMargins(15, 15, 15, 30)
+        self.canvas.layout.setContentsMargins(15, 15, 15, 15)
 
         center_window(self)
 
@@ -464,6 +565,13 @@ class StackVisualizer(CelldetectiveWidget):
             np.arange(self.n_channels), self.stack_length, self.n_channels
         )
 
+        # Initialize background loader
+        self.loader_thread = StackLoader(
+            self.stack_path, self.img_num_per_channel, self.n_channels
+        )
+        self.loader_thread.frame_loaded.connect(self.on_frame_loaded)
+        self.loader_thread.start()
+
         self.init_frame = load_frames(
             self.img_num_per_channel[self.target_channel, self.mid_time],
             self.stack_path,
@@ -647,6 +755,12 @@ class StackVisualizer(CelldetectiveWidget):
 
         self.current_time_index = value
 
+        # Update loader priority
+        if self.mode == "virtual" and self.loader_thread:
+            self.loader_thread.update_priority(
+                self.target_channel, value, self.frame_cache.keys()
+            )
+
         if self.mode == "direct":
             self.init_frame = self.stack[value, :, :, self.target_channel]
 
@@ -693,8 +807,25 @@ class StackVisualizer(CelldetectiveWidget):
         self.canvas.canvas.draw_idle()
         self.update_profile()
 
+    def on_frame_loaded(self, channel, frame, image):
+        """Callback from loader thread"""
+        # Store in cache
+        cache_key = (channel, frame)
+        if cache_key not in self.frame_cache:
+            self.frame_cache[cache_key] = image
+            if len(self.frame_cache) > self.max_cache_size:
+                self.frame_cache.popitem(last=False)
+
+        # If this is the current frame (user might have scrolled while loading), update display?
+        # Usually change_frame handles display. If we are waiting for this frame, we might want to refresh.
+        if channel == self.target_channel and frame == self.current_time_index:
+            # Refresh
+            self.change_frame(self.current_time_index)
+
     def closeEvent(self, event):
         # Event handler for closing the widget
+        if self.loader_thread:
+            self.loader_thread.stop()
         if hasattr(self, "frame_cache") and isinstance(self.frame_cache, OrderedDict):
             self.frame_cache.clear()
         self.canvas.close()

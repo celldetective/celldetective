@@ -118,10 +118,10 @@ class CellEdgeVisualizer(StackVisualizer):
             ), "Wrong dimensions for the provided labels, expect TXY"
             assert len(self.labels) == self.stack_length
 
-            self.mode = "direct"
+            self.label_mode = "direct"
             self.init_label = self.labels[self.mid_time, :, :]
         else:
-            self.mode = "virtual"
+            self.label_mode = "virtual"
             assert isinstance(self.stack_path, str)
             assert self.stack_path.endswith(".tif")
             self.locate_labels_virtual()
@@ -292,7 +292,7 @@ class CellEdgeVisualizer(StackVisualizer):
             self.sdf_cache.move_to_end(value)
         else:
             # Cache Miss: Load Label
-            if self.mode == "virtual":
+            if self.label_mode == "virtual":
                 if hasattr(self, "label_map") and value in self.label_map:
                     try:
                         self.init_label = imread(self.label_map[value])
@@ -300,7 +300,7 @@ class CellEdgeVisualizer(StackVisualizer):
                         self.init_label = np.zeros_like(self.init_frame)
                 else:
                     self.init_label = np.zeros_like(self.init_frame)
-            elif self.mode == "direct":
+            elif self.label_mode == "direct":
                 if value < len(self.labels):
                     self.init_label = self.labels[value, :, :]
                 else:
