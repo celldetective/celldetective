@@ -263,8 +263,7 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
     def ask_for_feature(self):
 
         cols = np.array(list(self.df.columns))
-        is_number = np.vectorize(lambda x: np.issubdtype(x, np.number))
-        feats = cols[is_number(self.df.dtypes)]
+        feats = [c for c in cols if pd.api.types.is_numeric_dtype(self.df[c])]
 
         self.feature_choice_widget = CelldetectiveWidget()
         self.feature_choice_widget.setWindowTitle("Select numeric feature")
@@ -286,8 +285,7 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
     def ask_for_features(self):
 
         cols = np.array(list(self.df.columns))
-        is_number = np.vectorize(lambda x: np.issubdtype(x, np.number))
-        feats = cols[is_number(self.df.dtypes)]
+        feats = [c for c in cols if pd.api.types.is_numeric_dtype(self.df[c])]
 
         self.feature_choice_widget = CelldetectiveWidget()
         self.feature_choice_widget.setWindowTitle("Select numeric feature")

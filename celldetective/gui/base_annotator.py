@@ -308,7 +308,7 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
         signals = [
             c
             for c in self.df_tracks.columns
-            if np.issubdtype(self.df_tracks[c].dtype, np.number)
+            if pd.api.types.is_numeric_dtype(self.df_tracks[c])
         ]
 
         to_remove = [
