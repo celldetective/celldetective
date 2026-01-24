@@ -325,14 +325,18 @@ class AppInitWindow(CelldetectiveMainWindow):
     def reload_previous_experiments(self):
 
         self.recent_file_acts = []
-        if os.path.exists(os.sep.join([self.soft_path, "celldetective", "recent.txt"])):
-            recent_exps = open(
-                os.sep.join([self.soft_path, "celldetective", "recent.txt"]), "r"
-            )
-            recent_exps = recent_exps.readlines()
-            recent_exps = [r.strip() for r in recent_exps]
+        recent_path = os.sep.join([self.soft_path, "celldetective", "recent.txt"])
+        if os.path.exists(recent_path):
+            with open(recent_path, "r") as f:
+                recent_exps = [r.strip() for r in f.readlines()]
             recent_exps.reverse()
-            recent_exps = list(dict.fromkeys(recent_exps))
+            recent_exps = list(dict.fromkeys(recent_exps))[:10]
+
+            # Auto-clean the file as well
+            with open(recent_path, "w") as f:
+                for r in reversed(recent_exps):
+                    f.write(r + "\n")
+
             self.recent_file_acts = [QAction(r, self) for r in recent_exps]
             for r in self.recent_file_acts:
                 r.triggered.connect(
@@ -525,10 +529,23 @@ class AppInitWindow(CelldetectiveMainWindow):
                 logger.info(f"Number of positions per well:")
                 pretty_table(number_pos)
 
-                with open(
-                    os.sep.join([self.soft_path, "celldetective", "recent.txt"]), "a+"
-                ) as f:
-                    f.write(self.exp_dir + "\n")
+                recent_path = os.sep.join(
+                    [self.soft_path, "celldetective", "recent.txt"]
+                )
+                recent_exps = []
+                if os.path.exists(recent_path):
+                    with open(recent_path, "r") as f:
+                        recent_exps = [r.strip() for r in f.readlines()]
+
+                recent_exps.append(self.exp_dir)
+                # Deduplicate (keep latest)
+                recent_exps = list(dict.fromkeys(reversed(recent_exps)))
+                recent_exps.reverse()  # Back to original order (latest at end)
+                recent_exps = recent_exps[-10:]  # Keep only last 10
+
+                with open(recent_path, "w") as f:
+                    for r in recent_exps:
+                        f.write(r + "\n")
 
             threading.Thread(
                 target=log_position_stats, args=(wells,), daemon=True
