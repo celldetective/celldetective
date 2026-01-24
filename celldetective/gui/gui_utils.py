@@ -822,10 +822,15 @@ def color_from_state(state, recently_modified=False):
     color_map = {}
     for value in unique_values:
 
-        if np.isnan(value):
-            value = "nan"
-            color_map[value] = "k"
-        elif value == 0:
+        try:
+            if np.isnan(value):
+                value = "nan"
+                color_map[value] = "k"
+                continue
+        except TypeError:
+            pass
+
+        if value == 0:
             color_map[value] = "tab:blue"
         elif value == 1:
             color_map[value] = "tab:red"
@@ -834,7 +839,11 @@ def color_from_state(state, recently_modified=False):
         else:
             import matplotlib.pyplot as plt
 
-            color_map[value] = plt.cm.tab20(value / 20.0)
+            if isinstance(value, (int, float, np.number)):
+                idx = value
+            else:
+                idx = hash(str(value)) % 20
+            color_map[value] = plt.cm.tab20(idx / 20.0)
 
     return color_map
 

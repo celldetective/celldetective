@@ -623,6 +623,9 @@ def fix_missing_labels(position, population="target", prefix="Aligned"):
         )
         path = position + os.sep + f"labels_{population}"
 
+    if not os.path.exists(path):
+        os.makedirs(path, exist_ok=True)
+
     if label_path != []:
         # path = os.path.split(label_path[0])[0]
         int_valid = [int(lbl.split(os.sep)[-1].split(".")[0]) for lbl in label_path]

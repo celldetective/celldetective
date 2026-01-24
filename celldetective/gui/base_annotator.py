@@ -305,7 +305,11 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
         ]
         # self.log_btns = [QPushButton() for i in range(self.n_signals)]
 
-        signals = list(self.df_tracks.columns)
+        signals = [
+            c
+            for c in self.df_tracks.columns
+            if np.issubdtype(self.df_tracks[c].dtype, np.number)
+        ]
 
         to_remove = [
             "FRAME",
@@ -357,7 +361,10 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
 
         for i in range(len(self.signal_choice_cb)):
             self.signal_choice_cb[i].addItems(["--"] + signals)
-            self.signal_choice_cb[i].setCurrentIndex(i + 1)
+            if i + 1 < self.signal_choice_cb[i].count():
+                self.signal_choice_cb[i].setCurrentIndex(i + 1)
+            else:
+                self.signal_choice_cb[i].setCurrentIndex(0)
             self.signal_choice_cb[i].currentIndexChanged.connect(self.plot_signals)
 
     def on_scatter_pick(self, event):

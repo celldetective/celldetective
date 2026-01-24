@@ -2,7 +2,7 @@ from typing import Union, List, Tuple
 
 import numpy as np
 from scipy import ndimage
-from scipy.ndimage.morphology import distance_transform_edt
+from scipy.ndimage import distance_transform_edt
 from skimage.morphology import disk
 from celldetective.log_manager import get_logger
 

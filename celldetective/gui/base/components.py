@@ -120,6 +120,8 @@ class QCheckableComboBox(QComboBox):
         actions = self.toolMenu.actions()
 
         item = self.model().itemFromIndex(index)
+        if item is None:
+            return
         if item.checkState() == Qt.Checked:
             item.setCheckState(Qt.Unchecked)
             actions[idx].setChecked(False)

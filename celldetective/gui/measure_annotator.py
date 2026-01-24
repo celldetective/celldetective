@@ -126,7 +126,11 @@ class MeasureAnnotator(BaseAnnotator):
             if self.len_movie > 0:
                 temp_labels = locate_labels(self.pos, population=self.mode)
                 if temp_labels is None or len(temp_labels) < self.len_movie:
-                    fix_missing_labels(self.pos, population=self.mode)
+                    fix_missing_labels(
+                        self.pos,
+                        population=self.mode,
+                        prefix=self.parent_window.movie_prefix,
+                    )
                     self.labels = locate_labels(self.pos, population=self.mode)
                 elif len(temp_labels) > self.len_movie:
                     self.labels = temp_labels[: self.len_movie]
@@ -855,8 +859,11 @@ class MeasureAnnotator(BaseAnnotator):
 
     def assign_color_state(self, state):
 
-        if np.isnan(state):
-            state = "nan"
+        try:
+            if np.isnan(state):
+                state = "nan"
+        except TypeError:
+            pass
         return self.state_color_map[state]
 
     def on_scatter_pick(self, event):
