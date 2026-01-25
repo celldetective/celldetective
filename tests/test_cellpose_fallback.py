@@ -1,30 +1,46 @@
 import unittest
 from unittest.mock import MagicMock, patch
 import sys
-import torch
+
+# Do not import torch here to avoid WinError 1114 if environment is broken.
+# We will mock it in setUp.
 
 
 class TestCellposeFallback(unittest.TestCase):
 
     def setUp(self):
-        # Patch modules before importing the function under test
-        self.cellpose_patcher = patch.dict(
-            sys.modules, {"cellpose": MagicMock(), "cellpose.models": MagicMock()}
+        # Create a mock for torch
+        self.mock_torch = MagicMock()
+        self.mock_torch.device = MagicMock(return_value="cpu")
+        self.mock_torch.cuda = MagicMock()
+        self.mock_torch.cuda.is_available.return_value = (
+            False  # Default to CPU environment simulation
         )
-        self.cellpose_patcher.start()
+
+        # Patch modules so that 'import torch' and 'import cellpose' work with our mocks
+        # We need to patch 'torch' in sys.modules BEFORE importing code that uses it.
+        self.modules_patcher = patch.dict(
+            sys.modules,
+            {
+                "torch": self.mock_torch,
+                "cellpose": MagicMock(),
+                "cellpose.models": MagicMock(),
+            },
+        )
+        self.modules_patcher.start()
 
         # Define a mock CellposeModel that we can control
         self.MockCellposeModel = MagicMock()
         sys.modules["cellpose.models"].CellposeModel = self.MockCellposeModel
 
     def tearDown(self):
-        self.cellpose_patcher.stop()
+        self.modules_patcher.stop()
 
     def test_gpu_fallback_on_assertion_error(self):
         """
         Test that _prep_cellpose_model falls back to CPU if GPU init fails with AssertionError.
         """
-        # Lazy import to ensure mocks are in place
+        # Lazy import inside the test method/patch context
         from celldetective.utils.cellpose_utils import _prep_cellpose_model
 
         # Side effect for CellposeModel constructor
@@ -47,9 +63,6 @@ class TestCellposeFallback(unittest.TestCase):
         )
 
         # Check call history
-        # Should be called twice.
-        # First call: gpu=True
-        # Second call: gpu=False
         self.assertEqual(self.MockCellposeModel.call_count, 2)
 
         args1, kwargs1 = self.MockCellposeModel.call_args_list[0]
@@ -58,14 +71,12 @@ class TestCellposeFallback(unittest.TestCase):
         args2, kwargs2 = self.MockCellposeModel.call_args_list[1]
         self.assertFalse(kwargs2.get("gpu"), "Second call should retry with gpu=False")
 
-        # Ensure we got a valid model back
         self.assertIsNotNone(model)
 
     def test_gpu_success(self):
         """
         Test that _prep_cellpose_model works normally if GPU init succeeds.
         """
-        # Lazy import
         from celldetective.utils.cellpose_utils import _prep_cellpose_model
 
         # Side effect for success
@@ -81,7 +92,6 @@ class TestCellposeFallback(unittest.TestCase):
             model_name="fake_model", path="fake_path/", use_gpu=True, n_channels=2
         )
 
-        # Should be called once with gpu=True
         self.assertEqual(self.MockCellposeModel.call_count, 1)
         args, kwargs = self.MockCellposeModel.call_args
         self.assertTrue(kwargs.get("gpu"))
