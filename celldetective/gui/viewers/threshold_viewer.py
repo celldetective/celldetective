@@ -65,14 +65,21 @@ class ThresholdedStackVisualizer(StackVisualizer):
         self.thresh_min = 0.0
         self.thresh_max = 30.0
 
-        self.thresh_max = 30.0
-
         # Cache for processed images
         self.processed_cache = OrderedDict()
         self.processed_image = None
         self.max_processed_cache_size = 128
 
         self.generate_threshold_slider()
+
+        # Ensure we start at frame 0 for consistent mask caching and UX
+        if self.create_frame_slider and hasattr(self, "frame_slider"):
+            self.frame_slider.blockSignals(True)
+            self.frame_slider.setValue(0)
+            self.frame_slider.blockSignals(False)
+            self.change_frame(0)
+        elif self.stack_length > 0:
+            self.change_frame(0)
 
         if self.thresh is not None:
             self.compute_mask(self.thresh)
@@ -138,8 +145,8 @@ class ThresholdedStackVisualizer(StackVisualizer):
             slider_range=(self.thresh_min, np.amax([self.thresh_max, init_value])),
             decimal_option=True,
             precision=4,
+            layout_ratio=(0.15, 0.85),
         )
-        thresh_layout.setContentsMargins(15, 0, 15, 0)
         self.threshold_slider.valueChanged.connect(self.change_threshold)
         if self.show_threshold_slider:
             self.canvas.layout.addLayout(thresh_layout)
@@ -154,8 +161,8 @@ class ThresholdedStackVisualizer(StackVisualizer):
             slider_range=(0, 1),
             decimal_option=True,
             precision=3,
+            layout_ratio=(0.15, 0.85),
         )
-        opacity_layout.setContentsMargins(15, 0, 15, 0)
         self.opacity_slider.valueChanged.connect(self.change_mask_opacity)
         if self.show_opacity_slider:
             self.canvas.layout.addLayout(opacity_layout)
@@ -190,7 +197,8 @@ class ThresholdedStackVisualizer(StackVisualizer):
         if self.thresh is not None:
             self.compute_mask(self.thresh)
             mask = np.ma.masked_where(self.mask == 0, self.mask)
-            self.im_mask.set_data(mask)
+            if hasattr(self, "im_mask"):
+                self.im_mask.set_data(mask)
             self.canvas.canvas.draw_idle()
 
     def change_frame(self, value):
@@ -219,7 +227,7 @@ class ThresholdedStackVisualizer(StackVisualizer):
             threshold_image,
         )
 
-        edge = estimate_unreliable_edge(self.preprocessing)
+        edge = estimate_unreliable_edge(self.preprocessing or [])
 
         if isinstance(threshold_value, (list, np.ndarray, tuple)):
             self.mask = threshold_image(

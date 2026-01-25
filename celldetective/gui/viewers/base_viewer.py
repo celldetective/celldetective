@@ -553,7 +553,10 @@ class StackVisualizer(CelldetectiveWidget):
             self.mode = "direct"
             self.stack_length = len(self.stack)
             self.mid_time = self.stack_length // 2
-            self.init_frame = self.stack[self.mid_time, :, :, self.target_channel]
+            self.current_time_index = 0
+            self.init_frame = self.stack[
+                self.current_time_index, :, :, self.target_channel
+            ]
             self.last_frame = self.stack[-1, :, :, self.target_channel]
         else:
             self.mode = "virtual"
@@ -566,6 +569,7 @@ class StackVisualizer(CelldetectiveWidget):
 
         self.stack_length = auto_load_number_of_frames(self.stack_path)
         self.mid_time = self.stack_length // 2
+        self.current_time_index = 0
         self.img_num_per_channel = _get_img_num_per_channel(
             np.arange(self.n_channels), self.stack_length, self.n_channels
         )
@@ -578,7 +582,7 @@ class StackVisualizer(CelldetectiveWidget):
         self.loader_thread.start()
 
         self.init_frame = load_frames(
-            self.img_num_per_channel[self.target_channel, self.mid_time],
+            self.img_num_per_channel[self.target_channel, self.current_time_index],
             self.stack_path,
             normalize_input=False,
         )[:, :, 0]
@@ -713,7 +717,7 @@ class StackVisualizer(CelldetectiveWidget):
         layout = QHBoxLayout()
         self.frame_slider = QLabeledSlider(Qt.Horizontal)
         self.frame_slider.setRange(0, self.stack_length - 1)
-        self.frame_slider.setValue(self.mid_time)
+        self.frame_slider.setValue(self.current_time_index)
         self.frame_slider.valueChanged.connect(self.change_frame)
         layout.addWidget(QLabel("Time: "), 15)
         layout.addWidget(self.frame_slider, 85)
@@ -721,7 +725,7 @@ class StackVisualizer(CelldetectiveWidget):
 
     def set_target_channel(self, value):
         self.target_channel = value
-        self.init_frame = self.stack[self.mid_time, :, :, self.target_channel]
+        self.init_frame = self.stack[self.current_time_index, :, :, self.target_channel]
         self.im.set_data(self.init_frame)
         self.canvas.draw()
         self.update_profile()
@@ -739,7 +743,9 @@ class StackVisualizer(CelldetectiveWidget):
             self.change_frame_from_channel_switch(self.frame_slider.value())
         else:
             if self.stack is not None and self.stack.ndim == 4:
-                self.init_frame = self.stack[self.mid_time, :, :, self.target_channel]
+                self.init_frame = self.stack[
+                    self.current_time_index, :, :, self.target_channel
+                ]
                 self.im.set_data(self.init_frame)
                 self.canvas.draw()
                 self.update_profile()
