@@ -285,6 +285,10 @@ class StackVisualizer(CelldetectiveWidget):
             self.lock_y_action.setEnabled(True)
             self.canvas.toolbar.mode = ""
 
+            # Enable manual layout control to prevent tight_layout interference
+            if hasattr(self.canvas, "manual_layout"):
+                self.canvas.manual_layout = True
+
             # Connect events
             self.cid_press = self.fig.canvas.mpl_connect(
                 "button_press_event", self.on_line_press
@@ -297,8 +301,8 @@ class StackVisualizer(CelldetectiveWidget):
             )
 
             # Save original position if not saved
-            if not hasattr(self, "ax_original_pos"):
-                self.ax_original_pos = self.ax.get_position()
+            # if not hasattr(self, "ax_original_pos"):
+            #     self.ax_original_pos = self.ax.get_position()
 
             # Disable tight_layout/layout engine to prevent fighting manual positioning
             if hasattr(self.fig, "set_layout_engine"):
@@ -334,6 +338,7 @@ class StackVisualizer(CelldetectiveWidget):
                 self.ax_profile.set_position(gs[1].get_position(self.fig))
 
             self.ax_profile.set_visible(True)
+            self.ax_profile.set_label("profile_axes")
             self.ax_profile.set_facecolor("none")
             self.ax_profile.tick_params(axis="y", which="major", labelsize=8)
             self.ax_profile.set_xticks([])
@@ -346,11 +351,40 @@ class StackVisualizer(CelldetectiveWidget):
             self.ax_profile.spines["bottom"].set_color("black")
             self.ax_profile.spines["left"].set_color("black")
 
+            # Update Toolbar Home State to match new layout BUT with full field of view
+            # 1. Save current zoom
+            current_xlim = self.ax.get_xlim()
+            current_ylim = self.ax.get_ylim()
+
+            # 2. Set limits to full extent (Home State)
+            if hasattr(self, "im"):
+                extent = self.im.get_extent()  # (left, right, bottom, top) or similar
+                self.ax.set_xlim(extent[0], extent[1])
+                self.ax.set_ylim(extent[2], extent[3])
+
+            # 3. Reset Stack and save Home
+            self.canvas.toolbar._nav_stack.clear()
+            self.canvas.toolbar.push_current()
+
+            # 4. Restore User Zoom
+            self.ax.set_xlim(current_xlim)
+            self.ax.set_ylim(current_ylim)
+
+            # 5. Push restored zoom state so "Back"/"Forward" logic works from here?
+            # Actually, if we just restore, we are "live" at a new state.
+            # If we don't push, "Home" works. "Back" might not exist yet. That's fine.
+            self.canvas.toolbar.push_current()
+
             self.canvas.draw()
         else:
             self.line_mode = False
             self.lock_y_action.setChecked(False)
             self.lock_y_action.setEnabled(False)
+
+            # Disable manual layout control
+            if hasattr(self.canvas, "manual_layout"):
+                self.canvas.manual_layout = False
+
             # Disconnect events
             if hasattr(self, "cid_press"):
                 self.fig.canvas.mpl_disconnect(self.cid_press)
@@ -372,17 +406,24 @@ class StackVisualizer(CelldetectiveWidget):
                 self.ax_profile = None
 
             # Restore original layout
-            if hasattr(self, "ax_original_pos"):
-                # standard 1x1 GridSpec or manual restore
-                import matplotlib.gridspec as gridspec
+            # if hasattr(self, "ax_original_pos"):
+            # standard 1x1 GridSpec or manual restore
+            import matplotlib.gridspec as gridspec
 
-                gs = gridspec.GridSpec(1, 1)
-                self.ax.set_subplotspec(gs[0])
-                self.ax.set_position(gs[0].get_position(self.fig))
-                self.fig.subplots_adjust(
-                    top=1, bottom=0, right=1, left=0, hspace=0, wspace=0
-                )
-                # self.ax.set_position(self.ax_original_pos) # tight layout should fix it
+            gs = gridspec.GridSpec(1, 1)
+            self.ax.set_subplotspec(gs[0])
+            # self.ax.set_position(gs[0].get_position(self.fig))
+            self.fig.subplots_adjust(
+                top=1, bottom=0, right=1, left=0, hspace=0, wspace=0
+            )
+            # self.ax.set_position(self.ax_original_pos) # tight layout should fix it
+
+            # Re-enable tight_layout via standard resize event later or explicit call
+            self.fig.tight_layout()
+
+            # Reset Toolbar Stack for Standard View
+            self.canvas.toolbar._nav_stack.clear()
+            self.canvas.toolbar.push_current()
 
             self.canvas.draw()
             self.info_lbl.setText("")
@@ -758,7 +799,8 @@ class StackVisualizer(CelldetectiveWidget):
             p01 = np.nanpercentile(self.init_frame, 0.1)
             p99 = np.nanpercentile(self.init_frame, 99.9)
             self.im.set_clim(vmin=p01, vmax=p99)
-            self.contrast_slider.setValue((p01, p99))
+            if self.create_contrast_slider and hasattr(self, "contrast_slider"):
+                self.contrast_slider.setValue((p01, p99))
             self.channel_trigger = False
             self.canvas.draw()
 

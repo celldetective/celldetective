@@ -9,10 +9,15 @@ from superqt import QLabeledDoubleSlider, QLabeledDoubleRangeSlider
 from celldetective.gui.base.components import QHSeperationLine
 from celldetective.gui.gui_utils import QuickSliderLayout, ThresholdLineEdit
 from celldetective.gui.viewers.base_viewer import StackVisualizer
-from celldetective.utils.image_loaders import load_frames, auto_load_number_of_frames, _get_img_num_per_channel
+from celldetective.utils.image_loaders import (
+    load_frames,
+    auto_load_number_of_frames,
+    _get_img_num_per_channel,
+)
 from celldetective import get_logger
 
 logger = get_logger(__name__)
+
 
 class ChannelOffsetViewer(StackVisualizer):
 
@@ -22,16 +27,32 @@ class ChannelOffsetViewer(StackVisualizer):
         self.overlay_target_channel = -1
         self.shift_vertical = 0
         self.shift_horizontal = 0
+        self.overlay_init_contrast = False
         super().__init__(*args, **kwargs)
 
         self.load_stack()
+
+        if self.mode == "direct":
+            # Initialize overlay frames for direct mode
+            default_overlay_idx = -1
+            if self.stack.ndim == 4:
+                self.overlay_init_frame = self.stack[
+                    self.current_time_index, :, :, default_overlay_idx
+                ]
+                self.overlay_last_frame = self.stack[-1, :, :, default_overlay_idx]
+            else:
+                # Should rely on 4D stack assumption from StackVisualizer
+                self.overlay_init_frame = self.init_frame
+                self.overlay_last_frame = self.last_frame
+
         self.canvas.layout.addWidget(QHSeperationLine())
 
         self.generate_overlay_channel_cb()
         self.generate_overlay_imshow()
 
         self.generate_overlay_alpha_slider()
-        self.generate_overlay_contrast_slider()
+        if self.create_contrast_slider:
+            self.generate_overlay_contrast_slider()
 
         self.generate_overlay_shift()
         self.generate_add_to_parent_btn()
@@ -190,7 +211,7 @@ class ChannelOffsetViewer(StackVisualizer):
 
         self.im_overlay.set_data(self.overlay_init_frame)
 
-        if self.overlay_init_contrast:
+        if self.overlay_init_contrast and self.create_contrast_slider:
             self.im_overlay.autoscale()
             I_min, I_max = self.im_overlay.get_clim()
             self.overlay_contrast_slider.setRange(
@@ -214,12 +235,13 @@ class ChannelOffsetViewer(StackVisualizer):
             gc.collect()
 
         self.mid_time = self.stack_length // 2
+        self.current_time_index = 0
         self.img_num_per_channel = _get_img_num_per_channel(
             np.arange(self.n_channels), self.stack_length, self.n_channels
         )
 
         self.init_frame = load_frames(
-            self.img_num_per_channel[self.target_channel, self.mid_time],
+            self.img_num_per_channel[self.target_channel, self.current_time_index],
             self.stack_path,
             normalize_input=False,
         ).astype(float)[:, :, 0]
@@ -229,7 +251,9 @@ class ChannelOffsetViewer(StackVisualizer):
             normalize_input=False,
         ).astype(float)[:, :, 0]
         self.overlay_init_frame = load_frames(
-            self.img_num_per_channel[self.overlay_target_channel, self.mid_time],
+            self.img_num_per_channel[
+                self.overlay_target_channel, self.current_time_index
+            ],
             self.stack_path,
             normalize_input=False,
         ).astype(float)[:, :, 0]
@@ -306,6 +330,7 @@ class ChannelOffsetViewer(StackVisualizer):
         )
         self.im_overlay.set_data(self.shifted_frame)
         self.fig.canvas.draw_idle()
+        self.update_profile()
 
     def generate_add_to_parent_btn(self):
 
@@ -317,6 +342,95 @@ class ChannelOffsetViewer(StackVisualizer):
         add_hbox.addWidget(self.set_shift_btn, 33)
         add_hbox.addWidget(QLabel(""), 33)
         self.canvas.layout.addLayout(add_hbox)
+
+    def update_profile(self):
+        if not self.line_mode or not hasattr(self, "line_x") or not self.line_x:
+            return
+
+        # Calculate profile
+        x0, y0 = self.line_x[0], self.line_y[0]
+        x1, y1 = self.line_x[1], self.line_y[1]
+        length_px = np.hypot(x1 - x0, y1 - y0)
+        if length_px == 0:
+            return
+
+        num_points = int(length_px)
+        if num_points < 2:
+            num_points = 2
+
+        x, y = np.linspace(x0, x1, num_points), np.linspace(y0, y1, num_points)
+
+        # Use self.init_frame and overlay frame
+        profiles = []
+        colors = ["black", "tab:blue"]
+
+        # Main channel profile
+        if hasattr(self, "init_frame") and self.init_frame is not None:
+            from scipy.ndimage import map_coordinates
+
+            profile = map_coordinates(
+                self.init_frame, np.vstack((y, x)), order=1, mode="nearest"
+            )
+            profiles.append(profile)
+        else:
+            profiles.append(None)
+
+        # Overlay channel profile
+        # Use data currently in im_overlay, which accounts for shifts
+        overlay_data = self.im_overlay.get_array()
+        if overlay_data is not None:
+            from scipy.ndimage import map_coordinates
+
+            profile_overlay = map_coordinates(
+                overlay_data, np.vstack((y, x)), order=1, mode="nearest"
+            )
+            profiles.append(profile_overlay)
+        else:
+            profiles.append(None)
+
+        # Basic setup
+        self.ax_profile.clear()
+        self.ax_profile.set_facecolor("none")
+
+        # Distance axis
+        dist_axis = np.arange(num_points)
+        title_str = f"{round(length_px,2)} [px]"
+        if self.PxToUm is not None:
+            title_str += f" | {round(length_px*self.PxToUm,3)} [µm]"
+
+        # Handle Y-Axis Locking
+        current_ylim = None
+        if self.lock_y_action.isChecked():
+            current_ylim = self.ax_profile.get_ylim()
+
+        # Plot profiles
+        for i, (profile, color) in enumerate(zip(profiles, colors)):
+            if profile is not None:
+                if np.all(np.isnan(profile)):
+                    profile = np.zeros_like(profile)
+                    profile[:] = np.nan
+
+                self.ax_profile.plot(
+                    dist_axis, profile, color=color, linestyle="-", label=f"Ch{i}"
+                )
+
+        self.ax_profile.set_xticks([])
+        self.ax_profile.set_ylabel("Intensity", fontsize=8)
+        self.ax_profile.set_xlabel(title_str, fontsize=8)
+        self.ax_profile.tick_params(axis="y", which="major", labelsize=6)
+
+        # Hide spines
+        self.ax_profile.spines["top"].set_visible(False)
+        self.ax_profile.spines["right"].set_visible(False)
+        self.ax_profile.spines["bottom"].set_color("black")
+        self.ax_profile.spines["left"].set_color("black")
+
+        self.fig.set_facecolor("none")
+
+        if current_ylim:
+            self.ax_profile.set_ylim(current_ylim)
+
+        self.fig.canvas.draw_idle()
 
     def set_parent_attributes(self):
 

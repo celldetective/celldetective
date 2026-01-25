@@ -30,14 +30,25 @@ class FigureCanvas(CelldetectiveWidget):
         if interactive:
             self.layout.addWidget(self.toolbar)
 
+        self.manual_layout = False
         # center_window(self)
         self.setAttribute(Qt.WA_DeleteOnClose)
 
     def resizeEvent(self, event):
-
+        print("DEBUG: resizeEvent called")
         super().resizeEvent(event)
         try:
-            self.fig.tight_layout()
+            manual_layout = getattr(self, "manual_layout", False)
+
+            # Double check for profile axes manually (robust fallback)
+            if not manual_layout and hasattr(self.fig, "axes"):
+                for ax in self.fig.axes:
+                    if ax.get_label() == "profile_axes":
+                        manual_layout = True
+                        break
+
+            if not manual_layout:
+                self.fig.tight_layout()
         except:
             pass
 
