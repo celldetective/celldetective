@@ -950,9 +950,9 @@ class MeasureAnnotator(BaseAnnotator):
                 ].to_numpy()
             )
             self.colors.append(
-                self.df_tracks.loc[
-                    self.df_tracks["FRAME"] == t, ["group_color"]
-                ].to_numpy()
+                self.df_tracks.loc[self.df_tracks["FRAME"] == t, ["group_color"]]
+                .to_numpy()
+                .copy()
             )
             if "TRACK_ID" in self.df_tracks.columns:
                 self.tracks.append(
