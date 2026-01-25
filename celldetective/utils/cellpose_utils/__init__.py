@@ -113,13 +113,29 @@ def _prep_cellpose_model(
 
     from cellpose.models import CellposeModel
 
-    model = CellposeModel(
-        gpu=use_gpu,
-        device=device,
-        pretrained_model=path + model_name,
-        model_type=None,
-        nchan=n_channels,
-    )  # diam_mean=30.0,
+    try:
+        model = CellposeModel(
+            gpu=use_gpu,
+            device=device,
+            pretrained_model=path + model_name,
+            model_type=None,
+            nchan=n_channels,
+        )  # diam_mean=30.0,
+    except AssertionError as e:
+        if use_gpu:
+            print(
+                f"[WARNING] Could not load Cellpose model with GPU ({e}). Retrying with CPU..."
+            )
+            device = torch.device("cpu")
+            model = CellposeModel(
+                gpu=False,
+                device=device,
+                pretrained_model=path + model_name,
+                model_type=None,
+                nchan=n_channels,
+            )
+        else:
+            raise e
     if scale is None:
         scale_model = model.diam_mean / model.diam_labels
     else:
