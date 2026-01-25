@@ -111,6 +111,11 @@ class StackLoader(QThread):
                 # If nothing to load, wait
                 self.mutex.lock()
                 self.condition.wait(self.mutex, 500)  # Wait 500ms or until new priority
+
+                if not self.running:
+                    self.mutex.unlock()
+                    break
+
                 self.mutex.unlock()
 
 
