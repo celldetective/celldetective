@@ -22,12 +22,15 @@ class FigureCanvas(CelldetectiveWidget):
             from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT
 
             self.toolbar = NavigationToolbar2QT(self.canvas)
+            self.toolbar.setStyleSheet(
+                "QToolButton:hover {background-color: lightgray;} QToolButton {background-color: transparent; border: none;}"
+            )
         self.layout = QVBoxLayout(self)
         self.layout.addWidget(self.canvas, 90)
         if interactive:
             self.layout.addWidget(self.toolbar)
 
-        #center_window(self)
+        # center_window(self)
         self.setAttribute(Qt.WA_DeleteOnClose)
 
     def resizeEvent(self, event):
