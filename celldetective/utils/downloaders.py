@@ -85,8 +85,8 @@ def download_url_to_file(url, dst, progress=True):
     ssl._create_default_https_context = ssl._create_unverified_context
 
     # Retry configuration
-    max_retries = 3
-    retry_delay = 5  # Initial delay in seconds
+    max_retries = 5
+    retry_delay = 10  # Initial delay in seconds
 
     for attempt in range(max_retries):
         try:
