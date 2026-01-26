@@ -77,18 +77,39 @@ def download_url_to_file(url, dst, progress=True):
                     Default: True
 
     """
-    file_size = None
     import ssl
+    import time
+    from urllib.error import HTTPError, URLError
 
+    file_size = None
     ssl._create_default_https_context = ssl._create_unverified_context
-    u = urlopen(url)
-    meta = u.info()
-    if hasattr(meta, "getheaders"):
-        content_length = meta.getheaders("Content-Length")
-    else:
-        content_length = meta.get_all("Content-Length")
-    if content_length is not None and len(content_length) > 0:
-        file_size = int(content_length[0])
+
+    # Retry configuration
+    max_retries = 3
+    retry_delay = 5  # Initial delay in seconds
+
+    for attempt in range(max_retries):
+        try:
+            u = urlopen(url)
+            meta = u.info()
+            if hasattr(meta, "getheaders"):
+                content_length = meta.getheaders("Content-Length")
+            else:
+                content_length = meta.get_all("Content-Length")
+            if content_length is not None and len(content_length) > 0:
+                file_size = int(content_length[0])
+            break  # Success
+        except (HTTPError, URLError) as e:
+            if attempt < max_retries - 1:
+                logger.warning(
+                    f"Download check failed: {e}. Retrying in {retry_delay}s..."
+                )
+                time.sleep(retry_delay)
+                retry_delay *= 2  # Exponential backoff
+            else:
+                logger.error(f"Download check failed after {max_retries} attempts: {e}")
+                raise e
+
     # We deliberately save it in a temp file and move it after
     dst = os.path.expanduser(dst)
     dst_dir = os.path.dirname(dst)
@@ -143,14 +164,27 @@ def download_url_to_file(url, dst, progress=True):
                 unit_divisor=1024,
             ) as pbar:
                 while True:
-                    buffer = u.read(8192)  # 8192
-                    if len(buffer) == 0:
-                        break
-                    f.write(buffer)
-                    pbar.update(len(buffer))
+                    try:
+                        buffer = u.read(8192)  # 8192
+                        if len(buffer) == 0:
+                            break
+                        f.write(buffer)
+                        pbar.update(len(buffer))
+                    except (HTTPError, URLError) as e:
+                        # Attempt rudimentary resume-like behavior or just fail?
+                        # Simple retry of read is hard without Range headers on a stream.
+                        # Best to just fail the whole download and rely on outer retry if we wrapped the whole thing.
+                        # For now, let's just let it raise, but really we should wrap the whole download block.
+                        raise e
 
         f.close()
         shutil.move(f.name, dst)
+    except Exception as e:
+        f.close()
+        remove_file_if_exists(f.name)
+        # If we failed during download reading (after open), we should probably retry the whole function from start
+        # but that requires significant refactoring. Given the error was 504 on open, the retry block above handles it.
+        raise e
     finally:
         f.close()
         remove_file_if_exists(f.name)
