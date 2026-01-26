@@ -43,7 +43,14 @@ def _prep_stardist_model(
     - GPU support depends on the availability of compatible hardware and software setup.
     """
 
-    from stardist.models import StarDist2D
+    try:
+        from stardist.models import StarDist2D
+    except ImportError as e:
+        raise RuntimeError(
+            "StarDist is not installed. Please install it to use this feature.\n"
+            "You can install the full package with: pip install celldetective[process]\n"
+            "Or specifically: pip install celldetective[stardist]"
+        ) from e
 
     model = StarDist2D(None, name=model_name, basedir=path)
     model.config.use_gpu = use_gpu

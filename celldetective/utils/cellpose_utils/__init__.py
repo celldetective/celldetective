@@ -104,14 +104,27 @@ def _prep_cellpose_model(
       `diam_labels` are attributes of the model.
     """
 
-    import torch
+    try:
+        import torch
+    except ImportError as e:
+        raise RuntimeError(
+            "Torch is not installed. Please install it to use this feature.\n"
+            "You can install the full package with: pip install celldetective[process]\n"
+        ) from e
 
     if not use_gpu:
         device = torch.device("cpu")
     else:
         device = torch.device("cuda")
 
-    from cellpose.models import CellposeModel
+    try:
+        from cellpose.models import CellposeModel
+    except ImportError as e:
+        raise RuntimeError(
+            "Cellpose is not installed. Please install it to use this feature.\n"
+            "You can install the full package with: pip install celldetective[process]\n"
+            "Or specifically: pip install celldetective[cellpose]"
+        ) from e
 
     try:
         model = CellposeModel(

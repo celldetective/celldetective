@@ -88,10 +88,12 @@ To use the software, you must install python, *e.g.* through
 
 Celldetective requires a version of Python between 3.9 and 3.11 (included). If your Python version is older or more recent, consider using `conda` to create an environment as described below.
 
-With the proper Python version, Celldetective can be directly installed with `pip`:
+With the proper Python version, Celldetective can be directly installed with `pip`.
+**Important**: By default, `pip install celldetective` will **not** install deep-learning libraries (`tensorflow`, `cellpose`, `stardist`) to allow users to manage their own GPU environment (e.g. `torch`, `cuda`).
 
+If you want the standard full installation (recommended for most users), use:
 ``` bash
-pip install celldetective
+pip install celldetective[process]
 ```
 
 We recommend that you create an environment to use Celldetective, to protect your package versions and fix the Python version *e.g.*
@@ -100,7 +102,7 @@ with `conda`:
 ``` bash
 conda create -n celldetective python=3.11 pyqt
 conda activate celldetective
-pip install celldetective
+pip install celldetective[process]
 ```
 
 Need an update? Simply type the following in the terminal (in your
