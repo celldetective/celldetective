@@ -33,7 +33,7 @@ jobs:
           pip install setuptools wheel PyQt5
       - name: Install package [Full]
         run: |
-          pip install ".[process]"
+          pip install ".[all]"
       - name: Test package
         run: |
           python -m unittest
@@ -113,7 +113,7 @@ jobs:
           pip install setuptools wheel PyQt5
       - name: Install package [Full]
         run: |
-          pip install -e ".[process]"
+          pip install -e ".[all]"
       - name: Test package
         run: |
           python -m unittest

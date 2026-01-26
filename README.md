@@ -93,7 +93,7 @@ With the proper Python version, Celldetective can be directly installed with `pi
 
 If you want the standard full installation (recommended for most users), use:
 ``` bash
-pip install celldetective[process]
+pip install celldetective[all]
 ```
 
 We recommend that you create an environment to use Celldetective, to protect your package versions and fix the Python version *e.g.*
@@ -102,7 +102,7 @@ with `conda`:
 ``` bash
 conda create -n celldetective python=3.11 pyqt
 conda activate celldetective
-pip install celldetective[process]
+pip install celldetective[all]
 ```
 
 Need an update? Simply type the following in the terminal (in your

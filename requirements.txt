@@ -37,4 +37,6 @@ prettyprint
 pandas
 matplotlib
 prettytable
+scikit-image
+natsort
 
