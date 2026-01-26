@@ -879,6 +879,14 @@ class StackVisualizer(CelldetectiveWidget):
         # Event handler for closing the widget
         if self.loader_thread:
             self.loader_thread.stop()
+            self.loader_thread = None
         if hasattr(self, "frame_cache") and isinstance(self.frame_cache, OrderedDict):
             self.frame_cache.clear()
         self.canvas.close()
+
+    def __del__(self):
+        try:
+            if hasattr(self, "loader_thread") and self.loader_thread:
+                self.loader_thread.stop()
+        except:
+            pass
