@@ -48,8 +48,7 @@ def _prep_stardist_model(
     except ImportError as e:
         raise RuntimeError(
             "StarDist is not installed. Please install it to use this feature.\n"
-            "You can install the full package with: pip install celldetective[process]\n"
-            "Or specifically: pip install celldetective[stardist]"
+            "You can install the full package with: pip install celldetective[all]"
         ) from e
 
     model = StarDist2D(None, name=model_name, basedir=path)

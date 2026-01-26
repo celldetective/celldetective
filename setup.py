@@ -72,7 +72,7 @@ setup(
     install_requires=requirements,
     extras_require={
         "tensorflow": ["tensorflow~=2.15.0", "stardist"],
-        "process": ["cellpose<3", "stardist", "tensorflow~=2.15.0"],
+        #"process": ["cellpose<3", "stardist", "tensorflow~=2.15.0"],
         "all": ["cellpose<3", "stardist", "tensorflow~=2.15.0"],
     },
     # dependency_links = links

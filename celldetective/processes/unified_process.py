@@ -122,15 +122,29 @@ class UnifiedBatchProcess(Process):
         signal_model = None
 
         if self.run_signals:
-            from celldetective.utils.event_detection import _prep_event_detection_model
-
             try:
+                from celldetective.utils.event_detection import (
+                    _prep_event_detection_model,
+                )
+
                 logger.info("Loading the event detection model...")
                 self.queue.put({"status": "Loading event detection model..."})
                 model_name = self.signal_args["model_name"]
                 signal_model = _prep_event_detection_model(
                     model_name, use_gpu=self.signal_args.get("gpu", True)
                 )
+            except (ImportError, ModuleNotFoundError) as e:
+                if "tensorflow" in str(e):
+                    logger.warning(
+                        "Tensorflow not found/installed. Signal analysis will be skipped."
+                    )
+                    self.run_signals = False
+                else:
+                    logger.error(
+                        f"Failed to initialize event detection model: {e}",
+                        exc_info=True,
+                    )
+                    self.run_signals = False
             except Exception as e:
                 logger.error(
                     f"Failed to initialize event detection model: {e}", exc_info=True
