@@ -6,6 +6,7 @@ from PyQt5.QtWidgets import QHBoxLayout, QAction, QLabel, QComboBox
 from fonticon_mdi6 import MDI6
 from superqt import QLabeledDoubleRangeSlider, QLabeledSlider
 from superqt.fonticon import icon
+import matplotlib.gridspec as gridspec
 
 from celldetective.gui.base.components import CelldetectiveWidget
 from celldetective.gui.base.utils import center_window
@@ -102,8 +103,7 @@ class StackLoader(QThread):
                     self.mutex.unlock()
 
                 except Exception as e:
-                    pass
-                    # logger.error(f"Error loading frame {frame_to_load}: {e}")
+                    logger.debug(f"Error loading frame {frame_to_load}: {e}")
                     # Prepare to wait to avoid spin loop on error
                     self.msleep(100)
 
@@ -169,9 +169,13 @@ class StackVisualizer(CelldetectiveWidget):
         window_title="View",
         PxToUm=None,
         background_color="transparent",
-        imshow_kwargs={},
+        imshow_kwargs=None,
     ):
         super().__init__()
+
+        # Default mutable argument handling
+        if imshow_kwargs is None:
+            imshow_kwargs = {}
 
         # self.setWindowTitle(window_title)
         self.window_title = window_title
@@ -266,7 +270,6 @@ class StackVisualizer(CelldetectiveWidget):
             else:
                 if len(actions) > 5:
                     self.canvas.toolbar.insertAction(actions[5], self.line_action)
-                    self.canvas.toolbar.insertAction(actions[5], self.line_action)
                     self.canvas.toolbar.insertAction(actions[5], self.lock_y_action)
                 else:
                     self.canvas.toolbar.addAction(self.line_action)
@@ -313,8 +316,6 @@ class StackVisualizer(CelldetectiveWidget):
             # Use GridSpec for robust layout
             # 2 rows: Main Image (top, ~75%), Profile (bottom, ~25%)
             # Add margins to ensure axis labels and text are visible
-            import matplotlib.gridspec as gridspec
-
             gs = gridspec.GridSpec(
                 2,
                 1,
@@ -406,10 +407,6 @@ class StackVisualizer(CelldetectiveWidget):
                 self.ax_profile = None
 
             # Restore original layout
-            # if hasattr(self, "ax_original_pos"):
-            # standard 1x1 GridSpec or manual restore
-            import matplotlib.gridspec as gridspec
-
             gs = gridspec.GridSpec(1, 1)
             self.ax.set_subplotspec(gs[0])
             # self.ax.set_position(gs[0].get_position(self.fig))
@@ -505,9 +502,8 @@ class StackVisualizer(CelldetectiveWidget):
             profile = np.zeros_like(profile)
             profile[:] = np.nan
 
-        # Distance in microns if available
+        # Distance in pixels
         dist_axis = np.arange(num_points)
-        x_label = "Distance (px)"
 
         # Only show pixel length, rounded to integer
         title_str = f"{round(length_px,2)} [px]"
@@ -525,11 +521,8 @@ class StackVisualizer(CelldetectiveWidget):
         if hasattr(self, "profile_line") and self.profile_line:
             try:
                 self.profile_line.remove()
-            except:
-                pass
-
-        # Distance in microns if available
-        dist_axis = np.arange(num_points)
+            except ValueError:
+                pass  # Already removed
 
         (self.profile_line,) = self.ax_profile.plot(
             dist_axis, profile, color="black", linestyle="-"
@@ -850,12 +843,16 @@ class StackVisualizer(CelldetectiveWidget):
 
         if curr_min < self._min:
             self._min = curr_min
-            rescale_constrast = True
+            rescale_contrast = True
         if curr_max > self._max:
             self._max = curr_max
             rescale_contrast = True
 
-        if rescale_contrast:
+        if (
+            rescale_contrast
+            and self.create_contrast_slider
+            and hasattr(self, "contrast_slider")
+        ):
             self.contrast_slider.setRange(self._min, self._max)
         self.canvas.canvas.draw_idle()
         self.update_profile()
@@ -888,5 +885,5 @@ class StackVisualizer(CelldetectiveWidget):
         try:
             if hasattr(self, "loader_thread") and self.loader_thread:
                 self.loader_thread.stop()
-        except:
+        except Exception:
             pass
