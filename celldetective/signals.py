@@ -2971,6 +2971,15 @@ def ResNetModelCurrent(
     # Creates a ResNet model configured for classification with 3 classes.
 
     """
+    from tensorflow.keras.layers import (
+        Input,
+        Conv1D,
+        MaxPooling1D,
+        GlobalAveragePooling1D,
+        Dense,
+        Dropout,
+    )
+    from tensorflow.keras.models import Model
 
     if header == "classifier":
         final_activation = "softmax"
