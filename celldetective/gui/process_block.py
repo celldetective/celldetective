@@ -1361,12 +1361,12 @@ class ProcessPanel(QFrame, Styles):
                     msgBox = QMessageBox()
                     msgBox.setIcon(QMessageBox.Question)
                     msgBox.setText(
-                        "A measurement table already exists. Previously annotated data for\nthis position will be lost. Do you want to proceed?"
+                        "A measurement table already exists. Previously annotated data for this position will be lost. Do you want to proceed?"
                     )
                     msgBox.setWindowTitle("Info")
                     msgBox.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
                     if msgBox.exec() == QMessageBox.No:
-                        run_tracking = False
+                        return None
 
             if run_tracking:
                 track_args = {"mode": self.mode, "n_threads": self.n_threads}
