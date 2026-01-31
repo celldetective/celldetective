@@ -1489,6 +1489,11 @@ class SignalDetectionModel(object):
 
         """
 
+        from tensorflow.keras.optimizers import Adam
+        from tensorflow.keras.metrics import Precision, Recall, MeanIoU
+        from tensorflow.keras.models import clone_model, load_model
+        from tensorflow.keras.losses import MeanSquaredError
+
         # if pretrained model
         self.n_classes = 3
 
@@ -1600,7 +1605,7 @@ class SignalDetectionModel(object):
         self.model_class.load_weights(os.sep.join([self.model_folder, "classifier.h5"]))
 
         time_callback = next(
-            (cb for cb in self.cb if isinstance(cb, TimeHistory)), None
+            (cb for cb in self.cb if type(cb).__name__ == "TimeHistory"), None
         )
         self.dico = {
             "history_classifier": self.history_classifier,
@@ -1735,6 +1740,10 @@ class SignalDetectionModel(object):
 
         """
 
+        from tensorflow.keras.optimizers import Adam
+        from tensorflow.keras.models import clone_model, load_model
+        from tensorflow.keras.losses import MeanSquaredError
+
         # Compile model
         # if pretrained model
         if self.pretrained is not None:
@@ -1803,7 +1812,7 @@ class SignalDetectionModel(object):
         if self.show_plots:
             self.plot_model_history(mode="regressor")
         time_callback = next(
-            (cb for cb in self.cb if isinstance(cb, TimeHistory)), None
+            (cb for cb in self.cb if type(cb).__name__ == "TimeHistory"), None
         )
         self.dico.update(
             {
@@ -1895,6 +1904,8 @@ class SignalDetectionModel(object):
 
         """
 
+        from tensorflow.keras.losses import MeanSquaredError, MeanAbsoluteError
+
         mse = MeanSquaredError()
         mae = MeanAbsoluteError()
 
@@ -1977,6 +1988,14 @@ class SignalDetectionModel(object):
         - The list of callbacks is stored in the class attribute `cb` and used during model training.
 
         """
+
+        from tensorflow.keras.callbacks import (
+            ReduceLROnPlateau,
+            CSVLogger,
+            ModelCheckpoint,
+            EarlyStopping,
+            TensorBoard,
+        )
 
         self.cb = []
 
@@ -2073,6 +2092,8 @@ class SignalDetectionModel(object):
         - The method applies specified normalization and interpolation options to prepare the signals for model training.
 
         """
+
+        from tensorflow.keras.utils import to_categorical
 
         self.x_set = []
         self.y_time_set = []
