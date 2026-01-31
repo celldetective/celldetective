@@ -129,14 +129,14 @@ class SegmentationModelLoader(CelldetectiveWidget):
     def unlock_upload(self):
         if self.stardist_button.isChecked():
             if np.any(
-                [c.currentText() != "--" for c in self.channel_layout.channel_cbs]
+                [c.currentData() != "--" for c in self.channel_layout.channel_cbs]
             ):
                 self.upload_button.setEnabled(True)
             else:
                 self.upload_button.setEnabled(False)
         elif self.cellpose_button.isChecked():
             if np.any(
-                [c.currentText() != "--" for c in self.channel_layout.channel_cbs]
+                [c.currentData() != "--" for c in self.channel_layout.channel_cbs]
             ):
                 self.upload_button.setEnabled(True)
             else:
@@ -373,7 +373,7 @@ class SegmentationModelLoader(CelldetectiveWidget):
 
         channels = []
         for i in range(len(self.channel_layout.channel_cbs)):
-            channels.append(self.channel_layout.channel_cbs[i].currentText())
+            channels.append(self.channel_layout.channel_cbs[i].currentData())
 
         if self.file_label.text() == "No file chosen":
             generic_message("Please select a model first...")
@@ -450,7 +450,7 @@ class SegmentationModelLoader(CelldetectiveWidget):
 
         channels = []
         for i in range(len(self.channel_layout.channel_cbs)):
-            channels.append(self.channel_layout.channel_cbs[i].currentText())
+            channels.append(self.channel_layout.channel_cbs[i].currentData())
 
         slots_to_keep = np.where(np.array(channels) != "--")[0]
         while "--" in channels:

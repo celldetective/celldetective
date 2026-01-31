@@ -355,7 +355,7 @@ class SettingsSegmentationModelTraining(CelldetectiveSettingsPanel):
             not current_name in models
             and not self.spatial_calib_le.text() == ""
             and not np.all(
-                [cb.currentText() == "--" for cb in self.ch_norm.channel_cbs]
+                [cb.currentData() == "--" for cb in self.ch_norm.channel_cbs]
             )
         ):
             self.submit_btn.setEnabled(True)
@@ -370,7 +370,7 @@ class SettingsSegmentationModelTraining(CelldetectiveSettingsPanel):
                 self.submit_warning.setText(
                     "Please provide a valid spatial calibration..."
                 )
-            elif np.all([cb.currentText() == "--" for cb in self.ch_norm.channel_cbs]):
+            elif np.all([cb.currentData() == "--" for cb in self.ch_norm.channel_cbs]):
                 self.submit_warning.setText("Please provide valid channels...")
 
     def rescale_slider(self):
@@ -459,7 +459,7 @@ class SettingsSegmentationModelTraining(CelldetectiveSettingsPanel):
 
         for k in range(len(self.diamWidget.cellpose_channel_cb)):
             ch = self.diamWidget.cellpose_channel_cb[k].currentText()
-            idx = self.ch_norm.channel_cbs[k].findText(ch)
+            idx = self.ch_norm.channel_cbs[k].findData(ch)
             self.ch_norm.channel_cbs[k].setCurrentIndex(idx)
 
         self.diamWidget.close()
@@ -561,7 +561,7 @@ class SettingsSegmentationModelTraining(CelldetectiveSettingsPanel):
             self.cellpose_model.setChecked(True)
 
         for c, cb in zip(channels, self.ch_norm.channel_cbs):
-            index = cb.findText(c)
+            index = cb.findData(c)
             cb.setCurrentIndex(index)
 
         for i in range(len(channels)):
@@ -622,7 +622,7 @@ class SettingsSegmentationModelTraining(CelldetectiveSettingsPanel):
 
         channels = []
         for i in range(len(self.ch_norm.channel_cbs)):
-            channels.append(self.ch_norm.channel_cbs[i].currentText())
+            channels.append(self.ch_norm.channel_cbs[i].currentData())
 
         slots_to_keep = np.where(np.array(channels) != "--")[0]
         while "--" in channels:

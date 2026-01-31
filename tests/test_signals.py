@@ -73,9 +73,9 @@ class TestCreateSignalModel(unittest.TestCase):
 
 	def test_create_model(self):
 
-		from celldetective.signals import SignalDetectionModel
+		from celldetective.event_detection_models import SignalDetectionModel
 
-		model = SignalDetectionModel(
+        model = SignalDetectionModel(
 									 channel_option=["signal"], 
 									 model_signal_length=128,
 									 n_channels=1,
@@ -92,9 +92,9 @@ class TestTrainSignalModel(unittest.TestCase):
 	@classmethod
 	def setUpClass(self):
 
-		from celldetective.signals import SignalDetectionModel
+		from celldetective.event_detection_models import SignalDetectionModel
 
-		self.trajectories = generate_fake_signal_data(300)
+        self.trajectories = generate_fake_signal_data(300)
 		if not os.path.exists('temp'):
 			os.mkdir('temp')
 		export_set(self.trajectories, name='set.npy', output_folder='temp')

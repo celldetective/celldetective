@@ -8,7 +8,7 @@ import json
 from glob import glob
 import numpy as np
 from art import tprint
-from celldetective.signals import SignalDetectionModel
+from celldetective.event_detection_models import SignalDetectionModel
 from celldetective.utils.model_loaders import locate_signal_model
 
 tprint("Train")

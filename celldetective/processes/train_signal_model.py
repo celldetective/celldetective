@@ -7,7 +7,7 @@ import numpy as np
 from art import tprint
 from tensorflow.python.keras.callbacks import Callback
 
-from celldetective.signals import SignalDetectionModel
+from celldetective.event_detection_models import SignalDetectionModel
 from celldetective.log_manager import get_logger
 from celldetective.utils.model_loaders import locate_signal_model
 

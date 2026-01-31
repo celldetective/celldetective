@@ -23,7 +23,7 @@ class FigureCanvas(CelldetectiveWidget):
 
             self.toolbar = NavigationToolbar2QT(self.canvas)
             self.toolbar.setStyleSheet(
-                "QToolButton:hover {background-color: lightgray;} QToolButton {background-color: transparent; border: none;}"
+                "QToolButton:checked {background-color: darkgray;} QToolButton:hover {background-color: lightgray;} QToolButton {background-color: transparent; border: none;}"
             )
         self.layout = QVBoxLayout(self)
         self.layout.addWidget(self.canvas, 90)

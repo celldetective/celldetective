@@ -417,8 +417,7 @@ class SettingsEventDetectionModelTraining(CelldetectiveSettingsPanel):
         self.signals = ["--"] + num_cols_pairs + num_cols_reference + num_cols_neighbor
 
         for cb in self.ch_norm.channel_cbs:
-            cb.clear()
-            cb.addItems(self.signals)
+            self.ch_norm.add_items_truncated(cb, self.signals)
 
     def fill_available_neighborhoods(self):
 
@@ -541,15 +540,36 @@ class SettingsEventDetectionModelTraining(CelldetectiveSettingsPanel):
         self.model_length_slider.setValue(int(signal_length))
         self.model_length_slider.setEnabled(False)
 
-        for c, cb in zip(channels, self.ch_norm.channel_cbs):
-            index = cb.findText(c)
+        try:
+            norm_perc = data["normalization_percentile"]
+            if isinstance(norm_perc, bool):
+                norm_perc = [norm_perc] * len(channels)
+            norm_val = data["normalization_values"]
+            if len(norm_val) == 2 and isinstance(norm_val[0], float):
+                norm_val = [norm_val] * len(channels)
+            norm_clip = data["normalization_clip"]
+            if isinstance(norm_clip, bool):
+                norm_clip = [norm_clip] * len(channels)
+        except Exception:
+            norm_perc = [True] * len(channels)
+            norm_val = [[0.1, 99.99]] * len(channels)
+            norm_clip = [False] * len(channels)
+
+        for k, (c, cb) in enumerate(zip(channels, self.ch_norm.channel_cbs)):
+            index = cb.findData(c)
             cb.setCurrentIndex(index)
 
-        if len(channels) < len(self.ch_norm.channel_cbs):
-            for k in range(len(self.ch_norm.channel_cbs) - len(channels)):
-                self.ch_norm.channel_cbs[len(channels) + k].setCurrentIndex(0)
-                self.ch_norm.channel_cbs[len(channels) + k].setEnabled(False)
-        self.ch_norm.add_col_btn.setEnabled(False)
+            # Set normalization mode
+            if self.ch_norm.normalization_mode[k] != norm_perc[k]:
+                self.ch_norm.switch_normalization_mode(k)
+
+            # Set clipping mode
+            if self.ch_norm.clip_option[k] != norm_clip[k]:
+                self.ch_norm.switch_clipping_mode(k)
+
+            # Set normalization values
+            self.ch_norm.normalization_min_value_le[k].setText(str(norm_val[k][0]))
+            self.ch_norm.normalization_max_value_le[k].setText(str(norm_val[k][1]))
 
     def adjust_scroll_area(self):
         """
@@ -581,7 +601,7 @@ class SettingsEventDetectionModelTraining(CelldetectiveSettingsPanel):
 
         channels = []
         for i in range(len(self.ch_norm.channel_cbs)):
-            channels.append(self.ch_norm.channel_cbs[i].currentText())
+            channels.append(self.ch_norm.channel_cbs[i].currentData())
 
         slots_to_keep = np.where(np.array(channels) != "--")[0]
         while "--" in channels:
@@ -750,10 +770,8 @@ class SettingsEventDetectionModelTraining(CelldetectiveSettingsPanel):
 
             # Assuming signal/event models directory. Verifying path would be better but this fits pattern.
             # If exact attribute unknown, use os.path.dirname logic or config methods.
-            # Safe bet: self.parent_window.signal_models_dir based on refresh call.
-            model_path = os.path.join(
-                self.parent_window.signal_models_dir, self.modelname_le.text()
-            )
+            # Safe bet: self.signal_models_dir based on init.
+            model_path = os.path.join(self.signal_models_dir, self.modelname_le.text())
             if os.path.exists(model_path):
                 time.sleep(0.5)
                 shutil.rmtree(model_path)

@@ -36,6 +36,22 @@ class ChannelNormGenerator(QVBoxLayout, Styles):
         self.generate_widgets()
         self.add_to_layout()
 
+    def add_items_truncated(self, combo, items):
+        """
+        Add items to a combobox with truncated text and full text in tooltip/data.
+        """
+        combo.clear()
+        for item in items:
+            item_text = str(item)
+            if len(item_text) > 25:
+                display_text = item_text[:25] + "..."
+            else:
+                display_text = item_text
+            combo.addItem(display_text, item_text)
+            # Find the index of the added item
+            idx = combo.count() - 1
+            combo.setItemData(idx, item_text, Qt.ToolTipRole)
+
     def generate_widgets(self):
 
         self.channel_cbs = [QSearchableComboBox() for i in range(self.init_n_channels)]
@@ -178,7 +194,7 @@ class ChannelNormGenerator(QVBoxLayout, Styles):
 
         self.channel_cbs.append(QSearchableComboBox())
         self.channel_labels.append(QLabel())
-        self.channel_cbs[-1].addItems(self.channel_items)
+        self.add_items_truncated(self.channel_cbs[-1], self.channel_items)
         self.channel_cbs[-1].currentIndexChanged.connect(self.check_valid_channels)
         self.channel_labels[-1].setText(f"channel {len(self.channel_cbs)-1}: ")
 
@@ -239,7 +255,7 @@ class ChannelNormGenerator(QVBoxLayout, Styles):
             ch_layout = QHBoxLayout()
             self.channel_labels[i].setText(f"channel {i}: ")
             ch_layout.addWidget(self.channel_labels[i], 30)
-            self.channel_cbs[i].addItems(self.channel_items)
+            self.add_items_truncated(self.channel_cbs[i], self.channel_items)
             self.channel_cbs[i].currentIndexChanged.connect(self.check_valid_channels)
             ch_layout.addWidget(self.channel_cbs[i], 70)
             self.channels_vb.addLayout(ch_layout)
@@ -323,7 +339,7 @@ class ChannelNormGenerator(QVBoxLayout, Styles):
     def check_valid_channels(self):
 
         if hasattr(self.parent_window, "submit_btn"):
-            if np.all([cb.currentText() == "--" for cb in self.channel_cbs]):
+            if np.all([cb.currentData() == "--" for cb in self.channel_cbs]):
                 self.parent_window.submit_btn.setEnabled(False)
 
         if hasattr(self.parent_window, "spatial_calib_le") and hasattr(
