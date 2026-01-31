@@ -101,14 +101,58 @@ class EventAnnotator(BaseAnnotator):
         self.class_name = "class"
         self.time_name = "t0"
         self.status_name = "status"
+        self._loader_thread = None
 
         # self.locate_stack()
         if not self.proceed:
             self.close()
         else:
             if not lazy_load:
-                self.prepare_stack()
-                self.finalize_init()
+                self._start_threaded_loading()
+
+    def _start_threaded_loading(self):
+        """Start loading the stack in a background thread with progress dialog."""
+        from celldetective.gui.base.components import CelldetectiveProgressDialog
+
+        self._progress_dialog = CelldetectiveProgressDialog(
+            "Loading stack...", "Cancel", 0, 100, self
+        )
+        self._progress_dialog.setWindowTitle("Loading")
+        self._progress_dialog.setMinimumDuration(0)
+        self._progress_dialog.setValue(0)
+
+        self._loader_thread = StackLoaderThread(self)
+        self._loader_thread.progress.connect(self._on_load_progress)
+        self._loader_thread.status_update.connect(self._on_load_status)
+        self._loader_thread.finished.connect(self._on_load_finished)
+        self._progress_dialog.canceled.connect(self._on_load_canceled)
+
+        self._loader_thread.start()
+
+    def _on_load_progress(self, value):
+        """Update progress dialog."""
+        if hasattr(self, "_progress_dialog") and self._progress_dialog:
+            self._progress_dialog.setValue(value)
+
+    def _on_load_status(self, status):
+        """Update progress dialog label."""
+        if hasattr(self, "_progress_dialog") and self._progress_dialog:
+            self._progress_dialog.setLabelText(status)
+
+    def _on_load_canceled(self):
+        """Handle cancel button click."""
+        if self._loader_thread:
+            self._loader_thread.stop()
+            self._loader_thread.wait()
+        self.close()
+
+    def _on_load_finished(self):
+        """Called when loading completes."""
+        if hasattr(self, "_progress_dialog") and self._progress_dialog:
+            self._progress_dialog.close()
+            self._progress_dialog = None
+        self._loader_thread = None
+        self.finalize_init()
 
     def finalize_init(self):
         self.frame_lbl = QLabel("frame: ")
@@ -298,15 +342,13 @@ class EventAnnotator(BaseAnnotator):
             self.contrast_slider.setSingleStep(0.001)
             self.contrast_slider.setTickInterval(0.001)
             self.contrast_slider.setOrientation(Qt.Horizontal)
-            self.contrast_slider.setRange(
-                *[
-                    np.nanpercentile(self.stack, 0.001),
-                    np.nanpercentile(self.stack, 99.999),
-                ]
-            )
-            self.contrast_slider.setValue(
-                [np.nanpercentile(self.stack, 1), np.nanpercentile(self.stack, 99.99)]
-            )
+            # Cache percentile values to avoid recomputing on the full stack
+            self._stack_p_low = np.nanpercentile(self.stack, 0.001)
+            self._stack_p_high = np.nanpercentile(self.stack, 99.999)
+            self._stack_p1 = np.nanpercentile(self.stack, 1)
+            self._stack_p99 = np.nanpercentile(self.stack, 99.99)
+            self.contrast_slider.setRange(self._stack_p_low, self._stack_p_high)
+            self.contrast_slider.setValue([self._stack_p1, self._stack_p99])
             self.contrast_slider.valueChanged.connect(self.contrast_slider_action)
             contrast_hbox.addWidget(QLabel("contrast: "))
             contrast_hbox.addWidget(self.contrast_slider, 90)
@@ -314,10 +356,6 @@ class EventAnnotator(BaseAnnotator):
 
         if self.class_choice_cb.currentText() != "":
             self.compute_status_and_colors(0)
-
-        self.no_event_shortcut = QShortcut(QKeySequence("n"), self)  # QKeySequence("s")
-        self.no_event_shortcut.activated.connect(self.shortcut_no_event)
-        self.no_event_shortcut.setEnabled(False)
 
         QApplication.processEvents()
 
@@ -481,7 +519,10 @@ class EventAnnotator(BaseAnnotator):
         self.enable_time_of_interest()
         self.correct_btn.setText("submit")
 
-        self.correct_btn.disconnect()
+        try:
+            self.correct_btn.clicked.disconnect()
+        except TypeError:
+            pass  # No connections to disconnect
         self.correct_btn.clicked.connect(self.apply_modification)
 
     def apply_modification(self):
@@ -493,8 +534,8 @@ class EventAnnotator(BaseAnnotator):
                 t0 = float(self.time_of_interest_le.text().replace(",", "."))
                 self.line_dt.set_xdata([t0, t0])
                 self.cell_fcanvas.canvas.draw_idle()
-            except Exception as e:
-                print(f"L 598 {e=}")
+            except ValueError:
+                # Invalid time value entered
                 t0 = -1
                 cclass = 2
         elif self.no_event_btn.isChecked():
@@ -541,9 +582,11 @@ class EventAnnotator(BaseAnnotator):
         self.extract_scatter_from_trajectories()
         self.give_cell_information()
 
-        self.correct_btn.disconnect()
+        try:
+            self.correct_btn.clicked.disconnect()
+        except TypeError:
+            pass  # No connections to disconnect
         self.correct_btn.clicked.connect(self.show_annotation_buttons)
-        # self.cancel_btn.click()
 
         self.hide_annotation_buttons()
         self.correct_btn.setEnabled(False)
@@ -704,73 +747,25 @@ class EventAnnotator(BaseAnnotator):
                     self.cell_ax.set_ylim(self.value_magnitude, self.non_log_ymax)
 
     def extract_scatter_from_trajectories(self):
-
+        """Extract scatter data from trajectories using efficient groupby."""
         self.positions = []
         self.colors = []
         self.tracks = []
 
-        for t in np.arange(self.len_movie):
-            self.positions.append(
-                self.df_tracks.loc[
-                    self.df_tracks["FRAME"] == t, ["x_anim", "y_anim"]
-                ].to_numpy()
-            )
-            self.colors.append(
-                self.df_tracks.loc[
-                    self.df_tracks["FRAME"] == t, ["class_color", "status_color"]
-                ].to_numpy()
-            )
-            self.tracks.append(
-                self.df_tracks.loc[self.df_tracks["FRAME"] == t, "TRACK_ID"].to_numpy()
-            )
+        # Pre-allocate with empty arrays for all frames
+        for _ in range(self.len_movie):
+            self.positions.append(np.empty((0, 2)))
+            self.colors.append(np.empty((0, 2), dtype=object))
+            self.tracks.append(np.empty(0))
 
-    # def load_annotator_config(self):
-    #
-    # 	"""
-    # 	Load settings from config or set default values.
-    # 	"""
-    #
-    # 	if os.path.exists(self.instructions_path):
-    # 		with open(self.instructions_path, 'r') as f:
-    #
-    # 			instructions = json.load(f)
-    #
-    # 			if 'rgb_mode' in instructions:
-    # 				self.rgb_mode = instructions['rgb_mode']
-    # 			else:
-    # 				self.rgb_mode = False
-    #
-    # 			if 'percentile_mode' in instructions:
-    # 				self.percentile_mode = instructions['percentile_mode']
-    # 			else:
-    # 				self.percentile_mode = True
-    #
-    # 			if 'channels' in instructions:
-    # 				self.target_channels = instructions['channels']
-    # 			else:
-    # 				self.target_channels = [[self.channel_names[0], 0.01, 99.99]]
-    #
-    # 			if 'fraction' in instructions:
-    # 				self.fraction = float(instructions['fraction'])
-    # 			else:
-    # 				self.fraction = 0.25
-    #
-    # 			if 'interval' in instructions:
-    # 				self.anim_interval = int(instructions['interval'])
-    # 			else:
-    # 				self.anim_interval = 1
-    #
-    # 			if 'log' in instructions:
-    # 				self.log_option = instructions['log']
-    # 			else:
-    # 				self.log_option = False
-    # 	else:
-    # 		self.rgb_mode = False
-    # 		self.log_option = False
-    # 		self.percentile_mode = True
-    # 		self.target_channels = [[self.channel_names[0], 0.01, 99.99]]
-    # 		self.fraction = 0.25
-    # 		self.anim_interval = 1
+        # Use groupby for efficient extraction
+        grouped = self.df_tracks.groupby("FRAME")
+        for frame, group in grouped:
+            frame = int(frame)
+            if 0 <= frame < self.len_movie:
+                self.positions[frame] = group[["x_anim", "y_anim"]].to_numpy()
+                self.colors[frame] = group[["class_color", "status_color"]].to_numpy()
+                self.tracks[frame] = group["TRACK_ID"].to_numpy()
 
     def prepare_stack(self, progress_callback=None):
 
@@ -919,7 +914,7 @@ class EventAnnotator(BaseAnnotator):
             cache_frame_data=False,
         )
 
-        self.fig.canvas.mpl_connect("pick_event", self.on_scatter_pick)
+        self._pick_cid = self.fig.canvas.mpl_connect("pick_event", self.on_scatter_pick)
         self.fcanvas.canvas.draw()
 
     def select_single_cell(self, index, timepoint):
@@ -1080,10 +1075,12 @@ class EventAnnotator(BaseAnnotator):
 
         # Recreate animation with new interval
         try:
-            # We must disconnect the old pick event to avoid accumulating connections
-            # although mpl_connect returns a cid, we didn't store it properly before.
-            # However, the canvas clears usually handle this if we cleared axes, but we aren't clearing axes here.
-            # Ideally we should clean up, but for now let's focus on the animation object replacement.
+            # Disconnect the old pick event to avoid accumulating connections
+            if hasattr(self, "_pick_cid"):
+                try:
+                    self.fig.canvas.mpl_disconnect(self._pick_cid)
+                except Exception:
+                    pass
 
             self.anim = FuncAnimation(
                 self.fig,
@@ -1092,6 +1089,11 @@ class EventAnnotator(BaseAnnotator):
                 interval=self.anim_interval,
                 blit=True,
                 cache_frame_data=False,
+            )
+
+            # Reconnect pick event and store cid
+            self._pick_cid = self.fig.canvas.mpl_connect(
+                "pick_event", self.on_scatter_pick
             )
 
             # If we were NOT playing (i.e. Paused), pause the new animation immediately
