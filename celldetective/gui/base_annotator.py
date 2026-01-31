@@ -431,10 +431,7 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
                 else:
                     self.fraction = 0.25
 
-                if "interval" in instructions:
-                    self.anim_interval = int(instructions["interval"])
-                else:
-                    self.anim_interval = 1
+                self.anim_interval = 33
 
                 if "log" in instructions:
                     self.log_option = instructions["log"]
@@ -446,7 +443,7 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
             self.percentile_mode = True
             self.target_channels = [[self.channel_names[0], 0.01, 99.99]]
             self.fraction = 0.25
-            self.anim_interval = 1
+            self.anim_interval = 33
 
     def locate_stack(self):
         """

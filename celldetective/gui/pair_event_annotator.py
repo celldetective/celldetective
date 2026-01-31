@@ -21,7 +21,7 @@ from celldetective.gui.base.components import (
     CelldetectiveWidget,
 )
 from celldetective.gui.base.utils import center_window
-from superqt import QLabeledDoubleRangeSlider, QSearchableComboBox
+from superqt import QLabeledDoubleRangeSlider, QSearchableComboBox, QLabeledSlider
 from celldetective import (
     get_software_location,
 )
@@ -466,11 +466,26 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         # Animation
         animation_buttons_box = QHBoxLayout()
 
+        self.speed_slider = QLabeledSlider(Qt.Horizontal)
+        self.speed_slider.setRange(1, 60)
+        # Convert initial interval (ms) to FPS
+        initial_fps = int(1000 / max(1, self.anim_interval))
+        self.speed_slider.setValue(initial_fps)
+        self.speed_slider.valueChanged.connect(self.update_speed)
+        self.speed_slider.setFixedWidth(200)
+        self.speed_slider.setToolTip("Adjust animation framerate (FPS)")
+
+        speed_layout = QHBoxLayout()
+        speed_layout.addWidget(QLabel("Framerate: "))
+        speed_layout.addWidget(self.speed_slider)
+
         animation_buttons_box.addWidget(self.frame_lbl, 20, alignment=Qt.AlignLeft)
+        animation_buttons_box.addLayout(speed_layout, 20)
 
         self.first_frame_btn = QPushButton()
         self.first_frame_btn.clicked.connect(self.set_first_frame)
-        self.first_frame_btn.setShortcut(QKeySequence("f"))
+        self.first_short = QShortcut(QKeySequence("f"), self)
+        self.first_short.activated.connect(self.set_first_frame)
         self.first_frame_btn.setIcon(icon(MDI6.page_first, color="black"))
         self.first_frame_btn.setStyleSheet(self.button_select_all)
         self.first_frame_btn.setFixedSize(QSize(60, 60))
@@ -478,7 +493,8 @@ class PairEventAnnotator(CelldetectiveMainWindow):
 
         self.last_frame_btn = QPushButton()
         self.last_frame_btn.clicked.connect(self.set_last_frame)
-        self.last_frame_btn.setShortcut(QKeySequence("l"))
+        self.last_short = QShortcut(QKeySequence("l"), self)
+        self.last_short.activated.connect(self.set_last_frame)
         self.last_frame_btn.setIcon(icon(MDI6.page_last, color="black"))
         self.last_frame_btn.setStyleSheet(self.button_select_all)
         self.last_frame_btn.setFixedSize(QSize(60, 60))
@@ -499,11 +515,32 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         self.start_btn.setIconSize(QSize(30, 30))
         self.start_btn.hide()
 
+        self.toggle_short = QShortcut(Qt.Key_Space, self)
+        self.toggle_short.activated.connect(self.toggle_animation)
+
+        self.prev_frame_btn = QPushButton()
+        self.prev_frame_btn.clicked.connect(self.prev_frame)
+        self.prev_frame_btn.setIcon(icon(MDI6.chevron_left, color="black"))
+        self.prev_frame_btn.setStyleSheet(self.button_select_all)
+        self.prev_frame_btn.setFixedSize(QSize(60, 60))
+        self.prev_frame_btn.setIconSize(QSize(30, 30))
+        self.prev_frame_btn.setEnabled(False)
+
+        self.next_frame_btn = QPushButton()
+        self.next_frame_btn.clicked.connect(self.next_frame)
+        self.next_frame_btn.setIcon(icon(MDI6.chevron_right, color="black"))
+        self.next_frame_btn.setStyleSheet(self.button_select_all)
+        self.next_frame_btn.setFixedSize(QSize(60, 60))
+        self.next_frame_btn.setIconSize(QSize(30, 30))
+        self.next_frame_btn.setEnabled(False)
+
         animation_buttons_box.addWidget(
             self.first_frame_btn, 5, alignment=Qt.AlignRight
         )
+        animation_buttons_box.addWidget(self.prev_frame_btn, 5, alignment=Qt.AlignRight)
         animation_buttons_box.addWidget(self.stop_btn, 5, alignment=Qt.AlignRight)
         animation_buttons_box.addWidget(self.start_btn, 5, alignment=Qt.AlignRight)
+        animation_buttons_box.addWidget(self.next_frame_btn, 5, alignment=Qt.AlignRight)
         animation_buttons_box.addWidget(self.last_frame_btn, 5, alignment=Qt.AlignRight)
 
         self.right_panel.addLayout(animation_buttons_box, 5)
@@ -1968,10 +2005,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
                 else:
                     self.fraction = 0.25
 
-                if "interval" in instructions:
-                    self.anim_interval = int(instructions["interval"])
-                else:
-                    self.anim_interval = 1
+                self.anim_interval = 33
 
                 if "log" in instructions:
                     self.log_option = instructions["log"]
@@ -1983,7 +2017,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
             self.percentile_mode = True
             self.target_channels = [[self.channel_names[0], 0.01, 99.99]]
             self.fraction = 0.25
-            self.anim_interval = 1
+            self.anim_interval = 33
 
     def prepare_stack(self):
 
@@ -2104,6 +2138,49 @@ class PairEventAnnotator(CelldetectiveMainWindow):
             idx = self.relative_class_choice_cb.findText(self.relative_class)
             self.relative_class_choice_cb.setCurrentIndex(idx)
 
+    def update_speed(self):
+        fps = self.speed_slider.value()
+        # Convert FPS to interval in ms
+        # FPS = 1000 / interval_ms => interval_ms = 1000 / FPS
+        val = int(1000 / max(1, fps))
+
+        self.anim_interval = val
+        print(
+            f"DEBUG: Speed slider moved. FPS: {fps} -> Interval: {val} ms. Recreating animation object."
+        )
+
+        # Check if animation is allowed to run (Pause button is visible means we are Playing)
+        should_play = self.stop_btn.isVisible()
+
+        if hasattr(self, "anim") and self.anim:
+            try:
+                self.anim.event_source.stop()
+            except Exception as e:
+                print(f"DEBUG: Error stopping animation: {e}")
+
+        # Recreate animation with new interval
+        try:
+            # We must disconnect the old pick event to avoid accumulating connections
+            # although mpl_connect returns a cid, we didn't store it properly before.
+            # However, the canvas clears usually handle this if we cleared axes, but we aren't clearing axes here.
+            # Ideally we should clean up, but for now let's focus on the animation object replacement.
+
+            self.anim = FuncAnimation(
+                self.fig,
+                self.draw_frame,
+                frames=self.animation_generator,
+                interval=self.anim_interval,
+                blit=True,
+                cache_frame_data=False,
+            )
+
+            # If we were NOT playing (i.e. Paused), pause the new animation immediately
+            if not should_play:
+                self.anim.event_source.stop()
+
+        except Exception as e:
+            print(f"DEBUG: Error recreating animation: {e}")
+
     def closeEvent(self, event):
 
         self.stop()
@@ -2118,6 +2195,18 @@ class PairEventAnnotator(CelldetectiveMainWindow):
             pass
 
         gc.collect()
+
+    def animation_generator(self):
+        """
+        Generator yielding frame indices for the animation,
+        starting from the current self.framedata.
+        """
+        i = self.framedata
+        while True:
+            yield i
+            i += 1
+            if i >= self.len_movie:
+                i = 0
 
     def looped_animation(self):
         """
@@ -2195,9 +2284,10 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         self.anim = FuncAnimation(
             self.fig,
             self.draw_frame,
-            frames=self.len_movie,  # better would be to cast np.arange(len(movie)) in case frame column is incomplete
+            frames=self.animation_generator,
             interval=self.anim_interval,  # in ms
             blit=True,
+            cache_frame_data=False,
         )
 
         self.fig.canvas.mpl_connect("pick_event", self.on_scatter_pick)
@@ -2855,26 +2945,62 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         self.stop_btn.hide()
         self.start_btn.show()
         self.anim.pause()
+        self.prev_frame_btn.setEnabled(True)
+        self.next_frame_btn.setEnabled(True)
         self.stop_btn.clicked.connect(self.start)
 
     def start(self):
         """
-        Starts interactive animation. Adds the draw frame command to the GUI
-        handler, calls show to start the event loop.
+        Starts interactive animation.
         """
-        self.start_btn.setShortcut(QKeySequence(""))
-
-        self.last_frame_btn.setEnabled(True)
-        self.last_frame_btn.clicked.connect(self.set_last_frame)
-
-        self.first_frame_btn.setEnabled(True)
-        self.first_frame_btn.clicked.connect(self.set_first_frame)
-
         self.start_btn.hide()
         self.stop_btn.show()
 
-        self.anim.event_source.start()
+        self.prev_frame_btn.setEnabled(False)
+        self.next_frame_btn.setEnabled(False)
+
+        self.anim.resume()
         self.stop_btn.clicked.connect(self.stop)
+
+    def toggle_animation(self):
+        if self.stop_btn.isVisible():
+            self.stop()
+        else:
+            self.start()
+
+    def next_frame(self):
+        self.framedata += 1
+        if self.framedata >= self.len_movie:
+            self.framedata = 0
+        self.draw_frame(self.framedata)
+        self.fcanvas.canvas.draw()
+
+    def prev_frame(self):
+        self.framedata -= 1
+        if self.framedata < 0:
+            self.framedata = self.len_movie - 1
+        self.draw_frame(self.framedata)
+        self.fcanvas.canvas.draw()
+
+    def set_first_frame(self):
+        self.stop()
+        self.framedata = 0
+        self.draw_frame(self.framedata)
+        self.fcanvas.canvas.draw()
+
+    def set_last_frame(self):
+        self.stop()
+        self.framedata = len(self.stack) - 1
+        while len(np.where(self.stack[self.framedata].flatten() == 0)[0]) > 0.99 * len(
+            self.stack[self.framedata].flatten()
+        ):
+            self.framedata -= 1
+            if self.framedata < 0:
+                self.framedata = 0
+                break
+
+        self.draw_frame(self.framedata)
+        self.fcanvas.canvas.draw()
 
     def give_reference_cell_information(self):
 

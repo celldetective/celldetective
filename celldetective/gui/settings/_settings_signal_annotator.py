@@ -100,11 +100,6 @@ class SettingsSignalAnnotator(CelldetectiveSettingsPanel):
         hbox_frac.addWidget(self.fraction_slider, 80)
         sub_layout.addLayout(hbox_frac)
 
-        hbox_interval = QHBoxLayout()
-        hbox_interval.addWidget(self._interval_lbl, 20)
-        hbox_interval.addWidget(self.interval_slider, 80)
-        sub_layout.addLayout(hbox_interval)
-
         self._layout.addLayout(sub_layout)
 
         self._layout.addWidget(self.submit_btn)
@@ -118,7 +113,6 @@ class SettingsSignalAnnotator(CelldetectiveSettingsPanel):
 
         self._modality_lbl = QLabel("Modality: ")
         self._fraction_lbl = QLabel("fraction: ")
-        self._interval_lbl = QLabel("interval [ms]: ")
 
         self.gs_btn = QRadioButton("grayscale")
         self.gs_btn.setChecked(True)
@@ -172,14 +166,6 @@ class SettingsSignalAnnotator(CelldetectiveSettingsPanel):
         self.fraction_slider.setOrientation(Qt.Horizontal)
         self.fraction_slider.setRange(0.1, 1)
         self.fraction_slider.setValue(0.25)
-
-        self.interval_slider = QLabeledSlider()
-        self.interval_slider.setSingleStep(1)
-        self.interval_slider.setTickInterval(1)
-        self.interval_slider.setSingleStep(1)
-        self.interval_slider.setOrientation(Qt.Horizontal)
-        self.interval_slider.setRange(1, 1000)
-        self.interval_slider.setValue(1)
 
     def enable_channels(self):
         """
@@ -255,7 +241,6 @@ class SettingsSignalAnnotator(CelldetectiveSettingsPanel):
             "rgb_mode": self.rgb_btn.isChecked(),
             "percentile_mode": self.percentile_mode,
             "fraction": float(self.fraction_slider.value()),
-            "interval": int(self.interval_slider.value()),
             "log": self.log_option,
         }
         max_i = 3 if self.rgb_btn.isChecked() else 1
@@ -321,10 +306,6 @@ class SettingsSignalAnnotator(CelldetectiveSettingsPanel):
                 if "fraction" in instructions:
                     fraction = instructions["fraction"]
                     self.fraction_slider.setValue(fraction)
-
-                if "interval" in instructions:
-                    interval = instructions["interval"]
-                    self.interval_slider.setValue(interval)
 
                 if "log" in instructions:
                     self.log_option = not instructions["log"]

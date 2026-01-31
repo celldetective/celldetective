@@ -20,7 +20,12 @@ from PyQt5.QtGui import QKeySequence, QIntValidator
 
 from celldetective.gui.gui_utils import color_from_state
 from celldetective.gui.base.utils import center_window, pretty_table
-from superqt import QLabeledDoubleSlider, QLabeledDoubleRangeSlider, QSearchableComboBox
+from superqt import (
+    QLabeledDoubleSlider,
+    QLabeledDoubleRangeSlider,
+    QSearchableComboBox,
+    QLabeledSlider,
+)
 from celldetective.utils.image_loaders import (
     locate_labels,
     load_frames,
@@ -200,7 +205,8 @@ class EventAnnotator(BaseAnnotator):
 
         self.first_frame_btn = QPushButton()
         self.first_frame_btn.clicked.connect(self.set_first_frame)
-        self.first_frame_btn.setShortcut(QKeySequence("f"))
+        self.first_short = QShortcut(QKeySequence("f"), self)
+        self.first_short.activated.connect(self.set_first_frame)
         self.first_frame_btn.setIcon(icon(MDI6.page_first, color="black"))
         self.first_frame_btn.setStyleSheet(self.button_select_all)
         self.first_frame_btn.setFixedSize(QSize(60, 60))
@@ -208,7 +214,8 @@ class EventAnnotator(BaseAnnotator):
 
         self.last_frame_btn = QPushButton()
         self.last_frame_btn.clicked.connect(self.set_last_frame)
-        self.last_frame_btn.setShortcut(QKeySequence("l"))
+        self.last_short = QShortcut(QKeySequence("l"), self)
+        self.last_short.activated.connect(self.set_last_frame)
         self.last_frame_btn.setIcon(icon(MDI6.page_last, color="black"))
         self.last_frame_btn.setStyleSheet(self.button_select_all)
         self.last_frame_btn.setFixedSize(QSize(60, 60))
@@ -229,11 +236,56 @@ class EventAnnotator(BaseAnnotator):
         self.start_btn.setIconSize(QSize(30, 30))
         self.start_btn.hide()
 
+        self.toggle_short = QShortcut(Qt.Key_Space, self)
+        self.toggle_short.activated.connect(self.toggle_animation)
+
+        self.speed_slider = QLabeledSlider(Qt.Horizontal)
+        self.speed_slider.setRange(1, 60)
+        # Convert initial interval (ms) to FPS
+        initial_fps = int(1000 / max(1, self.anim_interval))
+        self.speed_slider.setValue(initial_fps)
+        self.speed_slider.valueChanged.connect(self.update_speed)
+        self.speed_slider.setFixedWidth(200)
+        self.speed_slider.setToolTip("Adjust animation framerate (FPS)")
+
+        speed_layout = QHBoxLayout()
+        speed_layout.addWidget(QLabel("Framerate: "))
+        speed_layout.addWidget(self.speed_slider)
+
+        animation_buttons_box.addLayout(speed_layout, 20)
+
         animation_buttons_box.addWidget(
             self.first_frame_btn, 5, alignment=Qt.AlignRight
         )
+
+        self.prev_frame_btn = QPushButton()
+        self.prev_frame_btn.clicked.connect(self.prev_frame)
+        self.prev_frame_btn.setIcon(icon(MDI6.chevron_left, color="black"))
+        self.prev_frame_btn.setStyleSheet(self.button_select_all)
+        self.prev_frame_btn.setFixedSize(QSize(60, 60))
+        self.prev_frame_btn.setIconSize(QSize(30, 30))
+        self.prev_frame_btn.setEnabled(
+            False
+        )  # Disabled by default (assuming auto-start or initial state)
+        # Actually start is hidden initially, and stop shown?
+        # In populate_window: start_btn.hide() (line 235), stop_btn defaults?
+        # stop_btn is created.
+        # So assumed state is Playing? No, usually it starts, looped_animation matches.
+        # But if it starts playing, buttons should be disabled.
+        animation_buttons_box.addWidget(self.prev_frame_btn, 5, alignment=Qt.AlignRight)
+
         animation_buttons_box.addWidget(self.stop_btn, 5, alignment=Qt.AlignRight)
         animation_buttons_box.addWidget(self.start_btn, 5, alignment=Qt.AlignRight)
+
+        self.next_frame_btn = QPushButton()
+        self.next_frame_btn.clicked.connect(self.next_frame)
+        self.next_frame_btn.setIcon(icon(MDI6.chevron_right, color="black"))
+        self.next_frame_btn.setStyleSheet(self.button_select_all)
+        self.next_frame_btn.setFixedSize(QSize(60, 60))
+        self.next_frame_btn.setIconSize(QSize(30, 30))
+        self.next_frame_btn.setEnabled(False)
+        animation_buttons_box.addWidget(self.next_frame_btn, 5, alignment=Qt.AlignRight)
+
         animation_buttons_box.addWidget(self.last_frame_btn, 5, alignment=Qt.AlignRight)
 
         self.right_panel.addLayout(animation_buttons_box, 5)
@@ -808,6 +860,18 @@ class EventAnnotator(BaseAnnotator):
         except:
             pass
 
+    def animation_generator(self):
+        """
+        Generator yielding frame indices for the animation,
+        starting from the current self.framedata.
+        """
+        i = self.framedata
+        while True:
+            yield i
+            i += 1
+            if i >= self.len_movie:
+                i = 0
+
     def looped_animation(self):
         """
         Load an image.
@@ -849,9 +913,10 @@ class EventAnnotator(BaseAnnotator):
         self.anim = FuncAnimation(
             self.fig,
             self.draw_frame,
-            frames=self.len_movie,  # better would be to cast np.arange(len(movie)) in case frame column is incomplete
+            frames=self.animation_generator,  # Use generator to allow seamless restarts
             interval=self.anim_interval,  # in ms
             blit=True,
+            cache_frame_data=False,
         )
 
         self.fig.canvas.mpl_connect("pick_event", self.on_scatter_pick)
@@ -957,7 +1022,84 @@ class EventAnnotator(BaseAnnotator):
         self.stop_btn.hide()
         self.start_btn.show()
         self.anim.pause()
+        self.prev_frame_btn.setEnabled(True)
+        self.next_frame_btn.setEnabled(True)
         self.stop_btn.clicked.connect(self.start)
+
+    def start(self):
+        """
+        Starts interactive animation.
+        """
+        self.start_btn.hide()
+        self.stop_btn.show()
+
+        self.prev_frame_btn.setEnabled(False)
+        self.next_frame_btn.setEnabled(False)
+
+        self.anim.resume()
+        self.stop_btn.clicked.connect(self.stop)
+
+    def next_frame(self):
+        self.framedata += 1
+        if self.framedata >= self.len_movie:
+            self.framedata = 0
+        self.draw_frame(self.framedata)
+        self.fcanvas.canvas.draw()
+
+    def prev_frame(self):
+        self.framedata -= 1
+        if self.framedata < 0:
+            self.framedata = self.len_movie - 1
+        self.draw_frame(self.framedata)
+        self.fcanvas.canvas.draw()
+
+    def toggle_animation(self):
+        if self.stop_btn.isVisible():
+            self.stop()
+        else:
+            self.start()
+
+    def update_speed(self):
+        fps = self.speed_slider.value()
+        # Convert FPS to interval in ms
+        # FPS = 1000 / interval_ms => interval_ms = 1000 / FPS
+        val = int(1000 / max(1, fps))
+        self.anim_interval = val
+        print(
+            f"DEBUG: Speed slider moved. FPS: {fps} -> Interval: {val} ms. Recreating animation object."
+        )
+
+        # Check if animation is allowed to run (Pause button is visible means we are Playing)
+        should_play = self.stop_btn.isVisible()
+
+        if hasattr(self, "anim") and self.anim:
+            try:
+                self.anim.event_source.stop()
+            except Exception as e:
+                print(f"DEBUG: Error stopping animation: {e}")
+
+        # Recreate animation with new interval
+        try:
+            # We must disconnect the old pick event to avoid accumulating connections
+            # although mpl_connect returns a cid, we didn't store it properly before.
+            # However, the canvas clears usually handle this if we cleared axes, but we aren't clearing axes here.
+            # Ideally we should clean up, but for now let's focus on the animation object replacement.
+
+            self.anim = FuncAnimation(
+                self.fig,
+                self.draw_frame,
+                frames=self.animation_generator,
+                interval=self.anim_interval,
+                blit=True,
+                cache_frame_data=False,
+            )
+
+            # If we were NOT playing (i.e. Paused), pause the new animation immediately
+            if not should_play:
+                self.anim.event_source.stop()
+
+        except Exception as e:
+            print(f"DEBUG: Error recreating animation: {e}")
 
     def give_cell_information(self):
 
@@ -982,56 +1124,22 @@ class EventAnnotator(BaseAnnotator):
             self.compute_status_and_colors(0)
         self.extract_scatter_from_trajectories()
 
-    def set_last_frame(self):
-
-        self.last_frame_btn.setEnabled(False)
-        self.last_frame_btn.disconnect()
-
-        self.last_key = len(self.stack) - 1
-        while len(np.where(self.stack[self.last_key].flatten() == 0)[0]) > 0.99 * len(
-            self.stack[self.last_key].flatten()
-        ):
-            self.last_key -= 1
-        self.anim._drawn_artists = self.draw_frame(self.last_key)
-        self.anim._drawn_artists = sorted(
-            self.anim._drawn_artists, key=lambda x: x.get_zorder()
-        )
-        for a in self.anim._drawn_artists:
-            a.set_visible(True)
-
-        self.fig.canvas.draw()
-        self.anim.event_source.stop()
-
-        # self.cell_plot.draw()
-        self.stop_btn.hide()
-        self.start_btn.show()
-        self.stop_btn.clicked.connect(self.start)
-        self.start_btn.setShortcut(QKeySequence("l"))
-
     def set_first_frame(self):
+        self.stop()
+        self.framedata = 0
+        self.draw_frame(self.framedata)
+        self.fcanvas.canvas.draw()
 
-        self.first_frame_btn.setEnabled(False)
-        self.first_frame_btn.disconnect()
+    def set_last_frame(self):
+        self.stop()
+        self.framedata = len(self.stack) - 1
+        while len(np.where(self.stack[self.framedata].flatten() == 0)[0]) > 0.99 * len(
+            self.stack[self.framedata].flatten()
+        ):
+            self.framedata -= 1
+            if self.framedata < 0:
+                self.framedata = 0
+                break
 
-        self.first_key = 0
-        self.anim._drawn_artists = self.draw_frame(0)
-        self.vmin = self.contrast_slider.value()[0]
-        self.vmax = self.contrast_slider.value()[1]
-        self.im.set_clim(vmin=self.vmin, vmax=self.vmax)
-
-        self.anim._drawn_artists = sorted(
-            self.anim._drawn_artists, key=lambda x: x.get_zorder()
-        )
-        for a in self.anim._drawn_artists:
-            a.set_visible(True)
-
-        self.fig.canvas.draw()
-        self.anim.event_source.stop()
-
-        # self.cell_plot.draw()
-        self.stop_btn.hide()
-        self.start_btn.show()
-        self.stop_btn.clicked.connect(self.start)
-        self.start_btn.setShortcut(QKeySequence("f"))
-
-
+        self.draw_frame(self.framedata)
+        self.fcanvas.canvas.draw()
