@@ -3,38 +3,9 @@ import os
 import subprocess
 import json
 
-from tensorflow.keras.optimizers import Adam
-from tensorflow.keras.callbacks import (
-    EarlyStopping,
-    ModelCheckpoint,
-    TensorBoard,
-    ReduceLROnPlateau,
-    CSVLogger,
-)
-from tensorflow.keras.losses import (
-    CategoricalCrossentropy,
-    MeanSquaredError,
-    MeanAbsoluteError,
-)
-from tensorflow.keras.metrics import Precision, Recall, MeanIoU
-from tensorflow.keras.models import load_model, clone_model
-from tensorflow.config.experimental import list_physical_devices, set_memory_growth
-from tensorflow.keras.utils import to_categorical
-from tensorflow.keras import Input, Model
-from tensorflow.keras.layers import (
-    Conv1D,
-    BatchNormalization,
-    Dense,
-    Activation,
-    Add,
-    MaxPooling1D,
-    Dropout,
-    GlobalAveragePooling1D,
-    Concatenate,
-    ZeroPadding1D,
-    Flatten,
-)
-from tensorflow.keras.callbacks import Callback
+# TensorFlow imports are lazy-loaded in functions that need them to avoid
+# slow import times for modules that don't require TensorFlow.
+
 from sklearn.metrics import confusion_matrix, classification_report
 from sklearn.metrics import (
     jaccard_score,
@@ -69,57 +40,69 @@ abs_path = os.sep.join(
 )
 
 
-class TimeHistory(Callback):
-    """
-    A custom Keras callback to log the duration of each epoch during training.
+def _get_time_history_class():
+    """Factory function to get TimeHistory class with lazy TensorFlow import."""
+    from tensorflow.keras.callbacks import Callback
 
-    This callback records the time taken for each epoch during the model training process, allowing for
-    monitoring of training efficiency and performance over time. The times are stored in a list, with each
-    element representing the duration of an epoch in seconds.
+    class TimeHistory(Callback):
+        """
+        A custom Keras callback to log the duration of each epoch during training.
 
-    Attributes
-    ----------
-    times : list
-            A list of times (in seconds) taken for each epoch during the training. This list is populated as the
-            training progresses.
+        This callback records the time taken for each epoch during the model training process, allowing for
+        monitoring of training efficiency and performance over time. The times are stored in a list, with each
+        element representing the duration of an epoch in seconds.
 
-    Methods
-    -------
-    on_train_begin(logs={})
-            Initializes the list of times at the beginning of training.
+        Attributes
+        ----------
+        times : list
+                A list of times (in seconds) taken for each epoch during the training. This list is populated as the
+                training progresses.
 
-    on_epoch_begin(epoch, logs={})
-            Records the start time of the current epoch.
+        Methods
+        -------
+        on_train_begin(logs={})
+                Initializes the list of times at the beginning of training.
 
-    on_epoch_end(epoch, logs={})
-            Calculates and appends the duration of the current epoch to the `times` list.
+        on_epoch_begin(epoch, logs={})
+                Records the start time of the current epoch.
 
-    Notes
-    -----
-    - This callback is intended to be used with the `fit` method of Keras models.
-    - The time measurements are made using the `time.time()` function, which provides wall-clock time.
+        on_epoch_end(epoch, logs={})
+                Calculates and appends the duration of the current epoch to the `times` list.
 
-    Examples
-    --------
-    >>> from keras.models import Sequential
-    >>> from keras.layers import Dense
-    >>> model = Sequential([Dense(10, activation='relu', input_shape=(20,)), Dense(1)])
-    >>> time_callback = TimeHistory()
-    >>> model.compile(optimizer='adam', loss='mean_squared_error')
-    >>> model.fit(x_train, y_train, epochs=10, callbacks=[time_callback])
-    >>> print(time_callback.times)
-    # This will print the time taken for each epoch during the training.
+        Notes
+        -----
+        - This callback is intended to be used with the `fit` method of Keras models.
+        - The time measurements are made using the `time.time()` function, which provides wall-clock time.
 
-    """
+        Examples
+        --------
+        >>> from keras.models import Sequential
+        >>> from keras.layers import Dense
+        >>> model = Sequential([Dense(10, activation='relu', input_shape=(20,)), Dense(1)])
+        >>> time_callback = TimeHistory()
+        >>> model.compile(optimizer='adam', loss='mean_squared_error')
+        >>> model.fit(x_train, y_train, epochs=10, callbacks=[time_callback])
+        >>> print(time_callback.times)
+        # This will print the time taken for each epoch during the training.
 
-    def on_train_begin(self, logs={}):
-        self.times = []
+        """
 
-    def on_epoch_begin(self, epoch, logs={}):
-        self.epoch_time_start = time.time()
+        def on_train_begin(self, logs={}):
+            self.times = []
 
-    def on_epoch_end(self, epoch, logs={}):
-        self.times.append(time.time() - self.epoch_time_start)
+        def on_epoch_begin(self, epoch, logs={}):
+            self.epoch_time_start = time.time()
+
+        def on_epoch_end(self, epoch, logs={}):
+            self.times.append(time.time() - self.epoch_time_start)
+
+    return TimeHistory
+
+
+def TimeHistory():
+    """Create a TimeHistory callback instance."""
+    cls = _get_time_history_class()
+    return cls()
 
 
 def analyze_signals(
@@ -818,6 +801,9 @@ class SignalDetectionModel(object):
         if self.pretrained.endswith(os.sep):
             self.pretrained = os.sep.join(self.pretrained.split(os.sep)[:-1])
 
+        from tensorflow.keras.models import load_model
+        from tensorflow.keras.losses import MeanSquaredError
+
         try:
             self.model_class = load_model(
                 os.sep.join([self.pretrained, "classifier.h5"]),
@@ -950,6 +936,11 @@ class SignalDetectionModel(object):
         """
 
         try:
+            from tensorflow.config.experimental import (
+                list_physical_devices,
+                set_memory_growth,
+            )
+
             physical_devices = list_physical_devices("GPU")
             for gpu in physical_devices:
                 set_memory_growth(gpu, True)
@@ -975,7 +966,7 @@ class SignalDetectionModel(object):
         recompile_pretrained=False,
         learning_rate=0.01,
         loss_reg="mse",
-        loss_class=CategoricalCrossentropy(from_logits=False),
+        loss_class=None,
         show_plots=True,
         callbacks=None,
     ):
@@ -1031,6 +1022,12 @@ class SignalDetectionModel(object):
         - The method automatically splits the dataset into training, validation, and test sets according to the specified splits.
 
         """
+
+        # Lazy import for TensorFlow loss class
+        if loss_class is None:
+            from tensorflow.keras.losses import CategoricalCrossentropy
+
+            loss_class = CategoricalCrossentropy(from_logits=False)
 
         if not hasattr(self, "normalization_percentile"):
             self.normalization_percentile = normalization_percentile
@@ -1111,7 +1108,7 @@ class SignalDetectionModel(object):
         recompile_pretrained=False,
         learning_rate=0.001,
         loss_reg="mse",
-        loss_class=CategoricalCrossentropy(from_logits=False),
+        loss_class=None,
     ):
         """
         Trains the model using provided datasets.
@@ -1127,6 +1124,12 @@ class SignalDetectionModel(object):
           flexibility for data preprocessing steps outside this class.
 
         """
+
+        # Lazy import for TensorFlow loss class
+        if loss_class is None:
+            from tensorflow.keras.losses import CategoricalCrossentropy
+
+            loss_class = CategoricalCrossentropy(from_logits=False)
 
         self.normalize = normalize
         if not hasattr(self, "normalization_percentile"):
