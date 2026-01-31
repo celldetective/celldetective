@@ -2772,6 +2772,13 @@ def residual_block1D(
     # Create a 1D residual block with 64 filters and apply it to the input tensor.
 
     """
+    from tensorflow.keras.layers import (
+        Conv1D,
+        ZeroPadding1D,
+        BatchNormalization,
+        Activation,
+        Add,
+    )
 
     # Create skip connection
     x_skip = x
@@ -2857,6 +2864,19 @@ def MultiscaleResNetModel(
     # Define a ResNet 1D encoder model with 3 input channels, 4 residual blocks, and 2 output classes.
 
     """
+    from tensorflow.keras.layers import (
+        Input,
+        ZeroPadding1D,
+        Conv1D,
+        BatchNormalization,
+        MaxPooling1D,
+        GlobalAveragePooling1D,
+        Concatenate,
+        Flatten,
+        Dense,
+        Dropout,
+    )
+    from tensorflow.keras.models import Model
 
     if header == "classifier":
         final_activation = "softmax"
