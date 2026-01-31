@@ -12,8 +12,15 @@ from tensorflow.keras.callbacks import Callback
 from matplotlib import pyplot as plt
 from natsort import natsorted
 from scipy.interpolate import interp1d
-from sklearn.metrics import jaccard_score, balanced_accuracy_score, precision_score, recall_score, confusion_matrix, \
-    ConfusionMatrixDisplay, classification_report
+from sklearn.metrics import (
+    jaccard_score,
+    balanced_accuracy_score,
+    precision_score,
+    recall_score,
+    confusion_matrix,
+    ConfusionMatrixDisplay,
+    classification_report,
+)
 from tensorflow.keras.utils import to_categorical
 from tensorflow.keras.losses import MeanAbsoluteError
 from tensorflow.keras.callbacks import (
@@ -242,7 +249,7 @@ class SignalDetectionModel(object):
             self.normalization_percentile = model_config["normalization_percentile"]
         if "normalization_values" in model_config:
             self.normalization_values = model_config["normalization_values"]
-        if "normalization_percentile" in model_config:
+        if "normalization_clip" in model_config:
             self.normalization_clip = model_config["normalization_clip"]
         if "label" in model_config:
             self.label = model_config["label"]
@@ -334,7 +341,7 @@ class SignalDetectionModel(object):
             physical_devices = list_physical_devices("GPU")
             for gpu in physical_devices:
                 set_memory_growth(gpu, True)
-        except:
+        except Exception:
             pass
 
     def fit_from_directory(
@@ -597,7 +604,7 @@ class SignalDetectionModel(object):
                     )
 
             except Exception as e:
-                print("Could not load validation data, error {e}...")
+                print(f"Could not load validation data, error {e}...")
         else:
             self.validation_split = validation_split
 
@@ -624,7 +631,7 @@ class SignalDetectionModel(object):
                         normalization_clip=self.normalization_clip,
                     )
             except Exception as e:
-                print("Could not load test data, error {e}...")
+                print(f"Could not load test data, error {e}...")
 
         self.batch_size = batch_size
         self.epochs = epochs
@@ -664,6 +671,27 @@ class SignalDetectionModel(object):
             os.sep.join([self.model_folder, "config_input.json"]), "w"
         ) as outfile:
             outfile.write(json_string)
+
+        # Free memory by clearing large training arrays
+        import gc
+
+        for attr in [
+            "x_train",
+            "x_val",
+            "x_test",
+            "x_set",
+            "y_time_train",
+            "y_time_val",
+            "y_time_test",
+            "y_time_set",
+            "y_class_train",
+            "y_class_val",
+            "y_class_test",
+            "y_class_set",
+        ]:
+            if hasattr(self, attr):
+                delattr(self, attr)
+        gc.collect()
 
     def predict_class(
         self, x, normalize=True, pad=True, return_one_hot=False, interpolate=True
@@ -2182,18 +2210,7 @@ def normalize_signal_set(
         signal_set[:, :, k] /= max_val - min_val
 
         if normalization_clip[k]:
-            to_clip_low = []
-            to_clip_high = []
-            for i in range(len(signal_set)):
-                clip_low_loc = np.where(signal_set[i, :, k] <= 0)
-                clip_high_loc = np.where(signal_set[i, :, k] >= 1.0)
-                to_clip_low.append(clip_low_loc)
-                to_clip_high.append(clip_high_loc)
-
-            for i, z in enumerate(to_clip_low):
-                signal_set[i, z, k] = 0.0
-            for i, z in enumerate(to_clip_high):
-                signal_set[i, z, k] = 1.0
+            signal_set[:, :, k] = np.clip(signal_set[:, :, k], 0.0, 1.0)
 
         for i, z in enumerate(zero_values):
             signal_set[i, z, k] = 0.0
