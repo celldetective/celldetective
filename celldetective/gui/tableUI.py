@@ -21,8 +21,13 @@ from celldetective.gui.gui_utils import (
 )
 from celldetective.gui.base.figure_canvas import FigureCanvas
 from celldetective.gui.base.utils import center_window
-from celldetective.gui.table_ops._maths import DifferentiateColWidget, OperationOnColsWidget, CalibrateColWidget, \
-    AbsColWidget, LogColWidget
+from celldetective.gui.table_ops._maths import (
+    DifferentiateColWidget,
+    OperationOnColsWidget,
+    CalibrateColWidget,
+    AbsColWidget,
+    LogColWidget,
+)
 from celldetective.gui.table_ops._merge_one_hot import MergeOneHotWidget
 from celldetective.gui.table_ops._query_table import QueryWidget
 from celldetective.gui.table_ops._rename_col import RenameColWidget
@@ -55,7 +60,7 @@ class PivotTableUI(CelldetectiveWidget):
         self.mode = mode
 
         self.setWindowTitle(title)
-        print("tab to show: ", self.data)
+        logger.debug(f"Pivot table to show: {self.data.shape}")
 
         self.table = QTableView(self)
 
@@ -219,8 +224,34 @@ class TableUI(CelldetectiveMainWindow):
 
         try:
             self.fig.tight_layout()
-        except:
+        except AttributeError:
+            # fig not yet created
             pass
+
+    def _get_selected_columns(self, max_cols=None):
+        """
+        Get selected column names from the table view.
+
+        Parameters
+        ----------
+        max_cols : int, optional
+            Maximum number of columns to return. Returns all if None.
+
+        Returns
+        -------
+        list
+            List of selected column names.
+        """
+        x = self.table_view.selectedIndexes()
+        col_idx = np.unique(np.array([l.column() for l in x]))
+        cols = np.array(list(self.data.columns))
+        result = []
+        if len(col_idx) > 0:
+            for i in col_idx:
+                result.append(str(cols[i]))
+        if max_cols is not None:
+            return result[:max_cols]
+        return result
 
     def _create_actions(self):
 
@@ -540,8 +571,8 @@ class TableUI(CelldetectiveMainWindow):
         self.renameWidget.show()
 
     def save_as_csv_inplace_per_pos(self):
-
-        print("Saving each table in its respective position folder...")
+        """Save each position's table in its respective folder."""
+        logger.info("Saving each table in its respective position folder...")
         for pos, pos_group in self.data.groupby(["position"]):
             invalid_cols = [
                 c for c in list(pos_group.columns) if c.startswith("Unnamed")
@@ -555,26 +586,12 @@ class TableUI(CelldetectiveMainWindow):
                 ),
                 index=False,
             )
-        print("Done...")
+        logger.info("Done saving tables.")
 
     def divide_signals(self):
-
-        x = self.table_view.selectedIndexes()
-        col_idx = np.unique(np.array([l.column() for l in x]))
-        if isinstance(col_idx, (list, np.ndarray)):
-            cols = np.array(list(self.data.columns))
-            if len(col_idx) > 0:
-                selected_col1 = str(cols[col_idx[0]])
-                if len(col_idx) > 1:
-                    selected_col2 = str(cols[col_idx[1]])
-                else:
-                    selected_col2 = None
-            else:
-                selected_col1 = None
-                selected_col2 = None
-        else:
-            selected_col1 = None
-            selected_col2 = None
+        selected = self._get_selected_columns(max_cols=2)
+        selected_col1 = selected[0] if len(selected) > 0 else None
+        selected_col2 = selected[1] if len(selected) > 1 else None
 
         self.divWidget = OperationOnColsWidget(
             self, column1=selected_col1, column2=selected_col2, operation="divide"
@@ -582,23 +599,9 @@ class TableUI(CelldetectiveMainWindow):
         self.divWidget.show()
 
     def multiply_signals(self):
-
-        x = self.table_view.selectedIndexes()
-        col_idx = np.unique(np.array([l.column() for l in x]))
-        if isinstance(col_idx, (list, np.ndarray)):
-            cols = np.array(list(self.data.columns))
-            if len(col_idx) > 0:
-                selected_col1 = str(cols[col_idx[0]])
-                if len(col_idx) > 1:
-                    selected_col2 = str(cols[col_idx[1]])
-                else:
-                    selected_col2 = None
-            else:
-                selected_col1 = None
-                selected_col2 = None
-        else:
-            selected_col1 = None
-            selected_col2 = None
+        selected = self._get_selected_columns(max_cols=2)
+        selected_col1 = selected[0] if len(selected) > 0 else None
+        selected_col2 = selected[1] if len(selected) > 1 else None
 
         self.mulWidget = OperationOnColsWidget(
             self, column1=selected_col1, column2=selected_col2, operation="multiply"
@@ -606,23 +609,9 @@ class TableUI(CelldetectiveMainWindow):
         self.mulWidget.show()
 
     def add_signals(self):
-
-        x = self.table_view.selectedIndexes()
-        col_idx = np.unique(np.array([l.column() for l in x]))
-        if isinstance(col_idx, (list, np.ndarray)):
-            cols = np.array(list(self.data.columns))
-            if len(col_idx) > 0:
-                selected_col1 = str(cols[col_idx[0]])
-                if len(col_idx) > 1:
-                    selected_col2 = str(cols[col_idx[1]])
-                else:
-                    selected_col2 = None
-            else:
-                selected_col1 = None
-                selected_col2 = None
-        else:
-            selected_col1 = None
-            selected_col2 = None
+        selected = self._get_selected_columns(max_cols=2)
+        selected_col1 = selected[0] if len(selected) > 0 else None
+        selected_col2 = selected[1] if len(selected) > 1 else None
 
         self.addiWidget = OperationOnColsWidget(
             self, column1=selected_col1, column2=selected_col2, operation="add"
@@ -630,23 +619,9 @@ class TableUI(CelldetectiveMainWindow):
         self.addiWidget.show()
 
     def subtract_signals(self):
-
-        x = self.table_view.selectedIndexes()
-        col_idx = np.unique(np.array([l.column() for l in x]))
-        if isinstance(col_idx, (list, np.ndarray)):
-            cols = np.array(list(self.data.columns))
-            if len(col_idx) > 0:
-                selected_col1 = str(cols[col_idx[0]])
-                if len(col_idx) > 1:
-                    selected_col2 = str(cols[col_idx[1]])
-                else:
-                    selected_col2 = None
-            else:
-                selected_col1 = None
-                selected_col2 = None
-        else:
-            selected_col1 = None
-            selected_col2 = None
+        selected = self._get_selected_columns(max_cols=2)
+        selected_col1 = selected[0] if len(selected) > 0 else None
+        selected_col2 = selected[1] if len(selected) > 1 else None
 
         self.subWidget = OperationOnColsWidget(
             self, column1=selected_col1, column2=selected_col2, operation="subtract"
@@ -654,56 +629,22 @@ class TableUI(CelldetectiveMainWindow):
         self.subWidget.show()
 
     def differenciate_selected_feature(self):
-
-        # check only one col selected and assert is numerical
-        # open widget to select window parameters, directionality
-        # create new col
-
-        x = self.table_view.selectedIndexes()
-        col_idx = np.unique(np.array([l.column() for l in x]))
-        if isinstance(col_idx, (list, np.ndarray)):
-            cols = np.array(list(self.data.columns))
-            if len(col_idx) > 0:
-                selected_col = str(cols[col_idx[0]])
-            else:
-                selected_col = None
-        else:
-            selected_col = None
-
+        """Open widget to differentiate the selected column."""
+        selected = self._get_selected_columns(max_cols=1)
+        selected_col = selected[0] if selected else None
         self.diffWidget = DifferentiateColWidget(self, selected_col)
         self.diffWidget.show()
 
     def take_log_of_selected_feature(self):
-
-        # check only one col selected and assert is numerical
-        # open widget to select window parameters, directionality
-        # create new col
-
-        x = self.table_view.selectedIndexes()
-        col_idx = np.unique(np.array([l.column() for l in x]))
-        if isinstance(col_idx, (list, np.ndarray)):
-            cols = np.array(list(self.data.columns))
-            if len(col_idx) > 0:
-                selected_col = str(cols[col_idx[0]])
-            else:
-                selected_col = None
-        else:
-            selected_col = None
-
+        """Open widget to take log of the selected column."""
+        selected = self._get_selected_columns(max_cols=1)
+        selected_col = selected[0] if selected else None
         self.LogWidget = LogColWidget(self, selected_col)
         self.LogWidget.show()
 
     def merge_classification_features(self):
-
-        x = self.table_view.selectedIndexes()
-        col_idx = np.unique(np.array([l.column() for l in x]))
-
-        col_selection = []
-        if isinstance(col_idx, (list, np.ndarray)):
-            cols = np.array(list(self.data.columns))
-            if len(col_idx) > 0:
-                selected_cols = cols[col_idx]
-                col_selection.extend(selected_cols)
+        """Open widget to merge selected classification columns."""
+        col_selection = self._get_selected_columns()
 
         # Lazy load MergeGroupWidget
         from celldetective.gui.table_ops._merge_groups import MergeGroupWidget
@@ -712,38 +653,16 @@ class TableUI(CelldetectiveMainWindow):
         self.merge_classification_widget.show()
 
     def calibrate_selected_feature(self):
-
-        x = self.table_view.selectedIndexes()
-        col_idx = np.unique(np.array([l.column() for l in x]))
-        if isinstance(col_idx, (list, np.ndarray)):
-            cols = np.array(list(self.data.columns))
-            if len(col_idx) > 0:
-                selected_col = str(cols[col_idx[0]])
-            else:
-                selected_col = None
-        else:
-            selected_col = None
-
+        """Open widget to calibrate the selected column."""
+        selected = self._get_selected_columns(max_cols=1)
+        selected_col = selected[0] if selected else None
         self.calWidget = CalibrateColWidget(self, selected_col)
         self.calWidget.show()
 
     def take_abs_of_selected_feature(self):
-
-        # check only one col selected and assert is numerical
-        # open widget to select window parameters, directionality
-        # create new col
-
-        x = self.table_view.selectedIndexes()
-        col_idx = np.unique(np.array([l.column() for l in x]))
-        if isinstance(col_idx, (list, np.ndarray)):
-            cols = np.array(list(self.data.columns))
-            if len(col_idx) > 0:
-                selected_col = str(cols[col_idx[0]])
-            else:
-                selected_col = None
-        else:
-            selected_col = None
-
+        """Open widget to take absolute value of the selected column."""
+        selected = self._get_selected_columns(max_cols=1)
+        selected_col = selected[0] if selected else None
         self.absWidget = AbsColWidget(self, selected_col)
         self.absWidget.show()
 
@@ -991,7 +910,8 @@ class TableUI(CelldetectiveMainWindow):
             y = column_names[unique_cols]
             idx = self.y_cb.findText(y)
             self.y_cb.setCurrentIndex(idx)
-        except:
+        except (IndexError, KeyError):
+            # No column selected or invalid selection
             pass
 
         hbox = QHBoxLayout()
@@ -1018,7 +938,8 @@ class TableUI(CelldetectiveMainWindow):
             if hasattr(matplotlib.cm, str(cm).lower()):
                 try:
                     self.cmap_cb.addColormap(cm.lower())
-                except:
+                except Exception:
+                    # Some colormaps may fail to add
                     pass
 
         hbox = QHBoxLayout()
@@ -1057,7 +978,7 @@ class TableUI(CelldetectiveMainWindow):
                 cmap(i / len(self.data[self.hue_variable].unique()))
                 for i in range(len(self.data[self.hue_variable].unique()))
             ]
-        except:
+        except (KeyError, ZeroDivisionError):
             colors = None
 
         if self.hue_cb.currentText() == "--":

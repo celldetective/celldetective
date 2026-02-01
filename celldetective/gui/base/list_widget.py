@@ -128,6 +128,6 @@ class ListWidget(CelldetectiveWidget):
             return
         for item in listItems:
             idx = self.list_widget.row(item)
-            self.list_widget.takeItem(idx)
             if self.items:
                 del self.items[idx]
+            self.list_widget.takeItem(idx)

@@ -85,7 +85,11 @@ The isotropic measurements are interfaced in almost the same way as the contour 
 Spot detection
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-We provide a module for spot detection to count the number of blob-like objects of similar size within a cell mask. You must estimate the average diameter of the spots (in pixels) and increase the intensity threshold to remove false positive detections. A visualizer helps determine the detection parameters. The module computes the total number of detected spots and their mean intensity per cell.
+We provide a module for spot detection to count the number of blob-like objects of similar size within a cell mask. The algorithm relies on the **Laplacian of Gaussian (LoG)** method (via `scikit-image`'s `blob_log`), which is robust for detecting bright spots on a dark background.
+
+You must estimate the average **diameter** of the spots (in pixels) and increase the intensity **threshold** (relative intensity difference) to remove false positive detections. The detection performance can often be improved by applying **preprocessing** filters (e.g., smoothing to reduce noise, background subtraction, or inversion for dark spots) directly within the interface.
+
+A visualizer helps determine the optimal detection parameters interactively. The module computes the total number of detected spots and their mean intensity per cell.
 
 .. figure:: _static/spot_detection.png
     :align: center

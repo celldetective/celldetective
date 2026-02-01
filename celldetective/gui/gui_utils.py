@@ -35,11 +35,19 @@ class PreprocessingLayout(QVBoxLayout, Styles):
     A widget that allows user to choose preprocessing filters for an image
     """
 
-    def __init__(self, parent_window=None, apply_btn_option=True, *args, **kwargs):
+    def __init__(
+        self,
+        parent_window=None,
+        apply_btn_option=True,
+        extra_widget=None,
+        *args,
+        **kwargs,
+    ):
         super().__init__(*args, **kwargs)
 
         self.parent_window = parent_window
         self.apply_btn_option = apply_btn_option
+        self.extra_widget = extra_widget
         self.generate_components()
         self.add_to_layout()
 
@@ -48,7 +56,12 @@ class PreprocessingLayout(QVBoxLayout, Styles):
         self.setContentsMargins(20, 20, 20, 20)
 
         button_layout = QHBoxLayout()
-        button_layout.addWidget(self.preprocess_lbl, 85, alignment=Qt.AlignLeft)
+        v_layout = QVBoxLayout()
+        v_layout.addWidget(self.preprocess_lbl, alignment=Qt.AlignLeft)
+        if self.extra_widget is not None:
+            v_layout.addWidget(self.extra_widget, alignment=Qt.AlignLeft)
+
+        button_layout.addLayout(v_layout, 85)
         button_layout.addWidget(self.delete_filter_btn, 5)
         button_layout.addWidget(self.add_filter_btn, 5)
         button_layout.addWidget(self.help_prefilter_btn, 5)
@@ -129,10 +142,12 @@ class PreprocessingLayout(QVBoxLayout, Styles):
 
 class PreprocessingLayout2(PreprocessingLayout):
 
-    def __init__(self, fraction=75, *args, **kwargs):
+    def __init__(self, fraction=75, extra_widget=None, *args, **kwargs):
 
         self.fraction = fraction
-        super().__init__(apply_btn_option=False, *args, **kwargs)
+        super().__init__(
+            apply_btn_option=False, extra_widget=extra_widget, *args, **kwargs
+        )
         self.preprocess_lbl.setText("Preprocessing: ")
         self.preprocess_lbl.setStyleSheet("")
         self.setContentsMargins(0, 0, 0, 0)
@@ -142,12 +157,18 @@ class PreprocessingLayout2(PreprocessingLayout):
         main_layout = QHBoxLayout()
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(5)
+        main_layout.setSpacing(5)
+
         main_layout.addWidget(self.preprocess_lbl, self.fraction, alignment=Qt.AlignTop)
 
         list_grid = QGridLayout()
         list_grid.addWidget(self.list, 0, 0, 2, 2)
         list_grid.addWidget(self.add_filter_btn, 0, 2, 1, 1)
         list_grid.addWidget(self.delete_filter_btn, 1, 2, 1, 1)
+
+        if self.extra_widget is not None:
+            list_grid.addWidget(self.extra_widget, 2, 0, 1, 3, alignment=Qt.AlignRight)
+
         main_layout.addLayout(list_grid, 100 - self.fraction)
         self.add_filter_btn.setFixedWidth(35)  # Ensure the button width is fixed
         self.delete_filter_btn.setFixedWidth(35)
@@ -449,8 +470,6 @@ class FilterChoice(CelldetectiveWidget):
     def add_current_feature(self):
 
         filtername = self.combo_box.currentText()
-        self.parent_window.list_widget.addItems([filtername])
-
         filter_instructions = [filtername.split("_")[0]]
         for a in self.arguments_le:
 
@@ -467,7 +486,9 @@ class FilterChoice(CelldetectiveWidget):
 
         print(f"You added filter {filter_instructions}.")
 
+        # Update items BEFORE adding to widget to ensure signals pick up the new state
         self.parent_window.items.append(filter_instructions)
+        self.parent_window.list_widget.addItems([filtername])
         self.close()
 
     def update_arguments(self):

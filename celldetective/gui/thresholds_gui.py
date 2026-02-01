@@ -74,6 +74,7 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
 
         super().__init__()
         self.parent_window = parent_window
+        # Navigate explicit parent chain: SegModelLoader -> ControlPanel -> ProcessPanel -> MainWindow
         self.screen_height = (
             self.parent_window.parent_window.parent_window.parent_window.screen_height
         )
@@ -123,6 +124,17 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
 
         self.bg_loader = BackgroundLoader()
         self.bg_loader.start()
+
+    def closeEvent(self, event):
+        """Clean up resources on close."""
+        if hasattr(self, "bg_loader") and self.bg_loader.isRunning():
+            self.bg_loader.quit()
+            self.bg_loader.wait()
+        # Clear large arrays
+        for attr in ["img", "labels", "edt_map", "props", "coords"]:
+            if hasattr(self, attr):
+                delattr(self, attr)
+        super().closeEvent(event)
 
     def _create_menu_bar(self):
         menu_bar = self.menuBar()
@@ -810,7 +822,8 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
         for i in range(2):
             try:
                 self.features_cb[i].disconnect()
-            except Exception as _:
+            except TypeError:
+                # No connections to disconnect
                 pass
             self.features_cb[i].clear()
 
@@ -879,12 +892,39 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
             self.exp_dir + f"configs/threshold_config_{self.mode}.json",
             "JSON (*.json)",
         )[0]
-        with open(self.previous_instruction_file, "r") as f:
-            threshold_instructions = json.load(f)
+
+        if not self.previous_instruction_file:
+            return  # User cancelled
+
+        try:
+            with open(self.previous_instruction_file, "r") as f:
+                threshold_instructions = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError) as e:
+            generic_message(f"Could not load config: {e}")
+            return
+
+        # Validate required keys
+        required_keys = [
+            "target_channel",
+            "filters",
+            "thresholds",
+            "marker_footprint_size",
+            "marker_min_distance",
+            "feature_queries",
+        ]
+        missing_keys = [k for k in required_keys if k not in threshold_instructions]
+        if missing_keys:
+            generic_message(f"Config file is missing required keys: {missing_keys}")
+            return
 
         target_channel = threshold_instructions["target_channel"]
-        index = self.viewer.channels_cb.findText(target_channel)
-        self.viewer.channels_cb.setCurrentIndex(index)
+        index = self.viewer.channel_cb.findText(target_channel)
+        if index >= 0:
+            self.viewer.channel_cb.setCurrentIndex(index)
+        else:
+            logger.warning(
+                f"Channel '{target_channel}' not found in available channels"
+            )
 
         filters = threshold_instructions["filters"]
         items_to_add = [f[0] + "_filter" for f in filters]

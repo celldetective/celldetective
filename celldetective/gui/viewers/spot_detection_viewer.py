@@ -5,17 +5,33 @@ from pathlib import Path
 import numpy as np
 from PyQt5.QtCore import QSize
 from PyQt5.QtGui import QDoubleValidator
-from PyQt5.QtWidgets import QMessageBox, QHBoxLayout, QLabel, QComboBox, QLineEdit, QPushButton
+from PyQt5.QtWidgets import (
+    QMessageBox,
+    QHBoxLayout,
+    QLabel,
+    QComboBox,
+    QLineEdit,
+    QPushButton,
+    QCheckBox,
+    QSizePolicy,
+    QWidget,
+)
+from PyQt5.QtCore import Qt
+from celldetective.gui.base.utils import center_window
 from fonticon_mdi6 import MDI6
 from natsort import natsorted
 from superqt.fonticon import icon
 
-from celldetective.gui.gui_utils import PreprocessingLayout2
 from celldetective.gui.viewers.base_viewer import StackVisualizer
+from celldetective.gui.gui_utils import PreprocessingLayout2
 from celldetective.utils.image_loaders import load_frames
+from celldetective.measure import extract_blobs_in_image
+from celldetective.filters import filter_image
 from celldetective import get_logger
+from tifffile import imread
 
 logger = get_logger(__name__)
+
 
 class SpotDetectionVisualizer(StackVisualizer):
 
@@ -37,6 +53,7 @@ class SpotDetectionVisualizer(StackVisualizer):
         self.labels = labels
         self.detection_channel = self.target_channel
         self.switch_from_channel = False
+        self.preview_preprocessing = False
 
         self.parent_channel_cb = parent_channel_cb
         self.parent_diameter_le = parent_diameter_le
@@ -46,6 +63,35 @@ class SpotDetectionVisualizer(StackVisualizer):
         self.spot_sizes = []
         self.floatValidator = QDoubleValidator()
         self.init_scatter()
+
+        self.setWindowTitle(self.window_title)
+        self.resize(1200, 800)
+
+        # Main Layout (Horizontal split)
+        self.main_layout = QHBoxLayout(self)
+        self.main_layout.setContentsMargins(10, 10, 10, 10)
+
+        # Left Panel (Settings) - Scrollable
+        from PyQt5.QtWidgets import QScrollArea, QWidget, QVBoxLayout
+
+        self.scroll_area = QScrollArea()
+        self.scroll_area.setWidgetResizable(True)
+        self.settings_widget = QWidget()
+        self.settings_layout = QVBoxLayout(self.settings_widget)
+        self.settings_layout.setContentsMargins(10, 10, 10, 10)
+        self.settings_layout.setSpacing(15)
+        self.settings_layout.setAlignment(Qt.AlignTop)
+        self.scroll_area.setWidget(self.settings_widget)
+        self.scroll_area.setFixedWidth(350)  # Set a reasonable width for settings
+
+        # Add Left Panel
+        self.main_layout.addWidget(self.scroll_area)
+
+        # Right Panel (Image Canvas)
+        # self.canvas is created by super().__init__
+        # We allow it to expand
+        self.canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.main_layout.addWidget(self.canvas)
 
         self.generate_detection_channel()
         self.detection_channel = self.detection_channel_cb.currentIndex()
@@ -57,12 +103,29 @@ class SpotDetectionVisualizer(StackVisualizer):
 
         self.ax.callbacks.connect("xlim_changed", self.update_marker_sizes)
         self.ax.callbacks.connect("ylim_changed", self.update_marker_sizes)
+        self._axis_callbacks_connected = True
 
         self.apply_diam_btn.clicked.connect(self.detect_and_display_spots)
         self.apply_thresh_btn.clicked.connect(self.detect_and_display_spots)
 
-        self.channel_cb.setCurrentIndex(self.target_channel)
-        self.detection_channel_cb.setCurrentIndex(self.target_channel)
+        self.channel_cb.setCurrentIndex(min(self.target_channel, self.n_channels - 1))
+        self.detection_channel_cb.setCurrentIndex(
+            min(self.target_channel, self.n_channels - 1)
+        )
+
+    def closeEvent(self, event):
+        """Clean up resources on close."""
+        # Clear large arrays
+        self.target_img = None
+        self.init_label = None
+        self.spot_sizes = []
+
+        # Remove scatter
+        if hasattr(self, "spot_scat") and self.spot_scat is not None:
+            self.spot_scat.remove()
+            self.spot_scat = None
+
+        super().closeEvent(event)
 
     def update_marker_sizes(self, event=None):
 
@@ -105,9 +168,7 @@ class SpotDetectionVisualizer(StackVisualizer):
         if not self.switch_from_channel:
             self.reset_detection()
 
-        if self.mode == "virtual":
-            from tifffile import imread
-
+        if self.mode == "virtual" and hasattr(self, "mask_paths"):
             self.init_label = imread(self.mask_paths[value])
             self.target_img = load_frames(
                 self.img_num_per_channel[self.detection_channel, value],
@@ -122,14 +183,10 @@ class SpotDetectionVisualizer(StackVisualizer):
 
         self.reset_detection()
         self.control_valid_parameters()  # set current diam and threshold
-        # self.change_frame(self.frame_slider.value())
-        # self.set_detection_channel_index(self.detection_channel_cb.currentIndex())
 
         image_preprocessing = self.preprocessing.list.items
         if image_preprocessing == []:
             image_preprocessing = None
-
-        from celldetective.measure import extract_blobs_in_image
 
         blobs_filtered = extract_blobs_in_image(
             self.target_img,
@@ -157,8 +214,7 @@ class SpotDetectionVisualizer(StackVisualizer):
             self.canvas.canvas.draw()
 
     def reset_detection(self):
-
-        self.ax.scatter([], []).get_offsets()
+        """Clear spot detection display."""
         empty_offset = np.ma.masked_array([0, 0], mask=True)
         self.spot_scat.set_offsets(empty_offset)
         self.canvas.canvas.draw()
@@ -205,8 +261,6 @@ class SpotDetectionVisualizer(StackVisualizer):
             returnValue = msgBox.exec()
             self.close()
 
-        from tifffile import imread
-
         self.init_label = imread(self.mask_paths[self.frame_slider.value()])
 
     def generate_detection_channel(self):
@@ -215,7 +269,7 @@ class SpotDetectionVisualizer(StackVisualizer):
         assert len(self.channel_names) == self.n_channels
 
         channel_layout = QHBoxLayout()
-        channel_layout.setContentsMargins(15, 0, 15, 0)
+        channel_layout.setContentsMargins(0, 0, 0, 0)
         channel_layout.addWidget(QLabel("Detection\nchannel: "), 25)
 
         self.detection_channel_cb = QComboBox()
@@ -231,11 +285,22 @@ class SpotDetectionVisualizer(StackVisualizer):
         # self.invert_check.toggled.connect(self.set_invert)
         # channel_layout.addWidget(self.invert_check, 10)
 
-        self.canvas.layout.addLayout(channel_layout)
+        self.settings_layout.addLayout(channel_layout)
 
-        self.preprocessing = PreprocessingLayout2(fraction=25, parent_window=self)
-        self.preprocessing.setContentsMargins(15, 0, 15, 0)
-        self.canvas.layout.addLayout(self.preprocessing)
+        self.preview_cb = QCheckBox("Preview")
+        self.preview_cb.toggled.connect(self.toggle_preprocessing_preview)
+
+        self.preprocessing = PreprocessingLayout2(
+            fraction=25, parent_window=self, extra_widget=self.preview_cb
+        )
+        self.preprocessing.setContentsMargins(0, 10, 0, 10)
+        self.preprocessing.list.list_widget.model().rowsInserted.connect(
+            self.update_preview_if_active
+        )
+        self.preprocessing.list.list_widget.model().rowsRemoved.connect(
+            self.update_preview_if_active
+        )
+        self.settings_layout.addLayout(self.preprocessing)
 
     # def set_invert(self):
     # 	if self.invert_check.isChecked():
@@ -272,19 +337,22 @@ class SpotDetectionVisualizer(StackVisualizer):
         self.spot_diam_le.textChanged.connect(self.control_valid_parameters)
         self.spot_thresh_le.textChanged.connect(self.control_valid_parameters)
 
+        self.apply_diam_btn.clicked.connect(self.detect_and_display_spots)
+        self.apply_thresh_btn.clicked.connect(self.detect_and_display_spots)
+
         spot_diam_layout = QHBoxLayout()
-        spot_diam_layout.setContentsMargins(15, 0, 15, 0)
+        spot_diam_layout.setContentsMargins(0, 0, 0, 0)
         spot_diam_layout.addWidget(QLabel("Spot diameter: "), 25)
         spot_diam_layout.addWidget(self.spot_diam_le, 65)
         spot_diam_layout.addWidget(self.apply_diam_btn, 10)
-        self.canvas.layout.addLayout(spot_diam_layout)
+        self.settings_layout.addLayout(spot_diam_layout)
 
         spot_thresh_layout = QHBoxLayout()
-        spot_thresh_layout.setContentsMargins(15, 0, 15, 0)
+        spot_thresh_layout.setContentsMargins(0, 0, 0, 0)
         spot_thresh_layout.addWidget(QLabel("Detection\nthreshold: "), 25)
         spot_thresh_layout.addWidget(self.spot_thresh_le, 65)
         spot_thresh_layout.addWidget(self.apply_thresh_btn, 10)
-        self.canvas.layout.addLayout(spot_thresh_layout)
+        self.settings_layout.addLayout(spot_thresh_layout)
 
     def generate_add_measurement_btn(self):
 
@@ -297,7 +365,48 @@ class SpotDetectionVisualizer(StackVisualizer):
         add_hbox.addWidget(QLabel(""), 33)
         add_hbox.addWidget(self.add_measurement_btn, 33)
         add_hbox.addWidget(QLabel(""), 33)
-        self.canvas.layout.addLayout(add_hbox)
+        self.settings_layout.addLayout(add_hbox)
+
+    def show(self):
+        QWidget.show(self)
+        center_window(self)
+
+    def update_preview_if_active(self):
+        if self.preview_cb.isChecked():
+            self.toggle_preprocessing_preview()
+
+    def toggle_preprocessing_preview(self):
+
+        image_preprocessing = self.preprocessing.list.items
+        if image_preprocessing == []:
+            image_preprocessing = None
+
+        if self.preview_cb.isChecked() and image_preprocessing is not None:
+            # Apply preprocessing
+            try:
+                preprocessed_img = filter_image(
+                    self.target_img.copy(), filters=image_preprocessing
+                )
+                self.im.set_data(preprocessed_img)
+
+                # Update contrast to match new range
+                p01 = np.nanpercentile(preprocessed_img, 0.1)
+                p99 = np.nanpercentile(preprocessed_img, 99.9)
+                self.im.set_clim(vmin=p01, vmax=p99)
+                if hasattr(self, "contrast_slider"):
+                    self.contrast_slider.setValue((p01, p99))
+                self.canvas.draw()
+            except Exception as e:
+                logger.error(f"Preprocessing preview failed: {e}")
+        else:
+            # Restore original
+            self.im.set_data(self.target_img)
+            p01 = np.nanpercentile(self.target_img, 0.1)
+            p99 = np.nanpercentile(self.target_img, 99.9)
+            self.im.set_clim(vmin=p01, vmax=p99)
+            if hasattr(self, "contrast_slider"):
+                self.contrast_slider.setValue((p01, p99))
+            self.canvas.draw()
 
     def control_valid_parameters(self):
 
@@ -305,14 +414,14 @@ class SpotDetectionVisualizer(StackVisualizer):
         try:
             self.diameter = float(self.spot_diam_le.text().replace(",", "."))
             valid_diam = True
-        except:
+        except ValueError:
             valid_diam = False
 
         valid_thresh = False
         try:
             self.thresh = float(self.spot_thresh_le.text().replace(",", "."))
             valid_thresh = True
-        except:
+        except ValueError:
             valid_thresh = False
 
         if valid_diam and valid_thresh:

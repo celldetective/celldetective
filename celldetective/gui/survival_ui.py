@@ -19,11 +19,13 @@ from celldetective.utils.data_cleaning import extract_cols_from_table_list
 from celldetective.utils.parsing import _extract_labels_from_config
 from celldetective.utils.data_loaders import load_experiment_tables
 import numpy as np
+import pandas as pd
 import os
 import matplotlib.pyplot as plt
 
 plt.rcParams["svg.fonttype"] = "none"
 from glob import glob
+from celldetective import get_logger
 from celldetective.gui.base.styles import Styles
 from celldetective.gui.base.components import CelldetectiveWidget
 from matplotlib import colormaps
@@ -31,6 +33,8 @@ from celldetective.events import compute_survival
 from celldetective.relative_measurements import expand_pair_table
 import matplotlib.cm
 from celldetective.neighborhood import extract_neighborhood_in_pair_table
+
+logger = get_logger(__name__)
 
 
 class ConfigSurvival(CelldetectiveWidget):
@@ -225,7 +229,9 @@ class ConfigSurvival(CelldetectiveWidget):
                 )
             )
             if not tables_pairs:
-                print("No pair table found... please compute the pair measurements...")
+                logger.warning(
+                    "No pair table found. Please compute the pair measurements."
+                )
                 return None
             self.cols_pairs = extract_cols_from_table_list(tables_pairs)
 
@@ -264,7 +270,7 @@ class ConfigSurvival(CelldetectiveWidget):
                     and str(self.population_neigh) not in c
                 ]
 
-            print(f"{self.neighborhood_keys=}")
+            logger.debug(f"Neighborhood keys: {self.neighborhood_keys}")
 
             time_idx = np.array(
                 [s.startswith("t_") or s.startswith("t0") for s in self.cols_pairs]
@@ -281,8 +287,8 @@ class ConfigSurvival(CelldetectiveWidget):
 
             try:
                 time_columns = list(self.all_columns[time_idx])
-            except:
-                print("no column starts with t")
+            except (IndexError, KeyError):
+                logger.warning("No column starts with 't_' for time reference.")
                 self.auto_close = True
                 return None
 
@@ -295,8 +301,15 @@ class ConfigSurvival(CelldetectiveWidget):
 
     def process_survival(self):
 
+        # Validate that reference time and time of interest are different
+        time_of_reference = self.cbs[1].currentText()
+        time_of_interest = self.cbs[2].currentText()
+        if time_of_reference == time_of_interest:
+            generic_message("Reference time and time of interest must be different.")
+            return None
+
         self.FrameToMin = float(self.time_calibration_le.text().replace(",", "."))
-        self.time_of_interest = self.cbs[2].currentText()
+        self.time_of_interest = time_of_interest
         if self.time_of_interest == "t0":
             self.class_of_interest = "class"
         elif self.time_of_interest.startswith("t0"):
@@ -312,8 +325,22 @@ class ConfigSurvival(CelldetectiveWidget):
                 query_text = self.query_le.text()
                 if query_text != "":
                     self.df = self.df.query(query_text)
+            except pd.errors.UndefinedVariableError as e:
+                logger.warning(f"Query failed - undefined variable: {e}")
+                generic_message(
+                    f"Query error: column not found.\n{e}\n\nPlease check your column names."
+                )
+                return None
+            except SyntaxError as e:
+                logger.warning(f"Query failed - syntax error: {e}")
+                generic_message(
+                    f"Query syntax error: {e}\n\nCheck your query format (e.g., 'column > 100')."
+                )
+                return None
             except Exception as e:
-                print(e, " The query is misunderstood and will not be applied...")
+                logger.warning(f"Query not applied: {e}")
+                generic_message(f"Query could not be applied: {e}")
+                return None
 
             self.interpret_pos_location()
 
@@ -391,11 +418,12 @@ class ConfigSurvival(CelldetectiveWidget):
                     / self.FrameToMin
                 )
                 if not 0 < cut_observation_time <= (self.df["FRAME"].max()):
-                    print("Invalid cut time (larger than movie length)... Not applied.")
+                    logger.warning(
+                        "Invalid cut time (larger than movie length). Not applied."
+                    )
                     cut_observation_time = None
         except Exception as e:
-            print(f"{e=}")
-            pass
+            logger.debug(f"Cut time parsing error: {e}")
 
         pairs = False
         if self.neighborhood_keys is not None:
@@ -403,7 +431,7 @@ class ConfigSurvival(CelldetectiveWidget):
 
         # Per position survival
         for block, movie_group in self.df.groupby(["well", "position"]):
-            print(f"{block=}")
+            logger.debug(f"Processing block: {block}")
             ks = compute_survival(
                 movie_group,
                 self.class_of_interest,
@@ -413,7 +441,7 @@ class ConfigSurvival(CelldetectiveWidget):
                 cut_observation_time=cut_observation_time,
                 pairs=pairs,
             )
-            print(f"{ks=}")
+            logger.debug(f"Survival fit result: {ks}")
             if ks is not None:
                 self.df_pos_info.loc[
                     self.df_pos_info["pos_path"] == block[1], "survival_fit"

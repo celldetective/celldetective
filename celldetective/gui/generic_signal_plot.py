@@ -29,12 +29,15 @@ import matplotlib.pyplot as plt
 
 plt.rcParams["svg.fonttype"] = "none"
 from glob import glob
+from celldetective import get_logger
 from matplotlib.cm import tab10
 from celldetective.gui.base.components import CelldetectiveWidget
 import matplotlib.cm as mcm
 import pandas as pd
 
 from lifelines.utils import qth_survival_times
+
+logger = get_logger(__name__)
 
 
 class GenericSignalPlotWidget(CelldetectiveWidget):
@@ -317,7 +320,7 @@ class GenericSignalPlotWidget(CelldetectiveWidget):
         alpha = value
         try:
             alpha = float(alpha)
-        except:
+        except (ValueError, TypeError):
             return None
         if alpha > 1.0:
             alpha = 1.0
@@ -440,7 +443,7 @@ class GenericSignalPlotWidget(CelldetectiveWidget):
             + glob(self.parent_window.exp_dir + os.sep.join([f"W*", "*metadata.txt"]))
             + glob(self.parent_window.exp_dir + "*metadata.txt")
         )
-        print(f"Found {len(self.metafiles)} metadata files...")
+        logger.debug(f"Found {len(self.metafiles)} metadata files.")
         if len(self.metafiles) > 0:
             self.metadata_found = True
 
@@ -455,17 +458,17 @@ class GenericSignalPlotWidget(CelldetectiveWidget):
                 data = json.load(f)
                 positions = data["Summary"]["InitialPositionList"]
         except Exception as e:
-            print(f"Trouble loading metadata: error {e}...")
+            logger.debug(f"Trouble loading metadata: {e}")
             return None
 
         for k in range(len(positions)):
             pos_label = positions[k]["Label"]
             try:
                 coords = positions[k]["DeviceCoordinatesUm"]["XYStage"]
-            except:
+            except KeyError:
                 try:
                     coords = positions[k]["DeviceCoordinatesUm"]["PIXYStage"]
-                except:
+                except KeyError:
                     self.no_meta = True
 
             if not self.no_meta:
@@ -515,8 +518,8 @@ class GenericSignalPlotWidget(CelldetectiveWidget):
             self.fig_scatter.tight_layout()
             self.fig_scatter.canvas.mpl_connect("motion_notify_event", self.hover)
             self.fig_scatter.canvas.mpl_connect("pick_event", self.unselect_position)
-        except Exception as e:
-            pass
+        except (KeyError, TypeError) as e:
+            logger.debug(f"Could not plot spatial location: {e}")
 
     def update_annot(self, ind):
 
@@ -616,19 +619,16 @@ class GenericSignalPlotWidget(CelldetectiveWidget):
                 leg.set_visible(True)
 
     def show_hide_legend(self):
-
+        """Toggle legend visibility and replot to sync state."""
         if self.legend_visible:
-            leg = self.ax.get_legend()
-            leg.set_visible(False)
             self.legend_visible = False
             self.legend_btn.setIcon(icon(MDI6.text_box, color="black"))
         else:
-            leg = self.ax.get_legend()
-            leg.set_visible(True)
             self.legend_visible = True
             self.legend_btn.setIcon(icon(MDI6.text_box, color=self.help_color))
 
-        self.plot_widget.canvas.draw_idle()
+        # Replot to sync legend state
+        self.plot_signals(0)
 
     def switch_to_log(self):
         """
@@ -886,7 +886,7 @@ class GenericSignalPlotWidget(CelldetectiveWidget):
         try:
             self.plot_signals(0)
         except Exception as e:
-            print(f"{e=}")
+            logger.debug(f"Error plotting signals: {e}")
 
     def switch_cell_lines(self):
 

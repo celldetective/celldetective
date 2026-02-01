@@ -15,15 +15,37 @@ Reference keys: :term:`single-cell measurements`
 
 #. Press the :icon:`image-check,black` icon on the right side to set up spot detection visually.
 
-#. Set up the channel interest and adjust contrast to see the spots clearly.
+#. Set up the channel interest using the controls on the **Right Panel**. You can change the displayed frame and adjust contrast to see the spots clearly.
+    
+    .. note::
+        The viewer is split into two panels:
+        - **Left Panel**: Contains all detection settings (Channels, Thresholds, Preprocessing).
+        - **Right Panel**: Displays the image and visualization controls.
 
-#. Set the detection channel to the same channel as above.
+#. In the **Left Panel**, set the detection channel to the same channel as above.
 
-#. Estimate visually the average spot diameter. Set the detection threshold to 0. Press Set (any of the two buttons).
+   .. tip::
+       If the image is noisy or the background is uneven, or if the spots are dark (e.g., RICM), use the **Preprocessing** options below the channel selection.
+       
+       - For **noisy images**: Add a `gaussian` or `median` filter (e.g., sigma=1 or size=3).
+       - For **uneven background**: Add a `tophat` filter (white tophat) to isolate bright spots.
+       - For **dark spots**: Add an `invert` filter roughly at the bit-depth max (e.g., 255 or 65535) to make spots bright.
 
-#. Assess whether single-spot circles reflect accurately single spot size (you can have many false positive detections at this stage, which is normal, leave the threshold at 0).
+       You can check the **Preview** box (below the Preprocessing list) to see the effect of your filters on the image.
 
-#. Increase the detection threshold to remove as many false positive detections as possible.
+#. Estimate visually the average spot diameter (in pixels). You can zoom in on the image.
+
+#. Set the **Detection threshold** to 0 initially.
+
+#. Press **Set** (any of the two buttons) to preview the detection. 
+   
+   - **Visual Feedback**: Detected spots will appear as red circles. 
+   - **Note**: At threshold 0, you will likely see many false positives (background noise detected as spots). This is normal.
+
+#. Gradually **increase the detection threshold** and press **Set** again to update the preview.
+   
+   - The goal is to filter out the false positives until only the real spots remain circled.
+   - If spots are not detected even at threshold 0, try adjusting the diameter or checking your preprocessing.
 
 #. Once the detection is satisfactory, press :icon:`plus,black` Add measurement.
 

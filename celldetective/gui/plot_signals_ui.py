@@ -28,6 +28,7 @@ import matplotlib.pyplot as plt
 
 plt.rcParams["svg.fonttype"] = "none"
 from glob import glob
+from celldetective import get_logger
 from natsort import natsorted
 import math
 from celldetective.gui.base.components import CelldetectiveWidget
@@ -35,6 +36,8 @@ from matplotlib import colormaps
 import matplotlib.cm
 from celldetective.relative_measurements import expand_pair_table
 from celldetective.neighborhood import extract_neighborhood_in_pair_table
+
+logger = get_logger(__name__)
 
 
 class ConfigSignalPlot(CelldetectiveWidget):
@@ -173,7 +176,7 @@ class ConfigSignalPlot(CelldetectiveWidget):
             if hasattr(matplotlib.cm, str(cm).lower()):
                 try:
                     self.cbs[-1].addColormap(cm.lower())
-                except:
+                except Exception:
                     pass
 
         self.cbs[0].setCurrentIndex(1)
@@ -257,7 +260,9 @@ class ConfigSignalPlot(CelldetectiveWidget):
                 )
             )
             if not tables_pairs:
-                print("No pair table found... please compute the pair measurements...")
+                logger.warning(
+                    "No pair table found. Please compute the pair measurements."
+                )
                 return None
             self.cols_pairs = extract_cols_from_table_list(tables_pairs)
 
@@ -333,7 +338,9 @@ class ConfigSignalPlot(CelldetectiveWidget):
             time_idx = np.array(
                 [s.startswith("t_") or s.startswith("t0_") for s in self.all_columns]
             )
-            print(f"{class_idx=} {time_idx=} {self.all_columns=}")
+            logger.debug(
+                f"class_idx={class_idx}, time_idx={time_idx}, columns={self.all_columns}"
+            )
 
             try:
                 if len(class_idx) > 0:
@@ -345,7 +352,7 @@ class ConfigSignalPlot(CelldetectiveWidget):
                 else:
                     time_columns = []
             except Exception as e:
-                print(f"L266 columns not found {e}")
+                logger.warning(f"Columns not found: {e}")
                 self.auto_close = True
                 return None
 
@@ -435,8 +442,20 @@ class ConfigSignalPlot(CelldetectiveWidget):
                 query_text = self.query_le.text()
                 if query_text != "":
                     self.df = self.df.query(query_text)
+            except pd.errors.UndefinedVariableError as e:
+                logger.warning(f"Query failed - undefined variable: {e}")
+                generic_message(
+                    f"Query error: column not found.\n{e}\n\nPlease check your column names."
+                )
+                return None
+            except SyntaxError as e:
+                logger.warning(f"Query failed - syntax error: {e}")
+                generic_message(f"Query syntax error: {e}\n\nCheck your query format.")
+                return None
             except Exception as e:
-                print(e, " The query is misunderstood and will not be applied...")
+                logger.warning(f"Query not applied: {e}")
+                generic_message(f"Query could not be applied: {e}")
+                return None
 
             self.feature_selected = self.feature_cb.currentText()
             self.feature_choice_widget.close()
@@ -454,17 +473,17 @@ class ConfigSignalPlot(CelldetectiveWidget):
                     )
                     self.plot_window.show()
                 except Exception as e:
-                    print(f"{e=}")
+                    logger.debug(f"Error creating plot widget: {e}")
 
     def process_signal(self):
 
         self.FrameToMin = float(self.time_calibration_le.text().replace(",", "."))
-        print(f"Time calibration set to 1 frame =  {self.FrameToMin} min...")
+        logger.info(f"Time calibration set to 1 frame = {self.FrameToMin} min")
 
         # read instructions from combobox options
         self.load_available_tables()
         class_col = self.class_columns[self.cbs[1].currentIndex()]
-        print(f"{class_col=}")
+        logger.debug(f"Selected class column: {class_col}")
 
         if self.df is not None:
 
@@ -512,8 +531,8 @@ class ConfigSignalPlot(CelldetectiveWidget):
             )
 
         if self.df is None:
-            print("No table could be found...")
-            generic_message("No table could be found to compute survival...")
+            logger.warning("No table could be found.")
+            generic_message("No table could be found to compute signals.")
             self.close()
             return None
         else:
@@ -533,9 +552,7 @@ class ConfigSignalPlot(CelldetectiveWidget):
         # Per position signal
         self.df = self.df.dropna(subset=["FRAME"])
         if len(self.df) == 0:
-            print(
-                "Warning... The dataset is empty. Please check your filters. Abort..."
-            )
+            logger.warning("The dataset is empty. Please check your filters.")
             return None
 
         pairs = False
@@ -714,7 +731,7 @@ class ConfigSignalPlot(CelldetectiveWidget):
                     ):
 
                         if "area" in list(track_group.columns):
-                            print("area in list")
+                            logger.debug("Using 'area' column for first detection")
                             feat = track_group["area"].values
                         else:
                             feat = feature
@@ -731,7 +748,7 @@ class ConfigSignalPlot(CelldetectiveWidget):
                         matrix[cid, loc_t + 1] = second_feature
 
                     cid += 1
-                except:
+                except (KeyError, IndexError, ValueError):
                     pass
         return matrix
 
