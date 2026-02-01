@@ -544,10 +544,19 @@ def measure_features(
         df_props = df_props[[c for c in df_props.columns if not c.endswith("_delme")]]
 
     if border_dist is not None:
+        # Get the names of extra properties that were actually requested by the user
+        # (these were moved from features to extra_props_list earlier)
+        requested_extra_names = []
+        if extra_props_list:
+            for prop_func in extra_props_list:
+                if hasattr(prop_func, "__name__"):
+                    requested_extra_names.append(prop_func.__name__)
+
         # Filter for features containing "intensity" but not "centroid" or "peripheral"
+        # Only use user-requested features, not all available extra properties
         intensity_features = [
             f
-            for f in (features + extra)
+            for f in (features + requested_extra_names)
             if "intensity" in f and "centroid" not in f and "peripheral" not in f
         ]
 
@@ -558,7 +567,7 @@ def measure_features(
 
         clean_intensity_features = []
         for s in intensity_features:
-            if s in extra:
+            if s in requested_extra_names:
                 intensity_extra.append(getattr(extra_props, s))
             else:
                 clean_intensity_features.append(s)

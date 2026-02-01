@@ -213,6 +213,7 @@ class SettingsNeighborhood(CelldetectiveWidget):
                 channel_names=self.attr_parent.exp_channels,
                 n_channels=self.attr_parent.nbr_channels,
                 PxToUm=1,
+                single_value_mode=True,
             )
             self.viewer.show()
 

@@ -239,5 +239,92 @@ class TestNumpyArrayHandling(unittest.TestCase):
             self.fail(f"Spot detection failed with numpy array channels: {e}")
 
 
+class TestExtraPropertiesNotAutoIncluded(unittest.TestCase):
+    """
+    Regression test for bug where ALL extra_properties functions containing 'intensity'
+    were being included in edge measurements, instead of only user-requested ones.
+
+    Bug: In measure_features(), when border_dist was set, the code used `extra`
+    (ALL available extra_properties functions) instead of `requested_extra_names`
+    (only user-requested ones). This caused unwanted measurements and warnings.
+
+    Fix: Changed to use only requested_extra_names in intensity_features list.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        """Create simple test data."""
+        cls.frame = np.ones((100, 100, 1), dtype=float)
+        cls.labels = np.zeros((100, 100), dtype=int)
+        cls.labels[40:60, 40:60] = 1  # 20x20 square
+
+    def test_border_dist_does_not_include_unrequested_extra_props(self):
+        """
+        Test that edge measurements only include requested features,
+        not all extra_properties containing 'intensity'.
+
+        Before fix: Would include ~30+ extra_properties functions with 'intensity'.
+        After fix: Only includes explicitly requested features.
+        """
+        result = measure_features(
+            self.frame,
+            self.labels,
+            features=["intensity_mean"],  # Only request mean intensity
+            channels=["test"],
+            border_dist=[5],
+        )
+
+        self.assertIsInstance(result, pd.DataFrame)
+
+        # Get all column names related to edge/slice measurements
+        edge_columns = [c for c in result.columns if "edge" in c or "slice" in c]
+
+        # Should only have requested intensity_mean edge measurement, not all extra_properties
+        # Before the fix, this would include many unwanted columns like:
+        # - mean_dark_intensity_*
+        # - intensity_percentile_*
+        # - etc.
+
+        # Count intensity-related edge columns - should be minimal (just what we requested)
+        intensity_edge_cols = [
+            c for c in edge_columns if "intensity" in c.lower() or "mean" in c.lower()
+        ]
+
+        # We requested only intensity_mean, so should have at most 1-2 edge columns per channel
+        # (the mean intensity for the edge region)
+        # Before the fix, this would be 30+ columns
+        self.assertLess(
+            len(intensity_edge_cols),
+            10,
+            f"Too many intensity edge columns found ({len(intensity_edge_cols)}). "
+            f"This suggests unrequested extra_properties are being included. "
+            f"Columns: {intensity_edge_cols}",
+        )
+
+    def test_no_features_requested_only_adds_mean(self):
+        """
+        Test that when no intensity features are requested, only basic mean is added.
+        Should not include all extra_properties.
+        """
+        result = measure_features(
+            self.frame,
+            self.labels,
+            features=["area"],  # Non-intensity feature only
+            channels=["test"],
+            border_dist=[5],
+        )
+
+        self.assertIsInstance(result, pd.DataFrame)
+
+        # Should have area column
+        self.assertIn("area", result.columns)
+
+        # Edge columns should only have basic intensity (auto-added for edges)
+        edge_columns = [c for c in result.columns if "edge" in c or "slice" in c]
+
+        # Should have minimal edge measurements (just auto-added mean for edge measurement)
+        self.assertLess(len(edge_columns), 10, f"Too many edge columns: {edge_columns}")
+
+
 if __name__ == "__main__":
     unittest.main()

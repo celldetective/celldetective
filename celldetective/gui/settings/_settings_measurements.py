@@ -680,16 +680,15 @@ class SettingsMeasurements(CelldetectiveSettingsPanel):
                     border_distances = measurement_instructions["border_distances"]
                     if border_distances is not None:
                         if isinstance(border_distances, int):
-                            distances = [border_distances]
+                            distances = [str(border_distances)]
                         elif isinstance(border_distances, list):
                             distances = []
                             for d in border_distances:
-                                if isinstance(d, int) | isinstance(d, float):
+                                if isinstance(d, (int, float)):
                                     distances.append(str(int(d)))
                                 elif isinstance(d, list):
-                                    distances.append(
-                                        str(int(d[0])) + "-" + str(int(d[1]))
-                                    )
+                                    # Use (min,max) tuple format to match CellEdgeVisualizer output
+                                    distances.append(f"({int(d[0])},{int(d[1])})")
                         self.contours_list.list_widget.clear()
                         self.contours_list.list_widget.addItems(distances)
 

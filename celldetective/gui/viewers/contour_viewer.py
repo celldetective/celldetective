@@ -72,6 +72,7 @@ class CellEdgeVisualizer(StackVisualizer):
         labels=None,
         initial_edge=5,
         initial_mask_alpha=0.5,
+        single_value_mode=False,
         *args,
         **kwargs,
     ):
@@ -86,6 +87,7 @@ class CellEdgeVisualizer(StackVisualizer):
         self.invert = invert
         self.parent_list_widget = parent_list_widget
         self.parent_le = parent_le
+        self.single_value_mode = single_value_mode
 
         # SDF cache (stores label + dist_in + dist_out + voronoi)
         self.sdf_cache = OrderedDict()
@@ -201,8 +203,18 @@ class CellEdgeVisualizer(StackVisualizer):
 
     def set_measurement_in_parent_list(self):
         # Add the edge size to the parent QListWidget
-
-        self.parent_list_widget.addItems([str(self.edge_slider.value())])
+        # edge_slider is a QLabeledRangeSlider returning (min, max) tuple
+        slider_val = self.edge_slider.value()
+        if isinstance(slider_val, tuple):
+            if self.single_value_mode:
+                # For neighborhood: just output the max absolute distance
+                edge_value = str(max(abs(slider_val[0]), abs(slider_val[1])))
+            else:
+                # For contour measurements: output as "(min,max)" tuple format
+                edge_value = f"({slider_val[0]},{slider_val[1]})"
+        else:
+            edge_value = str(abs(slider_val))
+        self.parent_list_widget.addItems([edge_value])
         self.close()
 
     def generate_label_imshow(self):

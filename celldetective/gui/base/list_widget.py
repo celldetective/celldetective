@@ -89,7 +89,7 @@ class ListWidget(CelldetectiveWidget):
         """
         Retrieves and returns the items from the list widget.
 
-        This method parses any items that contain a range (formatted as 'min-max')
+        This method parses any items that contain a range (formatted as '(min,max)')
         into a list of two values, and casts all items to the specified `dtype`.
 
         Returns
@@ -97,18 +97,33 @@ class ListWidget(CelldetectiveWidget):
         list
                 A list of the items in the list widget, with ranges split into two values.
         """
+        import re
+
+        # Pattern for tuple format: "(min,max)" with optional negative numbers and decimals
+        tuple_pattern = re.compile(r"^\((-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)\)$")
 
         items = []
         for x in range(self.list_widget.count()):
-            if len(self.list_widget.item(x).text().split("-")) == 2:
-                if self.list_widget.item(x).text()[0] == "-":
-                    items.append(self.dtype(self.list_widget.item(x).text()))
-                else:
-                    minn, maxx = self.list_widget.item(x).text().split("-")
-                    to_add = [self.dtype(minn), self.dtype(maxx)]
-                    items.append(to_add)
-            else:
-                items.append(self.dtype(self.list_widget.item(x).text()))
+            text = self.list_widget.item(x).text().strip()
+
+            # Try tuple format first: (min,max)
+            tuple_match = tuple_pattern.match(text)
+            if tuple_match:
+                try:
+                    minn = self.dtype(float(tuple_match.group(1)))
+                    maxx = self.dtype(float(tuple_match.group(2)))
+                    items.append([minn, maxx])
+                    continue
+                except ValueError:
+                    pass
+
+            # Single value
+            try:
+                items.append(self.dtype(text))
+            except ValueError:
+                print(
+                    f"Warning: Could not convert '{text}' to {self.dtype.__name__}, skipping..."
+                )
         return items
 
     def clear(self):

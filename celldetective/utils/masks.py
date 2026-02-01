@@ -49,8 +49,10 @@ def contour_of_instance_segmentation(label, distance, sdf=None, voronoi_map=None
     """
     from scipy.ndimage import distance_transform_edt
 
-    # helper to parse string "rad1-rad2"
+    # helper to parse string "rad1-rad2" or "-12-13" or "-5--2"
     if isinstance(distance, str):
+        import re
+
         try:
             # Check for stringified tuple "(a, b)"
             distance = distance.strip()
@@ -74,13 +76,18 @@ def contour_of_instance_segmentation(label, distance, sdf=None, voronoi_map=None
                         min_r = val
                         max_r = 0
                 except ValueError:
-                    # It's a range string "5-10"
-                    parts = distance.split("-")
-                    # Assumption: "A-B" where A, B positive radii for OUTER annulus.
-                    r1 = float(parts[0])
-                    r2 = float(parts[1])
-                    min_r = -max(r1, r2)
-                    max_r = -min(r1, r2)
+                    # It's a range string like "5-10", "-12-13", or "-5--2"
+                    # Use regex to parse range with potentially negative numbers
+                    range_pattern = re.compile(r"^(-?\d+(?:\.\d+)?)-(-?\d+(?:\.\d+)?)$")
+                    match = range_pattern.match(distance)
+                    if match:
+                        r1 = float(match.group(1))
+                        r2 = float(match.group(2))
+                        # Use the values directly as specified (min, max in SDF space)
+                        min_r = min(r1, r2)
+                        max_r = max(r1, r2)
+                    else:
+                        raise ValueError(f"Could not parse range string: {distance}")
 
         except Exception:
             logger.warning(
