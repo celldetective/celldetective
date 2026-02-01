@@ -43,6 +43,9 @@ class SpotDetectionVisualizer(StackVisualizer):
         parent_preprocessing_list=None,
         cell_type="targets",
         labels=None,
+        initial_diameter=None,
+        initial_threshold=None,
+        initial_preprocessing=None,
         *args,
         **kwargs,
     ):
@@ -112,6 +115,17 @@ class SpotDetectionVisualizer(StackVisualizer):
         self.detection_channel_cb.setCurrentIndex(
             min(self.target_channel, self.n_channels - 1)
         )
+
+        # Initialize from provided values (sync with settings panel)
+        if initial_diameter is not None:
+            self.spot_diam_le.setText(str(initial_diameter))
+        if initial_threshold is not None:
+            self.spot_thresh_le.setText(str(initial_threshold))
+        if initial_preprocessing is not None and len(initial_preprocessing) > 0:
+            items_for_list = [a[0] for a in initial_preprocessing]
+            for it in items_for_list:
+                self.preprocessing.list.addItemToList(it)
+            self.preprocessing.list.items = list(initial_preprocessing)
 
     def closeEvent(self, event):
         """Clean up resources on close."""

@@ -838,7 +838,6 @@ class SettingsMeasurements(CelldetectiveSettingsPanel):
             self.imshow_digit_window.canvas.draw()
             self.imshow_digit_window.show()
 
-
     def control_haralick_intensity_histogram(self):
         """
         Load an image for the first experiment movie found.
@@ -1123,7 +1122,9 @@ class SettingsMeasurements(CelldetectiveSettingsPanel):
                 # else:
                 # 	invert_value = None
 
-                from celldetective.gui.viewers.spot_detection_viewer import SpotDetectionVisualizer
+                from celldetective.gui.viewers.spot_detection_viewer import (
+                    SpotDetectionVisualizer,
+                )
 
                 self.spot_visual = SpotDetectionVisualizer(
                     frame_slider=True,
@@ -1139,6 +1140,13 @@ class SettingsMeasurements(CelldetectiveSettingsPanel):
                     parent_diameter_le=self.diameter_value,
                     parent_threshold_le=self.threshold_value,
                     parent_preprocessing_list=self.spot_preprocessing.list,
+                    initial_diameter=self.diameter_value.text(),
+                    initial_threshold=self.threshold_value.text(),
+                    initial_preprocessing=(
+                        self.spot_preprocessing.list.items
+                        if self.spot_preprocessing.list.items
+                        else None
+                    ),
                     # parent_invert_check=self.invert_check,
                     # invert = self.invert_check.isChecked(),
                     # invert_value = self.invert_value_le.text().replace(',','.'),

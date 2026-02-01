@@ -249,9 +249,13 @@ def rename_intensity_column(df, channels):
         if np.any(test_digit):
             index = int(sections[np.where(test_digit)[0]][-1])
         else:
-            print(
-                f"No valid channel index found for {intensity_cols[k]}... Skipping the renaming for {intensity_cols[k]}..."
-            )
+            # Check if the column already contains a channel name (e.g., spot detection columns)
+            # If so, skip silently as no renaming is needed
+            already_named = any(ch in intensity_cols[k] for ch in channel_names)
+            if not already_named:
+                print(
+                    f"No valid channel index found for {intensity_cols[k]}... Skipping the renaming for {intensity_cols[k]}..."
+                )
             continue
 
         channel_name = channel_names[np.where(channel_indices == index)[0]][0]

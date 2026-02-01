@@ -343,3 +343,52 @@ def test_dark_spot_detection_with_invert(qtbot, dark_spots_data):
     has_spot_2 = np.any(np.all(np.abs(pos - [62, 62]) < 5, axis=1))
     assert has_spot_1, f"Dark Spot 1 not found near (22, 22). Positions: {pos}"
     assert has_spot_2, f"Dark Spot 2 not found near (62, 62). Positions: {pos}"
+
+
+def test_viewer_initializes_from_parent_values(qtbot, dummy_data):
+    """
+    Test that the viewer initializes its widgets from initial_* arguments.
+    """
+    stack, labels = dummy_data
+    channel_names = ["Background", "Spots"]
+
+    # Mock parent widgets
+    parent_channel_cb = MagicMock()
+    parent_diameter_le = MagicMock()
+    parent_threshold_le = MagicMock()
+    parent_preprocessing_list = MagicMock()
+
+    initial_params = [["gauss", 1.5], ["invert", 500]]
+
+    viewer = SpotDetectionVisualizer(
+        stack=stack,
+        labels=labels,
+        channel_names=channel_names,
+        n_channels=2,
+        parent_channel_cb=parent_channel_cb,
+        parent_diameter_le=parent_diameter_le,
+        parent_threshold_le=parent_threshold_le,
+        parent_preprocessing_list=parent_preprocessing_list,
+        window_title="Test Init Values",
+        channel_cb=True,
+        contrast_slider=False,
+        frame_slider=False,
+        # Pass initial values
+        initial_diameter="8.5",
+        initial_threshold="1.2",
+        initial_preprocessing=initial_params,
+    )
+
+    qtbot.addWidget(viewer)
+    viewer.show()
+    qtbot.waitForWindowShown(viewer)
+
+    # Verify widgets were initialized with passed values
+    assert viewer.spot_diam_le.text() == "8.5"
+    assert viewer.spot_thresh_le.text() == "1.2"
+
+    # Verify preprocessing list was populated
+    current_filters = viewer.preprocessing.list.items
+    assert len(current_filters) == 2
+    assert current_filters[0] == ["gauss", 1.5]
+    assert current_filters[1] == ["invert", 500]

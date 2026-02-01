@@ -23,6 +23,7 @@ from celldetective.utils.maths import step_function
 from celldetective.utils.image_cleaning import interpolate_nan
 from celldetective.preprocessing import field_correction
 from celldetective.log_manager import get_logger
+import pandas as pd
 
 logger = get_logger(__name__)
 
@@ -279,8 +280,6 @@ def measure(
 
         timestep_dataframes.append(measurements_at_t)
 
-    import pandas as pd
-
     measurements = pd.concat(timestep_dataframes)
     if trajectories is not None:
         measurements = measurements.sort_values(
@@ -435,8 +434,11 @@ def measure_features(
 
         if spot_detection is not None:
             detection_channel = spot_detection.get("channel")
-            if detection_channel in channels:
-                ind = channels.index(detection_channel)
+            channels_list = (
+                list(channels) if not isinstance(channels, list) else channels
+            )
+            if detection_channel in channels_list:
+                ind = channels_list.index(detection_channel)
                 if "image_preprocessing" not in spot_detection:
                     spot_detection.update({"image_preprocessing": None})
 
@@ -458,8 +460,11 @@ def measure_features(
         if normalisation_list:
             for norm in normalisation_list:
                 target = norm.get("target_channel")
-                if target in channels:
-                    ind = channels.index(target)
+                channels_list = (
+                    list(channels) if not isinstance(channels, list) else channels
+                )
+                if target in channels_list:
+                    ind = channels_list.index(target)
 
                     if norm["correction_type"] == "local":
                         normalised_image = normalise_by_cell(
@@ -529,7 +534,6 @@ def measure_features(
         extra_properties=extra_props_list,
         channel_names=channels,
     )
-    import pandas as pd
 
     df_props = pd.DataFrame(props)
 
@@ -598,7 +602,6 @@ def measure_features(
                 extra_properties=intensity_extra,
                 channel_names=channels,
             )
-            import pandas as pd
 
             df_props_border_d = pd.DataFrame(props_border)
 
@@ -820,8 +823,6 @@ def compute_haralick_features(
     assert len(haralick_properties) == (
         len(np.unique(labels)) - 1
     ), "Some cells have not been measured..."
-
-    import pandas as pd
 
     return pd.DataFrame(haralick_properties)
 
@@ -1070,7 +1071,6 @@ def measure_at_position(pos, mode, return_measurements=False, threads=1):
 
     table = pos + os.sep.join(["output", "tables", f"trajectories_{mode}.csv"])
     if return_measurements:
-        import pandas as pd
 
         df = pd.read_csv(table)
         return df
