@@ -172,6 +172,10 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         print(
             f"The following neighborhoods were detected: {self.neighborhood_cols=}..."
         )
+        if len(self.neighborhood_cols) == 0:
+            raise ValueError(
+                "No neighborhoods detected. Please compute neighborhoods first."
+            )
 
         self.locate_relative_tracks()
 
@@ -1449,6 +1453,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         self.reference_population = self.neighborhood_choice_cb.currentText().split(
             "_"
         )[0]
+        self.neighbor_population = self.reference_population
 
         if "_(" in self.current_neighborhood and ")_" in self.current_neighborhood:
             self.neighbor_population = (
@@ -1457,9 +1462,6 @@ class PairEventAnnotator(CelldetectiveMainWindow):
             self.reference_population = (
                 self.current_neighborhood.split("_(")[-1].split(")_")[0].split("-")[0]
             )
-        else:
-            if "self" in self.current_neighborhood:
-                self.neighbor_population = self.reference_population
 
         print(f"Current neighborhood: {self.current_neighborhood}")
         print(f"New reference population: {self.reference_population}")
@@ -2183,18 +2185,44 @@ class PairEventAnnotator(CelldetectiveMainWindow):
 
     def closeEvent(self, event):
 
-        self.stop()
-        # result = QMessageBox.question(self,
-        # 			  "Confirm Exit...",
-        # 			  "Are you sure you want to exit ?",
-        # 			  QMessageBox.Yes| QMessageBox.No,
-        # 			  )
         try:
-            del self.stack
-        except:
+            self.stop()
+        except Exception:
             pass
 
+        # Stop and delete animation to break reference cycles
+        if hasattr(self, "anim") and self.anim:
+            try:
+                self.anim.event_source.stop()
+            except Exception:
+                pass
+            del self.anim
+
+        # Close matplotlib figures
+        if hasattr(self, "fig"):
+            try:
+                plt.close(self.fig)
+            except Exception:
+                pass
+
+        if hasattr(self, "cell_fig"):
+            try:
+                plt.close(self.cell_fig)
+            except Exception:
+                pass
+
+        # Delete large objects
+        if hasattr(self, "stack"):
+            del self.stack
+
+        if hasattr(self, "dataframes"):
+            self.dataframes.clear()
+
+        if hasattr(self, "df_relative"):
+            del self.df_relative
+
         gc.collect()
+        super().closeEvent(event)
 
     def animation_generator(self):
         """
@@ -2979,26 +3007,6 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         self.framedata -= 1
         if self.framedata < 0:
             self.framedata = self.len_movie - 1
-        self.draw_frame(self.framedata)
-        self.fcanvas.canvas.draw()
-
-    def set_first_frame(self):
-        self.stop()
-        self.framedata = 0
-        self.draw_frame(self.framedata)
-        self.fcanvas.canvas.draw()
-
-    def set_last_frame(self):
-        self.stop()
-        self.framedata = len(self.stack) - 1
-        while len(np.where(self.stack[self.framedata].flatten() == 0)[0]) > 0.99 * len(
-            self.stack[self.framedata].flatten()
-        ):
-            self.framedata -= 1
-            if self.framedata < 0:
-                self.framedata = 0
-                break
-
         self.draw_frame(self.framedata)
         self.fcanvas.canvas.draw()
 

@@ -26,14 +26,16 @@ description: Graphical Unit Tests
     * **Crucial:** If a full user journey is required to reproduce the crash/bug, write a "Long Unit Test" (E2E style) that simulates the full path from application startup.
 
 ## 3. Coding Guidelines
+* **Real Objects > Mocks:**
+    * **No MagicMocks for GUI:** Avoid using `MagicMock` or similar mocking libraries for graphical classes (windows, widgets, dialogs). Mocks hide rendering issues.
+    * **Use Real Instances:** Always instantiate the actual graphical class to test its real behavior and event loop integration.
+* **Project Integration (`ExperimentTest`):**
+    * **Context:** `ExperimentTest` is a specific project type designed to be processed by the main `App`.
+    * **Usage:** When testing main application logic or full workflows, do not mock the project data. Instead, instantiate a real `ExperimentTest` project and load it into a real `App` instance to simulate authentic execution.
 * **Reproduction First:** The test *must* fail when run against the code *before* the fix (if possible) and pass *after* the fix.
 * **Robustness:**
-    * For GUI tests, ensure proper setup and teardown of the application instance to avoid side effects on other tests.
-    * Use explicit waits/assertions for UI elements (don't rely on `sleep`).
-* **Documentation:** Add a docstring to the test explaining:
-    1. The bug it prevents (link to issue if available).
-    2. The steps being simulated.
-    3. The expected outcome.
+    * Ensure proper setup and teardown to avoid side effects.
+    * Use explicit waits/assertions for UI elements.
 
 ---
 **Trigger:** Run this workflow immediately after identifying a bug or drafting a fix.

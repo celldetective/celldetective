@@ -850,10 +850,39 @@ class EventAnnotator(BaseAnnotator):
 
         try:
             self.stop()
-            del self.stack
-            gc.collect()
-        except:
+        except Exception:
             pass
+
+        # Stop and delete animation to break reference cycles
+        if hasattr(self, "anim") and self.anim:
+            try:
+                self.anim.event_source.stop()
+            except Exception:
+                pass
+            del self.anim
+
+        # Close matplotlib figures
+        if hasattr(self, "fig"):
+            try:
+                plt.close(self.fig)
+            except Exception:
+                pass
+
+        if hasattr(self, "cell_fig"):
+            try:
+                plt.close(self.cell_fig)
+            except Exception:
+                pass
+
+        # Delete large objects
+        if hasattr(self, "stack"):
+            del self.stack
+
+        if hasattr(self, "df_tracks"):
+            del self.df_tracks
+
+        gc.collect()
+        super().closeEvent(event)
 
     def animation_generator(self):
         """

@@ -684,5 +684,14 @@ class NeighPanel(QFrame, Styles):
 
         test = self.parent_window.locate_selected_position()
         if test:
-            self.pair_event_annotator = PairEventAnnotator(self)
-            self.pair_event_annotator.show()
+            try:
+                self.pair_event_annotator = PairEventAnnotator(self)
+                self.pair_event_annotator.show()
+            except ValueError as e:
+                # Show useful feedback if no neighborhood detected
+                msg = QMessageBox()
+                msg.setIcon(QMessageBox.Warning)
+                msg.setText(str(e))
+                msg.setWindowTitle("Warning")
+                msg.exec_()
+                return
