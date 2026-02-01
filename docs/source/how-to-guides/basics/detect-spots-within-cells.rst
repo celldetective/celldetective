@@ -31,13 +31,13 @@ Reference keys: :term:`single-cell measurements`
        - For **uneven background**: Add a `tophat` filter (white tophat) to isolate bright spots.
        - For **dark spots**: Add an `invert` filter roughly at the bit-depth max (e.g., 255 or 65535) to make spots bright.
 
-       You can check the **Preview** box (below the Preprocessing list) to see the effect of your filters on the image.
+       You can check the **Preview** box (below the Preprocessing list) to see the effect of your filters on the image (e.g. smoothing, inversion). This preview does not show the detected spots, only the enhanced image.
 
 #. Estimate visually the average spot diameter (in pixels). You can zoom in on the image.
 
 #. Set the **Detection threshold** to 0 initially.
 
-#. Press **Set** (any of the two buttons) to preview the detection. 
+#. Press **Set** (next to Diameter or Threshold) to run the spot detection.
    
    - **Visual Feedback**: Detected spots will appear as red circles. 
    - **Note**: At threshold 0, you will likely see many false positives (background noise detected as spots). This is normal.
@@ -46,6 +46,7 @@ Reference keys: :term:`single-cell measurements`
    
    - The goal is to filter out the false positives until only the real spots remain circled.
    - If spots are not detected even at threshold 0, try adjusting the diameter or checking your preprocessing.
+   - **Note**: The detection uses the preprocessed image if filters are listed, regardless of whether the "Preview" checkbox is ticked.
 
 #. Once the detection is satisfactory, press :icon:`plus,black` Add measurement.
 
