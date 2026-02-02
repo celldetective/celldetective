@@ -1504,10 +1504,10 @@ class TableUI(CelldetectiveMainWindow):
 		if self.projection_option.isChecked():
 
 			self.projection_mode = self.projection_op_cb.currentText()
-            group_table = getattr(
-                self.current_data.groupby(self.groupby_cols), self.projection_mode
-            )(numeric_only=True)
-            
+			group_table = getattr(
+				self.current_data.groupby(self.groupby_cols), self.projection_mode
+			)(numeric_only=True)
+
 			for c in self.static_columns:
 				try:
 					group_table[c] = self.current_data.groupby(self.groupby_cols)[c].apply(lambda x: x.unique()[0])
