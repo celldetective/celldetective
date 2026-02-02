@@ -56,3 +56,9 @@ Compare survival functions
     from the plot.
 
 
+
+Start exploring data
+--------------------
+
+For a detailed guide on how to interact with the data tables, perform calculations, and collapse tracks, please refer to the :ref:`table_exploration` page.
+
