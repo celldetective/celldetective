@@ -1347,10 +1347,9 @@ class TableUI(CelldetectiveMainWindow):
         if self.projection_option.isChecked():
 
             self.projection_mode = self.projection_op_cb.currentText()
-            op = getattr(
+            group_table = getattr(
                 self.current_data.groupby(self.groupby_cols), self.projection_mode
-            )
-            group_table = op(self.current_data.groupby(self.groupby_cols))
+            )(numeric_only=True)
 
             for c in self.static_columns:
                 try:
