@@ -17,6 +17,7 @@ The menu bar provides several categories of actions:
 
 File
 ~~~~
+
 - **Save as...** (``Ctrl+S``): Save the current table to a CSV file.
 - **Save inplace...**: Save the table back to its original location (if applicable). Use this only if you created new measurements that you would like to keep with the data (e.g., a difference of times).
 - **Plot...** (``Ctrl+P``): Open the plotting interface for 1D/2D data visualization.
@@ -28,6 +29,7 @@ File
 
 Edit
 ~~~~
+
 - **Delete...** (``Del``): Delete selected columns.
 - **Rename...**: Rename the selected column.
 
@@ -63,6 +65,7 @@ If two columns are selected, a scatter plot is automatically generated comparing
 Time Series / Track Signals
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 When viewing track data, you can visualize signals over time:
+
 - **Plot instantaneous...** (``Ctrl+I``): Switches the plotting mode to show track signals when rows are selected, allowing you to see the temporal evolution of metrics for selected cells.
 
 Track Collapsing
@@ -73,17 +76,20 @@ One of the most powerful features is the ability to aggregate data at the track 
 Global Operation
 ~~~~~~~~~~~~~~~~
 Collapse the entire track into a single value using an aggregation function:
+
 - **Operations**: `mean`, `median`, `min`, `max`, `first`, `last`, `prod`, `sum`.
 - **Example**: Calculate the *max* intensity or *mean* speed of a cell over its entire track.
 
 @ Event Time
 ~~~~~~~~~~~~
 Extract measurement values at a specific event time.
+
 - **Use case**: "What was the cell's area *at the moment of division* (t0)?"
 - Requires event times (columns starting with `t_` or `t0`) to be present in the data.
 
 Per Status
 ~~~~~~~~~~
 Aggregate measurements independently for each cell state/status.
+
 - **Use case**: "What is the mean speed of the cell while it is in *G1 phase* vs *S phase*?"
 - Requires status/classification columns.
