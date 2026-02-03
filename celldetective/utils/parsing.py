@@ -392,6 +392,11 @@ def extract_cols_from_query(query: str):
     # 2. Remove backtick sections so they don't get double-counted
     cleaned_query = re.sub(backtick_pattern, "", query)
 
+    # 2b. Remove quoted strings (double and single quotes) so string literals
+    #     like "W1" or 'W1' are not mistakenly parsed as column names
+    cleaned_query = re.sub(r'"[^"]*"', "", cleaned_query)
+    cleaned_query = re.sub(r"'[^']*'", "", cleaned_query)
+
     # 3. Extract bare identifiers from the remaining string
     identifier_pattern = r"\b([A-Za-z_]\w*)\b"
     bare = set(re.findall(identifier_pattern, cleaned_query))
