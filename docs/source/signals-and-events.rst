@@ -88,6 +88,10 @@ Here are some keyboard shortcuts to facilitate single-cell annotations with the 
 +---------------------+-----------------------------------------------+            
 | f                   | show the first frame                          |
 +---------------------+-----------------------------------------------+
+| Space               | play/stop animation                           |
++---------------------+-----------------------------------------------+
+| Ctrl+P              | open interactive signal plotter               |
++---------------------+-----------------------------------------------+
 | Esc                 | cancel cell selection                         |
 +---------------------+-----------------------------------------------+
 | Del                 | mark cell for deletion                        |
