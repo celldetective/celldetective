@@ -5,6 +5,7 @@ from celldetective import get_logger
 
 logger = get_logger(__name__)
 
+
 class LocalCorrectionLayout(BackgroundFitCorrectionLayout):
     """docstring for ClassName"""
 
@@ -57,11 +58,12 @@ class LocalCorrectionLayout(BackgroundFitCorrectionLayout):
                 n_channels=len(self.channel_names),
                 target_channel=self.channels_cb.currentIndex(),
                 edge_range=(0, 30),
-                initial_edge=int(thresh),
+                initial_edge=-int(thresh),
                 invert=True,
                 window_title="Set an edge distance to estimate local intensity",
                 channel_cb=False,
                 PxToUm=1,
+                single_value_mode=True,
             )
             self.viewer.show()
 

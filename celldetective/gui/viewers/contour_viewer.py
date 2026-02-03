@@ -198,7 +198,12 @@ class CellEdgeVisualizer(StackVisualizer):
     def set_measurement_in_parent_le(self):
         # Set the edge size in the parent QLineEdit
 
-        self.parent_le.setText(str(int(self.edge_slider.value())))
+        slider_val = self.edge_slider.value()
+        if isinstance(slider_val, tuple):
+            val = max(abs(slider_val[0]), abs(slider_val[1]))
+            self.parent_le.setText(str(int(val)))
+        else:
+            self.parent_le.setText(str(int(slider_val)))
         self.close()
 
     def set_measurement_in_parent_list(self):
