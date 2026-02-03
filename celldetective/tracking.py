@@ -841,7 +841,9 @@ def interpolate_time_gaps(
     )
     trajectories.reset_index(drop=True, inplace=True)
     trajectories[column_labels["time"]] = np.round(
-        trajectories[column_labels["time"]].astype("int64").astype(float) / 10**9, 9
+        (trajectories[column_labels["time"]] - pd.Timestamp("1970-01-01"))
+        / pd.Timedelta("1s"),
+        9,
     )
     # trajectories[column_labels['time']] = trajectories[column_labels['time']].astype('int64')
     trajectories.sort_values(
