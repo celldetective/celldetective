@@ -15,9 +15,24 @@ from celldetective.gui.InitWindow import AppInitWindow
 from celldetective.gui.settings._settings_measurements import SettingsMeasurements
 from celldetective import get_software_location
 from unittest.mock import patch
+from PyQt5.QtWidgets import QApplication
+import time
 
 
 software_location = get_software_location()
+
+
+def safe_wait(ms):
+    """Safe wait that uses processEvents to avoid Windows access violations.
+
+    On Windows CI, qtbot.wait() can cause access violations due to race
+    conditions with the tqdm monitor thread. This helper processes events
+    without blocking in the Qt event loop.
+    """
+    end_time = time.time() + ms / 1000.0
+    while time.time() < end_time:
+        QApplication.processEvents()
+        time.sleep(0.01)  # Small sleep to avoid CPU spinning
 
 
 @pytest.fixture(autouse=True)
@@ -91,7 +106,7 @@ class TestMeasurementSettingsUI:
         with patch.object(cp.well_list, "getSelectedIndices", return_value=[0]):
             with patch.object(cp.position_list, "getSelectedIndices", return_value=[0]):
                 cp.update_position_options()
-                qtbot.wait(500)
+                safe_wait(500)
 
                 # Click to open measurement settings
                 qtbot.mouseClick(p0.measurements_config_btn, QtCore.Qt.LeftButton)
@@ -129,7 +144,7 @@ class TestFeatureSettings:
         with patch.object(cp.well_list, "getSelectedIndices", return_value=[0]):
             with patch.object(cp.position_list, "getSelectedIndices", return_value=[0]):
                 cp.update_position_options()
-                qtbot.wait(500)
+                safe_wait(500)
 
                 qtbot.mouseClick(p0.measurements_config_btn, QtCore.Qt.LeftButton)
 
@@ -166,7 +181,7 @@ class TestFeatureSettings:
         with patch.object(cp.well_list, "getSelectedIndices", return_value=[0]):
             with patch.object(cp.position_list, "getSelectedIndices", return_value=[0]):
                 cp.update_position_options()
-                qtbot.wait(500)
+                safe_wait(500)
 
                 qtbot.mouseClick(p0.measurements_config_btn, QtCore.Qt.LeftButton)
 
@@ -181,7 +196,7 @@ class TestFeatureSettings:
 
                 initial_count = settings.features_list.list_widget.count()
                 settings.add_feature_btn.click()
-                qtbot.wait(100)
+                safe_wait(100)
 
                 new_count = settings.features_list.list_widget.count()
                 assert new_count >= initial_count
@@ -208,7 +223,7 @@ class TestContourSettings:
         with patch.object(cp.well_list, "getSelectedIndices", return_value=[0]):
             with patch.object(cp.position_list, "getSelectedIndices", return_value=[0]):
                 cp.update_position_options()
-                qtbot.wait(500)
+                safe_wait(500)
 
                 qtbot.mouseClick(p0.measurements_config_btn, QtCore.Qt.LeftButton)
 
@@ -241,7 +256,7 @@ class TestContourSettings:
         with patch.object(cp.well_list, "getSelectedIndices", return_value=[0]):
             with patch.object(cp.position_list, "getSelectedIndices", return_value=[0]):
                 cp.update_position_options()
-                qtbot.wait(500)
+                safe_wait(500)
 
                 qtbot.mouseClick(p0.measurements_config_btn, QtCore.Qt.LeftButton)
 
@@ -256,7 +271,7 @@ class TestContourSettings:
 
                 initial_count = settings.contours_list.list_widget.count()
                 settings.add_contour_btn.click()
-                qtbot.wait(100)
+                safe_wait(100)
 
                 new_count = settings.contours_list.list_widget.count()
                 assert new_count >= initial_count
@@ -283,7 +298,7 @@ class TestHaralickTextureSettings:
         with patch.object(cp.well_list, "getSelectedIndices", return_value=[0]):
             with patch.object(cp.position_list, "getSelectedIndices", return_value=[0]):
                 cp.update_position_options()
-                qtbot.wait(500)
+                safe_wait(500)
 
                 qtbot.mouseClick(p0.measurements_config_btn, QtCore.Qt.LeftButton)
 
@@ -316,7 +331,7 @@ class TestHaralickTextureSettings:
         with patch.object(cp.well_list, "getSelectedIndices", return_value=[0]):
             with patch.object(cp.position_list, "getSelectedIndices", return_value=[0]):
                 cp.update_position_options()
-                qtbot.wait(500)
+                safe_wait(500)
 
                 qtbot.mouseClick(p0.measurements_config_btn, QtCore.Qt.LeftButton)
 
@@ -335,7 +350,7 @@ class TestHaralickTextureSettings:
 
                 # Enable Haralick
                 settings.activate_haralick_btn.setChecked(True)
-                qtbot.wait(100)
+                safe_wait(100)
 
                 # Now options should be enabled
                 assert settings.haralick_channel_choice.isEnabled()
@@ -360,7 +375,7 @@ class TestHaralickTextureSettings:
         with patch.object(cp.well_list, "getSelectedIndices", return_value=[0]):
             with patch.object(cp.position_list, "getSelectedIndices", return_value=[0]):
                 cp.update_position_options()
-                qtbot.wait(500)
+                safe_wait(500)
 
                 qtbot.mouseClick(p0.measurements_config_btn, QtCore.Qt.LeftButton)
 
@@ -373,7 +388,7 @@ class TestHaralickTextureSettings:
 
                 settings = p0.settings_measurements
                 settings.activate_haralick_btn.setChecked(True)
-                qtbot.wait(100)
+                safe_wait(100)
 
                 # Should have channel options
                 assert settings.haralick_channel_choice.count() >= 1
@@ -381,7 +396,7 @@ class TestHaralickTextureSettings:
                 # Change channel
                 if settings.haralick_channel_choice.count() > 1:
                     settings.haralick_channel_choice.setCurrentIndex(1)
-                    qtbot.wait(50)
+                    safe_wait(50)
                     assert settings.haralick_channel_choice.currentIndex() == 1
 
                 settings.close()
@@ -402,7 +417,7 @@ class TestHaralickTextureSettings:
         with patch.object(cp.well_list, "getSelectedIndices", return_value=[0]):
             with patch.object(cp.position_list, "getSelectedIndices", return_value=[0]):
                 cp.update_position_options()
-                qtbot.wait(500)
+                safe_wait(500)
 
                 qtbot.mouseClick(p0.measurements_config_btn, QtCore.Qt.LeftButton)
 
@@ -415,7 +430,7 @@ class TestHaralickTextureSettings:
 
                 settings = p0.settings_measurements
                 settings.activate_haralick_btn.setChecked(True)
-                qtbot.wait(100)
+                safe_wait(100)
 
                 # Initially in percentile mode
                 assert settings.percentile_mode is True
@@ -425,7 +440,7 @@ class TestHaralickTextureSettings:
 
                 # Toggle to absolute mode
                 settings.haralick_normalization_mode_btn.click()
-                qtbot.wait(100)
+                safe_wait(100)
 
                 assert settings.percentile_mode is False
                 assert "value" in settings.haralick_percentile_min_lbl.text().lower()
@@ -452,7 +467,7 @@ class TestIsotropicMeasurementSettings:
         with patch.object(cp.well_list, "getSelectedIndices", return_value=[0]):
             with patch.object(cp.position_list, "getSelectedIndices", return_value=[0]):
                 cp.update_position_options()
-                qtbot.wait(500)
+                safe_wait(500)
 
                 qtbot.mouseClick(p0.measurements_config_btn, QtCore.Qt.LeftButton)
 
@@ -489,7 +504,7 @@ class TestIsotropicMeasurementSettings:
         with patch.object(cp.well_list, "getSelectedIndices", return_value=[0]):
             with patch.object(cp.position_list, "getSelectedIndices", return_value=[0]):
                 cp.update_position_options()
-                qtbot.wait(500)
+                safe_wait(500)
 
                 qtbot.mouseClick(p0.measurements_config_btn, QtCore.Qt.LeftButton)
 
@@ -504,7 +519,7 @@ class TestIsotropicMeasurementSettings:
 
                 initial_count = settings.radii_list.list_widget.count()
                 settings.add_radius_btn.click()
-                qtbot.wait(100)
+                safe_wait(100)
 
                 new_count = settings.radii_list.list_widget.count()
                 assert new_count >= initial_count
@@ -527,7 +542,7 @@ class TestIsotropicMeasurementSettings:
         with patch.object(cp.well_list, "getSelectedIndices", return_value=[0]):
             with patch.object(cp.position_list, "getSelectedIndices", return_value=[0]):
                 cp.update_position_options()
-                qtbot.wait(500)
+                safe_wait(500)
 
                 qtbot.mouseClick(p0.measurements_config_btn, QtCore.Qt.LeftButton)
 
@@ -560,7 +575,7 @@ class TestIsotropicMeasurementSettings:
         with patch.object(cp.well_list, "getSelectedIndices", return_value=[0]):
             with patch.object(cp.position_list, "getSelectedIndices", return_value=[0]):
                 cp.update_position_options()
-                qtbot.wait(500)
+                safe_wait(500)
 
                 qtbot.mouseClick(p0.measurements_config_btn, QtCore.Qt.LeftButton)
 
@@ -575,7 +590,7 @@ class TestIsotropicMeasurementSettings:
 
                 initial_count = settings.operations_list.list_widget.count()
                 settings.add_op_btn.click()
-                qtbot.wait(100)
+                safe_wait(100)
 
                 new_count = settings.operations_list.list_widget.count()
                 assert new_count >= initial_count
@@ -602,7 +617,7 @@ class TestSpotDetectionSettings:
         with patch.object(cp.well_list, "getSelectedIndices", return_value=[0]):
             with patch.object(cp.position_list, "getSelectedIndices", return_value=[0]):
                 cp.update_position_options()
-                qtbot.wait(500)
+                safe_wait(500)
 
                 qtbot.mouseClick(p0.measurements_config_btn, QtCore.Qt.LeftButton)
 
@@ -635,7 +650,7 @@ class TestSpotDetectionSettings:
         with patch.object(cp.well_list, "getSelectedIndices", return_value=[0]):
             with patch.object(cp.position_list, "getSelectedIndices", return_value=[0]):
                 cp.update_position_options()
-                qtbot.wait(500)
+                safe_wait(500)
 
                 qtbot.mouseClick(p0.measurements_config_btn, QtCore.Qt.LeftButton)
 
@@ -654,7 +669,7 @@ class TestSpotDetectionSettings:
 
                 # Enable spot detection
                 settings.spot_check.setChecked(True)
-                qtbot.wait(100)
+                safe_wait(100)
 
                 # Now widgets should be enabled
                 assert settings.spot_channel.isEnabled()
@@ -679,7 +694,7 @@ class TestSpotDetectionSettings:
         with patch.object(cp.well_list, "getSelectedIndices", return_value=[0]):
             with patch.object(cp.position_list, "getSelectedIndices", return_value=[0]):
                 cp.update_position_options()
-                qtbot.wait(500)
+                safe_wait(500)
 
                 qtbot.mouseClick(p0.measurements_config_btn, QtCore.Qt.LeftButton)
 
@@ -692,16 +707,16 @@ class TestSpotDetectionSettings:
 
                 settings = p0.settings_measurements
                 settings.spot_check.setChecked(True)
-                qtbot.wait(100)
+                safe_wait(100)
 
                 # Set diameter
                 settings.diameter_value.setText("11")
-                qtbot.wait(50)
+                safe_wait(50)
                 assert settings.diameter_value.text() == "11"
 
                 # Set threshold
                 settings.threshold_value.setText("0.5")
-                qtbot.wait(50)
+                safe_wait(50)
                 assert settings.threshold_value.text() == "0.5"
 
                 settings.close()
@@ -726,7 +741,7 @@ class TestWriteInstructions:
         with patch.object(cp.well_list, "getSelectedIndices", return_value=[0]):
             with patch.object(cp.position_list, "getSelectedIndices", return_value=[0]):
                 cp.update_position_options()
-                qtbot.wait(500)
+                safe_wait(500)
 
                 qtbot.mouseClick(p0.measurements_config_btn, QtCore.Qt.LeftButton)
 
@@ -741,7 +756,7 @@ class TestWriteInstructions:
 
                 # Click submit to write instructions
                 settings.submit_btn.click()
-                qtbot.wait(500)
+                safe_wait(500)
 
                 # Check that instructions file was created
                 instructions_path = os.path.join(
@@ -772,7 +787,7 @@ class TestWriteInstructions:
         with patch.object(cp.well_list, "getSelectedIndices", return_value=[0]):
             with patch.object(cp.position_list, "getSelectedIndices", return_value=[0]):
                 cp.update_position_options()
-                qtbot.wait(500)
+                safe_wait(500)
 
                 qtbot.mouseClick(p0.measurements_config_btn, QtCore.Qt.LeftButton)
 
@@ -787,14 +802,14 @@ class TestWriteInstructions:
 
                 # Enable Haralick with custom settings
                 settings.activate_haralick_btn.setChecked(True)
-                qtbot.wait(100)
+                safe_wait(100)
 
                 settings.haralick_distance_le.setText("3")
                 settings.haralick_n_gray_levels_le.setText("128")
 
                 # Submit
                 settings.submit_btn.click()
-                qtbot.wait(500)
+                safe_wait(500)
 
                 instructions_path = os.path.join(
                     exp_dir, "configs", f"measurement_instructions_{p0.mode}.json"
@@ -823,7 +838,7 @@ class TestWriteInstructions:
         with patch.object(cp.well_list, "getSelectedIndices", return_value=[0]):
             with patch.object(cp.position_list, "getSelectedIndices", return_value=[0]):
                 cp.update_position_options()
-                qtbot.wait(500)
+                safe_wait(500)
 
                 qtbot.mouseClick(p0.measurements_config_btn, QtCore.Qt.LeftButton)
 
@@ -838,14 +853,14 @@ class TestWriteInstructions:
 
                 # Enable spot detection
                 settings.spot_check.setChecked(True)
-                qtbot.wait(100)
+                safe_wait(100)
 
                 settings.diameter_value.setText("9")
                 settings.threshold_value.setText("0.3")
 
                 # Submit
                 settings.submit_btn.click()
-                qtbot.wait(500)
+                safe_wait(500)
 
                 instructions_path = os.path.join(
                     exp_dir, "configs", f"measurement_instructions_{p0.mode}.json"
