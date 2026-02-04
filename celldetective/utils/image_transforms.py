@@ -16,7 +16,7 @@ def axes_check_and_normalize(axes, length=None, disallowed=None, return_allowed=
     S(ample), T(ime), C(hannel), Z, Y, X
     """
     allowed = "STCZYX"
-    assert axes is not None,ValueError("axis cannot be None.")
+    assert axes is not None, ValueError("axis cannot be None.")
     axes = str(axes).upper()
     consume(a in allowed for a in axes)
     disallowed is None or consume(a not in disallowed for a in axes)
@@ -107,7 +107,7 @@ def estimate_unreliable_edge(activation_protocol=[["gauss", 2], ["std", 4]]):
     None
     """
 
-    if activation_protocol == []:
+    if activation_protocol is None or activation_protocol == []:
         return None
     else:
         edge = 0
