@@ -252,10 +252,11 @@ class TestQueryValidation:
 
                 survival.process_survival()
 
-                # Should have called generic_message with error
+                # Should have called generic_message with error containing the missing column
                 mock_msg.assert_called()
                 call_arg = mock_msg.call_args[0][0]
-                assert "Query" in call_arg or "column" in call_arg.lower()
+                assert "NONEXISTENT_COLUMN" in call_arg
+                assert "not found" in call_arg.lower()
 
         survival.close()
 

@@ -16,7 +16,10 @@ from celldetective import (
     get_software_location,
 )
 from celldetective.utils.data_cleaning import extract_cols_from_table_list
-from celldetective.utils.parsing import _extract_labels_from_config
+from celldetective.utils.parsing import (
+    _extract_labels_from_config,
+    extract_cols_from_query,
+)
 from celldetective.utils.data_loaders import load_experiment_tables
 import numpy as np
 import pandas as pd
@@ -324,6 +327,14 @@ class ConfigSurvival(CelldetectiveWidget):
             try:
                 query_text = self.query_le.text()
                 if query_text != "":
+                    cols = extract_cols_from_query(query_text)
+                    missing_cols = [c for c in cols if c not in self.df.columns]
+                    if missing_cols:
+                        generic_message(
+                            f"Query error: the following columns were not found in the table:\n{missing_cols}\n\nPlease check your column names."
+                        )
+                        return None
+
                     self.df = self.df.query(query_text)
             except pd.errors.UndefinedVariableError as e:
                 logger.warning(f"Query failed - undefined variable: {e}")
