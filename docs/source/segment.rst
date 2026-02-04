@@ -28,46 +28,81 @@ In Celldetective, you may want to specifically segment up to two cell population
 Traditional segmentation
 ------------------------
 
-In many applications, cell or nucleus segmentation can be achieved through the use of filters and thresholds, without having to resort to a Deep Learning model. Adapting such a model to a new system can be time-consuming and computationally expensive, as it usually requires numerous annotations. To ensure a user-friendly experience with Celldetective, we developed a robust framework for traditional segmentation as a potent alternative to calling a Deep Learning model. 
+In many applications, cell or nucleus segmentation can be achieved through the use of filters and thresholds, without having to resort to a Deep Learning model. Adapting such a model to a new system can be time-consuming and computationally expensive, as it usually requires numerous annotations. To ensure a user-friendly experience with Celldetective, we developed a robust framework for traditional segmentation as a potent alternative to calling a Deep Learning model.
 
-We call this UI the ``Threshold Configuration Wizard``. In broad terms, this interface allows the user to define a segmentation pipeline which can be broken into the following steps: 
+We call this UI the ``Threshold Configuration Wizard`` (TCW). This interface allows you to interactively build a segmentation pipeline step-by-step.
 
-#. applying filters to activate the relevant regions in the images
-#. setting a threshold on the processed image to generate a binary segmentation
-#. using the watershed method to transform the latter into an instance segmentation 
-#. eliminating objects based on morpho-tonal features and spatial location.
+Opening the Threshold Configuration Wizard
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+1.  Select a specific position within your experiment.
+2.  In the "Segmentation" section of the Control Panel, locate the population of interest (e.g., Targets or Effectors).
+3.  Click the ``UPLOAD`` button.
+4.  Toggle the **Threshold** option.
+5.  Click the **Threshold Config Wizard** button to open the interface.
 
-.. figure:: _static/tcw.png
+.. image:: _static/tcw.png
     :align: center
     :alt: threshold_config_wizard
-    
-    **The threshold configuration wizard in action.** Application of the TCW to an image of HaCaT cell nuclei stained with DAPI from the dataset S-BSST265 [#]_  is loaded into the threshold configuration wizard of Celldetective. a) the raw image undergoes a series of preprocessing filters, namely a gauss filter with a kernel (2×2) and a standard-deviation filter with a kernel (2×2). The upper and lower thresholds on the transformed intensities are set and the image is binarized. Peak detection parameters are optimized to the size of the nuclei. b) Post-watershed application, the original image and its instance segmentation are shown on the right side panel. Single object measurements are automatically performed to facilitate the identification and removal of false-positive detections. In this application, a filter based both on area and solidity effectively eliminates nuclei truncated at the edges and smaller objects.
 
+*The Threshold Configuration Wizard interface showing preprocessing, thresholding, and object detection controls.*
 
-This output is visualized and annotated in the napari viewer [#]_ , that we completed with simple plugins to manage corrections and export annotations. 
+Configuring the Pipeline
+~~~~~~~~~~~~~~~~~~~~~~~~
 
+The wizard guides you through four main steps. Changes are applied immediately to the current frame.
 
-How to open the Threshold Configuration Wizard
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+1. Preprocessing
+^^^^^^^^^^^^^^^^
+Enhance your image to make objects easier to detect.
+*   **Add Filter:** Select a filter (e.g., ``gauss``, ``median``, ``std``) and kernel size, then click **Add**.
+*   **Remove Filter:** Double-click a filter in the list to remove it.
+*   **Apply:** Click **Apply** to see the effect on the image.
 
-To launch the TCW, set a specific position within an experiment. Then for the population of interest, click on the ``UPLOAD`` button in the segmentation section. Toggle the threshold option. Click on the ``Threshold Config Wizard`` button to open it.
+2. Thresholding
+^^^^^^^^^^^^^^^
+Binarize the image to separate foreground (cells) from background.
+*   **Slider:** Adjust the min/max sliders to define the intensity range of fit.
+*   **Histogram:** Use the histogram to identify intensity peaks. Toggle **Log scale** for better visibility of low-intensity pixels.
+*   **Fill Holes:** Keep this checked to automatically fill holes inside detected objects.
 
-Upon startup, the TCW loads the initial frame of the movie associated to the selected position, operating in virtual-stack mode where only one frame is in memory at a time. An automatic threshold binarization of the image is overlaid into the image, in semi-transparent magenta. You can choose a different channel, navigate to another time-point and re-adjust the image contrast. Once you are satisfied with the image selection, avoid modifying these settings until the configuration process is complete.
+3. Object Detection (Split / Merge)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Convert the binary mask into individual objects.
 
-Upon clicking on the ``Save`` button, all choices are written down in a ``json`` configuration file, saved automatically in a ``configs/`` sub-folder of the experiment folder, and the TCW closes automatically. The path to this configuration file is automatically loaded in the ``Upload model`` window, and it is up to you to click on ``Upload`` to effectively load it in Celldetective. 
+**Option A: Markers (Watershed)**
+Best for touching cells or nuclei.
+*   **Footprint:** Adjust the size of the local region used to find distinct peaks. Larger values merge peaks; smaller values split them.
+*   **Min Distance:** Set the minimum allowed distance between two object centers.
+*   **Run:** Click **Run** to detect markers (shown as red dots).
+*   **Watershed:** Click **Watershed** to expand markers into object boundaries.
 
+**Option B: All Objects**
+Best for well-separated objects.
+*   **Select:** Choose **all non-contiguous objects**.
+*   **Watershed:** Click **Watershed** to label all connected components directly.
 
-Apply a threshold configuration to your data
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+4. Property Filtering
+^^^^^^^^^^^^^^^^^^^^^
+Remove false positives based on morphology or intensity.
+*   **Visualize:** Use the dropdowns to plot two properties (e.g., ``area`` vs ``solidity``) on the scatter plot.
+*   **Select:** Click points on the scatter plot to highlight the corresponding object in the viewer.
+*   **Query:** Enter a filtering query in the text box (e.g., ``area > 100`` or ``solidity > 0.9``).
+*   **Filter:** Click **Submit Query** to remove objects that don't match the criteria.
 
-If you want to apply a previously defined threshold configuration pipeline to segment your cells, click on the ``UPLOAD`` button, toggle ``Threshold``, locate your config file. Click on ``Upload``.
+Saving and Applying
+~~~~~~~~~~~~~~~~~~~
 
-In the segmentation model zoo, select the ``Threshold`` option. Submit to segment your data.
+Once satisfied with the segmentation on the current frame:
+
+1.  Click **Save**. The configuration is saved as a ``.json`` file in your experiment's ``configs/`` folder.
+2.  The wizard closes, and the config file path is automatically loaded into the **Upload Model** window.
+3.  Click **Upload** to confirm.
+4.  To process the entire specific position or experiment, select **Threshold** in the segmentation zoo and click **Submit**.
 
 .. note::
     
-    You have to reload the threshold config file, everytime you reopen an experiment
+    You must reload the threshold config file if you reopen the experiment later.
 
 
 Deep learning segmentation

@@ -14,7 +14,7 @@ tqdm
 mahotas
 fonticon-materialdesignicons6
 art
-lifelines
+lifelines<0.30.0  # Pin for Python 3.9 compat (datetime.UTC added in 3.11)
 setuptools
 scipy
 seaborn
