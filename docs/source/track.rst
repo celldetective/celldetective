@@ -17,28 +17,40 @@ This modules takes the instance segmentation label images, the original microsco
 Adapt the tracker to your cells
 -------------------------------
 
-After segmentation, tracking the cells is a necessary step to attribute a unique identity to each cell in a movie. Since cells exhibit complex motion that often goes well beyond the scope of Brownian motion, we decided to interface the state-of-the art tracking method bTrack [#]_ , exploiting both the motion history and the appearance of the cells to make the best tracking hypotheses. This tracker requires a configuration file to set all of the motion and tracklet connection hypotheses.
+After segmentation, tracking attributes a unique identity to each cell throughout the movie. Celldetective supports two tracking engines: **bTrack** (default, advanced) and **trackpy** (simple, Brownian motion).
 
-The settings button in the tracking module allows to :
+Click the **Settings** button in the Tracking module to configure the pipeline.
 
-#. fine-tune the bTrack configuration
-#. pilot feature measurements to help the tracker
-#. define a post-processing pipeline on the trajectories
+1. Tracker Selection
+~~~~~~~~~~~~~~~~~~~~
+
+*   **bTrack** [#]_: A Bayesian tracker that uses both motion prediction (Kalman filter) and visual features to link detections. It is best for complex cell behaviors (division, apoptosis) and crowded environments.
+*   **trackpy**: A particle-tracking algorithm based on Crocker-Grier. Best for simple Brownian motion.
+    *   **Search range [px]**: Maximum distance a cell can move between frames.
+    *   **Memory [frames]**: Number of frames a particle can "disappear" and still be linked if it reappears.
+
+2. Feature Extraction
+~~~~~~~~~~~~~~~~~~~~~
+
+You can extract morphological and intensity features during tracking.
+For a complete list of available features and settings (including Haralick texture parameters), see the :ref:`Tracking Settings Reference <ref_tracking_settings>`.
+
+3. Post-Processing
+~~~~~~~~~~~~~~~~~~
+
+Clean up trajectories before saving. Options include filtering by track length, filling gaps, and cleaning start/end artifacts.
+See the :ref:`Post-Processing Reference <ref_tracking_settings>` for details.
 
 .. figure:: _static/tracking-options.png
     :width: 400px
     :align: center
     :alt: tracking_options
     
-    **GUI to configure the tracking parameters.** A bTrack configuration can be modified in place, or other configurations can be loaded. Features can be passed to the tracker. Post processing modules clean up the raw trajectories for subsequent analysis.
+    **GUI to configure the tracking parameters.**
 
+**Execution**
 
-.. note::
-    
-    You can import a bTrack configuration produced with the napari-bTrack plugin
-
-
-Once the tracking configuration is properly set, click on ``Save``, tick the ``TRACK`` option in the control panel and execute. A subprocess loads the multichannel images and the masks one frame at a time, to extract all cell locations. If you enabled features, they are measured along the way. Then the bTrack configuration is loaded, and the cell locations (with features) are passed to the tracker. The potential features are all normalized independently, using a standard scaler. The tracking mode switches from ``motion`` to ``motion + visual`` depending on the presence of features. The tracking is performed and a ``csv`` table containing the tracks is generated in the ``output/tables`` subfolder of each position.
+Once configured, click **Save**. Tick the ``TRACK`` option in the control panel and click **Submit**. Celldetective will process the movie, extract features, run the tracker, and save a ``.csv`` file in ``output/tables``.
 
 Visualization
 -------------

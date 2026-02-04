@@ -13,52 +13,9 @@ The Table UI provides a spreadsheet-like view of your data with extensive capabi
 Menu Actions
 ------------
 
-The menu bar provides several categories of actions:
+The menu bar provides access to file operations, column editing, and mathematical transformations.
 
-File
-~~~~
-
-- **Save as...** (``Ctrl+S``): Save the current table to a CSV file.
-- **Save inplace...**: Save the table back to its original location (if applicable). Use this only if you created new measurements that you would like to keep with the data (e.g., a difference of times).
-- **Plot...** (``Ctrl+P``): Open the plotting interface for 1D/2D data visualization.
-- **Plot instantaneous...** (``Ctrl+I``): Toggle between static plots and interactive track signal plots.
-- **Collapse tracks...** (``Ctrl+G``): Open the dialogue to aggregate track data (see `Track Collapsing`_).
-- **Collapse pairs in neighborhood...**: (For pair tables) Aggregate interaction data based on defined neighborhoods.
-- **Group by frames...** (``Ctrl+T``): Aggregate data by time frame to see population-level temporal trends.
-- **Query...**: Filter the table using SQL-like queries.
-
-  .. tip::
-      The query syntax follows pandas' ``query()`` method.
-      
-      **Examples:**
-      
-      - Filter by value: ``area > 500``
-      - Combine conditions: ``area > 500 and mean_intensity < 200``
-      - Filter by category: ``cell_type == 'Tumor'``
-
-
-Edit
-~~~~
-
-- **Delete...** (``Del``): Delete selected columns.
-- **Rename...**: Rename the selected column.
-
-Math
-~~~~
-Perfom mathematical operations on columns:
-
-- **Calibrate...** (``Ctrl+C``): Apply a calibration factor to a column.
-- **Merge states...**: Merge multiple classification/status columns.
-- **Differentiate...** (``Ctrl+D``): Compute the derivative of a column (requires tracks).
-
-  .. note::
-     The derivative is computed track by track. The implementation allows you to choose a **window size** (integer number of frames) and a **mode** (``forward``, ``backward``, or ``bi``-directional) for the finite difference computation.
-     
-     See the tutorial :doc:`/how-to-guides/advanced/compute-derivative-measurement` for a step-by-step example.
-
-- **Absolute value...**: Compute the absolute value of a column.
-- **Log (decimal)...**: Compute the base-10 logarithm of a column.
-- **Divide/Multiply/Add/Subtract...**: Perform arithmetic operations between two selected columns.
+For a complete list of commands (including Keyboard Shortcuts), see the :ref:`Table Explorer Menu Reference <ref_table_explorer_menus>`.
 
 Plotting
 --------

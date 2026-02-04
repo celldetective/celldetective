@@ -81,11 +81,9 @@ Configuration file example
 Configuration file tags
 ~~~~~~~~~~~~~~~~~~~~~~~
 
-- ``Populations``: defines the names and number of populations to study at single-cell resolution.
-- ``MovieSettings``: defines image-related parameters such as spatio-temporal calibration, stack length, and filename prefix.
-- ``Channels``: specifies the name and order of channels in the stack.
-- ``Labels``: provides additional descriptive information for each well in the experiment. You can add extra-fields with the same comma-separated format. The information will be propagated to the single-cell data in each respective each well. 
-- ``Metadata``: extra information related to the experiment. You can add extra fields which will be propagated to the single-cell data.
+The configuration file defines the structure of your experiment (populations, image parameters, channel names, etc.).
+
+For a detailed explanation of each tag (``[Populations]``, ``[MovieSettings]``, etc.), see the :ref:`Experiment Configuration Reference <ref_experiment_config>`.
 
 Quick access to the experiment folder
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

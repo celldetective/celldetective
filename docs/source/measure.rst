@@ -127,6 +127,26 @@ This is done via the **Classifier Widget**, which allows you to define condition
 
 Once a classification is applied (with **Time correlated** unchecked), it creates a static attribute that can be explored in the **Static Measurements Annotator**.
 
+Neighborhood measurements
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Neighborhood measurements quantify the spatial relationships between cells. This is essential for studying cell-cell interactions (e.g., immune cell targeting, tissue organization).
+
+To configure this, select **Neighborhood** in the measurement settings. The configuration window allows you to define a "Reference" population and a "Neighbor" population.
+For a complete list of configuration options (Filters, Measurement Types, etc.), see the :ref:`Neighborhood Measurement Reference <ref_neighborhood_settings>`.
+
+**Workflow**
+
+1.  Select the **Reference** population (e.g., Target cells) and **Neighbor** population (e.g., Effector cells).
+2.  Choose the measurement type:
+    *   **Distance Threshold**: For simple radial proximity.
+    *   **Mask Contact**: For detecting precise cell boundary contacts.
+3.  Click **Set** to save the configuration.
+
+**3. Output**
+
+The software generates new columns in the reference population's table, such as ``n_neighbors`` (count) or specific interaction IDs, depending on the chosen metrics.
+
 Static measurements annotation
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 

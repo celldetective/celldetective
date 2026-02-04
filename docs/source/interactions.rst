@@ -11,23 +11,9 @@ You must perform the segmentation and measurements of the cell populations for w
 Neighborhood
 ------------
 
-Configure a neighborhood measurement
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-If you want to compute a neighborhood you can go to the ``INTERACTION``  section of the control panel and open the settings window associated with the ``ISOTROPIC DISTANCE THRESHOLD`` or ``MASK CONTACT`` option. 
-
-.. figure:: _static/neigh-ui.png
-    :align: center
-    :alt: neigh-ui
+Neighborhood analysis is configured in the **Measurements** module, allowing you to define reference and neighbor populations and choose detection methods (Distance Threshold or Mask Contact).
     
-    **GUI for neighborhood configuration.** After setting the reference and neighbor populations, which can be identical, the user defines as many distances as there are neighborhood distances of interest.
-
-1) Define the reference and neighbor populations. 
-2) (Optional): attach a status to the neighbor population. This will allow a decomposition of the neighbor counts with respect to that status (as *count_s0* for the neighbors with a status equal to 0 and *count_s1* for the neighbors with a status equal to 1). An invert button allows you to switch 0 and 1 in the status. 
-3) (Optional): enable the computation of the cumulated presence. This only makes sense if the neighbor population is tracked.
-4) (Optional): attach an event time to the reference population. This allows the computation of the mean number of neighbors (in status = 1) up to the event time for the reference cells. 
-5) Set the distance. We recommend using the viewer on the right side to tune directly on the image the neighborhood distance of interest. 
-6) (Optional): clear the previous neighborhoods (this will erase any previously existing neighborhood computation as well as subsequent pair tables and annotations).
+For full configuration instructions, see the :doc:`Neighborhood Measurements Guide <measure>`.
 
 
 Pair measurements

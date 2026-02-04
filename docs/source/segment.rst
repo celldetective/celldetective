@@ -148,21 +148,9 @@ If you have trained a model (using Celldetective or externally) or want to reuse
 Configuration Fields
 ^^^^^^^^^^^^^^^^^^^^
 
-**General Settings (All Models)**
+The import window creates a configuration file ensuring the model receives data correctly.
 
-*   **Input spatial calibration**: The pixel resolution (in microns) of the images the model was *trained on*. Celldetective will automatically rescale your experimental images to match this resolution before prediction.
-*   **Channel Mapping**: Map the model's expected inputs (e.g., "Channel 1", "Cyto", "Nuclei") to your experiment's channels (e.g., "TRITC", "DAPI"). Select ``--`` to ignore a channel.
-*   **Normalization**:
-    *   **Mode**: Check to standard scale (0-1) based on percentiles. Uncheck to pass raw values.
-    *   **Clip**: Check to clip values outside the chosen percentile range.
-    *   **Range**: Define the min/max percentiles for normalization (e.g., 1.0 - 99.8).
-
-**Cellpose Specifics**
-
-*   **Cell Diameter [px]**: The average diameter of objects in the *training data*. 
-    *   *Note*: If set to 30.0 (default), Cellpose assumes standard scaling. If your model was trained on different sized objects without resizing, provide that diameter here to ensure correct rescaling.
-*   **Cellprob Threshold**: Threshold for the model's confidence map (default 0.0). Lower values detect more objects (and potential noise).
-*   **Flow Threshold**: Threshold for flow error (default 0.4). Increase to accept more irregular shapes; decrease to enforce strict shapes.
+For a detailed list of all configuration parameters (Spatial Calibration, Channel Mapping, Normalization, etc.), see the :ref:`Segmentation Data Import Reference <ref_segmentation_settings>`.
 
 **Finishing Up**
 
@@ -177,7 +165,22 @@ The imported models are now available in the segmentation model zoo.
 2. Select your model from the dropdown list.
 3. Click **Submit** to start processing.
 
-If employing a generalist model, ensure the channel mapping matches your current experiment's setup. Image rescaling and normalization are handled automatically based on the configuration you created during import.
+If employing a generalist model (e.g., ``SD_versatile_fluo``), a **Channel Selection** window will appear after you click **Submit**.
+You must explicitly map your experiment's channels to the model's expected inputs to ensure the correct data is processed:
+
+*   **SD_versatile_fluo**: Select the channel containing the nuclei (e.g., DAPI or Hoechst).
+*   **SD_versatile_he**: Select the corresponding RGB channels (if dealing with H&E staining).
+
+Image rescaling and normalization are handled automatically based on the internal model configuration.
+
+Similarly, for generalist Cellpose models (e.g., ``CP_cyto2``, ``CP_nuclei``), a parameter configuration window will open.
+
+*   **Channel Mapping**: Select the "Cytoplasm" (channel 1) and "Nuclei" (channel 2, optional) channels from your experiment.
+*   **Diameter [px]**: The expected cell diameter in pixels.
+    *   *Interactive Tool*: Click the **eye icon** next to the diameter field to open a specific viewer. Adjust the diameter slider until the red circle matches your cells' size. This ensures the model receives images scaled correctly for its training parameters.
+*   **Thresholds**:
+    *   **Flow threshold**: Controls shape consistency. Maximum error allowed for the flows. Increase (e.g., > 0.4) if cells are missing; decrease to strictly enforce shape constraints.
+    *   **Cellprob threshold**: Controls detection sensitivity. Decrease (e.g., < 0.0) to detect fainter or less confident objects.
 
 
 Mask visualization and annotations

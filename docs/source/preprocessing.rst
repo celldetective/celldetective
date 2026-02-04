@@ -31,48 +31,26 @@ In-software preprocessing
 Sometimes, preprocessing your images directly within Celldetective can simplify segmentation and produce more controlled measurements. The **Preprocessing** module allows you to batch-correct stacks through the following steps:
 
 
-#. **Select a target channel** and define correction parameters (manually or visually).
+**Workflow: Applying a correction**
 
-#. **Add the correction protocol** to the list.
+1.  **Select a target channel** and define correction parameters (manually or visually).
+2.  **Add the correction protocol** to the list.
+3.  Repeat for other channels if needed.
+4.  **Submit** to apply corrections.
 
-#. Repeat the process for other channels of interest.
-
-#. **Submit** to apply corrections sequentially:
-
-    - Protocol 1 is applied to all stacks matching the movie_prefix.
-
-    - The corrected stacks are saved with the prefix ``Corrected_``.
-    
-    - For subsequent protocols, Celldetective uses the ``Corrected_`` stacks without adding another prefix.
-
+The corrected stacks are saved with the prefix ``Corrected_``.
 
 Background correction
 ~~~~~~~~~~~~~~~~~~~~~
 
-Celldetective includes two techniques for background correction. The first is fit-based, where the idea is to fit a background for each image, where cells are excluded, with a 2D model (plane, paraboloid), and apply it. The second leverages the multiple-position organization of the experiment folder to build a median background, without cells.
+**Concept**
 
+Background correction removes uneven illumination or artifacts. Celldetective offers two approaches:
 
-#. **Model fit**: 
+1.  **Model Fit**: Fits a 2D mathematical surface (plane/paraboloid) to the image, excluding cells. Best for single images with clear background.
+2.  **Model Free**: Computes a median background from multiple positions or timeframes. Best for batch processing well plates.
 
-    - Fits a 2D background model (plane or paraboloid) to exclude cells.
-
-    - Masks non-homogeneous parts using a Gaussian blur and standard-deviation filter.
-
-    - Allows you to set a threshold on the transformed image using the viewer.
-
-    - The background can be subtracted (with or without clipping) or divided by the image.
-
-#. **Model free**: 
-
-    - Uses the multiple-position structure of the experiment folder to create a median background without cells.
-
-    - For time-series data, select a frame range with minimal cell coverage, or use the tiles option to consider all frames as background estimators.
-
-    - A median projection over the positions is performed to estimate the background for each well.
-    
-    - A QC slider helps monitor the generated background, including identifying NaN pixels (indicating uncertain areas). If too many NaN pixels are present, reduce the threshold and repeat the process.
-    
-    - This background can be subtracted or divided (with or without clipping) from the images. Optimization can minimize intensity differences between the background region and the generated background.
+For technical details on these methods (Thresholds, Tile options), see the :ref:`Preprocessing Protocols Reference <ref_preprocessing_settings>`.
 
 
 Channel offset correction

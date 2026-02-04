@@ -25,31 +25,12 @@ Despite notable efforts in the development of user-friendly software that integr
 * **Accessible and open source** : Celldetective does not require any coding skills. The software, its models and datasets are made fully open source to encourage transparency and reproducibility.
 
 
-System requirements
+ System requirements
 -------------------
 
-Hardware requirements
-~~~~~~~~~~~~~~~~~~~~~
+Celldetective is designed to run on standard workstations as well as high-performance clusters. It supports GPU acceleration (NVIDIA) for Deep Learning tasks but can run fully on CPU.
 
-The software was tested on several machines, including:
-
-- An Intel(R) Core(TM) i9-10850K CPU @ 3.60GHz, with a single NVIDIA GeForce RTX 3070 (8 Gb of memory) and 16 Gb of memory
-- An Intel(R) Core(TM) i7-9750H CPU @ 2.60 GHz, with 16 Gb of memory
-
-In GPU mode, succesive segmentation and DL signal analysis could be performed without saturating the GPU memory thanks to the subprocess formulation for the different modules. The GPU can be disabled in the startup window. The software does not require a GPU (but model inference will be longer).
-
-The memory must be sufficient to load a movie stack at once in order to visualize it in napari. Otherwise, processing is performed frame by frame, therefore the memory required is extremely low. 
-
-
-Software requirements
-~~~~~~~~~~~~~~~~~~~~~
-
-The software was developed simulateously on Ubuntu 20.04 and Windows 11. It was tested on MacOS, but Tensorflow installation can rquire extra steps. 
-
-- Linux: Ubuntu 20.04.6 LTS (Focal Fossa) (not tested on ulterior versions)
-- Windows: Windows 11 Home 23H2
-
-To use the software, you must install python, *e.g.* through `Anaconda <https://www.anaconda.com/download>`_. We developed and tested the software in Python 3.9.18. 
+For detailed hardware and software specifications, see the :ref:`System Requirements Reference <reference/system-requirements>`. 
 
 
 Bibliography

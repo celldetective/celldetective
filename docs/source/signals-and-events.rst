@@ -12,7 +12,23 @@ Perform segmentation, tracking and measurements for either target or effector ce
 Deep-learning signal analysis
 -----------------------------
 
-We provide several Deep-learning models that take select single-cell signals as their input and determine the event class and time of event (if any) for all cells. Exactly as for the segmentation models, we provide a zoo of such models that can be applied to positions or wells, in the signal analysis section. The result can be corrected and monitored in the signal annotator UI. 
+We provide several Deep-learning models that take select single-cell signals as their input and determine the event class and time of event (if any) for all cells. Exactly as for the segmentation models, we provide a zoo of such models that can be applied to positions or wells.
+
+**Workflow**
+
+1.  Navigate to the **Signal Analysis** section in the control panel.
+2.  Review the **Available Models** list and select the appropriate one.
+3.  Click **Submit**.
+
+**Signal Mapping**
+
+If the model requires specific input signals (e.g., "Nuclei Intensity", "Cytoplasm Morphology"), a **Signals** configuration window will appear.
+You must map the model's **Required Inputs** to the columns available in your current measurement tables.
+
+*   **Left Column**: Shows the input name expected by the model.
+*   **Right Dropdown**: Select the corresponding column from your data (e.g., map "nuc_int" to "Mean_Intensity_RED").
+
+Click **Set** to launch the prediction process. The results (event class and time) will be added to your data tables. 
 
 
 Threshold-based event characterization

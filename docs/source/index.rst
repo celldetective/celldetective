@@ -60,6 +60,10 @@ Contents
 .. toctree::
    :caption: Reference:
 
+   reference/settings
+   reference/menus
+   reference/installation
+   reference/system-requirements
    reference/glossary
    API
    acknowledegments

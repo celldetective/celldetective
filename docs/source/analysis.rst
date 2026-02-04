@@ -33,35 +33,15 @@ Configure a survival function
 
 Go to the ``Analyze`` tab and click on the ``plot survival`` button to open the configuration window.
 
-**1. Data Selection**
+**Configuration**
 
-   * **Population**: Select the cell population to analyze (e.g., "targets", "effectors"). You can also select "pairs" to analyze interaction durations (requires prior pair measurement).
-   * **Time of Reference**: Define the starting point (:math:`T=0`) for the survival analysis.
-     
-     * `t_firstdetection`: The time the cell first appeared in the movie.
-     * `t0`: Absolute time 0 of the experiment.
-     * Any other event time column (e.g., `t_mitosis`).
-   * **Time of Interest**: Define the event that marks the "death" or end of the state being measured.
-     
-     * `t_death`: Time of cell death.
-     * Any other event time column.
-     * **Note**: The reference time and time of interest must be different.
+For a detailed explanation of all fields (including Time Reference options and Query syntax), see the :ref:`Survival Analysis Settings Reference <ref_survival_settings>`.
 
-**2. Filtering (Optional)**
+**Workflow**
 
-   * **Select cells with query**: Enter a Pandas query string to filter the cells before analysis.
-     
-     * *Example*: ``TRACK_ID > 10`` or ``mean_intensity > 500``
-   * **Cut obs. time [min]**: Set a maximum observation duration. Events occurring after this time will be considered right-censored (i.e., the cell "survived" past this point).
-
-**3. Visualization Settings**
-
-   * **Time calibration (frame to min)**: Conversion factor from frames to minutes. Defaults to the experiment setting.
-   * **Cmap**: Select the colormap for the output curves.
-
-**4. Run Analysis**
-
-   Click **Submit** to generate the survival curves.
+1.  **Data Selection**: Choose the population and define the *Start Event* (Time of Reference) and *End Event* (Time of Interest).
+2.  **Filter (Optional)**: Apply a query to select a sub-population (e.g., ``TRACK_ID > 10``).
+3.  **Submit**: Click **Submit** to generate the Kaplan-Meier curves.
 
 Output
 ^^^^^^
