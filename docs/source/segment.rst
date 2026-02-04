@@ -136,10 +136,48 @@ Simultaneously, we propose Deep-learning segmentation models trained with the St
     
     **Effector models.** Primary NK segmentation models that we developed for our application. The models have been trained on the ``db_primary_NK_w_mcf7`` dataset available in Zenodo.
 
+Importing and Configuring Models
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+If you have trained a model (using Celldetective or externally) or want to reuse a saved Threshold configuration, you must import it. This process creates a configuration file ensuring the model receives data correctly (correct resolution, normalization, and channel mapping).
+
+1. In the **Segmentation** section of the Control Panel, click ``UPLOAD``.
+2. Select the model type (**StarDist**, **Cellpose**, or **Threshold**).
+3. Click **Choose File** to select your model folder (StarDist) or file (Cellpose/JSON).
+
+Configuration Fields
+^^^^^^^^^^^^^^^^^^^^
+
+**General Settings (All Models)**
+
+*   **Input spatial calibration**: The pixel resolution (in microns) of the images the model was *trained on*. Celldetective will automatically rescale your experimental images to match this resolution before prediction.
+*   **Channel Mapping**: Map the model's expected inputs (e.g., "Channel 1", "Cyto", "Nuclei") to your experiment's channels (e.g., "TRITC", "DAPI"). Select ``--`` to ignore a channel.
+*   **Normalization**:
+    *   **Mode**: Check to standard scale (0-1) based on percentiles. Uncheck to pass raw values.
+    *   **Clip**: Check to clip values outside the chosen percentile range.
+    *   **Range**: Define the min/max percentiles for normalization (e.g., 1.0 - 99.8).
+
+**Cellpose Specifics**
+
+*   **Cell Diameter [px]**: The average diameter of objects in the *training data*. 
+    *   *Note*: If set to 30.0 (default), Cellpose assumes standard scaling. If your model was trained on different sized objects without resizing, provide that diameter here to ensure correct rescaling.
+*   **Cellprob Threshold**: Threshold for the model's confidence map (default 0.0). Lower values detect more objects (and potential noise).
+*   **Flow Threshold**: Threshold for flow error (default 0.4). Increase to accept more irregular shapes; decrease to enforce strict shapes.
+
+**Finishing Up**
+
+Click **Upload** to save the model and its configuration to the project's model zoo.
+
+
 Apply a model to your data
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The models are available in the segmentation model zoo. To call one, tick the ``SEGMENT`` option, simply select the model in the list, and press submit. If the model is a generalist one, you must tell Celldetective which channels you want to pass to the model. Image rescaling and normalization is handled automatically using the information you provided in the experiment configuration.
+The imported models are now available in the segmentation model zoo.
+1. Tick the ``SEGMENT`` option in the control panel.
+2. Select your model from the dropdown list.
+3. Click **Submit** to start processing.
+
+If employing a generalist model, ensure the channel mapping matches your current experiment's setup. Image rescaling and normalization are handled automatically based on the configuration you created during import.
 
 
 Mask visualization and annotations
