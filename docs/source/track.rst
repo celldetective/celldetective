@@ -1,87 +1,88 @@
-Track
-=====
+Tracking
+========
 
 .. _track:
+
+The Tracking module links segmented cells across frames to create trajectories. This allows you to analyze cell motility, lineage, and dynamic behaviors.
 
 Prerequisite
 ------------
 
-You must segment the cells prior to tracking.
+*   **Segmentation**: You must have segmented the cells (masks) before tracking.
 
+.. _configure_tracker:
 
-I/O
----
+How to Configure the Tracker
+----------------------------
 
-This modules takes the instance segmentation label images, the original microscopy images (if you asked for feature measurements) and outputs a trajectory table where each line represents a cell at a given timepoint.
+1.  Navigate to the **Tracking** module in the main processing panel.
+2.  Click the **Settings** button |settings_icon| to open the configuration window.
+3.  **Select a Tracker**:
+    *   Choose **bTrack** (default) for complex behaviors (division, apoptosis) and crowded scenes. It uses a Bayesian approach with motion prediction.
+    *   Choose **trackpy** for simple particle tracking (Brownian motion).
+4.  **Add Features** (Optional):
+    *   Click **Add features** to calculate morphological (e.g., area) or intensity features during tracking.
+    *   Enable **Haralick texture features** if you need texture analysis (computationally expensive).
+5.  **Configure Post-Processing** (Optional):
+    *   Enable options to filter short tracks, fill gaps, or extrapolate positions.
+6.  Click **Save** to apply your settings.
 
-Adapt the tracker to your cells
--------------------------------
+.. tip::
+    For a detailed explanation of every parameter, see the :ref:`Tracking Settings Reference <ref_tracking_settings>`.
 
-After segmentation, tracking attributes a unique identity to each cell throughout the movie. Celldetective supports two tracking engines: **bTrack** (default, advanced) and **trackpy** (simple, Brownian motion).
+.. _run_tracking:
 
-Click the **Settings** button in the Tracking module to configure the pipeline.
+How to Run Tracking
+-------------------
 
-1. Tracker Selection
-~~~~~~~~~~~~~~~~~~~~
+1.  In the **Tracking** module control panel, check the **TRACK** box.
+2.  Ensure you have selected the wells/positions you wish to process.
+3.  Click **Submit**.
+4.  Celldetective will:
+    *   Load the segmentation masks.
+    *   Run the selected tracker.
+    *   Compute the requested features.
+    *   Save the results as ``trajectories_targets.csv`` (or ``_effectors``) in the ``output/tables`` folder of each position.
 
-*   **bTrack** [#]_: A Bayesian tracker that uses both motion prediction (Kalman filter) and visual features to link detections. It is best for complex cell behaviors (division, apoptosis) and crowded environments.
-*   **trackpy**: A particle-tracking algorithm based on Crocker-Grier. Best for simple Brownian motion.
-    *   **Search range [px]**: Maximum distance a cell can move between frames.
-    *   **Memory [frames]**: Number of frames a particle can "disappear" and still be linked if it reappears.
+.. _visualize_tracks:
 
-2. Feature Extraction
-~~~~~~~~~~~~~~~~~~~~~
+How to Visualize Tracks
+-----------------------
 
-You can extract morphological and intensity features during tracking.
-For a complete list of available features and settings (including Haralick texture parameters), see the :ref:`Tracking Settings Reference <ref_tracking_settings>`.
+1.  Select a single position in the file list.
+2.  Click the **Eye** button |eye_icon| in the Tracking module.
+3.  Napari will open with the following layers:
+    *   ``image``: Raw microscopy data.
+    *   ``segmentation``: Labeled cell masks (color-coded by ID).
+    *   ``tracks``: Trajectory lines connecting cell positions over time.
+    *   ``points``: Centroids of detected cells.
 
-3. Post-Processing
-~~~~~~~~~~~~~~~~~~
+.. _correct_tracks:
 
-Clean up trajectories before saving. Options include filtering by track length, filling gaps, and cleaning start/end artifacts.
-See the :ref:`Post-Processing Reference <ref_tracking_settings>` for details.
+How to Correct Tracking Errors
+------------------------------
 
-.. figure:: _static/tracking-options.png
-    :width: 400px
-    :align: center
-    :alt: tracking_options
-    
-    **GUI to configure the tracking parameters.**
+You can manually correct tracking mistakes (e.g., identity switches) using the Napari viewer.
 
-**Execution**
+1.  **Identify the Error**: Scroll through the timeline to find where a cell's ID changes incorrectly.
+2.  **Select the Correct ID**:
+    *   Activate the ``segmentation`` layer.
+    *   Select the **picker tool** (pipette).
+    *   Click on the cell *before* the error (the correct ID). The label value will be selected.
+3.  **Apply to Future Frames**:
+    *   Advance to the frame where the error occurs.
+    *   **Double-click** on the cell with the wrong ID.
+    *   A confirmation dialog will appear. Click **Yes**.
+    *   The software will assign the selected ID to this cell and propagate it to all subsequent frames.
+    *   Any conflicting track that previously held this ID will be assigned a new, unique ID to prevent merging.
+4.  **Save Changes**:
+    *   Once finished, click the **Export the modified tracks...** button in the Napari dock widget.
+    *   This updates the CSV file and re-runs any post-processing (e.g., smoothing, velocity).
 
-Once configured, click **Save**. Tick the ``TRACK`` option in the control panel and click **Submit**. Celldetective will process the movie, extract features, run the tracker, and save a ``.csv`` file in ``output/tables``.
-
-Visualization
--------------
-
-Once the tracking step is complete, you can view the tracks (neglecting the positions not associated with a cell mask) by clicking on the eye button in the tracking module (select a single position first). 
-
-.. figure:: _static/napari-tracks.png
-    :align: center
-    :alt: napari_tracks
-    
-    **View tracks in napari**
-
-Upon running the function, Napari launches with the following layers:
-
-* ``image``: Displays the raw image stack.
-* ``segmentation``: Shows the labeled masks with cell IDs.
-* ``points``: Highlights key positions for each cell.
-* ``tracks``: Visualizes trajectories across frames.
-
-Modifying Tracks
-----------------
-
-You can interact with the ``segmentation`` layer to modify trajectories. Here's how:
-
-#. **Selecting a Cell**:  Use the pipette tool in the segmentation layer to select a cell's mask value, just before a tracking mistake. Select the move image button. Navigate to the next frame using Napari's timeline slider.
-#. **Reassigning a Track**: in the later frame, double-click on the target cell to change its value to the one selected with the pipette. A confirmation dialog will appear: click Yes to assign the selected track ID to the cell under the cursor. The software will propagate the new track ID to all later frames. Any conflicting track IDs are automatically reassigned to maintain data integrity.
-#. **Visualization Updates**: The tracks layer updates dynamically, reflecting the changes.
-``points`` and ``segmentation`` layers refresh to show the adjustments.
-#. **Exporting Modifications**: Once you’ve completed your edits, save the updated tracks to the dataset. In napari’s right dock, find the ``Export the modified tracks...`` button.
-Click it to: 1) save the updated track data to the original CSV file and 2) apply any configured post-processing options, such as velocity calculations or trajectory cleanup.
-
+.. |settings_icon| image:: _static/settings_icon_placeholder.png
+    :height: 1em
+.. |eye_icon| image:: _static/eye_icon_placeholder.png
+    :height: 1em
 
 References
 ----------

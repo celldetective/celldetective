@@ -58,22 +58,29 @@ Accessible via the **Settings** button in the Tracking module.
 
 **Feature Extraction**
 
-*   **Morphological**: Standard features (area, eccentricity, etc.).
-*   **Haralick Texture Features**:
-    *   **Target channel**: Channel to analyze.
-    *   **Distance**: GLCM pixel offset.
-    *   **# gray levels**: Intensity quantization bins (default 256).
-    *   **Scale**: Downscaling factor (0-1).
-    *   **Normalization**:
-        *   **Percentile Mode**: Norm based on min/max percentiles.
-        *   **Absolute Mode**: Norm based on fixed pixel values.
-
-**Post-Processing**
-
-*   **Min. tracklength**: Minimum duration (frames).
-*   **Interpolate gaps**: Fill missing detections (limited by memory).
-*   **Remove tracks...**: Filter tracks not starting at frame 0 or ending at the last frame.
-*   **Sustain positions**: Extrapolate start/end positions to movie limits.
+**Feature Extraction**
+ 
+ *   **Morphological & Intensity**:
+     *   **Standard**: ``area``, ``eccentricity``, ``solidity``, ``perimeter``, ``intensity_mean``, ``intensity_max``, ``intensity_min``, etc.
+     *   **Advanced**: ``major_axis_length``, ``minor_axis_length``, ``orientation``, ``extent``, ``euler_number``, ``feret_diameter_max``.
+     *   **Custom**: Any allowed function from ``skimage.measure.regionprops``.
+ *   **Haralick Texture Features**:
+     *   **Target channel**: Channel to analyze (must be one of the loaded channels).
+     *   **Distance**: Pixel distance for GLCM calculation (default 1).
+     *   **# gray levels**: Number of intensity bins for quantization (default 256).
+     *   **Scale**: Downscaling factor (0-1) to speed up computation.
+     *   **Normalization**:
+         *   **Percentile Mode**: Normalize intensities between min/max percentiles (e.g., 1% - 99.9%).
+         *   **Absolute Mode**: Normalize intensities between fixed pixel values.
+ 
+ **Post-Processing**
+ 
+ *   **Min. tracklength**: Filter out tracks shorter than this number of frames.
+ *   **Remove tracks... (Start)**: Remove tracks that do not start at the first frame.
+ *   **Remove tracks... (End)**: Remove tracks that do not end at the last frame.
+ *   **Interpolate gaps**: Fill missing detections (gaps) within a track using linear interpolation.
+ *   **Extrapolate (Pre)**: Sustain the first detection's position backwards to the start of the movie.
+ *   **Extrapolate (Post)**: Sustain the last detection's position forwards to the end of the movie.
 
 .. _ref_neighborhood_settings:
 
@@ -154,3 +161,28 @@ Accessible via the **Preprocessing** module.
 
 *   **X/Y Offset**: Pixel shift to align channels.
 *   **Viewer**: Use the arrow keys to visually align the overlay channel (blue) with reference (gray).
+
+.. _ref_signal_settings:
+
+Signal Analysis
+---------------
+
+**Signal Mapping**
+
+Configuration window for Deep Learning signal models.
+
+*   **Required Inputs** (Left): The specific signals expected by the model (e.g., "Nuclei Intensity").
+*   **Available Columns** (Right): The columns from your measurement table to map to these inputs.
+
+.. _ref_event_annotation_settings:
+
+Event Annotation
+----------------
+
+Configuration for the Single Cell Signal Annotator.
+
+*   **Image Mode**:
+    *   **Grayscale**: Single channel visualization.
+    *   **Composite**: RGB overlay (requires channel selection and per-channel normalization).
+*   **Rescaling**: Downscaling fraction (e.g., 0.5) to reduce memory usage during animation.
+*   **Time Interval**: Playback speed (milliseconds between frames).

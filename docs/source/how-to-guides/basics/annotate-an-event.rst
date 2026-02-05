@@ -49,23 +49,9 @@ Annotate in the viewer
 Viewer Controls & Shortcuts
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The Event Annotator provides several controls to navigate the movie frame by frame or play it as an animation.
+The Event Annotator provides controls to play animation, jump between frames, and quickly annotate cells using keyboard shortcuts.
 
-**Playback Controls:**
-- **Framerate Slider**: Adjust the speed of the animation (FPS).
-- **Buttons**:
-    - :icon:`page-first,black`: Jump to the first frame (Shortcut: ``f``).
-    - :icon:`chevron-left,black`: Previous frame.
-    - :icon:`play,black`: Play animation (Shortcut: ``Space``).
-    - :icon:`stop,black`: Stop animation (Shortcut: ``Space``).
-    - :icon:`chevron-right,black`: Next frame.
-    - :icon:`page-last,black`: Jump to the last frame (Shortcut: ``l``).
-
-**Annotation Shortcuts:**
-When a cell is selected:
-- **n**: Quickly mark as "no event" (Class 1).
-- **Delete**: Mark for deletion.
-- **Esc**: Cancel selection.
+For a complete list of shortcuts (e.g., ``Space`` to play, ``n`` for no-event), see the :ref:`Signal Annotator Shortcuts <ref_signal_annotator_shortcuts>`.
 
 
 Interactive Correction

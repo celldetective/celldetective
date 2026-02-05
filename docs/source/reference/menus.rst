@@ -33,3 +33,54 @@ Table Explorer (TableUI)
 *   **Absolute value...**: Compute ``abs(x)``.
 *   **Log (decimal)...**: Compute ``log10(x)``.
 *   **Arithmetic**: Add, Subtract, Multiply, or Divide two columns.
+
+.. _ref_signal_annotator_shortcuts:
+
+Signal Annotator / Viewer
+-------------------------
+
+**Keyboard Shortcuts**
+
++---------------------+---------------------------------------------------+
+| Shortcut            | Action                                            |
++=====================+===================================================+
+| ``Space``           | Play / Stop animation                             |
++---------------------+---------------------------------------------------+
+| ``f``               | Jump to **First** frame                           |
++---------------------+---------------------------------------------------+
+| ``l``               | Jump to **Last** frame                            |
++---------------------+---------------------------------------------------+
+| ``Ctrl+P``          | Open interactive signal plotter                   |
++---------------------+---------------------------------------------------+
+| ``Esc``             | Cancel cell selection                             |
++---------------------+---------------------------------------------------+
+| ``Del``             | Mark selected cell for deletion (cannot undo)     |
++---------------------+---------------------------------------------------+
+| ``n``               | Reset cell class to "No Event"                    |
++---------------------+---------------------------------------------------+
+
+**Mouse Interactions**
+
+*   **Left Click (Cell)**: Select a cell to view its signals.
+*   **Left Click (Timeline)**: Jump to a specific timepoint.
+
+.. _ref_interactive_plotter_shortcuts:
+
+Interactive Plotter
+-------------------
+
+Accessed via ``Ctrl+P`` from the Signal Annotator or Table Explorer.
+
+**Keyboard Shortcuts**
+
++---------------------+---------------------------------------------------+
+| Shortcut            | Action                                            |
++=====================+===================================================+
+| ``Left / Right``    | Shift event time for selected traces              |
++---------------------+---------------------------------------------------+
+| ``Ctrl+S``          | Save changes                                      |
++---------------------+---------------------------------------------------+
+
+**Mouse Interactions**
+
+*   **Click + Drag**: Draw a box to select multiple traces (highlighted in red).

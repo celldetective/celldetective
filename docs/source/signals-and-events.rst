@@ -25,8 +25,7 @@ We provide several Deep-learning models that take select single-cell signals as 
 If the model requires specific input signals (e.g., "Nuclei Intensity", "Cytoplasm Morphology"), a **Signals** configuration window will appear.
 You must map the model's **Required Inputs** to the columns available in your current measurement tables.
 
-*   **Left Column**: Shows the input name expected by the model.
-*   **Right Dropdown**: Select the corresponding column from your data (e.g., map "nuc_int" to "Mean_Intensity_RED").
+For detailed mapping instructions, see the :ref:`Signal Analysis Reference <ref_signal_settings>`.
 
 Click **Set** to launch the prediction process. The results (event class and time) will be added to your data tables. 
 
@@ -57,17 +56,12 @@ Single-cell signal visualization
 Single annotator configuration
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Celldetective ships a powerful viewer for single-cell signals. If a single position is set and tracking has been performed for a cell population, the eye icon in the signal analysis section becomes active. 
+Celldetective ships a powerful viewer for single-cell signals. If a single position is set and tracking has been performed, the eye icon in the signal analysis section becomes active.
 
-Click on the configuration button next to the eye to configure the image displayed and the animation parameters in the signal annotator. 
+Click the configuration button next to the eye to adjust settings (e.g., Image Mode, Playback Speed).
+For details on these parameters, see the :ref:`Event Annotation Settings Reference <ref_event_annotation_settings>`.
 
-The available options are:
-
-* a grayscale or a RGB composite representation of the microscopy images, with per-channel normalization to define in case of RGB composite
-* a fraction to control the rescaling applied to the images as they are loaded in memory. The smaller the fraction, the easier it will be to run the animation on a less powerful computer. 
-* a time interval to set the gap in milliseconds between each frame in the animation. 
-
-Upon saving, a small configuration file is saved in the experiment folder in such a way that the settings can be reloaded in later sessions. Click on the eye to proceed.
+Upon saving, a configuration file is created for future sessions. Click the eye to proceed.
 
 
 Single annotator UI
@@ -95,22 +89,6 @@ If all cells have been annotated for an event of interest, you can decide to exp
 Keyboard shortcuts 
 ~~~~~~~~~~~~~~~~~~
 
-Here are some keyboard shortcuts to facilitate single-cell annotations with the signal annotator UI.
+The Single Annotator supports various keyboard shortcuts for navigation (``Space``, ``f``, ``l``) and annotation (``Del``, ``n``, ``Esc``).
 
-+---------------------+-----------------------------------------------+
-| Keyboard shortcuts  | Description                                   |
-+=====================+===============================================+
-| l                   | show the last frame                           |
-+---------------------+-----------------------------------------------+            
-| f                   | show the first frame                          |
-+---------------------+-----------------------------------------------+
-| Space               | play/stop animation                           |
-+---------------------+-----------------------------------------------+
-| Ctrl+P              | open interactive signal plotter               |
-+---------------------+-----------------------------------------------+
-| Esc                 | cancel cell selection                         |
-+---------------------+-----------------------------------------------+
-| Del                 | mark cell for deletion                        |
-+---------------------+-----------------------------------------------+
-| n                   | set cell class to no event                    |
-+---------------------+-----------------------------------------------+
+For a complete list of shortcuts and mouse interactions, see the :ref:`Signal Annotator Shortcuts Reference <ref_signal_annotator_shortcuts>`.

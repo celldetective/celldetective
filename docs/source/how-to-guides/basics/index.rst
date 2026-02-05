@@ -18,6 +18,6 @@ Basics
    ..measure-locally-corrected-intensity-measurements
    ..measure-peripheral-intensity
    ..measure-texture
-   ..plot-a-time-averaged-measurement
+   plot-a-time-averaged-measurement
    ..plot-survival
    ..plot-synchronized-time-series
