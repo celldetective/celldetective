@@ -968,7 +968,7 @@ class SettingsTracking(CelldetectiveSettingsPanel):
 
         # Fetch trackpky params
         if not btrack_option:
-            search_range = int(self.search_range_le.text().replace(",", "."))
+            search_range = float(self.search_range_le.text().replace(",", "."))
             memory = self.memory_slider.value()
         else:
             search_range = None
@@ -1000,7 +1000,8 @@ class SettingsTracking(CelldetectiveSettingsPanel):
             {"features": features, "mask_channels": masked_channels}
         )
 
-        self.extract_haralick_options()
+        if not hasattr(self, "haralick_options"):
+            self.extract_haralick_options()
         tracking_options.update({"haralick_options": self.haralick_options})
 
         if self.post_proc_ticked:
