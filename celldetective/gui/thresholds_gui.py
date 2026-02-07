@@ -49,7 +49,10 @@ logger = logging.getLogger(__name__)
 
 
 class BackgroundLoader(QThread):
+        logger.info("Background packages loaded...")
+        
     def run(self):
+        """Run the background loader."""
         logger.info("Loading background packages...")
         try:
             from celldetective.segmentation import (
@@ -71,6 +74,14 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
     """
 
     def __init__(self, parent_window=None):
+        """
+        Initialize the ThresholdConfigWizard.
+
+        Parameters
+        ----------
+        parent_window : QMainWindow, optional
+            The parent window.
+        """
 
         super().__init__()
         self.parent_window = parent_window
@@ -126,7 +137,14 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
         self.bg_loader.start()
 
     def closeEvent(self, event):
-        """Clean up resources on close."""
+        """
+        Clean up resources on close.
+
+        Parameters
+        ----------
+        event : QCloseEvent
+            The close event.
+        """
         if hasattr(self, "bg_loader") and self.bg_loader.isRunning():
             self.bg_loader.quit()
             self.bg_loader.wait()
@@ -137,6 +155,7 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
         super().closeEvent(event)
 
     def _create_menu_bar(self):
+        """Create the menu bar."""
         menu_bar = self.menuBar()
         # Creating menus using a QMenu object
         file_menu = QMenu("&File", self)
@@ -148,6 +167,7 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
     # helpMenu = menuBar.addMenu("&Help")
 
     def _createActions(self):
+        """Create actions."""
         # Creating action using the first constructor
         # self.newAction = QAction(self)
         # self.newAction.setText("&New")
@@ -190,6 +210,7 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
         QApplication.processEvents()
 
     def populate_left_panel(self):
+        """Populate the left panel."""
 
         self.preprocessing = PreprocessingLayout(self)
         self.left_panel.addLayout(self.preprocessing)
@@ -320,6 +341,7 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
                 return None
 
     def generate_marker_contents(self):
+        """Generate marker contents."""
 
         marker_box = QVBoxLayout()
         marker_box.setContentsMargins(30, 30, 30, 30)
@@ -387,6 +409,7 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
         self.left_panel.addLayout(marker_box)
 
     def enable_marker_options(self):
+        """Enable marker options."""
         if self.marker_option.isChecked():
             self.footprint_slider.setEnabled(True)
             self.min_dist_slider.setEnabled(True)
@@ -398,6 +421,7 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
             self.watershed_btn.setEnabled(True)
 
     def generate_props_contents(self):
+        """Generate properties contents."""
 
         properties_box = QVBoxLayout()
         properties_box.setContentsMargins(30, 30, 30, 30)
@@ -431,6 +455,7 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
         self.left_panel.addLayout(properties_box)
 
     def generate_viewer(self):
+        """Generate the viewer."""
         self.viewer = ThresholdedStackVisualizer(
             preprocessing=self.filters,
             show_opacity_slider=False,
@@ -448,6 +473,7 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
         )
 
     def populate_right_panel(self):
+        """Populate the right panel."""
         self.right_panel.addWidget(self.viewer.canvas)
 
     def locate_stack(self):
@@ -499,6 +525,7 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
         self.propscanvas.canvas.setMinimumHeight(self.screen_height // 5)
 
     def initialize_histogram(self):
+        """Initialize the histogram."""
 
         self.img = self.viewer.init_frame
 
@@ -573,6 +600,7 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
         self.threshold_changed(self.threshold_slider.value())
 
     def add_hist_threshold(self):
+        """Add threshold lines to the histogram."""
 
         ymin, ymax = self.ax_hist.get_ylim()
         (self.min_intensity_line,) = self.ax_hist.plot(
@@ -611,6 +639,11 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
     def threshold_changed(self, value):
         """
         Move the threshold values on histogram, when slider is moved.
+
+        Parameters
+        ----------
+        value : list
+            The new threshold values [min, max].
         """
         self.clear_post_threshold_options()
         self.viewer.change_threshold(value)
@@ -638,6 +671,7 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
         self.canvas_hist.canvas.draw_idle()
 
     def toggle_fill_holes(self):
+        """Toggle fill holes option."""
         self.fill_holes = self.fill_holes_btn.isChecked()
         self.viewer.fill_holes = self.fill_holes
         self.viewer.change_threshold(self.threshold_slider.value())
@@ -645,16 +679,19 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
         self.fill_holes_btn.setIcon(icon(MDI6.format_color_fill, color=color))
 
     def set_footprint(self):
+        """Set the footprint size."""
         self.footprint = self.footprint_slider.value()
 
     # print(f"Setting footprint to {self.footprint}")
 
     def set_min_dist(self):
+        """Set the minimum distance."""
         self.min_dist = self.min_dist_slider.value()
 
     # print(f"Setting min distance to {self.min_dist}")
 
     def detect_markers(self):
+        """Detect markers in the image."""
 
         self.clear_post_threshold_options()
 
@@ -680,6 +717,7 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
             self.watershed_btn.setEnabled(False)
 
     def apply_watershed_to_selection(self):
+        """Apply watershed algorithm to the selection."""
 
         import scipy.ndimage as ndi
         from celldetective.segmentation import apply_watershed
@@ -710,6 +748,7 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
             self.features_cb[i].currentTextChanged.connect(self.update_props_scatter)
 
     def compute_features(self):
+        """Compute features for the segmented objects."""
 
         import pandas as pd
         from skimage.measure import regionprops_table
@@ -746,6 +785,7 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
         self.update_props_scatter()
 
     def update_props_scatter(self):
+        """Update the properties scatter plot."""
 
         feat1 = self.features_cb[1].currentText()
         feat0 = self.features_cb[0].currentText()
@@ -787,6 +827,7 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
         logger.info(f"Update markers for {len(self.props)} objects.")
 
     def prep_cell_properties(self):
+        """Prepare cell properties list."""
 
         self.cell_properties_options = list(np.copy(self.cell_properties))
         self.cell_properties_options.remove("centroid")
@@ -795,6 +836,7 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
         self.cell_properties_options.remove("intensity_mean")
 
     def apply_property_query(self):
+        """Apply property query to filter objects."""
         query = self.property_query_le.text()
         self.props["class"] = 1
 
@@ -814,6 +856,7 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
         self.update_props_scatter()
 
     def clear_post_threshold_options(self):
+        """Clear options available after thresholding."""
 
         self.watershed_btn.setEnabled(False)
         for p in self.properties_box_widgets:
@@ -834,6 +877,7 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
         self.viewer.scat_markers.set_visible(False)
 
     def write_instructions(self):
+        """Write the threshold configuration to a JSON file."""
 
         instructions = {
             "target_channel": self.viewer.channel_cb.currentText(),
@@ -875,6 +919,7 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
             logger.error("The instruction file could not be written...")
 
     def activate_histogram_equalizer(self):
+        """Toggle histogram equalization."""
 
         if not self.equalize_option:
             self.equalize_option = True
@@ -886,6 +931,7 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
             self.equalize_option_btn.setIconSize(QSize(20, 20))
 
     def load_previous_config(self):
+        """Load a previous threshold configuration from a JSON file."""
         self.previous_instruction_file = QFileDialog.getOpenFileName(
             self,
             "Load config",

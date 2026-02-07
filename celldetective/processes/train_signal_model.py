@@ -15,8 +15,32 @@ logger = get_logger(__name__)
 
 
 class ProgressCallback(Callback):
+    """
+    Callback for reporting training progress.
+
+    Parameters
+    ----------
+    queue : multiprocessing.Queue, optional
+        Queue for progress updates.
+    total_epochs : int, optional
+        Total number of epochs. Default is 100.
+    stop_event : multiprocessing.Event, optional
+        Event to signal stopping.
+    """
 
     def __init__(self, queue=None, total_epochs=100, stop_event=None):
+        """
+        Initialize the callback.
+
+        Parameters
+        ----------
+        queue : Queue
+            The queue to communicate with the main process.
+        total_epochs : int
+            The total number of epochs.
+        stop_event : Event
+            The event to stop the training.
+        """
         super().__init__()
         self.queue = queue
         self.total_epochs = total_epochs
@@ -25,9 +49,29 @@ class ProgressCallback(Callback):
         self.stop_event = stop_event
 
     def on_epoch_begin(self, epoch, logs=None):
+        """
+        Called at the beginning of an epoch.
+
+        Parameters
+        ----------
+        epoch : int
+            Current epoch index.
+        logs : dict, optional
+            Logs.
+        """
         self.epoch_start_time = time.time()
 
     def on_batch_end(self, batch, logs=None):
+        """
+        Called at the end of a batch.
+
+        Parameters
+        ----------
+        batch : int
+            Current batch index.
+        logs : dict, optional
+            Logs.
+        """
         # Update frame bar (bottom bar) for batch progress
         # logs has 'size' and 'batch'
         # We need total batches. Keras doesn't always pass it easily in logs unless we know steps_per_epoch.
@@ -45,6 +89,16 @@ class ProgressCallback(Callback):
                 )
 
     def on_epoch_end(self, epoch, logs=None):
+        """
+        Called at the end of an epoch.
+
+        Parameters
+        ----------
+        epoch : int
+            Current epoch index.
+        logs : dict, optional
+            Logs.
+        """
         if self.stop_event and self.stop_event.is_set():
             logger.info("Interrupting training...")
             self.model.stop_training = True
@@ -93,13 +147,49 @@ class ProgressCallback(Callback):
             self.queue.put(msg)
 
     def on_training_result(self, result):
+        """
+        Handle training result.
+
+        Parameters
+        ----------
+        result : dict
+            Training result.
+        """
         if self.queue is not None:
             self.queue.put({"training_result": result})
 
 
 class TrainSignalModelProcess(Process):
+    """
+    Process for training signal detection models.
+
+    Parameters
+    ----------
+    queue : multiprocessing.Queue, optional
+        Queue for progress updates.
+    process_args : dict, optional
+        Arguments for the process.
+    *args
+        Variable length argument list.
+    **kwargs
+        Arbitrary keyword arguments.
+    """
 
     def __init__(self, queue=None, process_args=None, *args, **kwargs):
+        """
+        Initialize the process.
+
+        Parameters
+        ----------
+        queue : Queue
+            The queue to communicate with the main process.
+        process_args : dict
+            Arguments for the process.
+        *args
+            Variable length argument list.
+        **kwargs
+            Arbitrary keyword arguments.
+        """
 
         super().__init__(*args, **kwargs)
 
@@ -117,6 +207,9 @@ class TrainSignalModelProcess(Process):
         self.t0 = time.time()
 
     def read_instructions(self):
+        """
+        Read training instructions from JSON file.
+        """
 
         if os.path.exists(self.instructions):
             with open(self.instructions, "r") as f:
@@ -168,6 +261,9 @@ class TrainSignalModelProcess(Process):
         }
 
     def neighborhood_postprocessing(self):
+        """
+        Post-process neighborhood information if required.
+        """
 
         # if neighborhood of interest in training instructions, write it in config!
         if "neighborhood_of_interest" in self.training_instructions:
@@ -201,6 +297,9 @@ class TrainSignalModelProcess(Process):
                     outfile.write(json_string)
 
     def run(self):
+        """
+        Run the training process.
+        """
         self.queue.put({"status": "Loading datasets..."})
         model = SignalDetectionModel(**self.model_params)
 
@@ -236,6 +335,9 @@ class TrainSignalModelProcess(Process):
         self.queue.close()
 
     def extract_training_params(self):
+        """
+        Extract and prepare training parameters.
+        """
 
         self.training_instructions.update(
             {"n_channels": len(self.training_instructions["channel_option"])}
@@ -248,6 +350,9 @@ class TrainSignalModelProcess(Process):
         self.training_instructions.update({"test_split": 0.0})
 
     def end_process(self):
+        """
+        Terminate the process gracefully.
+        """
 
         # self.terminate()
 
@@ -260,6 +365,9 @@ class TrainSignalModelProcess(Process):
         self.queue.put("finished")
 
     def abort_process(self):
+        """
+        Abort the process and signal error.
+        """
 
         self.terminate()
         self.queue.put("error")

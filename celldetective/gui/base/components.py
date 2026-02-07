@@ -23,6 +23,7 @@ from celldetective.gui.base.styles import Styles
 
 class CelldetectiveWidget(QWidget, Styles):
     def __init__(self, *args, **kwargs):
+        """Initialize the CelldetectiveWidget."""
         super().__init__(*args, **kwargs)
         self.setWindowIcon(self.celldetective_icon)
         self.setAttribute(Qt.WA_DeleteOnClose)
@@ -30,6 +31,7 @@ class CelldetectiveWidget(QWidget, Styles):
 
 class CelldetectiveMainWindow(QMainWindow, Styles):
     def __init__(self, *args, **kwargs):
+        """Initialize the CelldetectiveMainWindow."""
         super().__init__(*args, **kwargs)
         self.setWindowIcon(self.celldetective_icon)
         self.setAttribute(Qt.WA_DeleteOnClose)
@@ -37,6 +39,7 @@ class CelldetectiveMainWindow(QMainWindow, Styles):
 
 class CelldetectiveDialog(QDialog, Styles):
     def __init__(self, *args, **kwargs):
+        """Initialize the CelldetectiveDialog."""
         super().__init__(*args, **kwargs)
         self.setWindowIcon(self.celldetective_icon)
 
@@ -51,6 +54,24 @@ class CelldetectiveProgressDialog(QProgressDialog, Styles):
         parent=None,
         window_title="Please wait",
     ):
+        """
+        Initialize the CelldetectiveProgressDialog.
+
+        Parameters
+        ----------
+        label_text : str
+            The label text.
+        cancel_button_text : str, optional
+            The cancel button text.
+        minimum : int, optional
+            The minimum value.
+        maximum : int, optional
+            The maximum value.
+        parent : QWidget, optional
+            The parent widget.
+        window_title : str, optional
+            The window title.
+        """
         super().__init__(label_text, cancel_button_text, minimum, maximum, parent)
         self.setWindowIcon(self.celldetective_icon)
         self.setWindowTitle(window_title)
@@ -69,6 +90,16 @@ class CelldetectiveProgressDialog(QProgressDialog, Styles):
 
 
 def generic_message(message, msg_type="warning"):
+    """
+    Show a generic message box.
+
+    Parameters
+    ----------
+    message : str
+        The message text.
+    msg_type : str, optional
+        The message type ('warning', 'info', 'critical').
+    """
 
     print(message)
     message_box = QMessageBox()
@@ -92,6 +123,20 @@ class QCheckableComboBox(QComboBox):
     activated = pyqtSignal(str)
 
     def __init__(self, obj="", parent_window=None, *args, **kwargs):
+        """
+        Initialize the QCheckableComboBox.
+
+        Parameters
+        ----------
+        obj : str, optional
+            Object name for display.
+        parent_window : QMainWindow, optional
+            The parent window.
+        *args
+            Variable length argument list.
+        **kwargs
+            Arbitrary keyword arguments.
+        """
 
         super().__init__(parent_window, *args, **kwargs)
 
@@ -109,12 +154,21 @@ class QCheckableComboBox(QComboBox):
         self.view().pressed.connect(self.handleItemPressed)
 
     def clear(self):
+        """Clear the combo box and uncheck all items."""
 
         self.unselectAll()
         self.toolMenu.clear()
         super().clear()
 
     def handleItemPressed(self, index):
+        """
+        Handle item press events to toggle check state.
+
+        Parameters
+        ----------
+        index : QModelIndex
+            The index of the item pressed.
+        """
 
         idx = index.row()
         actions = self.toolMenu.actions()
@@ -145,6 +199,14 @@ class QCheckableComboBox(QComboBox):
         self.activated.emit(self.title())
 
     def setCurrentIndex(self, index):
+        """
+        Set the current index and toggle its state.
+
+        Parameters
+        ----------
+        index : int
+            The index to set.
+        """
 
         super().setCurrentIndex(index)
 
@@ -154,6 +216,7 @@ class QCheckableComboBox(QComboBox):
         self.handleItemPressed(modelIndex)
 
     def selectAll(self):
+        """Select all items."""
 
         actions = self.toolMenu.actions()
         for i, a in enumerate(actions):
@@ -162,6 +225,7 @@ class QCheckableComboBox(QComboBox):
         self.anySelected = True
 
     def unselectAll(self):
+        """Unselect all items."""
 
         actions = self.toolMenu.actions()
         for i, a in enumerate(actions):
@@ -170,14 +234,31 @@ class QCheckableComboBox(QComboBox):
         self.anySelected = False
 
     def title(self):
+        """Return the current title."""
         return self._title
 
     def setTitle(self, title):
+        """
+        Set the title of the combo box.
+
+        Parameters
+        ----------
+        title : str
+            The new title.
+        """
         self._title = title
         self.update()
         self.repaint()
 
     def paintEvent(self, event):
+        """
+        Paint the combo box.
+
+        Parameters
+        ----------
+        event : QPaintEvent
+            The paint event.
+        """
 
         painter = QStylePainter(self)
         painter.setPen(self.palette().color(QPalette.Text))
@@ -188,6 +269,16 @@ class QCheckableComboBox(QComboBox):
         painter.drawControl(QStyle.CE_ComboBoxLabel, opt)
 
     def addItem(self, item, tooltip=None):
+        """
+        Add an item to the combo box.
+
+        Parameters
+        ----------
+        item : str
+            The item text.
+        tooltip : str, optional
+            The tooltip for the item.
+        """
 
         super().addItem(item)
         idx = self.findText(item)
@@ -199,6 +290,14 @@ class QCheckableComboBox(QComboBox):
         action.setCheckable(True)
 
     def addItems(self, items):
+        """
+        Add multiple items to the combo box.
+
+        Parameters
+        ----------
+        items : list of str
+            The items to add.
+        """
 
         super().addItems(items)
 
@@ -211,6 +310,7 @@ class QCheckableComboBox(QComboBox):
             action.setCheckable(True)
 
     def getSelectedIndices(self):
+        """Return the indices of selected items."""
 
         actions = self.toolMenu.actions()
         options_checked = np.array([a.isChecked() for a in actions])
@@ -219,20 +319,34 @@ class QCheckableComboBox(QComboBox):
         return list(idx_selected)
 
     def currentText(self):
+        """Return the current text."""
         return self.title()
 
     def isMultipleSelection(self):
+        """Check if multiple items are selected."""
         return self.currentText().startswith("Multiple")
 
     def isSingleSelection(self):
+        """Check if a single item is selected."""
         return not self.currentText().startswith(
             "Multiple"
         ) and not self.title().startswith("No")
 
     def isAnySelected(self):
+        """Check if any item is selected."""
         return not self.title().startswith("No")
 
     def eventFilter(self, source, event):
+        """
+        Filter events to keep the popup open on click.
+
+        Parameters
+        ----------
+        source : QObject
+            The event source.
+        event : QEvent
+            The event.
+        """
         if source is self.view().viewport():
             if event.type() == QEvent.MouseButtonRelease:
                 return True  # Prevent the popup from closing
@@ -245,6 +359,7 @@ class QHSeperationLine(QFrame):
     """
 
     def __init__(self):
+        """Initialize the QHSeperationLine."""
         super().__init__()
         self.setMinimumWidth(1)
         self.setFixedHeight(20)
@@ -255,6 +370,20 @@ class QHSeperationLine(QFrame):
 
 class HoverButton(QPushButton):
     def __init__(self, text, icon_enum, default_color="black", hover_color="white"):
+        """
+        Initialize the HoverButton.
+
+        Parameters
+        ----------
+        text : str
+            Button text.
+        icon_enum : str
+            Icon name from MDI6.
+        default_color : str, optional
+            Default icon color.
+        hover_color : str, optional
+            Hover icon color.
+        """
         super().__init__(text)
         self.icon_enum = icon_enum
         self.default_color = default_color
@@ -262,9 +391,25 @@ class HoverButton(QPushButton):
         self.setIcon(icon(self.icon_enum, color=self.default_color))
 
     def enterEvent(self, event):
+        """
+        Change icon color on hover enter.
+
+        Parameters
+        ----------
+        event : QEvent
+            The enter event.
+        """
         self.setIcon(icon(self.icon_enum, color=self.hover_color))
         super().enterEvent(event)
 
     def leaveEvent(self, event):
+        """
+        Revert icon color on hover leave.
+
+        Parameters
+        ----------
+        event : QEvent
+            The leave event.
+        """
         self.setIcon(icon(self.icon_enum, color=self.default_color))
         super().leaveEvent(event)

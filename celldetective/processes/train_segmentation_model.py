@@ -28,6 +28,18 @@ logger = get_logger()
 class ProgressCallback(Callback):
 
     def __init__(self, queue=None, epochs=100, stop_event=None):
+        """
+        Initialize the callback.
+
+        Parameters
+        ----------
+        queue : Queue
+            The queue to communicate with the main process.
+        epochs : int
+            The total number of epochs.
+        stop_event : Event
+            The event to stop the training.
+        """
         super().__init__()
         self.queue = queue
         self.epochs = epochs
@@ -35,6 +47,16 @@ class ProgressCallback(Callback):
         self.t0 = time.time()
 
     def on_epoch_end(self, epoch, logs=None):
+        """
+        Called at the end of an epoch.
+
+        Parameters
+        ----------
+        epoch : int
+            The current epoch.
+        logs : dict
+            The logs from the training.
+        """
 
         if self.stop_event and self.stop_event.is_set():
             self.model.stop_training = True
@@ -66,6 +88,18 @@ class ProgressCallback(Callback):
 
 class QueueLoggingHandler(logging.Handler):
     def __init__(self, queue, total_epochs, stop_event=None):
+        """
+        Initialize the logging handler.
+
+        Parameters
+        ----------
+        queue : Queue
+            The queue to communicate with the main process.
+        total_epochs : int
+            The total number of epochs.
+        stop_event : Event
+            The event to stop the training.
+        """
         super().__init__()
         self.queue = queue
         self.total_epochs = total_epochs
@@ -77,6 +111,14 @@ class QueueLoggingHandler(logging.Handler):
         self.t0 = time.time()
 
     def emit(self, record):
+        """
+        Emit a log record.
+
+        Parameters
+        ----------
+        record : LogRecord
+            The log record.
+        """
         if self.stop_event and self.stop_event.is_set():
             # Can't easily stop cellpose_utils loop from here without raising exception or hacking
             # raising exception might be safest to exit training loop
@@ -113,6 +155,20 @@ class QueueLoggingHandler(logging.Handler):
 class TrainSegModelProcess(Process):
 
     def __init__(self, queue=None, process_args=None, *args, **kwargs):
+        """
+        Initialize the process.
+
+        Parameters
+        ----------
+        queue : Queue
+            The queue to communicate with the main process.
+        process_args : dict
+            Arguments for the process.
+        *args
+            Variable length argument list.
+        **kwargs
+            Arbitrary keyword arguments.
+        """
 
         super().__init__(*args, **kwargs)
 
@@ -132,6 +188,7 @@ class TrainSegModelProcess(Process):
         self.t0 = time.time()
 
     def read_instructions(self):
+        """Read the training instructions from the configuration file."""
 
         if os.path.exists(self.instructions):
             with open(self.instructions, "r") as f:
@@ -141,6 +198,7 @@ class TrainSegModelProcess(Process):
             self.abort_process()
 
     def run(self):
+        """Run the training process."""
 
         self.queue.put("Loading dataset...")
 
@@ -153,6 +211,7 @@ class TrainSegModelProcess(Process):
         self.queue.close()
 
     def train_stardist_model(self):
+        """Train a StarDist model."""
 
         from stardist import calculate_extents, gputools_available
         from stardist.models import Config2D, StarDist2D
@@ -287,6 +346,20 @@ class TrainSegModelProcess(Process):
 
         class StreamToQueue:
             def __init__(self, queue, total_epochs, original_stream, stop_event=None):
+                """
+                Initialize the stream parser.
+
+                Parameters
+                ----------
+                queue : Queue
+                    The queue to communicate with the main process.
+                total_epochs : int
+                    The total number of epochs.
+                original_stream : object
+                    The original stream.
+                stop_event : Event
+                    The event to stop the training.
+                """
                 self.queue = queue
                 self.total_epochs = total_epochs
                 self.original_stream = original_stream
@@ -301,6 +374,14 @@ class TrainSegModelProcess(Process):
                 self.buffer = ""
 
             def write(self, message):
+                """
+                Write a message to the stream.
+
+                Parameters
+                ----------
+                message : str
+                    The message to write.
+                """
                 if self.stop_event and self.stop_event.is_set():
                     raise InterruptedError("Training interrupted by user")
 
@@ -311,9 +392,11 @@ class TrainSegModelProcess(Process):
                     self._parse_buffer()
 
             def flush(self):
+                """Flush the stream."""
                 self.original_stream.flush()
 
             def _parse_buffer(self):
+                """Parse the buffer for metrics."""
                 lines = re.split(r"[\r\n]+", self.buffer)
                 # Keep the last incomplete part in buffer
                 if not (self.buffer.endswith("\n") or self.buffer.endswith("\r")):
@@ -418,6 +501,19 @@ class TrainSegModelProcess(Process):
         }
 
         def make_json_safe(obj):
+            """
+            Convert object to JSON-serializable format.
+
+            Parameters
+            ----------
+            obj : object
+                Input object.
+
+            Returns
+            -------
+            object
+                JSON-serializable object.
+            """
             if isinstance(obj, np.ndarray):
                 return obj.tolist()
             if isinstance(obj, (np.int64, np.int32)):
@@ -434,6 +530,7 @@ class TrainSegModelProcess(Process):
             outfile.write(json_input_config)
 
     def train_cellpose_model(self):
+        """Train a Cellpose model."""
 
         # do augmentation in place
         X_aug = []
@@ -578,6 +675,19 @@ class TrainSegModelProcess(Process):
         }
 
         def make_json_safe(obj):
+            """
+            Convert object to JSON-serializable format.
+
+            Parameters
+            ----------
+            obj : object
+                Input object.
+
+            Returns
+            -------
+            object
+                JSON-serializable object.
+            """
             if isinstance(obj, np.ndarray):
                 return obj.tolist()
             if isinstance(obj, (np.int64, np.int32)):
@@ -594,6 +704,7 @@ class TrainSegModelProcess(Process):
             outfile.write(json_input_config)
 
     def split_test_train(self):
+        """Split the dataset into training and validation sets."""
 
         if not len(self.X) > 1:
             logger.error("Not enough training data")
@@ -618,6 +729,7 @@ class TrainSegModelProcess(Process):
         logger.info("- validation:     %3d" % len(self.X_val))
 
     def extract_training_params(self):
+        """Extract the training parameters from the configuration file."""
 
         self.model_name = self.training_instructions["model_name"]
         self.target_directory = self.training_instructions["target_directory"]
@@ -642,6 +754,7 @@ class TrainSegModelProcess(Process):
         self.batch_size = self.training_instructions["batch_size"]
 
     def load_dataset(self):
+        """Load the dataset."""
 
         logger.info(f"Datasets: {self.datasets}")
         self.X, self.Y, self.filenames = load_image_dataset(
@@ -684,11 +797,13 @@ class TrainSegModelProcess(Process):
         self.Y = [fill_label_holes(y) for y in tqdm(self.Y)]
 
     def end_process(self):
+        """End the process."""
 
         self.terminate()
         self.queue.put("finished")
 
     def abort_process(self):
+        """Abort the process."""
 
         self.terminate()
         self.queue.put("error")

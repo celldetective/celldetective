@@ -155,6 +155,7 @@ class EventAnnotator(BaseAnnotator):
         self.finalize_init()
 
     def finalize_init(self):
+        """Finalize initialization after loading stack."""
         self.frame_lbl = QLabel("frame: ")
         self.looped_animation()
         self.init_event_buttons()
@@ -167,6 +168,7 @@ class EventAnnotator(BaseAnnotator):
             )
 
     def init_event_buttons(self):
+        """Initialize event buttons."""
 
         self.event_btn = QRadioButton("event")
         self.event_btn.setStyleSheet(self.button_style_sheet_2)
@@ -191,6 +193,7 @@ class EventAnnotator(BaseAnnotator):
         self.time_of_interest_le = QLineEdit()
 
     def populate_options_layout(self):
+        """Populate the options layout."""
 
         # clear options hbox
         for i in reversed(range(self.options_hbox.count())):
@@ -370,6 +373,7 @@ class EventAnnotator(BaseAnnotator):
         viewMenu.addAction(openPlotterAct)
 
     def launch_interactive_viewer(self):
+        """Launch the interactive signal viewer."""
         if (
             not hasattr(self, "plotter")
             or self.plotter is None
@@ -476,6 +480,7 @@ class EventAnnotator(BaseAnnotator):
             pass
 
     def hide_annotation_buttons(self):
+        """Hide annotation buttons."""
 
         for a in self.annotation_btns_to_hide:
             a.hide()
@@ -486,6 +491,7 @@ class EventAnnotator(BaseAnnotator):
         self.time_of_interest_le.setEnabled(False)
 
     def enable_time_of_interest(self):
+        """Enable time of interest input if event is selected."""
 
         if self.event_btn.isChecked():
             self.time_of_interest_label.setEnabled(True)
@@ -495,6 +501,7 @@ class EventAnnotator(BaseAnnotator):
             self.time_of_interest_le.setEnabled(False)
 
     def show_annotation_buttons(self):
+        """Show annotation buttons."""
 
         for a in self.annotation_btns_to_hide:
             a.show()
@@ -526,6 +533,7 @@ class EventAnnotator(BaseAnnotator):
         self.correct_btn.clicked.connect(self.apply_modification)
 
     def apply_modification(self):
+        """Apply modification to the event."""
 
         t0 = -1
         if self.event_btn.isChecked():
@@ -598,6 +606,7 @@ class EventAnnotator(BaseAnnotator):
         self.selection.pop(0)
 
     def make_status_column(self):
+        """Create the status column based on class and time."""
 
         print(
             f"Generating status information for class `{self.class_name}` and time `{self.time_name}`..."
@@ -625,6 +634,7 @@ class EventAnnotator(BaseAnnotator):
             self.df_tracks.loc[indices, "class_color"] = class_color
 
     def generate_signal_choices(self):
+        """Generate signal choice combos."""
 
         self.signal_choice_cb = [QSearchableComboBox() for i in range(self.n_signals)]
         self.signal_choice_label = [
@@ -681,6 +691,7 @@ class EventAnnotator(BaseAnnotator):
             self.signal_choice_cb[i].currentIndexChanged.connect(self.plot_signals)
 
     def plot_signals(self):
+        """Plot the selected signals."""
 
         range_values = []
 
@@ -768,6 +779,14 @@ class EventAnnotator(BaseAnnotator):
                 self.tracks[frame] = group["TRACK_ID"].to_numpy()
 
     def prepare_stack(self, progress_callback=None):
+        """
+        Load the stack images.
+
+        Parameters
+        ----------
+        progress_callback : callable, optional
+            Callback for progress updates.
+        """
 
         self.img_num_channels = _get_img_num_per_channel(
             self.channels, self.len_movie, self.nbr_channels
@@ -847,7 +866,14 @@ class EventAnnotator(BaseAnnotator):
                 )
 
     def closeEvent(self, event):
+        """
+        Handle close event.
 
+        Parameters
+        ----------
+        event : QCloseEvent
+            The close event.
+        """
         try:
             self.stop()
         except Exception:
@@ -947,6 +973,16 @@ class EventAnnotator(BaseAnnotator):
         self.fcanvas.canvas.draw()
 
     def select_single_cell(self, index, timepoint):
+        """
+        Select a single cell.
+
+        Parameters
+        ----------
+        index : int
+            The cell index.
+        timepoint : int
+            The timepoint.
+        """
 
         self.correct_btn.setEnabled(True)
         self.cancel_btn.setEnabled(True)
@@ -972,11 +1008,13 @@ class EventAnnotator(BaseAnnotator):
             self.colors[t][idx] = "lime"
 
     def shortcut_no_event(self):
+        """Handle no event shortcut."""
         self.correct_btn.click()
         self.no_event_btn.click()
         self.correct_btn.click()
 
     def configure_ylims(self):
+        """Configure y-axis limits for signal plots."""
 
         try:
             min_values = []
@@ -1024,6 +1062,16 @@ class EventAnnotator(BaseAnnotator):
     def draw_frame(self, framedata):
         """
         Update plot elements at each timestep of the loop.
+
+        Parameters
+        ----------
+        framedata : int
+            The current frame index.
+
+        Returns
+        -------
+        tuple
+            The updated plot elements.
         """
 
         self.framedata = framedata
@@ -1042,6 +1090,7 @@ class EventAnnotator(BaseAnnotator):
         )
 
     def stop(self):
+        """Stop animation."""
         # # On stop we disconnect all of our events.
         self.stop_btn.hide()
         self.start_btn.show()
@@ -1051,9 +1100,7 @@ class EventAnnotator(BaseAnnotator):
         self.stop_btn.clicked.connect(self.start)
 
     def start(self):
-        """
-        Starts interactive animation.
-        """
+        """Start animation."""
         self.start_btn.hide()
         self.stop_btn.show()
 
@@ -1064,6 +1111,7 @@ class EventAnnotator(BaseAnnotator):
         self.stop_btn.clicked.connect(self.stop)
 
     def next_frame(self):
+        """Go to likely next frame."""
         self.framedata += 1
         if self.framedata >= self.len_movie:
             self.framedata = 0
@@ -1071,6 +1119,7 @@ class EventAnnotator(BaseAnnotator):
         self.fcanvas.canvas.draw()
 
     def prev_frame(self):
+        """Go to likely previous frame."""
         self.framedata -= 1
         if self.framedata < 0:
             self.framedata = self.len_movie - 1
@@ -1078,12 +1127,14 @@ class EventAnnotator(BaseAnnotator):
         self.fcanvas.canvas.draw()
 
     def toggle_animation(self):
+        """Toggle animation play/pause."""
         if self.stop_btn.isVisible():
             self.stop()
         else:
             self.start()
 
     def update_speed(self):
+        """Update animation speed."""
         fps = self.speed_slider.value()
         # Convert FPS to interval in ms
         # FPS = 1000 / interval_ms => interval_ms = 1000 / FPS
@@ -1133,6 +1184,7 @@ class EventAnnotator(BaseAnnotator):
             print(f"DEBUG: Error recreating animation: {e}")
 
     def give_cell_information(self):
+        """Display cell information."""
 
         cell_selected = f"cell: {self.track_of_interest}\n"
         cell_class = f"class: {self.df_tracks.loc[self.df_tracks['TRACK_ID'] == self.track_of_interest, self.class_name].to_numpy()[0]}\n"
@@ -1140,6 +1192,7 @@ class EventAnnotator(BaseAnnotator):
         self.cell_info.setText(cell_selected + cell_class + cell_time)
 
     def save_trajectories(self):
+        """Save trajectories to file."""
 
         if self.normalized_signals:
             self.normalize_features_btn.click()
@@ -1156,12 +1209,14 @@ class EventAnnotator(BaseAnnotator):
         self.extract_scatter_from_trajectories()
 
     def set_first_frame(self):
+        """Set to the first frame."""
         self.stop()
         self.framedata = 0
         self.draw_frame(self.framedata)
         self.fcanvas.canvas.draw()
 
     def set_last_frame(self):
+        """Set to the last frame."""
         self.stop()
         self.framedata = len(self.stack) - 1
         while len(np.where(self.stack[self.framedata].flatten() == 0)[0]) > 0.99 * len(

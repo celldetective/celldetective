@@ -28,6 +28,16 @@ from celldetective.relative_measurements import measure_pair_signals_at_position
 class NeighborhoodProcess(Process):
 
     def __init__(self, queue=None, process_args=None):
+        """
+        Initialize the process.
+
+        Parameters
+        ----------
+        queue : Queue
+            The queue to communicate with the main process.
+        process_args : dict
+            Arguments for the process.
+        """
 
         super().__init__()
 
@@ -78,6 +88,45 @@ class NeighborhoodProcess(Process):
             "mask_id": "class_id",
         },
     ):
+        """
+        Compute the neighborhood based on mask contact.
+
+        Parameters
+        ----------
+        setA : pandas.DataFrame
+            The first set of cells.
+        setB : pandas.DataFrame
+            The second set of cells.
+        labelsA : list
+            The list of label images for setA.
+        labelsB : list
+            The list of label images for setB.
+        distance : int
+            The distance threshold.
+        mode : str
+            The mode of computation.
+        status : str
+            The status column.
+        not_status_option : str
+            The not status option.
+        compute_cum_sum : bool
+            Whether to compute the cumulative sum.
+        attention_weight : bool
+            Whether to compute the attention weight.
+        symmetrize : bool
+            Whether to symmetrize the neighborhood.
+        include_dead_weight : bool
+            Whether to include dead weight.
+        column_labels : dict
+            The column labels.
+
+        Returns
+        -------
+        setA : pandas.DataFrame
+            The first set of cells with neighborhood data.
+        setB : pandas.DataFrame
+            The second set of cells with neighborhood data.
+        """
 
         if setA is not None and setB is not None:
             setA, setB, status = set_live_status(setA, setB, status, not_status_option)
@@ -223,6 +272,41 @@ class NeighborhoodProcess(Process):
             "y": "POSITION_Y",
         },
     ):
+        """
+        Compute the neighborhood based on distance cut.
+
+        Parameters
+        ----------
+        setA : pandas.DataFrame
+            The first set of cells.
+        setB : pandas.DataFrame
+            The second set of cells.
+        distance : int
+            The distance threshold.
+        mode : str
+            The mode of computation.
+        status : str
+            The status column.
+        not_status_option : str
+            The not status option.
+        compute_cum_sum : bool
+            Whether to compute the cumulative sum.
+        attention_weight : bool
+            Whether to compute the attention weight.
+        symmetrize : bool
+            Whether to symmetrize the neighborhood.
+        include_dead_weight : bool
+            Whether to include dead weight.
+        column_labels : dict
+            The column labels.
+
+        Returns
+        -------
+        setA : pandas.DataFrame
+            The first set of cells with neighborhood data.
+        setB : pandas.DataFrame
+            The second set of cells with neighborhood data.
+        """
         # Check live_status option
         if setA is not None and setB is not None:
             setA, setB, status = set_live_status(setA, setB, status, not_status_option)
@@ -355,6 +439,37 @@ class NeighborhoodProcess(Process):
             "symmetrize": True,
         },
     ):
+        """
+        Compute the neighborhood at a specific position.
+
+        Parameters
+        ----------
+        pos : str
+            The position path.
+        distance : int
+            The distance threshold.
+        population : list
+            The population names.
+        theta_dist : list
+            The theta distance thresholds.
+        img_shape : tuple
+            The image shape.
+        return_tables : bool
+            Whether to return the tables.
+        clear_neigh : bool
+            Whether to clear previous neighborhood data.
+        event_time_col : str
+            The event time column.
+        neighborhood_kwargs : dict
+            Additional arguments for neighborhood computation.
+
+        Returns
+        -------
+        setA : pandas.DataFrame
+            The first set of cells with neighborhood data.
+        setB : pandas.DataFrame
+            The second set of cells with neighborhood data.
+        """
 
         pos = pos.replace("\\", "/")
         pos = rf"{pos}"
@@ -551,6 +666,37 @@ class NeighborhoodProcess(Process):
             "symmetrize": True,
         },
     ):
+        """
+        Compute the contact neighborhood at a specific position.
+
+        Parameters
+        ----------
+        pos : str
+            The position path.
+        distance : int
+            The distance threshold.
+        population : list
+            The population names.
+        theta_dist : list
+            The theta distance thresholds.
+        img_shape : tuple
+            The image shape.
+        return_tables : bool
+            Whether to return the tables.
+        clear_neigh : bool
+            Whether to clear previous neighborhood data.
+        event_time_col : str
+            The event time column.
+        neighborhood_kwargs : dict
+            Additional arguments for neighborhood computation.
+
+        Returns
+        -------
+        setA : pandas.DataFrame
+            The first set of cells with neighborhood data.
+        setB : pandas.DataFrame
+            The second set of cells with neighborhood data.
+        """
 
         pos = pos.replace("\\", "/")
         pos = rf"{pos}"
@@ -742,6 +888,7 @@ class NeighborhoodProcess(Process):
             return df_A, df_B
 
     def run(self):
+        """Run the neighborhood computation process."""
         self.queue.put({"status": "Computing neighborhood..."})
         print(f"Launching the neighborhood computation...")
         if self.protocol["neighborhood_type"] == "distance_threshold":
@@ -884,11 +1031,13 @@ class NeighborhoodProcess(Process):
         self.queue.close()
 
     def end_process(self):
+        """End the process."""
 
         self.terminate()
         self.queue.put("finished")
 
     def abort_process(self):
+        """Abort the process."""
 
         self.terminate()
         self.queue.put("error")

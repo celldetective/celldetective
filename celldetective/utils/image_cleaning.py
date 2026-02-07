@@ -43,6 +43,19 @@ def _fix_no_contrast(frames: np.ndarray, value: Union[float, int] = 1):
 
 
 def interpolate_nan_multichannel(frames):
+    """
+    Interpolate NaNs in a multichannel image.
+
+    Parameters
+    ----------
+    frames : ndarray
+        Multichannel image (H, W, C).
+
+    Returns
+    -------
+    ndarray
+        Image with NaNs interpolated.
+    """
     frames = np.moveaxis(
         [interpolate_nan(frames[:, :, c].copy()) for c in range(frames.shape[-1])],
         0,
@@ -54,6 +67,18 @@ def interpolate_nan_multichannel(frames):
 def interpolate_nan(img, method="nearest"):
     """
     Interpolate NaN on single channel array 2D
+
+    Parameters
+    ----------
+    img : ndarray
+        Input image.
+    method : str, optional
+        Interpolation method. Default is 'nearest'.
+
+    Returns
+    -------
+    ndarray
+        Image with NaNs interpolated.
     """
     from scipy.interpolate import griddata
 

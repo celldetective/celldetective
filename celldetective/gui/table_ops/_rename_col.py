@@ -9,6 +9,16 @@ from celldetective.gui.gui_utils import PandasModel
 class RenameColWidget(CelldetectiveWidget):
 
     def __init__(self, parent_window, column=None):
+        """
+        Initialize the RenameColWidget.
+
+        Parameters
+        ----------
+        parent_window : QMainWindow
+            The parent window.
+        column : str, optional
+            The column to rename.
+        """
 
         super().__init__()
         self.parent_window = parent_window
@@ -32,6 +42,7 @@ class RenameColWidget(CelldetectiveWidget):
         self.setAttribute(Qt.WA_DeleteOnClose)
 
     def rename_col(self):
+        """Rename the column."""
 
         old_name = self.column
         new_name = self.new_col_name.text()

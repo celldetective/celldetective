@@ -20,6 +20,20 @@ class SegModelParamsWidget(CelldetectiveWidget):
     def __init__(
         self, parent_window=None, model_name="SD_versatile_fluo", *args, **kwargs
     ):
+        """
+        Initialize the SegModelParamsWidget.
+
+        Parameters
+        ----------
+        parent_window : QMainWindow, optional
+            The parent window.
+        model_name : str, optional
+            The name of the model.
+        *args
+            Variable length argument list.
+        **kwargs
+            Arbitrary keyword arguments.
+        """
 
         super().__init__(*args)
         self.setWindowTitle("Channels")
@@ -46,7 +60,7 @@ class SegModelParamsWidget(CelldetectiveWidget):
         center_window(self)
 
     def locate_model_path(self):
-
+        """Locate the model path."""
         self.model_complete_path = locate_segmentation_model(self.model_name)
         if self.model_complete_path is None:
             print("Model could not be found. Abort.")
@@ -64,7 +78,7 @@ class SegModelParamsWidget(CelldetectiveWidget):
             self.input_config = json.load(config_file)
 
     def populate_widgets(self):
-
+        """Populate the widgets."""
         self.n_channels = len(self.required_channels)
         self.channel_cbs = [QComboBox() for i in range(self.n_channels)]
 

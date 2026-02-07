@@ -16,6 +16,16 @@ class UnifiedBatchProcess(Process):
     """
 
     def __init__(self, queue, process_args=None):
+        """
+        Initialize the unified batch process.
+
+        Parameters
+        ----------
+        queue : multiprocessing.Queue
+            Queue for progress updates.
+        process_args : dict, optional
+            Arguments for the process.
+        """
         super(UnifiedBatchProcess, self).__init__()
         self.queue = queue
         self.process_args = process_args
@@ -33,6 +43,9 @@ class UnifiedBatchProcess(Process):
         self.log_file = process_args.get("log_file", None)
 
     def run(self):
+        """
+        Run the unified batch process.
+        """
 
         if self.log_file is not None:
             from celldetective.log_manager import setup_logging
@@ -298,6 +311,9 @@ class UnifiedBatchProcess(Process):
         self.queue.close()
 
     def end_process(self):
+        """
+        Terminate the process.
+        """
         try:
             if self.is_alive():
                 self.terminate()

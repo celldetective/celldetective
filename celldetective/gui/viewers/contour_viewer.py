@@ -76,6 +76,34 @@ class CellEdgeVisualizer(StackVisualizer):
         *args,
         **kwargs,
     ):
+        """
+        Initialize the CellEdgeVisualizer.
+
+        Parameters
+        ----------
+        cell_type : str, optional
+            Type of cells ('effectors' by default).
+        edge_range : tuple, optional
+            Range of edge sizes (-30, 30) by default.
+        invert : bool, optional
+            Flag to invert the edge size (False by default).
+        parent_list_widget : QListWidget, optional
+            The parent QListWidget instance to add edge measurements.
+        parent_le : QLineEdit, optional
+            The parent QLineEdit instance to set the edge size.
+        labels : numpy.ndarray, optional
+            Array of labels for cell segmentation.
+        initial_edge : int, optional
+            Initial edge size (5 by default).
+        initial_mask_alpha : float, optional
+             Initial mask opacity value (0.5 by default).
+        single_value_mode : bool, optional
+            Whether to output a single value or tuple.
+        *args
+            Variable length argument list.
+        **kwargs
+            Arbitrary keyword arguments.
+        """
 
         # Initialize the widget and its attributes
         super().__init__(*args, **kwargs)
@@ -103,11 +131,20 @@ class CellEdgeVisualizer(StackVisualizer):
             self.generate_add_to_le_btn()
 
     def closeEvent(self, event):
+        """
+        Handle the close event.
+
+        Parameters
+        ----------
+        event : QEvent
+            The close event.
+        """
         if hasattr(self, "sdf_cache") and isinstance(self.sdf_cache, OrderedDict):
             self.sdf_cache.clear()
         super().closeEvent(event)
 
     def load_labels(self):
+        """Load the cell labels."""
         # Load the cell labels
 
         if self.labels is not None:
@@ -131,6 +168,7 @@ class CellEdgeVisualizer(StackVisualizer):
         self.compute_edge_labels()
 
     def locate_labels_virtual(self):
+        """Locate virtual labels."""
         # Locate virtual labels
 
         labels_path = (
@@ -170,6 +208,7 @@ class CellEdgeVisualizer(StackVisualizer):
                 self.init_label = imread(self.mask_paths[0])
 
     def generate_add_to_list_btn(self):
+        """Generate the add to list button."""
         # Generate the add to list button
 
         add_hbox = QHBoxLayout()
@@ -184,6 +223,7 @@ class CellEdgeVisualizer(StackVisualizer):
         self.canvas.layout.addLayout(add_hbox)
 
     def generate_add_to_le_btn(self):
+        """Generate the set measurement button for QLineEdit."""
         # Generate the set measurement button for QLineEdit
 
         add_hbox = QHBoxLayout()
@@ -196,6 +236,7 @@ class CellEdgeVisualizer(StackVisualizer):
         self.canvas.layout.addLayout(add_hbox)
 
     def set_measurement_in_parent_le(self):
+        """Set the edge size in the parent QLineEdit."""
         # Set the edge size in the parent QLineEdit
 
         slider_val = self.edge_slider.value()
@@ -207,6 +248,7 @@ class CellEdgeVisualizer(StackVisualizer):
         self.close()
 
     def set_measurement_in_parent_list(self):
+        """Add the edge size to the parent QListWidget."""
         # Add the edge size to the parent QListWidget
         # edge_slider is a QLabeledRangeSlider returning (min, max) tuple
         slider_val = self.edge_slider.value()
@@ -223,6 +265,7 @@ class CellEdgeVisualizer(StackVisualizer):
         self.close()
 
     def generate_label_imshow(self):
+        """Generate the label imshow."""
         # Generate the label imshow
 
         self.im_mask = self.ax.imshow(
@@ -234,6 +277,7 @@ class CellEdgeVisualizer(StackVisualizer):
         self.canvas.canvas.draw()
 
     def generate_edge_slider(self):
+        """Generate the edge size slider."""
         # Generate the edge size slider using a Range Slider
 
         edge_layout = QHBoxLayout()
@@ -267,6 +311,7 @@ class CellEdgeVisualizer(StackVisualizer):
         self.canvas.layout.addLayout(edge_layout)
 
     def generate_opacity_slider(self):
+        """Generate the opacity slider for the mask."""
         # Generate the opacity slider for the mask
 
         self.opacity_slider = QLabeledDoubleSlider()
@@ -283,6 +328,14 @@ class CellEdgeVisualizer(StackVisualizer):
         self.canvas.layout.addLayout(opacity_layout)
 
     def change_mask_opacity(self, value):
+        """
+        Change the opacity of the mask.
+
+        Parameters
+        ----------
+        value : float
+            The alpha value.
+        """
         # Change the opacity of the mask
 
         self.mask_alpha = value
@@ -290,6 +343,14 @@ class CellEdgeVisualizer(StackVisualizer):
         self.canvas.canvas.draw_idle()
 
     def change_edge_size(self, value):
+        """
+        Change the edge size.
+
+        Parameters
+        ----------
+        value : tuple or int
+             The new edge size.
+        """
         self.edge_size = value  # Tuple (min, max)
         self.compute_edge_labels()
         mask = np.ma.masked_where(self.edge_labels == 0, self.edge_labels)
@@ -297,6 +358,14 @@ class CellEdgeVisualizer(StackVisualizer):
         self.canvas.canvas.draw_idle()
 
     def change_frame(self, value):
+        """
+        Change the displayed frame and update the edge labels.
+
+        Parameters
+        ----------
+        value : int
+            The frame index.
+        """
         # Change the displayed frame and update the edge labels
 
         super().change_frame(value)
@@ -343,6 +412,7 @@ class CellEdgeVisualizer(StackVisualizer):
         self.im_mask.set_data(mask)
 
     def update_sdf(self):
+        """Compute Signed Distance Functions (SDFs) and Voronoi map for the current labels."""
         # Compute Signed Distance Functions (SDFs) and Voronoi map for the current labels
         from scipy.ndimage import distance_transform_edt
 
@@ -368,6 +438,7 @@ class CellEdgeVisualizer(StackVisualizer):
         self.voronoi_map = self.init_label[indices[0], indices[1]]
 
     def compute_edge_labels(self):
+        """Compute the edge labels using Composite SDF and Range Masking."""
         # Compute the edge labels using Composite SDF and Range Masking
         # Delegates to the unified utility in celldetective.utils
 

@@ -16,6 +16,19 @@ logger = get_logger()
 
 
 def get_zenodo_files(cat=None):
+    """
+    Get list of files available on Zenodo.
+
+    Parameters
+    ----------
+    cat : str, optional
+        Category of files to retrieve. Default is None.
+
+    Returns
+    -------
+    list or tuple
+        List of files, or (list of files, list of categories).
+    """
 
     zenodo_json = os.sep.join(
         [
@@ -68,14 +81,18 @@ def get_zenodo_files(cat=None):
 
 
 def download_url_to_file(url, dst, progress=True):
-    r"""Download object at the given URL to a local path.
-                    Thanks to torch, slightly modified, from Cellpose
-    Args:
-            url (string): URL of the object to download
-            dst (string): Full path where object will be saved, e.g. `/tmp/temporary_file`
-            progress (bool, optional): whether to display a progress bar to stderr
-                    Default: True
+    r"""
+    Download object at the given URL to a local path.
+    Thanks to torch, slightly modified, from Cellpose
 
+    Parameters
+    ----------
+    url : str
+        URL of the object to download.
+    dst : str
+        Full path where object will be saved, e.g. `/tmp/temporary_file`.
+    progress : bool, optional
+        Whether to display a progress bar to stderr. Default is True.
     """
     import ssl
     import time
@@ -191,6 +208,16 @@ def download_url_to_file(url, dst, progress=True):
 
 
 def download_zenodo_file(file, output_dir):
+    """
+    Download a file from Zenodo.
+
+    Parameters
+    ----------
+    file : str
+        Name of the file to download.
+    output_dir : str
+        Directory to save the downloaded file.
+    """
 
     logger.info(f"{file=} {output_dir=}")
 

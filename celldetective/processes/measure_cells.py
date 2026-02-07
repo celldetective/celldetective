@@ -46,6 +46,16 @@ class MeasurementProcess(Process):
     n_threads: int = 1
 
     def __init__(self, queue=None, process_args=None):
+        """
+        Initialize the process.
+
+        Parameters
+        ----------
+        queue : Queue
+            The queue to communicate with the main process.
+        process_args : dict
+            Arguments for the process.
+        """
 
         super().__init__()
 
@@ -66,6 +76,7 @@ class MeasurementProcess(Process):
         self.t0 = time.time()
 
     def check_possible_measurements(self):
+        """Check which measurements are possible based on available data."""
 
         if (self.file is None) or (self.intensity_measurement_radii is None):
             self.do_iso_intensities = False
@@ -89,6 +100,7 @@ class MeasurementProcess(Process):
                 self.features.append("label")
 
     def read_measurement_instructions(self):
+        """Read measurement instructions from the configuration file."""
 
         logger.info("Looking for measurement instruction file...")
         instr_path = PurePath(self.exp_dir, Path(f"{self.instruction_file}"))
@@ -155,11 +167,13 @@ class MeasurementProcess(Process):
             self.features = []
 
     def detect_channels(self):
+        """Detect the number of images per channel."""
         self.img_num_channels = _get_img_num_per_channel(
             self.channel_indices, self.len_movie, self.nbr_channels
         )
 
     def write_log(self):
+        """Write the measurement log."""
 
         features_log = f"features: {self.features}"
         border_distances_log = f"border_distances: {self.border_distances}"
@@ -188,6 +202,7 @@ class MeasurementProcess(Process):
             f.write(log + "\n")
 
     def prepare_folders(self):
+        """Prepare folder names and table names based on the mode."""
 
         if self.mode.lower() == "target" or self.mode.lower() == "targets":
             self.label_folder = "labels_targets"
@@ -211,6 +226,7 @@ class MeasurementProcess(Process):
             )
 
     def extract_experiment_parameters(self):
+        """Extract experiment parameters from the configuration."""
 
         self.movie_prefix = config_section_to_dict(self.config, "MovieSettings")[
             "movie_prefix"
@@ -237,6 +253,7 @@ class MeasurementProcess(Process):
         self.nbr_channels = len(self.channel_names)
 
     def locate_experiment_config(self):
+        """Locate the experiment configuration file."""
 
         parent1 = Path(self.pos).parent
         self.exp_dir = parent1.parent
@@ -247,6 +264,7 @@ class MeasurementProcess(Process):
             self.abort_process()
 
     def detect_tracks(self):
+        """Detect existing tracks or features."""
 
         # Load trajectories, add centroid if not in trajectory
         self.trajectories = self.pos + os.sep.join(
@@ -279,6 +297,7 @@ class MeasurementProcess(Process):
             self.do_iso_intensities = False
 
     def detect_movie_and_labels(self):
+        """Detect the movie file and label images."""
 
         self.label_path = natsorted(
             glob(os.sep.join([self.pos, self.label_folder, "*.tif"]))
@@ -305,6 +324,19 @@ class MeasurementProcess(Process):
             self.len_movie = len_movie_auto
 
     def parallel_job(self, indices):
+        """
+        Run measurements in parallel for a chunk of frames.
+
+        Parameters
+        ----------
+        indices : list
+            List of frame indices to process.
+
+        Returns
+        -------
+        list
+            List of DataFrames with measurements for each frame.
+        """
 
         measurements = []
 
@@ -467,6 +499,14 @@ class MeasurementProcess(Process):
         return measurements
 
     def setup_for_position(self, pos):
+        """
+        Setup the process for a specific position.
+
+        Parameters
+        ----------
+        pos : str
+            The position path.
+        """
 
         self.pos = pos
         # Experiment
@@ -481,6 +521,7 @@ class MeasurementProcess(Process):
         self.write_log()
 
     def process_position(self):
+        """Process the measurements for the position."""
         tprint("Measure")
 
         self.indices = list(range(self.img_num_channels.shape[1]))
@@ -572,6 +613,7 @@ class MeasurementProcess(Process):
         gc.collect()
 
     def run(self):
+        """Run the measurement process."""
 
         self.setup_for_position(self.pos)
         self.process_position()
@@ -581,11 +623,13 @@ class MeasurementProcess(Process):
         self.queue.close()
 
     def end_process(self):
+        """End the process."""
 
         self.terminate()
         self.queue.put("finished")
 
     def abort_process(self):
+        """Abort the process."""
 
         self.terminate()
         self.queue.put("error")

@@ -39,6 +39,22 @@ class SettingsNeighborhood(CelldetectiveWidget):
         *args,
         **kwargs,
     ):
+        """
+        Initialize the SettingsNeighborhood widget.
+
+        Parameters
+        ----------
+        neighborhood_type : str, optional
+            The type of neighborhood.
+        neighborhood_parameter_name : str, optional
+            The name of the neighborhood parameter.
+        parent_window : QMainWindow, optional
+            The parent window.
+        *args
+            Variable length argument list.
+        **kwargs
+            Arbitrary keyword arguments.
+        """
 
         super().__init__(*args, **kwargs)
         self.parent_window = parent_window
@@ -65,7 +81,7 @@ class SettingsNeighborhood(CelldetectiveWidget):
         center_window(self)
 
     def generate_main_layout(self):
-
+        """Generate the main layout."""
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(30, 30, 30, 30)
 
@@ -176,7 +192,7 @@ class SettingsNeighborhood(CelldetectiveWidget):
         grid.addWidget(self.ContentsMeasurements)
 
     def view_current_stack_with_circle(self):
-
+        """View the current stack with a circle visualization."""
         self.parent_window.parent_window.locate_image()
         if self.parent_window.parent_window.current_stack is not None:
             self.viewer = CellSizeViewer(
@@ -196,7 +212,7 @@ class SettingsNeighborhood(CelldetectiveWidget):
             self.viewer.show()
 
     def view_current_stack_with_edge(self):
-
+        """View the current stack with an edge visualization."""
         self.attr_parent.locate_image()
         if self.attr_parent.current_stack is not None:
             self.viewer = CellEdgeVisualizer(
@@ -353,7 +369,7 @@ class SettingsNeighborhood(CelldetectiveWidget):
         grid.addWidget(self.ContentsNeigh, 70)
 
     def fill_cbs_of_neighbor_population(self):
-
+        """Fill combo boxes for the neighbor population."""
         population = self.neighbor_population_cb.currentText()
         class_cols, status_cols, group_cols, time_cols = (
             self.locate_population_specific_columns(population)
@@ -368,7 +384,7 @@ class SettingsNeighborhood(CelldetectiveWidget):
         )
 
     def fill_cbs_of_reference_population(self):
-
+        """Fill combo boxes for the reference population."""
         population = self.reference_population_cb.currentText()
         class_cols, status_cols, group_cols, time_cols = (
             self.locate_population_specific_columns(population)
@@ -386,7 +402,7 @@ class SettingsNeighborhood(CelldetectiveWidget):
         )
 
     def switch_not_reference(self):
-
+        """Switch the 'not' status for the reference population."""
         self.not_status_reference = not self.not_status_reference
         if self.not_status_reference:
             self.reference_switch_status_btn.setIcon(
@@ -400,7 +416,7 @@ class SettingsNeighborhood(CelldetectiveWidget):
             self.reference_switch_status_btn.setIconSize(QSize(20, 20))
 
     def switch_not_neigh(self):
-
+        """Switch the 'not' status for the neighbor population."""
         self.not_status_neighbor = not self.not_status_neighbor
         if self.not_status_neighbor:
             self.neighbor_switch_status_btn.setIcon(
@@ -414,6 +430,19 @@ class SettingsNeighborhood(CelldetectiveWidget):
             self.neighbor_switch_status_btn.setIconSize(QSize(20, 20))
 
     def locate_population_specific_columns(self, population):
+        """
+        Locate specific columns for a population.
+
+        Parameters
+        ----------
+        population : str
+            The population name.
+
+        Returns
+        -------
+        tuple
+            A tuple containing lists of columns: (class_columns, status_columns, group_columns, time_columns).
+        """
 
         # Look for all classes and times
         tables = glob(

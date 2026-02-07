@@ -19,6 +19,14 @@ from PyQt5.QtGui import QDoubleValidator, QIntValidator
 class CelldetectiveSettingsPanel(CelldetectiveMainWindow):
 
     def __init__(self, title=""):
+        """
+        Initialize the CelldetectiveSettingsPanel.
+
+        Parameters
+        ----------
+        title : str, optional
+            The title of the settings panel.
+        """
 
         super().__init__()
         self.setWindowTitle(title)
@@ -36,25 +44,30 @@ class CelldetectiveSettingsPanel(CelldetectiveMainWindow):
         self.center_window()
 
     def _create_widgets(self):
+        """Create the widgets."""
         self.submit_btn: QPushButton = QPushButton("Save")
         self.submit_btn.setStyleSheet(self.button_style_sheet)
         self.submit_btn.clicked.connect(self._write_instructions)
 
     def center_window(self):
+        """Center the window on the screen."""
         return center_window(self)
 
     def _get_screen_height(self):
+        """Get the screen height."""
         app = QApplication.instance()
         screen = app.primaryScreen()
         geometry = screen.availableGeometry()
         self._screen_width, self._screen_height = geometry.getRect()[-2:]
 
     def _adjust_size(self):
+        """Adjust the size of the widget."""
         self._widget.adjustSize()
         self._scroll_area.adjustSize()
         self.adjustSize()
 
     def _build_layouts(self):
+        """Build the layouts."""
 
         self._layout: QVBoxLayout = QVBoxLayout()
         self._widget: CelldetectiveWidget = CelldetectiveWidget()
@@ -75,8 +88,10 @@ class CelldetectiveSettingsPanel(CelldetectiveMainWindow):
 
     @abstractmethod
     def _load_previous_instructions(self):
+        """Load previous instructions."""
         pass
 
     @abstractmethod
     def _write_instructions(self):
+        """Write instructions."""
         pass

@@ -176,6 +176,18 @@ with open(pos + f"log_{mode}.json", "a") as f:
 
 # Loop over all frames and segment
 def segment_index(indices):
+    """
+    Segment a chunk of frames.
+
+    Parameters
+    ----------
+    indices : list
+        List of frame indices to process.
+
+    Returns
+    -------
+    None
+    """
 
     if model_type == "stardist":
         model, scale_model = _prep_stardist_model(

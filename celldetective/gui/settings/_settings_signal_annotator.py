@@ -30,6 +30,14 @@ class SettingsSignalAnnotator(CelldetectiveSettingsPanel):
     """
 
     def __init__(self, parent_window=None):
+        """
+        Initialize the SettingsSignalAnnotator.
+
+        Parameters
+        ----------
+        parent_window : QMainWindow, optional
+            The parent window.
+        """
 
         self.parent_window = parent_window
         self.mode = self.parent_window.mode
@@ -60,6 +68,7 @@ class SettingsSignalAnnotator(CelldetectiveSettingsPanel):
         self.resize(int(self.width() * 1.4), int(self._screen_height * 0.65))
 
     def _add_to_layout(self):
+        """Add widgets to the layout."""
 
         sub_layout = QVBoxLayout()
         sub_layout.setContentsMargins(10, 10, 10, 20)

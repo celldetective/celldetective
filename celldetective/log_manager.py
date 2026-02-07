@@ -12,6 +12,18 @@ FILE_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 def setup_global_logging(level=logging.INFO, log_file=None):
     """
     Sets up the global logger for the application.
+
+    Parameters
+    ----------
+    level : int, optional
+            The logging level (e.g., logging.INFO, logging.DEBUG). Default is logging.INFO.
+    log_file : str, optional
+            Path to a file where logs should be saved. If None, logs are only output to the console. Default is None.
+
+    Returns
+    -------
+    logging.Logger
+            The configured root logger.
     """
     root_logger = logging.getLogger("celldetective")
     root_logger.setLevel(level)
@@ -56,6 +68,16 @@ def setup_global_logging(level=logging.INFO, log_file=None):
 def get_logger(name="celldetective"):
     """
     Returns a logger with the specified name, defaulting to the package logger.
+
+    Parameters
+    ----------
+    name : str, optional
+            The name of the logger to retrieve. Default is "celldetective".
+
+    Returns
+    -------
+    logging.Logger
+            The requested logger.
     """
     return logging.getLogger(name)
 

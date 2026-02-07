@@ -6,6 +6,7 @@ import os
 class Styles(object):
 
     def __init__(self):
+        """Initialize the Styles class."""
 
         self.init_button_styles()
         self.init_tab_styles()
@@ -77,6 +78,7 @@ class Styles(object):
         """
 
     def init_button_styles(self):
+        """Initialize button styles."""
 
         self.button_style_sheet = """
 			QPushButton {
@@ -236,6 +238,7 @@ class Styles(object):
 		"""
 
     def init_tab_styles(self):
+        """Initialize tab styles."""
 
         self.qtab_style = """
 			QTabWidget::pane {
@@ -328,6 +331,7 @@ class Styles(object):
 		"""
 
     def init_label_styles(self):
+        """Initialize label styles."""
 
         self.block_title = """
 			font-weight: bold;

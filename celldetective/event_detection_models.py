@@ -512,8 +512,50 @@ class SignalDetectionModel(object):
 
         Parameters
         ----------
-        Same as `fit_from_directory`, but instead of loading data from directories, this method accepts preloaded and
-        optionally preprocessed datasets directly.
+        x_train : ndarray
+                The training data (signals).
+        y_time_train : ndarray
+                The training labels for regression (time of interest).
+        y_class_train : ndarray
+                The training labels for classification.
+        normalize : bool, optional
+                Whether to normalize the input signals (default is True).
+        normalization_percentile : list or None, optional
+                Percentiles for signal normalization (default is None).
+        normalization_values : list or None, optional
+                Specific values for signal normalization (default is None).
+        normalization_clip : bool, optional
+                Whether to clip the normalized signals (default is None).
+        pad : bool, optional
+                Whether to pad the input signals to match the model's expected signal length (default is True).
+        validation_data : tuple of ndarray, optional
+                Data to use for validation, expected format: (x_val, y_class_val, y_time_val) (default is None).
+        test_data : tuple of ndarray, optional
+                Data to use for testing, expected format: (x_test, y_class_test, y_time_test) (default is None).
+        channel_option : list of str, optional
+                Specifies the channels to be used for signal analysis (default is ["live_nuclei_channel", "dead_nuclei_channel"]).
+        model_name : str, optional
+                Name of the model for saving purposes (default is None).
+        target_directory : str, optional
+                Directory where the trained model and outputs will be saved (default is None).
+        augment : bool, optional
+                Whether to augment the training data (default is True).
+        augmentation_factor : int, optional
+                Factor by which to augment the training data (default is 3).
+        validation_split : float, optional
+                Fraction of the data to be used as validation set if validation_data is not provided (default is 0.25).
+        batch_size : int, optional
+                Batch size for training (default is 64).
+        epochs : int, optional
+                Number of epochs to train for (default is 300).
+        recompile_pretrained : bool, optional
+                Whether to recompile a pretrained model (default is False).
+        learning_rate : float, optional
+                Learning rate for the optimizer (default is 0.001).
+        loss_reg : str or keras.losses.Loss, optional
+                Loss function for the regression model (default is "mse").
+        loss_class : str or keras.losses.Loss, optional
+                Loss function for the classification model (default is None, which uses CategoricalCrossentropy).
 
         Notes
         -----
@@ -2409,13 +2451,17 @@ def random_time_shift(signal, time_of_interest, cclass, model_signal_length):
             The original time of interest for the signal. Use -1 if not applicable.
     model_signal_length : int
             The length of the model signal.
+    cclass : array-like
+            The class label (one-hot encoded).
 
     Returns
     -------
-    array-like
+    signal : array-like
             The shifted fluorescence signal.
-    int or float
+    target_time : int or float
             The new time of interest if available; otherwise, the original time of interest.
+    cclass : array-like
+            The (possibly modified) class label.
 
     Notes
     -----

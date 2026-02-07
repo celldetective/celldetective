@@ -10,9 +10,22 @@ from celldetective import get_logger
 
 logger = get_logger(__name__)
 
+
 class ChannelOffsetOptionsLayout(QVBoxLayout, Styles):
 
     def __init__(self, parent_window=None, *args, **kwargs):
+        """
+        Initialize the ChannelOffsetOptionsLayout.
+
+        Parameters
+        ----------
+        parent_window : QMainWindow, optional
+            The parent window.
+        *args
+            Variable length argument list.
+        **kwargs
+            Arbitrary keyword arguments.
+        """
 
         super().__init__(*args, **kwargs)
 
@@ -29,6 +42,7 @@ class ChannelOffsetOptionsLayout(QVBoxLayout, Styles):
         self.add_to_layout()
 
     def generate_widgets(self):
+        """Generate the widgets."""
 
         self.channel_lbl = QLabel("Channel: ")
         self.channels_cb = QComboBox()
@@ -65,6 +79,7 @@ class ChannelOffsetOptionsLayout(QVBoxLayout, Styles):
         )
 
     def add_to_layout(self):
+        """Add widgets to the layout."""
 
         channel_ch_hbox = QHBoxLayout()
         channel_ch_hbox.addWidget(self.channel_lbl, 25)
@@ -89,6 +104,7 @@ class ChannelOffsetOptionsLayout(QVBoxLayout, Styles):
         self.addLayout(btn_hbox)
 
     def add_instructions_to_parent_list(self):
+        """Add instructions to the parent protocol list."""
 
         self.generate_instructions()
         self.parent_window.protocol_layout.protocols.append(self.instructions)
@@ -100,6 +116,7 @@ class ChannelOffsetOptionsLayout(QVBoxLayout, Styles):
         self.parent_window.protocol_layout.protocol_list.addItem(correction_description)
 
     def generate_instructions(self):
+        """Generate the instructions dictionary."""
 
         self.instructions = {
             "correction_type": "offset",
@@ -109,6 +126,7 @@ class ChannelOffsetOptionsLayout(QVBoxLayout, Styles):
         }
 
     def set_target_channel(self):
+        """Set the target channel index."""
 
         channel_indices = _extract_channel_indices_from_config(
             self.attr_parent.exp_config, [self.channels_cb.currentText()]
@@ -116,6 +134,7 @@ class ChannelOffsetOptionsLayout(QVBoxLayout, Styles):
         self.target_channel = channel_indices[0]
 
     def open_offset_viewer(self):
+        """Open the channel offset viewer."""
         from celldetective.gui.viewers.channel_offset_viewer import ChannelOffsetViewer
 
         self.attr_parent.locate_image()

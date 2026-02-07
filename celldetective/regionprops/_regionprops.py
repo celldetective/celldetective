@@ -90,6 +90,18 @@ class CustomRegionProps(RegionProperties):
     """
 
     def __init__(self, channel_names, *args, **kwargs):
+        """
+        Initialize CustomRegionProps.
+
+        Parameters
+        ----------
+        channel_names : list
+            List of channel names.
+        *args
+            Variable length argument list.
+        **kwargs
+            Arbitrary keyword arguments.
+        """
 
         self.channel_names = channel_names
         if isinstance(self.channel_names, np.ndarray):
@@ -97,6 +109,19 @@ class CustomRegionProps(RegionProperties):
         super().__init__(*args, **kwargs)
 
     def __getattr__(self, attr):
+        """
+        Get attribute.
+
+        Parameters
+        ----------
+        attr : str
+            Attribute name.
+
+        Returns
+        -------
+        object
+            Attribute value.
+        """
 
         if self.channel_names is not None and self._multichannel:
             assert (
@@ -192,6 +217,14 @@ class CustomRegionProps(RegionProperties):
     @property
     @_cached
     def image_intensity(self):
+        """
+        Get intensity image.
+
+        Returns
+        -------
+        ndarray
+            Intensity image.
+        """
         if self._intensity_image is None:
             raise AttributeError("No intensity image specified.")
         image = (
@@ -213,6 +246,32 @@ def regionprops(
     offset=None,
 ):
     """
+    Measure properties of labeled image regions.
+
+    Parameters
+    ----------
+    label_image : (N, M, P) ndarray
+        Labeled input image. Integer array where non-zero values represent distinct regions.
+    intensity_image : (N, M, P, C) ndarray, optional
+        Intensity image with same size as labeled image. Default is None.
+    cache : bool, optional
+        Whether to cache calculated properties. Default is True.
+    channel_names : list, optional
+        Names of channels in intensity image. Default is None.
+    extra_properties : list, optional
+        Extra properties to measure. Default is None.
+    spacing : tuple, optional
+        Pixel spacing. Default is None.
+    offset : tuple, optional
+        Offset of the labels. Default is None.
+
+    Returns
+    -------
+    list
+        List of RegionProperties.
+
+    Notes
+    -----
     From https://github.com/scikit-image/scikit-image/blob/main/skimage/measure/_regionprops.py with a modification to use CustomRegionProps
     """
 
@@ -268,6 +327,23 @@ def regionprops(
 
 
 def _props_to_dict(regions, properties=("label", "bbox"), separator="-"):
+    """
+    Convert region properties to dictionary.
+
+    Parameters
+    ----------
+    regions : list
+        List of RegionProperties.
+    properties : tuple, optional
+        Properties to include. Default is ("label", "bbox").
+    separator : str, optional
+        Separator for multi-column properties. Default is "-".
+
+    Returns
+    -------
+    dict
+        Dictionary of properties.
+    """
 
     out = {}
     n = len(regions)
@@ -334,6 +410,34 @@ def regionprops_table(
     channel_names=None,
 ):
     """
+    Compute region properties and return as a pandas-compatible table.
+
+    Parameters
+    ----------
+    label_image : (N, M) ndarray
+        Labeled input image.
+    intensity_image : (N, M, C) ndarray, optional
+        Intensity image. Default is None.
+    properties : tuple, optional
+        Properties to include. Default is ("label", "bbox").
+    cache : bool, optional
+        Whether to cache calculated properties. Default is True.
+    separator : str, optional
+        Separator for multi-column properties. Default is "-".
+    extra_properties : list, optional
+        Extra properties to measure. Default is None.
+    spacing : tuple, optional
+        Pixel spacing. Default is None.
+    channel_names : list, optional
+        Names of channels in intensity image. Default is None.
+
+    Returns
+    -------
+    dict
+        Dictionary of properties.
+
+    Notes
+    -----
     From https://github.com/scikit-image/scikit-image/blob/main/skimage/measure/_regionprops.py
     """
     regions = regionprops(

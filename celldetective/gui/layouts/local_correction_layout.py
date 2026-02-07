@@ -10,6 +10,14 @@ class LocalCorrectionLayout(BackgroundFitCorrectionLayout):
     """docstring for ClassName"""
 
     def __init__(self, *args):
+        """
+        Initialize the LocalCorrectionLayout.
+
+        Parameters
+        ----------
+        *args
+            Variable length argument list.
+        """
 
         super().__init__(*args)
 
@@ -43,6 +51,7 @@ class LocalCorrectionLayout(BackgroundFitCorrectionLayout):
         self.corrected_stack_viewer.hide()
 
     def set_distance_graphically(self):
+        """Set the distance graphically using the contour viewer."""
         from celldetective.gui.viewers.contour_viewer import CellEdgeVisualizer
 
         self.attr_parent.locate_image()
@@ -68,6 +77,7 @@ class LocalCorrectionLayout(BackgroundFitCorrectionLayout):
             self.viewer.show()
 
     def generate_instructions(self):
+        """Generate the instructions dictionary."""
 
         if self.operation_layout.subtract_btn.isChecked():
             operation = "subtract"

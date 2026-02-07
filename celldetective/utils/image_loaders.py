@@ -357,6 +357,25 @@ def auto_load_number_of_frames(stack_path):
 
 
 def _load_frames_to_segment(file, indices, scale_model=None, normalize_kwargs=None):
+    """
+    Load frames for segmentation.
+
+    Parameters
+    ----------
+    file : str
+        Path to the image stack.
+    indices : list or ndarray
+        Indices of frames to load.
+    scale_model : float, optional
+        Scaling factor for the model. Default is None.
+    normalize_kwargs : dict, optional
+        Normalization keyword arguments. Default is None.
+
+    Returns
+    -------
+    ndarray
+        Loaded and preprocessed frames.
+    """
 
     frames = load_frames(
         indices,
@@ -374,6 +393,21 @@ def _load_frames_to_segment(file, indices, scale_model=None, normalize_kwargs=No
 
 
 def _load_frames_to_measure(file, indices):
+    """
+    Load frames for measurement.
+
+    Parameters
+    ----------
+    file : str
+        Path to the image stack.
+    indices : list or ndarray
+        Indices of frames to load.
+
+    Returns
+    -------
+    ndarray
+        Loaded frames.
+    """
     return load_frames(indices, file, scale=None, normalize_input=False)
 
 
@@ -486,6 +520,8 @@ def _rearrange_multichannel_frame(
             - If 3D, the function identifies the channel axis (assumed to be the axis with the smallest size)
               and moves it to the last position.
             - If 2D, the function adds a singleton channel axis to make it compatible with 3D processing.
+    n_channels : int, optional
+            Number of channels in the image. If provided, helps identify the channel axis. Default is None.
 
     Returns
     -------

@@ -6,6 +6,11 @@ import numpy as np
 def consume(iterator):
     """
     adapted from https://github.com/CSBDeep/CSBDeep/blob/main/csbdeep/utils/utils.py
+
+    Parameters
+    ----------
+    iterator : iterable
+        The iterator to consume.
     """
     collections.deque(iterator, maxlen=0)
 
@@ -14,6 +19,17 @@ def axes_check_and_normalize(axes, length=None, disallowed=None, return_allowed=
     """
     adapted from https://github.com/CSBDeep/CSBDeep/blob/main/csbdeep/utils/utils.py
     S(ample), T(ime), C(hannel), Z, Y, X
+
+    Parameters
+    ----------
+    axes : str
+        The axes string to check and normalize.
+    length : int, optional
+        The expected length of the axes string. Default is None.
+    disallowed : str, optional
+        A string of disallowed axes. Default is None.
+    return_allowed : bool, optional
+        Whether to return the allowed axes string. Default is False.
     """
     allowed = "STCZYX"
     assert axes is not None, ValueError("axis cannot be None.")
@@ -29,6 +45,11 @@ def axes_dict(axes):
     """
     adapted from https://github.com/CSBDeep/CSBDeep/blob/main/csbdeep/utils/utils.py
     from axes string to dict
+
+    Parameters
+    ----------
+    axes : str
+        The axes string to convert to a dictionary.
     """
     axes, allowed = axes_check_and_normalize(axes, return_allowed=True)
     return {a: None if axes.find(a) == -1 else axes.find(a) for a in allowed}
@@ -40,6 +61,17 @@ def move_image_axes(x, fr, to, adjust_singletons=False):
     adapted from https://github.com/CSBDeep/CSBDeep/blob/main/csbdeep/utils/utils.py
     x: ndarray
     fr,to: axes string (see `axes_dict`)
+
+    Parameters
+    ----------
+    x : ndarray
+        Input image.
+    fr : str
+        Source axes.
+    to : str
+        Target axes.
+    adjust_singletons : bool, optional
+        Whether to adjust singleton axes. Default is False.
     """
     fr = axes_check_and_normalize(fr, length=x.ndim)
     to = axes_check_and_normalize(to)

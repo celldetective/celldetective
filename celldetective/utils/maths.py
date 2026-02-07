@@ -134,6 +134,25 @@ def derivative(x, timeline, window, mode="bi"):
 
 
 def differentiate_per_track(tracks, measurement, window_size=3, mode="bi"):
+    """
+    Compute derivate of a measurement per track.
+
+    Parameters
+    ----------
+    tracks : DataFrame
+        Tracking data.
+    measurement : str
+        Measurement column name.
+    window_size : int, optional
+        Window size for differentiation. Default is 3.
+    mode : str, optional
+        Differentiation mode. Default is "bi".
+
+    Returns
+    -------
+    DataFrame
+        Tracking data with derivative column.
+    """
 
     groupby_cols = ["TRACK_ID"]
     if "position" in list(tracks.columns):
@@ -151,6 +170,23 @@ def differentiate_per_track(tracks, measurement, window_size=3, mode="bi"):
 
 
 def velocity_per_track(tracks, window_size=3, mode="bi"):
+    """
+    Compute velocity per track.
+
+    Parameters
+    ----------
+    tracks : DataFrame
+        Tracking data.
+    window_size : int, optional
+        Window size for differentiation. Default is 3.
+    mode : str, optional
+        Differentiation mode. Default is "bi".
+
+    Returns
+    -------
+    DataFrame
+        Tracking data with velocity column.
+    """
 
     groupby_cols = ["TRACK_ID"]
     if "position" in list(tracks.columns):

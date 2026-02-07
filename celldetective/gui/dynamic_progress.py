@@ -1,7 +1,16 @@
 import numpy as np
 from PyQt5.QtCore import QTimer, Qt, pyqtSignal
-from PyQt5.QtWidgets import QApplication, QComboBox, QDialog, QHBoxLayout, QLabel, QProgressBar, QPushButton, \
-	QSizePolicy, QVBoxLayout
+from PyQt5.QtWidgets import (
+    QApplication,
+    QComboBox,
+    QDialog,
+    QHBoxLayout,
+    QLabel,
+    QProgressBar,
+    QPushButton,
+    QSizePolicy,
+    QVBoxLayout,
+)
 from fonticon_mdi6 import MDI6
 from matplotlib import pyplot as plt
 from matplotlib.figure import Figure
@@ -12,6 +21,7 @@ from celldetective.gui.base.figure_canvas import FigureCanvas
 from celldetective import get_logger
 
 logger = get_logger(__name__)
+
 
 class DynamicProgressDialog(QDialog, Styles):
     canceled = pyqtSignal()
@@ -26,6 +36,24 @@ class DynamicProgressDialog(QDialog, Styles):
         max_epochs=100,
         parent=None,
     ):
+        """
+        Initialize the DynamicProgressDialog.
+
+        Parameters
+        ----------
+        title : str, optional
+            The window title.
+        label_text : str, optional
+            The label text.
+        minimum : int, optional
+            The minimum progress value.
+        maximum : int, optional
+            The maximum progress value.
+        max_epochs : int, optional
+            The maximum number of epochs.
+        parent : QWidget, optional
+            The parent widget.
+        """
         super().__init__(parent)
         Styles.__init__(self)
         self.setWindowTitle(title)
@@ -132,6 +160,7 @@ class DynamicProgressDialog(QDialog, Styles):
         self._screen_width, self._screen_height = geometry.getRect()[-2:]
 
     def on_skip(self):
+        """Handle skip button click."""
         self.interrupted.emit()
         self.skip_btn.setDisabled(True)
         self.user_interrupted = True
@@ -140,6 +169,7 @@ class DynamicProgressDialog(QDialog, Styles):
         )
 
     def apply_plot_style(self):
+        """Apply style to the plot."""
         self.ax.spines["top"].set_visible(False)
         self.ax.spines["right"].set_visible(False)
         self.ax.patch.set_alpha(0.0)
@@ -231,6 +261,7 @@ class DynamicProgressDialog(QDialog, Styles):
         self.canvas.draw()
 
     def toggle_log_scale(self):
+        """Toggle between linear and log scale."""
         self.log_scale = self.btn_log.isChecked()
         self.update_plot_display()
         self.figure.tight_layout()
@@ -252,6 +283,7 @@ class DynamicProgressDialog(QDialog, Styles):
                 pass
 
     def auto_scale(self):
+        """Auto scale the plot."""
         target_metric = self.metric_combo.currentText()
         if not target_metric or target_metric not in self.metrics_history:
             return
@@ -295,23 +327,40 @@ class DynamicProgressDialog(QDialog, Styles):
         self.canvas.draw()
 
     def force_update_plot(self):
+        """Force plot update."""
         self.update_plot_display()
 
     def on_cancel(self):
+        """Handle cancel button click."""
         self.canceled.emit()
         self.reject()
 
     def update_progress(self, value, text=None):
+        """
+        Update the progress bar.
+
+        Parameters
+        ----------
+        value : int
+            The progress value.
+        text : str, optional
+            The status text.
+        """
         self.progress_bar.setValue(value)
         if text:
             self.status_label.setText(text)
 
     def update_plot(self, epoch_data):
+        """
+        Update the plot with new epoch data.
+
+        Parameters
+        ----------
+        epoch_data : dict
+            Dictionary containing 'epoch', 'metrics' (dict), 'val_metrics' (dict), 'model_name', 'total_epochs'.
+        """
         import time
 
-        """
-        epoch_data: dict with keys 'epoch', 'metrics' (dict), 'val_metrics' (dict), 'model_name', 'total_epochs'
-        """
         model_name = epoch_data.get("model_name", "Unknown")
         total_epochs = epoch_data.get("total_epochs", 100)
         epoch = epoch_data.get("epoch", 0)
@@ -378,6 +427,7 @@ class DynamicProgressDialog(QDialog, Styles):
             self.last_update_time = current_time
 
     def update_plot_display(self):
+        """Update the plot display based on selected metric and scale."""
         target_metric = self.metric_combo.currentText()
         if not target_metric or target_metric not in self.metrics_history:
             return
@@ -439,6 +489,14 @@ class DynamicProgressDialog(QDialog, Styles):
                 pass
 
     def update_status(self, text):
+        """
+        Update the status label.
+
+        Parameters
+        ----------
+        text : str
+            The status text.
+        """
         self.status_label.setText(text)
         if "Loading" in text and "librar" in text.lower():
             try:

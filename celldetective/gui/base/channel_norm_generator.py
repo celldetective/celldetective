@@ -16,6 +16,20 @@ class ChannelNormGenerator(QVBoxLayout, Styles):
     """Generator for list of channels"""
 
     def __init__(self, parent_window=None, init_n_channels=4, mode="signals", *args):
+        """
+        Initialize the ChannelNormGenerator.
+
+        Parameters
+        ----------
+        parent_window : QMainWindow, optional
+            The parent window.
+        init_n_channels : int, optional
+            Number of initial channels, default is 4.
+        mode : str, optional
+            The mode ('signals' or 'channels'), default is 'signals'.
+        *args
+            Variable length argument list.
+        """
         super().__init__(*args)
 
         self.parent_window = parent_window
@@ -39,6 +53,13 @@ class ChannelNormGenerator(QVBoxLayout, Styles):
     def add_items_truncated(self, combo, items):
         """
         Add items to a combobox with truncated text and full text in tooltip/data.
+
+        Parameters
+        ----------
+        combo : QComboBox
+            The combo box to add items to.
+        items : list
+            The list of items to add.
         """
         combo.clear()
         for item in items:
@@ -53,6 +74,7 @@ class ChannelNormGenerator(QVBoxLayout, Styles):
             combo.setItemData(idx, item_text, Qt.ToolTipRole)
 
     def generate_widgets(self):
+        """Generate the widgets."""
 
         self.channel_cbs = [QSearchableComboBox() for i in range(self.init_n_channels)]
         self.channel_labels = [QLabel() for i in range(self.init_n_channels)]
@@ -191,6 +213,7 @@ class ChannelNormGenerator(QVBoxLayout, Styles):
         self.add_col_btn.setIcon(icon(MDI6.plus, color="black"))
 
     def add_channel(self):
+        """Add a new channel row."""
 
         self.channel_cbs.append(QSearchableComboBox())
         self.channel_labels.append(QLabel())
@@ -247,6 +270,7 @@ class ChannelNormGenerator(QVBoxLayout, Styles):
         self.channels_vb.addLayout(channel_norm_options_layout)
 
     def add_to_layout(self):
+        """Add widgets to the layout."""
 
         self.channels_vb = QVBoxLayout()
         self.channel_option_layouts = []
@@ -284,6 +308,10 @@ class ChannelNormGenerator(QVBoxLayout, Styles):
         """
         Use absolute or percentile values for the normalization of each individual channel.
 
+        Parameters
+        ----------
+        index : int
+            The index of the channel.
         """
 
         currentNormMode = self.normalization_mode[index]
@@ -318,6 +346,14 @@ class ChannelNormGenerator(QVBoxLayout, Styles):
             self.normalization_max_value_le[index].setText("1000")
 
     def switch_clipping_mode(self, index):
+        """
+        Switch the clipping mode for a specific channel.
+
+        Parameters
+        ----------
+        index : int
+            The index of the channel.
+        """
 
         currentClipMode = self.clip_option[index]
         self.clip_option[index] = not currentClipMode
@@ -337,6 +373,7 @@ class ChannelNormGenerator(QVBoxLayout, Styles):
             self.normalization_clip_btns[index].setStyleSheet(self.button_select_all)
 
     def check_valid_channels(self):
+        """Check if the selected channels are valid and enable/disable the submit button."""
 
         if hasattr(self.parent_window, "submit_btn"):
             if np.all([cb.currentData() == "--" for cb in self.channel_cbs]):

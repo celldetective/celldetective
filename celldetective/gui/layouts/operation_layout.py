@@ -6,6 +6,16 @@ class OperationLayout(QVBoxLayout):
     """docstring for ClassName"""
 
     def __init__(self, ratio=(0.25, 0.75), *args):
+        """
+        Initialize the OperationLayout.
+
+        Parameters
+        ----------
+        ratio : tuple, optional
+            The ratio for the layout.
+        *args
+            Variable length argument list.
+        """
 
         super().__init__(*args)
 
@@ -14,6 +24,7 @@ class OperationLayout(QVBoxLayout):
         self.generate_layout()
 
     def generate_widgets(self):
+        """Generate the widgets."""
 
         self.operation_lbl = QLabel("Operation: ")
         self.operation_group = QButtonGroup()
@@ -33,6 +44,7 @@ class OperationLayout(QVBoxLayout):
         self.clip_group.addButton(self.clip_not_btn)
 
     def generate_layout(self):
+        """Generate the layout."""
 
         operation_layout = QHBoxLayout()
         operation_layout.addWidget(self.operation_lbl, 100 * int(self.ratio[0]))
@@ -59,6 +71,7 @@ class OperationLayout(QVBoxLayout):
         self.clip_not_btn.click()
 
     def activate_clipping_options(self):
+        """Activate clipping options based on the operation."""
 
         if self.subtract_btn.isChecked():
             self.clip_btn.setEnabled(True)

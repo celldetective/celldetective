@@ -502,6 +502,27 @@ def collapse_trajectories_by_status(
     population="effectors",
     groupby_columns=["position", "TRACK_ID"],
 ):
+    """
+    Collapse trajectories based on status.
+
+    Parameters
+    ----------
+    df : DataFrame
+        Tracking data.
+    status : str, optional
+        Status column name. Default is None.
+    projection : str, optional
+        Projection method (e.g., "mean"). Default is "mean".
+    population : str, optional
+        Population name. Default is "effectors".
+    groupby_columns : list, optional
+        Columns to group by. Default is ["position", "TRACK_ID"].
+
+    Returns
+    -------
+    DataFrame or None
+        Collapsed dataframe, or None if invalid status.
+    """
 
     static_columns = [
         "well_index",

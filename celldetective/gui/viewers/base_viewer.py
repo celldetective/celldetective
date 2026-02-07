@@ -24,6 +24,18 @@ class StackLoader(QThread):
     frame_loaded = pyqtSignal(int, int, np.ndarray)  # channel, frame_idx, image
 
     def __init__(self, stack_path, img_num_per_channel, n_channels):
+        """
+        Initialize the StackLoader.
+
+        Parameters
+        ----------
+        stack_path : str
+            Path to the image stack.
+        img_num_per_channel : numpy.ndarray
+            Array of image numbers per channel.
+        n_channels : int
+            Number of channels.
+        """
         super().__init__()
         self.stack_path = stack_path
         self.img_num_per_channel = img_num_per_channel
@@ -36,6 +48,18 @@ class StackLoader(QThread):
         self.condition = QWaitCondition()
 
     def update_priority(self, channel, frame, current_cache_keys):
+        """
+        Update the loading priority.
+
+        Parameters
+        ----------
+        channel : int
+            Target channel.
+        frame : int
+            Target frame.
+        current_cache_keys : list
+            List of currently cached keys.
+        """
         self.mutex.lock()
         self.target_channel = channel
         self.priority_frame = frame
@@ -44,11 +68,13 @@ class StackLoader(QThread):
         self.mutex.unlock()
 
     def stop(self):
+        """Stop the loader thread."""
         self.running = False
         self.condition.wakeAll()
         self.wait()
 
     def run(self):
+        """Run the loader thread."""
         while self.running:
             self.mutex.lock()
             if not self.running:
@@ -171,6 +197,36 @@ class StackVisualizer(CelldetectiveWidget):
         background_color="transparent",
         imshow_kwargs=None,
     ):
+        """
+        Initialize the StackVisualizer.
+
+        Parameters
+        ----------
+        stack : numpy.ndarray, optional
+            The stack of images.
+        stack_path : str, optional
+            The path to the stack of images if provided as a file.
+        frame_slider : bool, optional
+            Enable frame navigation slider.
+        contrast_slider : bool, optional
+             Enable contrast adjustment slider.
+        channel_cb : bool, optional
+            Enable channel selection dropdown.
+        channel_names : list, optional
+            Names of the channels if `channel_cb` is True.
+        n_channels : int, optional
+            Number of channels.
+        target_channel : int, optional
+            Index of the target channel.
+        window_title : str, optional
+            Title of the window.
+        PxToUm : float, optional
+            Pixel to micrometer conversion factor.
+        background_color : str, optional
+            Background color of the widget.
+        imshow_kwargs : dict, optional
+            Additional keyword arguments for imshow function.
+        """
         super().__init__()
 
         # Default mutable argument handling
@@ -228,6 +284,7 @@ class StackVisualizer(CelldetectiveWidget):
         center_window(self)
 
     def generate_custom_tools(self):
+        """Generate custom toolbar tools."""
 
         tools_layout = QHBoxLayout()
         tools_layout.setContentsMargins(15, 0, 15, 0)
@@ -281,6 +338,7 @@ class StackVisualizer(CelldetectiveWidget):
         self.canvas.layout.addLayout(tools_layout)
 
     def toggle_line_mode(self):
+        """Toggle the line profile drawing mode."""
 
         if self.line_action.isChecked():
 
@@ -426,6 +484,14 @@ class StackVisualizer(CelldetectiveWidget):
             self.info_lbl.setText("")
 
     def on_line_press(self, event):
+        """
+        Handle mouse press event for line drawing.
+
+        Parameters
+        ----------
+        event : matplotlib.backend_bases.MouseEvent
+            The mouse event.
+        """
         if event.inaxes != self.ax:
             return
         if self.canvas.toolbar.mode:
@@ -456,6 +522,14 @@ class StackVisualizer(CelldetectiveWidget):
         self.canvas.canvas.blit(self.ax.bbox)
 
     def on_line_drag(self, event):
+        """
+        Handle mouse drag event for line drawing.
+
+        Parameters
+        ----------
+        event : matplotlib.backend_bases.MouseEvent
+             The mouse event.
+        """
         if not getattr(self, "is_drawing_line", False) or event.inaxes != self.ax:
             return
 
@@ -471,6 +545,7 @@ class StackVisualizer(CelldetectiveWidget):
         self.canvas.canvas.blit(self.ax.bbox)
 
     def update_profile(self):
+        """Update the intensity profile plot."""
         if not self.line_mode or not hasattr(self, "line_x") or not self.line_x:
             return
 
@@ -547,6 +622,14 @@ class StackVisualizer(CelldetectiveWidget):
         self.fig.canvas.draw_idle()
 
     def on_line_release(self, event):
+        """
+        Handle mouse release event for line drawing.
+
+        Parameters
+        ----------
+        event : matplotlib.backend_bases.MouseEvent
+            The mouse event.
+        """
         if not getattr(self, "is_drawing_line", False):
             return
         self.is_drawing_line = False
@@ -567,10 +650,12 @@ class StackVisualizer(CelldetectiveWidget):
         self.canvas.canvas.draw_idle()
 
     def show(self):
+        """Display the widget."""
         # Display the widget
         self.canvas.show()
 
     def load_stack(self):
+        """Load the stack of images."""
         # Load the stack of images
         if self.stack is not None:
             if isinstance(self.stack, list):
@@ -599,6 +684,7 @@ class StackVisualizer(CelldetectiveWidget):
             self.locate_image_virtual()
 
     def locate_image_virtual(self):
+        """Locate virtual images."""
         # Locate the stack of images if provided as a file
 
         self.stack_length = auto_load_number_of_frames(self.stack_path)
@@ -627,6 +713,7 @@ class StackVisualizer(CelldetectiveWidget):
         )[:, :, 0]
 
     def generate_figure_canvas(self):
+        """Generate the figure canvas."""
 
         if np.all(np.isnan(self.init_frame)):
             p01, p99 = 0, 1
@@ -676,6 +763,7 @@ class StackVisualizer(CelldetectiveWidget):
         self.ax.axis("off")
 
     def generate_channel_cb(self):
+        """Generate the channel selection combobox."""
 
         self.channel_cb = QComboBox()
         if self.channel_names is not None and len(self.channel_names) > 0:
@@ -692,6 +780,7 @@ class StackVisualizer(CelldetectiveWidget):
         self.canvas.layout.addLayout(layout)
 
     def set_contrast_decimals(self):
+        """Set the number of decimals for contrast slider."""
         from celldetective.utils.types import is_integer_array
 
         if is_integer_array(self.init_frame):
@@ -700,6 +789,7 @@ class StackVisualizer(CelldetectiveWidget):
             self.contrast_decimals = 2
 
     def generate_contrast_slider(self):
+        """Generate the contrast slider."""
         # Generate the contrast slider if enabled
 
         layout = QHBoxLayout()
@@ -746,6 +836,7 @@ class StackVisualizer(CelldetectiveWidget):
         self.canvas.layout.addLayout(layout)
 
     def generate_frame_slider(self):
+        """Generate the frame slider."""
         # Generate the frame slider if enabled
 
         layout = QHBoxLayout()
@@ -758,6 +849,14 @@ class StackVisualizer(CelldetectiveWidget):
         self.canvas.layout.addLayout(layout)
 
     def set_target_channel(self, value):
+        """
+        Set the target channel.
+
+        Parameters
+        ----------
+        value : int
+            The channel index.
+        """
         self.target_channel = value
         self.init_frame = self.stack[self.current_time_index, :, :, self.target_channel]
         self.im.set_data(self.init_frame)
@@ -765,12 +864,28 @@ class StackVisualizer(CelldetectiveWidget):
         self.update_profile()
 
     def change_contrast(self, value):
+        """
+        Change the contrast.
+
+        Parameters
+        ----------
+        value : tuple
+            The contrast limits (min, max).
+        """
         # Change contrast based on slider value
         if not self.init_contrast:
             self.im.set_clim(vmin=value[0], vmax=value[1])
             self.canvas.draw()
 
     def set_channel_index(self, value):
+        """
+        Set the channel index.
+
+        Parameters
+        ----------
+        value : int
+            The channel index.
+        """
         self.target_channel = value
         self.channel_trigger = True
         if self.create_frame_slider:
@@ -785,6 +900,14 @@ class StackVisualizer(CelldetectiveWidget):
                 self.update_profile()
 
     def change_frame_from_channel_switch(self, value):
+        """
+        Update frame when channel switches.
+
+        Parameters
+        ----------
+        value : int
+            The frame index.
+        """
         self._min = 0
         self._max = 0
         self.change_frame(value)
@@ -798,6 +921,14 @@ class StackVisualizer(CelldetectiveWidget):
             self.canvas.draw()
 
     def change_frame(self, value):
+        """
+        Change the displayed frame.
+
+        Parameters
+        ----------
+        value : int
+            The frame index.
+        """
 
         self.current_time_index = value
 
@@ -858,6 +989,18 @@ class StackVisualizer(CelldetectiveWidget):
         self.update_profile()
 
     def on_frame_loaded(self, channel, frame, image):
+        """
+        Callback from loader thread.
+
+        Parameters
+        ----------
+        channel : int
+            The channel index.
+        frame : int
+            The frame index.
+        image : numpy.ndarray
+            The loaded image.
+        """
         """Callback from loader thread"""
         # Store in cache
         cache_key = (channel, frame)
@@ -873,6 +1016,14 @@ class StackVisualizer(CelldetectiveWidget):
             self.change_frame(self.current_time_index)
 
     def closeEvent(self, event):
+        """
+        Handle the close event.
+
+        Parameters
+        ----------
+        event : QEvent
+            The close event.
+        """
         # Event handler for closing the widget
         if self.loader_thread:
             self.loader_thread.stop()
@@ -882,6 +1033,7 @@ class StackVisualizer(CelldetectiveWidget):
         self.canvas.close()
 
     def __del__(self):
+        """Destructor to clean up threads."""
         try:
             if hasattr(self, "loader_thread") and self.loader_thread:
                 self.loader_thread.stop()

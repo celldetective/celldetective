@@ -22,6 +22,18 @@ logger = get_logger(__name__)
 class ChannelOffsetViewer(StackVisualizer):
 
     def __init__(self, parent_window=None, *args, **kwargs):
+        """
+        Initialize the ChannelOffsetViewer.
+
+        Parameters
+        ----------
+        parent_window : QMainWindow, optional
+            The parent window.
+        *args
+            Variable length argument list.
+        **kwargs
+            Arbitrary keyword arguments.
+        """
 
         self.parent_window = parent_window
         self.overlay_target_channel = -1
@@ -74,6 +86,7 @@ class ChannelOffsetViewer(StackVisualizer):
         self.setAttribute(Qt.WA_DeleteOnClose)
 
     def generate_overlay_imshow(self):
+        """Generate the overlay image show."""
         self.im_overlay = self.ax.imshow(
             self.overlay_init_frame,
             cmap="Blues",
@@ -83,6 +96,7 @@ class ChannelOffsetViewer(StackVisualizer):
         )
 
     def generate_overlay_alpha_slider(self):
+        """Generate the transparency slider for the overlay."""
         # Generate the contrast slider if enabled
 
         self.overlay_alpha_slider = QLabeledDoubleSlider()
@@ -99,6 +113,7 @@ class ChannelOffsetViewer(StackVisualizer):
         self.canvas.layout.addLayout(alpha_layout)
 
     def generate_overlay_contrast_slider(self):
+        """Generate the contrast slider for the overlay."""
         # Generate the contrast slider if enabled
 
         self.overlay_contrast_slider = QLabeledDoubleRangeSlider()
@@ -125,6 +140,14 @@ class ChannelOffsetViewer(StackVisualizer):
         self.canvas.layout.addLayout(contrast_layout)
 
     def set_overlay_channel_index(self, value):
+        """
+        Set the overlay channel index.
+
+        Parameters
+        ----------
+        value : int
+            The channel index.
+        """
         # Set the channel index based on dropdown value
 
         self.overlay_target_channel = value
@@ -143,6 +166,7 @@ class ChannelOffsetViewer(StackVisualizer):
         self.overlay_init_contrast = False
 
     def generate_overlay_channel_cb(self):
+        """Generate the overlay channel combobox."""
 
         assert self.channel_names is not None
         assert len(self.channel_names) == self.n_channels
@@ -160,6 +184,7 @@ class ChannelOffsetViewer(StackVisualizer):
         self.canvas.layout.addLayout(channel_layout)
 
     def generate_overlay_shift(self):
+        """Generate the overlay shift controls."""
 
         shift_layout = QHBoxLayout()
         shift_layout.setContentsMargins(15, 0, 15, 0)
@@ -195,6 +220,14 @@ class ChannelOffsetViewer(StackVisualizer):
         self.canvas.layout.addLayout(shift_layout)
 
     def change_overlay_frame(self, value):
+        """
+        Change the displayed overlay frame.
+
+        Parameters
+        ----------
+        value : int
+             The frame index.
+        """
         # Change the displayed frame based on slider value
 
         if self.mode == "virtual":
@@ -224,6 +257,7 @@ class ChannelOffsetViewer(StackVisualizer):
             self.change_contrast_overlay(self.overlay_contrast_slider.value())
 
     def locate_image_virtual(self):
+        """Locate virtual images."""
         from tifffile import imread
 
         # Locate the stack of images if provided as a file
@@ -266,6 +300,14 @@ class ChannelOffsetViewer(StackVisualizer):
         ).astype(float)[:, :, 0]
 
     def change_contrast_overlay(self, value):
+        """
+        Change the contract of the overlay.
+
+        Parameters
+        ----------
+        value : tuple
+             The contrast limits (min, max).
+        """
         # Change contrast based on slider value
 
         vmin = value[0]
@@ -274,6 +316,14 @@ class ChannelOffsetViewer(StackVisualizer):
         self.fig.canvas.draw_idle()
 
     def change_alpha_overlay(self, value):
+        """
+        Change the transparency of the overlay.
+
+        Parameters
+        ----------
+        value : float
+            The alpha value.
+        """
         # Change contrast based on slider value
 
         alpha = value
@@ -281,6 +331,7 @@ class ChannelOffsetViewer(StackVisualizer):
         self.fig.canvas.draw_idle()
 
     def define_keyboard_shortcuts(self):
+        """Define keyboard shortcuts for shifting."""
 
         self.shift_up_shortcut = QShortcut(QKeySequence(Qt.Key_Up), self.canvas)
         self.shift_up_shortcut.activated.connect(self.shift_overlay_up)
@@ -295,30 +346,35 @@ class ChannelOffsetViewer(StackVisualizer):
         self.shift_right_shortcut.activated.connect(self.shift_overlay_right)
 
     def shift_overlay_up(self):
+        """Shift the overlay up."""
         self.shift_vertical -= 2
         self.vertical_shift_le.set_threshold(self.shift_vertical)
         # self.shift_generic()
         self.apply_shift_btn.click()
 
     def shift_overlay_down(self):
+        """Shift the overlay down."""
         self.shift_vertical += 2
         self.vertical_shift_le.set_threshold(self.shift_vertical)
         # self.shift_generic()
         self.apply_shift_btn.click()
 
     def shift_overlay_left(self):
+        """Shift the overlay left."""
         self.shift_horizontal -= 2
         self.horizontal_shift_le.set_threshold(self.shift_horizontal)
         # self.shift_generic()
         self.apply_shift_btn.click()
 
     def shift_overlay_right(self):
+        """Shift the overlay right."""
         self.shift_horizontal += 2
         self.horizontal_shift_le.set_threshold(self.shift_horizontal)
         # self.shift_generic()
         self.apply_shift_btn.click()
 
     def shift_generic(self):
+        """Apply the shift to the overlay."""
         from scipy.ndimage import shift
 
         self.shift_vertical = self.vertical_shift_le.get_threshold()
@@ -333,6 +389,7 @@ class ChannelOffsetViewer(StackVisualizer):
         self.update_profile()
 
     def generate_add_to_parent_btn(self):
+        """Generate the 'Set' button to apply shifts to parent."""
 
         add_hbox = QHBoxLayout()
         add_hbox.setContentsMargins(0, 5, 0, 5)
@@ -344,6 +401,7 @@ class ChannelOffsetViewer(StackVisualizer):
         self.canvas.layout.addLayout(add_hbox)
 
     def update_profile(self):
+        """Update the intensity profile plot."""
         if not self.line_mode or not hasattr(self, "line_x") or not self.line_x:
             return
 
@@ -433,6 +491,7 @@ class ChannelOffsetViewer(StackVisualizer):
         self.fig.canvas.draw_idle()
 
     def set_parent_attributes(self):
+        """Set the shift attributes in the parent window."""
 
         idx = self.channels_overlay_cb.currentIndex()
         self.parent_window.channels_cb.setCurrentIndex(idx)

@@ -179,6 +179,21 @@ def get_pair_signal_models_list(return_path=False):
 
 
 def get_segmentation_models_list(mode="targets", return_path=False):
+    """
+    Get available segmentation models.
+
+    Parameters
+    ----------
+    mode : str, optional
+        Segmentation mode ("targets" or "effectors"). Default is "targets".
+    return_path : bool, optional
+        If True, return path to models. Default is False.
+
+    Returns
+    -------
+    list or tuple
+        List of models, or (list, path) if return_path is True.
+    """
 
     modelpath = os.sep.join(
         [

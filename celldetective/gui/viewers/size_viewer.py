@@ -11,6 +11,7 @@ from celldetective import get_logger
 
 logger = get_logger(__name__)
 
+
 class CellSizeViewer(StackVisualizer):
     """
     A widget for visualizing cell size with interactive sliders and circle display.
@@ -48,6 +49,26 @@ class CellSizeViewer(StackVisualizer):
         *args,
         **kwargs,
     ):
+        """
+        Initialize the CellSizeViewer.
+
+        Parameters
+        ----------
+        initial_diameter : int, optional
+            Initial diameter of the circle.
+        set_radius_in_list : bool, optional
+            Flag to set radius instead of diameter in the list.
+        diameter_slider_range : tuple, optional
+            Range of the diameter slider.
+        parent_le : QLineEdit, optional
+             Parent line edit for diameter.
+        parent_list_widget : QListWidget, optional
+            Parent list widget for measurements.
+        *args
+            Variable length argument list.
+        **kwargs
+            Arbitrary keyword arguments.
+        """
         # Initialize the widget and its attributes
 
         super().__init__(*args, **kwargs)
@@ -65,6 +86,7 @@ class CellSizeViewer(StackVisualizer):
             self.generate_add_to_list_btn()
 
     def generate_circle(self):
+        """Generate the circle for visualization."""
         # Generate the circle for visualization
 
         import matplotlib.pyplot as plt
@@ -81,6 +103,7 @@ class CellSizeViewer(StackVisualizer):
         self.ax.callbacks.connect("ylim_changed", self.on_xlims_or_ylims_change)
 
     def generate_add_to_list_btn(self):
+        """Generate the add to list button."""
         # Generate the add to list button
 
         add_hbox = QHBoxLayout()
@@ -95,6 +118,7 @@ class CellSizeViewer(StackVisualizer):
         self.canvas.layout.addLayout(add_hbox)
 
     def set_measurement_in_parent_list(self):
+        """Add the diameter to the parent QListWidget."""
         # Add the diameter to the parent QListWidget
 
         if self.set_radius_in_list:
@@ -106,6 +130,14 @@ class CellSizeViewer(StackVisualizer):
         self.close()
 
     def on_xlims_or_ylims_change(self, event_ax):
+        """
+        Update the circle position on axis limits change.
+
+        Parameters
+        ----------
+        event_ax : matplotlib.axes.Axes
+            The axes object.
+        """
         # Update the circle position on axis limits change
 
         xmin, xmax = event_ax.get_xlim()
@@ -113,6 +145,7 @@ class CellSizeViewer(StackVisualizer):
         self.circ.center = np.mean([xmin, xmax]), np.mean([ymin, ymax])
 
     def generate_set_btn(self):
+        """Generate the set button for QLineEdit."""
         # Generate the set button for QLineEdit
 
         apply_hbox = QHBoxLayout()
@@ -125,12 +158,14 @@ class CellSizeViewer(StackVisualizer):
         self.canvas.layout.addLayout(apply_hbox)
 
     def set_threshold_in_parent_le(self):
+        """Set the diameter in the parent QLineEdit."""
         # Set the diameter in the parent QLineEdit
 
         self.parent_le.set_threshold(self.diameter_slider.value())
         self.close()
 
     def generate_diameter_slider(self):
+        """Generate the diameter slider."""
         # Generate the diameter slider
 
         self.diameter_slider = QLabeledDoubleSlider()
@@ -147,6 +182,14 @@ class CellSizeViewer(StackVisualizer):
         self.canvas.layout.addLayout(diameter_layout)
 
     def change_diameter(self, value):
+        """
+        Change the diameter of the circle.
+
+        Parameters
+        ----------
+        value : float
+            The new diameter value.
+        """
         # Change the diameter of the circle
         self.diameter = value
         self.circ.set_radius(self.diameter // 2 / self.PxToUm)

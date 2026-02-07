@@ -309,6 +309,8 @@ def correct_background_model_free(
             The operation to apply for background correction. Defaults to 'divide'.
     clip : bool, optional
             If True, clip the corrected values to be non-negative when using subtraction. Defaults to False.
+    offset : float, optional
+            A constant value to subtract from the background. Defaults to None.
     show_progress_per_well : bool, optional
             If True, show progress bar for each well. Defaults to True.
     show_progress_per_pos : bool, optional
@@ -317,6 +319,14 @@ def correct_background_model_free(
             If True, export the corrected stacks to files. Defaults to False.
     return_stacks : bool, optional
             If True, return the corrected stacks as a list of numpy arrays. Defaults to False.
+    movie_prefix : str, optional
+            The prefix of the movie files. Defaults to None.
+    fix_nan : bool, optional
+            Whether to interpolate NaN values in the background. Defaults to False.
+    activation_protocol : list of list, optional
+            The activation protocol consisting of filters and their respective parameters (default is [['gauss', 2], ['std', 4]]).
+    export_prefix : str, optional
+            The prefix for the exported file name. Defaults to "Corrected".
     progress_callback : callable, optional
             A callback function to be called at each step of the process (default is None).
 

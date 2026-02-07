@@ -11,6 +11,18 @@ class FigureCanvas(CelldetectiveWidget):
     """
 
     def __init__(self, fig, title="", interactive=True):
+        """
+        Initialize the FigureCanvas.
+
+        Parameters
+        ----------
+        fig : Figure
+            The matplotlib figure.
+        title : str, optional
+            The window title.
+        interactive : bool, optional
+            Whether to include a navigation toolbar.
+        """
         super().__init__()
         self.fig = fig
         self.setWindowTitle(title)
@@ -35,7 +47,14 @@ class FigureCanvas(CelldetectiveWidget):
         self.setAttribute(Qt.WA_DeleteOnClose)
 
     def resizeEvent(self, event):
-        print("DEBUG: resizeEvent called")
+        """
+        Handle resize events.
+
+        Parameters
+        ----------
+        event : QResizeEvent
+            The resize event.
+        """
         super().resizeEvent(event)
         try:
             manual_layout = getattr(self, "manual_layout", False)
@@ -53,10 +72,18 @@ class FigureCanvas(CelldetectiveWidget):
             pass
 
     def draw(self):
+        """Draw the canvas."""
         self.canvas.draw()
 
     def closeEvent(self, event):
-        """Delete figure on closing window."""
+        """
+        Delete figure on closing window.
+
+        Parameters
+        ----------
+        event : QCloseEvent
+            The close event.
+        """
         # self.canvas.ax.cla() # ****
         # self.canvas.ax.cla() # ****
         self.fig.clf()  # ****

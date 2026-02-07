@@ -284,6 +284,23 @@ def mean_dark_intensity_nintyfive(
     """
     Calculate the mean intensity in a dark subregion below 95, handling NaN values.
 
+    Parameters
+    ----------
+    regionmask : ndarray
+            A binary mask (2D array) where nonzero values define the region of interest.
+    intensity_image : ndarray
+            A 2D array of the same shape as `regionmask`, representing the intensity
+            values associated with the region.
+    target_channel : str, optional
+            Name of the intensity channel used for measurement. Defaults to `'adhesion_channel'`.
+    fill_holes : bool, optional
+            If `True`, fills enclosed holes in the detected dark intensity regions before computing
+            the area. Defaults to `True`.
+
+    Returns
+    -------
+    float
+            Mean intensity value in the dark subregion.
     """
     subregion = (intensity_image < 0.95) * regionmask
 
@@ -302,6 +319,21 @@ def mean_dark_intensity_nintyfive_fillhole_false(
 ):
     """
     Calculate the mean intensity in a dark subregion below 95, handling NaN values.
+
+    Parameters
+    ----------
+    regionmask : ndarray
+            A binary mask (2D array) where nonzero values define the region of interest.
+    intensity_image : ndarray
+            A 2D array of the same shape as `regionmask`, representing the intensity
+            values associated with the region.
+    target_channel : str, optional
+            Name of the intensity channel used for measurement. Defaults to `'adhesion_channel'`.
+
+    Returns
+    -------
+    float
+            Mean intensity value in the dark subregion.
     """
     subregion = (
         intensity_image < 0.95
@@ -319,6 +351,21 @@ def mean_dark_intensity_ninty_fillhole_false(
 ):
     """
     Calculate the mean intensity in a dark subregion, handling NaN values.
+
+    Parameters
+    ----------
+    regionmask : ndarray
+            A binary mask (2D array) where nonzero values define the region of interest.
+    intensity_image : ndarray
+            A 2D array of the same shape as `regionmask`, representing the intensity
+            values associated with the region.
+    target_channel : str, optional
+            Name of the intensity channel used for measurement. Defaults to `'adhesion_channel'`.
+
+    Returns
+    -------
+    float
+            Mean intensity value in the dark subregion.
     """
     subregion = (
         intensity_image < 0.90
@@ -337,6 +384,23 @@ def mean_dark_intensity_ninty(
     """
     Calculate the mean intensity in a dark subregion below 90, handling NaN values.
 
+    Parameters
+    ----------
+    regionmask : ndarray
+            A binary mask (2D array) where nonzero values define the region of interest.
+    intensity_image : ndarray
+            A 2D array of the same shape as `regionmask`, representing the intensity
+            values associated with the region.
+    target_channel : str, optional
+            Name of the intensity channel used for measurement. Defaults to `'adhesion_channel'`.
+    fill_holes : bool, optional
+            If `True`, fills enclosed holes in the detected dark intensity regions before computing
+            the area. Defaults to `True`.
+
+    Returns
+    -------
+    float
+            Mean intensity value in the dark subregion.
     """
     subregion = (intensity_image < 0.90) * regionmask
 
@@ -356,6 +420,23 @@ def mean_dark_intensity_eight_five(
     """
     Calculate the mean intensity in a dark subregion below 85, handling NaN values.
 
+    Parameters
+    ----------
+    regionmask : ndarray
+            A binary mask (2D array) where nonzero values define the region of interest.
+    intensity_image : ndarray
+            A 2D array of the same shape as `regionmask`, representing the intensity
+            values associated with the region.
+    target_channel : str, optional
+            Name of the intensity channel used for measurement. Defaults to `'adhesion_channel'`.
+    fill_holes : bool, optional
+            If `True`, fills enclosed holes in the detected dark intensity regions before computing
+            the area. Defaults to `True`.
+
+    Returns
+    -------
+    float
+            Mean intensity value in the dark subregion.
     """
     subregion = (intensity_image < 0.85) * regionmask
 

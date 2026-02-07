@@ -72,6 +72,16 @@ class BackgroundLoader(QThread):
 class ControlPanel(CelldetectiveMainWindow):
 
     def __init__(self, parent_window=None, exp_dir=""):
+        """
+        Initialize the ControlPanel.
+
+        Parameters
+        ----------
+        parent_window : QMainWindow, optional
+            The parent window.
+        exp_dir : str, optional
+            The experiment directory path.
+        """
 
         super().__init__()
 

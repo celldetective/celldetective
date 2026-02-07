@@ -60,7 +60,7 @@ from pandas.api.types import is_numeric_dtype
 
 class PairEventAnnotator(CelldetectiveMainWindow):
     """
-    UI to set tracking parameters for bTrack.
+    UI to explore cell interactions.
 
     """
 
@@ -70,6 +70,9 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         self.parent_window = parent
         self.setWindowTitle("Signal annotator")
 
+        # These attributes should be set after super().__init__() if they depend on parent_window
+        # which might be initialized by the super call.
+        # Assuming parent_window is now accessible via self after super().__init__()
         self.pos = self.parent_window.parent_window.pos
         self.exp_dir = self.parent_window.exp_dir
         self.populations = self.parent_window.parent_window.populations
@@ -592,6 +595,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         QApplication.processEvents()
 
     def fill_class_cbs(self):
+        """Fill class combo boxes."""
 
         cols_to_remove = ["class_id", "class_color"]
 
@@ -634,6 +638,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         )
 
     def del_relative_event_class(self):
+        """Delete relative event class."""
 
         msgBox = QMessageBox()
         msgBox.setIcon(QMessageBox.Warning)
@@ -659,6 +664,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
             self.relative_class_choice_cb.removeItem(item_idx)
 
     def update_cell_events(self):
+        """Update cell events."""
 
         try:
             self.neighbor_event_choice_cb.show()
@@ -686,6 +692,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
             )
 
     def create_new_relative_event_class(self):
+        """Create a new relative event class."""
 
         # display qwidget to name the event
         self.newClassWidget = CelldetectiveWidget()
@@ -723,6 +730,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         center_window(self.newClassWidget)
 
     def write_new_relative_event_class(self):
+        """Write new relative event class."""
 
         if self.relative_class_name_le.text() == "":
             self.relative_class = "class"
@@ -782,10 +790,12 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         self.newClassWidget.close()
 
     def close_without_new_class(self):
+        """Close without creating a new class."""
 
         self.newClassWidget.close()
 
     def compute_status_and_colors_reference(self):
+        """Compute status and colors for reference."""
 
         df_reference = self.dataframes[self.reference_population]
         self.reference_class_name = self.reference_event_choice_cb.currentText()
@@ -852,6 +862,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
                     self.cell_fcanvas.canvas.draw()
 
     def compute_status_and_colors_neighbor(self):
+        """Compute status and colors for neighbor."""
 
         df_neighbors = self.dataframes[self.neighbor_population]
         self.neighbor_class_name = self.neighbor_event_choice_cb.currentText()
@@ -904,6 +915,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
             self.refresh_scatter_from_trajectories(self.neighbor_population)
 
     def compute_status_and_colors_pair(self):
+        """Compute status and colors for pair."""
 
         self.pair_class_name = self.relative_class_choice_cb.currentText()
 
@@ -960,9 +972,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
             self.plot_signals()
 
     def contrast_slider_action(self):
-        """
-        Recontrast the imshow as the contrast slider is moved.
-        """
+        """Recontrast the imshow as the contrast slider is moved."""
 
         self.vmin = self.contrast_slider.value()[0]
         self.vmax = self.contrast_slider.value()[1]
@@ -970,6 +980,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         self.fcanvas.canvas.draw_idle()
 
     def cancel_selection(self):
+        """Cancel selection."""
 
         print("Canceling selection...")
 
@@ -1096,6 +1107,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         self.cancel_btn.setEnabled(False)
 
     def apply_modification(self):
+        """Apply modification."""
 
         # Plot the new time
         t0 = -1
@@ -1178,10 +1190,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         self.trace_neighbors()
 
     def locate_stack(self):
-        """
-        Locate the target movie.
-
-        """
+        """Locate the target movie."""
 
         movies = glob(
             self.pos + f"movie/{self.parent_window.parent_window.movie_prefix}*.tif"
@@ -1213,6 +1222,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
             self.nbr_channels = len(self.channels)
 
     def locate_all_tracks(self):
+        """Locate all tracks."""
 
         self.dataframes = {}
         self.class_cols_per_pop = {}
@@ -1357,6 +1367,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
             self.MinMaxScaler_per_pop.update({population: minmax})
 
     def locate_relative_tracks(self):
+        """Locate relative tracks."""
 
         population = "relative"
         self.relative_trajectories_path = self.pos + os.sep.join(
@@ -1441,6 +1452,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         self.MinMaxScaler_pairs.fit(x)
 
     def set_reference_and_neighbor_populations(self):
+        """Set reference and neighbor populations."""
 
         neigh = self.neighborhood_choice_cb.currentText()
 
@@ -1474,6 +1486,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
             self.relative_class_choice_cb.setCurrentIndex(idx)
 
     def make_reference_status_column(self):
+        """Make reference status column."""
 
         df_reference = self.dataframes[self.reference_population]
         print("remaking the status column")
@@ -1499,6 +1512,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
             df_reference.loc[indices, "class_color"] = class_color
 
     def make_relative_status_column(self):
+        """Make relative status column."""
 
         pair_filter = self.df_relative.loc[
             ~(self.df_relative["status_" + self.current_neighborhood].isnull())
@@ -1534,6 +1548,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
             self.df_relative.loc[indices, "class_color"] = class_color
 
     def make_neighbor_status_column(self):
+        """Make neighbor status column."""
 
         df_neighbors = self.dataframes[self.neighbor_population]
         print("remaking the status column")
@@ -1559,6 +1574,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
             df_neighbors.loc[indices, "class_color"] = class_color
 
     def fill_signal_choices(self):
+        """Fill signal choices."""
 
         self.reference_signals = list(
             self.dataframes[self.reference_population].columns
@@ -1586,6 +1602,14 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         self.update_signal_choices(2)
 
     def update_signal_choices(self, index):
+        """
+        Update signal choices.
+
+        Parameters
+        ----------
+        index : int
+            The index of the signal choice.
+        """
 
         self.signal_choices[index].disconnect()
 
@@ -1609,6 +1633,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         self.plot_signals()
 
     def generate_signal_choices(self):
+        """Generate signal choices."""
 
         self.signal_choices = []
         self.signal_labels = []
@@ -1654,6 +1679,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
             self.relative_pop_option_buttons[i].setEnabled(False)
 
     def plot_signals(self):
+        """Plot signals."""
 
         range_values = []
 
@@ -1893,6 +1919,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         self.cell_fcanvas.canvas.draw()
 
     def extract_scatter_from_lines(self):
+        """Extract scatter from lines."""
 
         self.lines_list = []
         self.lines_tracks = []
@@ -1925,6 +1952,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
             self.lines_colors_class.append(data[:, [0, 1, 3]])
 
     def extract_scatter_from_trajectories(self):
+        """Extract scatter from trajectories."""
 
         self.tracks = {}
         self.positions = {}
@@ -1936,6 +1964,16 @@ class PairEventAnnotator(CelldetectiveMainWindow):
             self.refresh_scatter_from_trajectories(population)
 
     def refresh_scatter_from_trajectories(self, population, clear_selection=True):
+        """
+        Refresh scatter from trajectories.
+
+        Parameters
+        ----------
+        population : str
+            The population to refresh.
+        clear_selection : bool, optional
+            Whether to clear selection.
+        """
 
         df = self.dataframes[population]
         positions = []
@@ -1976,9 +2014,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
             self.highlight_the_pair()
 
     def load_annotator_config(self):
-        """
-        Load settings from config or set default values.
-        """
+        """Load settings from config or set default values."""
 
         print("Reading instructions..")
         if os.path.exists(self.instructions_path):

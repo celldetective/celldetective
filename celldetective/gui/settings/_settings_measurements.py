@@ -54,6 +54,14 @@ class SettingsMeasurements(CelldetectiveSettingsPanel):
     """
 
     def __init__(self, parent_window=None):
+        """
+        Initialize the SettingsMeasurements widget.
+
+        Parameters
+        ----------
+        parent_window : QMainWindow, optional
+            The parent window.
+        """
 
         self.parent_window = parent_window
         self.mode = self.parent_window.mode
@@ -125,6 +133,7 @@ class SettingsMeasurements(CelldetectiveSettingsPanel):
         self.clear_previous_btn = QCheckBox("clear previous measurements")
 
     def _add_to_layout(self):
+        """Add widgets to the layout."""
         self._layout.addWidget(self.normalisation_frame)
         self._layout.addWidget(self.features_frame)
         self._layout.addWidget(self.iso_frame)
@@ -168,7 +177,7 @@ class SettingsMeasurements(CelldetectiveSettingsPanel):
         grid.addWidget(self.ContentsFeatures, 1, 0, 1, 4, alignment=Qt.AlignTop)
 
     def generate_iso_contents(self):
-
+        """Generate the isotropic measurements panel contents."""
         self.ContentsIso = QFrame()
         layout = QVBoxLayout(self.ContentsIso)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -227,7 +236,7 @@ class SettingsMeasurements(CelldetectiveSettingsPanel):
         self.add_op_btn.clicked.connect(self.operations_list.addItem)
 
     def generate_feature_panel_contents(self):
-
+        """Generate the feature panel contents."""
         self.ContentsFeatures = QFrame()
         layout = QVBoxLayout(self.ContentsFeatures)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -451,7 +460,7 @@ class SettingsMeasurements(CelldetectiveSettingsPanel):
         layout.addLayout(self.haralick_layout)
 
     def go_to_extraprops(self):
-
+        """Open the extra properties file."""
         path = os.sep.join(
             [self._software_path, "celldetective", os.sep, "extra_properties.py"]
         )
@@ -465,7 +474,7 @@ class SettingsMeasurements(CelldetectiveSettingsPanel):
                 return None
 
     def switch_to_absolute_normalization_mode(self):
-
+        """Switch between percentile and absolute normalization for Haralick features."""
         if self.percentile_mode:
             self.percentile_mode = False
             self.haralick_normalization_mode_btn.setIcon(
@@ -586,7 +595,7 @@ class SettingsMeasurements(CelldetectiveSettingsPanel):
         self.close()
 
     def extract_haralick_options(self):
-
+        """Extract Haralick features options from the GUI."""
         if self.activate_haralick_btn.isChecked():
             self.haralick_options = {
                 "target_channel": self.haralick_channel_choice.currentIndex(),
@@ -928,6 +937,10 @@ class SettingsMeasurements(CelldetectiveSettingsPanel):
         """
         Adjust intensity values when changing channels in the contour visualizer.
 
+        Parameters
+        ----------
+        value : int
+            The index of the selected channel.
         """
 
         self.im_contour.set_array(self.test_frame[:, :, value])
@@ -947,23 +960,48 @@ class SettingsMeasurements(CelldetectiveSettingsPanel):
         self.fig_contour.canvas.draw_idle()
 
     def contrast_im_contour(self, value):
+        """
+        Contrast the image for contour visualization.
+
+        Parameters
+        ----------
+        value : list
+            A list containing [vmin, vmax].
+        """
         vmin = value[0]
         vmax = value[1]
         self.im_contour.set_clim(vmin=vmin, vmax=vmax)
         self.fig_contour.canvas.draw_idle()
 
     def make_contour_transparent(self, value):
+        """
+        Make the contour transparent.
+
+        Parameters
+        ----------
+        value : float
+            Transparency value (alpha).
+        """
 
         self.im_mask.set_alpha(value)
         self.fig_contour.canvas.draw_idle()
 
     def remove_item_from_list(self):
+        """Remove the selected item from the list."""
         current_item = self.normalisation_list.currentRow()
         if current_item > -1:
             del self.background_correction[current_item]
             self.normalisation_list.takeItem(current_item)
 
     def check_the_information(self):
+        """
+        Check if the provided information is valid.
+
+        Returns
+        -------
+        bool
+            True if information is valid or confirmed, False otherwise.
+        """
 
         if self.tabs.currentIndex() == 0:
             if self.background_correction is None:
@@ -982,6 +1020,14 @@ class SettingsMeasurements(CelldetectiveSettingsPanel):
                         return True
 
     def display_message_box(self, missing_info):
+        """
+        Display a warning message box.
+
+        Parameters
+        ----------
+        missing_info : str
+            The missing information description.
+        """
         QMessageBox.about(
             self,
             "Message Box Title",
@@ -989,6 +1035,14 @@ class SettingsMeasurements(CelldetectiveSettingsPanel):
         )
 
     def channel_already_in_list(self):
+        """
+        Check if a channel is already in the list.
+
+        Returns
+        -------
+        int
+            QMessageBox response (Yes/No).
+        """
         response = QMessageBox.question(
             self,
             "Message Box Title",
@@ -1028,6 +1082,7 @@ class SettingsMeasurements(CelldetectiveSettingsPanel):
             self.viewer.show()
 
     def populate_spot_detection(self):
+        """Populate the spot detection frame."""
 
         layout = QVBoxLayout(self.spot_detection_frame)
 
@@ -1101,6 +1156,7 @@ class SettingsMeasurements(CelldetectiveSettingsPanel):
             wg.setEnabled(False)
 
     def enable_spot_preview(self):
+        """Enable or disable the spot preview button."""
 
         diam = self.diameter_value.text().replace(",", "").replace(".", "")
         thresh = self.threshold_value.text().replace(",", "").replace(".", "")
@@ -1110,6 +1166,7 @@ class SettingsMeasurements(CelldetectiveSettingsPanel):
             self.spot_viewer_btn.setEnabled(False)
 
     def spot_preview(self):
+        """Preview the spot detection."""
         self.locate_image()
         if self.test_frame is not None:
             self.locate_mask()
@@ -1156,6 +1213,7 @@ class SettingsMeasurements(CelldetectiveSettingsPanel):
                 # 								 mask=self.test_mask, parent_window=self)
 
     def enable_spot_detection(self):
+        """Enable or disable spot detection based on input validity."""
 
         if self.spot_check.isChecked():
             for wg in self.spot_detection_widgets:

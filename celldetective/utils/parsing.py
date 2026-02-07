@@ -9,6 +9,19 @@ import numpy as np
 
 
 def _get_normalize_kwargs_from_config(config):
+    """
+    Get normalization kwargs from config.
+
+    Parameters
+    ----------
+    config : dict or str
+        Configuration dictionary or path to config file.
+
+    Returns
+    -------
+    dict
+        Normalization kwargs.
+    """
 
     if isinstance(config, str):
         if os.path.exists(config):
@@ -146,6 +159,19 @@ def _extract_channel_indices_from_config(config, channels_to_extract):
 
 def _extract_nbr_channels_from_config(config, return_names=False):
     """
+    Extract number of channels from config.
+
+    Parameters
+    ----------
+    config : dict or str
+        Configuration dictionary or path to config file.
+    return_names : bool, optional
+        Whether to return channel names. Default is False.
+
+    Returns
+    -------
+    int or tuple
+        Number of channels, or (number of channels, channel names).
 
     Examples
     --------
@@ -352,6 +378,23 @@ def _extract_channels_from_config(config):
 def _get_normalize_kwargs(
     normalization_percentile, normalization_values, normalization_clip
 ):
+    """
+    Get normalization kwargs.
+
+    Parameters
+    ----------
+    normalization_percentile : list
+        List of booleans indicating if normalization value is a percentile.
+    normalization_values : list
+        List of normalization values.
+    normalization_clip : bool
+        Whether to clip values.
+
+    Returns
+    -------
+    dict
+        Normalization kwargs.
+    """
 
     values = []
     percentiles = []
@@ -367,6 +410,19 @@ def _get_normalize_kwargs(
 
 
 def demangle_column_name(name):
+    """
+    Demangle column name.
+
+    Parameters
+    ----------
+    name : str
+        Column name to demangle.
+
+    Returns
+    -------
+    str
+        Demangled column name.
+    """
     if name.startswith("BACKTICK_QUOTED_STRING_"):
         # Unquote backtick-quoted string.
         return (
@@ -385,6 +441,19 @@ def demangle_column_name(name):
 
 
 def extract_cols_from_query(query: str):
+    """
+    Extract columns from query string.
+
+    Parameters
+    ----------
+    query : str
+        Query string.
+
+    Returns
+    -------
+    list
+        List of column names.
+    """
 
     backtick_pattern = r"`([^`]+)`"
     backticked = set(re.findall(backtick_pattern, query))

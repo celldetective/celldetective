@@ -27,6 +27,8 @@ from tqdm import tqdm
 import gc
 from tifffile import imread, memmap
 from magicgui import magicgui
+
+
 def extract_well_from_position(pos_path):
     """
     Extracts the well directory path from a given position directory path.
@@ -335,13 +337,38 @@ def get_temporal_calibration(experiment):
 
 
 def get_experiment_metadata(experiment):
+    """
+    Get experiment metadata.
 
+    Parameters
+    ----------
+    experiment : str
+        Path to the experiment directory.
+
+    Returns
+    -------
+    dict
+        Dictionary containing metadata.
+    """
     config = get_config(experiment)
     metadata = config_section_to_dict(config, "Metadata")
     return metadata
 
 
 def get_experiment_labels(experiment):
+    """
+    Get experiment labels.
+
+    Parameters
+    ----------
+    experiment : str
+        Path to the experiment directory.
+
+    Returns
+    -------
+    dict
+        Dictionary containing labels.
+    """
 
     config = get_config(experiment)
     wells = get_experiment_wells(experiment)
@@ -581,6 +608,21 @@ def get_experiment_pharmaceutical_agents(experiment, dtype=str):
 
 
 def get_experiment_populations(experiment, dtype=str):
+    """
+    Get experiment populations.
+
+    Parameters
+    ----------
+    experiment : str
+        Path to the experiment directory.
+    dtype : type, optional
+        Data type for the populations. Default is str.
+
+    Returns
+    -------
+    list
+        List of populations.
+    """
 
     config = get_config(experiment)
     populations_str = config_section_to_dict(config, "Populations")
@@ -1026,6 +1068,19 @@ def extract_experiment_folder_output(experiment_folder, destination_folder):
 
 
 def _get_contrast_limits(stack):
+    """
+    Get contrast limits for viewing.
+
+    Parameters
+    ----------
+    stack : ndarray
+        Image stack.
+
+    Returns
+    -------
+    list
+        List of (min, max) contrast limits for each channel.
+    """
     try:
         limits = []
         n_channels = stack.shape[-1]
@@ -1046,6 +1101,19 @@ def _get_contrast_limits(stack):
 
 # --- Appended functions from antigravity branch ---
 def auto_load_number_of_frames(stack_path):
+    """
+    Automatically load the number of frames from a stack.
+
+    Parameters
+    ----------
+    stack_path : str
+        Path to the stack file.
+
+    Returns
+    -------
+    int or None
+        Number of frames, or None if failed.
+    """
     from tifffile import imread, TiffFile
 
     if stack_path is None:
@@ -1109,6 +1177,23 @@ def auto_load_number_of_frames(stack_path):
 
 
 def locate_stack(position, prefix="Aligned", lazy=False):
+    """
+    Locate and load an image stack.
+
+    Parameters
+    ----------
+    position : str
+        Position directory path.
+    prefix : str, optional
+        Prefix of the stack file. Default is "Aligned".
+    lazy : bool, optional
+        If True, load lazily using dask. Default is False.
+
+    Returns
+    -------
+    ndarray or dask.array.Array
+        Loaded stack.
+    """
     from tifffile import imread, memmap
     import dask.array as da
 
@@ -1163,6 +1248,25 @@ def locate_stack(position, prefix="Aligned", lazy=False):
 
 
 def locate_labels(position, population="target", frames=None, lazy=False):
+    """
+    Locate and load labels.
+
+    Parameters
+    ----------
+    position : str
+        Position directory path.
+    population : str, optional
+        Population name ("target" or "effector"). Default is "target".
+    frames : int, list, or None, optional
+        Frames to load. Default is None (all frames).
+    lazy : bool, optional
+        If True, load lazily using dask. Default is False.
+
+    Returns
+    -------
+    ndarray or dask.array.Array
+        Loaded labels.
+    """
     from natsort import natsorted
     from tifffile import imread
     import dask.array as da
@@ -1234,6 +1338,18 @@ def locate_labels(position, population="target", frames=None, lazy=False):
 
 
 def fix_missing_labels(position, population="target", prefix="Aligned"):
+    """
+    Create empty label files for missing frames.
+
+    Parameters
+    ----------
+    position : str
+        Position directory path.
+    population : str, optional
+        Population name. Default is "target".
+    prefix : str, optional
+        Prefix of the stack file. Default is "Aligned".
+    """
     if not position.endswith(os.sep):
         position += os.sep
 
@@ -1274,6 +1390,25 @@ def fix_missing_labels(position, population="target", prefix="Aligned"):
 def locate_stack_and_labels(
     position, prefix="Aligned", population="target", lazy=False
 ):
+    """
+    Locate and load both stack and labels.
+
+    Parameters
+    ----------
+    position : str
+        Position directory path.
+    prefix : str, optional
+        Prefix of the stack file. Default is "Aligned".
+    population : str, optional
+        Population name. Default is "target".
+    lazy : bool, optional
+        If True, load lazily. Default is False.
+
+    Returns
+    -------
+    tuple
+        (stack, labels) as ndarrays or dask arrays.
+    """
     position = position.replace("\\", "/")
     labels = locate_labels(position, population=population, lazy=lazy)
     stack = locate_stack(position, prefix=prefix, lazy=lazy)
@@ -1288,6 +1423,23 @@ def locate_stack_and_labels(
 
 
 def load_tracking_data(position, prefix="Aligned", population="target"):
+    """
+    Load tracking data, labels, and stack.
+
+    Parameters
+    ----------
+    position : str
+        Position directory path.
+    prefix : str, optional
+        Prefix of the stack file. Default is "Aligned".
+    population : str, optional
+        Population name. Default is "target".
+
+    Returns
+    -------
+    tuple
+        (trajectories, labels, stack).
+    """
     import pandas as pd
 
     position = position.replace("\\", "/")
@@ -1313,11 +1465,25 @@ def load_tracking_data(position, prefix="Aligned", population="target"):
 
 
 def get_position_table(pos, population, return_path=False):
-    import pandas as pd
-
     """
     Retrieves the data table for a specified population at a given position.
+
+    Parameters
+    ----------
+    pos : str
+        Position directory path.
+    population : str
+        Population name.
+    return_path : bool, optional
+        If True, return the path to the table as well. Default is False.
+
+    Returns
+    -------
+    DataFrame or tuple
+        The data table, or (table, path) if return_path is True.
     """
+    import pandas as pd
+
     if not pos.endswith(os.sep):
         table = os.sep.join([pos, "output", "tables", f"trajectories_{population}.csv"])
     else:
@@ -1345,6 +1511,23 @@ def relabel_segmentation_lazy(
     df,
     column_labels={"track": "TRACK_ID", "frame": "FRAME", "label": "class_id"},
 ):
+    """
+    Relabel segmentation lazily using dask.
+
+    Parameters
+    ----------
+    labels : dask.array.Array
+        Label array.
+    df : DataFrame
+        Tracking data.
+    column_labels : dict, optional
+        Mapping of column names. Default provided.
+
+    Returns
+    -------
+    dask.array.Array
+        Relabeled segmentation.
+    """
     import dask.array as da
     import pandas as pd
 
@@ -1353,6 +1536,23 @@ def relabel_segmentation_lazy(
     indices = list(range(labels.shape[0]))
 
     def relabel_frame(frame_data, frame_idx, df_subset):
+        """
+        Relabel a single frame.
+
+        Parameters
+        ----------
+        frame_data : ndarray
+            Frame data.
+        frame_idx : int
+            Frame index.
+        df_subset : DataFrame
+            Subset of tracking data for this frame.
+
+        Returns
+        -------
+        ndarray
+            Relabeled frame.
+        """
 
         # frame_data is np.ndarray (Y, X)
         if frame_data is None:
@@ -1416,6 +1616,18 @@ def relabel_segmentation_lazy(
 def tracks_to_btrack(df, exclude_nans=False):
     """
     Converts a dataframe of tracked objects into the bTrack output format.
+
+    Parameters
+    ----------
+    df : DataFrame
+        Tracking data.
+    exclude_nans : bool, optional
+        If True, exclude NaN values. Default is False.
+
+    Returns
+    -------
+    tuple
+        (data, properties, graph).
     """
     graph = {}
     if exclude_nans:
@@ -1441,6 +1653,21 @@ def tracks_to_btrack(df, exclude_nans=False):
 
 
 def tracks_to_napari(df, exclude_nans=False):
+    """
+    Convert tracks to Napari format.
+
+    Parameters
+    ----------
+    df : DataFrame
+        Tracking data.
+    exclude_nans : bool, optional
+        If True, exclude NaN values. Default is False.
+
+    Returns
+    -------
+    tuple
+        (vertices, tracks, properties, graph).
+    """
     data, properties, graph = tracks_to_btrack(df, exclude_nans=exclude_nans)
     vertices = data[:, [1, -2, -1]]
     if data.shape[1] == 4:
@@ -1464,6 +1691,29 @@ def relabel_segmentation(
     threads=1,
     dialog=None,
 ):
+    """
+    Relabel segmentation based on tracking data.
+
+    Parameters
+    ----------
+    labels : ndarray
+        Label array.
+    df : DataFrame
+        Tracking data.
+    exclude_nans : bool, optional
+        If True, exclude NaN values. Default is True.
+    column_labels : dict, optional
+        Mapping of column names. Default provided.
+    threads : int, optional
+        Number of threads to use. Default is 1.
+    dialog : QProgressDialog, optional
+        Progress dialog to update. Default is None.
+
+    Returns
+    -------
+    ndarray
+        Relabeled segmentation.
+    """
     import threading
     import concurrent.futures
     from tqdm import tqdm
@@ -1483,6 +1733,14 @@ def relabel_segmentation(
         QApplication.processEvents()
 
     def rewrite_labels(indices):
+        """
+        Rewrite labels for a chunk of frames.
+
+        Parameters
+        ----------
+        indices : list
+            List of frame indices to process.
+        """
 
         all_track_ids = df[column_labels["track"]].dropna().unique()
 
@@ -1556,6 +1814,26 @@ def _view_on_napari(
     dialog=None,
     widget_adder=None,
 ):
+    """
+    View data on Napari.
+
+    Parameters
+    ----------
+    tracks : ndarray, optional
+        Tracks data. Default is None.
+    stack : ndarray, optional
+        Image stack. Default is None.
+    labels : ndarray, optional
+        Labels array. Default is None.
+    track_props : dict, optional
+        Track properties. Default is None.
+    track_graph : dict, optional
+        Track graph. Default is None.
+    dialog : QDialog, optional
+        Dialog to close after showing viewer. Default is None.
+    widget_adder : callable, optional
+        Function to add widgets to the viewer. Default is None.
+    """
     import napari
 
     viewer = napari.Viewer()
@@ -1594,6 +1872,35 @@ def view_tracks_in_napari(
     lazy=False,
     dialog=None,
 ):
+    """
+    View tracks in Napari for a given position and population.
+
+    Parameters
+    ----------
+    position : str
+        Position directory path.
+    population : str
+        Population name.
+    stack : ndarray, optional
+        Image stack. Default is None.
+    labels : ndarray, optional
+        Labels array. Default is None.
+    relabel : bool, optional
+        If True, relabel segmentation. Default is True.
+    flush_memory : bool, optional
+        If True, flush memory. Default is True.
+    threads : int, optional
+        Number of threads. Default is 1.
+    lazy : bool, optional
+        If True, use lazy loading. Default is False.
+    dialog : QDialog, optional
+        Progress dialog. Default is None.
+
+    Returns
+    -------
+    bool or None
+        True if successful, None if failed.
+    """
     df, df_path = get_position_table(position, population=population, return_path=True)
     if df is None:
         logger.error("Please compute trajectories first... Abort...")
@@ -1628,9 +1935,20 @@ def view_tracks_in_napari(
     vertices, tracks, properties, graph = tracks_to_napari(df, exclude_nans=True)
 
     def add_export_widget(viewer):
+        """
+        Add export widget to viewer.
+
+        Parameters
+        ----------
+        viewer : napari.Viewer
+            Napari viewer instance.
+        """
         from magicgui import magicgui
 
         def export_modifications():
+            """
+            Export modifications made in the viewer.
+            """
             # Lazy import to avoid circular dependency or heavy load
             import json
             from celldetective.tracking import (
@@ -1698,6 +2016,22 @@ def control_tracking_table(
         "label": "class_id",
     },
 ):
+    """
+    Control tracking table by viewing in Napari.
+
+    Parameters
+    ----------
+    position : str
+        Position directory path.
+    calibration : float, optional
+        Spatial calibration factor. Default is 1.
+    prefix : str, optional
+        Prefix of the stack file. Default is "Aligned".
+    population : str, optional
+        Population name. Default is "target".
+    column_labels : dict, optional
+        Mapping of column names. Default provided.
+    """
     position = position.replace("\\", "/")
 
     tracks, labels, stack = load_tracking_data(
@@ -1720,6 +2054,25 @@ def control_tracking_table(
 def auto_correct_masks(
     masks, bbox_factor: float = 1.75, min_area: int = 9, fill_labels: bool = False
 ):
+    """
+    Auto-correct masks by removing small objects and filling holes.
+
+    Parameters
+    ----------
+    masks : ndarray
+        Input masks.
+    bbox_factor : float, optional
+        Bounding box factor for splitting merged objects. Default is 1.75.
+    min_area : int, optional
+        Minimum area for objects. Default is 9.
+    fill_labels : bool, optional
+        If True, fill holes in labels. Default is False.
+
+    Returns
+    -------
+    ndarray
+        Corrected masks.
+    """
     from skimage.measure import regionprops_table, label
     import pandas as pd
 

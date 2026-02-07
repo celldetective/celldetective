@@ -13,17 +13,48 @@ from scipy.ndimage import find_objects
 
 
 def fill_label_holes(lbl_img, **kwargs):
-    """Fill small holes in label image.
+    """
+    Fill small holes in label image.
     from https://github.com/stardist/stardist/blob/main/stardist/utils.py
+
+    Parameters
+    ----------
+    lbl_img : ndarray
+        Label image.
+    **kwargs : dict
+        Additional arguments for `scipy.ndimage.binary_fill_holes`.
+
+    Returns
+    -------
+    ndarray
+        Label image with filled holes.
     """
 
     # TODO: refactor 'fill_label_holes' and 'edt_prob' to share code
     def grow(sl, interior):
+        """
+        Grow slice.
+
+        Parameters
+        ----------
+        sl : tuple
+            Slice tuple.
+        interior : list
+            List of interior flags.
+        """
         return tuple(
             slice(s.start - int(w[0]), s.stop + int(w[1])) for s, w in zip(sl, interior)
         )
 
     def shrink(interior):
+        """
+        Shrink slice.
+
+        Parameters
+        ----------
+        interior : list
+            List of interior flags.
+        """
         return tuple(slice(int(w[0]), (-1 if w[1] else None)) for w in interior)
 
     objects = find_objects(lbl_img)
@@ -45,6 +76,23 @@ def fill_label_holes(lbl_img, **kwargs):
 
 
 def _check_label_dims(lbl, file=None, template=None):
+    """
+    Check and resize label image to match template dimensions.
+
+    Parameters
+    ----------
+    lbl : ndarray
+        Label image.
+    file : str, optional
+        Path to the file to load as template. Default is None.
+    template : ndarray, optional
+        Template image. Default is None.
+
+    Returns
+    -------
+    ndarray
+        Resized label image.
+    """
 
     if file is not None:
         template = load_frames(0, file, scale=1, normalize_input=False)
@@ -262,6 +310,14 @@ def relabel_segmentation(
     total_frames = len(df[column_labels["frame"]].dropna().unique())
 
     def rewrite_labels(indices):
+        """
+        Rewrite labels for a batch of frames.
+
+        Parameters
+        ----------
+        indices : list
+            List of frame indices to process.
+        """
 
         all_track_ids = df[column_labels["track"]].dropna().unique()
 

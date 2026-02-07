@@ -71,6 +71,16 @@ class AppInitWindow(CelldetectiveMainWindow):
     """
 
     def __init__(self, parent_window=None, software_location=None):
+        """
+        Initialize the AppInitWindow.
+
+        Parameters
+        ----------
+        parent_window : QMainWindow, optional
+            The parent window.
+        software_location : str, optional
+            Path to the software location.
+        """
 
         super().__init__()
 
@@ -110,6 +120,7 @@ class AppInitWindow(CelldetectiveMainWindow):
         self.bg_loader.start()
 
     def closeEvent(self, event):
+        """Handle close event."""
 
         QApplication.closeAllWindows()
         event.accept()
@@ -131,6 +142,7 @@ class AppInitWindow(CelldetectiveMainWindow):
             self.use_gpu = False
 
     def create_locate_exp_hbox(self):
+        """Create the layout for locating the experiment folder."""
 
         self.locate_exp_layout = QHBoxLayout()
         self.locate_exp_layout.setContentsMargins(0, 5, 0, 0)
@@ -157,6 +169,7 @@ class AppInitWindow(CelldetectiveMainWindow):
         self.vertical_layout.addLayout(self.locate_exp_layout)
 
     def _create_menu_bar(self):
+        """Create the menu bar."""
 
         menu_bar = self.menuBar()
         menu_bar.clear()
@@ -202,6 +215,7 @@ class AppInitWindow(CelldetectiveMainWindow):
         # help_menu = menuBar.addMenu("&Help")
 
     def _create_actions(self):
+        """Create actions for the menu."""
         # Creating action using the first constructor
         # self.newAction = QAction(self)
         # self.newAction.setText("&New")
@@ -255,6 +269,7 @@ class AppInitWindow(CelldetectiveMainWindow):
         )
 
     def download_spreading_assay_demo(self):
+        """Download the spreading assay demo data."""
         if self.bg_loader.isFinished() and hasattr(self.bg_loader, "DownloadProcess"):
             DownloadProcess = self.bg_loader.DownloadProcess
         else:
@@ -290,6 +305,7 @@ class AppInitWindow(CelldetectiveMainWindow):
         self.validate_button.click()
 
     def download_cytotoxicity_assay_demo(self):
+        """Download the cytotoxicity assay demo data."""
         from celldetective.utils.downloaders import download_zenodo_file
 
         self.target_dir = str(
@@ -306,6 +322,7 @@ class AppInitWindow(CelldetectiveMainWindow):
         self.validate_button.click()
 
     def reload_previous_gpu_threads(self):
+        """Reload previous GPU and thread settings."""
 
         self.recent_file_acts = []
         self.threads_config_path = os.sep.join(
@@ -323,6 +340,7 @@ class AppInitWindow(CelldetectiveMainWindow):
                 logger.info(f"Number of threads: {self.n_threads}...")
 
     def reload_previous_experiments(self):
+        """Reload previously opened experiments."""
 
         self.recent_file_acts = []
         recent_path = os.sep.join([self.soft_path, "celldetective", "recent.txt"])
@@ -344,6 +362,7 @@ class AppInitWindow(CelldetectiveMainWindow):
                 )
 
     def correct_seg_annotation(self):
+        """Open dialog to correct segmentation annotation."""
 
         from celldetective.napari.utils import correct_annotation
 
@@ -375,6 +394,7 @@ class AppInitWindow(CelldetectiveMainWindow):
             return None
 
     def set_memory_and_threads(self):
+        """Open the memory and threads settings window."""
 
         logger.info("Opening Memory & Threads...")
 
@@ -407,6 +427,7 @@ class AppInitWindow(CelldetectiveMainWindow):
         center_window(self.threads_widget)
 
     def set_threads(self):
+        """Apply and save thread settings."""
         self.n_threads = int(self.threads_le.text())
         self.use_gpu = bool(self.use_gpu_checkbox.isChecked())
         dico = {"use_gpu": self.use_gpu, "n_threads": self.n_threads}
@@ -415,18 +436,28 @@ class AppInitWindow(CelldetectiveMainWindow):
         self.threads_widget.close()
 
     def open_experiment(self):
+        """Open the selected experiment."""
 
         self.browse_experiment_folder()
         if self.experiment_path_selection.text() != "":
             self.open_directory()
 
     def load_recent_exp(self, path):
+        """
+        Load a recent experiment.
+
+        Parameters
+        ----------
+        path : str
+            Path to the experiment.
+        """
 
         self.experiment_path_selection.setText(path)
         logger.info(f"Attempt to load experiment folder: {path}...")
         self.open_directory()
 
     def open_about_window(self):
+        """Open the About window."""
         if self.bg_loader.isFinished() and hasattr(self.bg_loader, "AboutWidget"):
             AboutWidget = self.bg_loader.AboutWidget
         else:
@@ -437,10 +468,12 @@ class AppInitWindow(CelldetectiveMainWindow):
 
     @staticmethod
     def open_documentation():
+        """Open the documentation URL."""
         doc_url = QUrl("https://celldetective.readthedocs.io/")
         QDesktopServices.openUrl(doc_url)
 
     def open_models_folder(self):
+        """Open the models directory in the file explorer."""
 
         path = os.sep.join([self.soft_path, "celldetective", "models", os.sep])
         try:
@@ -454,6 +487,7 @@ class AppInitWindow(CelldetectiveMainWindow):
                 return None
 
     def create_buttons_hbox(self):
+        """Create the buttons layout."""
 
         self.buttons_layout = QHBoxLayout()
         self.buttons_layout.setContentsMargins(30, 15, 30, 5)
@@ -482,9 +516,18 @@ class AppInitWindow(CelldetectiveMainWindow):
             self.validate_button.setEnabled(False)
 
     def set_experiment_path(self, path):
+        """
+        Set the experiment path text.
+
+        Parameters
+        ----------
+        path : str
+            The path to set.
+        """
         self.experiment_path_selection.setText(path)
 
     def create_new_experiment(self):
+        """Open the window to create a new experiment."""
 
         if self.bg_loader.isFinished() and hasattr(
             self.bg_loader, "ConfigNewExperiment"
@@ -499,6 +542,7 @@ class AppInitWindow(CelldetectiveMainWindow):
         center_window(self.new_exp_window)
 
     def open_directory(self):
+        """Open the selected directory and load the experiment."""
         self.t_ref = time.time()
 
         from celldetective.utils.experiment import extract_well_name_and_number

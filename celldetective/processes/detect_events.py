@@ -22,6 +22,16 @@ class SignalAnalysisProcess(Process):
     use_gpu = True
 
     def __init__(self, queue=None, process_args=None):
+        """
+        Initialize the process.
+
+        Parameters
+        ----------
+        queue : Queue
+            The queue to communicate with the main process.
+        process_args : dict
+            Arguments for the process.
+        """
         super().__init__()
         self.queue = queue
         if process_args is not None:
@@ -36,10 +46,26 @@ class SignalAnalysisProcess(Process):
         }
 
     def setup_for_position(self, pos):
+        """
+        Setup the process for a specific position.
+
+        Parameters
+        ----------
+        pos : str
+            The position path.
+        """
         self.pos = pos
         self.pos_path = rf"{pos}"
 
     def process_position(self, model=None):
+        """
+        Process the position for signal analysis.
+
+        Parameters
+        ----------
+        model : object
+            The signal detection model.
+        """
         logger.info(
             f"Analyzing signals for position {self.pos} with model {self.model_name}"
         )
@@ -236,6 +262,7 @@ class SignalAnalysisProcess(Process):
             raise e
 
     def run(self):
+        """Run the signal analysis process."""
         # This run method is for independent execution, but UnifiedBatchProcess calls methods directly.
         # However, keeping it robust.
         self.setup_for_position(self.pos)

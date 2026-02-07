@@ -20,6 +20,18 @@ from celldetective.gui.base.utils import center_window
 
 class MergeGroupWidget(CelldetectiveWidget):
     def __init__(self, parent_window, columns: List[str] = [], n_cols_init: int = 3):
+        """
+        Initialize the MergeGroupWidget.
+
+        Parameters
+        ----------
+        parent_window : QMainWindow
+             The parent window.
+        columns : list, optional
+            Columns to merge.
+        n_cols_init : int, optional
+            Initial number of column selectors.
+        """
 
         super().__init__()
         self.parent_window = parent_window
@@ -95,6 +107,7 @@ class MergeGroupWidget(CelldetectiveWidget):
         self.setAttribute(Qt.WA_DeleteOnClose)
 
     def add_col(self):
+        """Add a column selector."""
         cb_i = QComboBox()
         cb_i.addItems(self.group_cols)
         self.cbs.append(cb_i)
@@ -106,6 +119,7 @@ class MergeGroupWidget(CelldetectiveWidget):
         self.cbs_layout.addLayout(col_layout)
 
     def compute(self):
+        """Compute the merged classification."""
 
         cols_to_merge = [
             cb_i.currentText() for cb_i in self.cbs if cb_i.currentText() != "--"

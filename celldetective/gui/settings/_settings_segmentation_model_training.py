@@ -39,6 +39,7 @@ logger = get_logger(__name__)
 
 class BackgroundLoader(QThread):
     def run(self):
+        """Run the background loader."""
         logger.info("Loading libraries...")
         try:
             from celldetective.processes.train_segmentation_model import (
@@ -58,6 +59,14 @@ class SettingsSegmentationModelTraining(CelldetectiveSettingsPanel):
     """
 
     def __init__(self, parent_window=None):
+        """
+        Initialize the SettingsSegmentationModelTraining widget.
+
+        Parameters
+        ----------
+        parent_window : QMainWindow, optional
+            The parent window.
+        """
 
         self.parent_window = parent_window
         self.use_gpu = self.parent_window.use_gpu
@@ -85,13 +94,21 @@ class SettingsSegmentationModelTraining(CelldetectiveSettingsPanel):
         self.bg_loader.start()
 
     def closeEvent(self, event):
+        """
+        Handle the close event.
+
+        Parameters
+        ----------
+        event : QCloseEvent
+            The close event.
+        """
         if self.bg_loader.isRunning():
             logger.info("Waiting for background loader to finish...")
             self.bg_loader.wait()
         super().closeEvent(event)
 
     def _add_to_layout(self):
-
+        """Add widgets to the layout."""
         self._layout.addWidget(self.model_frame)
         self._layout.addWidget(self.data_frame)
         self._layout.addWidget(self.hyper_frame)
@@ -147,7 +164,7 @@ class SettingsSegmentationModelTraining(CelldetectiveSettingsPanel):
         grid.addWidget(self.ContentsHyper, 1, 0, 1, 4, alignment=Qt.AlignTop)
 
     def generate_hyper_contents(self):
-
+        """Generate the hyperparameters panel contents."""
         self.ContentsHyper = QFrame()
         layout = QVBoxLayout(self.ContentsHyper)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -222,7 +239,7 @@ class SettingsSegmentationModelTraining(CelldetectiveSettingsPanel):
         grid.addWidget(self.ContentsModel, 1, 0, 1, 4, alignment=Qt.AlignTop)
 
     def generate_data_contents(self):
-
+        """Generate the data panel contents."""
         self.ContentsData = QFrame()
         layout = QVBoxLayout(self.ContentsData)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -282,7 +299,7 @@ class SettingsSegmentationModelTraining(CelldetectiveSettingsPanel):
         layout.addLayout(validation_split_layout)
 
     def generate_model_panel_contents(self):
-
+        """Generate the model panel contents."""
         self.ContentsModel = QFrame()
         layout = QVBoxLayout(self.ContentsModel)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -348,7 +365,7 @@ class SettingsSegmentationModelTraining(CelldetectiveSettingsPanel):
         layout.addLayout(spatial_calib_layout)
 
     def activate_train_btn(self):
-
+        """Enable or disable the train button based on input validity."""
         current_name = self.modelname_le.text()
         models = get_segmentation_models_list(mode=self.mode, return_path=False)
         if (
@@ -374,6 +391,7 @@ class SettingsSegmentationModelTraining(CelldetectiveSettingsPanel):
                 self.submit_warning.setText("Please provide valid channels...")
 
     def rescale_slider(self):
+        """Adjust slider range and learning rate based on selected model."""
         if self.stardist_model.isChecked():
             self.epochs_slider.setRange(1, 500)
             self.lr_le.setText("0,0003")
@@ -382,7 +400,7 @@ class SettingsSegmentationModelTraining(CelldetectiveSettingsPanel):
             self.lr_le.setText("0,01")
 
     def showDialog_pretrained(self):
-
+        """Open a dialog to select a pretrained model."""
         self.clear_pretrained()
         self.pretrained_model = None
         self.pretrained_model = QFileDialog.getExistingDirectory(
@@ -443,7 +461,7 @@ class SettingsSegmentationModelTraining(CelldetectiveSettingsPanel):
             self.diamWidget.show()
 
     def set_cellpose_scale(self):
-
+        """Set the spatial calibration scale for Cellpose."""
         scale = (
             self.parent_window.parent_window.PxToUm
             * float(self.diamWidget.diameter_le.text().replace(",", "."))
@@ -465,7 +483,7 @@ class SettingsSegmentationModelTraining(CelldetectiveSettingsPanel):
         self.diamWidget.close()
 
     def showDialog_dataset(self):
-
+        """Open a dialog to select a dataset folder."""
         self.dataset_folder = QFileDialog.getExistingDirectory(
             self,
             "Open Directory",
@@ -487,7 +505,7 @@ class SettingsSegmentationModelTraining(CelldetectiveSettingsPanel):
                 self.cancel_dataset.setVisible(False)
 
     def clear_pretrained(self):
-
+        """Clear the selected pretrained model."""
         self.pretrained_model = None
         self.pretrained_lbl.setText("No folder chosen")
         for i in range(len(self.ch_norm.channel_cbs)):
@@ -506,14 +524,14 @@ class SettingsSegmentationModelTraining(CelldetectiveSettingsPanel):
         )
 
     def clear_dataset(self):
-
+        """Clear the selected dataset."""
         self.dataset_folder = None
         self.data_folder_label.setText("No folder chosen")
         self.data_folder_label.setToolTip("")
         self.cancel_dataset.setVisible(False)
 
     def load_stardist_train_config(self):
-
+        """Load StarDist training configuration."""
         config = os.sep.join([self.pretrained_model, "config.json"])
         if os.path.exists(config):
             with open(config, "r") as f:
@@ -526,7 +544,7 @@ class SettingsSegmentationModelTraining(CelldetectiveSettingsPanel):
                     self.lr_le.setText(str(lr).replace(".", ","))
 
     def load_pretrained_config(self):
-
+        """Load configuration from the pretrained model."""
         f = open(os.sep.join([self.pretrained_model, "config_input.json"]))
         data = json.load(f)
         channels = data["channels"]
@@ -608,6 +626,7 @@ class SettingsSegmentationModelTraining(CelldetectiveSettingsPanel):
         self.spatial_calib_le.setText(str(spatial_calib).replace(".", ","))
 
     def _write_instructions(self):
+        """Save training instructions to JSON file."""
         if self.bg_loader.isFinished() and hasattr(
             self.bg_loader, "TrainSegModelProcess"
         ):
@@ -747,6 +766,7 @@ class SettingsSegmentationModelTraining(CelldetectiveSettingsPanel):
         self.progress_dialog.exec_()
 
     def on_training_finished(self):
+        """Handle training completion."""
         if self.training_was_cancelled:
             return
 
@@ -765,12 +785,21 @@ class SettingsSegmentationModelTraining(CelldetectiveSettingsPanel):
         self.parent_window.seg_model_list.setCurrentIndex(idx)
 
     def on_training_error(self, message):
+        """
+        Handle training error.
+
+        Parameters
+        ----------
+        message : str
+            Error message.
+        """
         if self.training_was_cancelled:
             return
         self.progress_dialog.close()
         QMessageBox.critical(self, "Error", f"Training failed: {message}")
 
     def on_training_cancel(self):
+        """Handle training cancellation."""
         if self.is_finished:
             self.runner.close()
             self.progress_dialog.close()
@@ -795,7 +824,9 @@ class SettingsSegmentationModelTraining(CelldetectiveSettingsPanel):
             logger.error(f"Could not delete model folder after cancel: {e}")
 
     def on_training_interrupt(self):
+        """Handle training interruption."""
         self.stop_event.set()
 
     def _load_previous_instructions(self):
+        """Load previous training instructions."""
         pass

@@ -2,8 +2,19 @@ import os
 
 from PyQt5.QtCore import QSize, Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QIntValidator, QDoubleValidator
-from PyQt5.QtWidgets import QGridLayout, QLabel, QComboBox, QButtonGroup, QRadioButton, QPushButton, QCheckBox, \
-    QLineEdit, QHBoxLayout, QMessageBox, QDialog
+from PyQt5.QtWidgets import (
+    QGridLayout,
+    QLabel,
+    QComboBox,
+    QButtonGroup,
+    QRadioButton,
+    QPushButton,
+    QCheckBox,
+    QLineEdit,
+    QHBoxLayout,
+    QMessageBox,
+    QDialog,
+)
 from fonticon_mdi6 import MDI6
 from superqt import QLabeledRangeSlider, QLabeledSlider, QLabeledDoubleRangeSlider
 from superqt.fonticon import icon
@@ -19,10 +30,21 @@ from celldetective import get_logger
 
 logger = get_logger(__name__)
 
+
 class BackgroundModelFreeCorrectionLayout(QGridLayout, Styles):
     """docstring for ClassName"""
 
     def __init__(self, parent_window=None, *args):
+        """
+        Initialize the BackgroundModelFreeCorrectionLayout.
+
+        Parameters
+        ----------
+        parent_window : QMainWindow, optional
+            The parent window.
+        *args
+            Variable length argument list.
+        """
         super().__init__(*args)
 
         self.parent_window = parent_window
@@ -39,6 +61,7 @@ class BackgroundModelFreeCorrectionLayout(QGridLayout, Styles):
         self.add_to_layout()
 
     def generate_widgets(self):
+        """Generate the widgets."""
 
         self.channel_lbl = QLabel("Channel: ")
         self.channels_cb = QComboBox()
@@ -134,6 +157,7 @@ class BackgroundModelFreeCorrectionLayout(QGridLayout, Styles):
         self.interpolate_check = QCheckBox("interpolate NaNs")
 
     def add_to_layout(self):
+        """Add widgets to the layout."""
 
         channel_layout = QHBoxLayout()
         channel_layout.addWidget(self.channel_lbl, 25)
@@ -216,6 +240,7 @@ class BackgroundModelFreeCorrectionLayout(QGridLayout, Styles):
         # self.addItem(verticalSpacer, 5, 0, 1, 3)
 
     def add_instructions_to_parent_list(self):
+        """Add instructions to the parent protocol list."""
 
         self.generate_instructions()
         self.parent_window.protocols.append(self.instructions)
@@ -227,6 +252,7 @@ class BackgroundModelFreeCorrectionLayout(QGridLayout, Styles):
         self.parent_window.protocol_list.addItem(correction_description)
 
     def generate_instructions(self):
+        """Generate the instructions dictionary."""
 
         if self.timeseries_rb.isChecked():
             mode = "timeseries"
@@ -277,6 +303,7 @@ class BackgroundModelFreeCorrectionLayout(QGridLayout, Styles):
         }
 
     def set_target_channel(self):
+        """Set the target channel index."""
 
         channel_indices = _extract_channel_indices_from_config(
             self.attr_parent.exp_config, [self.channels_cb.currentText()]
@@ -284,6 +311,7 @@ class BackgroundModelFreeCorrectionLayout(QGridLayout, Styles):
         self.target_channel = channel_indices[0]
 
     def set_threshold_graphically(self):
+        """Open the threshold viewer to set the threshold graphically."""
         from celldetective.gui.viewers.threshold_viewer import (
             ThresholdedStackVisualizer,
         )
@@ -305,6 +333,7 @@ class BackgroundModelFreeCorrectionLayout(QGridLayout, Styles):
             self.viewer.show()
 
     def preview_correction(self):
+        """Preview the background correction on the current image."""
         from celldetective.gui.viewers.base_viewer import StackVisualizer
 
         if (
@@ -402,6 +431,7 @@ class BackgroundModelFreeCorrectionLayout(QGridLayout, Styles):
             print("Background correction cancelled.")
 
     def activate_time_range(self):
+        """Enable or disable time range options based on acquisition mode."""
 
         if self.timeseries_rb.isChecked():
             for wg in self.time_range_options:
@@ -411,6 +441,7 @@ class BackgroundModelFreeCorrectionLayout(QGridLayout, Styles):
                 wg.setEnabled(False)
 
     def activate_coef_options(self):
+        """Enable or disable coefficient options based on regression checkbox."""
 
         if self.regress_cb.isChecked():
             for c in self.coef_widgets:
@@ -420,6 +451,7 @@ class BackgroundModelFreeCorrectionLayout(QGridLayout, Styles):
                 c.setEnabled(False)
 
     def estimate_bg(self):
+        """Estimate the background and display the result."""
 
         if self.timeseries_rb.isChecked():
             mode = "timeseries"
@@ -448,6 +480,14 @@ class BackgroundModelFreeCorrectionLayout(QGridLayout, Styles):
         self.bg_worker.status_update.connect(self.bg_progress.setLabelText)
 
         def on_finished(bg):
+            """
+            Handle background estimation completion.
+
+            Parameters
+            ----------
+            bg : list
+                The background estimation result.
+            """
             self.bg_progress.blockSignals(True)
             self.bg_progress.close()
             if self.bg_worker._is_cancelled:
@@ -482,6 +522,24 @@ class BackgroundEstimatorThread(QThread):
     status_update = pyqtSignal(str)
 
     def __init__(self, exp_dir, well_idx, frame_range, channel, threshold, mode):
+        """
+        Initialize the BackgroundEstimatorThread.
+
+        Parameters
+        ----------
+        exp_dir : str
+            The experiment directory.
+        well_idx : int
+            The well index.
+        frame_range : tuple
+            The frame range.
+        channel : str
+            The target channel.
+        threshold : float
+            The threshold on STD.
+        mode : str
+            The acquisition mode ('timeseries' or 'tiles').
+        """
         super().__init__()
         self.exp_dir = exp_dir
         self.well_idx = well_idx
@@ -492,14 +550,17 @@ class BackgroundEstimatorThread(QThread):
         self._is_cancelled = False
 
     def stop(self):
+        """Stop the thread."""
         self._is_cancelled = True
 
     def run(self):
+        """Run the background estimation."""
         from celldetective.preprocessing import estimate_background_per_condition
 
         self.first_update = True
 
         def callback(**kwargs):
+            """Progress callback."""
             if self._is_cancelled:
                 return False
 

@@ -50,6 +50,18 @@ class CellposeParamsWidget(CelldetectiveWidget):
     cellprob_slider: QLabeledDoubleSlider = QLabeledDoubleSlider()
 
     def __init__(self, parent_window=None, model_name="CP_cyto2", *args):
+        """
+        Initialize the CellposeParamsWidget.
+
+        Parameters
+        ----------
+        parent_window : QMainWindow, optional
+            The parent window.
+        model_name : str, optional
+            The name of the model.
+        *args
+            Variable length argument list.
+        """
 
         super().__init__(*args)
         self.setWindowTitle("Estimate diameter")

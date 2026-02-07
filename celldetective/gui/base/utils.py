@@ -26,6 +26,14 @@ def center_window(window):
 
 
 def pretty_table(dct: dict):
+    """
+    Print a dictionary as a pretty table.
+
+    Parameters
+    ----------
+    dct : dict
+        The dictionary to print.
+    """
     table = PrettyTable()
     for c in dct.keys():
         table.add_column(str(c), [])

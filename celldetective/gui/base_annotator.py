@@ -55,6 +55,16 @@ logger = get_logger(__name__)
 class BaseAnnotator(CelldetectiveMainWindow, Styles):
 
     def __init__(self, parent_window=None, read_config=True):
+        """
+        Initialize the BaseAnnotator.
+
+        Parameters
+        ----------
+        parent_window : QMainWindow, optional
+            The parent window.
+        read_config : bool, optional
+            Whether to read the configuration file, default is True.
+        """
 
         super().__init__()
         self.parent_window = parent_window
@@ -99,13 +109,16 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
             self._init_base_widgets()
 
     def _init_base_widgets(self):
+        """Initialize base widgets."""
         self._init_base_widgets_left()
         self._init_base_widgets_right()
 
     def _init_base_widgets_right(self):
+        """Initialize right panel widgets."""
         pass
 
     def _init_base_widgets_left(self):
+        """Initialize left panel widgets."""
 
         self.class_label = QLabel("event: ")
         self.class_choice_cb = QComboBox()
@@ -170,6 +183,7 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
         self.export_btn.setIconSize(QSize(25, 25))
 
     def _init_cell_fig_widgets(self):
+        """Initialize cell figure widgets."""
 
         self.generate_signal_choices()
         self.create_cell_signal_canvas()
@@ -196,9 +210,11 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
         self.export_plot_btn = ExportPlotBtn(self.cell_fig, export_dir=self.exp_dir)
 
     def close_without_new_class(self):
+        """Close the new class widget without saving."""
         self.newClassWidget.close()
 
     def init_class_selection_block(self):
+        """Initialize the class selection block."""
 
         self.class_hbox = QHBoxLayout()
         self.class_hbox.setContentsMargins(0, 0, 0, 0)
@@ -209,10 +225,12 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
         self.class_hbox.addWidget(self.del_class_btn, 5)
 
     def init_options_block(self):
+        """Initialize the options block."""
         self.options_hbox = QHBoxLayout()
         self.options_hbox.setContentsMargins(0, 0, 0, 0)
 
     def init_correction_block(self):
+        """Initialize the correction block."""
         self.action_hbox = QHBoxLayout()
         self.action_hbox.setContentsMargins(0, 0, 0, 0)
 
@@ -220,6 +238,7 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
         self.action_hbox.addWidget(self.cancel_btn)
 
     def init_plot_buttons_block(self):
+        """Initialize the plot buttons block."""
         self.plot_buttons_hbox = QHBoxLayout()
         self.plot_buttons_hbox.setContentsMargins(0, 0, 0, 0)
         self.plot_buttons_hbox.addWidget(QLabel(""), 90)
@@ -229,6 +248,7 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
         self.plot_buttons_hbox.addWidget(self.export_plot_btn, 5)
 
     def init_save_btn_block(self):
+        """Initialize the save button block."""
 
         self.btn_hbox = QHBoxLayout()
         self.btn_hbox.setContentsMargins(0, 10, 0, 0)
@@ -298,6 +318,7 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
         QApplication.processEvents()
 
     def generate_signal_choices(self):
+        """Generate signal choice combos."""
 
         self.signal_choice_cb = [QSearchableComboBox() for i in range(self.n_signals)]
         self.signal_choice_label = [
@@ -368,7 +389,14 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
             self.signal_choice_cb[i].currentIndexChanged.connect(self.plot_signals)
 
     def on_scatter_pick(self, event):
+        """
+        Handle scatter plot pick events.
 
+        Parameters
+        ----------
+        event : PickEvent
+            The pick event.
+        """
         self.event = event
 
         self.correct_btn.disconnect()
@@ -402,9 +430,7 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
         #
 
     def load_annotator_config(self):
-        """
-        Load settings from config or set default values.
-        """
+        """Load settings from config or set default values."""
 
         if os.path.exists(self.instructions_path):
             with open(self.instructions_path, "r") as f:
@@ -446,10 +472,7 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
             self.anim_interval = 33
 
     def locate_stack(self):
-        """
-        Locate the target movie.
-
-        """
+        """Locate the target movie."""
 
         movies = glob(
             self.pos
@@ -488,6 +511,7 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
             self.img = load_frames(0, self.stack_path, normalize_input=False)
 
     def create_cell_signal_canvas(self):
+        """Create the cell signal canvas."""
 
         self.cell_fig, self.cell_ax = plt.subplots(tight_layout=True)
         self.cell_fcanvas = FigureCanvas(self.cell_fig, interactive=True)
@@ -524,6 +548,14 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
         self.cell_fcanvas.canvas.draw()
 
     def resizeEvent(self, event):
+        """
+        Handle resize events.
+
+        Parameters
+        ----------
+        event : QResizeEvent
+            The resize event.
+        """
 
         super().resizeEvent(event)
         try:
@@ -532,9 +564,7 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
             pass
 
     def locate_tracks(self):
-        """
-        Locate the tracks.
-        """
+        """Locate the trajectories file."""
 
         if not os.path.exists(self.trajectories_path):
 
@@ -698,6 +728,7 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
             self.MinMaxScaler.fit(x)
 
     def del_event_class(self):
+        """Delete an event class."""
 
         msgBox = QMessageBox()
         msgBox.setIcon(QMessageBox.Warning)
@@ -723,6 +754,7 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
             self.class_choice_cb.removeItem(item_idx)
 
     def normalize_features(self):
+        """Normalize or denormalize features."""
 
         x = self.df_tracks[self.columns_to_rescale].values
 
@@ -746,9 +778,7 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
             self.normalize_features_btn.setIconSize(QSize(25, 25))
 
     def switch_to_log(self):
-        """
-        Better would be to create a log(quantity) and plot it...
-        """
+        """Toggle log scale."""
 
         try:
             if self.cell_ax.get_yscale() == "linear":
@@ -768,10 +798,7 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
         self.cell_fcanvas.canvas.draw_idle()
 
     def start(self):
-        """
-        Starts interactive animation. Adds the draw frame command to the GUI
-        handler, calls show to start the event loop.
-        """
+        """Start interactive animation."""
         self.start_btn.setShortcut(QKeySequence(""))
 
         self.last_frame_btn.setEnabled(True)
@@ -787,9 +814,7 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
         self.stop_btn.clicked.connect(self.stop)
 
     def contrast_slider_action(self):
-        """
-        Recontrast the imshow as the contrast slider is moved.
-        """
+        """Recontrast the image when slider moves."""
 
         self.vmin = self.contrast_slider.value()[0]
         self.vmax = self.contrast_slider.value()[1]
@@ -797,6 +822,7 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
         self.fcanvas.canvas.draw_idle()
 
     def show_outliers(self):
+        """Toggle outliers visibility."""
         if self.outliers_check.isChecked():
             self.show_fliers = True
             self.plot_signals()
@@ -805,6 +831,7 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
             self.plot_signals()
 
     def export_signals(self):
+        """Export signals to a file."""
 
         auto_dataset_name = (
             self.pos.split(os.sep)[-4] + "_" + self.pos.split(os.sep)[-2] + ".npy"
@@ -851,6 +878,7 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
                 logger.error(f"Error {e}...")
 
     def create_new_event_class(self):
+        """Create a new event class."""
 
         # display qwidget to name the event
         self.newClassWidget = CelldetectiveWidget()
@@ -889,11 +917,20 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
         center_window(self.newClassWidget)
 
     def shortcut_suppr(self):
+        """Handle delete key shortcut."""
         self.correct_btn.click()
         self.suppr_btn.click()
         self.correct_btn.click()
 
     def closeEvent(self, event):
+        """
+        Handle close event.
+
+        Parameters
+        ----------
+        event : QCloseEvent
+            The close event.
+        """
         # result = QMessageBox.question(self,
         # 			  "Confirm Exit...",
         # 			  "Are you sure you want to exit ?",
@@ -903,12 +940,24 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
         gc.collect()
 
     def save_trajectories(self):
+        """Save trajectories (not implemented)."""
         # specific to signal/static annotator
         logger.info(
             "Save trajectory function not implemented for BaseAnnotator class..."
         )
 
+    def reset_scatter_selection(self):
+        """Reset scatter plot selection."""
+        self.selection = []
+
+    def hide_annotation_buttons(self):
+        """Hide annotation buttons."""
+        self.correct_btn.setEnabled(False)
+        self.correct_btn.setText("correct")
+        self.cancel_btn.setEnabled(False)
+
     def cancel_selection(self):
+        """Cancel the current selection."""
         self.hide_annotation_buttons()
         self.correct_btn.setEnabled(False)
         self.correct_btn.setText("correct")

@@ -15,6 +15,20 @@ import json
 class DownloadProcess(Process):
 
     def __init__(self, queue=None, process_args=None, *args, **kwargs):
+        """
+        Initialize the process.
+
+        Parameters
+        ----------
+        queue : Queue
+            The queue to communicate with the main process.
+        process_args : dict
+            Arguments for the process.
+        *args
+            Variable length argument list.
+        **kwargs
+            Arbitrary keyword arguments.
+        """
 
         super().__init__(*args, **kwargs)
 
@@ -46,6 +60,16 @@ class DownloadProcess(Process):
         self.t0 = time.time()
 
     def download_url_to_file(self, url, dst):
+        """
+        Download a file from a URL.
+
+        Parameters
+        ----------
+        url : str
+            The URL to download from.
+        dst : str
+            The destination file path.
+        """
         try:
             file_size = None
             ssl._create_default_https_context = ssl._create_unverified_context
@@ -95,6 +119,7 @@ class DownloadProcess(Process):
             return None
 
     def run(self):
+        """Run the download process."""
 
         self.download_url_to_file(rf"{self.zip_url}", self.path_to_zip_file)
         with zipfile.ZipFile(self.path_to_zip_file, "r") as zip_ref:
@@ -127,11 +152,13 @@ class DownloadProcess(Process):
         self.queue.close()
 
     def end_process(self):
+        """End the process."""
 
         self.terminate()
         self.queue.put("finished")
 
     def abort_process(self):
+        """Abort the process."""
 
         self.terminate()
         self.queue.put("error")

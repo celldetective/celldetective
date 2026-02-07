@@ -21,6 +21,18 @@ from distutils.dir_util import copy_tree
 
 
 def save_json(data, fpath, **kwargs):
+    """
+    Save dictionary to JSON file.
+
+    Parameters
+    ----------
+    data : dict
+        Data to save.
+    fpath : str
+        File path.
+    **kwargs
+        Additional keyword arguments for json.dumps.
+    """
     with open(fpath, "w") as f:
         f.write(json.dumps(data, **kwargs))
 
@@ -358,6 +370,19 @@ elif model_type == "stardist":
     }
 
     def make_json_safe(obj):
+        """
+        Convert object to JSON-serializable format.
+
+        Parameters
+        ----------
+        obj : object
+            Input object.
+
+        Returns
+        -------
+        object
+            JSON-serializable object.
+        """
         if isinstance(obj, np.ndarray):
             return obj.tolist()  # convert to list
         if isinstance(obj, (np.int64, np.int32)):

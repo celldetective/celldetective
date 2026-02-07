@@ -136,6 +136,18 @@ print(f"Instructions: {threshold_instructions}...")
 
 # Loop over all frames and segment
 def segment_index(indices):
+    """
+    Segment a chunk of frames using thresholds.
+
+    Parameters
+    ----------
+    indices : list
+        List of frame indices to process.
+
+    Returns
+    -------
+    None
+    """
 
     for t in tqdm(indices, desc="frame"):
 

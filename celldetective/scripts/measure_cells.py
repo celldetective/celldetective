@@ -286,6 +286,18 @@ with open(pos + f"log_{mode}.json", "a") as f:
 
 
 def measure_index(indices):
+    """
+    Measure features for a chunk of frames.
+
+    Parameters
+    ----------
+    indices : list
+        List of frame indices to process.
+
+    Returns
+    -------
+    None
+    """
 
     # global column_labels
 

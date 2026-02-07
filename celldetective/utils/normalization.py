@@ -4,6 +4,29 @@ import numpy as np
 
 
 def normalize_mi_ma(x, mi, ma, clip=False, eps=1e-20, dtype=np.float32):
+    """
+    Normalize array between min and max.
+
+    Parameters
+    ----------
+    x : ndarray
+        Input array.
+    mi : float
+        Minimum value.
+    ma : float
+        Maximum value.
+    clip : bool, optional
+        If True, clip values between 0 and 1. Default is False.
+    eps : float, optional
+        Epsilon for numerical stability. Default is 1e-20.
+    dtype : type, optional
+        Data type. Default is np.float32.
+
+    Returns
+    -------
+    ndarray
+        Normalized array.
+    """
     # from csbdeep https://github.com/CSBDeep/CSBDeep/blob/main/csbdeep/utils/utils.py
     if dtype is not None:
         x = x.astype(dtype, copy=False)

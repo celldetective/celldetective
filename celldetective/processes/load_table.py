@@ -9,6 +9,20 @@ logger = get_logger()
 class TableLoaderProcess(Process):
 
     def __init__(self, queue=None, process_args=None, *args, **kwargs):
+        """
+        Initialize the process.
+
+        Parameters
+        ----------
+        queue : Queue
+            The queue to communicate with the main process.
+        process_args : dict
+            Arguments for the process.
+        *args
+            Variable length argument list.
+        **kwargs
+            Arbitrary keyword arguments.
+        """
 
         super().__init__(*args, **kwargs)
 
@@ -19,8 +33,19 @@ class TableLoaderProcess(Process):
         self.queue = queue
 
     def run(self):
+        """Run the table loading process."""
 
         def progress(well_progress, pos_progress):
+            """
+            Report progress.
+
+            Parameters
+            ----------
+            well_progress : float
+                Progress for the well.
+            pos_progress : float
+                Progress for the position.
+            """
             # Check for cancellation if needed?
             # The runner checks queue for instructions? No, runner closes queue.
             # But here we can just push updates.
@@ -52,4 +77,5 @@ class TableLoaderProcess(Process):
             self.queue.put({"status": "error", "message": str(e)})
 
     def end_process(self):
+        """End the process."""
         self.terminate()

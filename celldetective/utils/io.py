@@ -3,7 +3,10 @@ from pathlib import Path
 from typing import Union
 import numpy as np
 
-from celldetective.utils.image_transforms import axes_check_and_normalize, move_image_axes
+from celldetective.utils.image_transforms import (
+    axes_check_and_normalize,
+    move_image_axes,
+)
 
 try:
     from tifffile import imwrite as imsave
@@ -13,6 +16,14 @@ import warnings
 
 
 def remove_file_if_exists(file: Union[str, Path]):
+    """
+    Remove a file if it exists.
+
+    Parameters
+    ----------
+    file : str or Path
+        Path to the file to remove.
+    """
     if os.path.exists(file):
         try:
             os.remove(file)

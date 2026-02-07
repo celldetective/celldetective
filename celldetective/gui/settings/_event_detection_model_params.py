@@ -13,6 +13,20 @@ from celldetective.utils.model_loaders import locate_signal_model
 class SignalModelParamsWidget(CelldetectiveWidget):
 
     def __init__(self, parent_window=None, model_name=None, *args, **kwargs):
+        """
+        Initialize the SignalModelParamsWidget.
+
+        Parameters
+        ----------
+        parent_window : QMainWindow, optional
+            The parent window.
+        model_name : str, optional
+            The name of the model.
+        *args
+            Variable length argument list.
+        **kwargs
+            Arbitrary keyword arguments.
+        """
 
         super().__init__(*args)
         self.setWindowTitle("Signals")
@@ -39,7 +53,7 @@ class SignalModelParamsWidget(CelldetectiveWidget):
         center_window(self)
 
     def locate_model_path(self):
-
+        """Locate the model path."""
         self.model_complete_path = locate_signal_model(self.model_name)
         if self.model_complete_path is None:
             raise ValueError(f"Model {self.model_name} could not be found.")
@@ -56,7 +70,7 @@ class SignalModelParamsWidget(CelldetectiveWidget):
             self.input_config = json.load(config_file)
 
     def populate_widgets(self):
-
+        """Populate the widgets."""
         self.n_channels = len(self.required_channels)
         self.channel_cbs = [QComboBox() for i in range(self.n_channels)]
 

@@ -66,6 +66,12 @@ def control_tracks(
     threads : int, optional, default=1
             The number of threads to use for processing. This can speed up the task in multi-threaded environments.
 
+    progress_callback : function, optional
+            A callback function to report progress.
+
+    prepare_only : bool, optional, default=False
+            If True, only prepare the data structure but do not launch the viewer.
+
     Returns
     -------
     None
@@ -112,6 +118,21 @@ def control_tracks(
 
 
 def tracks_to_napari(df, exclude_nans=False):
+    """
+    Convert a DataFrame of tracks to Napari-compatible format.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        The DataFrame containing tracking data.
+    exclude_nans : bool, optional
+        Whether to exclude NaNs from the data.
+
+    Returns
+    -------
+    tuple
+        A tuple containing vertices, tracks, properties, and graph.
+    """
 
     data, properties, graph = tracks_to_btrack(df, exclude_nans=exclude_nans)
     vertices = data[:, [1, -2, -1]]
@@ -134,7 +155,33 @@ def view_tracks_in_napari(
     prepare_only=False,
 ):
     """
-    Updated
+    View tracks in Napari.
+
+    Parameters
+    ----------
+    position : str
+        The path to the position directory.
+    population : str
+        The population to visualize.
+    stack : numpy.ndarray, optional
+        The image stack.
+    labels : numpy.ndarray, optional
+        The label images.
+    relabel : bool, optional
+        Whether to relabel the segmentation to match track IDs.
+    flush_memory : bool, optional
+        Whether to flush memory after visualization.
+    threads : int, optional
+        Number of threads for processing.
+    progress_callback : function, optional
+        Callback for progress updates.
+    prepare_only : bool, optional
+        If True, returns the data dictionary instead of launching the viewer.
+
+    Returns
+    -------
+    napari.Viewer or dict or None
+        The Napari viewer instance, data dictionary, or None.
     """
 
     print(f"DEBUG: view_tracks_in_napari called with pos={position}, pop={population}")
@@ -159,6 +206,14 @@ def view_tracks_in_napari(
         print("Replacing the cell mask labels with the track ID...")
 
         def wrapped_callback(p):
+            """
+            Wrap the progress callback to scale it.
+
+            Parameters
+            ----------
+            p : int
+                Progress value.
+            """
             if progress_callback:
                 return progress_callback(50 + int(p * 0.5))
             return True
@@ -208,6 +263,34 @@ def launch_napari_viewer(
     block=True,
     progress_callback=None,
 ):
+    """
+    Launch the Napari viewer with the provided data.
+
+    Parameters
+    ----------
+    stack : numpy.ndarray
+        The image stack.
+    labels : numpy.ndarray
+        The label images.
+    vertices : numpy.ndarray
+        The vertices of the tracks.
+    tracks : numpy.ndarray
+        The track data.
+    properties : dict
+        Properties of the tracks.
+    graph : dict
+        The graph of the tracks.
+    shared_data : dict
+        Shared data for the viewer.
+    contrast_limits : list
+        Contrast limits for the image.
+    flush_memory : bool, optional
+        Whether to flush memory after closing.
+    block : bool, optional
+        Whether to block execution while the viewer is open.
+    progress_callback : function, optional
+        Callback for progress.
+    """
 
     viewer = napari.Viewer()
 
@@ -227,6 +310,18 @@ def launch_napari_viewer(
     viewer.add_tracks(tracks, properties=properties, graph=graph, name="tracks")
 
     def lock_controls(layer, widgets=(), locked=True):
+        """
+        Lock or unlock controls for a layer.
+
+        Parameters
+        ----------
+        layer : str
+            The layer name.
+        widgets : tuple, optional
+            Widgets to lock/unlock.
+        locked : bool, optional
+            Whether to lock or unlock the widgets.
+        """
         qctrl = viewer.window.qt_viewer.controls.widgets[layer]
         for wdg in widgets:
             try:
@@ -259,6 +354,7 @@ def launch_napari_viewer(
     shared_data["selected_frame"] = selected_frame
 
     def export_modifications():
+        """Export modified tracks."""
 
         from celldetective.tracking import (
             write_first_detection_class,
@@ -295,11 +391,20 @@ def launch_napari_viewer(
 
     @magicgui(call_button="Export the modified\ntracks...")
     def export_table_widget():
+        """Widget to trigger export."""
         return export_modifications()
 
     export_table_widget.native.setStyleSheet(Styles().button_style_sheet)
 
     def label_changed(event):
+        """
+        Handle label selection change.
+
+        Parameters
+        ----------
+        event : str
+             The event type.
+        """
 
         value = viewer.layers["segmentation"].selected_label
         if value != 0:
@@ -312,6 +417,16 @@ def launch_napari_viewer(
 
     @labels_layer.mouse_double_click_callbacks.append
     def on_second_click_of_double_click(layer, event):
+        """
+        Handle double click on the labels layer.
+
+        Parameters
+        ----------
+        layer : napari.layers.Labels
+            The labels layer.
+        event : Event
+            The event object.
+        """
 
         df = shared_data["df"]
         position = shared_data["position"]
@@ -478,6 +593,8 @@ def load_napari_data(
             The prefix used to identify the movie file. The default is "Aligned".
     population : str, optional
             The population type to load, either "target" or "effector". The default is "target".
+    return_stack : bool, optional
+            Whether to return the image stack.
 
     Returns
     -------
@@ -583,6 +700,7 @@ def control_segmentation_napari(
     """
 
     def export_labels():
+        """Export corrected labels."""
         labels_layer = viewer.layers["segmentation"].data
         if not os.path.exists(output_folder):
             os.mkdir(output_folder)
@@ -600,6 +718,7 @@ def control_segmentation_napari(
         print("The labels have been successfully rewritten.")
 
     def export_annotation():
+        """Export annotation data."""
 
         # Locate experiment config
         parent1 = Path(position).parent
@@ -796,10 +915,19 @@ def control_segmentation_napari(
 
     @magicgui(call_button="Save the modified labels")
     def save_widget():
+        """
+        Widget to trigger saving.
+
+        Returns
+        -------
+        function
+            The export function.
+        """
         return export_labels()
 
     @magicgui(call_button="Export the annotation\nof the current frame")
     def export_widget():
+        """Widget to trigger export."""
         return export_annotation()
 
     stack, labels = locate_stack_and_labels(
@@ -834,6 +962,18 @@ def control_segmentation_napari(
     export_widget.native.setStyleSheet(Styles().button_style_sheet)
 
     def lock_controls(layer, widgets=(), locked=True):
+        """
+        Lock or unlock controls.
+
+        Parameters
+        ----------
+        layer : str
+            The layer name.
+        widgets : tuple, optional
+            Widgets to lock/unlock.
+        locked : bool, optional
+            Whether to lock or unlock.
+        """
         qctrl = viewer.window.qt_viewer.controls.widgets[layer]
         for wdg in widgets:
             try:
@@ -865,9 +1005,15 @@ def control_segmentation_napari(
 def correct_annotation(filename):
     """
     New function to reannotate an annotation image in post, using napari and save update inplace.
+
+    Parameters
+    ----------
+    filename : str
+        The path to the annotation file.
     """
 
     def export_labels():
+        """Export corrected labels to file."""
         labels_layer = viewer.layers["segmentation"].data
         for t, im in enumerate(tqdm(labels_layer)):
 
@@ -881,6 +1027,14 @@ def correct_annotation(filename):
 
     @magicgui(call_button="Save the modified labels")
     def save_widget():
+        """
+        Widget to trigger saving.
+
+        Returns
+        -------
+        function
+            The export function.
+        """
         return export_labels()
 
     if filename.endswith("_labelled.tif"):

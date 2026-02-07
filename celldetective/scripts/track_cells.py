@@ -207,6 +207,19 @@ if not btrack_option:
 
 
 def measure_index(indices):
+    """
+    Measure features for a chunk of frames for tracking.
+
+    Parameters
+    ----------
+    indices : list
+        List of frame indices to process.
+
+    Returns
+    -------
+    list of DataFrame
+        List of feature dataframes.
+    """
 
     props = []
 

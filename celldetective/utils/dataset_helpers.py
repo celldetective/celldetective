@@ -115,12 +115,14 @@ def train_test_split(
             Input features or independent variables.
     data_y1 : array-like
             Target variable 1.
-    data_y2 : array-like
-            Target variable 2.
+    data_class : array-like, optional
+            Target classification variable (e.g., cell type). Default is None.
     validation_size : float, optional
             Proportion of the dataset to include in the validation set. Default is 0.25.
     test_size : float, optional
             Proportion of the dataset to include in the test set. Default is 0.
+    n_iterations : int, optional
+            Number of iterations to attempt splitting while ensuring all classes are present in training and validation sets. Default is 10.
 
     Returns
     -------

@@ -24,6 +24,20 @@ class StarDistParamsWidget(CelldetectiveWidget):
     def __init__(
         self, parent_window=None, model_name="SD_versatile_fluo", *args, **kwargs
     ):
+        """
+        Initialize the StarDistParamsWidget.
+
+        Parameters
+        ----------
+        parent_window : QMainWindow, optional
+            The parent window.
+        model_name : str, optional
+            The name of the model.
+        *args
+            Variable length argument list.
+        **kwargs
+            Arbitrary keyword arguments.
+        """
 
         super().__init__(*args)
         self.setWindowTitle("Channels")

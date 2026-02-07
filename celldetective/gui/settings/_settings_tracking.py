@@ -56,7 +56,14 @@ class SettingsTracking(CelldetectiveSettingsPanel):
     """
 
     def __init__(self, parent_window=None):
+        """
+        Initialize the SettingsTracking widget.
 
+        Parameters
+        ----------
+        parent_window : QMainWindow, optional
+            The parent window.
+        """
         self.parent_window = parent_window
         self.mode = self.parent_window.mode
         self.exp_dir = self.parent_window.exp_dir
@@ -82,7 +89,7 @@ class SettingsTracking(CelldetectiveSettingsPanel):
         self.resize(int(self.width() * 1.1), int(self._screen_height * 0.8))
 
     def _add_to_layout(self):
-
+        """Add widgets to the layout."""
         tracker_hbox = QHBoxLayout()
         tracker_hbox.setContentsMargins(15, 15, 15, 15)
         tracker_hbox.addWidget(self.btrack_option, 50, alignment=Qt.AlignCenter)
@@ -134,7 +141,7 @@ class SettingsTracking(CelldetectiveSettingsPanel):
         self.trackpy_option.toggled.connect(self.show_tracking_options)
 
     def show_tracking_options(self):
-
+        """Show options for the selected tracker."""
         if self.btrack_option.isChecked():
             self.config_frame.show()
             self.features_frame.show()
@@ -199,7 +206,7 @@ class SettingsTracking(CelldetectiveSettingsPanel):
         self.uncheck_post_proc()
 
     def collapse_post_advanced(self):
-
+        """Collapse or expand the advanced post-processing settings."""
         features_open = not self.ContentsFeatures.isHidden()
         config_open = not self.ContentsConfig.isHidden()
         post_open = not self.ContentsPostProc.isHidden()
@@ -350,7 +357,7 @@ class SettingsTracking(CelldetectiveSettingsPanel):
             self.collapse_features_btn.setIconSize(QSize(20, 20))
 
     def generate_post_proc_panel_contents(self):
-
+        """Generate the post-processing panel contents."""
         self.ContentsPostProc = QFrame()
         layout = QVBoxLayout(self.ContentsPostProc)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -433,7 +440,7 @@ class SettingsTracking(CelldetectiveSettingsPanel):
         layout.addLayout(clean_traj_sublayout)
 
     def generate_feature_panel_contents(self):
-
+        """Generate the feature panel contents."""
         self.ContentsFeatures = QFrame()
         layout = QVBoxLayout(self.ContentsFeatures)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -612,6 +619,7 @@ class SettingsTracking(CelldetectiveSettingsPanel):
         layout.addLayout(self.haralick_layout)
 
     def switch_to_absolute_normalization_mode(self):
+        """Switch between percentile and absolute normalization for Haralick features."""
         if self.percentile_mode:
             self.percentile_mode = False
             self.haralick_normalization_mode_btn.setIcon(
@@ -641,7 +649,7 @@ class SettingsTracking(CelldetectiveSettingsPanel):
             self.haralick_percentile_max_le.setText("99.99")
 
     def populate_config_frame(self):
-
+        """Populate the configuration frame."""
         grid = QGridLayout(self.config_frame)
         panel_title = QLabel(f"CONFIGURATION")
         panel_title.setStyleSheet(
@@ -668,7 +676,7 @@ class SettingsTracking(CelldetectiveSettingsPanel):
         # self.ContentsConfig.hide()
 
     def populate_config_trackpy_frame(self):
-
+        """Populate the trackpy configuration frame."""
         grid = QGridLayout(self.config_trackpy_frame)
         panel_title = QLabel(f"CONFIGURATION")
         panel_title.setStyleSheet(
@@ -744,7 +752,7 @@ class SettingsTracking(CelldetectiveSettingsPanel):
             self.collapse_config_trackpy_btn.setIconSize(QSize(20, 20))
 
     def generate_config_trackpy_panel_contents(self):
-
+        """Generate the trackpy configuration panel contents."""
         self.ContentsConfigTrackpy = QFrame()
         layout = QVBoxLayout(self.ContentsConfigTrackpy)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -772,7 +780,7 @@ class SettingsTracking(CelldetectiveSettingsPanel):
         layout.addLayout(memory_layout)
 
     def generate_config_panel_contents(self):
-
+        """Generate the configuration panel contents."""
         self.ContentsConfig = QFrame()
         layout = QVBoxLayout(self.ContentsConfig)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -1031,6 +1039,7 @@ class SettingsTracking(CelldetectiveSettingsPanel):
         self.close()
 
     def uncheck_post_proc(self):
+        """Uncheck the post-processing option."""
         self.select_post_proc_btn.setIcon(
             icon(MDI6.checkbox_blank_outline, color="black")
         )
@@ -1040,6 +1049,7 @@ class SettingsTracking(CelldetectiveSettingsPanel):
             element.setEnabled(False)
 
     def check_post_proc(self):
+        """Check the post-processing option."""
         self.select_post_proc_btn.setIcon(icon(MDI6.checkbox_outline, color="black"))
         self.select_post_proc_btn.setIconSize(QSize(20, 20))
         self.post_proc_ticked = True
@@ -1047,6 +1057,7 @@ class SettingsTracking(CelldetectiveSettingsPanel):
             element.setEnabled(True)
 
     def uncheck_features(self):
+        """Uncheck the features option."""
         self.select_features_btn.setIcon(
             icon(MDI6.checkbox_blank_outline, color="black")
         )
@@ -1056,6 +1067,7 @@ class SettingsTracking(CelldetectiveSettingsPanel):
             element.setEnabled(False)
 
     def check_features(self):
+        """Check the features option."""
         self.select_features_btn.setIcon(icon(MDI6.checkbox_outline, color="black"))
         self.select_features_btn.setIconSize(QSize(20, 20))
         self.features_ticked = True
@@ -1063,7 +1075,7 @@ class SettingsTracking(CelldetectiveSettingsPanel):
             element.setEnabled(True)
 
     def extract_haralick_options(self):
-
+        """Extract Haralick features options from the GUI."""
         if self.activate_haralick_btn.isChecked():
             self.haralick_options = {
                 "target_channel": self.haralick_channel_choice.currentIndex(),

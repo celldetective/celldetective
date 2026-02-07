@@ -607,15 +607,19 @@ def distance_cut_neighborhood(
     mode: str
             neighboring mode, between 'two-pop' (e.g. target-effector) and 'self' (target-target or effector-effector).
     status: None or status
-            name to look for cells to ignore (because they are dead). By default all cells are kept.
-    compute_cum_sum: bool,
-            compute cumulated time of presence of neighbours (only if trajectories available for both sets)
-    attention_weight: bool,
-            compute the attention weight (how much a cell of set B is shared across cells of set A)
-    symmetrize: bool,
-            write in set B the neighborhood of set A
-    include_dead_weight: bool
-            do not count dead cells when establishing attention weight
+    not_status_option : str, optional
+            A string to specify status options to exclude (default is None).
+    compute_cum_sum : bool, optional
+            Compute cumulated time of presence of neighbours (only if trajectories available for both sets) (default is True).
+    attention_weight : bool, optional
+            Compute the attention weight (how much a cell of set B is shared across cells of set A) (default is True).
+    symmetrize : bool, optional
+            Write in set B the neighborhood of set A (default is True).
+    include_dead_weight : bool, optional
+            Do not count dead cells when establishing attention weight (default is True).
+    column_labels : dict, optional
+            Dictionary specifying column names for 'track', 'time', 'x', and 'y'.
+            Default is {'track': 'TRACK_ID', 'time': 'FRAME', 'x': 'POSITION_X', 'y': 'POSITION_Y'}.
     """
 
     # Check live_status option
@@ -1456,20 +1460,29 @@ def mask_contact_neighborhood(
     ----------
     setA,setB : pandas DataFrame
             Trajectory or position sets A and B.
+    labelsA : ndarray
+            Label image for set A.
+    labelsB : ndarray
+            Label image for set B.
     distance : float
             Cut-distance in pixels to match neighboring pairs.
-    mode: str
-            neighboring mode, between 'two-pop' (e.g. target-effector) and 'self' (target-target or effector-effector).
-    status: None or status
-            name to look for cells to ignore (because they are dead). By default all cells are kept.
-    compute_cum_sum: bool,
-            compute cumulated time of presence of neighbours (only if trajectories available for both sets)
-    attention_weight: bool,
-            compute the attention weight (how much a cell of set B is shared across cells of set A)
-    symmetrize: bool,
-            write in set B the neighborhood of set A
-    include_dead_weight: bool
-            do not count dead cells when establishing attention weight
+    mode : str, optional
+            Neighboring mode, e.g., 'two-pop' (default is 'two-pop').
+    status : list, optional
+            Status columns to consider (default is None).
+    not_status_option : str, optional
+            A string to specify status options to exclude (default is None).
+    compute_cum_sum : bool, optional
+            Compute cumulated time of presence of neighbours (only if trajectories available for both sets) (default is True).
+    attention_weight : bool, optional
+            Compute the attention weight (how much a cell of set B is shared across cells of set A) (default is True).
+    symmetrize : bool, optional
+            Write in set B the neighborhood of set A (default is True).
+    include_dead_weight : bool, optional
+            Do not count dead cells when establishing attention weight (default is True).
+    column_labels : dict, optional
+            Dictionary specifying column names for 'track', 'time', 'x', 'y' and 'mask_id'.
+            Default is {'track': 'TRACK_ID', 'time': 'FRAME', 'x': 'POSITION_X', 'y': 'POSITION_Y', 'mask_id': 'class_id'}.
     """
 
     if setA is not None and setB is not None:

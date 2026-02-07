@@ -40,6 +40,14 @@ def get_extra_properties_functions():
 class FeatureChoice(CelldetectiveWidget):
 
     def __init__(self, parent_window):
+        """
+        Initialize the FeatureChoice widget.
+
+        Parameters
+        ----------
+        parent_window : QMainWindow
+            The parent window.
+        """
         super().__init__()
         self.parent_window = parent_window
         self.setWindowTitle("Add feature")
@@ -87,6 +95,7 @@ class FeatureChoice(CelldetectiveWidget):
         center_window(self)
 
     def add_current_feature(self):
+        """Add the currently selected feature to the parent's list."""
         filtername = self.combo_box.currentText()
         self.parent_window.list_widget.addItems([filtername])
         self.close()

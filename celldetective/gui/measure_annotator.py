@@ -100,7 +100,9 @@ class AnnotatorStackVisualizer(CellEdgeVisualizer):
 class MeasureAnnotator(BaseAnnotator):
 
     def __init__(self, *args, **kwargs):
-
+        """
+        Initialize the MeasureAnnotator.
+        """
         self.status_name = "group"
         super().__init__(read_config=False, *args, **kwargs)
 
@@ -348,6 +350,7 @@ class MeasureAnnotator(BaseAnnotator):
             self.MinMaxScaler.fit(x)
 
     def populate_options_layout(self):
+        """Populate the options layout."""
         # clear options hbox
         for i in reversed(range(self.options_hbox.count())):
             self.options_hbox.itemAt(i).widget().setParent(None)
@@ -374,7 +377,7 @@ class MeasureAnnotator(BaseAnnotator):
         self.options_hbox.addLayout(time_option_hbox)
 
     def update_widgets(self):
-
+        """Update widgets."""
         self.class_label.setText("characteristic \n group: ")
         self.update_class_cb()
         self.add_class_btn.setToolTip("Add a new characteristic group")
@@ -384,7 +387,7 @@ class MeasureAnnotator(BaseAnnotator):
         self.export_btn.clicked.connect(self.export_measurements)
 
     def update_class_cb(self):
-
+        """Update class combo box."""
         self.class_choice_cb.disconnect()
         self.class_choice_cb.clear()
         cols = np.array(self.df_tracks.columns)
@@ -428,7 +431,7 @@ class MeasureAnnotator(BaseAnnotator):
         self.class_choice_cb.currentIndexChanged.connect(self.changed_class)
 
     def populate_window(self):
-
+        """Populate the window."""
         super().populate_window()
         # Left panel updates
         self.populate_options_layout()
@@ -471,6 +474,7 @@ class MeasureAnnotator(BaseAnnotator):
         self.compact_layout_main()
 
     def compact_layout_main(self):
+        """Compact the main layout."""
         # Attempt to compact the viewer layout one more time from the main window side
         if hasattr(self, "viewer"):
             self.viewer.compact_layout()
@@ -597,6 +601,14 @@ class MeasureAnnotator(BaseAnnotator):
         self.cell_fcanvas.canvas.draw()
 
     def plot_red_points(self, ax):
+        """
+        Plot red points on the axes.
+
+        Parameters
+        ----------
+        ax : Axes
+            The matplotlib axes.
+        """
         yvalues = []
         current_frame = self.current_frame
         for i in range(len(self.signal_choice_cb)):
@@ -623,6 +635,16 @@ class MeasureAnnotator(BaseAnnotator):
         self.cell_fcanvas.canvas.draw()
 
     def select_single_cell(self, index, timepoint):
+        """
+        Select a single cell.
+
+        Parameters
+        ----------
+        index : int
+            The cell index.
+        timepoint : int
+            The timepoint.
+        """
 
         self.correct_btn.setEnabled(True)
         self.cancel_btn.setEnabled(True)
@@ -656,11 +678,13 @@ class MeasureAnnotator(BaseAnnotator):
         self.draw_frame(self.current_frame)
 
     def cancel_selection(self):
+        """Cancel selection."""
         super().cancel_selection()
         self.event = None
         self.draw_frame(self.current_frame)
 
     def export_measurements(self):
+        """Export measurements to file."""
         logger.info("User interactions: Exporting measurements...")
         # Implementation same as before
         auto_dataset_name = (
@@ -691,7 +715,7 @@ class MeasureAnnotator(BaseAnnotator):
                 logger.error(f"Error {e}...")
 
     def write_new_event_class(self):
-
+        """Write new event class."""
         if self.class_name_le.text() == "":
             self.target_class = "group"
         else:
@@ -725,6 +749,7 @@ class MeasureAnnotator(BaseAnnotator):
         self.newClassWidget.close()
 
     def hide_annotation_buttons(self):
+        """Hide annotation buttons."""
 
         for a in self.annotation_btns_to_hide:
             a.hide()
@@ -733,6 +758,7 @@ class MeasureAnnotator(BaseAnnotator):
         self.time_of_interest_le.setEnabled(False)
 
     def show_annotation_buttons(self):
+        """Show annotation buttons."""
 
         for a in self.annotation_btns_to_hide:
             a.show()
@@ -745,6 +771,7 @@ class MeasureAnnotator(BaseAnnotator):
         self.correct_btn.clicked.connect(self.apply_modification)
 
     def give_cell_information(self):
+        """Display cell information."""
 
         try:
             cell_selected = f"cell: {self.track_of_interest}\n"
@@ -774,6 +801,7 @@ class MeasureAnnotator(BaseAnnotator):
             logger.error(f"Error in give_cell_information: {e}")
 
     def create_new_event_class(self):
+        """Create a new event class."""
 
         # display qwidget to name the event
         self.newClassWidget = CelldetectiveWidget()
@@ -801,6 +829,7 @@ class MeasureAnnotator(BaseAnnotator):
         center_window(self.newClassWidget)
 
     def apply_modification(self):
+        """Apply modification to the cell."""
         if self.time_of_interest_le.text() != "":
             status = int(self.time_of_interest_le.text())
         else:
@@ -858,7 +887,19 @@ class MeasureAnnotator(BaseAnnotator):
         self.draw_frame(self.current_frame)
 
     def assign_color_state(self, state):
+        """
+        Assign color based on state.
 
+        Parameters
+        ----------
+        state : int or str
+            The state.
+
+        Returns
+        -------
+        color
+            The assigned color.
+        """
         try:
             if np.isnan(state):
                 state = "nan"
@@ -926,6 +967,7 @@ class MeasureAnnotator(BaseAnnotator):
         )
 
     def make_status_column(self):
+        """Create the status column."""
         if self.status_name == "state_firstdetection":
             pass
         else:
@@ -938,6 +980,7 @@ class MeasureAnnotator(BaseAnnotator):
             )
 
     def extract_scatter_from_trajectories(self):
+        """Extract scatter data from trajectories."""
 
         self.positions = []
         self.colors = []
@@ -966,9 +1009,11 @@ class MeasureAnnotator(BaseAnnotator):
                 )
 
     def compute_status_and_colors(self, index=0):
+        """Compute status and colors."""
         self.changed_class()
 
     def changed_class(self):
+        """Handle class change."""
         self.status_name = self.class_choice_cb.currentText()
         if self.status_name != "":
             # self.compute_status_and_colors()
@@ -996,10 +1041,12 @@ class MeasureAnnotator(BaseAnnotator):
         self.plot_signals()
 
     def changed_channel(self):
+        """Handle channel change."""
         """Handled by StackViewer mostly, but we might need to refresh plotting if things depend on channel"""
         pass  # StackViewer handles image reload
 
     def save_trajectories(self):
+        """Save trajectories to file."""
         logger.info(f"Saving trajectories...")
         if self.normalized_signals:
             self.normalize_features_btn.click()
@@ -1035,6 +1082,7 @@ class MeasureAnnotator(BaseAnnotator):
         self.changed_class()
 
     def modify(self):
+        """Apply modification (update colors/scatter)."""
         if self.status_name not in self.df_tracks.columns:
             logger.warning(
                 f"Column '{self.status_name}' not found in df_tracks. Skipping modify."
@@ -1056,6 +1104,7 @@ class MeasureAnnotator(BaseAnnotator):
         self.correct_btn.clicked.connect(self.show_annotation_buttons)
 
     def del_cell(self):
+        """Delete the selected cell."""
         logger.info(
             f"User interactions: Deleting cell #{self.track_of_interest} (setting status to 99)"
         )

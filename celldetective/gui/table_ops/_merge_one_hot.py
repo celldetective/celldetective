@@ -12,6 +12,16 @@ from celldetective.gui.gui_utils import PandasModel
 class MergeOneHotWidget(CelldetectiveWidget):
 
     def __init__(self, parent_window, selected_columns=None):
+        """
+        Initialize the MergeOneHotWidget.
+
+        Parameters
+        ----------
+        parent_window : QMainWindow
+            The parent window.
+        selected_columns : list, optional
+            The columns to merge.
+        """
 
         super().__init__()
         self.parent_window = parent_window
@@ -71,6 +81,7 @@ class MergeOneHotWidget(CelldetectiveWidget):
         self.setAttribute(Qt.WA_DeleteOnClose)
 
     def add_col(self):
+        """Add a column selector."""
         self.cbs.append(QSearchableComboBox())
         self.cbs[-1].addItems(["--"] + list(self.parent_window.data.columns))
         lay = QHBoxLayout()
@@ -79,6 +90,7 @@ class MergeOneHotWidget(CelldetectiveWidget):
         self.cbs_layout.addLayout(lay)
 
     def merge_cols(self):
+        """Merge the selected columns."""
 
         self.parent_window.data[self.new_col_le.text()] = self.parent_window.data.loc[
             :, list(self.selected_columns)
@@ -88,6 +100,7 @@ class MergeOneHotWidget(CelldetectiveWidget):
         self.close()
 
     def allow_merge(self):
+        """Enable or disable the merge button based on input."""
 
         if self.new_col_le.text() == "":
             self.submit_btn.setEnabled(False)

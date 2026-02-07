@@ -170,6 +170,8 @@ def load_experiment_tables(
             If `True`, also returns a DataFrame containing position-level metadata. Default is `False`.
     load_pickle : bool, optional
             If `True`, loads pre-processed pickle files for the positions instead of raw data. Default is `False`.
+    progress_callback : callable, optional
+            A function to report progress. Should accept a two arguments (well_progress, pos_progress) and return True to continue or False to cancel. Default is None.
 
     Returns
     -------

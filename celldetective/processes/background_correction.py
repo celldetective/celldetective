@@ -6,7 +6,10 @@ from tifffile import imwrite
 from celldetective import get_logger
 from celldetective.utils.experiment import extract_experiment_channels
 from celldetective.utils.image_loaders import _get_img_num_per_channel
-from celldetective.utils.parsing import config_section_to_dict, _extract_channel_indices_from_config
+from celldetective.utils.parsing import (
+    config_section_to_dict,
+    _extract_channel_indices_from_config,
+)
 
 logger = get_logger(__name__)
 
@@ -14,6 +17,16 @@ logger = get_logger(__name__)
 class BackgroundCorrectionProcess(Process):
 
     def __init__(self, queue=None, process_args=None):
+        """
+        Initialize the process.
+
+        Parameters
+        ----------
+        queue : Queue
+            The queue to communicate with the main process.
+        process_args : dict
+            Arguments for the process.
+        """
 
         super().__init__()
 
@@ -27,7 +40,7 @@ class BackgroundCorrectionProcess(Process):
         self.t0 = time.time()
 
     def run(self):
-
+        """Run the background correction process."""
         logger.info("Start background correction process...")
 
         try:
@@ -63,6 +76,14 @@ class BackgroundCorrectionProcess(Process):
         self.count_pos = 0  # pos processed in current well
 
         def progress_callback(**kwargs):
+            """
+            Callback for reporting progress.
+
+            Parameters
+            ----------
+            **kwargs
+                Arbitrary keyword arguments.
+            """
 
             level = kwargs.get("level", None)
             iteration = kwargs.get("iter", 0)
@@ -267,5 +288,6 @@ class BackgroundCorrectionProcess(Process):
         self.queue.close()
 
     def end_process(self):
+        """End the process."""
         self.terminate()
         self.queue.put("finished")

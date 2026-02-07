@@ -7,6 +7,14 @@ from celldetective.gui.base.utils import center_window
 class QueryWidget(CelldetectiveWidget):
 
     def __init__(self, parent_window):
+        """
+        Initialize the QueryWidget.
+
+        Parameters
+        ----------
+        parent_window : QMainWindow
+            The parent window.
+        """
 
         super().__init__()
         self.parent_window = parent_window
@@ -25,6 +33,7 @@ class QueryWidget(CelldetectiveWidget):
         center_window(self)
 
     def filter_table(self):
+        """Filter the table based on the query."""
         from celldetective.gui.tableUI import TableUI
 
         try:

@@ -26,6 +26,16 @@ logger = get_logger(__name__)
 class DifferentiateColWidget(CelldetectiveWidget):
 
     def __init__(self, parent_window, column=None):
+        """
+        Initialize the DifferentiateColWidget.
+
+        Parameters
+        ----------
+        parent_window : QMainWindow
+            The parent window.
+        column : str, optional
+            The column to differentiate.
+        """
 
         super().__init__()
         self.parent_window = parent_window
@@ -85,6 +95,7 @@ class DifferentiateColWidget(CelldetectiveWidget):
         self.setAttribute(Qt.WA_DeleteOnClose)
 
     def compute_derivative_and_add_new_column(self):
+        """Compute the derivative and add as a new column."""
 
         if self.bi_btn.isChecked():
             mode = "bi"
@@ -106,6 +117,20 @@ class DifferentiateColWidget(CelldetectiveWidget):
 class OperationOnColsWidget(CelldetectiveWidget):
 
     def __init__(self, parent_window, column1=None, column2=None, operation="divide"):
+        """
+        Initialize the OperationOnColsWidget.
+
+        Parameters
+        ----------
+        parent_window : QMainWindow
+            The parent window.
+        column1 : str, optional
+            First column name.
+        column2 : str, optional
+            Second column name.
+        operation : str, optional
+            Operation to perform ("divide", "multiply", "add", "subtract").
+        """
 
         super().__init__()
         self.parent_window = parent_window
@@ -150,6 +175,7 @@ class OperationOnColsWidget(CelldetectiveWidget):
         self.setAttribute(Qt.WA_DeleteOnClose)
 
     def compute(self):
+        """Perform the operation and add result to table."""
 
         test = self._check_cols_before_operation()
         if not test:
@@ -195,6 +221,14 @@ class OperationOnColsWidget(CelldetectiveWidget):
             self.close()
 
     def _check_cols_before_operation(self):
+        """
+        Check if columns are valid for operation.
+
+        Returns
+        -------
+        bool
+            True if columns are numeric, False otherwise.
+        """
 
         self.col1_txt = self.col1_cb.currentText()
         self.col2_txt = self.col2_cb.currentText()
@@ -210,6 +244,16 @@ class OperationOnColsWidget(CelldetectiveWidget):
 class CalibrateColWidget(GenericOpColWidget):
 
     def __init__(self, *args, **kwargs):
+        """
+        Initialize the CalibrateColWidget.
+
+        Parameters
+        ----------
+        *args
+            Variable length argument list.
+        **kwargs
+            Arbitrary keyword arguments.
+        """
 
         super().__init__(title="Calibrate data", *args, **kwargs)
 
@@ -246,6 +290,7 @@ class CalibrateColWidget(GenericOpColWidget):
         # self.sublayout.addLayout(info_layout2)
 
     def check_valid_params(self):
+        """Check if calibration parameters are valid."""
 
         try:
             factor = float(self.calibration_factor_le.text().replace(",", "."))
@@ -264,6 +309,7 @@ class CalibrateColWidget(GenericOpColWidget):
             self.submit_btn.setEnabled(False)
 
     def compute(self):
+        """Apply calibration to the selected column."""
         self.parent_window.data[
             self.measurements_cb.currentText() + f"[{self.units_le.text()}]"
         ] = self.parent_window.data[self.measurements_cb.currentText()] * float(
@@ -274,10 +320,21 @@ class CalibrateColWidget(GenericOpColWidget):
 class AbsColWidget(GenericOpColWidget):
 
     def __init__(self, *args, **kwargs):
+        """
+        Initialize the AbsColWidget.
+
+        Parameters
+        ----------
+        *args
+            Variable length argument list.
+        **kwargs
+            Arbitrary keyword arguments.
+        """
 
         super().__init__(title="abs(.)", *args, **kwargs)
 
     def compute(self):
+        """Compute absolute value of the column."""
         self.parent_window.data["|" + self.measurements_cb.currentText() + "|"] = (
             self.parent_window.data[self.measurements_cb.currentText()].abs()
         )
@@ -286,10 +343,21 @@ class AbsColWidget(GenericOpColWidget):
 class LogColWidget(GenericOpColWidget):
 
     def __init__(self, *args, **kwargs):
+        """
+        Initialize the LogColWidget.
+
+        Parameters
+        ----------
+        *args
+            Variable length argument list.
+        **kwargs
+            Arbitrary keyword arguments.
+        """
 
         super().__init__(title="log10(.)", *args, **kwargs)
 
     def compute(self):
+        """Compute log10 of the column."""
         self.parent_window.data["log10(" + self.measurements_cb.currentText() + ")"] = (
             safe_log(self.parent_window.data[self.measurements_cb.currentText()].values)
         )

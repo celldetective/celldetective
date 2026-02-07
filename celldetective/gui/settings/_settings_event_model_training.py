@@ -39,6 +39,7 @@ logger = get_logger()
 
 class BackgroundLoader(QThread):
     def run(self):
+        """Run the background loader."""
         logger.info("Loading libraries...")
         try:
             from celldetective.processes.train_signal_model import (
@@ -58,6 +59,16 @@ class SettingsEventDetectionModelTraining(CelldetectiveSettingsPanel):
     """
 
     def __init__(self, parent_window=None, signal_mode="single-cells"):
+        """
+        Initialize the SettingsEventDetectionModelTraining widget.
+
+        Parameters
+        ----------
+        parent_window : QMainWindow, optional
+            The parent window.
+        signal_mode : str, optional
+            The signal mode ('single-cells' or 'pairs').
+        """
 
         self.parent_window = parent_window
         self.mode = self.parent_window.mode
@@ -97,6 +108,7 @@ class SettingsEventDetectionModelTraining(CelldetectiveSettingsPanel):
         self.bg_loader.start()
 
     def _add_to_layout(self):
+        """Add widgets to the layout."""
         self._layout.addWidget(self.model_frame)
         self._layout.addWidget(self.data_frame)
         self._layout.addWidget(self.hyper_frame)
@@ -152,6 +164,7 @@ class SettingsEventDetectionModelTraining(CelldetectiveSettingsPanel):
         grid.addWidget(self.ContentsHyper, 1, 0, 1, 4, alignment=Qt.AlignTop)
 
     def generate_hyper_contents(self):
+        """Generate the hyperparameter panel contents."""
 
         self.ContentsHyper = QFrame()
         layout = QVBoxLayout(self.ContentsHyper)
@@ -224,6 +237,7 @@ class SettingsEventDetectionModelTraining(CelldetectiveSettingsPanel):
         grid.addWidget(self.ContentsModel, 1, 0, 1, 4, alignment=Qt.AlignTop)
 
     def generate_data_contents(self):
+        """Generate the data panel contents."""
 
         self.ContentsData = QFrame()
         layout = QVBoxLayout(self.ContentsData)
@@ -285,6 +299,7 @@ class SettingsEventDetectionModelTraining(CelldetectiveSettingsPanel):
         layout.addLayout(validation_split_layout)
 
     def generate_model_panel_contents(self):
+        """Generate the model panel contents."""
 
         self.ContentsModel = QFrame()
         layout = QVBoxLayout(self.ContentsModel)
@@ -365,6 +380,7 @@ class SettingsEventDetectionModelTraining(CelldetectiveSettingsPanel):
         layout.addLayout(model_length_layout)
 
     def neighborhood_changed(self):
+        """Handle neighborhood selection changes."""
 
         neigh = self.neighborhood_choice_cb.currentText()
         self.current_neighborhood = neigh
@@ -420,6 +436,7 @@ class SettingsEventDetectionModelTraining(CelldetectiveSettingsPanel):
             self.ch_norm.add_items_truncated(cb, self.signals)
 
     def fill_available_neighborhoods(self):
+        """Fill available neighborhoods in the combo box."""
 
         self.dataframes = {}
         self.neighborhood_cols = []
@@ -440,6 +457,7 @@ class SettingsEventDetectionModelTraining(CelldetectiveSettingsPanel):
         self.neighborhood_choice_cb.addItems(self.neighborhood_cols)
 
     def show_dialog_pretrained(self):
+        """Show dialog to select a pretrained model."""
 
         self.pretrained_model = QFileDialog.getExistingDirectory(
             self,
@@ -469,6 +487,7 @@ class SettingsEventDetectionModelTraining(CelldetectiveSettingsPanel):
         logger.info(self.pretrained_model)
 
     def show_dialog_dataset(self):
+        """Show dialog to select a dataset folder."""
 
         self.dataset_folder = QFileDialog.getExistingDirectory(
             self,
@@ -495,6 +514,7 @@ class SettingsEventDetectionModelTraining(CelldetectiveSettingsPanel):
                 self.check_readiness()
 
     def clear_pretrained(self):
+        """Clear the selected pretrained model."""
 
         self.pretrained_model = None
         self.pretrained_lbl.setText("No folder chosen")
@@ -510,6 +530,7 @@ class SettingsEventDetectionModelTraining(CelldetectiveSettingsPanel):
         )
 
     def check_readiness(self):
+        """Check if the training can proceed."""
         if self.dataset_folder is None and self.dataset_cb.currentText() == "--":
             self.submit_btn.setEnabled(False)
             self.warning_label.setText("Please provide a dataset to train the model.")
@@ -518,6 +539,7 @@ class SettingsEventDetectionModelTraining(CelldetectiveSettingsPanel):
             self.warning_label.setText("")
 
     def clear_dataset(self):
+        """Clear the selected dataset."""
 
         self.dataset_folder = None
         self.data_folder_label.setText("No folder chosen")
@@ -527,6 +549,7 @@ class SettingsEventDetectionModelTraining(CelldetectiveSettingsPanel):
         self.check_readiness()
 
     def load_pretrained_config(self):
+        """Load configuration from the pretrained model."""
 
         f = open(os.sep.join([self.pretrained_model, "config_input.json"]))
         data = json.load(f)
@@ -585,6 +608,7 @@ class SettingsEventDetectionModelTraining(CelldetectiveSettingsPanel):
             self.resize(self.width(), self.height() + step)
 
     def _write_instructions(self):
+        """Write training instructions to JSON file."""
         if self.bg_loader.isFinished() and hasattr(
             self.bg_loader, "TrainSignalModelProcess"
         ):
@@ -730,6 +754,7 @@ class SettingsEventDetectionModelTraining(CelldetectiveSettingsPanel):
         self.progress_dialog.exec_()
 
     def on_training_finished(self):
+        """Handle training completion."""
         if self.training_was_cancelled:
             return
 
@@ -749,12 +774,21 @@ class SettingsEventDetectionModelTraining(CelldetectiveSettingsPanel):
         # MessageBox removed to allow viewing results in popup
 
     def on_training_error(self, message):
+        """
+        Handle training errors.
+
+        Parameters
+        ----------
+        message : str
+            The error message.
+        """
         if self.training_was_cancelled:
             return
         self.progress_dialog.close()
         QMessageBox.critical(self, "Error", f"Training failed: {message}")
 
     def on_training_cancel(self):
+        """Handle training cancellation."""
         if self.is_finished:
             logger.info("Training complete, dialog closed.")
             self.runner.close()
@@ -781,8 +815,10 @@ class SettingsEventDetectionModelTraining(CelldetectiveSettingsPanel):
         logger.info("Training cancelled.")
 
     def on_training_interrupt(self):
+        """Handle training interruption."""
         logger.info("Training interrupted by user (Skip Model).")
         self.stop_event.set()
 
     def _load_previous_instructions(self):
+        """Load previous instructions."""
         pass

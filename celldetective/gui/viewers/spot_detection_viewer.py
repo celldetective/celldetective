@@ -49,6 +49,34 @@ class SpotDetectionVisualizer(StackVisualizer):
         *args,
         **kwargs,
     ):
+        """
+        Initialize the SpotDetectionVisualizer.
+
+        Parameters
+        ----------
+        parent_channel_cb : QComboBox, optional
+             Parent channel checkbox.
+        parent_diameter_le : QLineEdit, optional
+            Parent diameter line edit.
+        parent_threshold_le : QLineEdit, optional
+            Parent threshold line edit.
+        parent_preprocessing_list : PreprocessingList, optional
+            Parent preprocessing list widget.
+        cell_type : str, optional
+            Type of cell ("targets" by default).
+        labels : numpy.ndarray, optional
+            Cell labels.
+        initial_diameter : float, optional
+             Initial spot diameter.
+        initial_threshold : float, optional
+            Initial detection threshold.
+        initial_preprocessing : list, optional
+            Initial preprocessing steps.
+        *args
+            Variable length argument list.
+        **kwargs
+            Arbitrary keyword arguments.
+        """
 
         super().__init__(*args, **kwargs)
 
@@ -128,7 +156,14 @@ class SpotDetectionVisualizer(StackVisualizer):
             self.preprocessing.list.items = list(initial_preprocessing)
 
     def closeEvent(self, event):
-        """Clean up resources on close."""
+        """
+        Clean up resources on close.
+
+        Parameters
+        ----------
+        event : QEvent
+            The close event.
+        """
         # Clear large arrays
         self.target_img = None
         self.init_label = None
@@ -142,6 +177,14 @@ class SpotDetectionVisualizer(StackVisualizer):
         super().closeEvent(event)
 
     def update_marker_sizes(self, event=None):
+        """
+        Update the size of the markers in the scatter plot.
+
+        Parameters
+        ----------
+        event : matplotlib.backend_bases.Event, optional
+             The event that triggered the update.
+        """
 
         # Get axis bounds
         xlim = self.ax.get_xlim()
@@ -171,12 +214,21 @@ class SpotDetectionVisualizer(StackVisualizer):
             self.fig.canvas.draw_idle()
 
     def init_scatter(self):
+        """Initialize the scatter plot."""
         self.spot_scat = self.ax.scatter(
             [], [], s=50, facecolors="none", edgecolors="tab:red", zorder=100
         )
         self.canvas.canvas.draw()
 
     def change_frame(self, value):
+        """
+        Change the displayed frame.
+
+        Parameters
+        ----------
+        value : int
+            The frame index.
+        """
 
         super().change_frame(value)
         if not self.switch_from_channel:
@@ -194,6 +246,7 @@ class SpotDetectionVisualizer(StackVisualizer):
             self.target_img = self.stack[value, :, :, self.detection_channel].copy()
 
     def detect_and_display_spots(self):
+        """Run spot detection and update the display."""
 
         self.reset_detection()
         self.control_valid_parameters()  # set current diam and threshold
@@ -234,6 +287,7 @@ class SpotDetectionVisualizer(StackVisualizer):
         self.canvas.canvas.draw()
 
     def load_labels(self):
+        """Load cell labels."""
 
         # Load the cell labels
         if self.labels is not None:
@@ -255,6 +309,7 @@ class SpotDetectionVisualizer(StackVisualizer):
             self.locate_labels_virtual()
 
     def locate_labels_virtual(self):
+        """Locate virtual label files."""
         # Locate virtual labels
 
         labels_path = (
@@ -278,6 +333,7 @@ class SpotDetectionVisualizer(StackVisualizer):
         self.init_label = imread(self.mask_paths[self.frame_slider.value()])
 
     def generate_detection_channel(self):
+        """Generate the detection channel selection widget."""
 
         assert self.channel_names is not None
         assert len(self.channel_names) == self.n_channels
@@ -323,6 +379,14 @@ class SpotDetectionVisualizer(StackVisualizer):
     # 		self.invert = False
 
     def set_detection_channel_index(self, value):
+        """
+        Set the detection channel index.
+
+        Parameters
+        ----------
+        value : int
+            The channel index.
+        """
 
         self.detection_channel = value
         if self.mode == "direct":
@@ -337,6 +401,7 @@ class SpotDetectionVisualizer(StackVisualizer):
             ).astype(float)[:, :, 0]
 
     def generate_spot_detection_params(self):
+        """Generate spot detection parameter widgets."""
 
         self.spot_diam_le = QLineEdit("1")
         self.spot_diam_le.setValidator(self.floatValidator)
@@ -369,6 +434,7 @@ class SpotDetectionVisualizer(StackVisualizer):
         self.settings_layout.addLayout(spot_thresh_layout)
 
     def generate_add_measurement_btn(self):
+        """Generate the 'Add measurement' button."""
 
         add_hbox = QHBoxLayout()
         self.add_measurement_btn = QPushButton("Add measurement")
@@ -382,14 +448,17 @@ class SpotDetectionVisualizer(StackVisualizer):
         self.settings_layout.addLayout(add_hbox)
 
     def show(self):
+        """Show the widget and center it."""
         QWidget.show(self)
         center_window(self)
 
     def update_preview_if_active(self):
+        """Update the preview if active."""
         if self.preview_cb.isChecked():
             self.toggle_preprocessing_preview()
 
     def toggle_preprocessing_preview(self):
+        """Toggle the preprocessing preview."""
 
         image_preprocessing = self.preprocessing.list.items
         if not image_preprocessing:
@@ -423,6 +492,7 @@ class SpotDetectionVisualizer(StackVisualizer):
             self.canvas.draw()
 
     def control_valid_parameters(self):
+        """Check if parameters are valid and enable/disable buttons."""
 
         valid_diam = False
         try:
@@ -448,6 +518,7 @@ class SpotDetectionVisualizer(StackVisualizer):
             self.add_measurement_btn.setEnabled(False)
 
     def set_measurement_in_parent_list(self):
+        """Set the measured parameters in the parent widgets."""
 
         if self.parent_channel_cb is not None:
             self.parent_channel_cb.setCurrentIndex(self.detection_channel)

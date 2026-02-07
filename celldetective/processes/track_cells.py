@@ -36,6 +36,20 @@ logger = get_logger(__name__)
 class TrackingProcess(Process):
 
     def __init__(self, queue=None, process_args=None, *args, **kwargs):
+        """
+        Initialize the process.
+
+        Parameters
+        ----------
+        queue : Queue
+            The queue to communicate with the main process.
+        process_args : dict
+            Arguments for the process.
+        *args
+            Variable length argument list.
+        **kwargs
+            Arbitrary keyword arguments.
+        """
 
         super().__init__(*args, **kwargs)
 
@@ -51,6 +65,7 @@ class TrackingProcess(Process):
         self.t0 = time.time()
 
     def read_tracking_instructions(self):
+        """Read the tracking instructions from the configuration file."""
 
         instr_path = PurePath(self.exp_dir, Path(f"{self.instruction_file}"))
         if os.path.exists(instr_path):
@@ -112,11 +127,13 @@ class TrackingProcess(Process):
             self.features = []
 
     def detect_channels(self):
+        """Detect the channels required for tracking."""
         self.img_num_channels = _get_img_num_per_channel(
             self.channel_indices, self.len_movie, self.nbr_channels
         )
 
     def write_log(self):
+        """Write the logo to the log file."""
 
         features_log = f"features: {self.features}"
         mask_channels_log = f"mask_channels: {self.mask_channels}"
@@ -137,6 +154,7 @@ class TrackingProcess(Process):
             f.write(log + "\n")
 
     def prepare_folders(self):
+        """Create the folders for the tracking output."""
 
         if not os.path.exists(self.pos + "output"):
             os.mkdir(self.pos + "output")
@@ -169,6 +187,7 @@ class TrackingProcess(Process):
             self.table_name = f"trajectories_{self.mode}.csv"
 
     def extract_experiment_parameters(self):
+        """Extract the experiment parameters from the configuration file."""
 
         self.movie_prefix = config_section_to_dict(self.config, "MovieSettings")[
             "movie_prefix"
@@ -195,6 +214,7 @@ class TrackingProcess(Process):
         self.nbr_channels = len(self.channel_names)
 
     def locate_experiment_config(self):
+        """Locate the experiment configuration file."""
 
         parent1 = Path(self.pos).parent
         self.exp_dir = parent1.parent
@@ -205,6 +225,7 @@ class TrackingProcess(Process):
             self.abort_process()
 
     def detect_movie_and_labels(self):
+        """Detect the movie and headers."""
 
         self.label_path = natsorted(
             glob(self.pos + f"{self.label_folder}" + os.sep + "*.tif")
@@ -230,6 +251,19 @@ class TrackingProcess(Process):
             self.len_movie = len_movie_auto
 
     def parallel_job(self, indices):
+        """
+        Run the parallel tracking job.
+
+        Parameters
+        ----------
+        indices : list
+            The list of indices to process.
+
+        Returns
+        -------
+        props : list
+            The list of feature dataframes.
+        """
 
         props = []
 
@@ -303,6 +337,14 @@ class TrackingProcess(Process):
         return props
 
     def setup_for_position(self, pos):
+        """
+        Setup the process for a specific position.
+
+        Parameters
+        ----------
+        pos : str
+            The path to the position.
+        """
 
         self.pos = pos
         # Experiment
@@ -315,6 +357,7 @@ class TrackingProcess(Process):
         self.write_log()
 
     def process_position(self):
+        """Process a single position."""
 
         tprint("Track")
 
@@ -416,6 +459,7 @@ class TrackingProcess(Process):
         gc.collect()
 
     def run(self):
+        """Run the tracking process."""
 
         self.setup_for_position(self.pos)
         self.process_position()
@@ -425,11 +469,13 @@ class TrackingProcess(Process):
         self.queue.close()
 
     def end_process(self):
+        """End the process."""
 
         self.terminate()
         self.queue.put("finished")
 
     def abort_process(self):
+        """Abort the process."""
 
         self.terminate()
         self.queue.put("error")

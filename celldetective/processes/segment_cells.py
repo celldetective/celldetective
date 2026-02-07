@@ -38,6 +38,21 @@ logger = get_logger(__name__)
 
 
 def _create_preview_overlay(image, mask):
+    """
+    Create a preview overlay of the segmentation mask on the image.
+
+    Parameters
+    ----------
+    image : ndarray
+        The input image.
+    mask : ndarray
+        The segmentation mask.
+
+    Returns
+    -------
+    img : ndarray
+        The overlay image.
+    """
     # If image has channels (C, Y, X), take max projection or first channel
     if image.ndim == 3:
         image = np.max(image, axis=0)
@@ -74,6 +89,20 @@ def _create_preview_overlay(image, mask):
 class BaseSegmentProcess(Process):
 
     def __init__(self, queue=None, process_args=None, *args, **kwargs):
+        """
+        Initialize the process.
+
+        Parameters
+        ----------
+        queue : Queue
+            The queue to communicate with the main process.
+        process_args : dict
+            Arguments for the process.
+        *args
+            Variable length argument list.
+        **kwargs
+            Arbitrary keyword arguments.
+        """
 
         super().__init__(*args, **kwargs)
 
@@ -108,6 +137,14 @@ class BaseSegmentProcess(Process):
         self.extract_experiment_parameters()
 
     def setup_for_position(self, pos_path):
+        """
+        Setup the process for a specific position.
+
+        Parameters
+        ----------
+        pos_path : str
+            The path to the position.
+        """
         self.pos = pos_path
         logger.info(f"Position: {extract_position_name(self.pos)}...")
         logger.info(f"Population: {self.mode}...")
@@ -116,6 +153,7 @@ class BaseSegmentProcess(Process):
         self.write_folders()
 
     def read_instructions(self):
+        """Read the segmentation instructions from the configuration file."""
         logger.info("Looking for instruction file...")
         instr_path = PurePath(self.exp_dir, Path(f"{self.instruction_file}"))
         if os.path.exists(instr_path):
@@ -128,6 +166,7 @@ class BaseSegmentProcess(Process):
             self.flip = False
 
     def write_folders(self):
+        """Create the folder for the segmentation labels."""
 
         self.mode = self.mode.lower()
         self.label_folder = f"labels_{self.mode}"
@@ -139,6 +178,7 @@ class BaseSegmentProcess(Process):
         logger.info(f"Labels folder successfully generated...")
 
     def extract_experiment_parameters(self):
+        """Extract experiment parameters from the configuration file."""
 
         self.spatial_calibration = float(
             config_section_to_dict(self.config, "MovieSettings")["pxtoum"]
@@ -155,6 +195,7 @@ class BaseSegmentProcess(Process):
         )
 
     def locate_experiment_config(self):
+        """Locate the experiment configuration file."""
 
         if hasattr(self, "pos"):
             p = self.pos
@@ -175,6 +216,7 @@ class BaseSegmentProcess(Process):
             self.abort_process()
 
     def detect_movie_length(self):
+        """Detect the length of the movie."""
 
         try:
             self.file = glob(self.pos + f"movie/{self.movie_prefix}*.tif")[0]
@@ -187,11 +229,13 @@ class BaseSegmentProcess(Process):
             self.len_movie = len_movie_auto
 
     def end_process(self):
+        """End the process."""
 
         self.terminate()
         self.queue.put("finished")
 
     def abort_process(self):
+        """Abort the process."""
 
         self.terminate()
         self.queue.put("error")
@@ -200,6 +244,16 @@ class BaseSegmentProcess(Process):
 class SegmentCellDLProcess(BaseSegmentProcess):
 
     def __init__(self, *args, **kwargs):
+        """
+        Initialize the process.
+
+        Parameters
+        ----------
+        *args
+            Variable length argument list.
+        **kwargs
+            Arbitrary keyword arguments.
+        """
 
         super().__init__(*args, **kwargs)
 
@@ -214,11 +268,20 @@ class SegmentCellDLProcess(BaseSegmentProcess):
         self.t0 = time.time()
 
     def setup_for_position(self, pos_path):
+        """
+        Setup the process for a specific position.
+
+        Parameters
+        ----------
+        pos_path : str
+            The path to the position.
+        """
         super().setup_for_position(pos_path)
         self.detect_channels()
         self.write_log()
 
     def extract_model_input_parameters(self):
+        """Extract the model input parameters from the configuration file."""
 
         self.required_channels = self.input_config["channels"]
         if "selected_channels" in self.input_config:
@@ -246,6 +309,7 @@ class SegmentCellDLProcess(BaseSegmentProcess):
             self.flow_threshold = self.input_config["flow_threshold"]
 
     def write_log(self):
+        """Write the logo to the log file."""
 
         log = f"segmentation model: {self.model_name}\n"
         with open(self.pos + f"log_{self.mode}.txt", "a") as f:
@@ -253,6 +317,7 @@ class SegmentCellDLProcess(BaseSegmentProcess):
             f.write(log)
 
     def detect_channels(self):
+        """Detect the channels required for the model."""
 
         self.channel_indices = _extract_channel_indices_from_config(
             self.config, self.required_channels
@@ -265,6 +330,7 @@ class SegmentCellDLProcess(BaseSegmentProcess):
         )
 
     def detect_rescaling(self):
+        """Detect the rescheduling factor for the images."""
 
         self.scale = _estimate_scale_factor(
             self.spatial_calibration, self.required_spatial_calibration
@@ -282,6 +348,7 @@ class SegmentCellDLProcess(BaseSegmentProcess):
         )
 
     def locate_model_path(self):
+        """Locate the path to the model."""
 
         self.model_complete_path = locate_segmentation_model(self.model_name)
         if self.model_complete_path is None:
@@ -300,11 +367,22 @@ class SegmentCellDLProcess(BaseSegmentProcess):
             self.input_config = json.load(config_file)
 
     def check_gpu(self):
+        """Check if GPU is available and set the environment variable."""
 
         if not self.use_gpu:
             os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
     def process_position(self, model=None, scale_model=None):
+        """
+        Process a single position.
+
+        Parameters
+        ----------
+        model : object
+            The segmentation model.
+        scale_model : object
+            The scaling model.
+        """
 
         tprint("Segment")
 
@@ -405,6 +483,7 @@ class SegmentCellDLProcess(BaseSegmentProcess):
             gc.collect()
 
     def run(self):
+        """Run the segmentation process."""
 
         try:
 
@@ -516,6 +595,16 @@ class SegmentCellDLProcess(BaseSegmentProcess):
 class SegmentCellThresholdProcess(BaseSegmentProcess):
 
     def __init__(self, *args, **kwargs):
+        """
+        Initialize the process.
+
+        Parameters
+        ----------
+        *args
+            Variable length argument list.
+        **kwargs
+            Arbitrary keyword arguments.
+        """
 
         super().__init__(*args, **kwargs)
 
@@ -525,6 +614,7 @@ class SegmentCellThresholdProcess(BaseSegmentProcess):
         self.t0 = time.time()
 
     def prepare_equalize(self):
+        """Prepare the equalization reference."""
 
         for i in range(len(self.instructions)):
 
@@ -542,6 +632,7 @@ class SegmentCellThresholdProcess(BaseSegmentProcess):
             self.instructions[i].update({"equalize_reference": f_reference})
 
     def load_threshold_config(self):
+        """Load the threshold configuration."""
 
         self.instructions = []
         for inst in self.threshold_instructions:
@@ -553,6 +644,7 @@ class SegmentCellThresholdProcess(BaseSegmentProcess):
                 self.abort_process()
 
     def extract_threshold_parameters(self):
+        """Extract the threshold parameters."""
 
         self.required_channels = []
         self.equalize = []
@@ -568,6 +660,7 @@ class SegmentCellThresholdProcess(BaseSegmentProcess):
                 self.equalize_time.append(equalize_time)
 
     def write_log(self):
+        """Write the logo to the log file."""
 
         log = f"Threshold segmentation: {self.threshold_instructions}\n"
         with open(self.pos + f"log_{self.mode}.txt", "a") as f:
@@ -575,6 +668,7 @@ class SegmentCellThresholdProcess(BaseSegmentProcess):
             f.write(log)
 
     def detect_channels(self):
+        """Detect the channels required for the thresholding."""
 
         for i in range(len(self.instructions)):
 
@@ -592,6 +686,14 @@ class SegmentCellThresholdProcess(BaseSegmentProcess):
         )
 
     def parallel_job(self, indices):
+        """
+        Run the parallel segmentation job.
+
+        Parameters
+        ----------
+        indices : list
+            The list of indices to process.
+        """
 
         try:
             from celldetective.segmentation import (
@@ -673,6 +775,7 @@ class SegmentCellThresholdProcess(BaseSegmentProcess):
         return
 
     def process_position(self):
+        """Process a single position."""
 
         tprint("Segment")
 
@@ -706,6 +809,7 @@ class SegmentCellThresholdProcess(BaseSegmentProcess):
                 raise e
 
     def run(self):
+        """Run the segmentation process."""
 
         # Wrapper for single-position compatibility if batch_structure is missing
         if not hasattr(self, "batch_structure"):

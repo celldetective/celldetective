@@ -34,6 +34,16 @@ class BackgroundFitCorrectionLayout(QGridLayout, Styles):
     """docstring for ClassName"""
 
     def __init__(self, parent_window=None, *args):
+        """
+        Initialize the BackgroundFitCorrectionLayout.
+
+        Parameters
+        ----------
+        parent_window : QMainWindow, optional
+            The parent window.
+        *args
+            Variable length argument list.
+        """
         super().__init__(*args)
 
         self.parent_window = parent_window
@@ -53,6 +63,7 @@ class BackgroundFitCorrectionLayout(QGridLayout, Styles):
         self.add_to_layout()
 
     def generate_widgets(self):
+        """Generate the widgets."""
 
         self.channel_lbl = QLabel("Channel: ")
         self.channels_cb = QComboBox()
@@ -105,6 +116,7 @@ class BackgroundFitCorrectionLayout(QGridLayout, Styles):
         self.downsample_le.setValidator(QIntValidator())
 
     def add_to_layout(self):
+        """Add widgets to the layout."""
 
         channel_layout = QHBoxLayout()
         channel_layout.addWidget(self.channel_lbl, 25)
@@ -142,6 +154,7 @@ class BackgroundFitCorrectionLayout(QGridLayout, Styles):
         self.addItem(verticalSpacer, 6, 0, 1, 3)
 
     def add_instructions_to_parent_list(self):
+        """Add instructions to the parent protocol list."""
 
         self.generate_instructions()
         self.parent_window.protocols.append(self.instructions)
@@ -153,6 +166,7 @@ class BackgroundFitCorrectionLayout(QGridLayout, Styles):
         self.parent_window.protocol_list.addItem(correction_description)
 
     def generate_instructions(self):
+        """Generate the instructions dictionary."""
 
         if self.operation_layout.subtract_btn.isChecked():
             operation = "subtract"
@@ -178,6 +192,7 @@ class BackgroundFitCorrectionLayout(QGridLayout, Styles):
         }
 
     def set_target_channel(self):
+        """Set the target channel index."""
 
         channel_indices = _extract_channel_indices_from_config(
             self.attr_parent.exp_config, [self.channels_cb.currentText()]
@@ -185,6 +200,7 @@ class BackgroundFitCorrectionLayout(QGridLayout, Styles):
         self.target_channel = channel_indices[0]
 
     def set_threshold_graphically(self):
+        """Open the threshold viewer to set the threshold graphically."""
 
         self.attr_parent.locate_image()
         self.set_target_channel()
@@ -203,6 +219,7 @@ class BackgroundFitCorrectionLayout(QGridLayout, Styles):
             self.viewer.show()
 
     def preview_correction(self):
+        """Preview the background correction on the current image."""
 
         if (
             self.attr_parent.well_list.isMultipleSelection()
@@ -277,6 +294,14 @@ class BackgroundFitCorrectionLayout(QGridLayout, Styles):
         )
 
         def on_result(corrected_stack):
+            """
+            Handle the result of the preview worker.
+
+            Parameters
+            ----------
+            corrected_stack : ndarray
+                The corrected stack.
+            """
 
             if corrected_stack is not None:
                 if subset_indices is not None and len(self.channel_names) > 0:
@@ -315,9 +340,18 @@ class BackgroundFitCorrectionLayout(QGridLayout, Styles):
                 print("Corrected stack could not be generated...")
 
         def on_finished():
+            """Handle completion of the preview worker."""
             self.bg_progress.close()
 
         def on_error(msg):
+            """
+            Handle errors from the preview worker.
+
+            Parameters
+            ----------
+            msg : str
+                The error message.
+            """
             self.bg_progress.close()
             QMessageBox.critical(None, "Error", f"Correction failed: {msg}")
 
@@ -336,11 +370,22 @@ class PreviewWorker(QThread):
     error = pyqtSignal(str)
 
     def __init__(self, process_class, process_args):
+        """
+        Initialize the PreviewWorker.
+
+        Parameters
+        ----------
+        process_class : class
+            The process class (unused).
+        process_args : dict
+            The process arguments.
+        """
         super().__init__()
         # process_class is unused now as we call function directly
         self.process_args = process_args
 
     def run(self):
+        """Run the preview worker."""
         try:
             result = correct_background_model(
                 experiment=self.process_args["exp_dir"],
@@ -369,4 +414,5 @@ class PreviewWorker(QThread):
         self.finished.emit()
 
     def stop(self):
+        """Stop the worker."""
         self.quit()

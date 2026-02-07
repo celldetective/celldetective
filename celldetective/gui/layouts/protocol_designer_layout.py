@@ -1,5 +1,13 @@
 from PyQt5.QtCore import QSize, Qt
-from PyQt5.QtWidgets import QVBoxLayout, QLabel, QTabWidget, QSizePolicy, QListWidget, QPushButton, QHBoxLayout
+from PyQt5.QtWidgets import (
+    QVBoxLayout,
+    QLabel,
+    QTabWidget,
+    QSizePolicy,
+    QListWidget,
+    QPushButton,
+    QHBoxLayout,
+)
 from fonticon_mdi6 import MDI6
 from superqt.fonticon import icon
 
@@ -21,6 +29,24 @@ class ProtocolDesignerLayout(QVBoxLayout, Styles):
         list_title="",
         *args,
     ):
+        """
+        Initialize the ProtocolDesignerLayout.
+
+        Parameters
+        ----------
+        parent_window : QMainWindow, optional
+            The parent window.
+        tab_layouts : list, optional
+            List of tab layouts.
+        tab_names : list, optional
+            List of tab names.
+        title : str, optional
+            The title of the layout.
+        list_title : str, optional
+            The title of the list.
+        *args
+            Variable length argument list.
+        """
 
         super().__init__(*args)
 
@@ -37,6 +63,7 @@ class ProtocolDesignerLayout(QVBoxLayout, Styles):
         self.generate_layout()
 
     def generate_widgets(self):
+        """Generate the widgets."""
 
         self.title_lbl = QLabel(self.title)
         self.title_lbl.setStyleSheet(
@@ -66,6 +93,7 @@ class ProtocolDesignerLayout(QVBoxLayout, Styles):
         self.delete_protocol_btn.clicked.connect(self.remove_protocol_from_list)
 
     def generate_layout(self):
+        """Generate the layout."""
 
         self.correction_layout = QVBoxLayout()
 
@@ -89,6 +117,7 @@ class ProtocolDesignerLayout(QVBoxLayout, Styles):
         self.addLayout(self.list_layout)
 
     def remove_protocol_from_list(self):
+        """Remove the selected protocol from the list."""
 
         current_item = self.protocol_list.currentRow()
         if current_item > -1:

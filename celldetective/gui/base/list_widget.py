@@ -51,6 +51,22 @@ class ListWidget(CelldetectiveWidget):
     """
 
     def __init__(self, choiceWidget, initial_features, dtype=str, *args, **kwargs):
+        """
+        Initialize the ListWidget.
+
+        Parameters
+        ----------
+        choiceWidget : class
+            The widget class used to add items.
+        initial_features : list
+            List of initial features.
+        dtype : type, optional
+            The data type of the items.
+        *args
+            Variable length argument list.
+        **kwargs
+            Arbitrary keyword arguments.
+        """
 
         super().__init__()
         self.initial_features = initial_features
@@ -83,6 +99,14 @@ class ListWidget(CelldetectiveWidget):
             pass
 
     def addItemToList(self, item):
+        """
+        Add an item to the list widget.
+
+        Parameters
+        ----------
+        item : str
+            The item to add.
+        """
         self.list_widget.addItems([item])
 
     def getItems(self):
@@ -127,6 +151,7 @@ class ListWidget(CelldetectiveWidget):
         return items
 
     def clear(self):
+        """Clear the list widget and the internal items list."""
         self.items = []
         self.list_widget.clear()
 

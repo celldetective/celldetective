@@ -51,6 +51,30 @@ class ThresholdedStackVisualizer(StackVisualizer):
         *args,
         **kwargs,
     ):
+        """
+        Initialize the ThresholdedStackVisualizer.
+
+        Parameters
+        ----------
+        preprocessing : list or None, optional
+            List of preprocessing filters.
+        parent_le : QLineEdit, optional
+            Parent line edit for threshold value.
+        initial_threshold : float, optional
+            Initial threshold value.
+        initial_mask_alpha : float, optional
+            Initial mask opacity.
+        show_opacity_slider : bool, optional
+            Whether to show the opacity slider.
+        show_threshold_slider : bool, optional
+            Whether to show the threshold slider.
+        fill_holes : bool, optional
+            Whether to fill holes in the mask.
+        *args
+            Variable length argument list.
+        **kwargs
+            Arbitrary keyword arguments.
+        """
         # Initialize the widget and its attributes
         super().__init__(*args, **kwargs)
         self.preprocessing = preprocessing
@@ -91,6 +115,7 @@ class ThresholdedStackVisualizer(StackVisualizer):
             self.generate_apply_btn()
 
     def generate_apply_btn(self):
+        """Generate the apply button to set the threshold in the parent QLineEdit."""
         # Generate the apply button to set the threshold in the parent QLineEdit
         apply_hbox = QHBoxLayout()
         self.apply_threshold_btn = QPushButton("Apply")
@@ -102,6 +127,14 @@ class ThresholdedStackVisualizer(StackVisualizer):
         self.canvas.layout.addLayout(apply_hbox)
 
     def closeEvent(self, event):
+        """
+        Handle the close event.
+
+        Parameters
+        ----------
+        event : QEvent
+            The close event.
+        """
         if hasattr(self, "processed_cache") and isinstance(
             self.processed_cache, OrderedDict
         ):
@@ -109,11 +142,13 @@ class ThresholdedStackVisualizer(StackVisualizer):
         super().closeEvent(event)
 
     def set_threshold_in_parent_le(self):
+        """Set the threshold value in the parent QLineEdit."""
         # Set the threshold value in the parent QLineEdit
         self.parent_le.set_threshold(self.threshold_slider.value())
         self.close()
 
     def generate_mask_imshow(self):
+        """Generate the mask imshow."""
         # Generate the mask imshow
 
         self.im_mask = self.ax.imshow(
@@ -127,9 +162,11 @@ class ThresholdedStackVisualizer(StackVisualizer):
         self.canvas.canvas.draw()
 
     def generate_scatter(self):
+        """Initialize scatter plot for markers."""
         self.scat_markers = self.ax.scatter([], [], color="tab:red")
 
     def generate_threshold_slider(self):
+        """Generate the threshold slider."""
         # Generate the threshold slider
         self.threshold_slider = QLabeledDoubleSlider()
         if self.thresh is None:
@@ -152,6 +189,7 @@ class ThresholdedStackVisualizer(StackVisualizer):
             self.canvas.layout.addLayout(thresh_layout)
 
     def generate_opacity_slider(self):
+        """Generate the opacity slider for the mask."""
         # Generate the opacity slider for the mask
         self.opacity_slider = QLabeledDoubleSlider()
         opacity_layout = QuickSliderLayout(
@@ -168,12 +206,28 @@ class ThresholdedStackVisualizer(StackVisualizer):
             self.canvas.layout.addLayout(opacity_layout)
 
     def change_mask_opacity(self, value):
+        """
+        Change the opacity of the mask.
+
+        Parameters
+        ----------
+        value : float
+            The opacity value.
+        """
         # Change the opacity of the mask
         self.mask_alpha = value
         self.im_mask.set_alpha(self.mask_alpha)
         self.canvas.canvas.draw_idle()
 
     def change_threshold(self, value):
+        """
+        Change the threshold value.
+
+        Parameters
+        ----------
+        value : float
+            The threshold value.
+        """
         # Change the threshold value
         self.thresh = value
 
@@ -202,6 +256,14 @@ class ThresholdedStackVisualizer(StackVisualizer):
             self.canvas.canvas.draw_idle()
 
     def change_frame(self, value):
+        """
+        Change the displayed frame and update the threshold.
+
+        Parameters
+        ----------
+        value : int
+            The frame index.
+        """
         # Change the displayed frame and update the threshold
         if self.thresholded:
             self.init_contrast = True
@@ -218,6 +280,14 @@ class ThresholdedStackVisualizer(StackVisualizer):
             self.init_contrast = False
 
     def compute_mask(self, threshold_value):
+        """
+        Compute the mask based on the threshold value.
+
+        Parameters
+        ----------
+        threshold_value : float or list
+             The threshold value(s).
+        """
         # Compute the mask based on the threshold value
         if self.processed_image is None:
             self.preprocess_image()
@@ -249,6 +319,7 @@ class ThresholdedStackVisualizer(StackVisualizer):
             ).astype(int)
 
     def preprocess_image(self):
+        """Preprocess the image before thresholding."""
         # Preprocess the image before thresholding
 
         # Determine cache key
@@ -301,6 +372,14 @@ class ThresholdedStackVisualizer(StackVisualizer):
             self.processed_image = self.init_frame.astype(float)
 
     def set_preprocessing(self, activation_protocol):
+        """
+        Set the preprocessing protocol.
+
+        Parameters
+        ----------
+        activation_protocol : list
+            The list of filters to apply.
+        """
 
         self.preprocessing = activation_protocol
         self.preprocess_image()

@@ -1,4 +1,19 @@
 def color_from_status(status, recently_modified=False):
+    """
+    Get color based on status.
+
+    Parameters
+    ----------
+    status : int
+        Status code.
+    recently_modified : bool, optional
+        If True, use recently modified color scheme. Default is False.
+
+    Returns
+    -------
+    str
+        Color string.
+    """
 
     if not recently_modified:
         if status == 0:
@@ -21,6 +36,21 @@ def color_from_status(status, recently_modified=False):
 
 
 def color_from_class(cclass, recently_modified=False):
+    """
+    Get color based on class.
+
+    Parameters
+    ----------
+    cclass : int
+        Class ID.
+    recently_modified : bool, optional
+        If True, use recently modified color scheme. Default is False.
+
+    Returns
+    -------
+    str
+        Color string.
+    """
 
     if not recently_modified:
         if cclass == 0:
