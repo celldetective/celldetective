@@ -5,6 +5,25 @@ import numpy as np
 
 
 def gauss_filter(img, sigma, interpolate=True, *kwargs):
+    """
+    Applies a Gaussian filter to an image.
+
+    Parameters
+    ----------
+    img : ndarray
+        The input image.
+    sigma : float or sequence of scalars
+        Standard deviation for Gaussian kernel.
+    interpolate : bool, optional
+        Whether to interpolate NaN values before filtering. Default is True.
+    *kwargs
+        Additional arguments passed to `scipy.ndimage.gaussian_filter`.
+
+    Returns
+    -------
+    ndarray
+        The filtered image.
+    """
     import scipy.ndimage as snd
 
     if np.any(img != img) and interpolate:
@@ -14,6 +33,25 @@ def gauss_filter(img, sigma, interpolate=True, *kwargs):
 
 
 def median_filter(img, size, interpolate=True, *kwargs):
+    """
+    Applies a median filter to an image.
+
+    Parameters
+    ----------
+    img : ndarray
+        The input image.
+    size : int
+        The size of the median filter window.
+    interpolate : bool, optional
+        Whether to interpolate NaN values before filtering. Default is True.
+    *kwargs
+        Additional arguments passed to `scipy.ndimage.median_filter`.
+
+    Returns
+    -------
+    ndarray
+        The filtered image.
+    """
 
     if np.any(img != img) and interpolate:
         img = interpolate_nan(img.astype(float))
@@ -26,6 +64,25 @@ def median_filter(img, size, interpolate=True, *kwargs):
 
 
 def maximum_filter(img, size, interpolate=True, *kwargs):
+    """
+    Applies a maximum filter to an image.
+
+    Parameters
+    ----------
+    img : ndarray
+        The input image.
+    size : int
+        The size of the maximum filter window.
+    interpolate : bool, optional
+        Whether to interpolate NaN values before filtering. Default is True.
+    *kwargs
+        Additional arguments passed to `scipy.ndimage.maximum_filter`.
+
+    Returns
+    -------
+    ndarray
+        The filtered image.
+    """
     if np.any(img != img) and interpolate:
         img = interpolate_nan(img.astype(float))
 
@@ -35,6 +92,25 @@ def maximum_filter(img, size, interpolate=True, *kwargs):
 
 
 def minimum_filter(img, size, interpolate=True, *kwargs):
+    """
+    Applies a minimum filter to an image.
+
+    Parameters
+    ----------
+    img : ndarray
+        The input image.
+    size : int
+        The size of the minimum filter window.
+    interpolate : bool, optional
+        Whether to interpolate NaN values before filtering. Default is True.
+    *kwargs
+        Additional arguments passed to `scipy.ndimage.minimum_filter`.
+
+    Returns
+    -------
+    ndarray
+        The filtered image.
+    """
     if np.any(img != img) and interpolate:
         img = interpolate_nan(img.astype(float))
 
@@ -44,6 +120,27 @@ def minimum_filter(img, size, interpolate=True, *kwargs):
 
 
 def percentile_filter(img, percentile, size, interpolate=True, *kwargs):
+    """
+    Applies a percentile filter to an image.
+
+    Parameters
+    ----------
+    img : ndarray
+        The input image.
+    percentile : float
+        The percentile value to calculate.
+    size : int
+        The size of the percentile filter window.
+    interpolate : bool, optional
+        Whether to interpolate NaN values before filtering. Default is True.
+    *kwargs
+        Additional arguments passed to `scipy.ndimage.percentile_filter`.
+
+    Returns
+    -------
+    ndarray
+        The filtered image.
+    """
     if np.any(img != img) and interpolate:
         img = interpolate_nan(img.astype(float))
 
@@ -53,14 +150,63 @@ def percentile_filter(img, percentile, size, interpolate=True, *kwargs):
 
 
 def subtract_filter(img, value, *kwargs):
+    """
+    Subtracts a scalar value from the image.
+
+    Parameters
+    ----------
+    img : ndarray
+        The input image.
+    value : float
+        The value to subtract.
+    *kwargs
+        Unused arguments.
+
+    Returns
+    -------
+    ndarray
+        The image with the value subtracted.
+    """
     return img.astype(float) - value
 
 
 def abs_filter(img, *kwargs):
+    """
+    Computes the absolute value of the image.
+
+    Parameters
+    ----------
+    img : ndarray
+        The input image.
+    *kwargs
+        Unused arguments.
+
+    Returns
+    -------
+    ndarray
+        The absolute value of the image.
+    """
     return np.abs(img)
 
 
 def ln_filter(img, interpolate=True, *kwargs):
+    """
+    Computes the natural logarithm of the image.
+
+    Parameters
+    ----------
+    img : ndarray
+        The input image.
+    interpolate : bool, optional
+        Whether to interpolate NaN values. Default is True.
+    *kwargs
+        Unused arguments.
+
+    Returns
+    -------
+    ndarray
+        The natural logarithm of the image.
+    """
     if np.any(img != img) and interpolate:
         img = interpolate_nan(img.astype(float))
 
@@ -71,6 +217,23 @@ def ln_filter(img, interpolate=True, *kwargs):
 
 
 def variance_filter(img, size, interpolate=True):
+    """
+    Computes the local variance of the image.
+
+    Parameters
+    ----------
+    img : ndarray
+        The input image.
+    size : int
+        The size of the window over which to compute the variance.
+    interpolate : bool, optional
+        Whether to interpolate NaN values. Default is True.
+
+    Returns
+    -------
+    ndarray
+        The local variance image.
+    """
 
     if np.any(img != img) and interpolate:
         img = interpolate_nan(img.astype(float))
@@ -87,6 +250,23 @@ def variance_filter(img, size, interpolate=True):
 
 
 def std_filter(img, size, interpolate=True):
+    """
+    Computes the local standard deviation of the image.
+
+    Parameters
+    ----------
+    img : ndarray
+        The input image.
+    size : int
+        The size of the window over which to compute the standard deviation.
+    interpolate : bool, optional
+        Whether to interpolate NaN values. Default is True.
+
+    Returns
+    -------
+    ndarray
+        The local standard deviation image.
+    """
 
     if np.any(img != img) and interpolate:
         img = interpolate_nan(img.astype(float))
@@ -108,6 +288,25 @@ def std_filter(img, size, interpolate=True):
 
 
 def laplace_filter(img, output=float, interpolate=True, *kwargs):
+    """
+    Applies a Laplace filter to the image.
+
+    Parameters
+    ----------
+    img : ndarray
+        The input image.
+    output : type, optional
+        The data type of the output. Default is float.
+    interpolate : bool, optional
+        Whether to interpolate NaN values. Default is True.
+    *kwargs
+        Additional arguments passed to `scipy.ndimage.laplace`.
+
+    Returns
+    -------
+    ndarray
+        The filtered image.
+    """
     if np.any(img != img) and interpolate:
         img = interpolate_nan(img.astype(float))
     import scipy.ndimage as snd
@@ -118,6 +317,29 @@ def laplace_filter(img, output=float, interpolate=True, *kwargs):
 def dog_filter(
     img, blob_size=None, sigma_low=1, sigma_high=2, interpolate=True, *kwargs
 ):
+    """
+    Applies a Difference of Gaussians (DoG) filter to the image.
+
+    Parameters
+    ----------
+    img : ndarray
+        The input image.
+    blob_size : float, optional
+        Expected blob size, used to calculate sigmas if provided. Default is None.
+    sigma_low : float, optional
+        Standard deviation for the lower Gaussian. Default is 1.
+    sigma_high : float, optional
+        Standard deviation for the higher Gaussian. Default is 2.
+    interpolate : bool, optional
+        Whether to interpolate NaN values. Default is True.
+    *kwargs
+        Additional arguments passed to `skimage.filters.difference_of_gaussians`.
+
+    Returns
+    -------
+    ndarray
+        The filtered image.
+    """
 
     if np.any(img != img) and interpolate:
         img = interpolate_nan(img.astype(float))
@@ -130,6 +352,21 @@ def dog_filter(
 
 
 def otsu_filter(img, *kwargs):
+    """
+    Applies Otsu's thresholding to the image.
+
+    Parameters
+    ----------
+    img : ndarray
+        The input image.
+    *kwargs
+        Unused arguments.
+
+    Returns
+    -------
+    ndarray
+        The binary image after thresholding (0 or 1, as float).
+    """
     from skimage.filters import threshold_otsu
 
     thresh = threshold_otsu(img.astype(float))
@@ -138,6 +375,23 @@ def otsu_filter(img, *kwargs):
 
 
 def multiotsu_filter(img, classes=3, *kwargs):
+    """
+    Applies Multi-Otsu thresholding to the image.
+
+    Parameters
+    ----------
+    img : ndarray
+        The input image.
+    classes : int, optional
+        number of classes to be found. Default is 3.
+    *kwargs
+        Unused arguments.
+
+    Returns
+    -------
+    ndarray
+        The segmented image (regions labeled).
+    """
     from skimage.filters import threshold_multiotsu
 
     thresholds = threshold_multiotsu(img, classes=classes)
@@ -146,6 +400,21 @@ def multiotsu_filter(img, classes=3, *kwargs):
 
 
 def local_filter(img, *kwargs):
+    """
+    Applies local thresholding to the image.
+
+    Parameters
+    ----------
+    img : ndarray
+        The input image.
+    *kwargs
+        Additional arguments passed to `skimage.filters.threshold_local`.
+
+    Returns
+    -------
+    ndarray
+        The binary image after thresholding (0 or 1, as float).
+    """
     from skimage.filters import threshold_local
 
     thresh = threshold_local(img.astype(float), *kwargs)
@@ -154,6 +423,21 @@ def local_filter(img, *kwargs):
 
 
 def niblack_filter(img, *kwargs):
+    """
+    Applies Niblack thresholding to the image.
+
+    Parameters
+    ----------
+    img : ndarray
+        The input image.
+    *kwargs
+        Additional arguments passed to `skimage.filters.threshold_niblack`.
+
+    Returns
+    -------
+    ndarray
+        The binary image after thresholding (0 or 1, as float).
+    """
 
     from skimage.filters import threshold_niblack
 
@@ -163,6 +447,21 @@ def niblack_filter(img, *kwargs):
 
 
 def sauvola_filter(img, *kwargs):
+    """
+    Applies Sauvola thresholding to the image.
+
+    Parameters
+    ----------
+    img : ndarray
+        The input image.
+    *kwargs
+        Additional arguments passed to `skimage.filters.threshold_sauvola`.
+
+    Returns
+    -------
+    ndarray
+        The binary image after thresholding (0 or 1, as float).
+    """
 
     from skimage.filters import threshold_sauvola
 
@@ -172,6 +471,27 @@ def sauvola_filter(img, *kwargs):
 
 
 def log_filter(img, blob_size=None, sigma=1, interpolate=True, *kwargs):
+    """
+    Applies a Laplacian of Gaussian (LoG) filter to the image.
+
+    Parameters
+    ----------
+    img : ndarray
+        The input image.
+    blob_size : float, optional
+        Expected blob size, used to calculate sigmas if provided. Default is None.
+    sigma : float, optional
+        Standard deviation for the Gaussian kernel. Default is 1.
+    interpolate : bool, optional
+        Whether to interpolate NaN values. Default is True.
+    *kwargs
+        Additional arguments passed to `scipy.ndimage.gaussian_laplace`.
+
+    Returns
+    -------
+    ndarray
+        The filtered image.
+    """
 
     if np.any(img != img) and interpolate:
         img = interpolate_nan(img.astype(float))
@@ -185,6 +505,27 @@ def log_filter(img, blob_size=None, sigma=1, interpolate=True, *kwargs):
 
 
 def tophat_filter(img, size, connectivity=4, interpolate=True, *kwargs):
+    """
+    Applies a White Top-Hat filter to the image.
+
+    Parameters
+    ----------
+    img : ndarray
+        The input image.
+    size : int
+        The size of the structuring element.
+    connectivity : int, optional
+        The connectivity for determining the neighborhood. Default is 4.
+    interpolate : bool, optional
+        Whether to interpolate NaN values. Default is True.
+    *kwargs
+        Additional arguments passed to `scipy.ndimage.white_tophat`.
+
+    Returns
+    -------
+    ndarray
+        The filtered image.
+    """
 
     if np.any(img != img) and interpolate:
         img = interpolate_nan(img.astype(float))
@@ -196,6 +537,23 @@ def tophat_filter(img, size, connectivity=4, interpolate=True, *kwargs):
 
 
 def invert_filter(img, value=65535, *kwargs):
+    """
+    Inverts the image by subtracting it from a maximum value.
+
+    Parameters
+    ----------
+    img : ndarray
+        The input image.
+    value : float or int, optional
+        The maximum value to subtract the image from. Default is 65535.
+    *kwargs
+        Unused arguments.
+
+    Returns
+    -------
+    ndarray
+        The inverted image.
+    """
 
     img = img.astype(float)
 

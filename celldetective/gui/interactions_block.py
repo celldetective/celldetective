@@ -38,6 +38,14 @@ logger = get_logger(__name__)
 
 class NeighPanel(QFrame, Styles):
     def __init__(self, parent_window):
+        """
+        Initialize the NeighPanel.
+
+        Parameters
+        ----------
+        parent_window : QMainWindow
+            The parent window.
+        """
 
         super().__init__()
         self.parent_window = parent_window
@@ -54,7 +62,6 @@ class NeighPanel(QFrame, Styles):
     def generate_header(self):
         """
         Read the mode and prepare a collapsable block to process a specific cell population.
-
         """
 
         panel_title = QLabel(f"INTERACTIONS")
@@ -85,6 +92,9 @@ class NeighPanel(QFrame, Styles):
         self.ContentsFrame.hide()
 
     def collapse_advanced(self):
+        """
+        Toggle the visibility of the advanced options block.
+        """
 
         panels_open = [
             not p.ContentsFrame.isHidden()
@@ -114,6 +124,9 @@ class NeighPanel(QFrame, Styles):
                 pass
 
     def populate_contents(self):
+        """
+        Populate the content frame with neighborhood analysis options.
+        """
 
         self.ContentsFrame = QFrame()
         self.grid_contents = QGridLayout(self.ContentsFrame)
@@ -340,6 +353,9 @@ class NeighPanel(QFrame, Styles):
         self.neigh_action.setChecked(False)
 
     def open_classifier_ui_pairs(self):
+        """
+        Open the classifier UI for cell pairs.
+        """
         from celldetective.gui.classifier_widget import ClassifierWidget
 
         self.mode = "pairs"
@@ -395,8 +411,7 @@ class NeighPanel(QFrame, Styles):
 
     def load_available_tables(self):
         """
-        Load the tables of the selected wells/positions from the control Panel for the population of interest
-
+        Load the tables of the selected wells/positions from the control Panel for the population of interest.
         """
 
         self.well_option = self.parent_window.well_list.getSelectedIndices()
@@ -413,6 +428,9 @@ class NeighPanel(QFrame, Styles):
             logger.info("No table could be found...")
 
     def view_table_ui(self):
+        """
+        Open the table viewer for the selected data.
+        """
         from celldetective.gui.tableUI import TableUI
         from celldetective.gui.workers import ProgressWindow
         from celldetective.processes.load_table import TableLoaderProcess
@@ -469,6 +487,9 @@ class NeighPanel(QFrame, Styles):
         result = self.job.exec_()
 
     def activate_neigh_options(self):
+        """
+        Enable or disable neighborhood options based on the checkbox state.
+        """
 
         if self.neigh_action.isChecked():
             self.dist_neigh_action.setEnabled(True)
@@ -488,11 +509,17 @@ class NeighPanel(QFrame, Styles):
             self.delete_protocol_btn.setEnabled(False)
 
     def refresh_signal_models(self):
+        """
+        Refresh the list of available signal models.
+        """
         signal_models = get_pair_signal_models_list()
         self.pair_signal_models_list.clear()
         self.pair_signal_models_list.addItems(signal_models)
 
     def open_signal_annotator_configuration_ui(self):
+        """
+        Open the signal annotator configuration UI.
+        """
         from celldetective.gui.settings._settings_signal_annotator import (
             SettingsSignalAnnotator,
         )
@@ -502,6 +529,9 @@ class NeighPanel(QFrame, Styles):
         self.config_signal_annotator.show()
 
     def open_signal_model_config_ui(self):
+        """
+        Open the signal model training configuration UI.
+        """
         from celldetective.gui.settings._settings_event_model_training import (
             SettingsEventDetectionModelTraining,
         )
@@ -512,6 +542,9 @@ class NeighPanel(QFrame, Styles):
         self.settings_pair_event_detection_training.show()
 
     def remove_protocol_from_list(self):
+        """
+        Remove the selected neighborhood protocol from the list.
+        """
 
         current_item = self.protocol_list.currentRow()
         if current_item > -1:
@@ -519,6 +552,9 @@ class NeighPanel(QFrame, Styles):
             self.protocol_list.takeItem(current_item)
 
     def open_config_distance_threshold_neighborhood(self):
+        """
+        Open the configuration for distance threshold neighborhood.
+        """
         from celldetective.gui.settings._settings_neighborhood import (
             SettingsNeighborhood,
         )
@@ -531,6 +567,9 @@ class NeighPanel(QFrame, Styles):
         self.ConfigNeigh.show()
 
     def open_config_contact_neighborhood(self):
+        """
+        Open the configuration for mask contact neighborhood.
+        """
         from celldetective.gui.settings._settings_neighborhood import (
             SettingsNeighborhood,
         )
@@ -543,12 +582,18 @@ class NeighPanel(QFrame, Styles):
         self.ConfigNeigh.show()
 
     def enable_signal_model_list(self):
+        """
+        Enable or disable the signal model list based on the checkbox state.
+        """
         if self.signal_analysis_action.isChecked():
             self.pair_signal_models_list.setEnabled(True)
         else:
             self.pair_signal_models_list.setEnabled(False)
 
     def process_neighborhood(self):
+        """
+        Start the neighborhood analysis process.
+        """
         from celldetective.gui.workers import ProgressWindow
         from celldetective.processes.compute_neighborhood import NeighborhoodProcess
         from celldetective.signals import analyze_pair_signals_at_position
@@ -680,6 +725,9 @@ class NeighPanel(QFrame, Styles):
         # else:
 
     def check_signals2(self):
+        """
+        Open the pair event annotator.
+        """
         from celldetective.gui.pair_event_annotator import PairEventAnnotator
 
         test = self.parent_window.locate_selected_position()

@@ -306,6 +306,22 @@ def write_first_detection_class(
         "y": "POSITION_Y",
     },
 ):
+    """
+    Identifies and records the first detection time and class for each track.
+
+    Parameters
+    ----------
+    tab : pandas.DataFrame
+        The dataframe containing tracking data.
+    column_labels : dict, optional
+        Dictionary mapping internal column names to dataframe column names.
+        Default is {"track": "TRACK_ID", "time": "FRAME", "x": "POSITION_X", "y": "POSITION_Y"}.
+
+    Returns
+    -------
+    pandas.DataFrame
+        The dataframe with added columns 'class_firstdetection' and 't_firstdetection'.
+    """
 
     tab = tab.sort_values(by=[column_labels["track"], column_labels["time"]])
     if "area" in tab.columns:
@@ -338,13 +354,13 @@ def drop_tonal_features(features):
     Parameters
     ----------
     features : list of str
-                    A list of feature names from which intensity-related features are to be removed.
+        A list of feature names from which intensity-related features are to be removed.
 
     Returns
     -------
     list of str
-                    The modified list of feature names with intensity-related features removed. Note that this operation modifies the
-                    input list in-place, so the return value is the same list object with some elements removed.
+        The modified list of feature names with intensity-related features removed. Note that this operation modifies the
+        input list in-place, so the return value is the same list object with some elements removed.
 
     """
 
@@ -586,6 +602,19 @@ def measure_features(
 
         # Helper to format suffix
         def get_suffix(d):
+            """
+            Formats the suffix for column names based on distance.
+
+            Parameters
+            ----------
+            d : int or float or str
+                The distance value.
+
+            Returns
+            -------
+            str
+                The formatted suffix string.
+            """
             d_str = str(d)
             d_clean = (
                 d_str.replace("(", "")
@@ -1107,6 +1136,29 @@ def local_normalisation(
     operation="subtract",
     clip=False,
 ):
+    """
+    Performs local normalization of an image based on background intensity.
+
+    Parameters
+    ----------
+    image : ndarray
+        The input image to be normalized.
+    labels : ndarray
+        The label image defining cell regions.
+    background_intensity : pandas.DataFrame
+        DataFrame containing background intensity measurements for each cell.
+    measurement : str, optional
+        The name of the measurement column in `background_intensity` to use. Default is "intensity_median".
+    operation : str, optional
+        The normalization operation to perform ("subtract" or "divide"). Default is "subtract".
+    clip : bool, optional
+        Whether to clip the normalized image values to be non-negative. Default is False.
+
+    Returns
+    -------
+    ndarray
+        The locally normalized image.
+    """
 
     for index, cell in enumerate(np.unique(labels)):
         if cell == 0:
@@ -1128,6 +1180,29 @@ def local_normalisation(
 def normalise_by_cell(
     image, labels, distance=5, model="median", operation="subtract", clip=False
 ):
+    """
+    Normalizes an image based on the local background around each cell.
+
+    Parameters
+    ----------
+    image : ndarray
+        The input image to be normalized.
+    labels : ndarray
+        The label image defining cell regions.
+    distance : int, optional
+        The distance from the cell boundary to define the local background region. Default is 5.
+    model : str, optional
+        The statistic to compute for the background ("median" or "mean"). Default is "median".
+    operation : str, optional
+        The normalization operation ("subtract" or "divide"). Default is "subtract".
+    clip : bool, optional
+        Whether to clip the normalized values. Default is False.
+
+    Returns
+    -------
+    ndarray
+        The normalized image.
+    """
 
     try:
         import celldetective.extra_properties as extra_props
@@ -1180,6 +1255,29 @@ def normalise_by_cell(
 def extract_blobs_in_image(
     image, label, diameter, threshold=0.0, method="log", image_preprocessing=None
 ):
+    """
+    Detects blobs (spots) within segmented regions of an image.
+
+    Parameters
+    ----------
+    image : ndarray
+        The input image.
+    label : ndarray
+        The label image defining regions to search for blobs.
+    diameter : float
+        The expected diameter of the blobs.
+    threshold : float, optional
+        The absolute lower bound for scale space maxima. Default is 0.0.
+    method : str, optional
+        The method to use for blob detection ("log" for Laplacian of Gaussian or "dog" for Difference of Gaussian). Default is "log".
+    image_preprocessing : list, optional
+        List of filters to apply to the image before detection. Default is None.
+
+    Returns
+    -------
+    list
+        A list of detected blobs, where each blob is represented as (y, x, sigma).
+    """
 
     if np.percentile(image.flatten(), 99.9) == 0.0:
         return None
@@ -1243,6 +1341,33 @@ def blob_detection(
     method="log",
     image_preprocessing=None,
 ):
+    """
+    Performs blob detection on a specific channel of an image and aggregates results per cell.
+
+    Parameters
+    ----------
+    image : ndarray
+        The input multichannel image.
+    label : ndarray
+        The label image.
+    diameter : float
+        The expected diameter of the blobs.
+    threshold : float, optional
+        The detection threshold. Default is 0.0.
+    channel_name : str, optional
+        The name of the channel being analyzed (used for column naming). Default is None.
+    target_channel : int, optional
+        The index of the channel to analyze. Default is 0.
+    method : str, optional
+        The blob detection method ("log" or "dog"). Default is "log".
+    image_preprocessing : list, optional
+        Preprocessing filters. Default is None.
+
+    Returns
+    -------
+    pandas.DataFrame
+        DataFrame containing spot counts and mean spot intensities for each cell.
+    """
 
     image = image[:, :, target_channel].copy()
     if np.percentile(image.flatten(), 99.9) == 0.0:
@@ -1738,6 +1863,8 @@ def classify_unique_states(df, class_attr, percentile=50, pre_event=None):
             Column name for the classification attribute (e.g., 'class') used to update the classification of cell states.
     percentile : int, optional
             Percentile value used to classify the status attribute within the valid frames (default is median).
+    pre_event : str, optional
+            Name of a pre-event class to consider. Default is None.
 
     Returns
     -------
@@ -1908,6 +2035,31 @@ def classify_tracks_from_query(
     r2_threshold=0.5,
     percentile_recovery=50,
 ):
+    """
+    Classifies tracks based on a query and interprets the resulting classifications.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        The dataframe containing tracking data.
+    event_name : str
+        The name of the event to classify (used for column naming).
+    query : str
+        The query string to select cells.
+    irreversible_event : bool, optional
+        Whether the event is irreversible. Default is True.
+    unique_state : bool, optional
+        Whether to classify unique states. Default is False.
+    r2_threshold : float, optional
+        R-squared threshold for event timing estimation. Default is 0.5.
+    percentile_recovery : float, optional
+        Percentile for recovery in unique state classification. Default is 50.
+
+    Returns
+    -------
+    pandas.DataFrame
+        The dataframe with added classification and timing columns.
+    """
 
     status_attr = "status_" + event_name
     df = classify_cells_from_query(df, status_attr, query)
@@ -1941,6 +2093,23 @@ def measure_radial_distance_to_center(
         "y": "POSITION_Y",
     },
 ):
+    """
+    Calculates the radial distance of each cell to the center of the image/volume.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        The dataframe containing cell positions.
+    volume : tuple or list
+        The dimensions of the volume (Y, X).
+    column_labels : dict, optional
+        Dictionary mapping internal column names. Default is {"track": "TRACK_ID", "time": "FRAME", "x": "POSITION_X", "y": "POSITION_Y"}.
+
+    Returns
+    -------
+    pandas.DataFrame
+        The dataframe with an added 'radial_distance' column.
+    """
 
     try:
         df[column_labels["x"]] = df[column_labels["x"]].astype(float)
@@ -1956,6 +2125,19 @@ def measure_radial_distance_to_center(
 
 
 def center_of_mass_to_abs_coordinates(df):
+    """
+    Converts relative center of mass coordinates to absolute coordinates.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        The dataframe containing relative center of mass coordinates.
+
+    Returns
+    -------
+    pandas.DataFrame
+        The dataframe with absolute center of mass coordinates.
+    """
 
     center_of_mass_x_cols = [
         c for c in list(df.columns) if c.endswith("centre_of_mass_x")

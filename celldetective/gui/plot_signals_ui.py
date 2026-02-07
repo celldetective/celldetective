@@ -47,6 +47,14 @@ class ConfigSignalPlot(CelldetectiveWidget):
     """
 
     def __init__(self, parent_window=None):
+        """
+        Initialize the ConfigSignalPlot widget.
+
+        Parameters
+        ----------
+        parent_window : QMainWindow, optional
+            The parent window.
+        """
 
         super().__init__()
         self.parent_window = parent_window
@@ -244,6 +252,9 @@ class ConfigSignalPlot(CelldetectiveWidget):
         # self.show()
 
     def set_classes_and_times(self):
+        """
+        Update available classes and time points based on the selected population.
+        """
 
         # Look for all classes and times
         self.neighborhood_keys = None
@@ -383,6 +394,9 @@ class ConfigSignalPlot(CelldetectiveWidget):
             self.cbs[1].setItemData(i, self.class_columns[i], Qt.ToolTipRole)
 
     def ask_for_feature(self):
+        """
+        Open a dialog to select a numeric feature for plotting.
+        """
 
         cols = np.array(list(self.df.columns))
         feats = [c for c in cols if pd.api.types.is_numeric_dtype(self.df[c])]
@@ -405,6 +419,9 @@ class ConfigSignalPlot(CelldetectiveWidget):
         center_window(self.feature_choice_widget)
 
     def ask_for_features(self):
+        """
+        Open a dialog to select numeric features for plotting with a searchable combobox.
+        """
 
         cols = np.array(list(self.df.columns))
         feats = [c for c in cols if pd.api.types.is_numeric_dtype(self.df[c])]
@@ -435,6 +452,9 @@ class ConfigSignalPlot(CelldetectiveWidget):
     # 		self.feature_two_cb.setEnabled(False)
 
     def compute_signals(self):
+        """
+        Compute signal functions and prepare the plot widget.
+        """
 
         if self.df is not None:
 
@@ -476,6 +496,9 @@ class ConfigSignalPlot(CelldetectiveWidget):
                     logger.debug(f"Error creating plot widget: {e}")
 
     def process_signal(self):
+        """
+        Process the signal plotting request.
+        """
 
         self.FrameToMin = float(self.time_calibration_le.text().replace(",", "."))
         logger.info(f"Time calibration set to 1 frame = {self.FrameToMin} min")
@@ -541,6 +564,9 @@ class ConfigSignalPlot(CelldetectiveWidget):
             ].drop_duplicates()
 
     def compute_signal_functions(self):
+        """
+        Compute mean signals and standard deviations for the selected data.
+        """
 
         # Check to move at the beginning
         self.open_widget = True
@@ -695,6 +721,25 @@ class ConfigSignalPlot(CelldetectiveWidget):
     def generate_synchronized_matrix(
         self, well_group, feature_selected, cclass, max_time
     ):
+        """
+        Generate a synchronized matrix of feature values.
+
+        Parameters
+        ----------
+        well_group : pandas.DataFrame
+            The dataframe containing data for a well or position.
+        feature_selected : str
+            The name of the feature to extract.
+        cclass : int or list
+            The class(es) to include.
+        max_time : int
+            The maximum time duration.
+
+        Returns
+        -------
+        numpy.ndarray
+            The synchronized matrix.
+        """
 
         if isinstance(cclass, int):
             cclass = [cclass]
@@ -753,6 +798,9 @@ class ConfigSignalPlot(CelldetectiveWidget):
         return matrix
 
     def switch_ref_time_mode(self):
+        """
+        Toggle between absolute time and reference time modes.
+        """
         if self.abs_time_checkbox.isChecked():
             self.frame_slider.setEnabled(True)
             self.cbs[-2].setEnabled(False)

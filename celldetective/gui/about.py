@@ -10,6 +10,9 @@ from celldetective._version import __version__
 class AboutWidget(CelldetectiveWidget):
 
     def __init__(self):
+        """
+        Initialize the AboutWidget.
+        """
         super().__init__()
         self.setWindowTitle("About celldetective")
         self.setMaximumWidth(320)

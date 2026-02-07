@@ -36,6 +36,14 @@ logger = get_logger(__name__)
 class PreprocessingPanel(QFrame, Styles):
 
     def __init__(self, parent_window):
+        """
+        Initialize the PreprocessingPanel.
+
+        Parameters
+        ----------
+        parent_window : QMainWindow
+            The parent window.
+        """
 
         super().__init__()
         self.parent_window = parent_window
@@ -95,6 +103,9 @@ class PreprocessingPanel(QFrame, Styles):
         self.ContentsFrame.hide()
 
     def collapse_advanced(self):
+        """
+        Collapse or expand the advanced settings panel.
+        """
 
         panels_open = [
             not p.ContentsFrame.isHidden()
@@ -131,6 +142,9 @@ class PreprocessingPanel(QFrame, Styles):
                 pass
 
     def populate_contents(self):
+        """
+        Populate the content area with preprocessing options.
+        """
 
         self.ContentsFrame = QFrame()
         self.grid_contents = QGridLayout(self.ContentsFrame)
@@ -189,9 +203,15 @@ class PreprocessingPanel(QFrame, Styles):
         self.grid_contents.addWidget(self.submit_preprocessing_btn, 1, 0, 1, 4)
 
     def add_offset_instructions_to_parent_list(self):
+        """
+        Add offset instructions to the parent list.
+        """
         logger.info("adding instructions")
 
     def launch_preprocessing(self):
+        """
+        Launch the preprocessing task based on selected options.
+        """
 
         msgBox1 = QMessageBox()
         msgBox1.setIcon(QMessageBox.Question)

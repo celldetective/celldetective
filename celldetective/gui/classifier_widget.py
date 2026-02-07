@@ -34,6 +34,14 @@ from celldetective.measure import (
 class ClassifierWidget(CelldetectiveWidget):
 
     def __init__(self, parent_window):
+        """
+        Initialize the ClassifierWidget.
+
+        Parameters
+        ----------
+        parent_window : QMainWindow
+            The parent window object.
+        """
 
         super().__init__()
 
@@ -247,12 +255,18 @@ class ClassifierWidget(CelldetectiveWidget):
         self.alpha_slider.valueChanged.connect(self.set_transparency)
 
     def activate_prereq_cb(self):
+        """
+        Activate or deactivate the prerequisite event combobox based on the checkbox state.
+        """
         if self.prereq_event_check.isChecked():
             self.prereq_event_cb.setEnabled(True)
         else:
             self.prereq_event_cb.setEnabled(False)
 
     def activate_submit_btn(self):
+        """
+        Activate or deactivate the submit button based on the query input.
+        """
 
         if self.property_query_le.text() == "":
             self.submit_query_btn.setEnabled(False)
@@ -262,6 +276,9 @@ class ClassifierWidget(CelldetectiveWidget):
             self.submit_btn.setEnabled(True)
 
     def activate_r2(self):
+        """
+        Activate or deactivate the R2 slider based on the irreversible event button state.
+        """
         if self.irreversible_event_btn.isChecked() and self.time_corr.isChecked():
             for wg in [self.r2_slider, self.r2_label]:
                 wg.setEnabled(True)
@@ -270,6 +287,9 @@ class ClassifierWidget(CelldetectiveWidget):
                 wg.setEnabled(False)
 
     def activate_time_corr_options(self):
+        """
+        Activate or deactivate time correlation options based on the checkbox state.
+        """
 
         if self.time_corr.isChecked():
             for btn in self.time_corr_options:
@@ -287,6 +307,9 @@ class ClassifierWidget(CelldetectiveWidget):
                 wg.setEnabled(False)
 
     def init_class(self):
+        """
+        Initialize the custom class name and column in the DataFrame.
+        """
 
         self.class_name = "custom"
         i = 1
@@ -311,12 +334,28 @@ class ClassifierWidget(CelldetectiveWidget):
         self.propscanvas.canvas.setMinimumHeight(self.screen_height // 5)
 
     def closeEvent(self, event):
+        """
+        Handle the close event to clean up matplotlib figures.
+
+        Parameters
+        ----------
+        event : QCloseEvent
+            The close event.
+        """
         self.ax_props.cla()
         self.fig_props.clf()
         plt.close(self.fig_props)
         super().closeEvent(event)
 
     def update_props_scatter(self, feature_changed=True):
+        """
+        Update the properties scatter plot.
+
+        Parameters
+        ----------
+        feature_changed : bool, optional
+            Whether the features to plot have changed. Default is True.
+        """
 
         try:
             if np.any(self.df[self.features_cb[0].currentText()].to_numpy() <= 0.0):
@@ -408,6 +447,14 @@ class ClassifierWidget(CelldetectiveWidget):
             print("Exception L355 ", e)
 
     def show_warning(self, message: str):
+        """
+        Show a warning message box.
+
+        Parameters
+        ----------
+        message : str
+            The warning message.
+        """
         msgBox = QMessageBox()
         msgBox.setIcon(QMessageBox.Warning)
         link = (
@@ -419,6 +466,9 @@ class ClassifierWidget(CelldetectiveWidget):
         msgBox.exec()
 
     def apply_property_query(self):
+        """
+        Apply the property query to classify cells.
+        """
 
         query = self.property_query_le.text()
         try:
@@ -449,6 +499,14 @@ class ClassifierWidget(CelldetectiveWidget):
         self.update_props_scatter(feature_changed=False)
 
     def set_frame(self, value):
+        """
+        Set the current frame for visualization.
+
+        Parameters
+        ----------
+        value : int
+            The frame number.
+        """
         xlim = self.ax_props.get_xlim()
         ylim = self.ax_props.get_ylim()
         self.currentFrame = value
@@ -457,6 +515,14 @@ class ClassifierWidget(CelldetectiveWidget):
         self.ax_props.set_ylim(ylim)
 
     def set_transparency(self, value):
+        """
+        Set the transparency of the scatter plot markers.
+
+        Parameters
+        ----------
+        value : float
+            The alpha value (0 to 1).
+        """
         xlim = self.ax_props.get_xlim()
         ylim = self.ax_props.get_ylim()
         self.currentAlpha = value
@@ -466,6 +532,9 @@ class ClassifierWidget(CelldetectiveWidget):
         self.ax_props.set_ylim(ylim)
 
     def switch_projection(self):
+        """
+        Switch between projecting all time points or showing a single frame.
+        """
         if self.project_times:
             self.project_times = False
             self.project_times_btn.setIcon(icon(MDI6.math_integral, color="black"))
@@ -479,6 +548,9 @@ class ClassifierWidget(CelldetectiveWidget):
         self.update_props_scatter(feature_changed=False)
 
     def submit_classification(self):
+        """
+        Submit the classification and save the results.
+        """
 
         self.auto_close = True
         self.apply_property_query()
@@ -609,6 +681,11 @@ class ClassifierWidget(CelldetectiveWidget):
     def switch_to_log(self, i):
         """
         Switch threshold histogram to log scale. Auto adjust.
+
+        Parameters
+        ----------
+        i : int
+            Index of the feature to switch (0 for y-axis, 1 for x-axis).
         """
 
         if i == 1:

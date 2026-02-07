@@ -548,6 +548,8 @@ def apply_watershed(binary_image, coords, distance, fill_holes=True):
     distance : ndarray
             A 2D numpy array of the same shape as `binary_image`, containing the distance transform of the binary image. This map is used
             to guide the watershed segmentation.
+    fill_holes : bool, optional
+            Whether to fill holes in the binary mask after watershed segmentation. Default is True.
 
     Returns
     -------
@@ -814,6 +816,23 @@ def train_segmentation_model(config, use_gpu=True):
 
 
 def merge_instance_segmentation(labels, iou_matching_threshold=0.05, mode="OR"):
+    """
+    Merges multiple instance segmentation masks into a single mask.
+
+    Parameters
+    ----------
+    labels : list of ndarray
+        List of label images to merging.
+    iou_matching_threshold : float, optional
+        IoU threshold for matching instances. Default is 0.05.
+    mode : str, optional
+        Merging mode for overlapping instances ('OR', 'AND', 'XOR'). Default is 'OR'.
+
+    Returns
+    -------
+    ndarray
+        Merged label image.
+    """
 
     label_reference = labels[0]
     try:

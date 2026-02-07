@@ -47,6 +47,20 @@ class NapariLoaderThread(QThread):
     finished_with_result = pyqtSignal(object)
 
     def __init__(self, pos, prefix, population, threads):
+        """
+        Initialize the NapariLoaderThread.
+
+        Parameters
+        ----------
+        pos : str
+            The position path.
+        prefix : str
+            The movie prefix.
+        population : str
+            The cell population.
+        threads : int
+            Number of threads to use.
+        """
         super().__init__()
         self.pos = pos
         self.prefix = prefix
@@ -58,6 +72,9 @@ class NapariLoaderThread(QThread):
         self._is_cancelled = True
 
     def run(self):
+        """
+        Run the thread to load tracks into Napari.
+        """
         from celldetective.napari.utils import control_tracks
 
         def callback(p):
@@ -100,6 +117,16 @@ logger = logging.getLogger("celldetective")
 class ProcessPanel(QFrame, Styles):
 
     def __init__(self, parent_window, mode):
+        """
+        Initialize the ProcessPanel.
+
+        Parameters
+        ----------
+        parent_window : QMainWindow
+            The parent window.
+        mode : str
+            The processing mode (e.g., 'targets', 'effectors').
+        """
 
         super().__init__()
         self.parent_window = parent_window
@@ -182,6 +209,9 @@ class ProcessPanel(QFrame, Styles):
         self.ContentsFrame.hide()
 
     def collapse_advanced(self):
+        """
+        Toggle the visibility of the advanced options block.
+        """
 
         panels_open = [
             not p.ContentsFrame.isHidden()
@@ -211,6 +241,9 @@ class ProcessPanel(QFrame, Styles):
                 pass
 
     def populate_contents(self):
+        """
+        Populate the content frame with processing options.
+        """
         self.ContentsFrame = QFrame()
         self.ContentsFrame.setContentsMargins(5, 5, 5, 5)
         self.grid_contents = QGridLayout(self.ContentsFrame)
@@ -246,6 +279,9 @@ class ProcessPanel(QFrame, Styles):
         self.check_readiness()
 
     def check_readiness(self):
+        """
+        Check if any action is selected and enable/disable the submit button accordingly.
+        """
         if (
             self.segment_action.isChecked()
             or self.track_action.isChecked()
@@ -257,6 +293,9 @@ class ProcessPanel(QFrame, Styles):
             self.submit_btn.setEnabled(False)
 
     def generate_measure_options(self):
+        """
+        Generate options for measurement configuration.
+        """
 
         measure_layout = QHBoxLayout()
 
@@ -302,6 +341,9 @@ class ProcessPanel(QFrame, Styles):
         self.grid_contents.addLayout(measure_layout, 5, 0, 1, 4)
 
     def generate_signal_analysis_options(self):
+        """
+        Generate options for signal analysis configuration.
+        """
 
         signal_layout = QVBoxLayout()
         signal_hlayout = QHBoxLayout()
@@ -366,6 +408,9 @@ class ProcessPanel(QFrame, Styles):
         self.grid_contents.addLayout(signal_layout, 6, 0, 1, 4)
 
     def refresh_signal_models(self):
+        """
+        Refresh the list of available signal models.
+        """
         self.signal_models = get_signal_models_list()
         self.signal_models_list.clear()
 
@@ -382,6 +427,9 @@ class ProcessPanel(QFrame, Styles):
             )
 
     def generate_tracking_options(self):
+        """
+        Generate options for tracking configuration.
+        """
 
         grid_track = QHBoxLayout()
 
@@ -438,6 +486,9 @@ class ProcessPanel(QFrame, Styles):
         self.grid_contents.addLayout(grid_track, 4, 0, 1, 4)
 
     def delete_tracks(self):
+        """
+        Delete existing tracks for the current population.
+        """
 
         msgBox = QMessageBox()
         msgBox.setIcon(QMessageBox.Question)
@@ -500,6 +551,9 @@ class ProcessPanel(QFrame, Styles):
             return None
 
     def generate_segmentation_options(self):
+        """
+        Generate options for segmentation configuration.
+        """
 
         grid_segment = QHBoxLayout()
         grid_segment.setContentsMargins(0, 0, 0, 0)
@@ -587,6 +641,9 @@ class ProcessPanel(QFrame, Styles):
         self.grid_contents.addLayout(seg_option_vbox, 2, 0, 1, 4)
 
     def flip_segmentation(self):
+        """
+        Flip the segmentation order (reverse frames).
+        """
         if not self.flipSeg:
             self.flipSeg = True
             self.flip_segment_btn.setIcon(
@@ -819,6 +876,9 @@ class ProcessPanel(QFrame, Styles):
             gc.collect()
 
     def check_signals(self):
+        """
+        Check and load signals for the selected position(s).
+        """
         from celldetective.gui.event_annotator import EventAnnotator, StackLoaderThread
         from celldetective.utils.experiment import interpret_wells_and_positions
 
@@ -899,6 +959,9 @@ class ProcessPanel(QFrame, Styles):
             self.view_table_ui()
 
     def check_measurements(self):
+        """
+        Check and initiate measurement annotation for the selected position(s).
+        """
         from celldetective.gui.measure_annotator import MeasureAnnotator
         from celldetective.utils.experiment import interpret_wells_and_positions
 
@@ -933,18 +996,27 @@ class ProcessPanel(QFrame, Styles):
             self.view_table_ui()
 
     def enable_segmentation_model_list(self):
+        """
+        Enable or disable the segmentation model list based on the checkbox state.
+        """
         if self.segment_action.isChecked():
             self.seg_model_list.setEnabled(True)
         else:
             self.seg_model_list.setEnabled(False)
 
     def enable_signal_model_list(self):
+        """
+        Enable or disable the signal model list based on the checkbox state.
+        """
         if self.signal_analysis_action.isChecked():
             self.signal_models_list.setEnabled(True)
         else:
             self.signal_models_list.setEnabled(False)
 
     def init_seg_model_list(self):
+        """
+        Initialize the segmentation model list with available models.
+        """
 
         self.seg_model_list.clear()
         self.seg_models_specific = get_segmentation_models_list(
@@ -989,6 +1061,9 @@ class ProcessPanel(QFrame, Styles):
     # 		self.all_ticked = True
 
     def upload_segmentation_model(self):
+        """
+        Open the generic segmentation model loader.
+        """
         from celldetective.gui.seg_model_loader import SegmentationModelLoader
 
         logger.info("Load a segmentation model or pipeline...")
@@ -997,6 +1072,9 @@ class ProcessPanel(QFrame, Styles):
         center_window(self.seg_model_loader)
 
     def open_tracking_configuration_ui(self):
+        """
+        Open the tracking configuration UI.
+        """
         from celldetective.gui.settings._settings_tracking import SettingsTracking
 
         logger.info("Set the tracking parameters...")
@@ -1005,6 +1083,9 @@ class ProcessPanel(QFrame, Styles):
         center_window(self.settings_tracking)
 
     def open_signal_model_config_ui(self):
+        """
+        Open the signal model training configuration UI.
+        """
         from celldetective.gui.settings._settings_event_model_training import (
             SettingsEventDetectionModelTraining,
         )
@@ -1017,6 +1098,9 @@ class ProcessPanel(QFrame, Styles):
         center_window(self.settings_event_detection_training)
 
     def open_segmentation_model_config_ui(self):
+        """
+        Open the segmentation model training configuration UI.
+        """
         from celldetective.gui.settings._settings_segmentation_model_training import (
             SettingsSegmentationModelTraining,
         )
@@ -1027,6 +1111,9 @@ class ProcessPanel(QFrame, Styles):
         center_window(self.settings_segmentation_training)
 
     def open_measurement_configuration_ui(self):
+        """
+        Open the measurement configuration UI.
+        """
         from celldetective.gui.settings._settings_measurements import (
             SettingsMeasurements,
         )
@@ -1037,6 +1124,9 @@ class ProcessPanel(QFrame, Styles):
         center_window(self.settings_measurements)
 
     def open_segmentation_configuration_ui(self):
+        """
+        Open the segmentation configuration UI.
+        """
         from celldetective.gui.settings._settings_segmentation import (
             SettingsSegmentation,
         )
@@ -1046,6 +1136,9 @@ class ProcessPanel(QFrame, Styles):
         self.settings_segmentation.show()
 
     def open_classifier_ui(self):
+        """
+        Open the classifier widget for the current population.
+        """
         from celldetective.gui.classifier_widget import ClassifierWidget
 
         self.load_available_tables()
@@ -1078,6 +1171,9 @@ class ProcessPanel(QFrame, Styles):
                 pass
 
     def open_signal_annotator_configuration_ui(self):
+        """
+        Open the signal annotator configuration UI.
+        """
         from celldetective.gui.settings._settings_signal_annotator import (
             SettingsSignalAnnotator,
         )
@@ -1092,14 +1188,28 @@ class ProcessPanel(QFrame, Styles):
             pass
 
     def reset_generalist_setup(self, index):
+        """
+        Reset generalist model calibration flags.
+
+        Parameters
+        ----------
+        index : int
+            The index (unused but required by signal connection).
+        """
         self.cellpose_calibrated = False
         self.stardist_calibrated = False
         self.segChannelsSet = False
 
     def reset_signals(self):
+        """
+        Reset signal channel settings.
+        """
         self.signalChannelsSet = False
 
     def process_population(self):
+        """
+        Execute the processing pipeline for the selected population.
+        """
         from celldetective.processes.unified_process import UnifiedBatchProcess
         from celldetective.gui.workers import ProgressWindow
 
@@ -1532,6 +1642,9 @@ class ProcessPanel(QFrame, Styles):
         self.reset_signals()
 
     def open_napari_tracking(self):
+        """
+        Open the tracks in Napari for visualization.
+        """
 
         logger.info(
             f"View the tracks before post-processing for position {self.parent_window.pos} in napari..."

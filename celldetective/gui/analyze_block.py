@@ -18,6 +18,16 @@ from celldetective.gui.base.utils import center_window
 
 class AnalysisPanel(QFrame, Styles):
     def __init__(self, parent_window, title=None):
+        """
+        Initialize the AnalysisPanel.
+
+        Parameters
+        ----------
+        parent_window : QMainWindow
+            The parent window object.
+        title : str, optional
+            The title of the panel. Default is None.
+        """
 
         super().__init__()
         self.parent_window = parent_window
@@ -96,6 +106,9 @@ class AnalysisPanel(QFrame, Styles):
         self.grid.addItem(vertical_spacer)
 
     def check_for_tables(self):
+        """
+        Check for the existence of trajectory tables for the populations.
+        """
 
         for population in self.parent_window.populations:
             tables = glob(
@@ -108,6 +121,9 @@ class AnalysisPanel(QFrame, Styles):
                 self.pop_exists = True
 
     def configure_survival(self):
+        """
+        Open the survival analysis configuration window.
+        """
         from celldetective.gui.survival_ui import ConfigSurvival
 
         self.check_for_tables()
@@ -120,6 +136,9 @@ class AnalysisPanel(QFrame, Styles):
             return None
 
     def configure_plot_signals(self):
+        """
+        Open the signal plotting configuration window.
+        """
         from celldetective.gui.plot_signals_ui import ConfigSignalPlot
 
         self.check_for_tables()

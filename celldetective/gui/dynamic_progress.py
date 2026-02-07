@@ -154,6 +154,9 @@ class DynamicProgressDialog(QDialog, Styles):
         self.setMinimumWidth(new_width)
 
     def _get_screen_height(self):
+        """
+        Get the screen dimensions.
+        """
         app = QApplication.instance()
         screen = app.primaryScreen()
         geometry = screen.availableGeometry()
@@ -181,7 +184,14 @@ class DynamicProgressDialog(QDialog, Styles):
             self.ax.set_yscale("linear")
 
     def show_result(self, results):
-        """Display final results (Confusion Matrix or Regression Plot)"""
+        """
+        Display final results (Confusion Matrix or Regression Plot).
+
+        Parameters
+        ----------
+        results : dict
+            Dictionary containing result metrics (e.g., 'val_predictions', 'val_ground_truth', 'val_confusion').
+        """
         self.ax.clear()
         self.apply_plot_style()
         self.ax.set_yscale("linear")

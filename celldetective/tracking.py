@@ -72,6 +72,10 @@ def track(
             Whether to return the napari data dictionary along with the DataFrame. Default is False.
     view_on_napari : bool, optional
             Whether to view the tracking results on napari. Default is False.
+    mask_timepoints : list of int, optional
+            List of timepoints (frames) to exclude from tracking. Default is None.
+    mask_channels : list of str, optional
+            List of channel names to mask/exclude during feature extraction. Default is None.
     optimizer_options : dict, optional
             The options for the optimizer. Default is {'tm_lim': int(12e4)}.
     track_kwargs : dict, optional
@@ -321,8 +325,11 @@ def extract_objects_and_features(
             The list of channel names corresponding to the image stack. Used for extracting Haralick features. Default is None.
     haralick_options : dict or None, optional
             The options for Haralick feature extraction. If None, no Haralick features are extracted. Default is None.
-    mask_timepoints : list of None, optionak
+    mask_timepoints : list of int, optional
             Frames to hide during tracking.
+    mask_channels : list of str, optional
+            List of channel names to mask/exclude during feature extraction. Default is None.
+
     Returns
     -------
     DataFrame
@@ -1249,6 +1256,27 @@ def compute_instantaneous_diffusion(
 
 
 def track_at_position(pos, mode, return_tracks=False, view_on_napari=False, threads=1):
+    """
+    Executes tracking for a specific position and mode.
+
+    Parameters
+    ----------
+    pos : str
+        Path to the experimental position.
+    mode : str
+        Tracking mode (e.g., 'targets', 'effectors').
+    return_tracks : bool, optional
+        Whether to return the tracking results as a DataFrame. Default is False.
+    view_on_napari : bool, optional
+        Whether to view the tracking results on Napari. Default is False.
+    threads : int, optional
+        Number of threads to use. Default is 1.
+
+    Returns
+    -------
+    pandas.DataFrame or None
+        DataFrame containing tracking results if `return_tracks` is True, else None.
+    """
 
     pos = pos.replace("\\", "/")
     pos = rf"{pos}"
@@ -1280,8 +1308,7 @@ def write_first_detection_class(
     },
 ):
     """
-    Assigns a classification and first detection time to tracks in the given DataFrame. This function must be called
-    before any track post-processing.
+    Assigns a classification and first detection time to tracks in the given DataFrame.
 
     This function computes the first detection time and a detection class (`class_firstdetection`) for each track in the data.
     Tracks that start on or near the image edge, or those detected at the initial frame, are marked with special classes.
@@ -1289,43 +1316,34 @@ def write_first_detection_class(
     Parameters
     ----------
     df : pandas.DataFrame
-            A DataFrame containing track data. Expected to have at least the columns specified in `column_labels` and `class_id` (mask value).
-
+        A DataFrame containing track data. Expected to have at least the columns specified in `column_labels` and `class_id` (mask value).
     img_shape : tuple of int, optional
-            The shape of the image as `(height, width)`. Used to determine whether the first detection occurs near the image edge.
-
-    edge_threshold : int, optional, default=20
-            The distance in pixels from the image edge to consider a detection as near the edge.
-
+        The shape of the image as `(height, width)`. Used to determine whether the first detection occurs near the image edge.
+    edge_threshold : int, optional
+        The distance in pixels from the image edge to consider a detection as near the edge. Default is 20.
     column_labels : dict, optional
-            A dictionary mapping logical column names to actual column names in `tab`. Keys include:
-
-                    - `'track'`: The column indicating the track ID (default: `"TRACK_ID"`).
-                    - `'time'`: The column indicating the frame/time (default: `"FRAME"`).
-                    - `'x'`: The column indicating the X-coordinate (default: `"POSITION_X"`).
-                    - `'y'`: The column indicating the Y-coordinate (default: `"POSITION_Y"`).
+        A dictionary mapping logical column names to actual column names in `df`. Keys include:
+        - `'track'`: The column indicating the track ID (default: `"TRACK_ID"`).
+        - `'time'`: The column indicating the frame/time (default: `"FRAME"`).
+        - `'x'`: The column indicating the X-coordinate (default: `"POSITION_X"`).
+        - `'y'`: The column indicating the Y-coordinate (default: `"POSITION_Y"`).
 
     Returns
     -------
     pandas.DataFrame
-            The input DataFrame `df` with two additional columns:
-
-                    - `'class_firstdetection'`: A class assigned based on detection status:
-
-                            - `0`: Valid detection not near the edge and not at the initial frame.
-                            - `2`: Detection near the edge, at the initial frame, or no detection available.
-
-                    - `'t_firstdetection'`: The adjusted first detection time (in frame units):
-
-                            - `-1`: Indicates no valid detection or detection near the edge.
-                            - A float value representing the adjusted first detection time otherwise.
+        The input DataFrame `df` with two additional columns:
+        - `'class_firstdetection'`: A class assigned based on detection status:
+            - `0`: Valid detection not near the edge and not at the initial frame.
+            - `2`: Detection near the edge, at the initial frame, or no detection available.
+        - `'t_firstdetection'`: The adjusted first detection time (in frame units):
+            - `-1`: Indicates no valid detection or detection near the edge.
+            - A float value representing the adjusted first detection time otherwise.
 
     Notes
     -----
     - The function assumes that tracks are grouped and sorted by track ID and frame.
     - Detections near the edge or at the initial frame (frame 0) are considered invalid and assigned special values.
     - If `img_shape` is not provided, edge checks are skipped.
-
     """
 
     df = df.sort_values(by=[column_labels["track"], column_labels["time"]])

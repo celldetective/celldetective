@@ -154,6 +154,32 @@ class SignalDetectionModel(object):
         dropout_rate=0.1,
         label="",
     ):
+        """
+        Initialize the SignalDetectionModel.
+
+        Parameters
+        ----------
+        path : str, optional
+            Path to the model directory. Default is None.
+        pretrained : str, optional
+            Path to a pretrained model to load. Default is None.
+        channel_option : list, optional
+            List of channel names to be used. Default is ["live_nuclei_channel"].
+        model_signal_length : int, optional
+            Length of the signals for the model. Default is 128.
+        n_channels : int, optional
+            Number of input channels. Default is 1.
+        n_conv : int, optional
+            Number of convolutional layers. Default is 2.
+        n_classes : int, optional
+            Number of output classes. Default is 3.
+        dense_collection : int, optional
+            Size of the dense layers. Default is 512.
+        dropout_rate : float, optional
+            Dropout rate for the model. Default is 0.1.
+        label : str, optional
+            Label for the model. Default is "".
+        """
 
         self.prep_gpu()
 
@@ -282,6 +308,21 @@ class SignalDetectionModel(object):
         return True
 
     def freeze_encoder(self, model, n_trainable_layers: int = 3):
+        """
+        Freezes the initial layers of the model, keeping only the last `n_trainable_layers` trainable.
+
+        Parameters
+        ----------
+        model : keras.Model
+            The model whose layers are to be frozen.
+        n_trainable_layers : int, optional
+            The number of final layers to keep trainable. Default is 3.
+
+        Returns
+        -------
+        keras.Model
+            The model with frozen initial layers.
+        """
         for layer in model.layers[
             : -min(n_trainable_layers, len(model.layers))
         ]:  # freeze everything except final Dense layer
@@ -694,6 +735,12 @@ class SignalDetectionModel(object):
         self.train_generic()
 
     def train_generic(self):
+        """
+        Orchestrates the training process for both classifier and regressor models.
+
+        This method handles the creation of the model folder, training of both models, saving of the
+        configuration, and cleanup of memory resources after training.
+        """
 
         if not os.path.exists(self.model_folder):
             os.mkdir(self.model_folder)
@@ -1671,9 +1718,36 @@ class SignalDetectionModel(object):
         print(f"New class weights: {self.class_weights}...")
 
     def load_set(self, signal_dataset):
+        """
+        Loads a signal dataset from a file.
+
+        Parameters
+        ----------
+        signal_dataset : str
+            Path to the .npy file containing the signal dataset.
+
+        Returns
+        -------
+        ndarray
+            The loaded signal dataset.
+        """
         return np.load(signal_dataset, allow_pickle=True)
 
     def find_best_signal_match(self, signal_dataset):
+        """
+        Identifies the best matching signals from the dataset based on the channel options.
+
+        Parameters
+        ----------
+        signal_dataset : list of dict
+            The loaded signal dataset.
+
+        Returns
+        -------
+        tuple
+            A tuple containing a list of selected signal keys and the maximum signal length found.
+            Returns None if required signals are not found.
+        """
 
         required_signals = self.channel_option
         available_signals = list(signal_dataset[0].keys())
@@ -1705,6 +1779,26 @@ class SignalDetectionModel(object):
     def cast_signals_into_training_data(
         self, signal_dataset, selected_signals, max_length
     ):
+        """
+        Transforms the raw signal dataset into a format suitable for training.
+
+        Parameters
+        ----------
+        signal_dataset : list of dict
+            The raw signal dataset.
+        selected_signals : list of str
+            The keys of the signals selected for training.
+        max_length : int
+            The maximum length of the signals.
+
+        Returns
+        -------
+        tuple
+            A tuple containing:
+            - signals_recast (ndarray): The recast 3D array of signals (samples, time, channels).
+            - classes (ndarray): The classes associated with each sample.
+            - times_of_interest (ndarray): The times of interest for each sample.
+        """
 
         signals_recast = np.zeros((len(signal_dataset), max_length, self.n_channels))
         classes = np.zeros(len(signal_dataset))
@@ -1743,6 +1837,21 @@ class SignalDetectionModel(object):
         return signals_recast, classes, times_of_interest
 
     def normalize_signals(self, signals_recast, times_of_interest):
+        """
+        Normalizes the recast signals and times of interest.
+
+        Parameters
+        ----------
+        signals_recast : ndarray
+            The 3D array of signals (samples, time, channels).
+        times_of_interest : ndarray
+            The times of interest for each sample.
+
+        Returns
+        -------
+        tuple
+            A tuple containing the normalized signals and the normalized times of interest.
+        """
 
         signals_recast = pad_to_model_length(signals_recast, self.model_signal_length)
         if self.normalize:
@@ -2085,12 +2194,40 @@ def _get_time_history_class():
         """
 
         def on_train_begin(self, logs={}):
+            """
+            Initialize the times list at the start of training.
+
+            Parameters
+            ----------
+            logs : dict, optional
+                Dictionary of logs. Default is {}.
+            """
             self.times = []
 
         def on_epoch_begin(self, epoch, logs={}):
+            """
+            Record the start time of the epoch.
+
+            Parameters
+            ----------
+            epoch : int
+                Index of the epoch.
+            logs : dict, optional
+                Dictionary of logs. Default is {}.
+            """
             self.epoch_time_start = time.time()
 
         def on_epoch_end(self, epoch, logs={}):
+            """
+            Calculate and record the duration of the epoch.
+
+            Parameters
+            ----------
+            epoch : int
+                Index of the epoch.
+            logs : dict, optional
+                Dictionary of logs. Default is {}.
+            """
             self.times.append(time.time() - self.epoch_time_start)
 
     return TimeHistory

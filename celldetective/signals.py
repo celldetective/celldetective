@@ -314,6 +314,25 @@ def analyze_signals_at_position(pos, model, mode, use_gpu=True, return_table=Fal
 def analyze_pair_signals_at_position(
     pos, model, use_gpu=True, populations=["targets", "effectors"]
 ):
+    """
+    Analyzes pair signals at a position using a specified model.
+
+    Parameters
+    ----------
+    pos : str
+        Path to the experimental position.
+    model : str
+        Name of the signal model to use.
+    use_gpu : bool, optional
+        Whether to use GPU acceleration. Default is True.
+    populations : list of str, optional
+        List of population names involved in the pair analysis. Default is ["targets", "effectors"].
+
+    Returns
+    -------
+    None
+        Results are saved to CSV.
+    """
 
     pos = pos.replace("\\", "/")
     pos = rf"{pos}"
@@ -380,6 +399,37 @@ def analyze_pair_signals(
         "y": "POSITION_Y",
     },
 ):
+    """
+    Analyzes signals for pairs of cells using a specified model.
+
+    Parameters
+    ----------
+    trajectories_pairs : pandas.DataFrame
+        DataFrame containing pair data.
+    trajectories_reference : pandas.DataFrame
+        DataFrame containing reference population data.
+    trajectories_neighbors : pandas.DataFrame
+        DataFrame containing neighbor population data.
+    model : str
+        Name of the signal model to use.
+    interpolate_na : bool, optional
+        Whether to interpolate NaN values. Default is True.
+    selected_signals : list of str, optional
+        List of signal columns to analyze. Default is None.
+    model_path : str, optional
+        Path to the model directory. Default is None.
+    plot_outcome : bool, optional
+        Whether to interpolate NaN values. Default is True.
+    output_dir : str, optional
+        Directory to save output plots. Default is None.
+    column_labels : dict, optional
+        Dictionary mapping column names.
+
+    Returns
+    -------
+    pandas.DataFrame
+        DataFrame with analyzed pair signals and classifications.
+    """
     from celldetective.event_detection_models import SignalDetectionModel
 
     model_path = locate_signal_model(model, path=model_path, pairs=True)
@@ -1007,7 +1057,9 @@ def columnwise_mean(matrix, min_nbr_values=1, projection="mean"):
             The input matrix for which column-wise mean and standard deviation are calculated.
     min_nbr_values : int, optional
             The minimum number of non-NaN values required in a column to calculate mean and standard deviation.
-            Default is 8.
+            Default is 1.
+    projection : str, optional
+            The method to calculate the central tendency, either 'mean' or 'median' (default is 'mean').
 
     Returns
     -------
@@ -1074,6 +1126,18 @@ def mean_signal(
             Name of the column in the DataFrame containing time information. Default is None.
     class_value : int, optional
             Value representing the class of interest. Default is 0.
+    return_matrix : bool, optional
+            Whether to return the signal matrix along with the mean and standard deviation (default is False).
+    forced_max_duration : int, optional
+            The forced maximum duration of the signal (default is None).
+    min_nbr_values : int, optional
+            The minimum number of values required to calculate the mean (default is 2).
+    conflict_mode : str, optional
+            The method to handle conflicts when multiple values exist for the same time point, either 'mean', 'first', or 'all' (default is 'mean').
+    projection : str, optional
+            The method to calculate the central tendency, either 'mean' or 'median' (default is 'mean').
+    pairs : bool, optional
+            Whether the input DataFrame contains pair data (default is False).
 
     Returns
     -------

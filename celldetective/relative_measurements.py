@@ -11,6 +11,21 @@ abs_path = os.sep.join(
 
 
 def measure_pairs(pos, neighborhood_protocol):
+    """
+    Measures properties of cell pairs defined by a neighborhood protocol at a specific position.
+
+    Parameters
+    ----------
+    pos : str
+        Path to the experimental position.
+    neighborhood_protocol : dict
+        Dictionary containing neighborhood settings (reference, neighbor, type, distance, etc.).
+
+    Returns
+    -------
+    pandas.DataFrame or None
+        DataFrame containing paired measurements, or None if data is missing.
+    """
 
     reference_population = neighborhood_protocol["reference"]
     neighbor_population = neighborhood_protocol["neighbor"]
@@ -193,6 +208,23 @@ def measure_pairs(pos, neighborhood_protocol):
 def measure_pair_signals_at_position(
     pos, neighborhood_protocol, velocity_kwargs={"window": 3, "mode": "bi"}
 ):
+    """
+    Measures signals and temporal properties for cell pairs at a specific position.
+
+    Parameters
+    ----------
+    pos : str
+        Path to the experimental position.
+    neighborhood_protocol : dict
+        Dictionary containing neighborhood settings.
+    velocity_kwargs : dict, optional
+        Arguments for velocity calculation (window size, mode). Default is {"window": 3, "mode": "bi"}.
+
+    Returns
+    -------
+    pandas.DataFrame or None
+        DataFrame containing temporal pair measurements, or None if data is missing.
+    """
 
     reference_population = neighborhood_protocol["reference"]
     neighbor_population = neighborhood_protocol["neighbor"]
@@ -663,6 +695,14 @@ def timeline_matching(timeline1, timeline2):
 
 
 def rel_measure_at_position(pos):
+    """
+    Executes the relative measurement script for a given position.
+
+    Parameters
+    ----------
+    pos : str
+        Path to the experimental position.
+    """
 
     pos = pos.replace("\\", "/")
     pos = rf"{pos}"
@@ -731,6 +771,21 @@ def rel_measure_at_position(pos):
 
 
 def update_effector_table(df_relative, df_effector):
+    """
+    Updates the effector table to mark effectors that are part of a neighborhood.
+
+    Parameters
+    ----------
+    df_relative : pandas.DataFrame
+        DataFrame containing relative measurements (pairs).
+    df_effector : pandas.DataFrame
+        DataFrame containing effector data.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Updated effector DataFrame with 'group_neighborhood' column.
+    """
     df_effector["group_neighborhood"] = 1
     effectors = np.unique(df_relative["EFFECTOR_ID"].to_numpy())
     for effector in effectors:

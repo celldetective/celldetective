@@ -35,11 +35,24 @@ logger = get_logger(__name__)
 
 class AnnotatorStackVisualizer(CellEdgeVisualizer):
     def __init__(self, *args, **kwargs):
+        """
+        Initialize the AnnotatorStackVisualizer.
+
+        Parameters
+        ----------
+        *args : tuple
+            Positional arguments passed to CellEdgeVisualizer.
+        **kwargs : dict
+            Keyword arguments passed to CellEdgeVisualizer.
+        """
         self.scat_markers = None
         super().__init__(*args, **kwargs)
         self.compact_layout()
 
     def generate_figure_canvas(self):
+        """
+        Generate the figure canvas and initialize custom overlays.
+        """
         super().generate_figure_canvas()
         self.generate_custom_overlays()
         # Force layout update
@@ -51,6 +64,16 @@ class AnnotatorStackVisualizer(CellEdgeVisualizer):
         # CellEdgeVisualizer handles self.im_mask
 
     def update_overlays(self, positions, colors):
+        """
+        Update the scatter plot overlays with new positions and colors.
+
+        Parameters
+        ----------
+        positions : array-like
+            The positions of the points (N, 2).
+        colors : array-like
+            The colors of the points.
+        """
         # Update Scatter
         self.scat_markers.set_offsets(positions)
         if len(positions) > 0 and len(colors) > 0:
@@ -64,10 +87,16 @@ class AnnotatorStackVisualizer(CellEdgeVisualizer):
         self.canvas.canvas.draw_idle()
 
     def generate_edge_slider(self):
+        """
+        Override to hide the edge slider.
+        """
         # Override to hide edge slider
         pass
 
     def generate_opacity_slider(self):
+        """
+        Generate a compact opacity slider for the mask.
+        """
         # Compact opacity slider
         self.opacity_slider = QLabeledDoubleSlider()
         self.opacity_slider.setOrientation(Qt.Horizontal)
@@ -84,6 +113,9 @@ class AnnotatorStackVisualizer(CellEdgeVisualizer):
         self.canvas.layout.addLayout(layout)
 
     def compact_layout(self):
+        """
+        Reduce margins and spacing for a more compact layout.
+        """
         # Reduce margins/spacing for all slider layouts in canvas
         self.canvas.layout.setSpacing(0)
         self.canvas.layout.setContentsMargins(0, 5, 0, 5)
@@ -480,7 +512,14 @@ class MeasureAnnotator(BaseAnnotator):
             self.viewer.compact_layout()
 
     def sync_frame(self, value):
-        """Callback when StackVisualizer frame changes"""
+        """
+        Callback when StackVisualizer frame changes.
+
+        Parameters
+        ----------
+        value : int
+            The new frame index.
+        """
 
         self.current_frame = value
         self.update_frame_logic()
@@ -908,7 +947,14 @@ class MeasureAnnotator(BaseAnnotator):
         return self.state_color_map[state]
 
     def on_scatter_pick(self, event):
-        """Handle pick event on scatter plot."""
+        """
+        Handle pick event on scatter plot.
+
+        Parameters
+        ----------
+        event : matplotlib.backend_bases.PickEvent
+            The pick event.
+        """
         self.event = event
         ind = event.ind
 
@@ -944,7 +990,12 @@ class MeasureAnnotator(BaseAnnotator):
     def draw_frame(self, framedata):
         """
         Update plot elements at each timestep of the loop.
-        Using StackVisualizer overlay update
+        Using StackVisualizer overlay update.
+
+        Parameters
+        ----------
+        framedata : int
+            The current frame index.
         """
         self.framedata = framedata
 
@@ -1009,7 +1060,14 @@ class MeasureAnnotator(BaseAnnotator):
                 )
 
     def compute_status_and_colors(self, index=0):
-        """Compute status and colors."""
+        """
+        Compute status and colors.
+
+        Parameters
+        ----------
+        index : int, optional
+            The index to compute for. Default is 0.
+        """
         self.changed_class()
 
     def changed_class(self):

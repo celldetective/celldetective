@@ -93,6 +93,23 @@ from sklearn.metrics import r2_score
 def fraction_of_area_detected_in_intensity(
     regionmask, intensity_image, target_channel="adhesion_channel"
 ):
+    """
+    Computes the fraction of the region area that is detected in the intensity image.
+
+    Parameters
+    ----------
+    regionmask : ndarray
+        Binary mask of the region of interest.
+    intensity_image : ndarray
+        Intensity image.
+    target_channel : str, optional
+        Target channel name. Default is 'adhesion_channel'.
+
+    Returns
+    -------
+    float
+        Fraction of the area detected in the intensity image.
+    """
 
     instructions = {
         "thresholds": [0.02, 1000],
@@ -236,6 +253,27 @@ def fraction_of_area_dark_intensity(
     fill_holes=True,
     threshold=0.95,
 ):  # , target_channel='adhesion_channel'
+    """
+    Computes the fraction of the region area where intensity is below a threshold.
+
+    Parameters
+    ----------
+    regionmask : ndarray
+        Binary mask of the region of interest.
+    intensity_image : ndarray
+        Intensity image.
+    target_channel : str, optional
+        Target channel name. Default is 'adhesion_channel'.
+    fill_holes : bool, optional
+        Whether to fill holes in the dark regions. Default is True.
+    threshold : float, optional
+        Intensity threshold. Default is 0.95.
+
+    Returns
+    -------
+    float
+        Fraction of the area with dark intensity.
+    """
 
     subregion = (
         intensity_image < threshold
@@ -251,6 +289,25 @@ def fraction_of_area_dark_intensity(
 def area_dark_intensity_nintyfive(
     regionmask, intensity_image, target_channel="adhesion_channel", fill_holes=True
 ):  # , target_channel='adhesion_channel'
+    """
+    Computes the area of the region where intensity is below 0.95.
+
+    Parameters
+    ----------
+    regionmask : ndarray
+        Binary mask of the region of interest.
+    intensity_image : ndarray
+        Intensity image.
+    target_channel : str, optional
+        Target channel name. Default is 'adhesion_channel'.
+    fill_holes : bool, optional
+        Whether to fill holes in the dark regions. Default is True.
+
+    Returns
+    -------
+    float
+        Area with intensity below 0.95.
+    """
 
     subregion = (
         intensity_image < 0.95
@@ -266,6 +323,25 @@ def area_dark_intensity_nintyfive(
 def area_dark_intensity_ninty(
     regionmask, intensity_image, target_channel="adhesion_channel", fill_holes=True
 ):  # , target_channel='adhesion_channel'
+    """
+    Computes the area of the region where intensity is below 0.90.
+
+    Parameters
+    ----------
+    regionmask : ndarray
+        Binary mask of the region of interest.
+    intensity_image : ndarray
+        Intensity image.
+    target_channel : str, optional
+        Target channel name. Default is 'adhesion_channel'.
+    fill_holes : bool, optional
+        Whether to fill holes in the dark regions. Default is True.
+
+    Returns
+    -------
+    float
+        Area with intensity below 0.90.
+    """
 
     subregion = (
         intensity_image < 0.90
@@ -453,6 +529,23 @@ def mean_dark_intensity_eight_five(
 def mean_dark_intensity_eight_five_fillhole_false(
     regionmask, intensity_image, target_channel="adhesion_channel"
 ):
+    """
+    Computes the mean intensity in dark regions (< 0.85), ignoring NaNs and without hole filling.
+
+    Parameters
+    ----------
+    regionmask : ndarray
+        Binary mask of the region of interest.
+    intensity_image : ndarray
+        Intensity image.
+    target_channel : str, optional
+        Target channel name. Default is 'adhesion_channel'.
+
+    Returns
+    -------
+    float
+        Mean intensity in dark regions.
+    """
 
     subregion = (
         intensity_image < 0.85
@@ -468,6 +561,23 @@ def mean_dark_intensity_eight_five_fillhole_false(
 def percentile_zero_one_dark_intensity_ninty(
     regionmask, intensity_image, target_channel="adhesion_channel"
 ):
+    """
+    Computes the 0.1th percentile of intensity in dark regions (< 0.95).
+
+    Parameters
+    ----------
+    regionmask : ndarray
+        Binary mask of the region of interest.
+    intensity_image : ndarray
+        Intensity image.
+    target_channel : str, optional
+        Target channel name. Default is 'adhesion_channel'.
+
+    Returns
+    -------
+    float
+        0.1th percentile of intensity in dark regions.
+    """
 
     subregion = (intensity_image < 0.95) * regionmask
     return float(np.nanpercentile(intensity_image[subregion], 0.1))
@@ -476,6 +586,23 @@ def percentile_zero_one_dark_intensity_ninty(
 def percentile_one_dark_intensity_ninty(
     regionmask, intensity_image, target_channel="adhesion_channel"
 ):
+    """
+    Computes the 1st percentile of intensity in dark regions (< 0.95).
+
+    Parameters
+    ----------
+    regionmask : ndarray
+        Binary mask of the region of interest.
+    intensity_image : ndarray
+        Intensity image.
+    target_channel : str, optional
+        Target channel name. Default is 'adhesion_channel'.
+
+    Returns
+    -------
+    float
+        1st percentile of intensity in dark regions.
+    """
 
     subregion = (intensity_image < 0.95) * regionmask
     return float(np.nanpercentile(intensity_image[subregion], 1))
@@ -484,6 +611,23 @@ def percentile_one_dark_intensity_ninty(
 def percentile_five_dark_intensity_ninty(
     regionmask, intensity_image, target_channel="adhesion_channel"
 ):
+    """
+    Computes the 5th percentile of intensity in dark regions (< 0.95).
+
+    Parameters
+    ----------
+    regionmask : ndarray
+        Binary mask of the region of interest.
+    intensity_image : ndarray
+        Intensity image.
+    target_channel : str, optional
+        Target channel name. Default is 'adhesion_channel'.
+
+    Returns
+    -------
+    float
+        5th percentile of intensity in dark regions.
+    """
 
     subregion = (intensity_image < 0.95) * regionmask
     return float(np.nanpercentile(intensity_image[subregion], 5))
@@ -492,6 +636,23 @@ def percentile_five_dark_intensity_ninty(
 def percentile_ten_dark_intensity_ninty(
     regionmask, intensity_image, target_channel="adhesion_channel"
 ):
+    """
+    Computes the 10th percentile of intensity in dark regions (< 0.95).
+
+    Parameters
+    ----------
+    regionmask : ndarray
+        Binary mask of the region of interest.
+    intensity_image : ndarray
+        Intensity image.
+    target_channel : str, optional
+        Target channel name. Default is 'adhesion_channel'.
+
+    Returns
+    -------
+    float
+        10th percentile of intensity in dark regions.
+    """
 
     subregion = (intensity_image < 0.95) * regionmask
     return float(np.nanpercentile(intensity_image[subregion], 10))
@@ -500,32 +661,139 @@ def percentile_ten_dark_intensity_ninty(
 def percentile_ninty_five_dark_intensity_ninty(
     regionmask, intensity_image, target_channel="adhesion_channel"
 ):
+    """
+    Computes the 95th percentile of intensity in dark regions (< 0.95).
+
+    Parameters
+    ----------
+    regionmask : ndarray
+        Binary mask of the region of interest.
+    intensity_image : ndarray
+        Intensity image.
+    target_channel : str, optional
+        Target channel name. Default is 'adhesion_channel'.
+
+    Returns
+    -------
+    float
+        95th percentile of intensity in dark regions.
+    """
 
     subregion = (intensity_image < 0.95) * regionmask
     return float(np.nanpercentile(intensity_image[subregion], 95))
 
 
 def intensity_percentile_ninety_nine(regionmask, intensity_image):
+    """
+    Computes the 99th percentile of intensity within the region.
+
+    Parameters
+    ----------
+    regionmask : ndarray
+        Binary mask of the region of interest.
+    intensity_image : ndarray
+        Intensity image.
+
+    Returns
+    -------
+    float
+        99th percentile of intensity.
+    """
     return np.nanpercentile(intensity_image[regionmask], 99)
 
 
 def intensity_percentile_ninety_five(regionmask, intensity_image):
+    """
+    Computes the 95th percentile of intensity within the region.
+
+    Parameters
+    ----------
+    regionmask : ndarray
+        Binary mask of the region of interest.
+    intensity_image : ndarray
+        Intensity image.
+
+    Returns
+    -------
+    float
+        95th percentile of intensity.
+    """
     return np.nanpercentile(intensity_image[regionmask], 95)
 
 
 def intensity_percentile_ninety(regionmask, intensity_image):
+    """
+    Computes the 90th percentile of intensity within the region.
+
+    Parameters
+    ----------
+    regionmask : ndarray
+        Binary mask of the region of interest.
+    intensity_image : ndarray
+        Intensity image.
+
+    Returns
+    -------
+    float
+        90th percentile of intensity.
+    """
     return np.nanpercentile(intensity_image[regionmask], 90)
 
 
 def intensity_percentile_seventy_five(regionmask, intensity_image):
+    """
+    Computes the 75th percentile of intensity within the region.
+
+    Parameters
+    ----------
+    regionmask : ndarray
+        Binary mask of the region of interest.
+    intensity_image : ndarray
+        Intensity image.
+
+    Returns
+    -------
+    float
+        75th percentile of intensity.
+    """
     return np.nanpercentile(intensity_image[regionmask], 75)
 
 
 def intensity_percentile_fifty(regionmask, intensity_image):
+    """
+    Computes the 50th percentile (median) of intensity within the region.
+
+    Parameters
+    ----------
+    regionmask : ndarray
+        Binary mask of the region of interest.
+    intensity_image : ndarray
+        Intensity image.
+
+    Returns
+    -------
+    float
+        50th percentile of intensity.
+    """
     return np.nanpercentile(intensity_image[regionmask], 50)
 
 
 def intensity_percentile_twenty_five(regionmask, intensity_image):
+    """
+    Computes the 25th percentile of intensity within the region.
+
+    Parameters
+    ----------
+    regionmask : ndarray
+        Binary mask of the region of interest.
+    intensity_image : ndarray
+        Intensity image.
+
+    Returns
+    -------
+    float
+        25th percentile of intensity.
+    """
     return np.nanpercentile(intensity_image[regionmask], 25)
 
 
@@ -533,14 +801,59 @@ def intensity_percentile_twenty_five(regionmask, intensity_image):
 
 
 def intensity_std(regionmask, intensity_image):
+    """
+    Computes the standard deviation of intensity within the region.
+
+    Parameters
+    ----------
+    regionmask : ndarray
+        Binary mask of the region of interest.
+    intensity_image : ndarray
+        Intensity image.
+
+    Returns
+    -------
+    float
+        Standard deviation of intensity.
+    """
     return np.nanstd(intensity_image[regionmask])
 
 
 def intensity_median(regionmask, intensity_image):
+    """
+    Computes the median intensity within the region.
+
+    Parameters
+    ----------
+    regionmask : ndarray
+        Binary mask of the region of interest.
+    intensity_image : ndarray
+        Intensity image.
+
+    Returns
+    -------
+    float
+        Median intensity.
+    """
     return np.nanmedian(intensity_image[regionmask])
 
 
 def intensity_nanmean(regionmask, intensity_image):
+    """
+    Computes the mean intensity within the region, ignoring NaNs.
+
+    Parameters
+    ----------
+    regionmask : ndarray
+        Binary mask of the region of interest.
+    intensity_image : ndarray
+        Intensity image.
+
+    Returns
+    -------
+    float
+        Mean intensity, or NaN if the image is all zeros.
+    """
 
     if np.all(intensity_image == 0):
         return np.nan
@@ -622,6 +935,22 @@ def intensity_center_of_mass_displacement(regionmask, intensity_image):
 
 
 def intensity_center_of_mass_displacement_edge(regionmask, intensity_image):
+    """
+    Computes displacement of center of mass relative to the edge of the region.
+
+    Parameters
+    ----------
+    regionmask : ndarray
+        Binary mask of the region of interest.
+    intensity_image : ndarray
+        Intensity image.
+
+    Returns
+    -------
+    tuple
+        (distance, direction_arctan, delta_x, delta_y).
+        Returns (NaN, NaN, NaN, NaN) if calculation fails.
+    """
 
     if np.any(intensity_image != intensity_image):
         intensity_image = interpolate_nan(intensity_image.copy())

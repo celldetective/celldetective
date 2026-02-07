@@ -39,6 +39,9 @@ logger = get_logger("celldetective")
 
 class BackgroundLoader(QThread):
     def run(self):
+        """
+        Load background packages and modules.
+        """
         logger.info("Loading background packages...")
         try:
             from celldetective.gui.control_panel import ControlPanel
@@ -120,13 +123,23 @@ class AppInitWindow(CelldetectiveMainWindow):
         self.bg_loader.start()
 
     def closeEvent(self, event):
-        """Handle close event."""
+        """
+        Handle close event.
+
+        Parameters
+        ----------
+        event : QCloseEvent
+            The close event.
+        """
 
         QApplication.closeAllWindows()
         event.accept()
         gc.collect()
 
     def check_gpu(self):
+        """
+        Check for the presence of an NVIDIA GPU using nvidia-smi.
+        """
         try:
             if os.name == "nt":
                 kwargs = {"creationflags": 0x08000000}

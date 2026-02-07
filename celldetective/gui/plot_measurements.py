@@ -50,6 +50,14 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
     """
 
     def __init__(self, parent_window=None):
+        """
+        Initialize the ConfigMeasurementsPlot widget.
+
+        Parameters
+        ----------
+        parent_window : QMainWindow, optional
+            The parent window.
+        """
 
         super().__init__()
         self.parent_window = parent_window
@@ -207,6 +215,9 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
     # self.setCentralWidget(self.scroll_area)
     # self.show()
     def class_enable(self):
+        """
+        Enable or disable the class selection combobox based on the checkbox state.
+        """
         if self.check_class.isChecked():
             self.cbs[1].setEnabled(True)
             self.check_group.setChecked(False)
@@ -214,6 +225,9 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
             self.cbs[1].setEnabled(False)
 
     def group_enable(self):
+        """
+        Enable or disable the group selection combobox based on the checkbox state.
+        """
         if self.check_group.isChecked():
             self.cbs[2].setEnabled(True)
             self.check_class.setChecked(False)
@@ -221,6 +235,9 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
             self.cbs[2].setEnabled(False)
 
     def set_classes_and_times(self):
+        """
+        Update available classes and groups based on the selected population.
+        """
         ext = "csv"
         # Look for all classes and times
         tables = glob(
@@ -261,6 +278,9 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
         self.cbs[2].addItems(np.unique(group_columns))
 
     def ask_for_feature(self):
+        """
+        Open a dialog to select a numeric feature for plotting.
+        """
 
         cols = np.array(list(self.df.columns))
         feats = [c for c in cols if pd.api.types.is_numeric_dtype(self.df[c])]
@@ -283,6 +303,9 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
         center_window(self.feature_choice_widget)
 
     def ask_for_features(self):
+        """
+        Open a dialog to select numeric features for plotting.
+        """
 
         cols = np.array(list(self.df.columns))
         feats = [c for c in cols if pd.api.types.is_numeric_dtype(self.df[c])]
@@ -322,12 +345,18 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
         center_window(self.feature_choice_widget)
 
     def enable_second_feature(self):
+        """
+        Enable or disable the second feature selection combobox.
+        """
         if self.checkBox_feature.isChecked():
             self.feature_two_cb.setEnabled(True)
         else:
             self.feature_two_cb.setEnabled(False)
 
     def compute_signals(self):
+        """
+        Compute signal functions and prepare the plot widget.
+        """
 
         if self.df is not None:
             self.feature_selected = self.feature_cb.currentText()
@@ -519,6 +548,9 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
             self.scroll.show()
 
     def process_signal(self):
+        """
+        Process the signal plotting request.
+        """
 
         print("you clicked!!")
         # self.FrameToMin = float(self.time_calibration_le.text().replace(',','.'))
@@ -532,6 +564,9 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
             return None
 
     def generate_pos_selection_widget(self):
+        """
+        Generate widgets for selecting positions or wells to display.
+        """
 
         self.well_names = self.df["well_name"].unique()
         self.pos_names = self.df_pos_info[
@@ -613,6 +648,9 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
             ].drop_duplicates()
 
     def compute_signal_functions(self):
+        """
+        Load data and prepare it for plotting.
+        """
         wells = get_experiment_wells(self.exp_dir)
         antibodies = get_experiment_antibodies(self.exp_dir)
         cell_types = get_experiment_cell_types(self.exp_dir)
@@ -707,6 +745,25 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
     def generate_synchronized_matrix(
         self, well_group, feature_selected, cclass, max_time
     ):
+        """
+        Generate a synchronized matrix of feature values.
+
+        Parameters
+        ----------
+        well_group : pandas.DataFrame
+            The dataframe containing data for a well or position.
+        feature_selected : str
+            The name of the feature to extract.
+        cclass : int or list
+            The class(es) to include.
+        max_time : int
+            The maximum time duration.
+
+        Returns
+        -------
+        numpy.ndarray
+            The synchronized matrix.
+        """
 
         if isinstance(cclass, int):
             cclass = [cclass]
@@ -766,6 +823,19 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
         return matrix
 
     def col_mean(self, matrix):
+        """
+        Compute the column-wise mean and standard deviation of a matrix.
+
+        Parameters
+        ----------
+        matrix : numpy.ndarray
+            The input matrix.
+
+        Returns
+        -------
+        tuple
+            Mean and standard deviation arrays.
+        """
 
         mean_line = np.zeros(matrix.shape[1])
         mean_line[:] = np.nan
@@ -781,6 +851,9 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
         return mean_line, std_line
 
     def initialize_axis(self):
+        """
+        Initialize the plot axis settings.
+        """
         plt.rcParams["svg.fonttype"] = "none"
         plt.rcParams["font.family"] = "sans-serif"
         SMALL_SIZE = 5
@@ -939,6 +1012,14 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
         plt.tight_layout()
 
     def plot_survivals(self, id):
+        """
+        Plot the survival curves (or boxplots/boxenplots) for the selected data.
+
+        Parameters
+        ----------
+        id : int
+            The ID of the checked button (unused but required by signal connection).
+        """
         self.ax.clear()
         plt.rcParams["svg.fonttype"] = "none"
         plt.rcParams["font.family"] = "sans-serif"
@@ -1114,6 +1195,32 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
         std_signal=None,
         matrix=None,
     ):
+        """
+        Plot a single line with optional confidence intervals and individual cell lines.
+
+        Parameters
+        ----------
+        line : pandas.DataFrame
+            The data for the line.
+        color : str
+            The color of the line.
+        label : str
+            The label for the legend.
+        mean_signal : str
+            The column name for the mean signal.
+        ci_option : bool, optional
+            Whether to plot confidence intervals.
+        cell_lines_option : bool, optional
+            Whether to plot individual cell lines.
+        alpha_ci : float, optional
+            Transparency for confidence intervals.
+        alpha_cell_lines : float, optional
+            Transparency for individual cell lines.
+        std_signal : str, optional
+            The column name for the standard deviation signal.
+        matrix : str, optional
+            The column name for the matrix of individual signals.
+        """
         try:
             if "second" in str(mean_signal):
                 self.ax2.plot(
@@ -1185,6 +1292,9 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
         self.survival_window.canvas.draw_idle()
 
     def show_hide_legend(self):
+        """
+        Toggle the visibility of the plot legend.
+        """
         if self.legend_visible:
             self.ax.legend().set_visible(False)
             self.legend_visible = False
@@ -1197,6 +1307,9 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
         self.survival_window.canvas.draw_idle()
 
     def look_for_metadata(self):
+        """
+        Search for metadata files in the experiment directory.
+        """
 
         self.metadata_found = False
         self.metafiles = (
@@ -1210,6 +1323,14 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
             self.metadata_found = True
 
     def switch_selection_mode(self, id):
+        """
+        Switch between name-based and spatial selection modes.
+
+        Parameters
+        ----------
+        id : int
+            The ID of the clicked button.
+        """
         print(f"button {id} was clicked")
         for i in range(2):
             if self.select_option[i].isChecked():
@@ -1255,6 +1376,14 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
                 self.df_pos_info.loc[pos_loc, "metadata_tag"] = pos_label
 
     def update_annot(self, ind):
+        """
+        Update the annotation text and position for the hover event.
+
+        Parameters
+        ----------
+        ind : dict
+            The index dictionary from the event.
+        """
 
         pos = self.sc.get_offsets()[ind["ind"][0]]
         self.annot.xy = pos
@@ -1264,6 +1393,14 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
         self.annot.get_bbox_patch().set_alpha(0.4)
 
     def hover(self, event):
+        """
+        Handle the hover event on the scatter plot.
+
+        Parameters
+        ----------
+        event : matplotlib.backend_bases.MouseEvent
+            The mouse event.
+        """
         vis = self.annot.get_visible()
         if event.inaxes == self.ax_scatter:
             cont, ind = self.sc.contains(event)
@@ -1277,6 +1414,14 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
                     self.fig_scatter.canvas.draw_idle()
 
     def unselect_position(self, event):
+        """
+        Handle the selection/unselection of a position on the scatter plot.
+
+        Parameters
+        ----------
+        event : matplotlib.backend_bases.PickEvent
+            The pick event.
+        """
         print("unselecting position")
         self.survival_window.canvas.clear()
         ind = event.ind  # index of selected position
@@ -1307,6 +1452,9 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
         self.plot_survivals(0)
 
     def select_survival_lines(self):
+        """
+        Update selected wells or positions based on checkboxes and refresh the plot.
+        """
         if self.plot_mode == "wells":
             selected_wells = []
             for i in range(len(self.well_display_options)):
@@ -1347,10 +1495,26 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
             self.position_scatter.canvas.draw_idle()
 
     def select_color(self, selection):
+        """
+        Get the colors for the points based on their selection state.
+
+        Parameters
+        ----------
+        selection : array-like
+            Boolean array indicating selection state.
+
+        Returns
+        -------
+        list
+            List of colors.
+        """
         colors = [tab10(0) if s else tab10(0.1) for s in selection]
         return colors
 
     def plot_spatial_location(self):
+        """
+        Plot the spatial location of the positions.
+        """
 
         try:
             self.sc = self.ax_scatter.scatter(
@@ -1377,6 +1541,9 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
             pass
 
     def switch_ref_time_mode(self):
+        """
+        Toggle between absolute time and reference event time modes.
+        """
         if self.abs_time_checkbox.isChecked():
             self.frame_slider.setEnabled(True)
             self.cbs[-1].setEnabled(False)
@@ -1385,6 +1552,9 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
             self.cbs[-1].setEnabled(True)
 
     def switch_ci(self):
+        """
+        Toggle the visibility of confidence intervals.
+        """
 
         if self.show_ci:
             self.ci_btn.setIcon(icon(MDI6.arrow_expand_horizontal, color="black"))
@@ -1394,6 +1564,9 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
         self.plot_survivals(0)
 
     def switch_cell_lines(self):
+        """
+        Toggle the visibility of individual cell lines.
+        """
 
         if self.show_cell_lines:
             self.cell_lines_btn.setIcon(icon(MDI6.view_headline, color="black"))
@@ -1403,6 +1576,9 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
         self.plot_survivals(0)
 
     def set_class_to_plot(self):
+        """
+        Set the target class(es) to plot based on the radio button selection.
+        """
 
         if self.all_btn.isChecked():
             self.target_class = [0, 1]

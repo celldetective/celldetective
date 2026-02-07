@@ -32,6 +32,38 @@ def _fill_distance_neighborhood_at_t(
     statusB=None,
     distance=10,
 ):
+    """
+    Helper function to fill distance-based neighborhood information for a specific time point.
+
+    Parameters
+    ----------
+    time_index : int
+        The time point to process.
+    setA, setB : pandas.DataFrame
+        The datasets for population A and B.
+    dist_map : ndarray
+        Distance matrix between cells in setA and setB.
+    attention_weight : bool, optional
+        Whether to compute attention weights.
+    include_dead_weight : bool, optional
+        Whether to include dead cells in weight computation.
+    symmetrize : bool, optional
+        Whether to update setB with neighborhood info from setA.
+    compute_cum_sum : bool, optional
+        Whether to compute cumulative presence.
+    weights : ndarray, optional
+        Precomputed attention weights.
+    closest_A : ndarray, optional
+        IDs of closest cells in setA.
+    neigh_col : str
+        Column name to store neighborhood data.
+    column_labelsA, column_labelsB : dict
+        Column mapping for sets A and B.
+    statusA, statusB : str
+        Column names for status in sets A and B.
+    distance : float, optional
+        Distance threshold. Default is 10.
+    """
 
     index_A = list(setA.loc[setA[column_labelsA["time"]] == time_index].index)
     index_B = list(setB.loc[setB[column_labelsB["time"]] == time_index].index)
@@ -189,6 +221,40 @@ def _fill_contact_neighborhood_at_t(
     statusB=None,
     d_filter=10,
 ):
+    """
+    Helper function to fill contact-based neighborhood information for a specific time point.
+
+    Parameters
+    ----------
+    time_index : int
+        The time point to process.
+    setA, setB : pandas.DataFrame
+        The datasets for population A and B.
+    dist_map : ndarray
+        Distance matrix between cells.
+    intersection_map : ndarray, optional
+        Map of intersection values between masks.
+    attention_weight : bool, optional
+        Whether to compute attention weights.
+    include_dead_weight : bool, optional
+        Whether to include dead cells in weight computation.
+    symmetrize : bool, optional
+        Whether to update setB with neighborhood info from setA.
+    compute_cum_sum : bool, optional
+        Whether to compute cumulative presence.
+    weights : ndarray, optional
+        Precomputed attention weights.
+    closest_A : ndarray, optional
+        IDs of closest cells in setA.
+    neigh_col : str
+        Column name to store neighborhood data.
+    column_labelsA, column_labelsB : dict
+        Column mapping for sets A and B.
+    statusA, statusB : str
+        Column names for status in sets A and B.
+    d_filter : float, optional
+        Distance filter threshold. Default is 10.
+    """
 
     index_A = list(setA.loc[setA[column_labelsA["time"]] == time_index].index)
     index_B = list(setB.loc[setB[column_labelsB["time"]] == time_index].index)
@@ -363,6 +429,31 @@ def _compute_mask_contact_dist_map(
     column_labelsA=None,
     column_labelsB=None,
 ):
+    """
+    Computes a distance map based on mask contact between two sets of cells.
+
+    Parameters
+    ----------
+    setA, setB : pandas.DataFrame
+        The datasets for population A and B.
+    labelsA : ndarray
+        Label image for set A.
+    labelsB : ndarray, optional
+        Label image for set B.
+    distance : float, optional
+        Distance threshold for contact. Default is 10.
+    mode : str, optional
+        Mode of interaction ('self' or 'two-pop'). Default is 'self'.
+    column_labelsA, column_labelsB : dict, optional
+        Column mapping for sets A and B.
+
+    Returns
+    -------
+    dist_map : ndarray
+        Calculated distance map.
+    intersection_map : ndarray
+        Map of intersection areas (in pixels).
+    """
 
     coordinates_A = setA.loc[:, [column_labelsA["x"], column_labelsA["y"]]].to_numpy()
     coordinates_B = setB.loc[:, [column_labelsB["x"], column_labelsB["y"]]].to_numpy()
@@ -1350,10 +1441,42 @@ def mean_neighborhood_after_event(
 
 
 def sign(num):
+    """
+    Returns the sign of a number.
+
+    Parameters
+    ----------
+    num : float or int
+        Input number.
+
+    Returns
+    -------
+    int
+        -1 if num < 0, else 1.
+    """
     return -1 if num < 0 else 1
 
 
 def contact_neighborhood(labelsA, labelsB=None, border=3, connectivity=2):
+    """
+    Identifies pairs of cells that are in contact or close proximity.
+
+    Parameters
+    ----------
+    labelsA : ndarray
+        Label image for the first population.
+    labelsB : ndarray, optional
+        Label image for the second population.
+    border : int, optional
+        Border expansion size to check for contact. Default is 3.
+    connectivity : int, optional
+        Connectivity for pixel graph. Default is 2.
+
+    Returns
+    -------
+    ndarray
+        Array of unique pairs of contacting cell labels.
+    """
 
     labelsA = labelsA.astype(float)
     if labelsB is not None:
@@ -1404,6 +1527,21 @@ def contact_neighborhood(labelsA, labelsB=None, border=3, connectivity=2):
 
 
 def merge_labels(labelsA, labelsB):
+    """
+    Merges two label images into one.
+
+    Parameters
+    ----------
+    labelsA : ndarray
+        First label image.
+    labelsB : ndarray
+        Second label image.
+
+    Returns
+    -------
+    ndarray
+        Merged label image where non-zero pixels from labelsB overwrite labelsA.
+    """
 
     labelsA = labelsA.astype(float)
     labelsB = labelsB.astype(float)
@@ -1415,6 +1553,21 @@ def merge_labels(labelsA, labelsB):
 
 
 def find_contact_neighbors(labels, connectivity=2):
+    """
+    Finds touching neighbors in a label image using a pixel graph.
+
+    Parameters
+    ----------
+    labels : ndarray
+        Label image.
+    connectivity : int, optional
+        Connectivity for the pixel graph. Default is 2.
+
+    Returns
+    -------
+    ndarray
+        Array of adjacent label pairs (touching masks).
+    """
 
     assert labels.ndim == 2, "Wrong dimension for labels..."
     g, nodes = pixel_graph(labels, mask=labels.astype(bool), connectivity=connectivity)

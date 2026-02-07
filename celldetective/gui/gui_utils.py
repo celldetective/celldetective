@@ -43,6 +43,18 @@ class PreprocessingLayout(QVBoxLayout, Styles):
         *args,
         **kwargs,
     ):
+        """
+        Initialize the PreprocessingLayout.
+
+        Parameters
+        ----------
+        parent_window : QMainWindow, optional
+            The parent window.
+        apply_btn_option : bool, optional
+            Whether to show the apply button. Default is True.
+        extra_widget : QWidget, optional
+            An extra widget to add to the layout.
+        """
         super().__init__(*args, **kwargs)
 
         self.parent_window = parent_window
@@ -52,6 +64,9 @@ class PreprocessingLayout(QVBoxLayout, Styles):
         self.add_to_layout()
 
     def add_to_layout(self):
+        """
+        Add widgets to the layout.
+        """
 
         self.setContentsMargins(20, 20, 20, 20)
 
@@ -72,6 +87,9 @@ class PreprocessingLayout(QVBoxLayout, Styles):
             self.addWidget(self.apply_btn, 5)
 
     def generate_components(self):
+        """
+        Generate and configure the UI components.
+        """
 
         self.list = ListWidget(FilterChoice, [])
 
@@ -143,6 +161,16 @@ class PreprocessingLayout(QVBoxLayout, Styles):
 class PreprocessingLayout2(PreprocessingLayout):
 
     def __init__(self, fraction=75, extra_widget=None, *args, **kwargs):
+        """
+        Initialize the PreprocessingLayout2.
+
+        Parameters
+        ----------
+        fraction : int, optional
+            The percentage width of the label. Default is 75.
+        extra_widget : QWidget, optional
+            An extra widget to add to the layout.
+        """
 
         self.fraction = fraction
         super().__init__(
@@ -153,6 +181,9 @@ class PreprocessingLayout2(PreprocessingLayout):
         self.setContentsMargins(0, 0, 0, 0)
 
     def add_to_layout(self):
+        """
+        Add widgets to the horizontal layout (compact version).
+        """
 
         main_layout = QHBoxLayout()
         main_layout.setContentsMargins(0, 0, 0, 0)
@@ -183,17 +214,42 @@ class PandasModel(QAbstractTableModel):
     """
 
     def __init__(self, data):
+        """
+        Initialize the PandasModel.
+
+        Parameters
+        ----------
+        data : pandas.DataFrame
+            The dataframe to display.
+        """
         QAbstractTableModel.__init__(self)
         self._data = data
         self.colors = dict()
 
     def rowCount(self, parent=None):
+        """Return the number of rows."""
         return self._data.shape[0]
 
     def columnCount(self, parent=None):
+        """Return the number of columns."""
         return self._data.shape[1]
 
     def data(self, index, role=Qt.DisplayRole):
+        """
+        Return the data for the given index and role.
+
+        Parameters
+        ----------
+        index : QModelIndex
+            The index of the item.
+        role : int, optional
+            The role for which data is requested. Default is Qt.DisplayRole.
+
+        Returns
+        -------
+        Any
+            The data for the item.
+        """
         if index.isValid():
             if role == Qt.DisplayRole:
                 return str(self._data.iloc[index.row(), index.column()])
@@ -204,6 +260,23 @@ class PandasModel(QAbstractTableModel):
         return None
 
     def headerData(self, rowcol, orientation, role):
+        """
+        Return the header data for the given row/column and orientation.
+
+        Parameters
+        ----------
+        rowcol : int
+            The row or column index.
+        orientation : Qt.Orientation
+            The orientation (Horizontal or Vertical).
+        role : int
+            The role.
+
+        Returns
+        -------
+        Any
+            The header data.
+        """
         if orientation == Qt.Horizontal and role == Qt.DisplayRole:
             return self._data.columns[rowcol]
         if orientation == Qt.Vertical and role == Qt.DisplayRole:
@@ -211,6 +284,18 @@ class PandasModel(QAbstractTableModel):
         return None
 
     def change_color(self, row, column, color):
+        """
+        Change the background color of a specific cell.
+
+        Parameters
+        ----------
+        row : int
+            The row index.
+        column : int
+            The column index.
+        color : QColor
+            The new background color.
+        """
         ix = self.index(row, column)
         self.colors[(row, column)] = color
         self.dataChanged.emit(ix, ix, (Qt.BackgroundRole,))
@@ -219,6 +304,18 @@ class PandasModel(QAbstractTableModel):
 class GenericOpColWidget(CelldetectiveWidget):
 
     def __init__(self, parent_window, column=None, title=""):
+        """
+        Initialize the GenericOpColWidget.
+
+        Parameters
+        ----------
+        parent_window : QMainWindow
+            The parent window.
+        column : str, optional
+            The initial column selection.
+        title : str, optional
+            The window title.
+        """
 
         super().__init__()
 
@@ -256,6 +353,9 @@ class GenericOpColWidget(CelldetectiveWidget):
         center_window(self)
 
     def launch_operation(self):
+        """
+        Execute the operation and update the table model.
+        """
 
         self.compute()
         self.parent_window.model = PandasModel(self.parent_window.data)
@@ -263,6 +363,9 @@ class GenericOpColWidget(CelldetectiveWidget):
         self.close()
 
     def compute(self):
+        """
+        Perform the computation. Should be overridden by subclasses.
+        """
         pass
 
 
@@ -410,6 +513,14 @@ class ExportPlotBtn(QPushButton, Styles):
 class FilterChoice(CelldetectiveWidget):
 
     def __init__(self, parent_window):
+        """
+        Initialize the FilterChoice widget.
+
+        Parameters
+        ----------
+        parent_window : QMainWindow
+            The parent window.
+        """
 
         super().__init__()
         self.parent_window = parent_window
@@ -468,6 +579,9 @@ class FilterChoice(CelldetectiveWidget):
         center_window(self)
 
     def add_current_feature(self):
+        """
+        Add the selected filter and its arguments to the processing list.
+        """
 
         filtername = self.combo_box.currentText()
         filter_instructions = [filtername.split("_")[0]]
@@ -492,6 +606,9 @@ class FilterChoice(CelldetectiveWidget):
         self.close()
 
     def update_arguments(self):
+        """
+        Update the argument fields based on the selected filter.
+        """
 
         selected_filter = self.combo_box.currentText()
         arguments = self.default_params[selected_filter]
@@ -523,6 +640,14 @@ class OperationChoice(CelldetectiveWidget):
     """
 
     def __init__(self, parent_window):
+        """
+        Initialize the OperationChoice widget.
+
+        Parameters
+        ----------
+        parent_window : QMainWindow
+            The parent window.
+        """
         super().__init__()
         self.parent_window = parent_window
         self.setWindowTitle("Add feature")
@@ -553,6 +678,9 @@ class OperationChoice(CelldetectiveWidget):
         layout.addWidget(self.add_btn)
 
     def add_current_feature(self):
+        """
+        Add the selected operation to the list.
+        """
         filtername = self.combo_box.currentText()
         self.parent_window.list_widget.addItems([filtername])
         self.close()
@@ -561,6 +689,14 @@ class OperationChoice(CelldetectiveWidget):
 class GeometryChoice(CelldetectiveWidget, Styles):
 
     def __init__(self, parent_window):
+        """
+        Initialize the GeometryChoice widget.
+
+        Parameters
+        ----------
+        parent_window : QMainWindow
+            The parent window.
+        """
 
         super().__init__()
         self.parent_window = parent_window
@@ -602,6 +738,9 @@ class GeometryChoice(CelldetectiveWidget, Styles):
             el.hide()
 
     def activate_outer_value(self):
+        """
+        Toggle the visibility of the outer distance input fields.
+        """
         if self.outer_btn.isChecked():
             self.dist_label.setText("Min distance [px]: ")
             for el in self.outer_to_hide:
@@ -612,6 +751,9 @@ class GeometryChoice(CelldetectiveWidget, Styles):
                 el.hide()
 
     def add_current_feature(self):
+        """
+        Add the selected distance(s) to the list.
+        """
 
         value = self.dist_le.text()
         if self.outer_btn.isChecked():
@@ -626,6 +768,14 @@ class GeometryChoice(CelldetectiveWidget, Styles):
 class DistanceChoice(CelldetectiveWidget):
 
     def __init__(self, parent_window):
+        """
+        Initialize the DistanceChoice widget.
+
+        Parameters
+        ----------
+        parent_window : QMainWindow
+            The parent window.
+        """
         super().__init__()
         self.parent_window = parent_window
         self.setWindowTitle("Set distances")
@@ -651,6 +801,9 @@ class DistanceChoice(CelldetectiveWidget):
         layout.addWidget(self.add_btn)
 
     def add_current_feature(self):
+        """
+        Add the selected distance to the list.
+        """
         value = self.dist_le.text().replace(",", ".")
         values = [value]
         self.parent_window.list_widget.addItems(values)
@@ -841,6 +994,8 @@ def color_from_state(state, recently_modified=False):
     ----------
     state : array-like
             An array or list of state values to be used for generating the color map.
+    recently_modified : bool, optional
+            Whether the item was recently modified. Default is False.
 
     Returns
     -------
@@ -885,6 +1040,21 @@ def color_from_state(state, recently_modified=False):
 
 
 def color_from_class(cclass, recently_modified=False):
+    """
+    Returns a color string based on the class and modification state.
+
+    Parameters
+    ----------
+    cclass : int
+        The class code.
+    recently_modified : bool, optional
+        Whether the item was recently modified. Default is False.
+
+    Returns
+    -------
+    str
+        Color string.
+    """
     if not recently_modified:
         if cclass == 0:
             return "tab:red"
@@ -908,6 +1078,14 @@ def color_from_class(cclass, recently_modified=False):
 class ChannelChoice(CelldetectiveWidget):
 
     def __init__(self, parent_window):
+        """
+        Initialize the ChannelChoice widget.
+
+        Parameters
+        ----------
+        parent_window : QMainWindow
+            The parent window.
+        """
         super().__init__()
         self.parent_window = parent_window
         # self.channel_names = channel_names
@@ -929,6 +1107,9 @@ class ChannelChoice(CelldetectiveWidget):
         layout.addWidget(self.add_btn)
 
     def add_current_channel(self):
+        """
+        Add the selected channel to the list.
+        """
         filtername = self.combo_box.currentText()
         self.parent_window.list_widget.addItems([filtername])
         self.close()

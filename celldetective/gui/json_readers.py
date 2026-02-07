@@ -23,6 +23,11 @@ class ConfigEditor(CelldetectiveWidget):
     def __init__(self, parent_window):
         """
         Load and edit the experiment config.
+
+        Parameters
+        ----------
+        parent_window : QMainWindow
+            The parent window containing the experiment configuration path.
         """
 
         super().__init__()
@@ -69,6 +74,9 @@ class ConfigEditor(CelldetectiveWidget):
         self.edit_config_btn.clicked.connect(self.edit_in_text_editor)
 
     def edit_in_text_editor(self):
+        """
+        Open the configuration file in the system's default text editor.
+        """
         path = self.config_path
         try:
             Popen(f"explorer {os.path.realpath(path)}")
@@ -80,6 +88,9 @@ class ConfigEditor(CelldetectiveWidget):
                 return None
 
     def load_config(self):
+        """
+        Load the configuration from the file and populate the editor fields.
+        """
         file_name = self.config_path
         # self.file_edit.setText(file_name)
 
@@ -124,6 +135,9 @@ class ConfigEditor(CelldetectiveWidget):
         self.save_button = save_button
 
     def save_config(self):
+        """
+        Save the edited configuration to the file and reload it in the parent window.
+        """
         # Save the configuration to the file
         file_name = self.config_path
 

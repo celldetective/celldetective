@@ -514,8 +514,16 @@ def apply_background_to_stack(
             The index of the target channel to be corrected. Defaults to 0.
     nbr_channels : int, optional
             The number of channels in the image stack. Defaults to 1.
+    nbr_channels : int, optional
+            The number of channels in the image stack. Defaults to 1.
     stack_length : int, optional
             The length of the image stack (number of frames). If None, the length is auto-detected. Defaults to 45.
+    offset : float or None, optional
+            A constant value to subtract from the image. Default is None.
+    activation_protocol : list of list, optional
+            The activation protocol consisting of filters and their respective parameters (default is [['gauss', 2], ['std', 4]]).
+    fix_nan : bool, optional
+            Whether to interpolate NaN values in the corrected image. Default is False.
     threshold_on_std : float, optional
             The threshold for the standard deviation filter to identify high-variance areas. Defaults to 1.
     optimize_option : bool, optional
@@ -979,6 +987,10 @@ def correct_background_model(
             The activation protocol consisting of filters and their respective parameters (default is [['gauss',2],['std',4]]).
     export_prefix : str, optional
             The prefix for exported corrected stacks (default is 'Corrected').
+    progress_callback : callable, optional
+            A callback function to be called at each step of the process (default is None).
+    downsample : int, optional
+            The downsampling factor to reduce the number of points used for fitting (default is 10).
     **kwargs : dict
             Additional keyword arguments to be passed to the underlying correction function.
 
@@ -1142,6 +1154,12 @@ def fit_and_apply_model_background_to_stack(
             The prefix for exported corrected stacks (default is 'Corrected').
     subset_indices : list of int, optional
             List of absolute frame indices to process (default is None).
+    return_stacks : bool, optional
+            Whether to return the corrected stacks (default is True).
+    progress_callback : callable, optional
+            A callback function to be called at each step of the process (default is None).
+    downsample : int, optional
+            The downsampling factor to reduce the number of points used for fitting (default is 10).
 
     Returns
     -------
@@ -1308,6 +1326,8 @@ def field_correction(
             Whether to return the background along with the corrected image (default is False).
     activation_protocol : list of list, optional
             The activation protocol consisting of filters and their respective parameters (default is [['gauss',2],['std',4]]).
+    downsample : int, optional
+            The downsampling factor to reduce the number of points used for fitting (default is 10).
 
     Returns
     -------
@@ -1385,6 +1405,8 @@ def fit_background_model(
             The background model to fit, either 'paraboloid' or 'plane' (default is 'paraboloid').
     edge_exclusion : int or None, optional
             The size of the border to exclude from fitting (default is None).
+    downsample : int, optional
+            The downsampling factor to reduce the number of points used for fitting (default is 10).
 
     Returns
     -------
@@ -1437,6 +1459,48 @@ def correct_channel_offset(
     progress_callback=None,
     **kwargs,
 ):
+    """
+    Correct the channel shift (chromatic aberration) for an entire experiment.
+
+    This function iterates through all selected wells and positions, correcting the channel offset
+    for each specified target channel.
+
+    Parameters
+    ----------
+    experiment : str
+            The path to the experiment directory.
+    well_option : str, optional
+            The option to select specific wells (default is '*').
+    position_option : str, optional
+            The option to select specific positions (default is '*').
+    target_channel : str, optional
+            The name of the target channel for correction (default is "channel_name").
+    correction_horizontal : int, optional
+            The horizontal shift to apply (default is 0).
+    correction_vertical : int, optional
+            The vertical shift to apply (default is 0).
+    show_progress_per_well : bool, optional
+            Whether to show progress for each well (default is True).
+    show_progress_per_pos : bool, optional
+            Whether to show progress for each position (default is True).
+    export : bool, optional
+            Whether to export the corrected stacks (default is False).
+    return_stacks : bool, optional
+            Whether to return the corrected stacks (default is False).
+    movie_prefix : str, optional
+            The prefix for the movie files (default is None).
+    export_prefix : str, optional
+            The prefix for exported corrected stacks (default is 'Corrected').
+    progress_callback : callable, optional
+            A callback function to be called at each step of the process (default is None).
+    **kwargs : dict
+            Additional keyword arguments.
+
+    Returns
+    -------
+    list of numpy.ndarray or None
+            A list of corrected stacks if `return_stacks` is True, otherwise None.
+    """
 
     config = get_config(experiment)
     wells = get_experiment_wells(experiment)
@@ -1528,6 +1592,37 @@ def correct_channel_offset_single_stack(
     return_stacks=True,
     progress_callback=None,
 ):
+    """
+    Correct the channel shift for a single image stack.
+
+    Parameters
+    ----------
+    stack_path : str
+            The path to the image stack.
+    target_channel_index : int, optional
+            The index of the target channel to be corrected (default is 0).
+    nbr_channels : int, optional
+            The number of channels in the image stack (default is 1).
+    stack_length : int, optional
+            The length of the image stack (default is 45).
+    correction_vertical : int, optional
+            The vertical shift to apply (default is 0).
+    correction_horizontal : int, optional
+            The horizontal shift to apply (default is 0).
+    export : bool, optional
+            Whether to export the corrected stack (default is False).
+    prefix : str, optional
+            The prefix for the exported file name (default is 'Corrected').
+    return_stacks : bool, optional
+            Whether to return the corrected stack (default is True).
+    progress_callback : callable, optional
+            A callback function to be called at each step of the process (default is None).
+
+    Returns
+    -------
+    numpy.ndarray or None
+            The corrected stack if `return_stacks` is True, otherwise None.
+    """
 
     assert os.path.exists(
         stack_path

@@ -62,15 +62,41 @@ class StackLoaderThread(QThread):
     finished = pyqtSignal()
 
     def __init__(self, annotator):
+        """
+        Initialize the loader thread.
+
+        Parameters
+        ----------
+        annotator : QWidget
+            The annotator instance.
+        """
         super().__init__()
         self.annotator = annotator
         self._is_cancelled = False
 
     def stop(self):
+        """Stop the thread."""
         self._is_cancelled = True
 
     def run(self):
+        """Run the thread."""
+
         def callback(progress, status=""):
+            """
+            Callback to update progress.
+
+            Parameters
+            ----------
+            progress : int
+                Progress percentage.
+            status : str, optional
+                Status message. Default is "".
+
+            Returns
+            -------
+            bool
+                True if should continue, False if cancelled.
+            """
             if self._is_cancelled:
                 return False
             self.progress.emit(progress)
@@ -91,9 +117,29 @@ class EventAnnotator(BaseAnnotator):
     """
     UI to set tracking parameters for bTrack.
 
+    Parameters
+    ----------
+    *args
+        Variable length argument list.
+    lazy_load : bool, optional
+        If True, do not start loading the stack immediately. Default is False.
+    **kwargs
+        Arbitrary keyword arguments.
     """
 
     def __init__(self, *args, lazy_load=False, **kwargs):
+        """
+        Initialize the annotator.
+
+        Parameters
+        ----------
+        *args
+            Variable length argument list.
+        lazy_load : bool, optional
+            Whether to load images lazily. Default is False.
+        **kwargs
+            Arbitrary keyword arguments.
+        """
         super().__init__(*args, **kwargs)
         self.setWindowTitle("Signal annotator")
 
@@ -130,12 +176,26 @@ class EventAnnotator(BaseAnnotator):
         self._loader_thread.start()
 
     def _on_load_progress(self, value):
-        """Update progress dialog."""
+        """
+        Update progress dialog.
+
+        Parameters
+        ----------
+        value : int
+            Progress value (0-100).
+        """
         if hasattr(self, "_progress_dialog") and self._progress_dialog:
             self._progress_dialog.setValue(value)
 
     def _on_load_status(self, status):
-        """Update progress dialog label."""
+        """
+        Update progress dialog label.
+
+        Parameters
+        ----------
+        status : str
+            Status message to display.
+        """
         if hasattr(self, "_progress_dialog") and self._progress_dialog:
             self._progress_dialog.setLabelText(status)
 
@@ -408,7 +468,14 @@ class EventAnnotator(BaseAnnotator):
         self.class_scatter.set_edgecolor(self.colors[self.framedata][:, 0])
 
     def compute_status_and_colors(self, i):
+        """
+        Compute the status and colors of the cells.
 
+        Parameters
+        ----------
+        i : int
+            Current frame index.
+        """
         self.class_name = self.class_choice_cb.currentText()
         if self.class_name == "":
             self.class_name = "class"
@@ -471,7 +538,7 @@ class EventAnnotator(BaseAnnotator):
     # 	self.newClassWidget.close()
 
     def cancel_selection(self):
-
+        """Cancel the current selection and revert color changes."""
         super().cancel_selection()
         try:
             for k, (t, idx) in enumerate(zip(self.loc_t, self.loc_idx)):

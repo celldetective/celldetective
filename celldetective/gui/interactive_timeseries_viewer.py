@@ -29,6 +29,24 @@ class InteractiveEventViewer(QDialog, Styles):
         callback=None,
         parent=None,
     ):
+        """
+        Initialize the InteractiveEventViewer.
+
+        Parameters
+        ----------
+        table_path : str
+            Path to the table file.
+        signal_name : str, optional
+            Name of the signal to plot.
+        event_label : str, optional
+            Label of the event to visualize.
+        df : pandas.DataFrame, optional
+            DataFrame containing the data. If None, loaded from table_path.
+        callback : callable, optional
+            Function to call when updates occur.
+        parent : QWidget, optional
+            Parent widget.
+        """
         super().__init__(parent)
         self.table_path = table_path
 
@@ -51,10 +69,16 @@ class InteractiveEventViewer(QDialog, Styles):
         self.plot_signals()
 
     def notify_update(self):
+        """
+        Notify the callback function about updates.
+        """
         if self.callback:
             self.callback()
 
     def detect_columns(self):
+        """
+        Auto-detect the columns for classes, times, and statuses in the dataframe.
+        """
         self.event_types = {}
         cols = self.df.columns
 
@@ -169,6 +193,14 @@ class InteractiveEventViewer(QDialog, Styles):
                 self.signal_name = cols[0]
 
     def set_active_event_type(self, type_name):
+        """
+        Set the active event type.
+
+        Parameters
+        ----------
+        type_name : str
+            The name of the event type to activate.
+        """
         self.current_event_type = type_name
         info = self.event_types[type_name]
         self.class_col = info["class"]
@@ -176,6 +208,9 @@ class InteractiveEventViewer(QDialog, Styles):
         self.status_col = info["status"]
 
     def init_ui(self):
+        """
+        Initialize the user interface.
+        """
         layout = QVBoxLayout(self)
 
         # Top controls
@@ -263,14 +298,38 @@ class InteractiveEventViewer(QDialog, Styles):
         layout.addWidget(self.info_label)
 
     def change_event_type(self, text):
+        """
+        Change the current event type and update the plot.
+
+        Parameters
+        ----------
+        text : str
+            The new event type name.
+        """
         self.set_active_event_type(text)
         self.plot_signals()
 
     def change_signal(self, text):
+        """
+        Change the signal to plot.
+
+        Parameters
+        ----------
+        text : str
+            The name of the signal to plot.
+        """
         self.signal_name = text
         self.plot_signals()
 
     def keyPressEvent(self, event):
+        """
+        Handle key press events for shifting signals.
+
+        Parameters
+        ----------
+        event : QKeyEvent
+            The key event.
+        """
         if not self.selected_tracks:
             super().keyPressEvent(event)
             return
@@ -309,7 +368,15 @@ class InteractiveEventViewer(QDialog, Styles):
         else:
             super().keyPressEvent(event)
 
-    def plot_signals(self):
+    def plot_signals(self, id=None):
+        """
+        Plot the signals for the current event type and options.
+
+        Parameters
+        ----------
+        id : Any, optional
+            Ignored argument for compatibility.
+        """
         self.fig.clf()
         self.ax = self.fig.add_subplot(111)
         self.lines = {}  # map line -> track_id
@@ -385,6 +452,16 @@ class InteractiveEventViewer(QDialog, Styles):
         self.canvas.draw()
 
     def on_select_rect(self, eclick, erelease):
+        """
+        Handle rectangle selection on the plot.
+
+        Parameters
+        ----------
+        eclick : MouseEvent
+            The press event.
+        erelease : MouseEvent
+            The release event.
+        """
         # Find lines intersecting the rectangle
         x1, y1 = eclick.xdata, eclick.ydata
         x2, y2 = erelease.xdata, erelease.ydata
@@ -425,7 +502,14 @@ class InteractiveEventViewer(QDialog, Styles):
         self.info_label.setText(f"Selected {len(self.selected_tracks)} tracks.")
 
     def set_class(self, class_val):
-        """Set class for selected tracks."""
+        """
+        Set class for selected tracks.
+
+        Parameters
+        ----------
+        class_val : int
+            The class value to assign (e.g., 0 for event, 1 for no event).
+        """
         if not self.selected_tracks:
             return
 
@@ -447,9 +531,15 @@ class InteractiveEventViewer(QDialog, Styles):
         self.notify_update()
 
     def reject_selection(self):
+        """
+        Mark selected tracks as 'No Event' (Class 1).
+        """
         self.set_class(1)
 
     def save_changes(self):
+        """
+        Save the changes to the CSV file.
+        """
         try:
             self.df.to_csv(self.table_path, index=False)
             QMessageBox.information(self, "Saved", "Table saved successfully.")

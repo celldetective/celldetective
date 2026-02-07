@@ -38,6 +38,14 @@ logger = logging.getLogger(__name__)
 class ConfigNewExperiment(CelldetectiveMainWindow):
 
     def __init__(self, parent_window=None):
+        """
+        Initialize the ConfigNewExperiment window.
+
+        Parameters
+        ----------
+        parent_window : QMainWindow, optional
+            The parent window object. Default is None.
+        """
 
         super().__init__()
         self.parent_window = parent_window
@@ -55,6 +63,9 @@ class ConfigNewExperiment(CelldetectiveMainWindow):
         self.adjustScrollArea()
 
     def init_widgets(self):
+        """
+        Initialize the widgets for the configuration window.
+        """
         self.scroll_area = QScrollArea(self)
         self.grid = QGridLayout()
 
@@ -80,10 +91,16 @@ class ConfigNewExperiment(CelldetectiveMainWindow):
         self.validate_button.setStyleSheet(self.button_style_sheet)
 
     def connect_signals(self):
+        """
+        Connect signals to slots.
+        """
         self.browse_button.clicked.connect(self.browse_experiment_folder)
         self.validate_button.clicked.connect(self.create_config)
 
     def add_to_layout(self):
+        """
+        Add widgets to the layout.
+        """
 
         button_widget = CelldetectiveWidget()
         button_widget.setLayout(self.grid)
@@ -335,6 +352,9 @@ class ConfigNewExperiment(CelldetectiveMainWindow):
         self.channel_grid.addWidget(self.addChannelBtn, 1000, 0, 1, 1)
 
     def add_custom_channel(self):
+        """
+        Open a dialog to add a custom channel.
+        """
 
         self.CustomChannelWidget = CelldetectiveWidget()
         self.CustomChannelWidget.setWindowTitle("Custom channel")
@@ -356,6 +376,9 @@ class ConfigNewExperiment(CelldetectiveMainWindow):
         logger.info("new channel added")
 
     def write_custom_channel(self):
+        """
+        Add the custom channel to the list.
+        """
 
         self.new_channel_name = self.name_le.text()
         name_map = self.new_channel_name
@@ -388,6 +411,14 @@ class ConfigNewExperiment(CelldetectiveMainWindow):
         )
 
     def show_slider(self, index):
+        """
+        Enable or disable the slider for a channel based on the checkbox state.
+
+        Parameters
+        ----------
+        index : int
+            Index of the channel.
+        """
         if self.checkBoxes[index].isChecked():
             self.sliders[index].setEnabled(True)
         else:
@@ -431,6 +462,9 @@ class ConfigNewExperiment(CelldetectiveMainWindow):
         self.population_grid.addWidget(self.addPopBtn, 1000, 0, 1, 1)
 
     def add_custom_population(self):
+        """
+        Open a dialog to add a custom cell population.
+        """
         self.CustomPopWidget = CelldetectiveWidget()
         self.CustomPopWidget.setWindowTitle("Define custom population")
         layout = QVBoxLayout()
@@ -453,6 +487,14 @@ class ConfigNewExperiment(CelldetectiveMainWindow):
         self.CustomPopWidget.show()
 
     def check_population_name(self, text):
+        """
+        Validate the population name.
+
+        Parameters
+        ----------
+        text : str
+            The population name to check.
+        """
         # define all conditions for valid population name (like no space)
         if len(text) > 0 and " " not in text:
             self.addPopBtn.setEnabled(True)
@@ -460,6 +502,9 @@ class ConfigNewExperiment(CelldetectiveMainWindow):
             self.addPopBtn.setEnabled(False)
 
     def write_custom_population(self):
+        """
+        Add the custom population to the list.
+        """
 
         self.new_population_name = self.name_le.text()
         name_map = self.new_population_name
@@ -600,6 +645,9 @@ class ConfigNewExperiment(CelldetectiveMainWindow):
                 os.mkdir(position_name + os.sep + "movie" + os.sep)
 
     def annotate_wells(self):
+        """
+        Open the well annotation window.
+        """
         self.w = SetupConditionLabels(self, self.nbr_wells)
         self.w.show()
 
@@ -667,6 +715,16 @@ class ConfigNewExperiment(CelldetectiveMainWindow):
 
 class SetupConditionLabels(CelldetectiveWidget):
     def __init__(self, parent_window, n_wells):
+        """
+        Initialize the SetupConditionLabels window.
+
+        Parameters
+        ----------
+        parent_window : CelldetectiveMainWindow
+            The parent window object.
+        n_wells : int
+            Number of wells in the experiment.
+        """
         super().__init__()
         self.parent_window = parent_window
         self.n_wells = n_wells
@@ -724,6 +782,9 @@ class SetupConditionLabels(CelldetectiveWidget):
         center_window(self)
 
     def populate(self):
+        """
+        Populate the layout with input fields for each well.
+        """
         self.cell_type_cbs = [QLineEdit() for i in range(self.n_wells)]
         self.antibodies_cbs = [QLineEdit() for i in range(self.n_wells)]
         self.concentrations_cbs = [QLineEdit() for i in range(self.n_wells)]
@@ -753,10 +814,21 @@ class SetupConditionLabels(CelldetectiveWidget):
             self.layout.addLayout(hbox)
 
     def update_placeholders(self, new_unit):
+        """
+        Update the placeholder text for concentration inputs.
+
+        Parameters
+        ----------
+        new_unit : str
+            The new unit of concentration.
+        """
         for le in self.concentrations_cbs:
             le.setPlaceholderText(f"e.g. 100 ({new_unit})")
 
     def set_default_values(self):
+        """
+        Set default values for all wells.
+        """
 
         for i in range(self.n_wells):
             self.cell_type_cbs[i].setText(str(i))
@@ -768,6 +840,9 @@ class SetupConditionLabels(CelldetectiveWidget):
         self.close()
 
     def set_user_values(self):
+        """
+        Set user-provided values for all wells and create the config file.
+        """
         for i in range(self.n_wells):
             if self.cell_type_cbs[i].text() == "":
                 self.cell_type_cbs[i].setText(str(i))
@@ -782,6 +857,9 @@ class SetupConditionLabels(CelldetectiveWidget):
         self.close()
 
     def set_attributes(self):
+        """
+        Set the attributes of the parent window based on the input values.
+        """
 
         cell_type_text = [c.text() for c in self.cell_type_cbs]
         self.parent_window.cell_types = ",".join(cell_type_text)

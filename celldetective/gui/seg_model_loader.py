@@ -32,6 +32,14 @@ class SegmentationModelLoader(CelldetectiveWidget):
     """
 
     def __init__(self, parent_window):
+        """
+        Initialize the SegmentationModelLoader.
+
+        Parameters
+        ----------
+        parent_window : QMainWindow
+            The parent window.
+        """
 
         super().__init__()
         self.parent_window = parent_window
@@ -41,6 +49,9 @@ class SegmentationModelLoader(CelldetectiveWidget):
         self.generate_content()
 
     def generate_content(self):
+        """
+        Generate the UI content for model selection and options.
+        """
 
         self.layout = QGridLayout(self)
         self.layout.addWidget(QLabel("Select:"), 0, 0, 1, 1)
@@ -127,6 +138,9 @@ class SegmentationModelLoader(CelldetectiveWidget):
         self.show()
 
     def unlock_upload(self):
+        """
+        Enable or disable the upload button based on the current selection state.
+        """
         if self.stardist_button.isChecked():
             if np.any(
                 [c.currentData() != "--" for c in self.channel_layout.channel_cbs]
@@ -566,6 +580,9 @@ class SegmentationModelLoader(CelldetectiveWidget):
             outfile.write(json_object)
 
     def open_threshold_config_wizard(self):
+        """
+        Open the wizard for configuring threshold-based segmentation.
+        """
 
         self.parent_window.parent_window.locate_image()
         if self.parent_window.parent_window.current_stack is None:

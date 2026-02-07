@@ -53,6 +53,24 @@ class GenericSignalPlotWidget(CelldetectiveWidget):
         *args,
         **kwargs,
     ):
+        """
+        Initialize the GenericSignalPlotWidget.
+
+        Parameters
+        ----------
+        df : pandas.DataFrame, optional
+            The dataframe containing the data.
+        df_pos_info : pandas.DataFrame, optional
+            Information about positions.
+        df_well_info : pandas.DataFrame, optional
+            Information about wells.
+        feature_selected : str, optional
+            The selected feature to plot.
+        parent_window : QMainWindow, optional
+            The parent window object.
+        title : str, optional
+            The title of the widget. Default is "plot".
+        """
 
         super().__init__()
         center_window(self)
@@ -87,6 +105,9 @@ class GenericSignalPlotWidget(CelldetectiveWidget):
         self.setLayout(self.layout)
 
     def populate_widget(self):
+        """
+        Populate the widget with controls and plot area.
+        """
 
         self.plot_options = [QRadioButton() for i in range(3)]
         self.radio_labels = ["well", "position", "both"]
@@ -316,6 +337,14 @@ class GenericSignalPlotWidget(CelldetectiveWidget):
         self.select_btn_group.buttons()[0].click()
 
     def submit_alpha(self, value):
+        """
+        Update the alpha value for single-cell lines.
+
+        Parameters
+        ----------
+        value : float
+            The alpha value.
+        """
 
         alpha = value
         try:
@@ -330,6 +359,9 @@ class GenericSignalPlotWidget(CelldetectiveWidget):
         self.plot_signals(0)
 
     def rescale_y_axis(self):
+        """
+        Rescale the Y-axis based on the user input.
+        """
         new_scale = self.scaling_factor_le.text().replace(",", ".")
         if new_scale == "":
             msgBox = QMessageBox()
@@ -345,6 +377,14 @@ class GenericSignalPlotWidget(CelldetectiveWidget):
             self.plot_signals(0)
 
     def switch_selection_mode(self, id):
+        """
+        Switch the selection mode between 'by name' and 'spatially'.
+
+        Parameters
+        ----------
+        id : int
+            The id of the selected radio button.
+        """
 
         for i in range(2):
             if self.select_option[i].isChecked():
@@ -359,6 +399,9 @@ class GenericSignalPlotWidget(CelldetectiveWidget):
             self.line_choice_widget.hide()
 
     def set_class_to_plot(self):
+        """
+        Set the class of cells to plot (events, no events, or all).
+        """
 
         if self.all_btn.isChecked():
             self.target_class = [0, 1]
@@ -370,6 +413,9 @@ class GenericSignalPlotWidget(CelldetectiveWidget):
         self.plot_signals(0)
 
     def generate_pos_selection_widget(self):
+        """
+        Generate the widget for selecting positions or wells to display.
+        """
 
         self.well_names = self.df["well_name"].unique()
         self.pos_names = self.df_pos_info[
@@ -431,6 +477,9 @@ class GenericSignalPlotWidget(CelldetectiveWidget):
         # self.layout.addLayout(self.line_check_vbox)
 
     def look_for_metadata(self):
+        """
+        Search for metadata files in the experiment directory.
+        """
         self.metadata_found = False
         self.metafiles = (
             glob(
@@ -479,6 +528,9 @@ class GenericSignalPlotWidget(CelldetectiveWidget):
                 self.df_pos_info.loc[pos_loc, "metadata_tag"] = pos_label
 
     def plot_spatial_location(self):
+        """
+        Plot the spatial location of the positions.
+        """
 
         try:
             self.sc = self.ax_scatter.scatter(
@@ -522,6 +574,14 @@ class GenericSignalPlotWidget(CelldetectiveWidget):
             logger.debug(f"Could not plot spatial location: {e}")
 
     def update_annot(self, ind):
+        """
+        Update the annotation tool tip.
+
+        Parameters
+        ----------
+        ind : dict
+            The index of the data point.
+        """
 
         pos = self.sc.get_offsets()[ind["ind"][0]]
         self.annot.xy = pos
@@ -531,6 +591,14 @@ class GenericSignalPlotWidget(CelldetectiveWidget):
         self.annot.get_bbox_patch().set_alpha(0.4)
 
     def hover(self, event):
+        """
+        Handle hover events on the scatter plot.
+
+        Parameters
+        ----------
+        event : MouseEvent
+            The mouse event.
+        """
         vis = self.annot.get_visible()
         if event.inaxes == self.ax_scatter:
             cont, ind = self.sc.contains(event)
@@ -544,6 +612,14 @@ class GenericSignalPlotWidget(CelldetectiveWidget):
                     self.fig_scatter.canvas.draw_idle()
 
     def unselect_position(self, event):
+        """
+        Handle pick events to select/deselect positions.
+
+        Parameters
+        ----------
+        event : PickEvent
+            The pick event.
+        """
 
         ind = event.ind  # index of selected position
         well_idx = self.df_pos_info.iloc[ind]["well_index"].values[0]
@@ -573,10 +649,26 @@ class GenericSignalPlotWidget(CelldetectiveWidget):
         self.plot_signals(0)
 
     def select_color(self, selection):
+        """
+        Get the colors for the points based on their selection status.
+
+        Parameters
+        ----------
+        selection : ndarray
+            Boolean array indicating selection status.
+
+        Returns
+        -------
+        list
+            List of RGBA colors.
+        """
         colors = [tab10(0) if s else tab10(0.1) for s in selection]
         return colors
 
     def initialize_axis(self):
+        """
+        Initialize the plot axis.
+        """
 
         previous_ymin, previous_ymax = self.ax.get_ylim()
         previous_legend = self.legend_visible
@@ -648,6 +740,14 @@ class GenericSignalPlotWidget(CelldetectiveWidget):
         self.plot_widget.canvas.draw_idle()
 
     def plot_signals(self, id):
+        """
+        Plot the signals based on the selected mode and options.
+
+        Parameters
+        ----------
+        id : int
+            Dummy argument for compatibility with signal connection.
+        """
 
         for i in range(3):
             if self.plot_options[i].isChecked():
@@ -830,6 +930,30 @@ class GenericSignalPlotWidget(CelldetectiveWidget):
         std_signal=None,
         matrix=None,
     ):
+        """
+        Plot a signal line with optional confidence intervals and individual cell lines.
+
+        Parameters
+        ----------
+        line : pandas.Series or dict
+            The data line containing signal information.
+        color : str or tuple
+            The color of the line.
+        label : str
+            The label for the legend.
+        mean_signal_type : str
+            The key for the mean signal in `line`.
+        ci_option : bool, optional
+            Whether to show confidence intervals. Default is True.
+        cell_lines_option : bool, optional
+            Whether to show individual cell lines. Default is False.
+        alpha_ci : float, optional
+            The transparency of the confidence interval. Default is 0.5.
+        std_signal : str, optional
+            The key for the standard deviation signal in `line`.
+        matrix : str, optional
+            The key for the matrix of individual cell signals in `line`.
+        """
 
         # Plot a signal
         if line == line:
@@ -873,6 +997,9 @@ class GenericSignalPlotWidget(CelldetectiveWidget):
                     )
 
     def switch_ci(self):
+        """
+        Toggle the visibility of confidence intervals or standard deviation.
+        """
 
         # Show the confidence interval / STD
 
@@ -889,6 +1016,9 @@ class GenericSignalPlotWidget(CelldetectiveWidget):
             logger.debug(f"Error plotting signals: {e}")
 
     def switch_cell_lines(self):
+        """
+        Toggle the visibility of individual cell signal lines.
+        """
 
         # Show individual cell signals
 
@@ -900,6 +1030,9 @@ class GenericSignalPlotWidget(CelldetectiveWidget):
         self.plot_signals(0)
 
     def select_lines(self):
+        """
+        Update the selection of lines (wells or positions) based on user checkboxes.
+        """
 
         if len(self.parent_window.well_indices) > 1:
             for i in range(len(self.well_display_options)):
@@ -924,6 +1057,16 @@ class GenericSignalPlotWidget(CelldetectiveWidget):
 class SurvivalPlotWidget(GenericSignalPlotWidget):
 
     def __init__(self, *args, **kwargs):
+        """
+        Initialize the SurvivalPlotWidget.
+
+        Parameters
+        ----------
+        *args : tuple
+            Positional arguments passed to GenericSignalPlotWidget.
+        **kwargs : dict
+            Keyword arguments passed to GenericSignalPlotWidget.
+        """
 
         super(SurvivalPlotWidget, self).__init__(*args, **kwargs)
         self.cell_lines_btn.hide()
@@ -952,6 +1095,9 @@ class SurvivalPlotWidget(GenericSignalPlotWidget):
         self.plot_widget.canvas.draw_idle()
 
     def initialize_axis(self):
+        """
+        Initialize the plot axis for survival curves.
+        """
 
         previous_legend = self.legend_visible
         is_log = self.ax.get_yscale()
@@ -986,6 +1132,14 @@ class SurvivalPlotWidget(GenericSignalPlotWidget):
                 leg.set_visible(True)
 
     def plot_signals(self, id):
+        """
+        Plot the survival signals based on the selected mode and options.
+
+        Parameters
+        ----------
+        id : int
+            Dummy argument for compatibility with signal connection.
+        """
 
         for i in range(3):
             if self.plot_options[i].isChecked():
@@ -1123,6 +1277,24 @@ class SurvivalPlotWidget(GenericSignalPlotWidget):
         self.plot_widget.canvas.draw()
 
     def plot_line(self, line, color, label, ci_option=True, legend=None, alpha_ci=0.5):
+        """
+        Plot a survival curve.
+
+        Parameters
+        ----------
+        line : lifelines.KaplanMeierFitter
+            The fitted survival model.
+        color : str or tuple
+            The color of the line.
+        label : str or None
+            The label for the legend.
+        ci_option : bool, optional
+            Whether to show confidence intervals. Default is True.
+        legend : bool or None, optional
+            Whether to show the legend.
+        alpha_ci : float, optional
+            The transparency of the confidence interval. Default is 0.5.
+        """
 
         # Plot a signal
         if line == line:
@@ -1136,6 +1308,9 @@ class SurvivalPlotWidget(GenericSignalPlotWidget):
             )
 
     def set_table_options(self):
+        """
+        Open the configuration window for exporting survival data to a table.
+        """
 
         self.config_table_wg = CelldetectiveWidget()
         self.config_table_wg.setMinimumWidth(480)
@@ -1186,6 +1361,9 @@ class SurvivalPlotWidget(GenericSignalPlotWidget):
         self.config_table_wg.show()
 
     def activate_sliders(self):
+        """
+        Enable or disable sliders based on the selected export option.
+        """
         if self.all_values_rb.isChecked():
             self.single_timepoint_slider.setEnabled(False)
             self.ec_slider.setEnabled(False)
@@ -1197,6 +1375,9 @@ class SurvivalPlotWidget(GenericSignalPlotWidget):
             self.single_timepoint_slider.setEnabled(False)
 
     def assemble_survival_data(self):
+        """
+        Assemble the survival data based on the selected options and display it in a table.
+        """
 
         if self.plot_options[0].isChecked():
             data = self.df_well_info

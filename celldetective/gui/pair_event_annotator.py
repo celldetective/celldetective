@@ -65,7 +65,14 @@ class PairEventAnnotator(CelldetectiveMainWindow):
     """
 
     def __init__(self, parent=None):
+        """
+        Initialize the annotator.
 
+        Parameters
+        ----------
+        parent : QWidget, optional
+            Parent widget. Default is None.
+        """
         super().__init__()
         self.parent_window = parent
         self.setWindowTitle("Signal annotator")
@@ -213,7 +220,14 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         # self.cell_fcanvas.setMinimumHeight(int(0.3*self.screen_height))
 
     def resizeEvent(self, event):
+        """
+        Handle resize event.
 
+        Parameters
+        ----------
+        event : QResizeEvent
+            The resize event.
+        """
         super().resizeEvent(event)
         try:
             self.cell_fig.tight_layout()
@@ -1039,7 +1053,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         self.plot_signals()
 
     def hide_annotation_buttons(self):
-
+        """Hide annotation buttons."""
         for a in self.annotation_btns_to_hide:
             a.hide()
         for b in [self.event_btn, self.no_event_btn, self.else_btn, self.suppr_btn]:
@@ -1049,7 +1063,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         self.time_of_interest_le.setEnabled(False)
 
     def enable_time_of_interest(self):
-
+        """Enable time of interest input if event is selected."""
         if self.event_btn.isChecked():
             self.time_of_interest_label.setEnabled(True)
             self.time_of_interest_le.setEnabled(True)
@@ -1058,7 +1072,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
             self.time_of_interest_le.setEnabled(False)
 
     def cancel_pair_selection(self):
-
+        """Cancel pair selection."""
         # Unselect and recolor pair line
         self.pair_selection = []
         for t in range(len(self.lines_colors_status)):
@@ -2057,8 +2071,15 @@ class PairEventAnnotator(CelldetectiveMainWindow):
             self.fraction = 0.25
             self.anim_interval = 33
 
-    def prepare_stack(self):
+    def prepare_stack(self, progress_callback=None):
+        """
+        Load the stack images.
 
+        Parameters
+        ----------
+        progress_callback : callable, optional
+            Callback for progress updates.
+        """
         self.img_num_channels = _get_img_num_per_channel(
             self.channels, self.len_movie, self.nbr_channels
         )
@@ -2115,7 +2136,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         print(f"Load stack of shape: {self.stack.shape}.")
 
     def neighborhood_changed(self):
-
+        """Handle neighborhood change."""
         self.cancel_selection()
         self.set_reference_and_neighbor_populations()
         # Update reference classes and neighbor classes
@@ -2128,7 +2149,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         self.plot_signals()
 
     def extract_relevant_events(self):
-
+        """Extract relevant events for the current pair."""
         if self.reference_population != self.neighbor_population:
             pattern = "_2_"
         else:
@@ -2177,6 +2198,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
             self.relative_class_choice_cb.setCurrentIndex(idx)
 
     def update_speed(self):
+        """Update animation speed."""
         fps = self.speed_slider.value()
         # Convert FPS to interval in ms
         # FPS = 1000 / interval_ms => interval_ms = 1000 / FPS
@@ -2220,7 +2242,14 @@ class PairEventAnnotator(CelldetectiveMainWindow):
             print(f"DEBUG: Error recreating animation: {e}")
 
     def closeEvent(self, event):
+        """
+        Handle close event.
 
+        Parameters
+        ----------
+        event : QCloseEvent
+            The close event.
+        """
         try:
             self.stop()
         except Exception:
@@ -2358,7 +2387,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         self.fcanvas.canvas.draw()
 
     def create_cell_signal_canvas(self):
-
+        """Create the canvas for plotting signals."""
         self.cell_fig, self.cell_ax = plt.subplots()
         self.cell_fcanvas = FigureCanvas(self.cell_fig, interactive=True)
         self.cell_ax.clear()
@@ -2403,7 +2432,14 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         # self.plot_signals()
 
     def on_scatter_pick(self, event):
+        """
+        Handle scatter pick event.
 
+        Parameters
+        ----------
+        event : matplotlib.backend_bases.PickEvent
+            The pick event.
+        """
         self.identify_closest_marker(event)
 
         _, tracks, _, _, _ = self.get_reference_sets()
@@ -2516,7 +2552,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         print(f"{self.pair_selection=}")
 
     def highlight_the_pair(self):
-
+        """Highlight the selected pair."""
         # 1) recolor the neighbor marker
         print(
             f"Reference cell: {self.reference_track_of_interest}, neighbor cell: {self.neighbor_track_of_interest}"
@@ -2579,6 +2615,14 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         self.cancel_btn.setEnabled(True)
 
     def get_neighbor_sets(self):
+        """
+        Get neighbor sets.
+
+        Returns
+        -------
+        tuple
+            Neighbor positions, tracks, colors, and initial colors.
+        """
         return (
             self.positions[self.neighbor_population],
             self.tracks[self.neighbor_population],
@@ -2587,6 +2631,14 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         )
 
     def get_reference_sets(self):
+        """
+        Get reference sets.
+
+        Returns
+        -------
+        tuple
+            Reference positions, tracks, timeline, colors, and initial colors.
+        """
         return (
             self.positions[self.reference_population],
             self.tracks[self.reference_population],
@@ -2596,7 +2648,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         )
 
     def trace_neighbors(self):
-
+        """Trace neighbors of the selected cell."""
         self.lines_data = {}
         self.points_data = {}
         self.connections = {}
@@ -2664,7 +2716,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
                     self.neighbor_previous_color.append(colors[t][idx].copy())
 
     def recolor_selection(self):
-
+        """Recolor the selected cell and its neighbors."""
         positions, tracks, timelines, colors, init_colors = self.get_reference_sets()
 
         self.reference_loc_t = []
@@ -2708,7 +2760,14 @@ class PairEventAnnotator(CelldetectiveMainWindow):
             colors[t][idx] = "black"
 
     def get_neighbors_of_selected_cell(self, selected_cell):
+        """
+        Get neighbors of the selected cell.
 
+        Parameters
+        ----------
+        selected_cell : int
+            The ID of the selected cell.
+        """
         self.neighbors = self.df_relative.loc[
             (self.df_relative["REFERENCE_ID"] == selected_cell)
             & (~self.df_relative["status_" + self.current_neighborhood].isnull())
@@ -2724,7 +2783,14 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         self.neighbor_track_of_interest = None
 
     def identify_closest_marker(self, event):
+        """
+        Identify the closest marker to the pick event.
 
+        Parameters
+        ----------
+        event : matplotlib.backend_bases.PickEvent
+            The pick event.
+        """
         ind = event.ind
         label = event.artist.get_label()
 
@@ -2764,7 +2830,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
                 self.index = None
 
     def show_annotation_buttons(self):
-
+        """Show annotation buttons."""
         for a in self.annotation_btns_to_hide:
             a.show()
 
@@ -2802,17 +2868,19 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         self.correct_btn.clicked.connect(self.apply_modification)
 
     def shortcut_suppr(self):
+        """Trigger suppress action via shortcut."""
         self.correct_btn.click()
         self.suppr_btn.click()
         self.correct_btn.click()
 
     def shortcut_no_event(self):
+        """Trigger no event action via shortcut."""
         self.correct_btn.click()
         self.no_event_btn.click()
         self.correct_btn.click()
 
     def configure_ylims(self):
-
+        """Configure y-limits for plots."""
         try:
             min_values = []
             max_values = []
@@ -2921,6 +2989,11 @@ class PairEventAnnotator(CelldetectiveMainWindow):
     def draw_frame(self, framedata):
         """
         Update plot elements at each timestep of the loop.
+
+        Parameters
+        ----------
+        framedata : int
+            The current frame index.
         """
 
         self.framedata = framedata
@@ -3005,6 +3078,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
             )
 
     def stop(self):
+        """Stop animation."""
         # # On stop we disconnect all of our events.
         self.stop_btn.hide()
         self.start_btn.show()
@@ -3027,12 +3101,14 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         self.stop_btn.clicked.connect(self.stop)
 
     def toggle_animation(self):
+        """Toggle animation (play/pause)."""
         if self.stop_btn.isVisible():
             self.stop()
         else:
             self.start()
 
     def next_frame(self):
+        """Go to next frame."""
         self.framedata += 1
         if self.framedata >= self.len_movie:
             self.framedata = 0
@@ -3040,6 +3116,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         self.fcanvas.canvas.draw()
 
     def prev_frame(self):
+        """Go to previous frame."""
         self.framedata -= 1
         if self.framedata < 0:
             self.framedata = self.len_movie - 1
@@ -3047,7 +3124,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         self.fcanvas.canvas.draw()
 
     def give_reference_cell_information(self):
-
+        """Display information about the selected reference cell."""
         df_reference = self.dataframes[self.reference_population]
         if self.reference_track_of_interest is not None:
             reference_cell_selected = f"Ref #{self.reference_track_of_interest}\n"
@@ -3065,7 +3142,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
             )
 
     def give_neighbor_cell_information(self):
-
+        """Display information about the selected neighbor cell."""
         if self.neighbor_track_of_interest is not None:
             neighbor_cell_selected = f"Neigh #{self.neighbor_track_of_interest}\n"
             neighbor_cell_population = f"Pop: {self.neighbor_population}\n"
@@ -3082,7 +3159,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
             )
 
     def give_pair_information(self):
-
+        """Display information about the selected pair."""
         if (
             self.neighbor_track_of_interest is not None
             and self.reference_track_of_interest is not None
@@ -3105,11 +3182,11 @@ class PairEventAnnotator(CelldetectiveMainWindow):
     # neighbor_cell_population.hide()
 
     def hide_target_cell_info(self):
-
+        """Hide target cell information."""
         self.target_cell_info.setText("")
 
     def save_trajectories(self):
-
+        """Save relative trajectories."""
         if self.normalized_signals:
             self.normalize_features_btn.click()
         self.cancel_selection()
@@ -3122,7 +3199,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         print("relative table saved.")
 
     def set_last_frame(self):
-
+        """Set the last frame of the animation."""
         self.last_frame_btn.setEnabled(False)
         self.last_frame_btn.disconnect()
 
@@ -3149,7 +3226,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         self.start_btn.setShortcut(QKeySequence("l"))
 
     def set_first_frame(self):
-
+        """Set the first frame of the animation."""
         self.first_frame_btn.setEnabled(False)
         self.first_frame_btn.disconnect()
 
@@ -3172,7 +3249,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         self.start_btn.setShortcut(QKeySequence("f"))
 
     def export_signals(self):
-
+        """Export signals to a .npy file."""
         auto_dataset_name = (
             self.pos.split(os.sep)[-4] + "_" + self.pos.split(os.sep)[-2] + ".npy"
         )
@@ -3256,7 +3333,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
                 print(f"Error {e}...")
 
     def normalize_features(self):
-
+        """Normalize features."""
         if not self.normalized_signals:
             for pop in self.dataframes.keys():
                 df_pop = self.dataframes[pop]

@@ -59,6 +59,9 @@ logger = logging.getLogger(__name__)
 
 class BackgroundLoader(QThread):
     def run(self):
+        """
+        Run the background loader thread.
+        """
         logger.info("Loading background packages...")
         try:
             from celldetective.gui.viewers.base_viewer import StackVisualizer
@@ -303,6 +306,9 @@ class ControlPanel(CelldetectiveMainWindow):
         vbox.addWidget(hsep)
 
     def select_all_wells(self):
+        """
+        Select or deselect all wells in the list.
+        """
 
         if not self.select_all_wells_option:
             self.well_list.selectAll()
@@ -320,6 +326,9 @@ class ControlPanel(CelldetectiveMainWindow):
             self.display_positions()
 
     def select_all_positions(self):
+        """
+        Select or deselect all positions in the list.
+        """
 
         if not self.select_all_pos_option:
             self.position_list.selectAll()
@@ -349,6 +358,9 @@ class ControlPanel(CelldetectiveMainWindow):
             self.current_stack = movies[0]
 
     def view_current_stack(self):
+        """
+        Open the stack visualizer for the currently selected position.
+        """
 
         if self.bg_loader.isFinished() and hasattr(self.bg_loader, "StackVisualizer"):
             StackVisualizer = self.bg_loader.StackVisualizer
@@ -379,6 +391,9 @@ class ControlPanel(CelldetectiveMainWindow):
             self.viewer.show()
 
     def open_experiment_folder(self):
+        """
+        Open the experiment folder in the file explorer.
+        """
 
         try:
             subprocess.Popen(f"explorer {os.path.realpath(self.exp_dir)}")
@@ -431,6 +446,11 @@ class ControlPanel(CelldetectiveMainWindow):
     def closeEvent(self, event):
         """
         Close child windows if closed.
+
+        Parameters
+        ----------
+        event : QCloseEvent
+            The close event.
         """
 
         for process_block in self.ProcessPopulations:
@@ -507,6 +527,9 @@ class ControlPanel(CelldetectiveMainWindow):
         self.update_position_options()
 
     def open_config_editor(self):
+        """
+        Open the configuration editor.
+        """
         from celldetective.gui.json_readers import ConfigEditor
 
         self.cfg_editor = ConfigEditor(self)
@@ -549,12 +572,18 @@ class ControlPanel(CelldetectiveMainWindow):
         return True
 
     def create_config_dir(self):
+        """
+        Create the configuration directory if it doesn't exist.
+        """
 
         self.config_folder = self.exp_dir + "configs" + os.sep
         if not os.path.exists(self.config_folder):
             os.mkdir(self.config_folder)
 
     def update_position_options(self):
+        """
+        Update the available options based on the selected position(s).
+        """
 
         self.pos = self.position_list.currentText()
 

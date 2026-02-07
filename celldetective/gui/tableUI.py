@@ -52,6 +52,20 @@ logger = get_logger(__name__)
 class PivotTableUI(CelldetectiveWidget):
 
     def __init__(self, data, title="", mode=None, *args, **kwargs):
+        """
+        Initialize the PivotTableUI.
+
+        Parameters
+        ----------
+        data : pandas.DataFrame
+            The pivot table data.
+        title : str, optional
+            The window title.
+        mode : str, optional
+            The coloring mode ('cliff', 'pvalue', or None).
+        *args, **kwargs
+            Additional arguments for CelldetectiveWidget.
+        """
 
         CelldetectiveWidget.__init__(self, *args, **kwargs)
 
@@ -82,15 +96,33 @@ class PivotTableUI(CelldetectiveWidget):
         center_window(self)
 
     def showdata(self):
+        """
+        Display the data in the table view.
+        """
         self.model = PandasModel(self.data)
         self.table.setModel(self.model)
 
     def set_cell_color(self, row, column, color="red"):
+        """
+        Set the background color of a specific cell.
+
+        Parameters
+        ----------
+        row : int
+            Row index.
+        column : int
+            Column index.
+        color : str, optional
+            Color name or hex code. Default is 'red'.
+        """
         self.model.change_color(
             row, column, QBrush(QColor(color))
         )  # eval(f"Qt.{color}")
 
     def color_cells_cliff(self):
+        """
+        Color cells based on Cliff's Delta values.
+        """
 
         color_codes = {
             "negligible": "#eff3ff",  # Green
@@ -123,13 +155,16 @@ class PivotTableUI(CelldetectiveWidget):
         self.information_label.setText(html_caption)
 
     def color_cells_pvalue(self):
+        """
+        Color cells based on p-values.
+        """
 
         color_codes = {
             "ns": "#fee5d9",
-            "*": "#fcae91",
-            "**": "#fb6a4a",
-            "***": "#de2d26",
-            "****": "#a50f15",
+            "*(<0.05)": "#fcae91",
+            "**(<0.01)": "#fb6a4a",
+            "***(<0.001)": "#de2d26",
+            "****(<0.0001)": "#a50f15",
         }
 
         for i in range(self.data.shape[0]):
@@ -171,6 +206,26 @@ class TableUI(CelldetectiveMainWindow):
         *args,
         **kwargs,
     ):
+        """
+        Initialize the TableUI.
+
+        Parameters
+        ----------
+        data : pandas.DataFrame
+            The data to display.
+        title : str
+            The window title.
+        population : str, optional
+            The cell population name. Default is 'targets'.
+        plot_mode : str, optional
+            The plotting mode. Default is 'plot_track_signals'.
+        save_inplace_option : bool, optional
+            Whether to allow saving inplace. Default is False.
+        collapse_tracks_option : bool, optional
+            Whether to allow collapsing tracks. Default is True.
+        *args, **kwargs
+            Additional arguments for CelldetectiveMainWindow.
+        """
 
         CelldetectiveMainWindow.__init__(self, *args, **kwargs)
 
@@ -219,6 +274,14 @@ class TableUI(CelldetectiveMainWindow):
         self.table_view.resizeColumnsToContents()
 
     def resizeEvent(self, event):
+        """
+        Handle resize event to adjust layout.
+
+        Parameters
+        ----------
+        event : QResizeEvent
+            The resize event.
+        """
 
         super().resizeEvent(event)
 
@@ -254,6 +317,9 @@ class TableUI(CelldetectiveMainWindow):
         return result
 
     def _create_actions(self):
+        """
+        Create menu actions.
+        """
 
         self.save_as = QAction("&Save as...", self)
         self.save_as.triggered.connect(self.save_as_csv)
@@ -373,6 +439,9 @@ class TableUI(CelldetectiveMainWindow):
         # self.mathMenu.addAction(self.onehot_action)
 
     def collapse_pairs_in_neigh(self):
+        """
+        Open the widget to collapse pairs in a specific neighborhood.
+        """
 
         self.selectNeighWidget = CelldetectiveWidget()
         self.selectNeighWidget.setMinimumWidth(480)
@@ -440,6 +509,9 @@ class TableUI(CelldetectiveMainWindow):
         center_window(self.selectNeighWidget)
 
     def prepare_table_at_neighborhood(self):
+        """
+        Prepare the data table for the selected neighborhood and collapse options.
+        """
 
         ref_pop = self.reference_pop_cb.currentText()
         neighborhood = self.neigh_cb.currentText()
@@ -504,6 +576,9 @@ class TableUI(CelldetectiveMainWindow):
             self.set_projection_mode_tracks()
 
     def update_neighborhoods(self):
+        """
+        Update the available neighborhoods based on the selected reference population.
+        """
 
         neigh_cols = [
             c.replace("status_", "")
@@ -519,6 +594,9 @@ class TableUI(CelldetectiveMainWindow):
         self.neigh_cb.addItems(neigh_cols)
 
     def merge_tables(self):
+        """
+        Merge tables for pairs.
+        """
 
         df_expanded = expand_pair_table(self.data)
         self.subtable = TableUI(
@@ -527,6 +605,9 @@ class TableUI(CelldetectiveMainWindow):
         self.subtable.show()
 
     def delete_columns(self):
+        """
+        Delete selected columns from the table.
+        """
 
         x = self.table_view.selectedIndexes()
         col_idx = np.unique(np.array([l.column() for l in x]))
@@ -548,6 +629,9 @@ class TableUI(CelldetectiveMainWindow):
         self.table_view.setModel(self.model)
 
     def rename_column(self):
+        """
+        Rename the selected column.
+        """
 
         x = self.table_view.selectedIndexes()
         col_idx = np.unique(np.array([l.column() for l in x]))
@@ -589,6 +673,9 @@ class TableUI(CelldetectiveMainWindow):
         logger.info("Done saving tables.")
 
     def divide_signals(self):
+        """
+        Divide two selected signal columns.
+        """
         selected = self._get_selected_columns(max_cols=2)
         selected_col1 = selected[0] if len(selected) > 0 else None
         selected_col2 = selected[1] if len(selected) > 1 else None
@@ -599,6 +686,9 @@ class TableUI(CelldetectiveMainWindow):
         self.divWidget.show()
 
     def multiply_signals(self):
+        """
+        Multiply two selected signal columns.
+        """
         selected = self._get_selected_columns(max_cols=2)
         selected_col1 = selected[0] if len(selected) > 0 else None
         selected_col2 = selected[1] if len(selected) > 1 else None
@@ -609,6 +699,9 @@ class TableUI(CelldetectiveMainWindow):
         self.mulWidget.show()
 
     def add_signals(self):
+        """
+        Add two selected signal columns.
+        """
         selected = self._get_selected_columns(max_cols=2)
         selected_col1 = selected[0] if len(selected) > 0 else None
         selected_col2 = selected[1] if len(selected) > 1 else None
@@ -619,6 +712,9 @@ class TableUI(CelldetectiveMainWindow):
         self.addiWidget.show()
 
     def subtract_signals(self):
+        """
+        Subtract two selected signal columns.
+        """
         selected = self._get_selected_columns(max_cols=2)
         selected_col1 = selected[0] if len(selected) > 0 else None
         selected_col2 = selected[1] if len(selected) > 1 else None
@@ -667,6 +763,9 @@ class TableUI(CelldetectiveMainWindow):
         self.absWidget.show()
 
     def transform_one_hot_cols_to_categorical(self):
+        """
+        Transform one-hot encoded columns to a single categorical column.
+        """
 
         x = self.table_view.selectedIndexes()
         col_idx = np.unique(np.array([l.column() for l in x]))
@@ -712,6 +811,9 @@ class TableUI(CelldetectiveMainWindow):
         # self.subtable.show()
 
     def set_projection_mode_neigh(self):
+        """
+        Set projection mode for neighbors.
+        """
 
         self.groupby_cols = [
             "position",
@@ -724,6 +826,9 @@ class TableUI(CelldetectiveMainWindow):
         self.set_projection_mode_tracks()
 
     def set_projection_mode_ref(self):
+        """
+        Set projection mode for reference cells.
+        """
 
         self.groupby_cols = [
             "position",
@@ -736,6 +841,9 @@ class TableUI(CelldetectiveMainWindow):
         self.set_projection_mode_tracks()
 
     def set_projection_mode_tracks(self):
+        """
+        Set projection mode for tracks.
+        """
 
         self.current_data = self.data
 
@@ -849,6 +957,9 @@ class TableUI(CelldetectiveMainWindow):
             self.status_operation.setEnabled(True)
 
     def set_1D_plot_params(self):
+        """
+        Open the 1D plot parameter configuration window.
+        """
 
         self.plot1Dparams = CelldetectiveWidget()
         self.plot1Dparams.setWindowTitle("Set 1D plot parameters")
@@ -956,6 +1067,9 @@ class TableUI(CelldetectiveMainWindow):
         center_window(self.plot1Dparams)
 
     def plot1d(self):
+        """
+        Generate the 1D plot based on selected parameters.
+        """
 
         self.x_option = False
         if self.x_cb.currentText() != "--":
@@ -1265,6 +1379,16 @@ class TableUI(CelldetectiveMainWindow):
             self.compute_pvalue()
 
     def extract_groupby_cols(self):
+        """
+        Extract the columns to group by for effect size or p-value computation.
+
+        Returns
+        -------
+        list
+            List of column names to group by.
+        str
+            The y-axis variable.
+        """
 
         x = self.x
         y = self.y
@@ -1287,6 +1411,9 @@ class TableUI(CelldetectiveMainWindow):
         return groupby_cols, y
 
     def compute_effect_size(self):
+        """
+        Compute Cliff's Delta effect size for the current selection.
+        """
 
         if self.count_check.isChecked() or self.scat_check.isChecked():
             print(
@@ -1304,6 +1431,9 @@ class TableUI(CelldetectiveMainWindow):
         self.effect_size_table.show()
 
     def compute_pvalue(self):
+        """
+        Compute the p-value using the KS test for the current selection.
+        """
 
         if self.count_check.isChecked() or self.scat_check.isChecked():
             print(
@@ -1321,6 +1451,9 @@ class TableUI(CelldetectiveMainWindow):
         self.pval_table.show()
 
     def set_proj_mode(self):
+        """
+        Apply the selected projection mode to the data and show the result.
+        """
 
         self.static_columns = [
             "well_index",
@@ -1440,6 +1573,9 @@ class TableUI(CelldetectiveMainWindow):
     # 	self.subtable.show()
 
     def _createMenuBar(self):
+        """
+        Create the menu bar for the main window.
+        """
         menuBar = self.menuBar()
         self.fileMenu = QMenu("&File", self)
         menuBar.addMenu(self.fileMenu)
@@ -1449,6 +1585,9 @@ class TableUI(CelldetectiveMainWindow):
         menuBar.addMenu(self.mathMenu)
 
     def save_as_csv(self):
+        """
+        Save the current table data as a CSV file.
+        """
         options = QFileDialog.Options()
         options |= QFileDialog.ReadOnly
         file_name, _ = QFileDialog.getSaveFileName(
@@ -1469,6 +1608,9 @@ class TableUI(CelldetectiveMainWindow):
             self.data.to_csv(file_name, index=False)
 
     def plot_instantaneous(self):
+        """
+        Refresh the plot for instantaneous values.
+        """
 
         if self.plot_mode == "plot_track_signals":
             self.plot_mode = "static"
@@ -1478,6 +1620,9 @@ class TableUI(CelldetectiveMainWindow):
             self.plot()
 
     def plot(self):
+        """
+        Plot the data based on the current mode.
+        """
         import matplotlib.pyplot as plt
 
         if self.plot_mode == "static":

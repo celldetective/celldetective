@@ -47,6 +47,14 @@ class ConfigSurvival(CelldetectiveWidget):
     """
 
     def __init__(self, parent_window=None):
+        """
+        Initialize the ConfigSurvival widget.
+
+        Parameters
+        ----------
+        parent_window : QMainWindow, optional
+            The parent window.
+        """
 
         super().__init__()
         self.parent_window = parent_window
@@ -216,6 +224,9 @@ class ConfigSurvival(CelldetectiveWidget):
         # self.show()
 
     def set_classes_and_times(self):
+        """
+        Update available classes and time points based on the selected population.
+        """
 
         # Look for all classes and times
         self.neighborhood_keys = None
@@ -303,6 +314,9 @@ class ConfigSurvival(CelldetectiveWidget):
         self.cbs[2].addItems(np.unique(self.cb_options[2] + time_columns))
 
     def process_survival(self):
+        """
+        Process the survival analysis based on the selected parameters.
+        """
 
         # Validate that reference time and time of interest are different
         time_of_reference = self.cbs[1].currentText()
@@ -420,6 +434,9 @@ class ConfigSurvival(CelldetectiveWidget):
             )
 
     def compute_survival_functions(self):
+        """
+        Compute survival functions for the selected data and update the display.
+        """
 
         cut_observation_time = None
         try:
