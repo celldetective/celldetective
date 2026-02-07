@@ -49,8 +49,6 @@ logger = logging.getLogger(__name__)
 
 
 class BackgroundLoader(QThread):
-        logger.info("Background packages loaded...")
-        
     def run(self):
         """Run the background loader."""
         logger.info("Loading background packages...")
