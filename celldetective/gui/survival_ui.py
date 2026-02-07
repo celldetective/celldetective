@@ -92,7 +92,7 @@ class ConfigSurvival(CelldetectiveWidget):
         self.position_indices = (
             self.parent_window.parent_window.position_list.getSelectedIndices()
         )
-        if self.position_indices == []:
+        if not self.position_indices:
             self.position_indices = None
 
     def populate_widget(self):

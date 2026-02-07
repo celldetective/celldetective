@@ -562,7 +562,7 @@ class SettingsMeasurements(CelldetectiveSettingsPanel):
         spot_detection = None
         if self.spot_check.isChecked():
             image_preprocessing = self.spot_preprocessing.list.items
-            if image_preprocessing == []:
+            if not image_preprocessing:
                 image_preprocessing = None
             spot_detection = {
                 "channel": self.spot_channel.currentText(),

@@ -507,7 +507,7 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
         self.lines = [
             self.cell_ax.plot(
                 [np.linspace(0, self.len_movie - 1, self.len_movie)],
-                [np.zeros((self.len_movie))],
+                [np.zeros(self.len_movie)],
             )[0]
             for i in range(len(self.signal_choice_cb))
         ]

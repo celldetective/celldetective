@@ -46,6 +46,12 @@ def normalize(
             The specific minimum and maximum values to use for normalization. If None, percentiles are used. Default is None.
     ignore_gray_value : float or None, optional
             The gray value to ignore during normalization. If specified, the pixels with this value will not be normalized. Default is 0.0.
+    clip : bool, optional
+            If True, clips the output values to the range [0, 1] or the specified `dtype` range if `dtype` is not float. Default is False.
+    amplification : float, optional
+            A factor by which to amplify the intensity values after normalization. If None, no amplification is applied.
+    dtype : data-type, optional
+            The desired data-type for the output normalized frame. The default is float.
 
     Returns
     -------

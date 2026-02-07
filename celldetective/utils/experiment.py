@@ -1259,7 +1259,7 @@ def fix_missing_labels(position, population="target", prefix="Aligned"):
         )
         path = position + os.sep + f"labels_{population}"
 
-    if label_path != []:
+    if label_path:
         int_valid = [int(lbl.split(os.sep)[-1].split(".")[0]) for lbl in label_path]
         to_create = [x for x in all_frames if x not in int_valid]
     else:

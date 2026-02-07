@@ -79,6 +79,10 @@ def estimate_background_per_condition(
             Whether to show progress for each position (default is False).
     show_progress_per_well : bool, optional
             Whether to show progress for each well (default is True).
+    offset : float or None, optional
+            A constant value to subtract from the background. Default is None.
+    fix_nan : bool, optional
+            Whether to interpolate NaN values in the background. Default is False.
     progress_callback : callable, optional
             A callback function to be called at each step of the process (default is None).
 

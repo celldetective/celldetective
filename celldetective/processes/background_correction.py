@@ -88,7 +88,7 @@ class BackgroundCorrectionProcess(Process):
                 if iteration == 0:
                     self.t0_well = current_time
 
-                well_progress = ((iteration) / total) * 100
+                well_progress = (iteration / total) * 100
                 if well_progress > 100:
                     well_progress = 100
                 data["well_progress"] = well_progress

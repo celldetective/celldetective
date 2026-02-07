@@ -79,6 +79,16 @@ def track(
     clean_trajectories_kwargs : dict or None, optional
             Keyword arguments for the clean_trajectories function to post-process the tracking trajectories. If None, no post-processing is performed.
             Default is None.
+    btrack_option : bool, optional
+            Whether to use bTrack for tracking. If False, `trackpy` is used. Default is True.
+    search_range : float or tuple, optional
+            Search range for `trackpy`. Required if `btrack_option` is False. Default is None.
+    memory : int, optional
+            Memory for `trackpy`. Required if `btrack_option` is False. Default is None.
+    volume : tuple, optional
+            The volume dimensions (height, width) for bTrack. Default is (2048, 2048).
+    objects : DataFrame or None, optional
+            Pre-computed objects to track. If None, objects are extracted from labels. Default is None.
     column_labels : dict, optional
             The column labels to use in the output DataFrame. Default is {'track': "TRACK_ID", 'time': 'FRAME', 'x': 'POSITION_X', 'y': 'POSITION_Y'}.
 
@@ -685,7 +695,7 @@ def filter_by_endpoints(
 
     """
 
-    if (remove_not_in_first) * (not remove_not_in_last):
+    if remove_not_in_first * (not remove_not_in_last):
         # filter tracks not in first frame
         leftover_tracks = (
             trajectories.groupby(column_labels["track"])
@@ -701,7 +711,7 @@ def filter_by_endpoints(
             trajectories[column_labels["track"]].isin(leftover_tracks)
         ]
 
-    elif (remove_not_in_last) * (not remove_not_in_first):
+    elif remove_not_in_last * (not remove_not_in_first):
         # filter tracks not in last frame
         leftover_tracks = (
             trajectories.groupby(column_labels["track"])

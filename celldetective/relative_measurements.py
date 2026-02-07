@@ -105,7 +105,7 @@ def measure_pairs(pos, neighborhood_protocol):
 
             for nc, group_neigh in neighbor_properties.groupby(neigh_id_col):
 
-                neighbor_vector = np.zeros((2))
+                neighbor_vector = np.zeros(2)
                 neighbor_vector[:] = np.nan
                 mass_displacement_vector = np.zeros((len(centre_of_mass_columns), 2))
 
@@ -752,6 +752,8 @@ def extract_neighborhoods_from_pickles(pos, populations=["targets", "effectors"]
     ----------
     pos : str
             The base directory path where the pickle files are located.
+    populations : list of str, optional
+            List of populations to extract neighborhoods from. Default is ["targets", "effectors"].
 
     Returns
     -------

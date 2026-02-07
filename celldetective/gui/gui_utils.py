@@ -794,6 +794,21 @@ class ThresholdLineEdit(QLineEdit):
 
 
 def color_from_status(status, recently_modified=False):
+    """
+    Returns a color string based on the status and modification state.
+
+    Parameters
+    ----------
+    status : int
+        The status code (0, 1, 2, or others).
+    recently_modified : bool, optional
+        Whether the item was recently modified. Default is False.
+
+    Returns
+    -------
+    str
+        Color string (e.g., 'tab:blue', 'yellow', 'k').
+    """
     if not recently_modified:
         if status == 0:
             return "tab:blue"

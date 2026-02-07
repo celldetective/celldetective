@@ -918,7 +918,7 @@ class SettingsTracking(CelldetectiveSettingsPanel):
         Switch the feature option.
         """
 
-        if self.features_ticked == True:
+        if self.features_ticked:
             self.features_ticked = False
         else:
             self.features_ticked = True
@@ -928,7 +928,7 @@ class SettingsTracking(CelldetectiveSettingsPanel):
         Switch the feature option.
         """
 
-        if self.post_proc_ticked == True:
+        if self.post_proc_ticked:
             self.post_proc_ticked = False
         else:
             self.post_proc_ticked = True

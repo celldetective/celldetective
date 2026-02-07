@@ -199,7 +199,7 @@ class SpotDetectionVisualizer(StackVisualizer):
         self.control_valid_parameters()  # set current diam and threshold
 
         image_preprocessing = self.preprocessing.list.items
-        if image_preprocessing == []:
+        if not image_preprocessing:
             image_preprocessing = None
 
         blobs_filtered = extract_blobs_in_image(
@@ -392,7 +392,7 @@ class SpotDetectionVisualizer(StackVisualizer):
     def toggle_preprocessing_preview(self):
 
         image_preprocessing = self.preprocessing.list.items
-        if image_preprocessing == []:
+        if not image_preprocessing:
             image_preprocessing = None
 
         if self.preview_cb.isChecked() and image_preprocessing is not None:

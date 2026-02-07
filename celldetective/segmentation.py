@@ -369,6 +369,12 @@ def segment_frame_from_thresholds(
             A list of query strings used to select features of interest from the segmented objects for further filtering (default is None).
     channel_names : list of str or None, optional
             A list of channel names corresponding to the dimensions in `frame`, used in conjunction with `feature_queries` for feature selection (default is None).
+    do_watershed : bool, optional
+            Whether to perform watershed segmentation. Default is True.
+    edge_exclusion : bool, optional
+            Whether to exclude unreliable edges based on filtering. Default is True.
+    fill_holes : bool, optional
+            Whether to fill holes in the binary mask. Default is True.
 
     Returns
     -------
@@ -664,6 +670,8 @@ def segment_at_position(
             If True, the function returns the segmentation labels as an output. Defaults to False.
     view_on_napari : bool, optional
             If True, the segmented labels are displayed in a Napari viewer. Defaults to False.
+    threads : int, optional
+            Number of threads to use for segmentation. Defaults to 1.
 
     Returns
     -------
@@ -772,6 +780,8 @@ def train_segmentation_model(config, use_gpu=True):
     config : str
             The file path to the JSON configuration file that specifies training parameters and dataset
             information for the segmentation model. The path must be valid.
+    use_gpu : bool, optional
+            Whether to use GPU acceleration for training. Defaults to True.
 
     Raises
     ------

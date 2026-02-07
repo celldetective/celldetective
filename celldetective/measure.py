@@ -83,6 +83,8 @@ def measure(
     column_labels : dict, optional
                     Dictionary containing the column labels for the DataFrame. Default is {'track': "TRACK_ID",
                     'time': 'FRAME', 'x': 'POSITION_X', 'y': 'POSITION_Y'}.
+    clear_previous : bool, optional
+                    If True, removes previously computed features from the trajectories DataFrame before measuring. Default is False.
 
     Returns
     -------
@@ -685,8 +687,8 @@ def compute_haralick_features(
             The segmentation labels corresponding to the image regions.
     target_channel : int, optional
             The target channel index of the image. The default is 0.
-    modality : str, optional
-            The modality or channel type of the image. The default is 'brightfield_channel'.
+    target_channel : int, optional
+            The target channel index of the image. The default is 0.
     scale_factor : float, optional
             The scale factor for resampling the image and labels. The default is 1.
     percentiles : tuple of float, optional
@@ -703,6 +705,14 @@ def compute_haralick_features(
             Flag indicating whether to return the mean and peak-to-peak values of each Haralick feature. The default is False.
     distance : int, optional
             The distance parameter for Haralick feature computation. The default is 1.
+    channels : list or str, optional
+            List of channel names or a single channel name to define the modality.
+    disable_progress_bar : bool, optional
+            If True, disables the progress bar. Default is False.
+    return_norm_image_only : bool, optional
+            If True, returns the normalized image used for computation instead of features. Default is False.
+    return_digit_image_only : bool, optional
+            If True, returns the digitized image used for computation instead of features. Default is False.
 
     Returns
     -------
@@ -1061,6 +1071,8 @@ def measure_at_position(pos, mode, return_measurements=False, threads=1):
     return_measurements : bool, optional
             If True, the function loads the resulting measurements from a CSV file into a pandas DataFrame and returns it. If
             False, the function returns None (default is False).
+    threads : int, optional
+            Number of threads to use for parallel processing (default is 1).
 
     Returns
     -------
@@ -1401,6 +1413,12 @@ def interpret_track_classification(
             This option is ignored if `irreversible_event` is set to True.
     r2_threshold : float, optional
             R-squared threshold used when fitting the model during the classification of irreversible events (default is 0.5).
+    transient_event : bool, optional
+            If True, classifies transient events. Default is False.
+    percentile_recovery : float, optional
+            Percentile threshold for recovery in irreversible classification. Default is 50.
+    pre_event : str, optional
+            Name of a pre-event class to consider. Default is None.
 
     Returns
     -------
@@ -1462,6 +1480,23 @@ def interpret_track_classification(
 
 
 def classify_transient_events(data, class_attr, pre_event=None):
+    """
+    Classify transient events in the dataset.
+
+    Parameters
+    ----------
+    data : pandas.DataFrame
+            DataFrame containing tracked cell data.
+    class_attr : str
+            Column name for the classification attribute.
+    pre_event : str, optional
+            Name of a pre-event class to consider. Default is None.
+
+    Returns
+    -------
+    pandas.DataFrame
+            DataFrame with updated classifications for transient events.
+    """
 
     df = data.copy()
     cols = list(df.columns)
@@ -1570,12 +1605,16 @@ def classify_irreversible_events(
 
     Parameters
     ----------
-    df : pandas.DataFrame
-            DataFrame containing tracked cell data, including classification and status columns.
+    data : pandas.DataFrame
+            DataFrame containing tracked cell data, included classification and status columns.
     class_attr : str
             Column name for the classification attribute (e.g., 'class') used to update the classification of cell states.
     r2_threshold : float, optional
             R-squared threshold for fitting the model (default is 0.5). Used when estimating the time of transition.
+    percentile_recovery : float, optional
+            Percentile threshold for recovery. Default is 50.
+    pre_event : str, optional
+            Name of a pre-event class to consider. Default is None.
 
     Returns
     -------

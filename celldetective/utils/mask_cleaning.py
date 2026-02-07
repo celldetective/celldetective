@@ -208,6 +208,8 @@ def relabel_segmentation(
             - `'label'`: Object ID column name (`"class_id"`)
     threads : int, optional
             Number of threads to use for multithreaded processing. Default is `1`.
+    progress_callback : callable, optional
+            A function to report progress. Should accept a single float argument (0-100) and return True to continue or False to cancel. Default is None.
 
     Returns
     -------

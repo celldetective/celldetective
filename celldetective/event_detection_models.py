@@ -375,8 +375,10 @@ class SignalDetectionModel(object):
 
         Parameters
         ----------
-        ds_folders : list of str
-                List of directories containing the dataset files for training.
+        datasets : list of str or list of ndarray
+                List of directories containing the dataset files for training, or list of datasets themselves.
+        show_plots : bool, optional
+                Whether to show plots during training (default is True).
         callbacks : list, optional
                 List of Keras callbacks to apply during training.
         normalize : bool, optional
@@ -1729,8 +1731,12 @@ def residual_block1D(
             Input tensor.
     number_of_filters : int
             Number of filters in the convolutional layers.
+    kernel_size : int, optional
+            Size of the kernel for convolutional layers. Default is 8.
     match_filter_size : bool, optional
             Whether to match the filter size of the skip connection to the output. Default is True.
+    connection : str, optional
+            Type of skip connection ("identity" or "projection"). Default is "identity".
 
     Returns
     -------
@@ -1808,8 +1814,8 @@ def MultiscaleResNetModel(
     ----------
     n_channels : int
             Number of input channels.
-    n_blocks : int
-            Number of residual blocks in the model.
+    use_pooling : bool, optional
+            Whether to use max pooling. Default is True.
     n_classes : int, optional
             Number of output classes. Default is 3.
     dropout_rate : float, optional

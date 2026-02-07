@@ -2951,7 +2951,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
                         ]
                         self.points.set_color(colors)
 
-        if self.lines_list != []:
+        if self.lines_list:
             return (
                 [self.im]
                 + [self.status_scatter[p] for p in self.status_scatter.keys()]

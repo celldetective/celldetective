@@ -52,8 +52,8 @@ class ProgressCallback(Callback):
 
         self.current_step += 1
         # Send signal for progress bar
-        sum_done = (self.current_step) / self.total_epochs * 100
-        mean_exec_per_step = (time.time() - self.t0) / (self.current_step)
+        sum_done = self.current_step / self.total_epochs * 100
+        mean_exec_per_step = (time.time() - self.t0) / self.current_step
         pred_time = (self.total_epochs - self.current_step) * mean_exec_per_step
 
         # Format time string

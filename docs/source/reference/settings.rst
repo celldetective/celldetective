@@ -91,18 +91,23 @@ Accessible when selecting **Neighborhood** in Measurements.
 
 **Population Configuration**
 
-*   **Reference / Neighbor**: Select populations.
+*   **Reference / Neighbor**: Select the two populations to analyze (can be the same for self-neighborhood).
 *   **Filters**:
-    *   **Status**: Restrict to specific cell states (e.g., "Alive").
-    *   **Time Ref**: Condition on an event time column.
-*   **Cumulated Presence**: Compute total duration of neighbor presence.
+    *   **Status**: Restrict analysis to cells with a specific status (e.g., "Alive", "Positive").
+    *   **Not**: Check the **"Not"** button (exclamation mark icon) to invert the status selection (e.g., Select "Alive" and check "Not" to target "Dead" cells).
+    *   **Event Time**: Correlate measurements with a specific event (e.g., ``t_death``). This creates event-aligned neighborhood metrics.
+*   **Cumulated Presence**: If checked, computes the total duration (in frames or time) that a neighbor has been present within the defined threshold.
 
 **Measurement Types**
 
-*   **Distance Threshold**: Radial proximity.
-    *   **Radius [px]**: Distance threshold.
-*   **Mask Contact**: Boundary proximity.
-    *   **Edge Proximity**: Pixel distance between boundaries.
+*   **Distance Threshold**: Detects neighbors within a fixed radial distance from the cell centroid.
+    *   **Distance [px]**: The radius of the neighborhood circle. Can add multiple distances.
+*   **Mask Contact**: Detects neighbors whose boundaries are within a specific proximity.
+    *   **Distance [px]**: The maximum distance between cell boundaries to be considered "in contact" (often 0 for touching or small positive value for near-contact).
+
+**General Options**
+
+*   **Clear Previous**: If checked, removes all previously computed neighborhood columns from the data tables before saving new ones. Essential when re-running analysis with different parameters to avoid clutter.
 
 .. _ref_survival_settings:
 

@@ -376,6 +376,15 @@ class SettingsNeighborhood(CelldetectiveWidget):
         self.event_time_cb.clear()
         self.event_time_cb.addItems(list(np.unique(["--", "t0"] + time_cols)))
 
+        self.reference_population_status_cb.clear()
+        self.reference_population_status_cb.addItems(
+            list(
+                np.unique(
+                    ["--", "class", "status"] + class_cols + status_cols + group_cols
+                )
+            )
+        )
+
     def switch_not_reference(self):
 
         self.not_status_reference = not self.not_status_reference

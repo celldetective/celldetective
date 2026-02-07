@@ -301,6 +301,8 @@ def threshold_image(
     fill_holes : bool, optional
             Whether to fill holes in the binary mask. If True, the binary mask will be processed to fill any holes.
             If False, the binary mask will not be modified. Default is True.
+    edge_exclusion : int, optional
+            If provided, border pixels of this width will be masked (set to 0). Default is None.
 
     Returns
     -------

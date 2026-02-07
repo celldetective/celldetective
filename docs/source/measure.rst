@@ -132,16 +132,29 @@ Neighborhood measurements
 
 Neighborhood measurements quantify the spatial relationships between cells. This is essential for studying cell-cell interactions (e.g., immune cell targeting, tissue organization).
 
-To configure this, select **Neighborhood** in the measurement settings. The configuration window allows you to define a "Reference" population and a "Neighbor" population.
-For a complete list of configuration options (Filters, Measurement Types, etc.), see the :ref:`Neighborhood Measurement Reference <ref_neighborhood_settings>`.
+**How to measure cell-cell interactions**
 
-**Workflow**
+1.  Open the **Measure** tab and select **Neighborhood**.
+2.  **Configure Populations**:
+    *   Set **Reference** to the population you want to analyze (e.g., ``Tumor``).
+    *   Set **Neighbor** to the surrounding population (e.g., ``T-cells``).
+    *   (Optional) Use **Status** filters to exclude dead cells (e.g., select ``Alive``).
+3.  **Choose Interaction Type**:
+    *   Use **Distance Threshold** for general proximity (e.g., "How many T-cells are within 50px?").
+    *   Use **Mask Contact** for physical contact (e.g., "Is a T-cell touching the Tumor cell?").
+4.  **Set Parameters**: enter the distance in pixels. You can add multiple distances to analyze different ranges simultaneously.
+5.  Click **Set** to save the configuration. 
+6.  Proceed to run the measurements on your dataset.
 
-1.  Select the **Reference** population (e.g., Target cells) and **Neighbor** population (e.g., Effector cells).
-2.  Choose the measurement type:
-    *   **Distance Threshold**: For simple radial proximity.
-    *   **Mask Contact**: For detecting precise cell boundary contacts.
-3.  Click **Set** to save the configuration.
+.. seealso::
+    For a complete list of parameters, including **Event Time** correlation and **Status Inversion**, see :ref:`ref_neighborhood_settings`.
+
+**Output**
+
+The software generates new columns in the reference population's table, such as:
+*   ``n_neighbors_...``: Count of neighbors within the threshold.
+*   ``neighborhood_ID_...``: IDs of the interacting neighbors.
+*   ``cumulated_presence_...``: (If enabled) Duration of contact.
 
 **3. Output**
 

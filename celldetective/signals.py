@@ -63,6 +63,8 @@ def analyze_signals(
             If True, generates and saves a plot of the signal analysis outcome (default is False).
     output_dir : str, optional
             The directory where the outcome plot will be saved. Required if `plot_outcome` is True (default is None).
+    model_path : str, optional
+            Path to the model directory. If None, it uses the default model location. Default is None.
 
     Returns
     -------
