@@ -698,23 +698,23 @@ def compute_attention_weight(
 
 
 def distance_cut_neighborhood(
-    setA,
-    setB,
-    distance,
-    mode="two-pop",
-    status=None,
-    not_status_option=None,
-    compute_cum_sum=True,
-    attention_weight=True,
-    symmetrize=True,
-    include_dead_weight=True,
-    column_labels={
+    setA: pd.DataFrame,
+    setB: pd.DataFrame,
+    distance: Union[float, List[float]],
+    mode: str = "two-pop",
+    status: Optional[List[str]] = None,
+    not_status_option: Optional[List[bool]] = None,
+    compute_cum_sum: bool = True,
+    attention_weight: bool = True,
+    symmetrize: bool = True,
+    include_dead_weight: bool = True,
+    column_labels: Dict[str, str] = {
         "track": "TRACK_ID",
         "time": "FRAME",
         "x": "POSITION_X",
         "y": "POSITION_Y",
     },
-):
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
 
     Match neighbors in set A and B within a circle of radius d.
@@ -837,15 +837,15 @@ def distance_cut_neighborhood(
 
 
 def compute_neighborhood_at_position(
-    pos,
-    distance,
-    population=["targets", "effectors"],
-    theta_dist=None,
-    img_shape=(2048, 2048),
-    return_tables=False,
-    clear_neigh=False,
-    event_time_col=None,
-    neighborhood_kwargs={
+    pos: str,
+    distance: Union[float, List[float]],
+    population: Union[str, List[str]] = ["targets", "effectors"],
+    theta_dist: Optional[Union[float, List[float]]] = None,
+    img_shape: Tuple[int, int] = (2048, 2048),
+    return_tables: bool = False,
+    clear_neigh: bool = False,
+    event_time_col: Optional[str] = None,
+    neighborhood_kwargs: Dict[str, Any] = {
         "mode": "two-pop",
         "status": None,
         "not_status_option": None,
@@ -854,7 +854,7 @@ def compute_neighborhood_at_position(
         "attention_weight": True,
         "symmetrize": True,
     },
-):
+) -> Optional[Union[pd.DataFrame, Tuple[pd.DataFrame, pd.DataFrame]]]:
     """
     Computes neighborhood metrics for specified cell populations within a given position, based on distance criteria and additional parameters.
 
@@ -1059,11 +1059,11 @@ def compute_neighborhood_at_position(
 
 
 def compute_neighborhood_metrics(
-    neigh_table,
-    neigh_col,
-    metrics=["inclusive", "exclusive", "intermediate"],
-    decompose_by_status=False,
-):
+    neigh_table: pd.DataFrame,
+    neigh_col: str,
+    metrics: List[str] = ["inclusive", "exclusive", "intermediate"],
+    decompose_by_status: bool = False,
+) -> pd.DataFrame:
     """
     Computes and appends neighborhood metrics to a dataframe based on specified neighborhood characteristics.
 
@@ -1235,11 +1235,11 @@ def compute_neighborhood_metrics(
 
 
 def mean_neighborhood_before_event(
-    neigh_table,
-    neigh_col,
-    event_time_col,
-    metrics=["inclusive", "exclusive", "intermediate"],
-):
+    neigh_table: pd.DataFrame,
+    neigh_col: str,
+    event_time_col: Optional[str],
+    metrics: List[str] = ["inclusive", "exclusive", "intermediate"],
+) -> pd.DataFrame:
     """
     Computes the mean neighborhood metrics for each cell track before a specified event time.
 
@@ -1353,11 +1353,11 @@ def mean_neighborhood_before_event(
 
 
 def mean_neighborhood_after_event(
-    neigh_table,
-    neigh_col,
-    event_time_col,
-    metrics=["inclusive", "exclusive", "intermediate"],
-):
+    neigh_table: pd.DataFrame,
+    neigh_col: str,
+    event_time_col: Optional[str],
+    metrics: List[str] = ["inclusive", "exclusive", "intermediate"],
+) -> pd.DataFrame:
     """
     Computes the mean neighborhood metrics for each cell track after a specified event time.
 
@@ -1470,7 +1470,7 @@ def mean_neighborhood_after_event(
 # New functions for direct cell-cell contact neighborhood
 
 
-def sign(num):
+def sign(num: Union[float, int]) -> int:
     """
     Returns the sign of a number.
 
@@ -1487,7 +1487,12 @@ def sign(num):
     return -1 if num < 0 else 1
 
 
-def contact_neighborhood(labelsA, labelsB=None, border=3, connectivity=2):
+def contact_neighborhood(
+    labelsA: np.ndarray,
+    labelsB: Optional[np.ndarray] = None,
+    border: int = 3,
+    connectivity: int = 2,
+) -> np.ndarray:
     """
     Identifies pairs of cells that are in contact or close proximity.
 
@@ -1556,7 +1561,7 @@ def contact_neighborhood(labelsA, labelsB=None, border=3, connectivity=2):
     return neighs
 
 
-def merge_labels(labelsA, labelsB):
+def merge_labels(labelsA: np.ndarray, labelsB: np.ndarray) -> np.ndarray:
     """
     Merges two label images into one.
 
@@ -1582,7 +1587,7 @@ def merge_labels(labelsA, labelsB):
     return labelsAB
 
 
-def find_contact_neighbors(labels, connectivity=2):
+def find_contact_neighbors(labels: np.ndarray, connectivity: int = 2) -> np.ndarray:
     """
     Finds touching neighbors in a label image using a pixel graph.
 
@@ -1615,38 +1620,40 @@ def find_contact_neighbors(labels, connectivity=2):
 
 
 def mask_contact_neighborhood(
-    setA,
-    setB,
-    labelsA,
-    labelsB,
-    distance,
-    mode="two-pop",
-    status=None,
-    not_status_option=None,
-    compute_cum_sum=True,
-    attention_weight=True,
-    symmetrize=True,
-    include_dead_weight=True,
-    column_labels={
+    setA: pd.DataFrame,
+    setB: pd.DataFrame,
+    labelsA: List[np.ndarray],
+    labelsB: Optional[List[np.ndarray]],
+    distance: Union[float, List[float]],
+    mode: str = "two-pop",
+    status: Optional[List[str]] = None,
+    not_status_option: Optional[List[bool]] = None,
+    compute_cum_sum: bool = True,
+    attention_weight: bool = True,
+    symmetrize: bool = True,
+    include_dead_weight: bool = True,
+    column_labels: Dict[str, str] = {
         "track": "TRACK_ID",
         "time": "FRAME",
         "x": "POSITION_X",
         "y": "POSITION_Y",
         "mask_id": "class_id",
     },
-):
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
 
     Match neighbors in set A and B within a circle of radius d.
 
     Parameters
     ----------
-    setA,setB : pandas DataFrame
-            Trajectory or position sets A and B.
-    labelsA : ndarray
-            Label image for set A.
-    labelsB : ndarray
-            Label image for set B.
+    setA : pandas.DataFrame
+        Trajectory or position set A.
+    setB : pandas.DataFrame
+        Trajectory or position set B.
+    labelsA : list of ndarray
+            List of label images for set A.
+    labelsB : list of ndarray
+            List of label images for set B.
     distance : float
             Cut-distance in pixels to match neighboring pairs.
     mode : str, optional
@@ -1776,15 +1783,15 @@ def mask_contact_neighborhood(
 
 
 def compute_contact_neighborhood_at_position(
-    pos,
-    distance,
-    population=["targets", "effectors"],
-    theta_dist=None,
-    img_shape=(2048, 2048),
-    return_tables=False,
-    clear_neigh=False,
-    event_time_col=None,
-    neighborhood_kwargs={
+    pos: str,
+    distance: Union[float, List[float]],
+    population: Union[str, List[str]] = ["targets", "effectors"],
+    theta_dist: Optional[Union[float, List[float]]] = None,
+    img_shape: Tuple[int, int] = (2048, 2048),
+    return_tables: bool = False,
+    clear_neigh: bool = False,
+    event_time_col: Optional[str] = None,
+    neighborhood_kwargs: Dict[str, Any] = {
         "mode": "two-pop",
         "status": None,
         "not_status_option": None,
@@ -1793,7 +1800,7 @@ def compute_contact_neighborhood_at_position(
         "attention_weight": True,
         "symmetrize": True,
     },
-):
+) -> Optional[Union[pd.DataFrame, Tuple[pd.DataFrame, pd.DataFrame]]]:
     """
     Computes neighborhood metrics for specified cell populations within a given position, based on distance criteria and additional parameters.
 
@@ -2010,14 +2017,14 @@ def compute_contact_neighborhood_at_position(
 
 
 def extract_neighborhood_in_pair_table(
-    df,
-    distance=None,
-    reference_population="targets",
-    neighbor_population="effectors",
-    mode="circle",
-    neighborhood_key=None,
-    contact_only=True,
-):
+    df: pd.DataFrame,
+    distance: Optional[int] = None,
+    reference_population: str = "targets",
+    neighbor_population: str = "effectors",
+    mode: str = "circle",
+    neighborhood_key: Optional[str] = None,
+    contact_only: bool = True,
+) -> pd.DataFrame:
     """
     Extracts data from a pair table that matches specific neighborhood criteria based on reference and neighbor
     populations, distance, and mode of neighborhood computation (e.g., circular or contact-based).

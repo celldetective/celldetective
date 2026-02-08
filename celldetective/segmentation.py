@@ -25,7 +25,7 @@ Segmentation parameters are typically passed via a dictionary or configuration o
 
 import json
 import os
-from typing import List, Optional, Union
+from typing import List, Optional, Union, Tuple, Any, Dict
 
 from celldetective.utils.model_loaders import locate_segmentation_model
 from celldetective.utils.normalization import normalize_multichannel
@@ -79,16 +79,16 @@ abs_path = os.sep.join(
 
 
 def segment(
-    stack: Union[np.ndarray, List],
+    stack: Union[np.ndarray, List[np.ndarray]],
     model_name: str,
     channels: Optional[List[str]] = None,
     spatial_calibration: Optional[float] = None,
     view_on_napari: bool = False,
     use_gpu: bool = True,
     channel_axis: int = -1,
-    cellprob_threshold: float = None,
-    flow_threshold: float = None,
-):
+    cellprob_threshold: Optional[float] = None,
+    flow_threshold: Optional[float] = None,
+) -> np.ndarray:
     """
 
     Segment objects in a stack using a pre-trained segmentation model.
@@ -263,18 +263,18 @@ def segment(
 
 
 def segment_from_thresholds(
-    stack,
-    target_channel=0,
-    thresholds=None,
-    view_on_napari=False,
-    equalize_reference=None,
-    filters=None,
-    marker_min_distance=30,
-    marker_footprint_size=20,
-    marker_footprint=None,
-    feature_queries=None,
-    fill_holes=True,
-):
+    stack: np.ndarray,
+    target_channel: int = 0,
+    thresholds: Optional[List[Tuple[float, float]]] = None,
+    view_on_napari: bool = False,
+    equalize_reference: Optional[int] = None,
+    filters: Optional[List[Dict[str, Any]]] = None,
+    marker_min_distance: int = 30,
+    marker_footprint_size: int = 20,
+    marker_footprint: Optional[np.ndarray] = None,
+    feature_queries: Optional[List[str]] = None,
+    fill_holes: bool = True,
+) -> np.ndarray:
     """
     Segments objects from a stack of images based on provided thresholds and optional image processing steps.
 
@@ -346,20 +346,20 @@ def segment_from_thresholds(
 
 
 def segment_frame_from_thresholds(
-    frame,
-    target_channel=0,
-    thresholds=None,
-    equalize_reference=None,
-    filters=None,
-    marker_min_distance=30,
-    marker_footprint_size=20,
-    marker_footprint=None,
-    feature_queries=None,
-    channel_names=None,
-    do_watershed=True,
-    edge_exclusion=True,
-    fill_holes=True,
-):
+    frame: np.ndarray,
+    target_channel: int = 0,
+    thresholds: Optional[Tuple[float, float]] = None,
+    equalize_reference: Optional[np.ndarray] = None,
+    filters: Optional[List[Dict[str, Any]]] = None,
+    marker_min_distance: int = 30,
+    marker_footprint_size: int = 20,
+    marker_footprint: Optional[np.ndarray] = None,
+    feature_queries: Optional[List[str]] = None,
+    channel_names: Optional[List[str]] = None,
+    do_watershed: bool = True,
+    edge_exclusion: bool = True,
+    fill_holes: bool = True,
+) -> np.ndarray:
     """
     Segments objects within a single frame based on intensity thresholds and optional image processing steps.
 
@@ -449,7 +449,12 @@ def segment_frame_from_thresholds(
     return instance_seg
 
 
-def filter_on_property(labels, intensity_image=None, queries=None, channel_names=None):
+def filter_on_property(
+    labels: np.ndarray,
+    intensity_image: Optional[np.ndarray] = None,
+    queries: Optional[Union[str, List[str]]] = None,
+    channel_names: Optional[List[str]] = None,
+) -> np.ndarray:
     """
     Filters segmented objects in a label image based on specified properties and queries.
 
@@ -551,7 +556,12 @@ def filter_on_property(labels, intensity_image=None, queries=None, channel_names
     return labels
 
 
-def apply_watershed(binary_image, coords, distance, fill_holes=True):
+def apply_watershed(
+    binary_image: np.ndarray,
+    coords: np.ndarray,
+    distance: np.ndarray,
+    fill_holes: bool = True,
+) -> np.ndarray:
     """
     Applies the watershed algorithm to segment objects in a binary image using given markers and distance map.
 
@@ -610,8 +620,12 @@ def apply_watershed(binary_image, coords, distance, fill_holes=True):
 
 
 def identify_markers_from_binary(
-    binary_image, min_distance, footprint_size=20, footprint=None, return_edt=False
-):
+    binary_image: np.ndarray,
+    min_distance: int,
+    footprint_size: int = 20,
+    footprint: Optional[np.ndarray] = None,
+    return_edt: bool = False,
+) -> Union[np.ndarray, Tuple[np.ndarray, np.ndarray]]:
     """
 
     Identify markers from a binary image using distance transform and peak detection.
@@ -665,15 +679,15 @@ def identify_markers_from_binary(
 
 
 def segment_at_position(
-    pos,
-    mode,
-    model_name,
-    stack_prefix=None,
-    use_gpu=True,
-    return_labels=False,
-    view_on_napari=False,
-    threads=1,
-):
+    pos: str,
+    mode: str,
+    model_name: str,
+    stack_prefix: Optional[str] = None,
+    use_gpu: bool = True,
+    return_labels: bool = False,
+    view_on_napari: bool = False,
+    threads: int = 1,
+) -> Optional[np.ndarray]:
     """
     Perform image segmentation at the specified position using a pre-trained model.
 
@@ -731,7 +745,9 @@ def segment_at_position(
         return None
 
 
-def segment_from_threshold_at_position(pos, mode, config, threads=1):
+def segment_from_threshold_at_position(
+    pos: str, mode: str, config: str, threads: int = 1
+) -> None:
     """
     Executes a segmentation script on a specified position directory using a given configuration and mode.
 
@@ -789,7 +805,7 @@ def segment_from_threshold_at_position(pos, mode, config, threads=1):
     subprocess.call(cmd, shell=True)
 
 
-def train_segmentation_model(config, use_gpu=True):
+def train_segmentation_model(config: str, use_gpu: bool = True) -> None:
     """
     Trains a segmentation model based on a specified configuration file.
 
@@ -836,7 +852,9 @@ def train_segmentation_model(config, use_gpu=True):
     subprocess.call(cmd, shell=True)
 
 
-def merge_instance_segmentation(labels, iou_matching_threshold=0.05, mode="OR"):
+def merge_instance_segmentation(
+    labels: List[np.ndarray], iou_matching_threshold: float = 0.05, mode: str = "OR"
+) -> np.ndarray:
     """
     Merges multiple instance segmentation masks into a single mask.
 

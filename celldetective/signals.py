@@ -41,6 +41,7 @@ from scipy.optimize import curve_fit
 import pandas as pd
 from pandas.api.types import is_numeric_dtype
 from scipy.stats import median_abs_deviation
+from typing import List, Optional, Union, Dict, Any, Tuple, Literal
 
 abs_path = os.sep.join(
     [os.path.split(os.path.dirname(os.path.realpath(__file__)))[0], "celldetective"]
@@ -48,20 +49,20 @@ abs_path = os.sep.join(
 
 
 def analyze_signals(
-    trajectories,
-    model,
-    interpolate_na=True,
-    selected_signals=None,
-    model_path=None,
-    column_labels={
+    trajectories: pd.DataFrame,
+    model: str,
+    interpolate_na: bool = True,
+    selected_signals: Optional[List[str]] = None,
+    model_path: Optional[str] = None,
+    column_labels: Dict[str, str] = {
         "track": "TRACK_ID",
         "time": "FRAME",
         "x": "POSITION_X",
         "y": "POSITION_Y",
     },
-    plot_outcome=False,
-    output_dir=None,
-):
+    plot_outcome: bool = False,
+    output_dir: Optional[str] = None,
+) -> pd.DataFrame:
     """
     Analyzes signals from trajectory data using a specified signal detection model and configuration.
 
@@ -277,7 +278,13 @@ def analyze_signals(
     return trajectories
 
 
-def analyze_signals_at_position(pos, model, mode, use_gpu=True, return_table=False):
+def analyze_signals_at_position(
+    pos: str,
+    model: str,
+    mode: str,
+    use_gpu: bool = True,
+    return_table: bool = False,
+) -> Optional[pd.DataFrame]:
     """
     Analyzes signals for a given position directory using a specified model and mode, with an option to use GPU acceleration.
 
@@ -336,8 +343,11 @@ def analyze_signals_at_position(pos, model, mode, use_gpu=True, return_table=Fal
 
 
 def analyze_pair_signals_at_position(
-    pos, model, use_gpu=True, populations=["targets", "effectors"]
-):
+    pos: str,
+    model: str,
+    use_gpu: bool = True,
+    populations: List[str] = ["targets", "effectors"],
+) -> None:
     """
     Analyzes pair signals at a position using a specified model.
 
@@ -407,22 +417,22 @@ def analyze_pair_signals_at_position(
 
 
 def analyze_pair_signals(
-    trajectories_pairs,
-    trajectories_reference,
-    trajectories_neighbors,
-    model,
-    interpolate_na=True,
-    selected_signals=None,
-    model_path=None,
-    plot_outcome=False,
-    output_dir=None,
-    column_labels={
+    trajectories_pairs: pd.DataFrame,
+    trajectories_reference: pd.DataFrame,
+    trajectories_neighbors: pd.DataFrame,
+    model: str,
+    interpolate_na: bool = True,
+    selected_signals: Optional[List[str]] = None,
+    model_path: Optional[str] = None,
+    plot_outcome: bool = False,
+    output_dir: Optional[str] = None,
+    column_labels: Dict[str, str] = {
         "track": "TRACK_ID",
         "time": "FRAME",
         "x": "POSITION_X",
         "y": "POSITION_Y",
     },
-):
+) -> pd.DataFrame:
     """
     Analyzes signals for pairs of cells using a specified model.
 
@@ -660,7 +670,7 @@ def analyze_pair_signals(
     return trajectories_pairs
 
 
-def train_signal_model(config):
+def train_signal_model(config: str) -> None:
     """
     Initiates the training of a signal detection model using a specified configuration file.
 
@@ -705,7 +715,11 @@ def train_signal_model(config):
     subprocess.call(cmd, shell=True)
 
 
-def T_MSD(x, y, dt):
+def T_MSD(
+    x: Union[np.ndarray, List[float]],
+    y: Union[np.ndarray, List[float]],
+    dt: float,
+) -> Tuple[List[float], np.ndarray]:
     """
     Compute the Time-Averaged Mean Square Displacement (T-MSD) of a 2D trajectory.
 
@@ -755,7 +769,7 @@ def T_MSD(x, y, dt):
     return msd, timelag
 
 
-def linear_msd(t, m):
+def linear_msd(t: Union[np.ndarray, List[float]], m: float) -> Union[np.ndarray, float]:
     """
     Function to compute Mean Square Displacement (MSD) with a linear scaling relationship.
 
@@ -784,7 +798,9 @@ def linear_msd(t, m):
     return m * t
 
 
-def alpha_msd(t, m, alpha):
+def alpha_msd(
+    t: Union[np.ndarray, List[float]], m: float, alpha: float
+) -> Union[np.ndarray, float]:
     """
     Function to compute Mean Square Displacement (MSD) with a power-law scaling relationship.
 
@@ -817,8 +833,14 @@ def alpha_msd(t, m, alpha):
 
 
 def sliding_msd(
-    x, y, timeline, window, mode="bi", n_points_migration=7, n_points_transport=7
-):
+    x: Union[np.ndarray, List[float]],
+    y: Union[np.ndarray, List[float]],
+    timeline: Union[np.ndarray, List[float]],
+    window: int,
+    mode: Literal["bi", "forward", "backward"] = "bi",
+    n_points_migration: int = 7,
+    n_points_transport: int = 7,
+) -> Tuple[np.ndarray, np.ndarray]:
     """
     Compute sliding mean square displacement (sMSD) and anomalous exponent (alpha) for a 2D trajectory using a sliding window approach.
 
@@ -920,7 +942,9 @@ def sliding_msd(
     return s_msd, s_alpha
 
 
-def drift_msd(t, d, v):
+def drift_msd(
+    t: Union[float, np.ndarray], d: float, v: float
+) -> Union[float, np.ndarray]:
     """
     Calculates the mean squared displacement (MSD) of a particle undergoing diffusion with drift.
 
@@ -960,15 +984,15 @@ def drift_msd(t, d, v):
 
 
 def sliding_msd_drift(
-    x,
-    y,
-    timeline,
-    window,
-    mode="bi",
-    n_points_migration=7,
-    n_points_transport=7,
-    r2_threshold=0.75,
-):
+    x: np.ndarray,
+    y: np.ndarray,
+    timeline: np.ndarray,
+    window: int,
+    mode: Literal["bi", "forward", "backward"] = "bi",
+    n_points_migration: int = 7,
+    n_points_transport: int = 7,
+    r2_threshold: float = 0.75,
+) -> Tuple[np.ndarray, np.ndarray]:
     """
     Computes the sliding mean squared displacement (MSD) with drift for particle trajectories.
 
@@ -1071,7 +1095,11 @@ def sliding_msd_drift(
     return s_diffusion, s_velocity
 
 
-def columnwise_mean(matrix, min_nbr_values=1, projection="mean"):
+def columnwise_mean(
+    matrix: np.ndarray,
+    min_nbr_values: int = 1,
+    projection: Literal["mean", "median"] = "mean",
+) -> Tuple[np.ndarray, np.ndarray]:
     """
     Calculate the column-wise mean and standard deviation of non-NaN elements in the input matrix.
 
@@ -1123,18 +1151,21 @@ def columnwise_mean(matrix, min_nbr_values=1, projection="mean"):
 
 
 def mean_signal(
-    df,
-    signal_name,
-    class_col,
-    time_col=None,
-    class_value=[0],
-    return_matrix=False,
-    forced_max_duration=None,
-    min_nbr_values=2,
-    conflict_mode="mean",
-    projection="mean",
-    pairs=False,
-):
+    df: pd.DataFrame,
+    signal_name: str,
+    class_col: str,
+    time_col: Optional[Union[str, float, int]] = None,
+    class_value: Union[int, List[int]] = [0],
+    return_matrix: bool = False,
+    forced_max_duration: Optional[int] = None,
+    min_nbr_values: int = 2,
+    conflict_mode: Literal["mean", "first", "all"] = "mean",
+    projection: Literal["mean", "median"] = "mean",
+    pairs: bool = False,
+) -> Union[
+    Tuple[np.ndarray, np.ndarray, np.ndarray],
+    Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray],
+]:
     """
     Calculate the mean and standard deviation of a specified signal for tracks of a given class in the input DataFrame.
 

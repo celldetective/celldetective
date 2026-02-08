@@ -61,6 +61,7 @@ import skimage.measure as skm
 from celldetective.utils.mask_cleaning import fill_label_holes
 from celldetective.segmentation import segment_frame_from_thresholds
 from sklearn.metrics import r2_score
+from typing import Union, List, Optional, Any, Tuple
 
 
 # def area_detected_in_ricm(regionmask, intensity_image, target_channel='adhesion_channel'):
@@ -99,8 +100,10 @@ from sklearn.metrics import r2_score
 
 
 def fraction_of_area_detected_in_intensity(
-    regionmask, intensity_image, target_channel="adhesion_channel"
-):
+    regionmask: np.ndarray,
+    intensity_image: np.ndarray,
+    target_channel: str = "adhesion_channel",
+) -> float:
     """
     Computes the fraction of the region area that is detected in the intensity image.
 
@@ -139,8 +142,10 @@ def fraction_of_area_detected_in_intensity(
 
 
 def area_detected_in_intensity(
-    regionmask, intensity_image, target_channel="adhesion_channel"
-):
+    regionmask: np.ndarray,
+    intensity_image: np.ndarray,
+    target_channel: str = "adhesion_channel",
+) -> float:
     """
     Computes the detected area within the regionmask based on threshold-based segmentation.
 
@@ -200,12 +205,12 @@ def area_detected_in_intensity(
 
 
 def area_dark_intensity(
-    regionmask,
-    intensity_image,
-    target_channel="adhesion_channel",
-    fill_holes=True,
-    threshold=0.95,
-):  # , target_channel='adhesion_channel'
+    regionmask: np.ndarray,
+    intensity_image: np.ndarray,
+    target_channel: str = "adhesion_channel",
+    fill_holes: bool = True,
+    threshold: float = 0.95,
+) -> float:
     """
     Computes the absolute area within the regionmask where the intensity is below a given threshold.
 
@@ -255,12 +260,12 @@ def area_dark_intensity(
 
 
 def fraction_of_area_dark_intensity(
-    regionmask,
-    intensity_image,
-    target_channel="adhesion_channel",
-    fill_holes=True,
-    threshold=0.95,
-):  # , target_channel='adhesion_channel'
+    regionmask: np.ndarray,
+    intensity_image: np.ndarray,
+    target_channel: str = "adhesion_channel",
+    fill_holes: bool = True,
+    threshold: float = 0.95,
+) -> float:
     """
     Computes the fraction of the region area where intensity is below a threshold.
 
@@ -295,8 +300,11 @@ def fraction_of_area_dark_intensity(
 
 
 def area_dark_intensity_nintyfive(
-    regionmask, intensity_image, target_channel="adhesion_channel", fill_holes=True
-):  # , target_channel='adhesion_channel'
+    regionmask: np.ndarray,
+    intensity_image: np.ndarray,
+    target_channel: str = "adhesion_channel",
+    fill_holes: bool = True,
+) -> float:
     """
     Computes the area of the region where intensity is below 0.95.
 
@@ -329,8 +337,11 @@ def area_dark_intensity_nintyfive(
 
 
 def area_dark_intensity_ninty(
-    regionmask, intensity_image, target_channel="adhesion_channel", fill_holes=True
-):  # , target_channel='adhesion_channel'
+    regionmask: np.ndarray,
+    intensity_image: np.ndarray,
+    target_channel: str = "adhesion_channel",
+    fill_holes: bool = True,
+) -> float:
     """
     Computes the area of the region where intensity is below 0.90.
 
@@ -363,8 +374,11 @@ def area_dark_intensity_ninty(
 
 
 def mean_dark_intensity_nintyfive(
-    regionmask, intensity_image, target_channel="adhesion_channel", fill_holes=True
-):
+    regionmask: np.ndarray,
+    intensity_image: np.ndarray,
+    target_channel: str = "adhesion_channel",
+    fill_holes: bool = True,
+) -> float:
     """
     Calculate the mean intensity in a dark subregion below 95, handling NaN values.
 
@@ -399,8 +413,10 @@ def mean_dark_intensity_nintyfive(
 
 
 def mean_dark_intensity_nintyfive_fillhole_false(
-    regionmask, intensity_image, target_channel="adhesion_channel"
-):
+    regionmask: np.ndarray,
+    intensity_image: np.ndarray,
+    target_channel: str = "adhesion_channel",
+) -> float:
     """
     Calculate the mean intensity in a dark subregion below 95, handling NaN values.
 
@@ -431,8 +447,10 @@ def mean_dark_intensity_nintyfive_fillhole_false(
 
 
 def mean_dark_intensity_ninty_fillhole_false(
-    regionmask, intensity_image, target_channel="adhesion_channel"
-):
+    regionmask: np.ndarray,
+    intensity_image: np.ndarray,
+    target_channel: str = "adhesion_channel",
+) -> float:
     """
     Calculate the mean intensity in a dark subregion, handling NaN values.
 
@@ -463,8 +481,11 @@ def mean_dark_intensity_ninty_fillhole_false(
 
 
 def mean_dark_intensity_ninty(
-    regionmask, intensity_image, target_channel="adhesion_channel", fill_holes=True
-):
+    regionmask: np.ndarray,
+    intensity_image: np.ndarray,
+    target_channel: str = "adhesion_channel",
+    fill_holes: bool = True,
+) -> float:
     """
     Calculate the mean intensity in a dark subregion below 90, handling NaN values.
 
@@ -499,8 +520,11 @@ def mean_dark_intensity_ninty(
 
 
 def mean_dark_intensity_eight_five(
-    regionmask, intensity_image, target_channel="adhesion_channel", fill_holes=True
-):
+    regionmask: np.ndarray,
+    intensity_image: np.ndarray,
+    target_channel: str = "adhesion_channel",
+    fill_holes: bool = True,
+) -> float:
     """
     Calculate the mean intensity in a dark subregion below 85, handling NaN values.
 
@@ -535,8 +559,10 @@ def mean_dark_intensity_eight_five(
 
 
 def mean_dark_intensity_eight_five_fillhole_false(
-    regionmask, intensity_image, target_channel="adhesion_channel"
-):
+    regionmask: np.ndarray,
+    intensity_image: np.ndarray,
+    target_channel: str = "adhesion_channel",
+) -> float:
     """
     Computes the mean intensity in dark regions (< 0.85), ignoring NaNs and without hole filling.
 
@@ -567,8 +593,10 @@ def mean_dark_intensity_eight_five_fillhole_false(
 
 
 def percentile_zero_one_dark_intensity_ninty(
-    regionmask, intensity_image, target_channel="adhesion_channel"
-):
+    regionmask: np.ndarray,
+    intensity_image: np.ndarray,
+    target_channel: str = "adhesion_channel",
+) -> float:
     """
     Computes the 0.1th percentile of intensity in dark regions (< 0.95).
 
@@ -592,8 +620,10 @@ def percentile_zero_one_dark_intensity_ninty(
 
 
 def percentile_one_dark_intensity_ninty(
-    regionmask, intensity_image, target_channel="adhesion_channel"
-):
+    regionmask: np.ndarray,
+    intensity_image: np.ndarray,
+    target_channel: str = "adhesion_channel",
+) -> float:
     """
     Computes the 1st percentile of intensity in dark regions (< 0.95).
 
@@ -617,8 +647,10 @@ def percentile_one_dark_intensity_ninty(
 
 
 def percentile_five_dark_intensity_ninty(
-    regionmask, intensity_image, target_channel="adhesion_channel"
-):
+    regionmask: np.ndarray,
+    intensity_image: np.ndarray,
+    target_channel: str = "adhesion_channel",
+) -> float:
     """
     Computes the 5th percentile of intensity in dark regions (< 0.95).
 
@@ -642,8 +674,10 @@ def percentile_five_dark_intensity_ninty(
 
 
 def percentile_ten_dark_intensity_ninty(
-    regionmask, intensity_image, target_channel="adhesion_channel"
-):
+    regionmask: np.ndarray,
+    intensity_image: np.ndarray,
+    target_channel: str = "adhesion_channel",
+) -> float:
     """
     Computes the 10th percentile of intensity in dark regions (< 0.95).
 
@@ -667,8 +701,10 @@ def percentile_ten_dark_intensity_ninty(
 
 
 def percentile_ninty_five_dark_intensity_ninty(
-    regionmask, intensity_image, target_channel="adhesion_channel"
-):
+    regionmask: np.ndarray,
+    intensity_image: np.ndarray,
+    target_channel: str = "adhesion_channel",
+) -> float:
     """
     Computes the 95th percentile of intensity in dark regions (< 0.95).
 
@@ -691,7 +727,9 @@ def percentile_ninty_five_dark_intensity_ninty(
     return float(np.nanpercentile(intensity_image[subregion], 95))
 
 
-def intensity_percentile_ninety_nine(regionmask, intensity_image):
+def intensity_percentile_ninety_nine(
+    regionmask: np.ndarray, intensity_image: np.ndarray
+) -> float:
     """
     Computes the 99th percentile of intensity within the region.
 
@@ -710,7 +748,9 @@ def intensity_percentile_ninety_nine(regionmask, intensity_image):
     return np.nanpercentile(intensity_image[regionmask], 99)
 
 
-def intensity_percentile_ninety_five(regionmask, intensity_image):
+def intensity_percentile_ninety_five(
+    regionmask: np.ndarray, intensity_image: np.ndarray
+) -> float:
     """
     Computes the 95th percentile of intensity within the region.
 
@@ -729,7 +769,9 @@ def intensity_percentile_ninety_five(regionmask, intensity_image):
     return np.nanpercentile(intensity_image[regionmask], 95)
 
 
-def intensity_percentile_ninety(regionmask, intensity_image):
+def intensity_percentile_ninety(
+    regionmask: np.ndarray, intensity_image: np.ndarray
+) -> float:
     """
     Computes the 90th percentile of intensity within the region.
 
@@ -748,7 +790,9 @@ def intensity_percentile_ninety(regionmask, intensity_image):
     return np.nanpercentile(intensity_image[regionmask], 90)
 
 
-def intensity_percentile_seventy_five(regionmask, intensity_image):
+def intensity_percentile_seventy_five(
+    regionmask: np.ndarray, intensity_image: np.ndarray
+) -> float:
     """
     Computes the 75th percentile of intensity within the region.
 
@@ -767,7 +811,9 @@ def intensity_percentile_seventy_five(regionmask, intensity_image):
     return np.nanpercentile(intensity_image[regionmask], 75)
 
 
-def intensity_percentile_fifty(regionmask, intensity_image):
+def intensity_percentile_fifty(
+    regionmask: np.ndarray, intensity_image: np.ndarray
+) -> float:
     """
     Computes the 50th percentile (median) of intensity within the region.
 
@@ -786,7 +832,9 @@ def intensity_percentile_fifty(regionmask, intensity_image):
     return np.nanpercentile(intensity_image[regionmask], 50)
 
 
-def intensity_percentile_twenty_five(regionmask, intensity_image):
+def intensity_percentile_twenty_five(
+    regionmask: np.ndarray, intensity_image: np.ndarray
+) -> float:
     """
     Computes the 25th percentile of intensity within the region.
 
@@ -808,7 +856,7 @@ def intensity_percentile_twenty_five(regionmask, intensity_image):
 # STD
 
 
-def intensity_std(regionmask, intensity_image):
+def intensity_std(regionmask: np.ndarray, intensity_image: np.ndarray) -> float:
     """
     Computes the standard deviation of intensity within the region.
 
@@ -827,7 +875,7 @@ def intensity_std(regionmask, intensity_image):
     return np.nanstd(intensity_image[regionmask])
 
 
-def intensity_median(regionmask, intensity_image):
+def intensity_median(regionmask: np.ndarray, intensity_image: np.ndarray) -> float:
     """
     Computes the median intensity within the region.
 
@@ -846,7 +894,7 @@ def intensity_median(regionmask, intensity_image):
     return np.nanmedian(intensity_image[regionmask])
 
 
-def intensity_nanmean(regionmask, intensity_image):
+def intensity_nanmean(regionmask: np.ndarray, intensity_image: np.ndarray) -> float:
     """
     Computes the mean intensity within the region, ignoring NaNs.
 
@@ -869,7 +917,9 @@ def intensity_nanmean(regionmask, intensity_image):
         return np.nanmean(intensity_image[regionmask])
 
 
-def intensity_center_of_mass_displacement(regionmask, intensity_image):
+def intensity_center_of_mass_displacement(
+    regionmask: np.ndarray, intensity_image: np.ndarray
+) -> Tuple[float, float, float, float]:
     """
     Computes the displacement between the geometric centroid and the
     intensity-weighted center of mass of a region.
@@ -942,7 +992,9 @@ def intensity_center_of_mass_displacement(regionmask, intensity_image):
         return np.nan, np.nan, np.nan, np.nan
 
 
-def intensity_center_of_mass_displacement_edge(regionmask, intensity_image):
+def intensity_center_of_mass_displacement_edge(
+    regionmask: np.ndarray, intensity_image: np.ndarray
+) -> Tuple[float, float, float, float]:
     """
     Computes displacement of center of mass relative to the edge of the region.
 
@@ -1003,7 +1055,9 @@ def intensity_center_of_mass_displacement_edge(regionmask, intensity_image):
         return np.nan, np.nan, np.nan, np.nan
 
 
-def intensity_radial_gradient(regionmask, intensity_image):
+def intensity_radial_gradient(
+    regionmask: np.ndarray, intensity_image: np.ndarray
+) -> Tuple[float, float, float]:
     """
     Determines whether the intensity follows a radial gradient from the center to the edge of the cell.
 

@@ -26,6 +26,7 @@ import pandas as pd
 import numpy as np
 from tqdm import tqdm
 from sklearn.preprocessing import StandardScaler
+from typing import List, Optional, Union, Dict, Any, Tuple
 
 from btrack.io.utils import localizations_to_objects
 from btrack import BayesianTracker
@@ -45,32 +46,32 @@ abs_path = os.sep.join(
 
 
 def track(
-    labels,
-    configuration=None,
-    stack=None,
-    spatial_calibration=1,
-    features=None,
-    channel_names=None,
-    haralick_options=None,
-    return_napari_data=False,
-    view_on_napari=False,
-    mask_timepoints=None,
-    mask_channels=None,
-    volume=(2048, 2048),
-    optimizer_options={"tm_lim": int(12e4)},
-    track_kwargs={"step_size": 100},
-    objects=None,
-    clean_trajectories_kwargs=None,
-    btrack_option=True,
-    search_range=None,
-    memory=None,
-    column_labels={
+    labels: np.ndarray,
+    configuration: Optional[Any] = None,
+    stack: Optional[np.ndarray] = None,
+    spatial_calibration: float = 1,
+    features: Optional[List[str]] = None,
+    channel_names: Optional[List[str]] = None,
+    haralick_options: Optional[Dict[str, Any]] = None,
+    return_napari_data: bool = False,
+    view_on_napari: bool = False,
+    mask_timepoints: Optional[List[int]] = None,
+    mask_channels: Optional[List[str]] = None,
+    volume: Tuple[int, int] = (2048, 2048),
+    optimizer_options: Dict[str, Any] = {"tm_lim": int(12e4)},
+    track_kwargs: Dict[str, Any] = {"step_size": 100},
+    objects: Optional[pd.DataFrame] = None,
+    clean_trajectories_kwargs: Optional[Dict[str, Any]] = None,
+    btrack_option: bool = True,
+    search_range: Optional[Union[float, Tuple[float, float]]] = None,
+    memory: Optional[int] = None,
+    column_labels: Dict[str, str] = {
         "track": "TRACK_ID",
         "time": "FRAME",
         "x": "POSITION_X",
         "y": "POSITION_Y",
     },
-):
+) -> Union[pd.DataFrame, Tuple[pd.DataFrame, Dict[str, Any]]]:
     """
     Perform cell tracking on segmented labels using the bTrack library.
 
@@ -324,14 +325,14 @@ def track(
 
 
 def extract_objects_and_features(
-    labels,
-    stack,
-    features,
-    channel_names=None,
-    haralick_options=None,
-    mask_timepoints=None,
-    mask_channels=None,
-):
+    labels: np.ndarray,
+    stack: Optional[np.ndarray],
+    features: Optional[List[str]],
+    channel_names: Optional[List[str]] = None,
+    haralick_options: Optional[Dict[str, Any]] = None,
+    mask_timepoints: Optional[List[int]] = None,
+    mask_channels: Optional[List[str]] = None,
+) -> pd.DataFrame:
     """
 
     Extract objects and features from segmented labels and image stack.
@@ -440,21 +441,21 @@ def extract_objects_and_features(
 
 
 def clean_trajectories(
-    trajectories,
-    remove_not_in_first=False,
-    remove_not_in_last=False,
-    minimum_tracklength=0,
-    interpolate_position_gaps=False,
-    extrapolate_tracks_post=False,
-    extrapolate_tracks_pre=False,
-    interpolate_na=False,
-    column_labels={
+    trajectories: pd.DataFrame,
+    remove_not_in_first: bool = False,
+    remove_not_in_last: bool = False,
+    minimum_tracklength: int = 0,
+    interpolate_position_gaps: bool = False,
+    extrapolate_tracks_post: bool = False,
+    extrapolate_tracks_pre: bool = False,
+    interpolate_na: bool = False,
+    column_labels: Dict[str, str] = {
         "track": "TRACK_ID",
         "time": "FRAME",
         "x": "POSITION_X",
         "y": "POSITION_Y",
     },
-):
+) -> pd.DataFrame:
     """
     Clean trajectories by applying various cleaning operations.
 
@@ -589,7 +590,7 @@ def clean_trajectories(
     return trajectories
 
 
-def interpolate_per_track(group_df):
+def interpolate_per_track(group_df: pd.DataFrame) -> pd.DataFrame:
     """
     Interpolate missing values within a track.
 
@@ -622,7 +623,9 @@ def interpolate_per_track(group_df):
     return group_df
 
 
-def interpolate_nan_properties(trajectories, track_label="TRACK_ID"):
+def interpolate_nan_properties(
+    trajectories: pd.DataFrame, track_label: str = "TRACK_ID"
+) -> pd.DataFrame:
     """
     Interpolate missing values within tracks in the input DataFrame.
 
@@ -667,16 +670,16 @@ def interpolate_nan_properties(trajectories, track_label="TRACK_ID"):
 
 
 def filter_by_endpoints(
-    trajectories,
-    remove_not_in_first=True,
-    remove_not_in_last=False,
-    column_labels={
+    trajectories: pd.DataFrame,
+    remove_not_in_first: bool = True,
+    remove_not_in_last: bool = False,
+    column_labels: Dict[str, str] = {
         "track": "TRACK_ID",
         "time": "FRAME",
         "x": "POSITION_X",
         "y": "POSITION_Y",
     },
-):
+) -> pd.DataFrame:
     """
     Filter trajectories based on their endpoints.
 
@@ -788,7 +791,9 @@ def filter_by_endpoints(
     return trajectories
 
 
-def filter_by_tracklength(trajectories, minimum_tracklength, track_label="TRACK_ID"):
+def filter_by_tracklength(
+    trajectories: pd.DataFrame, minimum_tracklength: int, track_label: str = "TRACK_ID"
+) -> pd.DataFrame:
     """
     Filter trajectories based on the minimum track length.
 
@@ -837,14 +842,14 @@ def filter_by_tracklength(trajectories, minimum_tracklength, track_label="TRACK_
 
 
 def interpolate_time_gaps(
-    trajectories,
-    column_labels={
+    trajectories: pd.DataFrame,
+    column_labels: Dict[str, str] = {
         "track": "TRACK_ID",
         "time": "FRAME",
         "x": "POSITION_X",
         "y": "POSITION_Y",
     },
-):
+) -> pd.DataFrame:
     """
     Interpolate time gaps in trajectories.
 
@@ -911,16 +916,16 @@ def interpolate_time_gaps(
 
 
 def extrapolate_tracks(
-    trajectories,
-    post=False,
-    pre=False,
-    column_labels={
+    trajectories: pd.DataFrame,
+    post: bool = False,
+    pre: bool = False,
+    column_labels: Dict[str, str] = {
         "track": "TRACK_ID",
         "time": "FRAME",
         "x": "POSITION_X",
         "y": "POSITION_Y",
     },
-):
+) -> pd.DataFrame:
     """
     Extrapolate tracks in trajectories.
 
@@ -1066,14 +1071,14 @@ def extrapolate_tracks(
 
 
 def compute_instantaneous_velocity(
-    trajectories,
-    column_labels={
+    trajectories: pd.DataFrame,
+    column_labels: Dict[str, str] = {
         "track": "TRACK_ID",
         "time": "FRAME",
         "x": "POSITION_X",
         "y": "POSITION_Y",
     },
-):
+) -> pd.DataFrame:
     """
 
     Compute the instantaneous velocity for each point in the trajectories.
@@ -1128,7 +1133,9 @@ def compute_instantaneous_velocity(
     return trajectories
 
 
-def instantaneous_diffusion(positions_x, positions_y, timeline):
+def instantaneous_diffusion(
+    positions_x: np.ndarray, positions_y: np.ndarray, timeline: np.ndarray
+) -> np.ndarray:
     """
     Compute the instantaneous diffusion coefficients for each position coordinate.
 
@@ -1185,7 +1192,7 @@ def instantaneous_diffusion(positions_x, positions_y, timeline):
     return diff
 
 
-def magnitude_diffusion(diffusion_vector):
+def magnitude_diffusion(diffusion_vector: np.ndarray) -> np.ndarray:
     """
     Compute the magnitude of diffusion for each diffusion vector.
 
@@ -1216,14 +1223,14 @@ def magnitude_diffusion(diffusion_vector):
 
 
 def compute_instantaneous_diffusion(
-    trajectories,
-    column_labels={
+    trajectories: pd.DataFrame,
+    column_labels: Dict[str, str] = {
         "track": "TRACK_ID",
         "time": "FRAME",
         "x": "POSITION_X",
         "y": "POSITION_Y",
     },
-):
+) -> pd.DataFrame:
     """
 
     Compute the instantaneous diffusion for each track in the provided trajectories DataFrame.
@@ -1278,7 +1285,13 @@ def compute_instantaneous_diffusion(
     return trajectories
 
 
-def track_at_position(pos, mode, return_tracks=False, view_on_napari=False, threads=1):
+def track_at_position(
+    pos: str,
+    mode: str,
+    return_tracks: bool = False,
+    view_on_napari: bool = False,
+    threads: int = 1,
+) -> Optional[pd.DataFrame]:
     """
     Executes tracking for a specific position and mode.
 
@@ -1320,16 +1333,16 @@ def track_at_position(pos, mode, return_tracks=False, view_on_napari=False, thre
 
 
 def write_first_detection_class(
-    df,
-    img_shape=None,
-    edge_threshold=20,
-    column_labels={
+    df: pd.DataFrame,
+    img_shape: Optional[Tuple[int, int]] = None,
+    edge_threshold: int = 20,
+    column_labels: Dict[str, str] = {
         "track": "TRACK_ID",
         "time": "FRAME",
         "x": "POSITION_X",
         "y": "POSITION_Y",
     },
-):
+) -> pd.DataFrame:
     """
     Assigns a classification and first detection time to tracks in the given DataFrame.
 

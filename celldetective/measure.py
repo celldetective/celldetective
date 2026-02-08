@@ -26,6 +26,7 @@ Copyright © 2022 Laboratoire Adhesion et Inflammation
 Authored by R. Torro, K. Dervanova, L. Limozin
 """
 
+from typing import Any, Dict, List, Optional, Tuple, Union, Literal, Callable
 import math
 import numpy as np
 import os
@@ -61,24 +62,37 @@ abs_path = os.sep.join(
 )
 
 
+IsotropicOperation = Literal[
+    "mean",
+    "median",
+    "average",
+    "std",
+    "var",
+    "nanmedian",
+    "nanmean",
+    "nanstd",
+    "nanvar",
+]
+
+
 def measure(
-    stack=None,
-    labels=None,
-    trajectories=None,
-    channel_names=None,
-    features=None,
-    intensity_measurement_radii=None,
-    isotropic_operations=["mean"],
-    border_distances=None,
-    haralick_options=None,
-    column_labels={
+    stack: Optional[np.ndarray] = None,
+    labels: Optional[np.ndarray] = None,
+    trajectories: Optional[pd.DataFrame] = None,
+    channel_names: Optional[List[str]] = None,
+    features: Optional[List[str]] = None,
+    intensity_measurement_radii: Optional[Union[int, float, List[float]]] = None,
+    isotropic_operations: List[IsotropicOperation] = ["mean"],
+    border_distances: Optional[Union[int, float, List[float]]] = None,
+    haralick_options: Optional[Dict[str, Any]] = None,
+    column_labels: Dict[str, str] = {
         "track": "TRACK_ID",
         "time": "FRAME",
         "x": "POSITION_X",
         "y": "POSITION_Y",
     },
-    clear_previous=False,
-):
+    clear_previous: bool = False,
+) -> pd.DataFrame:
     """
 
     Perform measurements on a stack of images or labels.
@@ -117,7 +131,7 @@ def measure(
     Returns
     -------
     pandas DataFrame
-                    DataFrame containing the measured features and intensities.
+        DataFrame containing the measured features and intensities.
 
     Notes
     -----
@@ -326,14 +340,14 @@ def measure(
 
 
 def write_first_detection_class(
-    tab,
-    column_labels={
+    tab: pd.DataFrame,
+    column_labels: Dict[str, str] = {
         "track": "TRACK_ID",
         "time": "FRAME",
         "x": "POSITION_X",
         "y": "POSITION_Y",
     },
-):
+) -> pd.DataFrame:
     """
     Identifies and records the first detection time and class for each track.
 
@@ -372,7 +386,7 @@ def write_first_detection_class(
     return tab
 
 
-def drop_tonal_features(features):
+def drop_tonal_features(features: List[str]) -> List[str]:
     """
     Removes features related to intensity from a list of feature names.
 
@@ -400,18 +414,18 @@ def drop_tonal_features(features):
 
 
 def measure_features(
-    img,
-    label,
-    features=["area", "intensity_mean"],
-    channels=None,
-    border_dist=None,
-    haralick_options=None,
-    verbose=True,
-    normalisation_list=None,
-    radial_intensity=None,
-    radial_channel=None,
-    spot_detection=None,
-):
+    img: Optional[np.ndarray],
+    label: np.ndarray,
+    features: List[str] = ["area", "intensity_mean"],
+    channels: Optional[List[str]] = None,
+    border_dist: Optional[Union[int, float, List[float]]] = None,
+    haralick_options: Optional[Dict[str, Any]] = None,
+    verbose: bool = True,
+    normalisation_list: Optional[List[Dict[str, Any]]] = None,
+    radial_intensity: Optional[Any] = None,
+    radial_channel: Optional[Any] = None,
+    spot_detection: Optional[Dict[str, Any]] = None,
+) -> pd.DataFrame:
     """
     Measure features within segmented regions of an image.
 
@@ -422,7 +436,7 @@ def measure_features(
     label : ndarray
             The segmentation labels corresponding to the image regions.
     features : list, optional
-            The list of features to measure within the segmented regions. The default is ['area', 'intensity_mean'].
+            The list of features to measure within the segmented regions. The default is ['area', 'eccentricity'].
     channels : list, optional
             The list of channel names in the image. The default is ["brightfield_channel", "dead_nuclei_channel", "live_nuclei_channel"].
     border_dist : int, float, or list, optional
@@ -629,7 +643,7 @@ def measure_features(
         clean_intensity_features.append("label")
 
         # Helper to format suffix
-        def get_suffix(d):
+        def get_suffix(d: Union[int, float, str]) -> str:
             """
             Formats the suffix for column names based on distance.
 
@@ -716,22 +730,22 @@ def measure_features(
 
 
 def compute_haralick_features(
-    img,
-    labels,
-    channels=None,
-    target_channel=0,
-    scale_factor=1,
-    percentiles=(0.01, 99.99),
-    clip_values=None,
-    n_intensity_bins=256,
-    ignore_zero=True,
-    return_mean=True,
-    return_mean_ptp=False,
-    distance=1,
-    disable_progress_bar=False,
-    return_norm_image_only=False,
-    return_digit_image_only=False,
-):
+    img: np.ndarray,
+    labels: np.ndarray,
+    channels: Optional[Union[List[str], str]] = None,
+    target_channel: int = 0,
+    scale_factor: float = 1,
+    percentiles: Tuple[float, float] = (0.01, 99.99),
+    clip_values: Optional[Tuple[float, float]] = None,
+    n_intensity_bins: int = 256,
+    ignore_zero: bool = True,
+    return_mean: bool = True,
+    return_mean_ptp: bool = False,
+    distance: int = 1,
+    disable_progress_bar: bool = False,
+    return_norm_image_only: bool = False,
+    return_digit_image_only: bool = False,
+) -> Optional[pd.DataFrame]:
     """
 
     Compute Haralick texture features on each segmented region of an image.
@@ -904,21 +918,23 @@ def compute_haralick_features(
 
 
 def measure_isotropic_intensity(
-    positions,  # Dataframe of cell positions @ t
-    img,  # multichannel frame (YXC) @ t
-    channels=None,  # channels, need labels to name measurements
-    intensity_measurement_radii=None,  # list of radii, single value is circle, tuple is ring?
-    operations=["mean"],
-    measurement_kernel=None,
-    pbar=None,
-    column_labels={
+    positions: pd.DataFrame,
+    img: np.ndarray,
+    channels: Optional[List[str]] = None,
+    intensity_measurement_radii: Optional[
+        Union[int, float, List[float], Tuple[float, float]]
+    ] = None,
+    operations: List[IsotropicOperation] = ["mean"],
+    measurement_kernel: Optional[np.ndarray] = None,
+    pbar: Optional[Any] = None,
+    column_labels: Dict[str, str] = {
         "track": "TRACK_ID",
         "time": "FRAME",
         "x": "POSITION_X",
         "y": "POSITION_Y",
     },
-    verbose=True,
-):
+    verbose: bool = True,
+) -> pd.DataFrame:
     """
 
     Measure isotropic intensity values around cell positions in an image.
@@ -1109,7 +1125,9 @@ def measure_isotropic_intensity(
     return positions
 
 
-def measure_at_position(pos, mode, return_measurements=False, threads=1):
+def measure_at_position(
+    pos: str, mode: str, return_measurements: bool = False, threads: int = 1
+) -> Optional[pd.DataFrame]:
     """
     Executes a measurement script at a specified position directory, optionally returning the measured data.
 
@@ -1157,13 +1175,13 @@ def measure_at_position(pos, mode, return_measurements=False, threads=1):
 
 
 def local_normalisation(
-    image,
-    labels,
-    background_intensity,
-    measurement="intensity_median",
-    operation="subtract",
-    clip=False,
-):
+    image: np.ndarray,
+    labels: np.ndarray,
+    background_intensity: pd.DataFrame,
+    measurement: str = "intensity_median",
+    operation: str = "subtract",
+    clip: bool = False,
+) -> np.ndarray:
     """
     Performs local normalization of an image based on background intensity.
 
@@ -1206,8 +1224,13 @@ def local_normalisation(
 
 
 def normalise_by_cell(
-    image, labels, distance=5, model="median", operation="subtract", clip=False
-):
+    image: np.ndarray,
+    labels: np.ndarray,
+    distance: int = 5,
+    model: str = "median",
+    operation: str = "subtract",
+    clip: bool = False,
+) -> np.ndarray:
     """
     Normalizes an image based on the local background around each cell.
 
@@ -1281,8 +1304,13 @@ def normalise_by_cell(
 
 
 def extract_blobs_in_image(
-    image, label, diameter, threshold=0.0, method="log", image_preprocessing=None
-):
+    image: np.ndarray,
+    label: np.ndarray,
+    diameter: float,
+    threshold: float = 0.0,
+    method: str = "log",
+    image_preprocessing: Optional[List[Any]] = None,
+) -> Optional[List[Tuple[float, float, float]]]:
     """
     Detects blobs (spots) within segmented regions of an image.
 
@@ -1360,15 +1388,15 @@ def extract_blobs_in_image(
 
 
 def blob_detection(
-    image,
-    label,
-    diameter,
-    threshold=0.0,
-    channel_name=None,
-    target_channel=0,
-    method="log",
-    image_preprocessing=None,
-):
+    image: np.ndarray,
+    label: np.ndarray,
+    diameter: float,
+    threshold: float = 0.0,
+    channel_name: Optional[str] = None,
+    target_channel: int = 0,
+    method: str = "log",
+    image_preprocessing: Optional[List[Any]] = None,
+) -> Optional[pd.DataFrame]:
     """
     Performs blob detection on a specific channel of an image and aggregates results per cell.
 
@@ -1446,8 +1474,12 @@ def blob_detection(
 
 
 def estimate_time(
-    df, class_attr, model="step_function", class_of_interest=[2], r2_threshold=0.5
-):
+    df: pd.DataFrame,
+    class_attr: str,
+    model: str = "step_function",
+    class_of_interest: List[int] = [2],
+    r2_threshold: float = 0.5,
+) -> pd.DataFrame:
     """
     Estimate the timing of an event for cells based on classification status and fit a model to the observed status signal.
 
@@ -1540,15 +1572,15 @@ def estimate_time(
 
 
 def interpret_track_classification(
-    df,
-    class_attr,
-    irreversible_event=False,
-    unique_state=False,
-    transient_event=False,
-    r2_threshold=0.5,
-    percentile_recovery=50,
-    pre_event=None,
-):
+    df: pd.DataFrame,
+    class_attr: str,
+    irreversible_event: bool = False,
+    unique_state: bool = False,
+    transient_event: bool = False,
+    r2_threshold: float = 0.5,
+    percentile_recovery: float = 50,
+    pre_event: Optional[str] = None,
+) -> pd.DataFrame:
     """
     Interpret and classify tracked cells based on their status signals.
 
@@ -1590,7 +1622,7 @@ def interpret_track_classification(
     -----
     - The function assumes that the input DataFrame contains a column for tracking cells (`TRACK_ID`) and possibly a 'position' column.
     - The classification behavior depends on the `irreversible_event` and `unique_state` flags:
-            
+
             - When `irreversible_event` is True, the function classifies events that are considered irreversible.
             - When `unique_state` is True (and `irreversible_event` is False), it classifies unique states using a 50th percentile threshold.
 
@@ -1634,7 +1666,9 @@ def interpret_track_classification(
     return df
 
 
-def classify_transient_events(data, class_attr, pre_event=None):
+def classify_transient_events(
+    data: pd.DataFrame, class_attr: str, pre_event: Optional[str] = None
+) -> pd.DataFrame:
     """
     Classify transient events in the dataset.
 
@@ -1753,8 +1787,12 @@ def classify_transient_events(data, class_attr, pre_event=None):
 
 
 def classify_irreversible_events(
-    data, class_attr, r2_threshold=0.5, percentile_recovery=50, pre_event=None
-):
+    data: pd.DataFrame,
+    class_attr: str,
+    r2_threshold: float = 0.5,
+    percentile_recovery: float = 50,
+    pre_event: Optional[str] = None,
+) -> pd.DataFrame:
     """
     Classify irreversible events in a tracked dataset based on the status of cells and transitions.
 
@@ -1882,7 +1920,12 @@ def classify_irreversible_events(
     return df
 
 
-def classify_unique_states(df, class_attr, percentile=50, pre_event=None):
+def classify_unique_states(
+    df: pd.DataFrame,
+    class_attr: str,
+    percentile: int = 50,
+    pre_event: Optional[str] = None,
+) -> pd.DataFrame:
     """
     Classify unique cell states based on percentile values of a status attribute in a tracked dataset.
 
@@ -1972,7 +2015,9 @@ def classify_unique_states(df, class_attr, percentile=50, pre_event=None):
     return df
 
 
-def classify_cells_from_query(df, status_attr, query):
+def classify_cells_from_query(
+    df: pd.DataFrame, status_attr: str, query: str
+) -> pd.DataFrame:
     """
     Classify cells in a DataFrame based on a query string, assigning classifications to a specified column.
 
@@ -2060,14 +2105,14 @@ def classify_cells_from_query(df, status_attr, query):
 
 
 def classify_tracks_from_query(
-    df,
-    event_name,
-    query,
-    irreversible_event=True,
-    unique_state=False,
-    r2_threshold=0.5,
-    percentile_recovery=50,
-):
+    df: pd.DataFrame,
+    event_name: str,
+    query: str,
+    irreversible_event: bool = True,
+    unique_state: bool = False,
+    r2_threshold: float = 0.5,
+    percentile_recovery: float = 50,
+) -> pd.DataFrame:
     """
     Classifies tracks based on a query and interprets the resulting classifications.
 
@@ -2117,15 +2162,15 @@ def classify_tracks_from_query(
 
 
 def measure_radial_distance_to_center(
-    df,
-    volume,
-    column_labels={
+    df: pd.DataFrame,
+    volume: Union[Tuple[int, int], List[int]],
+    column_labels: Dict[str, str] = {
         "track": "TRACK_ID",
         "time": "FRAME",
         "x": "POSITION_X",
         "y": "POSITION_Y",
     },
-):
+) -> pd.DataFrame:
     """
     Calculates the radial distance of each cell to the center of the image/volume.
 
@@ -2157,7 +2202,7 @@ def measure_radial_distance_to_center(
     return df
 
 
-def center_of_mass_to_abs_coordinates(df):
+def center_of_mass_to_abs_coordinates(df: pd.DataFrame) -> pd.DataFrame:
     """
     Converts relative center of mass coordinates to absolute coordinates.
 
