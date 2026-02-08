@@ -1,3 +1,26 @@
+"""
+Events Module
+=============
+
+This module handles the processing of time-to-event data and survival analysis.
+It is designed to transform tracking data into formats suitable for survival analysis (e.g., Kaplan-Meier estimators) to study event dynamics like cell death or division.
+
+Key Features
+------------
+-   **Data Transformation**: Converts raw tracking and event data into event/censorship indicators and survival times.
+-   **Survival Analysis**: Wrappers for computing and fitting Kaplan-Meier survival curves.
+-   **Censorship Handling**: robustly handles left and right censorship in time-series data.
+
+Main Functions
+--------------
+-   `switch_to_events`: Core function to convert class and time data into survival analysis format (events vs. censored).
+-   `compute_survival`: high-level function to compute survival statistics for a specific class of interest from a dataframe.
+
+Dependencies
+------------
+-   `lifelines`: Used for Kaplan-Meier fitting and survival analysis statistics.
+"""
+
 import numpy as np
 from lifelines import KaplanMeierFitter
 

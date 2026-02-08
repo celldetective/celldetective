@@ -227,11 +227,35 @@ class PandasModel(QAbstractTableModel):
         self.colors = dict()
 
     def rowCount(self, parent=None):
-        """Return the number of rows."""
+        """
+        Return the number of rows.
+
+        Parameters
+        ----------
+        parent : QModelIndex, optional
+            The parent index. Default is None.
+
+        Returns
+        -------
+        int
+            Number of rows.
+        """
         return self._data.shape[0]
 
     def columnCount(self, parent=None):
-        """Return the number of columns."""
+        """
+        Return the number of columns.
+
+        Parameters
+        ----------
+        parent : QModelIndex, optional
+            The parent index. Default is None.
+
+        Returns
+        -------
+        int
+            Number of columns.
+        """
         return self._data.shape[1]
 
     def data(self, index, role=Qt.DisplayRole):
@@ -417,6 +441,31 @@ class QuickSliderLayout(QHBoxLayout):
         precision=3,
         *args,
     ):
+        """
+        Initialize the QuickSliderLayout.
+
+        Parameters
+        ----------
+        label : str, optional
+            The label to be displayed next to the slider (default is None).
+        slider : QSlider, optional
+            The slider widget to be added to the layout.
+        layout_ratio : tuple of float, optional
+            Defines the width ratio between the label and the slider in the layout. The first element is the
+            ratio for the label, and the second is for the slider (default is (0.25, 0.75)).
+        slider_initial_value : int or float, optional
+            The initial value to set for the slider (default is 1).
+        slider_range : tuple of int or float, optional
+            A tuple specifying the minimum and maximum values for the slider (default is (0, 1)).
+        slider_tooltip : str, optional
+            Tooltip text to display when hovering over the slider (default is None).
+        decimal_option : bool, optional
+            If True, the slider allows decimal values with a specified precision (default is True).
+        precision : float, optional
+            The step size for the slider when `decimal_option` is enabled (default is 3).
+        *args : tuple
+            Additional positional arguments passed to the parent `QHBoxLayout`.
+        """
         super().__init__(*args)
 
         if label is not None and isinstance(label, str):
@@ -477,6 +526,21 @@ class ExportPlotBtn(QPushButton, Styles):
     """
 
     def __init__(self, fig, export_dir=None, *args, **kwargs):
+        """
+        Initialize the ExportPlotBtn.
+
+        Parameters
+        ----------
+        fig : matplotlib.figure.Figure
+            The matplotlib figure object to be exported.
+        export_dir : str, optional
+            The default directory where the file will be saved. If not provided, the current
+            working directory will be used.
+        *args : tuple
+            Additional positional arguments passed to the parent `QPushButton` constructor.
+        **kwargs : dict
+            Additional keyword arguments passed to the parent `QPushButton` constructor.
+        """
 
         super().__init__()
 
@@ -856,6 +920,24 @@ class ThresholdLineEdit(QLineEdit):
         value_type="float",
         *args,
     ):
+        """
+        Initialize the ThresholdLineEdit.
+
+        Parameters
+        ----------
+        init_value : float or int, optional
+            The initial threshold value to display in the input field (default is 2.0).
+        connected_buttons : QPushButton or list of QPushButton, optional
+            QPushButton(s) that should be enabled/disabled based on the validity of the threshold
+            value (default is None).
+        placeholder : str, optional
+            Placeholder text to show when no value is entered in the input field
+            (default is 'px > thresh are masked').
+        value_type : str, optional
+            Specifies the type of threshold value, either 'float' or 'int' (default is 'float').
+        *args : tuple
+            Additional positional arguments passed to the parent `QLineEdit`.
+        """
         super().__init__(*args)
 
         self.init_value = init_value

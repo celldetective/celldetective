@@ -34,6 +34,12 @@ if __name__ == "__main__":
 
     # Update check in background
     def check_update():
+        """
+        Check for software updates on PyPI.
+
+        Fetches the latest version from PyPI and compares it with the current version.
+        Logs a warning if a newer version is available.
+        """
         try:
             import requests
             import re

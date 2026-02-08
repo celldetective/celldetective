@@ -53,6 +53,18 @@ def setup_global_logging(level=logging.INFO, log_file=None):
 
     # Hook to capture uncaught exceptions
     def handle_exception(exc_type, exc_value, exc_traceback):
+        """
+        Handle uncaught exceptions.
+
+        Parameters
+        ----------
+        exc_type : type
+            Exception type.
+        exc_value : Exception
+            Exception value.
+        exc_traceback : traceback
+            Exception traceback.
+        """
         if issubclass(exc_type, KeyboardInterrupt):
             sys.__excepthook__(exc_type, exc_value, exc_traceback)
             return

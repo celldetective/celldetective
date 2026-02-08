@@ -1,3 +1,45 @@
+"""
+Image Filters Module
+====================
+
+This module provides a collection of image filtering and thresholding functions used throughout Celldetective.
+
+These functions act as building blocks for image preprocessing pipelines, particularly within custom `extra_properties` measurements and configuration-based image segmentation protocols (e.g. `segment_frame_from_thresholds`).
+
+Usage in Configuration
+----------------------
+
+Filters are typically specified in configuration dictionaries (e.g., `instructions`) as a list of lists or tuples, where the first element is the filter name and subsequent elements are arguments.
+
+**Example Configuration:**
+
+.. code-block:: python
+
+    "filters": [
+        ["gauss", 2.0],       # Applies gauss_filter(img, 2.0)
+        ["subtract", 100],    # Applies subtract_filter(img, 100)
+        ["abs"]               # Applies abs_filter(img)
+    ]
+
+This sequence is executed by `filter_image`, applying each filter to the output of the previous one.
+
+Available Operations
+--------------------
+
+*   **Smoothing/Denoising**: `gauss`, `median`
+*   **Edge/Texture**: `laplace`, `variance`, `std`, `dog` (Difference of Gaussians), `log` (Laplacian of Gaussian)
+*   **Morphological**: `maximum` (dilation), `minimum` (erosion), `tophat` (white top-hat)
+*   **Arithmetic**: `subtract`, `abs`, `invert`, `ln` (natural log), `percentile`
+*   **Thresholding**: `otsu`, `multiotsu`, `local`, `niblack`, `sauvola`
+
+Function Naming Convention
+--------------------------
+Each filter function is named ``<filter_name>_filter`` (e.g., ``gauss_filter``). In configuration lists, refer to them by ``<filter_name>`` (e.g., ``"gauss"``).
+
+Copyright © 2022 Laboratoire Adhesion et Inflammation
+Authored by R. Torro, K. Dervanova, L. Limozin
+"""
+
 import numpy
 
 from celldetective.utils.image_cleaning import interpolate_nan

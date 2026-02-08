@@ -1,4 +1,28 @@
-import numpy as np
+"""
+Signals Module
+==============
+
+This module is dedicated to the extraction, processing, and analysis of biological signals from tracked objects.
+It includes capabilities for signal measurement, feature computation, and event prediction using machine learning models.
+
+Key Features
+------------
+-   **Signal Extraction**: Retrieves intensity values and other measurements from image channels based on object masks.
+-   **Signal Analysis**: Computes signal derivatives, smoothing, and other temporal features.
+-   **Event Prediction**: Uses trained models to detect biological events (e.g., apoptosis, division) from signal time-series.
+
+Main Functions
+--------------
+-   `extract_signals`: Extracts raw signal data from images for tracked objects.
+-   `predict_signals`: Applies pre-trained models to classify signals and detect events.
+-   `compute_signal_features`: Calculates statistical and temporal features from raw signals.
+
+Dependencies
+------------
+-   `tensorflow`/`keras`: Required for running event detection models.
+-   `scikit-learn`: Used for metric calculation and some processing steps.
+"""
+
 import os
 import subprocess
 import json

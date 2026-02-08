@@ -1,5 +1,26 @@
 """
-Copright © 2024 Laboratoire Adhesion et Inflammation, Authored by Remy Torro & Ksenija Dervanova.
+Preprocessing Module
+====================
+
+This module provides tools for image preprocessing, focusing on background estimation and correction.
+It enables the creation of flat-field corrections and background subtraction models to improve image quality for downstream analysis.
+
+Key Features
+------------
+-   **Background Estimation**: Methods to estimate background from time-series or tiled acquisitions.
+-   **Background Correction**: Applies estimated backgrounds to image stacks (subtraction or division).
+-   **Surface Fitting**: Functions to fit 2D surfaces (planes, paraboloids) to image data, useful for uneven illumination correction.
+
+Main Functions
+--------------
+-   `estimate_background_per_condition`: Generates background images for experimental conditions.
+-   `correct_background_model_free`: Master function to apply background correction to an experiment.
+-   `apply_background_to_stack`: Applies a specific background image to a single image stack.
+-   `fit_plane`: Fits a plane model to an image, optionally excluding specific regions.
+
+Notes
+-----
+The module relies heavily on the directory structure and configuration files of the experiment to locate and process images.
 """
 
 from typing import List

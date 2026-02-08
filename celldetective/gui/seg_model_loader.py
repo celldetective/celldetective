@@ -594,6 +594,9 @@ class SegmentationModelLoader(CelldetectiveWidget):
             self.thresh_wizard.show()
 
             def safe_resize():
+                """
+                Safely resize the wizard.
+                """
                 try:
                     self.thresh_wizard.resize(
                         self.thresh_wizard.width() + 1,

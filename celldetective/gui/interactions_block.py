@@ -452,6 +452,14 @@ class NeighPanel(QFrame, Styles):
         self.df = None
 
         def on_table_loaded(df):
+            """
+            Callback when table is loaded.
+
+            Parameters
+            ----------
+            df : pandas.DataFrame
+                The loaded dataframe.
+            """
             self.df = df
             if self.df is not None:
                 plot_mode = "static"

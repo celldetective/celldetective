@@ -31,7 +31,7 @@ ADCCFactory requires a specific folder tree, that mimics the organization of a `
 
 .. _`glass slide`: Microscopy
 
-.. figure:: _static/glass_slide_to_exp_folder.png
+.. figure:: _static/glass-slide.png
     :align: center
     :alt: exp_folder_mimics_glass_slide
     
@@ -118,7 +118,7 @@ We highly recommend that you align the movie beforehand using for example, the "
 
 Usually, the alive target nucleus florescence channel works as a great reference for alignment, since the target cells are quasi-static. 
 
-.. figure:: _static/align_stack_sift.gif
+.. figure:: _static/align-stack-sift.gif
     :align: center
     :alt: sift_align
     

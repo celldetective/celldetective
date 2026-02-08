@@ -22,17 +22,17 @@ def contour_of_instance_segmentation(label, distance, sdf=None, voronoi_map=None
     label : ndarray
             The instance segmentation labels.
     distance : int, float, list, tuple, or str
-            The distance specification.
-            - Scalar > 0: Inner contour (Erosion) from boundary to 'distance' pixels inside. Range [0, distance].
-            - Scalar < 0: Outer contour (Dilation) from 'distance' pixels outside to boundary. Range [distance, 0].
-            - Tuple/List (a, b): Explicit range in SDF space.
-               - Positive values are inside the object.
-               - Negative values are outside methods.
-               - Example: (5, 10) -> Inner ring 5 to 10px deep.
-               - Example: (-10, -5) -> Outer ring 5 to 10px away.
-            - String "rad1-rad2": Interpretation for Batch Measurements (Outer Rings).
-               - Interpreted as an annular region OUTSIDE the object.
-               - "5-10" -> Range [-10, -5] in SDF space (5 to 10px away).
+        The distance specification.
+        - Scalar > 0: Inner contour (Erosion) from boundary to 'distance' pixels inside. Range [0, distance].
+        - Scalar < 0: Outer contour (Dilation) from 'distance' pixels outside to boundary. Range [distance, 0].
+        - Tuple/List (a, b): Explicit range in SDF space.
+            - Positive values are inside the object.
+            - Negative values are outside methods.
+            - Example: (5, 10) -> Inner ring 5 to 10px deep.
+            - Example: (-10, -5) -> Outer ring 5 to 10px away.
+        - String "rad1-rad2": Interpretation for Batch Measurements (Outer Rings).
+            - Interpreted as an annular region OUTSIDE the object.
+            - "5-10" -> Range [-10, -5] in SDF space (5 to 10px away).
     sdf : ndarray, optional
             Pre-computed Signed Distance Field (dist_in - dist_out).
             If provided, avoids recomputing EDT.

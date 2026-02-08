@@ -1,45 +1,53 @@
 """
+Extra Properties Module
+=======================
+
+This module defines custom measurement functions that extend `skimage.measure.regionprops`.
+
+These functions are designed to be dynamically discovered and applied to single-cell regions during the feature extraction phase. They allow for complex, user-defined measurements that go beyond standard morphological or intensity features (e.g., area of dark regions, specific intensity percentiles).
+
+Function Signature Specification
+--------------------------------
+
+To be valid, a function in this module must adhere to the following signature:
+
+.. code-block:: python
+
+    def my_custom_measurement(regionmask, intensity_image, target_channel='adhesion_channel', **kwargs):
+        # ... calculation ...
+        return scalar_value
+
+**Arguments:**
+
+*   **regionmask** (*ndarray*): A binary mask of the object (cell) within its bounding box.
+*   **intensity_image** (*ndarray*): The intensity image crop corresponding to the bounding box. **Note:** Unlike `regionprops`, this image is *not* masked (background is not zeroed), allowing for threshold-based analysis within the bounding box.
+*   **target_channel** (*str, optional*): The name of the channel being analyzed (e.g., 'adhesion_channel').
+*   **kwargs**: Additional keyword arguments may be passed by the system.
+
+**Return Value:**
+
+*   Must return a **scalar** (float or int).
+*   Returning `NaN` is permitted and handled.
+
+Naming and Indexing Rules
+-------------------------
+
+The name of the function determines the column name in the output measurement table.
+
+1.  **Channel Replacement**: If the function name contains the substring ``intensity``, it is automatically replaced by the actual channel name being measured.
+    *   *Example:* ``intensity_mean`` -> ``green_channel_mean``
+2.  **Multi-channel Indexing**: Since these functions are often run on multiple channels, avoid using simple digits (0-9) in the function name if they could conflict with channel indexing.
+    *   *Bad:* ``measure_ch1``
+    *   *Good:* ``measure_channel_one``
+
+Integration Details
+-------------------
+
+*   **Automatic Discovery**: Any function defined in this module is automatically detected and listed in the GUI settings under "Extra features".
+*   **Execution**: These functions are called by `celldetective.measure.measure_features`.
+
 Copyright © 2022 Laboratoire Adhesion et Inflammation
 Authored by R. Torro, K. Dervanova, L. Limozin
-
-This module defines additional measurement functions for use with `regionprops` via `measure_features`.
-
-Usage
------
-Each function must follow these conventions:
-
-- **First argument:** `regionmask` (numpy array)
-  A binary mask of the cell of interest, as provided by `regionprops`.
-- **Optional second argument:** `intensity_image` (numpy array)
-  An image crop/bounding box associated with the cell (single-channel at a time).
-
-Unlike the default `regionprops` from `scikit-image`, the cell image is **not** masked with zeros outside its boundaries.
-This allows thresholding techniques to be used in measurements.
-
-Naming Conventions & Indexing
-------------------------------
-- The measurement name is derived from the function name.
-- If a function returns multiple values (e.g., for multichannel images), outputs are labeled sequentially:
-  `function-0`, `function-1`, etc.
-- To rename these outputs, use `rename_intensity_column` from `celldetective.utils`.
-- `"intensity"` in function names is automatically replaced with the actual channel name:
-  - Example: `"intensity-0"` → `"brightfield_channel"`.
-- **Avoid digits smaller than the number of channels in function names** to prevent indexing conflicts.
-  Prefer text-based names instead:
-
-  .. code-block:: python
-
-          # Bad practice:
-          def intensity2(regionmask, intensity_image):
-                  pass
-
-          # Recommended:
-          def intensity_two(regionmask, intensity_image):
-                  pass
-
-GUI Integration
----------------
-New functions are **automatically** added to the list of available measurements in the graphical interface.
 """
 
 import warnings

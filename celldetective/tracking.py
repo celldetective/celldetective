@@ -1,3 +1,27 @@
+"""
+Tracking Module
+===============
+
+This module provides functionality for tracking segmented objects across time in timelapse experiments.
+It supports multiple tracking algorithms, primarily integrating with `btrack` and `trackpy`.
+
+Key Features
+------------
+-   **Object Tracking**: Links segmented objects into trajectories using Bayesian tracking (`btrack`) or greedy algorithms (`trackpy`).
+-   **Trajectory Management**: Tools for cleaning, filtering, and relabeling trajectories.
+-   **Feature Extraction**: Calculates motion and morphological features for tracked objects.
+
+Main Functions
+--------------
+-   `track`: The primary entry point for tracking objects in a set of segmentation masks.
+-   `clean_trajectories`: Filters trajectories based on length and other criteria.
+-   `relabel_trajectories`: Ensures consistent labeling of objects across frames.
+
+Notes
+-----
+This module expects input in the form of segmentation masks and configuration dictionaries specifying tracking parameters.
+"""
+
 import pandas as pd
 import numpy as np
 from tqdm import tqdm
@@ -48,7 +72,6 @@ def track(
     },
 ):
     """
-
     Perform cell tracking on segmented labels using the bTrack library.
 
     Parameters
@@ -1323,6 +1346,7 @@ def write_first_detection_class(
         The distance in pixels from the image edge to consider a detection as near the edge. Default is 20.
     column_labels : dict, optional
         A dictionary mapping logical column names to actual column names in `df`. Keys include:
+
         - `'track'`: The column indicating the track ID (default: `"TRACK_ID"`).
         - `'time'`: The column indicating the frame/time (default: `"FRAME"`).
         - `'x'`: The column indicating the X-coordinate (default: `"POSITION_X"`).

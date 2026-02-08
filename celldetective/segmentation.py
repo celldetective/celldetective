@@ -1,5 +1,26 @@
 """
-Segmentation module
+Segmentation Module
+===================
+
+This module handles the segmentation of cells and nuclei in microscopy images.
+It provides a unified interface for various segmentation algorithms, including deep learning-based methods and classical image processing techniques.
+
+Key Features
+------------
+-   **Deep Learning Integration**: Supports `StarDist` and `Cellpose` for robust instance segmentation.
+-   **Classical Methods**: Includes thresholding and watershed-based segmentation.
+-   **Preprocessing Integration**: Often works in tandem with the `preprocessing` module to prepare images for segmentation.
+
+Main Functions
+--------------
+-   `process_image` / `segment_image`: Main wrapper functions to execute segmentation based on provided configuration.
+-   `stardist_segmentation`: Wrapper for StarDist segmentation.
+-   `cp_segmentation`: Wrapper for Cellpose segmentation.
+-   `threshold_segmentation`: Implements threshold-based segmentation logic.
+
+Configuration
+-------------
+Segmentation parameters are typically passed via a dictionary or configuration object, specifying the method (e.g., 'stardist', 'cellpose') and its specific parameters (e.g., probability threshold, diameter).
 """
 
 import json

@@ -1,3 +1,27 @@
+"""
+Neighborhood Module
+===================
+
+This module provides improved algorithms for defining and analyzing local neighborhoods of cells.
+It supports various definitions of "neighborhood," including distance-based and contact-based criteria.
+
+Key Features
+------------
+-   **Distance-Based Neighbors**: Identifies neighbors within a specified radius.
+-   **Contact-Based Neighbors**: Identifies neighbors that are physically touching (based on segmentation masks).
+-   **Neighborhood Metrics**: Computes statistics about the local environment, such as density or neighbor types.
+
+Main Functions
+--------------
+-   `distance_cut_neighborhood`: Main function to compute distance-based neighborhoods for a set of objects.
+-   `contact_neighborhood`: Computes contact-based neighborhoods using mask adjacency.
+-   `compute_attention_weight`: Calculates weights based on proximity, useful for weighted neighborhood metrics.
+
+Integrations
+------------
+The output of this module (neighborhood lists) is often used by `relative_measurements.py` to compute detailed pair-wise statistics.
+"""
+
 import numpy as np
 import pandas as pd
 from tqdm import tqdm

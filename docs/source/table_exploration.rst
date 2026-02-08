@@ -1,5 +1,5 @@
 Table Explorer (Table UI)
-=======================
+=========================
 
 .. _table_exploration:
 

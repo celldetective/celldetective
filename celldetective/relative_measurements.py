@@ -1,3 +1,27 @@
+"""
+Relative Measurements Module
+============================
+
+This module calculates quantitative metrics describing the relationship between pairs of objects (reference and neighbor).
+It relies on neighborhood definitions provided by the `neighborhood` module.
+
+Key Features
+------------
+-   **Spatial Metrics**: Computes relative distance, angle, and orientation between cell pairs.
+-   **Temporal Metrics**: Calculates relative velocity and interaction duration.
+-   **Signal Coupling**: Analyzes how signals correlates between measuring pairs.
+
+Main Functions
+--------------
+-   `measure_pairs`: Computes instantaneous spatial relationships for identified pairs.
+-   `measure_pair_signals_at_position`: Extends pair measurements with signal analysis and temporal derivatives.
+-   `rel_measure_at_position`: Wrapper script to execute relative measurements for an entire position.
+
+Input
+-----
+Requires pre-computed tracking tables (`pkl` or `csv`) containing neighborhood information columns.
+"""
+
 import pandas as pd
 import numpy as np
 from celldetective.utils.maths import derivative

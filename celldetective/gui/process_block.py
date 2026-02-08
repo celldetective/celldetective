@@ -69,6 +69,7 @@ class NapariLoaderThread(QThread):
         self._is_cancelled = False
 
     def stop(self):
+        """Stop the thread."""
         self._is_cancelled = True
 
     def run(self):
@@ -78,6 +79,19 @@ class NapariLoaderThread(QThread):
         from celldetective.napari.utils import control_tracks
 
         def callback(p):
+            """
+            Callback to update progress.
+
+            Parameters
+            ----------
+            p : int
+                Progress value.
+
+            Returns
+            -------
+            bool
+                True if continued, False if cancelled.
+            """
             if self._is_cancelled:
                 return False
             self.progress.emit(p)
@@ -781,6 +795,12 @@ class ProcessPanel(QFrame, Styles):
                 return None
 
     def check_segmentation(self):
+        """
+        Check if segmentation labels exist, otherwise prompt to create them.
+
+        If labels are missing, the user is asked if they want to create a new label directory.
+        If labels exist, they are loaded into Napari for inspection.
+        """
         from celldetective.napari.utils import control_segmentation_napari
 
         if not os.path.exists(
@@ -931,6 +951,9 @@ class ProcessPanel(QFrame, Styles):
                 self.signal_progress.canceled.connect(self.signal_loader.stop)
 
                 def on_finished():
+                    """
+                    Handle completion of the signal loader.
+                    """
                     self.signal_progress.blockSignals(True)
                     self.signal_progress.close()
                     if not self.signal_loader._is_cancelled:
@@ -1160,6 +1183,14 @@ class ProcessPanel(QFrame, Styles):
             try:
 
                 def post_widget(wdg):
+                    """
+                    Resize and center the widget.
+
+                    Parameters
+                    ----------
+                    wdg : QWidget
+                        The widget to resize and center.
+                    """
                     try:
                         wdg.resize(wdg.width() + 1, wdg.height() + 1)
                         center_window(wdg)
@@ -1675,6 +1706,14 @@ class ProcessPanel(QFrame, Styles):
         self.napari_progress.canceled.connect(self.napari_loader.stop)
 
         def on_finished(result):
+            """
+            Handle completion of Napari loading.
+
+            Parameters
+            ----------
+            result : dict or Exception
+                The result of the loading process or an exception if one occurred.
+            """
             from celldetective.napari.utils import launch_napari_viewer
 
             self.napari_progress.blockSignals(True)
@@ -1702,6 +1741,14 @@ class ProcessPanel(QFrame, Styles):
                 QApplication.processEvents()
 
                 def progress_cb(msg):
+                    """
+                    Callback for Napari loading progress.
+
+                    Parameters
+                    ----------
+                    msg : str
+                        Progress message.
+                    """
                     if isinstance(msg, str):
                         self.napari_progress.setLabelText(msg)
                     QApplication.processEvents()
@@ -1737,6 +1784,12 @@ class ProcessPanel(QFrame, Styles):
         self.napari_loader.start()
 
     def view_table_ui(self):
+        """
+        Load and display the results table.
+
+        This method handles loading tables for single or multiple positions.
+        For multiple positions, it shows a progress window.
+        """
         from celldetective.gui.tableUI import TableUI
         from celldetective.gui.workers import ProgressWindow
         from celldetective.processes.load_table import TableLoaderProcess
@@ -1767,6 +1820,14 @@ class ProcessPanel(QFrame, Styles):
                 total_positions += len(positions)
 
         def show_table(df):
+            """
+            Display the dataframe in TableUI.
+
+            Parameters
+            ----------
+            df : pandas.DataFrame
+                The dataframe to display.
+            """
             if df is not None:
                 plot_mode = "plot_track_signals"
                 if "TRACK_ID" not in list(df.columns):
@@ -1813,6 +1874,14 @@ class ProcessPanel(QFrame, Styles):
             self.df = None
 
             def on_table_loaded(df):
+                """
+                Callback when table is loaded asynchronously.
+
+                Parameters
+                ----------
+                df : pandas.DataFrame
+                    The loaded dataframe.
+                """
                 self.df = df
                 show_table(self.df)
 
@@ -1930,6 +1999,12 @@ class ProcessPanel(QFrame, Styles):
             self.signals = [x for x in self.signals if not (x in seen or seen.add(x))]
 
     def set_cellpose_scale(self):
+        """
+        Set parameters for Cellpose models.
+
+        Updates the configuration file with scale, channels, flow threshold,
+        and cell probability threshold from the widget.
+        """
 
         scale = (
             self.parent_window.PxToUm
@@ -1965,6 +2040,11 @@ class ProcessPanel(QFrame, Styles):
         self.process_population()
 
     def set_stardist_scale(self):
+        """
+        Set parameters for StarDist models.
+
+        Updates the configuration file with selected channels from the widget.
+        """
 
         model_complete_path = locate_segmentation_model(self.model_name)
         input_config_path = model_complete_path + "config_input.json"
@@ -1984,6 +2064,12 @@ class ProcessPanel(QFrame, Styles):
         self.process_population()
 
     def set_selected_channels_for_segmentation(self):
+        """
+        Set channels for segmentation models.
+
+        Updates the configuration file with selected channels and optionally
+        target cell size.
+        """
 
         model_complete_path = locate_segmentation_model(self.model_name)
         input_config_path = model_complete_path + "config_input.json"
@@ -2011,6 +2097,11 @@ class ProcessPanel(QFrame, Styles):
         self.process_population()
 
     def set_selected_signals_for_event_detection(self):
+        """
+        Set channels for event detection models.
+
+        Updates the configuration file with selected channels for the signal model.
+        """
         self.signal_model_name = self.signal_models[
             self.signal_models_list.currentIndex()
         ]

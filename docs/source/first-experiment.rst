@@ -86,7 +86,7 @@ The configuration file defines the structure of your experiment (populations, im
 For a detailed explanation of each tag (``[Populations]``, ``[MovieSettings]``, etc.), see the :ref:`Experiment Configuration Reference <ref_experiment_config>`.
 
 Quick access to the experiment folder
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Once an experiment is opened in Celldetective, you can quickly access its folder by clicking the **folder icon** next to the experiment name in the top menu.
 

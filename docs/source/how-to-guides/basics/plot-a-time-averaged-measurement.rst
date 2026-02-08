@@ -1,5 +1,5 @@
 How to compare collapsed measurements across conditions
-=====================================================
+=======================================================
 
 This guide explains how to aggregate single-cell track data (e.g., computing the time-average of a signal) and compare it across different experimental conditions using Boxplots and Stripplots.
 

@@ -131,6 +131,9 @@ class PreprocessingPanel(QFrame, Styles):
             )
 
             def safe_center():
+                """
+                Safely center the window.
+                """
                 try:
                     center_window(self.window())
                 except RuntimeError:

@@ -16,9 +16,9 @@ How to Configure the Tracker
 ----------------------------
 
 1.  Navigate to the **Tracking** module in the main processing panel.
-2.  Click the **Settings** button |settings_icon| to open the configuration window.
+2.  Click the **Settings** button to open the configuration window.
 3.  **Select a Tracker**:
-    *   Choose **bTrack** (default) for complex behaviors (division, apoptosis) and crowded scenes. It uses a Bayesian approach with motion prediction.
+    *   Choose **bTrack** [#]_ (default) for complex behaviors (division, apoptosis) and crowded scenes. It uses a Bayesian approach with motion prediction.
     *   Choose **trackpy** for simple particle tracking (Brownian motion).
 4.  **Add Features** (Optional):
     *   Click **Add features** to calculate morphological (e.g., area) or intensity features during tracking.
@@ -50,7 +50,7 @@ How to Visualize Tracks
 -----------------------
 
 1.  Select a single position in the file list.
-2.  Click the **Eye** button |eye_icon| in the Tracking module.
+2.  Click the **Eye** button in the Tracking module.
 3.  Napari will open with the following layers:
     *   ``image``: Raw microscopy data.
     *   ``segmentation``: Labeled cell masks (color-coded by ID).
@@ -79,10 +79,10 @@ You can manually correct tracking mistakes (e.g., identity switches) using the N
     *   Once finished, click the **Export the modified tracks...** button in the Napari dock widget.
     *   This updates the CSV file and re-runs any post-processing (e.g., smoothing, velocity).
 
-.. |settings_icon| image:: _static/settings_icon_placeholder.png
-    :height: 1em
-.. |eye_icon| image:: _static/eye_icon_placeholder.png
-    :height: 1em
+.. .. |settings_icon| image:: _static/settings_icon_placeholder.png
+..     :height: 1em
+.. .. |eye_icon| image:: _static/eye_icon_placeholder.png
+..     :height: 1em
 
 References
 ----------

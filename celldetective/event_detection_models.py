@@ -1,3 +1,25 @@
+"""
+Event Detection Models Module
+=============================
+
+This module contains the deep learning architectures and helper classes for detecting biological events from signal time-series.
+It wraps TensorFlow/Keras models to provide a high-level API for training, evaluation, and inference.
+
+Key Features
+------------
+-   **SignalDetectionModel**: The main class for managing event detection workflows.
+-   **Model Architectures**: Implementations of ResNet-based 1D Convolutional Neural Networks for time-series classification and regression.
+-   **Training Utilities**: Custom data generators, callbacks, and loss functions for model training.
+
+Main Classes
+------------
+-   `SignalDetectionModel`: Facade for creating, determining, and training classification and regression models.
+
+Usage
+-----
+This module is typically used in conjunction with the `signals` module to process extracted signals and predict events.
+"""
+
 import json
 import os
 import random
@@ -70,10 +92,10 @@ def TimeHistory():
 
 class SignalDetectionModel(object):
     """
-    A class for creating and managing signal detection models for analyzing biological signals.
+    A class for creating and managing event detection models for analyzing biological timeseries.
 
-    This class provides functionalities to load a pretrained signal detection model or create one from scratch,
-    preprocess input signals, train the model, and make predictions on new data.
+    This class provides functionalities to load a pretrained event detection model or create one from scratch,
+    preprocess input timeseries, train the model, and make predictions on new data.
 
     Parameters
     ----------

@@ -1,3 +1,31 @@
+"""
+Measurements Module
+===================
+
+This module handles the extraction of quantitative features from single-cell data.
+
+It provides the core machinery for:
+
+1.  **Morphological & Intensity Measurements**: Computing standard and custom features for segmented cells (via `measure_features`).
+2.  **Isotropic Intensity Measurements**: Measuring signals in circular or ring-shaped regions around cell centroids or tracks (via `measure_isotropic_intensity`).
+3.  **Time-Lapse Analysis**: Processing entire stacks of images and labels to generate trajectory-linked data (via `measure`).
+4.  **Event Classification**: Post-processing tools to classify cell states and detect events in timeseries data.
+
+Core Functions
+--------------
+
+*   **`measure`**: The main entry point for processing an experiment. It iterates through frames, computes features, and links them to trajectories.
+*   **`classify_cells_from_query`**: Classify cells based on a query string.
+
+Integration with Extra Properties
+---------------------------------
+
+This module automatically integrates with `celldetective.extra_properties`. If valid functions are defined there, they are dynamically picked up by `measure_features` and added to the output tables.
+
+Copyright © 2022 Laboratoire Adhesion et Inflammation
+Authored by R. Torro, K. Dervanova, L. Limozin
+"""
+
 import math
 import numpy as np
 import os
@@ -1549,6 +1577,7 @@ def interpret_track_classification(
     -------
     pandas.DataFrame
             DataFrame with updated classifications for cell trajectories:
+
             - If `irreversible_event` is True, it classifies irreversible events using the `classify_irreversible_events` function.
             - If `unique_state` is True, it classifies unique states using the `classify_unique_states` function.
 
@@ -1561,6 +1590,7 @@ def interpret_track_classification(
     -----
     - The function assumes that the input DataFrame contains a column for tracking cells (`TRACK_ID`) and possibly a 'position' column.
     - The classification behavior depends on the `irreversible_event` and `unique_state` flags:
+            
             - When `irreversible_event` is True, the function classifies events that are considered irreversible.
             - When `unique_state` is True (and `irreversible_event` is False), it classifies unique states using a 50th percentile threshold.
 
@@ -1745,6 +1775,7 @@ def classify_irreversible_events(
     -------
     pandas.DataFrame
             DataFrame with updated classifications for irreversible events, with the following outcomes:
+
             - Cells with all 0s in the status column are classified as 1 (no event).
             - Cells with all 1s are classified as 2 (event already occurred).
             - Cells with a mix of 0s and 1s are classified as 2 (ambiguous, possible transition).
@@ -1753,7 +1784,7 @@ def classify_irreversible_events(
 
     Notes
     -----
-    - The function assumes that cells are grouped by a unique identifier ('TRACK_ID') and sorted by position or ID.
+    - The function assumes that cells are grouped by a unique identifier (`TRACK_ID`) and sorted by position or ID.
     - The classification is based on the `stat_col` derived from `class_attr` (status column).
     - Cells with no event (all 0s in the status column) are assigned a class value of 1.
     - Cells with irreversible events (all 1s in the status column) are assigned a class value of 2.
@@ -1871,6 +1902,7 @@ def classify_unique_states(df, class_attr, percentile=50, pre_event=None):
     pandas.DataFrame
             DataFrame with updated classification for each track and corresponding time (if applicable).
             The classification is updated based on the calculated percentile:
+
             - Cells with percentile values that round to 0 (negative to classification) are classified as 1.
             - Cells with percentile values that round to 1 (positive to classification) are classified as 2.
             - If classification is not applicable (NaN), time (`class_attr.replace('class', 't')`) is set to -1.
@@ -1958,6 +1990,7 @@ def classify_cells_from_query(df, status_attr, query):
     -------
     pandas.DataFrame
             The DataFrame with an updated `status_attr` column:
+
             - Cells matching the query are classified with a value of 1.
             - Cells that have `NaN` values in any of the columns involved in the query are classified as `NaN`.
             - Cells that do not match the query are classified with a value of 0.
@@ -1973,11 +2006,11 @@ def classify_cells_from_query(df, status_attr, query):
     >>> data = {'cell_type': ['A', 'B', 'A', 'B'], 'size': [10, 20, np.nan, 15]}
     >>> df = pd.DataFrame(data)
     >>> classify_cells_from_query(df, 'selected_cells', 'size > 15')
-    cell_type  size  selected_cells
-    0         A   10.0            0.0
-    1         B   20.0            1.0
-    2         A    NaN            NaN
-    3         B   15.0            0.0
+         cell_type    size       selected_cells
+    0         A       10.0            0.0
+    1         B       20.0            1.0
+    2         A       NaN             NaN
+    3         B       15.0            0.0
 
     - If the query string is empty, the function prints a message and returns the DataFrame unchanged.
     - If any of the columns in the query don't exist in the DataFrame, the classification column is set to `NaN`.

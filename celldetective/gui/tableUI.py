@@ -655,7 +655,12 @@ class TableUI(CelldetectiveMainWindow):
         self.renameWidget.show()
 
     def save_as_csv_inplace_per_pos(self):
-        """Save each position's table in its respective folder."""
+        """
+        Save each position's table in its respective folder.
+
+        Splits the current dataframe by 'position' and saves each subset
+        to the corresponding 'output/tables' directory.
+        """
         logger.info("Saving each table in its respective position folder...")
         for pos, pos_group in self.data.groupby(["position"]):
             invalid_cols = [
@@ -939,6 +944,9 @@ class TableUI(CelldetectiveMainWindow):
         center_window(self.projectionWidget)
 
     def enable_projection_options(self):
+        """
+        Enable/disable projection options based on the selected mode.
+        """
 
         if self.projection_option.isChecked():
             self.projection_op_cb.setEnabled(True)

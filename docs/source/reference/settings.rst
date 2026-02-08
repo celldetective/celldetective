@@ -60,23 +60,23 @@ Accessible via the **Settings** button in the Tracking module.
 
 **Feature Extraction**
  
- *   **Morphological & Intensity**:
-     *   **Standard**: ``area``, ``eccentricity``, ``solidity``, ``perimeter``, ``intensity_mean``, ``intensity_max``, ``intensity_min``, etc.
-     *   **Advanced**: ``major_axis_length``, ``minor_axis_length``, ``orientation``, ``extent``, ``euler_number``, ``feret_diameter_max``.
-     *   **Custom**: Any allowed function from ``skimage.measure.regionprops``.
- *   **Haralick Texture Features**:
-     *   **Target channel**: Channel to analyze (must be one of the loaded channels).
-     *   **Distance**: Pixel distance for GLCM calculation (default 1).
-     *   **# gray levels**: Number of intensity bins for quantization (default 256).
-     *   **Scale**: Downscaling factor (0-1) to speed up computation.
-     *   **Normalization**:
-         *   **Percentile Mode**: Normalize intensities between min/max percentiles (e.g., 1% - 99.9%).
-         *   **Absolute Mode**: Normalize intensities between fixed pixel values.
+*   **Morphological & Intensity**:
+    *   **Standard**: ``area``, ``eccentricity``, ``solidity``, ``perimeter``, ``intensity_mean``, ``intensity_max``, ``intensity_min``, etc.
+    *   **Advanced**: ``major_axis_length``, ``minor_axis_length``, ``orientation``, ``extent``, ``euler_number``, ``feret_diameter_max``.
+    *   **Custom**: Any allowed function from ``skimage.measure.regionprops``.
+*   **Haralick Texture Features**:
+    *   **Target channel**: Channel to analyze (must be one of the loaded channels).
+    *   **Distance**: Pixel distance for GLCM calculation (default 1).
+    *   **# gray levels**: Number of intensity bins for quantization (default 256).
+    *   **Scale**: Downscaling factor (0-1) to speed up computation.
+    *   **Normalization**:
+        *   **Percentile Mode**: Normalize intensities between min/max percentiles (e.g., 1% - 99.9%).
+        *   **Absolute Mode**: Normalize intensities between fixed pixel values.
  
- **Post-Processing**
- 
- *   **Min. tracklength**: Filter out tracks shorter than this number of frames.
- *   **Remove tracks... (Start)**: Remove tracks that do not start at the first frame.
+**Post-Processing**
+
+*   **Min. tracklength**: Filter out tracks shorter than this number of frames.
+*   **Remove tracks... (Start)**: Remove tracks that do not start at the first frame.
  *   **Remove tracks... (End)**: Remove tracks that do not end at the last frame.
  *   **Interpolate gaps**: Fill missing detections (gaps) within a track using linear interpolation.
  *   **Extrapolate (Pre)**: Sustain the first detection's position backwards to the start of the movie.

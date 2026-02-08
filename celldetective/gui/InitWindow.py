@@ -578,6 +578,14 @@ class AppInitWindow(CelldetectiveMainWindow):
                 logger.info(f"Found {self.number_of_wells} wells...")
 
             def log_position_stats(wells_list):
+                """
+                Log statistics about the number of positions per well.
+
+                Parameters
+                ----------
+                wells_list : list of str
+                    List of well paths.
+                """
                 number_pos = {}
                 for w in wells_list:
                     well_name, well_nbr = extract_well_name_and_number(w)
