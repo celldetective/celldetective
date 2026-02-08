@@ -20,6 +20,7 @@ Usage
 This module is typically used in conjunction with the `signals` module to process extracted signals and predict events.
 """
 
+from typing import List, Optional, Union, Callable, Any, Tuple
 import json
 import os
 import random
@@ -165,17 +166,17 @@ class SignalDetectionModel(object):
 
     def __init__(
         self,
-        path=None,
-        pretrained=None,
-        channel_option=["live_nuclei_channel"],
-        model_signal_length=128,
-        n_channels=1,
-        n_conv=2,
-        n_classes=3,
-        dense_collection=512,
-        dropout_rate=0.1,
-        label="",
-    ):
+        path: Optional[str] = None,
+        pretrained: Optional[str] = None,
+        channel_option: list[str] = ["live_nuclei_channel"],
+        model_signal_length: int = 128,
+        n_channels: int = 1,
+        n_conv: int = 2,
+        n_classes: int = 3,
+        dense_collection: int = 512,
+        dropout_rate: float = 0.1,
+        label: str = "",
+    ) -> None:
         """
         Initialize the SignalDetectionModel.
 
@@ -230,7 +231,7 @@ class SignalDetectionModel(object):
             self.create_models_from_scratch()
             print("Models successfully created.")
 
-    def load_pretrained_model(self):
+    def load_pretrained_model(self) -> Optional[bool]:
         """
         Loads a pretrained model and its configuration from the specified path.
 
@@ -329,7 +330,9 @@ class SignalDetectionModel(object):
 
         return True
 
-    def freeze_encoder(self, model, n_trainable_layers: int = 3):
+    def freeze_encoder(
+        self, model: keras.Model, n_trainable_layers: int = 3
+    ) -> keras.Model:
         """
         Freezes the initial layers of the model, keeping only the last `n_trainable_layers` trainable.
 
@@ -409,27 +412,27 @@ class SignalDetectionModel(object):
 
     def fit_from_directory(
         self,
-        datasets,
-        normalize=True,
-        normalization_percentile=None,
-        normalization_values=None,
-        normalization_clip=None,
-        channel_option=["live_nuclei_channel"],
-        model_name=None,
-        target_directory=None,
-        augment=True,
-        augmentation_factor=2,
-        validation_split=0.20,
-        test_split=0.0,
-        batch_size=64,
-        epochs=300,
-        recompile_pretrained=False,
-        learning_rate=0.01,
-        loss_reg="mse",
-        loss_class=None,
-        show_plots=True,
-        callbacks=None,
-    ):
+        datasets: Union[list[str], list[np.ndarray]],
+        normalize: bool = True,
+        normalization_percentile: Optional[list] = None,
+        normalization_values: Optional[list] = None,
+        normalization_clip: Optional[bool] = None,
+        channel_option: list[str] = ["live_nuclei_channel"],
+        model_name: Optional[str] = None,
+        target_directory: Optional[str] = None,
+        augment: bool = True,
+        augmentation_factor: int = 2,
+        validation_split: float = 0.20,
+        test_split: float = 0.0,
+        batch_size: int = 64,
+        epochs: int = 300,
+        recompile_pretrained: bool = False,
+        learning_rate: float = 0.01,
+        loss_reg: Union[str, Any] = "mse",
+        loss_class: Optional[Union[str, Any]] = None,
+        show_plots: bool = True,
+        callbacks: Optional[list] = None,
+    ) -> None:
         """
         Trains the model using data from specified directories.
 
@@ -547,29 +550,29 @@ class SignalDetectionModel(object):
 
     def fit(
         self,
-        x_train,
-        y_time_train,
-        y_class_train,
-        normalize=True,
-        normalization_percentile=None,
-        normalization_values=None,
-        normalization_clip=None,
-        pad=True,
-        validation_data=None,
-        test_data=None,
-        channel_option=["live_nuclei_channel", "dead_nuclei_channel"],
-        model_name=None,
-        target_directory=None,
-        augment=True,
-        augmentation_factor=3,
-        validation_split=0.25,
-        batch_size=64,
-        epochs=300,
-        recompile_pretrained=False,
-        learning_rate=0.001,
-        loss_reg="mse",
-        loss_class=None,
-    ):
+        x_train: np.ndarray,
+        y_time_train: np.ndarray,
+        y_class_train: np.ndarray,
+        normalize: bool = True,
+        normalization_percentile: Optional[list] = None,
+        normalization_values: Optional[list] = None,
+        normalization_clip: Optional[bool] = None,
+        pad: bool = True,
+        validation_data: Optional[Tuple[np.ndarray, np.ndarray, np.ndarray]] = None,
+        test_data: Optional[Tuple[np.ndarray, np.ndarray, np.ndarray]] = None,
+        channel_option: list[str] = ["live_nuclei_channel", "dead_nuclei_channel"],
+        model_name: Optional[str] = None,
+        target_directory: Optional[str] = None,
+        augment: bool = True,
+        augmentation_factor: int = 3,
+        validation_split: float = 0.25,
+        batch_size: int = 64,
+        epochs: int = 300,
+        recompile_pretrained: bool = False,
+        learning_rate: float = 0.001,
+        loss_reg: Union[str, Any] = "mse",
+        loss_class: Optional[Union[str, Any]] = None,
+    ) -> None:
         """
         Trains the model using provided datasets.
 
@@ -807,8 +810,13 @@ class SignalDetectionModel(object):
         gc.collect()
 
     def predict_class(
-        self, x, normalize=True, pad=True, return_one_hot=False, interpolate=True
-    ):
+        self,
+        x: np.ndarray,
+        normalize: bool = True,
+        pad: bool = True,
+        return_one_hot: bool = False,
+        interpolate: bool = True,
+    ) -> np.ndarray:
         """
         Predicts the class of input signals using the trained classification model.
 
@@ -887,8 +895,12 @@ class SignalDetectionModel(object):
             return self.class_predictions
 
     def predict_time_of_interest(
-        self, x, class_predictions=None, normalize=True, pad=True
-    ):
+        self,
+        x: np.ndarray,
+        class_predictions: Optional[np.ndarray] = None,
+        normalize: bool = True,
+        pad: bool = True,
+    ) -> np.ndarray:
         """
         Predicts the time of interest for input signals using the trained regression model.
 
@@ -965,7 +977,7 @@ class SignalDetectionModel(object):
             self.time_predictions_recast = np.zeros(len(self.x)) - 1.0
         return self.time_predictions_recast
 
-    def interpolate_signals(self, x_set):
+    def interpolate_signals(self, x_set: np.ndarray) -> np.ndarray:
         """
         Interpolates missing values in the input signal set.
 
@@ -1349,7 +1361,7 @@ class SignalDetectionModel(object):
         except Exception as e:
             print(e)
 
-    def plot_model_history(self, mode="regressor"):
+    def plot_model_history(self, mode: str = "regressor") -> None:
         """
         Generates and saves plots of the training history for the classifier or regressor model.
 
@@ -1483,7 +1495,7 @@ class SignalDetectionModel(object):
                     cb.on_training_result(self.dico)
             time.sleep(3)
 
-    def gather_callbacks(self, mode):
+    def gather_callbacks(self, mode: str) -> None:
         """
         Prepares a list of Keras callbacks for model training based on the specified mode.
 
@@ -1679,7 +1691,7 @@ class SignalDetectionModel(object):
         if self.augment:
             self.augment_training_set()
 
-    def augment_training_set(self, time_shift=True):
+    def augment_training_set(self, time_shift: bool = True) -> None:
         """
         Augments the training dataset with artificially generated data to increase model robustness.
 
@@ -1739,7 +1751,7 @@ class SignalDetectionModel(object):
         self.class_weights = compute_weights(self.y_class_train.argmax(axis=1))
         print(f"New class weights: {self.class_weights}...")
 
-    def load_set(self, signal_dataset):
+    def load_set(self, signal_dataset: str) -> np.ndarray:
         """
         Loads a signal dataset from a file.
 
@@ -1755,7 +1767,9 @@ class SignalDetectionModel(object):
         """
         return np.load(signal_dataset, allow_pickle=True)
 
-    def find_best_signal_match(self, signal_dataset):
+    def find_best_signal_match(
+        self, signal_dataset: List[dict]
+    ) -> Optional[Tuple[List[str], int]]:
         """
         Identifies the best matching signals from the dataset based on the channel options.
 
@@ -1799,8 +1813,8 @@ class SignalDetectionModel(object):
         return selected_signals, max_length
 
     def cast_signals_into_training_data(
-        self, signal_dataset, selected_signals, max_length
-    ):
+        self, signal_dataset: List[dict], selected_signals: List[str], max_length: int
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         Transforms the raw signal dataset into a format suitable for training.
 
@@ -1858,7 +1872,9 @@ class SignalDetectionModel(object):
 
         return signals_recast, classes, times_of_interest
 
-    def normalize_signals(self, signals_recast, times_of_interest):
+    def normalize_signals(
+        self, signals_recast: np.ndarray, times_of_interest: np.ndarray
+    ) -> Tuple[np.ndarray, np.ndarray]:
         """
         Normalizes the recast signals and times of interest.
 
@@ -2215,7 +2231,7 @@ def _get_time_history_class():
 
         """
 
-        def on_train_begin(self, logs={}):
+        def on_train_begin(self, logs: Optional[dict] = None) -> None:
             """
             Initialize the times list at the start of training.
 
@@ -2226,7 +2242,7 @@ def _get_time_history_class():
             """
             self.times = []
 
-        def on_epoch_begin(self, epoch, logs={}):
+        def on_epoch_begin(self, epoch: int, logs: Optional[dict] = None) -> None:
             """
             Record the start time of the epoch.
 
@@ -2239,7 +2255,7 @@ def _get_time_history_class():
             """
             self.epoch_time_start = time.time()
 
-        def on_epoch_end(self, epoch, logs={}):
+        def on_epoch_end(self, epoch: int, logs: Optional[dict] = None) -> None:
             """
             Calculate and record the duration of the epoch.
 

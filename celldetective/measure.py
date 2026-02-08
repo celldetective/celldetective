@@ -86,33 +86,33 @@ def measure(
     Parameters
     ----------
     stack : numpy array, optional
-                    Stack of images with shape (T, Y, X, C), where T is the number of frames, Y and X are the spatial dimensions,
-                    and C is the number of channels. Default is None.
+        Stack of images with shape (T, Y, X, C), where T is the number of frames, Y and X are the spatial dimensions,
+        and C is the number of channels. Default is None.
     labels : numpy array, optional
-                    Label stack with shape (T, Y, X) representing cell segmentations. Default is None.
+        Label stack with shape (T, Y, X) representing cell segmentations. Default is None.
     trajectories : pandas DataFrame, optional
-                    DataFrame of cell trajectories with columns specified in `column_labels`. Default is None.
+        DataFrame of cell trajectories with columns specified in `column_labels`. Default is None.
     channel_names : list, optional
-                    List of channel names corresponding to the image stack. Default is None.
+        List of channel names corresponding to the image stack. Default is None.
     features : list, optional
-                    List of features to measure using the `measure_features` function. Default is None.
+        List of features to measure using the `measure_features` function. Default is None.
     intensity_measurement_radii : int, float, or list, optional
-                    Radius or list of radii specifying the size of the isotropic measurement area for intensity measurements.
-                    If a single value is provided, a circular measurement area is used. If a list of values is provided, multiple
-                    measurements are performed using ring-shaped measurement areas. Default is None.
+        Radius or list of radii specifying the size of the isotropic measurement area for intensity measurements.
+        If a single value is provided, a circular measurement area is used. If a list of values is provided, multiple
+        measurements are performed using ring-shaped measurement areas. Default is None.
     isotropic_operations : list, optional
-                    List of operations to perform on the isotropic intensity values. Default is ['mean'].
+        List of operations to perform on the isotropic intensity values. Default is ['mean'].
     border_distances : int, float, or list, optional
-                    Distance or list of distances specifying the size of the border region for intensity measurements.
-                    If a single value is provided, measurements are performed at a fixed distance from the cell borders.
-                    If a list of values is provided, measurements are performed at multiple border distances. Default is None.
+        Distance or list of distances specifying the size of the border region for intensity measurements.
+        If a single value is provided, measurements are performed at a fixed distance from the cell borders.
+        If a list of values is provided, measurements are performed at multiple border distances. Default is None.
     haralick_options : dict, optional
-                    Dictionary of options for Haralick feature measurements. Default is None.
+        Dictionary of options for Haralick feature measurements. Default is None.
     column_labels : dict, optional
-                    Dictionary containing the column labels for the DataFrame. Default is {'track': "TRACK_ID",
-                    'time': 'FRAME', 'x': 'POSITION_X', 'y': 'POSITION_Y'}.
+        Dictionary containing the column labels for the DataFrame. Default is {'track': "TRACK_ID",
+        'time': 'FRAME', 'x': 'POSITION_X', 'y': 'POSITION_Y'}.
     clear_previous : bool, optional
-                    If True, removes previously computed features from the trajectories DataFrame before measuring. Default is False.
+        If True, removes previously computed features from the trajectories DataFrame before measuring. Default is False.
 
     Returns
     -------

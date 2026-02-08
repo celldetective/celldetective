@@ -23,7 +23,7 @@ Notes
 The module relies heavily on the directory structure and configuration files of the experiment to locate and process images.
 """
 
-from typing import List
+from typing import List, Optional, Union, Callable, Any, Tuple
 import numpy as np
 import os
 from celldetective.utils.image_loaders import (
@@ -59,19 +59,19 @@ logger = get_logger(__name__)
 
 
 def estimate_background_per_condition(
-    experiment,
-    threshold_on_std=1,
-    well_option="*",
-    target_channel="channel_name",
-    frame_range=[0, 5],
-    mode="timeseries",
-    activation_protocol=[["gauss", 2], ["std", 4]],
-    show_progress_per_pos=False,
-    show_progress_per_well=True,
-    offset=None,
+    experiment: str,
+    threshold_on_std: float = 1,
+    well_option: Union[str, int, list] = "*",
+    target_channel: str = "channel_name",
+    frame_range: list[int] = [0, 5],
+    mode: str = "timeseries",
+    activation_protocol: list[list] = [["gauss", 2], ["std", 4]],
+    show_progress_per_pos: bool = False,
+    show_progress_per_well: bool = True,
+    offset: Optional[float] = None,
     fix_nan: bool = False,
-    progress_callback=None,
-):
+    progress_callback: Optional[Callable] = None,
+) -> list[dict]:
     """
     Estimate the background for each condition in an experiment.
 
@@ -273,30 +273,30 @@ def estimate_background_per_condition(
 
 
 def correct_background_model_free(
-    experiment,
-    well_option="*",
-    position_option="*",
-    target_channel="channel_name",
-    mode="timeseries",
-    threshold_on_std=1,
-    frame_range=[0, 5],
-    optimize_option=False,
-    opt_coef_range=[0.95, 1.05],
-    opt_coef_nbr=100,
-    operation="divide",
-    clip=False,
-    offset=None,
-    show_progress_per_well=True,
-    show_progress_per_pos=False,
-    export=False,
-    return_stacks=False,
-    movie_prefix=None,
-    fix_nan=False,
-    activation_protocol=[["gauss", 2], ["std", 4]],
-    export_prefix="Corrected",
-    progress_callback=None,
+    experiment: str,
+    well_option: Union[str, int, list] = "*",
+    position_option: Union[str, int, list] = "*",
+    target_channel: str = "channel_name",
+    mode: str = "timeseries",
+    threshold_on_std: float = 1,
+    frame_range: list[int] = [0, 5],
+    optimize_option: bool = False,
+    opt_coef_range: Union[list[float], tuple[float, float]] = [0.95, 1.05],
+    opt_coef_nbr: int = 100,
+    operation: str = "divide",
+    clip: bool = False,
+    offset: Optional[float] = None,
+    show_progress_per_well: bool = True,
+    show_progress_per_pos: bool = False,
+    export: bool = False,
+    return_stacks: bool = False,
+    movie_prefix: Optional[str] = None,
+    fix_nan: bool = False,
+    activation_protocol: list[list] = [["gauss", 2], ["std", 4]],
+    export_prefix: str = "Corrected",
+    progress_callback: Optional[Callable] = None,
     **kwargs,
-):
+) -> Optional[list[np.ndarray]]:
     """
     Correct the background of image stacks for a given experiment.
 
@@ -500,24 +500,24 @@ def correct_background_model_free(
 
 
 def apply_background_to_stack(
-    stack_path,
-    background,
-    target_channel_index=0,
-    nbr_channels=1,
-    stack_length=45,
-    offset=None,
-    activation_protocol=[["gauss", 2], ["std", 4]],
-    threshold_on_std=1,
-    optimize_option=True,
-    opt_coef_range=(0.95, 1.05),
-    opt_coef_nbr=100,
-    operation="divide",
-    clip=False,
-    export=False,
-    prefix="Corrected",
-    fix_nan=False,
-    progress_callback=None,
-):
+    stack_path: str,
+    background: np.ndarray,
+    target_channel_index: int = 0,
+    nbr_channels: int = 1,
+    stack_length: Optional[int] = 45,
+    offset: Optional[float] = None,
+    activation_protocol: list[list] = [["gauss", 2], ["std", 4]],
+    threshold_on_std: float = 1,
+    optimize_option: bool = True,
+    opt_coef_range: Union[list[float], tuple[float, float]] = (0.95, 1.05),
+    opt_coef_nbr: int = 100,
+    operation: str = "divide",
+    clip: bool = False,
+    export: bool = False,
+    prefix: str = "Corrected",
+    fix_nan: bool = False,
+    progress_callback: Optional[Callable] = None,
+) -> Optional[np.ndarray]:
     """
     Apply background correction to an image stack.
 
@@ -697,7 +697,16 @@ def apply_background_to_stack(
     return corrected_stack
 
 
-def paraboloid(x, y, a, b, c, d, e, g):
+def paraboloid(
+    x: Union[float, np.ndarray],
+    y: Union[float, np.ndarray],
+    a: float,
+    b: float,
+    c: float,
+    d: float,
+    e: float,
+    g: float,
+) -> Union[float, np.ndarray]:
     """
     Compute the value of a 2D paraboloid function.
 
@@ -745,7 +754,13 @@ def paraboloid(x, y, a, b, c, d, e, g):
     return a * x**2 + b * y**2 + c * x * y + d * x + e * y + g
 
 
-def plane(x, y, a, b, c):
+def plane(
+    x: Union[float, np.ndarray],
+    y: Union[float, np.ndarray],
+    a: float,
+    b: float,
+    c: float,
+) -> Union[float, np.ndarray]:
     """
     Compute the value of a plane function.
 
@@ -787,7 +802,11 @@ def plane(x, y, a, b, c):
     return a * x + b * y + c
 
 
-def fit_plane(image, cell_masks=None, edge_exclusion=None):
+def fit_plane(
+    image: np.ndarray,
+    cell_masks: Optional[np.ndarray] = None,
+    edge_exclusion: Optional[int] = None,
+) -> np.ndarray:
     """
     Fit a plane to the given image data.
 
@@ -856,7 +875,12 @@ def fit_plane(image, cell_masks=None, edge_exclusion=None):
     return plane(xx, yy, **result.params)
 
 
-def fit_paraboloid(image, cell_masks=None, edge_exclusion=None, downsample=10):
+def fit_paraboloid(
+    image: np.ndarray,
+    cell_masks: Optional[np.ndarray] = None,
+    edge_exclusion: Optional[int] = None,
+    downsample: int = 10,
+) -> np.ndarray:
     """
     Fit a paraboloid to the given image data.
 
@@ -949,26 +973,26 @@ def fit_paraboloid(image, cell_masks=None, edge_exclusion=None, downsample=10):
 
 
 def correct_background_model(
-    experiment,
-    well_option="*",
-    position_option="*",
-    target_channel="channel_name",
-    threshold_on_std=1,
-    model="paraboloid",
-    operation="divide",
-    clip=False,
-    show_progress_per_well=True,
-    show_progress_per_pos=False,
-    export=False,
-    return_stacks=False,
-    movie_prefix=None,
-    activation_protocol=[["gauss", 2], ["std", 4]],
-    export_prefix="Corrected",
-    return_stack=True,
-    progress_callback=None,
-    downsample=10,
+    experiment: str,
+    well_option: Union[str, int, list] = "*",
+    position_option: Union[str, int, list] = "*",
+    target_channel: str = "channel_name",
+    threshold_on_std: float = 1,
+    model: str = "paraboloid",
+    operation: str = "divide",
+    clip: bool = False,
+    show_progress_per_well: bool = True,
+    show_progress_per_pos: bool = False,
+    export: bool = False,
+    return_stacks: bool = False,
+    movie_prefix: Optional[str] = None,
+    activation_protocol: list[list] = [["gauss", 2], ["std", 4]],
+    export_prefix: str = "Corrected",
+    return_stack: bool = True,
+    progress_callback: Optional[Callable] = None,
+    downsample: int = 10,
     **kwargs,
-):
+) -> Optional[list[np.ndarray]]:
     """
     Correct background in image stacks using a specified model.
 
@@ -1123,22 +1147,22 @@ def correct_background_model(
 
 
 def fit_and_apply_model_background_to_stack(
-    stack_path,
-    target_channel_index=0,
-    nbr_channels=1,
-    stack_length=45,
-    threshold_on_std=1,
-    operation="divide",
-    model="paraboloid",
-    clip=False,
-    export=False,
-    activation_protocol=[["gauss", 2], ["std", 4]],
-    prefix="Corrected",
-    return_stacks=True,
-    progress_callback=None,
-    downsample=10,
-    subset_indices=None,
-):
+    stack_path: str,
+    target_channel_index: int = 0,
+    nbr_channels: int = 1,
+    stack_length: Optional[int] = 45,
+    threshold_on_std: float = 1,
+    operation: str = "divide",
+    model: str = "paraboloid",
+    clip: bool = False,
+    export: bool = False,
+    activation_protocol: list[list] = [["gauss", 2], ["std", 4]],
+    prefix: str = "Corrected",
+    return_stacks: bool = True,
+    progress_callback: Optional[Callable] = None,
+    downsample: int = 10,
+    subset_indices: Optional[list[int]] = None,
+) -> Optional[np.ndarray]:
     """
     Fit and apply a background correction model to an image stack.
 
@@ -1408,8 +1432,12 @@ def field_correction(
 
 
 def fit_background_model(
-    img, cell_masks=None, model="paraboloid", edge_exclusion=None, downsample=10
-):
+    img: np.ndarray,
+    cell_masks: Optional[np.ndarray] = None,
+    model: str = "paraboloid",
+    edge_exclusion: Optional[int] = None,
+    downsample: int = 10,
+) -> Optional[np.ndarray]:
     """
     Fit a background model to the given image.
 
@@ -1465,21 +1493,21 @@ def fit_background_model(
 
 
 def correct_channel_offset(
-    experiment,
-    well_option="*",
-    position_option="*",
-    target_channel="channel_name",
-    correction_horizontal=0,
-    correction_vertical=0,
-    show_progress_per_well=True,
-    show_progress_per_pos=True,
-    export=False,
-    return_stacks=False,
-    movie_prefix=None,
-    export_prefix="Corrected",
-    progress_callback=None,
+    experiment: str,
+    well_option: Union[str, int, list] = "*",
+    position_option: Union[str, int, list] = "*",
+    target_channel: str = "channel_name",
+    correction_horizontal: int = 0,
+    correction_vertical: int = 0,
+    show_progress_per_well: bool = True,
+    show_progress_per_pos: bool = True,
+    export: bool = False,
+    return_stacks: bool = False,
+    movie_prefix: Optional[str] = None,
+    export_prefix: str = "Corrected",
+    progress_callback: Optional[Callable] = None,
     **kwargs,
-):
+) -> Optional[list[np.ndarray]]:
     """
     Correct the channel shift (chromatic aberration) for an entire experiment.
 
@@ -1602,17 +1630,17 @@ def correct_channel_offset(
 
 
 def correct_channel_offset_single_stack(
-    stack_path,
-    target_channel_index=0,
-    nbr_channels=1,
-    stack_length=45,
-    correction_vertical=0,
-    correction_horizontal=0,
-    export=False,
-    prefix="Corrected",
-    return_stacks=True,
-    progress_callback=None,
-):
+    stack_path: str,
+    target_channel_index: int = 0,
+    nbr_channels: int = 1,
+    stack_length: Optional[int] = 45,
+    correction_vertical: int = 0,
+    correction_horizontal: int = 0,
+    export: bool = False,
+    prefix: str = "Corrected",
+    return_stacks: bool = True,
+    progress_callback: Optional[Callable] = None,
+) -> Optional[np.ndarray]:
     """
     Correct the channel shift for a single image stack.
 

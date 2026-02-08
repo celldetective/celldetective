@@ -22,6 +22,7 @@ Integrations
 The output of this module (neighborhood lists) is often used by `relative_measurements.py` to compute detailed pair-wise statistics.
 """
 
+from typing import List, Optional, Union, Dict, Any, Tuple
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
@@ -39,23 +40,23 @@ abs_path = os.sep.join(
 
 
 def _fill_distance_neighborhood_at_t(
-    time_index,
-    setA,
-    setB,
-    dist_map,
-    attention_weight=None,
-    include_dead_weight=False,
-    symmetrize=False,
-    compute_cum_sum=False,
-    weights=None,
-    closest_A=None,
-    neigh_col="",
-    column_labelsA=None,
-    column_labelsB=None,
-    statusA=None,
-    statusB=None,
-    distance=10,
-):
+    time_index: int,
+    setA: pd.DataFrame,
+    setB: pd.DataFrame,
+    dist_map: np.ndarray,
+    attention_weight: Optional[bool] = None,
+    include_dead_weight: bool = False,
+    symmetrize: bool = False,
+    compute_cum_sum: bool = False,
+    weights: Optional[np.ndarray] = None,
+    closest_A: Optional[np.ndarray] = None,
+    neigh_col: str = "",
+    column_labelsA: Optional[Dict[str, str]] = None,
+    column_labelsB: Optional[Dict[str, str]] = None,
+    statusA: Optional[str] = None,
+    statusB: Optional[str] = None,
+    distance: float = 10,
+) -> None:
     """
     Helper function to fill distance-based neighborhood information for a specific time point.
 
@@ -227,24 +228,24 @@ def _fill_distance_neighborhood_at_t(
 
 
 def _fill_contact_neighborhood_at_t(
-    time_index,
-    setA,
-    setB,
-    dist_map,
-    intersection_map=None,
-    attention_weight=None,
-    include_dead_weight=False,
-    symmetrize=False,
-    compute_cum_sum=False,
-    weights=None,
-    closest_A=None,
-    neigh_col="",
-    column_labelsA=None,
-    column_labelsB=None,
-    statusA=None,
-    statusB=None,
-    d_filter=10,
-):
+    time_index: int,
+    setA: pd.DataFrame,
+    setB: pd.DataFrame,
+    dist_map: np.ndarray,
+    intersection_map: Optional[np.ndarray] = None,
+    attention_weight: Optional[bool] = None,
+    include_dead_weight: bool = False,
+    symmetrize: bool = False,
+    compute_cum_sum: bool = False,
+    weights: Optional[np.ndarray] = None,
+    closest_A: Optional[np.ndarray] = None,
+    neigh_col: str = "",
+    column_labelsA: Optional[Dict[str, str]] = None,
+    column_labelsB: Optional[Dict[str, str]] = None,
+    statusA: Optional[str] = None,
+    statusB: Optional[str] = None,
+    d_filter: float = 10,
+) -> None:
     """
     Helper function to fill contact-based neighborhood information for a specific time point.
 
@@ -444,15 +445,15 @@ def _fill_contact_neighborhood_at_t(
 
 
 def _compute_mask_contact_dist_map(
-    setA,
-    setB,
-    labelsA,
-    labelsB=None,
-    distance=10,
-    mode="self",
-    column_labelsA=None,
-    column_labelsB=None,
-):
+    setA: pd.DataFrame,
+    setB: pd.DataFrame,
+    labelsA: np.ndarray,
+    labelsB: Optional[np.ndarray] = None,
+    distance: float = 10,
+    mode: str = "self",
+    column_labelsA: Optional[Dict[str, str]] = None,
+    column_labelsB: Optional[Dict[str, str]] = None,
+) -> Tuple[np.ndarray, np.ndarray]:
     """
     Computes a distance map based on mask contact between two sets of cells.
 
@@ -545,7 +546,12 @@ def _compute_mask_contact_dist_map(
     return dist_map, intersection_map
 
 
-def set_live_status(setA, setB, status, not_status_option):
+def set_live_status(
+    setA: pd.DataFrame,
+    setB: pd.DataFrame,
+    status: Optional[List[str]],
+    not_status_option: Optional[List[bool]],
+) -> Tuple[pd.DataFrame, pd.DataFrame, Optional[List[str]]]:
     """
     Updates the live status for cells in two datasets based on specified status columns and options.
 
@@ -625,13 +631,13 @@ def set_live_status(setA, setB, status, not_status_option):
 
 
 def compute_attention_weight(
-    dist_matrix,
-    cut_distance,
-    opposite_cell_status,
-    opposite_cell_ids,
-    axis=1,
-    include_dead_weight=True,
-):
+    dist_matrix: np.ndarray,
+    cut_distance: float,
+    opposite_cell_status: np.ndarray,
+    opposite_cell_ids: np.ndarray,
+    axis: int = 1,
+    include_dead_weight: bool = True,
+) -> Tuple[np.ndarray, np.ndarray]:
     """
     Computes the attention weight for each cell based on its proximity to cells of an opposite type within a specified distance.
 
