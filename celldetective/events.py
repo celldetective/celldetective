@@ -21,19 +21,21 @@ Dependencies
 -   `lifelines`: Used for Kaplan-Meier fitting and survival analysis statistics.
 """
 
+from typing import Any, List, Optional, Union, Tuple, Sequence
 import numpy as np
+import pandas as pd
 from lifelines import KaplanMeierFitter
 
 
 def switch_to_events(
-    classes,
-    event_times,
-    max_times,
-    origin_times=None,
-    left_censored=True,
-    FrameToMin=None,
-    cut_observation_time=None,
-):
+    classes: Sequence[int],
+    event_times: Sequence[float],
+    max_times: Sequence[float],
+    origin_times: Optional[Sequence[float]] = None,
+    left_censored: bool = True,
+    FrameToMin: Optional[float] = None,
+    cut_observation_time: Optional[float] = None,
+) -> Tuple[List[int], List[float]]:
     """
     Converts time-to-event data into a format suitable for survival analysis, optionally adjusting for left censorship
     and converting time units.
@@ -175,14 +177,14 @@ def switch_to_events(
 
 
 def compute_survival(
-    df,
-    class_of_interest,
-    t_event,
-    t_reference=None,
-    FrameToMin=1,
-    cut_observation_time=None,
-    pairs=False,
-):
+    df: pd.DataFrame,
+    class_of_interest: str,
+    t_event: str,
+    t_reference: Optional[str] = None,
+    FrameToMin: float = 1.0,
+    cut_observation_time: Optional[float] = None,
+    pairs: bool = False,
+) -> Optional[KaplanMeierFitter]:
     """
     Computes survival analysis for a specific class of interest within a dataset, returning a fitted Kaplan-Meier
     survival curve based on event and reference times.

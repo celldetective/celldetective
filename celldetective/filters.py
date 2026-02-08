@@ -40,13 +40,16 @@ Copyright © 2022 Laboratoire Adhesion et Inflammation
 Authored by R. Torro, K. Dervanova, L. Limozin
 """
 
-import numpy
-
-from celldetective.utils.image_cleaning import interpolate_nan
+from typing import Any, List, Optional, Union, Tuple, Sequence
 import numpy as np
 
 
-def gauss_filter(img, sigma, interpolate=True, *kwargs):
+def gauss_filter(
+    img: np.ndarray,
+    sigma: Union[float, Sequence[float]],
+    interpolate: bool = True,
+    **kwargs: Any,
+) -> np.ndarray:
     """
     Applies a Gaussian filter to an image.
 
@@ -74,7 +77,9 @@ def gauss_filter(img, sigma, interpolate=True, *kwargs):
     return snd.gaussian_filter(img.astype(float), sigma, *kwargs)
 
 
-def median_filter(img, size, interpolate=True, *kwargs):
+def median_filter(
+    img: np.ndarray, size: int, interpolate: bool = True, **kwargs: Any
+) -> np.ndarray:
     """
     Applies a median filter to an image.
 
@@ -105,7 +110,9 @@ def median_filter(img, size, interpolate=True, *kwargs):
     return snd.median_filter(img, size, *kwargs)
 
 
-def maximum_filter(img, size, interpolate=True, *kwargs):
+def maximum_filter(
+    img: np.ndarray, size: int, interpolate: bool = True, **kwargs: Any
+) -> np.ndarray:
     """
     Applies a maximum filter to an image.
 
@@ -133,7 +140,9 @@ def maximum_filter(img, size, interpolate=True, *kwargs):
     return snd.maximum_filter(img.astype(float), size, *kwargs)
 
 
-def minimum_filter(img, size, interpolate=True, *kwargs):
+def minimum_filter(
+    img: np.ndarray, size: int, interpolate: bool = True, **kwargs: Any
+) -> np.ndarray:
     """
     Applies a minimum filter to an image.
 
@@ -161,7 +170,13 @@ def minimum_filter(img, size, interpolate=True, *kwargs):
     return snd.minimum_filter(img.astype(float), size, *kwargs)
 
 
-def percentile_filter(img, percentile, size, interpolate=True, *kwargs):
+def percentile_filter(
+    img: np.ndarray,
+    percentile: float,
+    size: int,
+    interpolate: bool = True,
+    **kwargs: Any,
+) -> np.ndarray:
     """
     Applies a percentile filter to an image.
 
@@ -191,7 +206,7 @@ def percentile_filter(img, percentile, size, interpolate=True, *kwargs):
     return snd.percentile_filter(img.astype(float), percentile, size, *kwargs)
 
 
-def subtract_filter(img, value, *kwargs):
+def subtract_filter(img: np.ndarray, value: float, **kwargs: Any) -> np.ndarray:
     """
     Subtracts a scalar value from the image.
 
@@ -212,7 +227,7 @@ def subtract_filter(img, value, *kwargs):
     return img.astype(float) - value
 
 
-def abs_filter(img, *kwargs):
+def abs_filter(img: np.ndarray, **kwargs: Any) -> np.ndarray:
     """
     Computes the absolute value of the image.
 
@@ -231,7 +246,7 @@ def abs_filter(img, *kwargs):
     return np.abs(img)
 
 
-def ln_filter(img, interpolate=True, *kwargs):
+def ln_filter(img: np.ndarray, interpolate: bool = True, **kwargs: Any) -> np.ndarray:
     """
     Computes the natural logarithm of the image.
 
@@ -258,7 +273,7 @@ def ln_filter(img, interpolate=True, *kwargs):
     return img
 
 
-def variance_filter(img, size, interpolate=True):
+def variance_filter(img: np.ndarray, size: int, interpolate: bool = True) -> np.ndarray:
     """
     Computes the local variance of the image.
 
@@ -291,7 +306,7 @@ def variance_filter(img, size, interpolate=True):
     return img
 
 
-def std_filter(img, size, interpolate=True):
+def std_filter(img: np.ndarray, size: int, interpolate: bool = True) -> np.ndarray:
     """
     Computes the local standard deviation of the image.
 
@@ -329,7 +344,9 @@ def std_filter(img, size, interpolate=True):
     return img
 
 
-def laplace_filter(img, output=float, interpolate=True, *kwargs):
+def laplace_filter(
+    img: np.ndarray, output: Any = float, interpolate: bool = True, **kwargs: Any
+) -> np.ndarray:
     """
     Applies a Laplace filter to the image.
 
@@ -357,8 +374,13 @@ def laplace_filter(img, output=float, interpolate=True, *kwargs):
 
 
 def dog_filter(
-    img, blob_size=None, sigma_low=1, sigma_high=2, interpolate=True, *kwargs
-):
+    img: np.ndarray,
+    blob_size: Optional[float] = None,
+    sigma_low: float = 1,
+    sigma_high: float = 2,
+    interpolate: bool = True,
+    **kwargs: Any,
+) -> np.ndarray:
     """
     Applies a Difference of Gaussians (DoG) filter to the image.
 
@@ -393,7 +415,7 @@ def dog_filter(
     return difference_of_gaussians(img.astype(float), sigma_low, sigma_high, *kwargs)
 
 
-def otsu_filter(img, *kwargs):
+def otsu_filter(img: np.ndarray, **kwargs: Any) -> np.ndarray:
     """
     Applies Otsu's thresholding to the image.
 
@@ -416,7 +438,7 @@ def otsu_filter(img, *kwargs):
     return binary.astype(float)
 
 
-def multiotsu_filter(img, classes=3, *kwargs):
+def multiotsu_filter(img: np.ndarray, classes: int = 3, **kwargs: Any) -> np.ndarray:
     """
     Applies Multi-Otsu thresholding to the image.
 
@@ -441,7 +463,7 @@ def multiotsu_filter(img, classes=3, *kwargs):
     return regions.astype(float)
 
 
-def local_filter(img, *kwargs):
+def local_filter(img: np.ndarray, **kwargs: Any) -> np.ndarray:
     """
     Applies local thresholding to the image.
 
@@ -464,7 +486,7 @@ def local_filter(img, *kwargs):
     return binary.astype(float)
 
 
-def niblack_filter(img, *kwargs):
+def niblack_filter(img: np.ndarray, **kwargs: Any) -> np.ndarray:
     """
     Applies Niblack thresholding to the image.
 
@@ -488,7 +510,7 @@ def niblack_filter(img, *kwargs):
     return binary.astype(float)
 
 
-def sauvola_filter(img, *kwargs):
+def sauvola_filter(img: np.ndarray, **kwargs: Any) -> np.ndarray:
     """
     Applies Sauvola thresholding to the image.
 
@@ -512,7 +534,13 @@ def sauvola_filter(img, *kwargs):
     return binary.astype(float)
 
 
-def log_filter(img, blob_size=None, sigma=1, interpolate=True, *kwargs):
+def log_filter(
+    img: np.ndarray,
+    blob_size: Optional[float] = None,
+    sigma: float = 1,
+    interpolate: bool = True,
+    **kwargs: Any,
+) -> np.ndarray:
     """
     Applies a Laplacian of Gaussian (LoG) filter to the image.
 
@@ -546,7 +574,13 @@ def log_filter(img, blob_size=None, sigma=1, interpolate=True, *kwargs):
     return snd.gaussian_laplace(img.astype(float), sigma, *kwargs)
 
 
-def tophat_filter(img, size, connectivity=4, interpolate=True, *kwargs):
+def tophat_filter(
+    img: np.ndarray,
+    size: int,
+    connectivity: int = 4,
+    interpolate: bool = True,
+    **kwargs: Any,
+) -> np.ndarray:
     """
     Applies a White Top-Hat filter to the image.
 
@@ -578,7 +612,7 @@ def tophat_filter(img, size, connectivity=4, interpolate=True, *kwargs):
     return img
 
 
-def invert_filter(img, value=65535, *kwargs):
+def invert_filter(img: np.ndarray, value: float = 65535, **kwargs: Any) -> np.ndarray:
     """
     Inverts the image by subtracting it from a maximum value.
 
@@ -606,7 +640,9 @@ def invert_filter(img, value=65535, *kwargs):
     return inverted
 
 
-def filter_image(img, filters=None):
+def filter_image(
+    img: np.ndarray, filters: Optional[List[Union[List[Any], Tuple[Any, ...]]]] = None
+) -> np.ndarray:
     """
 
     Apply one or more image filters to the input image.

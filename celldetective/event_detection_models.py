@@ -20,7 +20,7 @@ Usage
 This module is typically used in conjunction with the `signals` module to process extracted signals and predict events.
 """
 
-from typing import List, Optional, Union, Callable, Any, Tuple
+from typing import List, Optional, Union, Callable, Any, Tuple, Dict, Literal
 import json
 import os
 import random
@@ -168,7 +168,7 @@ class SignalDetectionModel(object):
         self,
         path: Optional[str] = None,
         pretrained: Optional[str] = None,
-        channel_option: list[str] = ["live_nuclei_channel"],
+        channel_option: List[str] = ["live_nuclei_channel"],
         model_signal_length: int = 128,
         n_channels: int = 1,
         n_conv: int = 2,
@@ -412,12 +412,12 @@ class SignalDetectionModel(object):
 
     def fit_from_directory(
         self,
-        datasets: Union[list[str], list[np.ndarray]],
+        datasets: Union[List[str], List[np.ndarray]],
         normalize: bool = True,
-        normalization_percentile: Optional[list] = None,
-        normalization_values: Optional[list] = None,
+        normalization_percentile: Optional[List[float]] = None,
+        normalization_values: Optional[List[float]] = None,
         normalization_clip: Optional[bool] = None,
-        channel_option: list[str] = ["live_nuclei_channel"],
+        channel_option: List[str] = ["live_nuclei_channel"],
         model_name: Optional[str] = None,
         target_directory: Optional[str] = None,
         augment: bool = True,
@@ -431,7 +431,7 @@ class SignalDetectionModel(object):
         loss_reg: Union[str, Any] = "mse",
         loss_class: Optional[Union[str, Any]] = None,
         show_plots: bool = True,
-        callbacks: Optional[list] = None,
+        callbacks: Optional[List[Callback]] = None,
     ) -> None:
         """
         Trains the model using data from specified directories.
@@ -554,13 +554,13 @@ class SignalDetectionModel(object):
         y_time_train: np.ndarray,
         y_class_train: np.ndarray,
         normalize: bool = True,
-        normalization_percentile: Optional[list] = None,
-        normalization_values: Optional[list] = None,
+        normalization_percentile: Optional[List[float]] = None,
+        normalization_values: Optional[List[float]] = None,
         normalization_clip: Optional[bool] = None,
         pad: bool = True,
         validation_data: Optional[Tuple[np.ndarray, np.ndarray, np.ndarray]] = None,
         test_data: Optional[Tuple[np.ndarray, np.ndarray, np.ndarray]] = None,
-        channel_option: list[str] = ["live_nuclei_channel", "dead_nuclei_channel"],
+        channel_option: List[str] = ["live_nuclei_channel", "dead_nuclei_channel"],
         model_name: Optional[str] = None,
         target_directory: Optional[str] = None,
         augment: bool = True,
@@ -1361,7 +1361,9 @@ class SignalDetectionModel(object):
         except Exception as e:
             print(e)
 
-    def plot_model_history(self, mode: str = "regressor") -> None:
+    def plot_model_history(
+        self, mode: Literal["regressor", "classifier"] = "regressor"
+    ) -> None:
         """
         Generates and saves plots of the training history for the classifier or regressor model.
 
@@ -1495,7 +1497,7 @@ class SignalDetectionModel(object):
                     cb.on_training_result(self.dico)
             time.sleep(3)
 
-    def gather_callbacks(self, mode: str) -> None:
+    def gather_callbacks(self, mode: Literal["regressor", "classifier"]) -> None:
         """
         Prepares a list of Keras callbacks for model training based on the specified mode.
 
@@ -1768,7 +1770,7 @@ class SignalDetectionModel(object):
         return np.load(signal_dataset, allow_pickle=True)
 
     def find_best_signal_match(
-        self, signal_dataset: List[dict]
+        self, signal_dataset: List[Dict[str, Any]]
     ) -> Optional[Tuple[List[str], int]]:
         """
         Identifies the best matching signals from the dataset based on the channel options.
@@ -1813,7 +1815,10 @@ class SignalDetectionModel(object):
         return selected_signals, max_length
 
     def cast_signals_into_training_data(
-        self, signal_dataset: List[dict], selected_signals: List[str], max_length: int
+        self,
+        signal_dataset: List[Dict[str, Any]],
+        selected_signals: List[str],
+        max_length: int,
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         Transforms the raw signal dataset into a format suitable for training.

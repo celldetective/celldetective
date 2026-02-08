@@ -23,7 +23,7 @@ Notes
 The module relies heavily on the directory structure and configuration files of the experiment to locate and process images.
 """
 
-from typing import List, Optional, Union, Callable, Any, Tuple
+from typing import List, Optional, Union, Callable, Any, Tuple, Dict, Literal
 import numpy as np
 import os
 from celldetective.utils.image_loaders import (
@@ -61,17 +61,17 @@ logger = get_logger(__name__)
 def estimate_background_per_condition(
     experiment: str,
     threshold_on_std: float = 1,
-    well_option: Union[str, int, list] = "*",
+    well_option: Union[str, int, List[Union[str, int]]] = "*",
     target_channel: str = "channel_name",
-    frame_range: list[int] = [0, 5],
-    mode: str = "timeseries",
-    activation_protocol: list[list] = [["gauss", 2], ["std", 4]],
+    frame_range: List[int] = [0, 5],
+    mode: Literal["timeseries", "tiles"] = "timeseries",
+    activation_protocol: List[List[Any]] = [["gauss", 2], ["std", 4]],
     show_progress_per_pos: bool = False,
     show_progress_per_well: bool = True,
     offset: Optional[float] = None,
     fix_nan: bool = False,
     progress_callback: Optional[Callable] = None,
-) -> list[dict]:
+) -> List[Dict[str, Any]]:
     """
     Estimate the background for each condition in an experiment.
 
@@ -274,16 +274,16 @@ def estimate_background_per_condition(
 
 def correct_background_model_free(
     experiment: str,
-    well_option: Union[str, int, list] = "*",
-    position_option: Union[str, int, list] = "*",
-    target_channel: str = "channel_name",
-    mode: str = "timeseries",
+    mode: Literal["timeseries", "tiles"] = "timeseries",
     threshold_on_std: float = 1,
-    frame_range: list[int] = [0, 5],
+    well_option: Union[str, int, List[Union[str, int]]] = "*",
+    position_option: Union[str, int, List[Union[str, int]]] = "*",
+    target_channel: str = "channel_name",
+    frame_range: List[int] = [0, 5],
     optimize_option: bool = False,
-    opt_coef_range: Union[list[float], tuple[float, float]] = [0.95, 1.05],
+    opt_coef_range: Union[List[float], tuple[float, float]] = [0.95, 1.05],
     opt_coef_nbr: int = 100,
-    operation: str = "divide",
+    operation: Literal["divide", "subtract"] = "divide",
     clip: bool = False,
     offset: Optional[float] = None,
     show_progress_per_well: bool = True,
@@ -292,11 +292,11 @@ def correct_background_model_free(
     return_stacks: bool = False,
     movie_prefix: Optional[str] = None,
     fix_nan: bool = False,
-    activation_protocol: list[list] = [["gauss", 2], ["std", 4]],
+    activation_protocol: List[List[Any]] = [["gauss", 2], ["std", 4]],
     export_prefix: str = "Corrected",
     progress_callback: Optional[Callable] = None,
-    **kwargs,
-) -> Optional[list[np.ndarray]]:
+    **kwargs: Any,
+) -> Optional[List[np.ndarray]]:
     """
     Correct the background of image stacks for a given experiment.
 
@@ -308,21 +308,21 @@ def correct_background_model_free(
     ----------
     experiment : str
             Path to the experiment configuration.
+    mode : {'timeseries', 'tiles'}, optional
+            The mode of processing. Defaults to "timeseries".
+    threshold_on_std : float, optional
+            The threshold for the standard deviation filter to identify high-variance areas. Defaults to 1.
     well_option : str, int, or list of int, optional
             Selection of wells to process. '*' indicates all wells. Defaults to '*'.
     position_option : str, int, or list of int, optional
             Selection of positions to process within each well. '*' indicates all positions. Defaults to '*'.
     target_channel : str, optional
             The name of the target channel to be corrected. Defaults to "channel_name".
-    mode : {'timeseries', 'tiles'}, optional
-            The mode of processing. Defaults to "timeseries".
-    threshold_on_std : float, optional
-            The threshold for the standard deviation filter to identify high-variance areas. Defaults to 1.
     frame_range : list of int, optional
             The range of frames to consider for background estimation. Defaults to [0, 5].
     optimize_option : bool, optional
             If True, optimize the correction coefficient. Defaults to False.
-    opt_coef_range : list of float, optional
+    opt_coef_range : list of float or tuple of float, optional
             The range of coefficients to try for optimization. Defaults to [0.95, 1.05].
     opt_coef_nbr : int, optional
             The number of coefficients to test within the optimization range. Defaults to 100.
@@ -350,6 +350,8 @@ def correct_background_model_free(
             The prefix for the exported file name. Defaults to "Corrected".
     progress_callback : callable, optional
             A callback function to be called at each step of the process (default is None).
+    **kwargs : Any
+            Additional keyword arguments.
 
     Returns
     -------
@@ -364,7 +366,7 @@ def correct_background_model_free(
     Examples
     --------
     >>> experiment = "path/to/experiment/config"
-    >>> corrected_stacks = correct_background(experiment, well_option=[0, 1], position_option='*', target_channel="DAPI", mode="timeseries", threshold_on_std=2, frame_range=[0, 10], optimize_option=True, operation='subtract', clip=True, return_stacks=True)
+    >>> corrected_stacks = correct_background_model_free(experiment, well_option=[0, 1], position_option='*', target_channel="DAPI", mode="timeseries", threshold_on_std=2, frame_range=[0, 10], optimize_option=True, operation='subtract', clip=True, return_stacks=True)
     >>> print(len(corrected_stacks))
     2
 
@@ -506,12 +508,12 @@ def apply_background_to_stack(
     nbr_channels: int = 1,
     stack_length: Optional[int] = 45,
     offset: Optional[float] = None,
-    activation_protocol: list[list] = [["gauss", 2], ["std", 4]],
+    activation_protocol: List[List[Any]] = [["gauss", 2], ["std", 4]],
     threshold_on_std: float = 1,
     optimize_option: bool = True,
-    opt_coef_range: Union[list[float], tuple[float, float]] = (0.95, 1.05),
+    opt_coef_range: Union[List[float], tuple[float, float]] = (0.95, 1.05),
     opt_coef_nbr: int = 100,
-    operation: str = "divide",
+    operation: Literal["divide", "subtract"] = "divide",
     clip: bool = False,
     export: bool = False,
     prefix: str = "Corrected",
@@ -535,8 +537,6 @@ def apply_background_to_stack(
             The index of the target channel to be corrected. Defaults to 0.
     nbr_channels : int, optional
             The number of channels in the image stack. Defaults to 1.
-    nbr_channels : int, optional
-            The number of channels in the image stack. Defaults to 1.
     stack_length : int, optional
             The length of the image stack (number of frames). If None, the length is auto-detected. Defaults to 45.
     offset : float or None, optional
@@ -549,7 +549,7 @@ def apply_background_to_stack(
             The threshold for the standard deviation filter to identify high-variance areas. Defaults to 1.
     optimize_option : bool, optional
             If True, optimize the correction coefficient using a range of values. Defaults to True.
-    opt_coef_range : tuple of float, optional
+    opt_coef_range : list of float or tuple of float, optional
             The range of coefficients to try for optimization. Defaults to (0.95, 1.05).
     opt_coef_nbr : int, optional
             The number of coefficients to test within the optimization range. Defaults to 100.
@@ -566,7 +566,7 @@ def apply_background_to_stack(
 
     Returns
     -------
-    corrected_stack : numpy.ndarray
+    corrected_stack : numpy.ndarray, optional
             The background-corrected image stack.
 
     Examples
@@ -715,9 +715,9 @@ def paraboloid(
 
     Parameters
     ----------
-    x : float or ndarray
+    x : float or numpy.ndarray
             The x-coordinate(s) at which to evaluate the paraboloid.
-    y : float or ndarray
+    y : float or numpy.ndarray
             The y-coordinate(s) at which to evaluate the paraboloid.
     a : float
             The coefficient of the x^2 term.
@@ -734,7 +734,7 @@ def paraboloid(
 
     Returns
     -------
-    float or ndarray
+    float or numpy.ndarray
             The value of the paraboloid at the given (x, y) coordinates. If `x` and
             `y` are arrays, the result is an array of the same shape.
 
@@ -769,9 +769,9 @@ def plane(
 
     Parameters
     ----------
-    x : float or ndarray
+    x : float or numpy.ndarray
             The x-coordinate(s) at which to evaluate the plane.
-    y : float or ndarray
+    y : float or numpy.ndarray
             The y-coordinate(s) at which to evaluate the plane.
     a : float
             The coefficient of the x term.
@@ -782,7 +782,7 @@ def plane(
 
     Returns
     -------
-    float or ndarray
+    float or numpy.ndarray
             The value of the plane at the given (x, y) coordinates. If `x` and
             `y` are arrays, the result is an array of the same shape.
 
@@ -974,25 +974,24 @@ def fit_paraboloid(
 
 def correct_background_model(
     experiment: str,
-    well_option: Union[str, int, list] = "*",
-    position_option: Union[str, int, list] = "*",
+    well_option: Union[str, int, List[Union[str, int]]] = "*",
+    position_option: Union[str, int, List[Union[str, int]]] = "*",
     target_channel: str = "channel_name",
     threshold_on_std: float = 1,
-    model: str = "paraboloid",
-    operation: str = "divide",
+    model: Literal["paraboloid", "plane"] = "paraboloid",
+    operation: Literal["divide", "subtract"] = "divide",
     clip: bool = False,
     show_progress_per_well: bool = True,
     show_progress_per_pos: bool = False,
     export: bool = False,
     return_stacks: bool = False,
     movie_prefix: Optional[str] = None,
-    activation_protocol: list[list] = [["gauss", 2], ["std", 4]],
+    activation_protocol: List[List[Any]] = [["gauss", 2], ["std", 4]],
     export_prefix: str = "Corrected",
-    return_stack: bool = True,
     progress_callback: Optional[Callable] = None,
     downsample: int = 10,
-    **kwargs,
-) -> Optional[list[np.ndarray]]:
+    **kwargs: Any,
+) -> Optional[List[np.ndarray]]:
     """
     Correct background in image stacks using a specified model.
 
@@ -1004,17 +1003,17 @@ def correct_background_model(
     ----------
     experiment : str
             The path to the experiment directory.
-    well_option : str, optional
-            The option to select specific wells (default is '*').
-    position_option : str, optional
-            The option to select specific positions (default is '*').
+    well_option : str, int, or list of int, optional
+            The option to select specific wells. '*' indicates all wells. Defaults to '*'.
+    position_option : str, int, or list of int, optional
+            The option to select specific positions. '*' indicates all positions. Defaults to '*'.
     target_channel : str, optional
             The name of the target channel for background correction (default is "channel_name").
     threshold_on_std : float, optional
             The threshold value on the standard deviation for masking (default is 1).
-    model : str, optional
+    model : {'paraboloid', 'plane'}, optional
             The background correction model to use, either 'paraboloid' or 'plane' (default is 'paraboloid').
-    operation : str, optional
+    operation : {'divide', 'subtract'}, optional
             The operation to apply for background correction, either 'divide' or 'subtract' (default is 'divide').
     clip : bool, optional
             Whether to clip the corrected image to ensure non-negative values (default is False).
@@ -1036,12 +1035,12 @@ def correct_background_model(
             A callback function to be called at each step of the process (default is None).
     downsample : int, optional
             The downsampling factor to reduce the number of points used for fitting (default is 10).
-    **kwargs : dict
+    **kwargs : Any
             Additional keyword arguments to be passed to the underlying correction function.
 
     Returns
     -------
-    list of numpy.ndarray
+    list of numpy.ndarray, optional
             A list of corrected image stacks if `return_stacks` is True, otherwise None.
 
     Notes
@@ -1118,7 +1117,6 @@ def correct_background_model(
                 clip=clip,
                 export=export,
                 prefix=export_prefix,
-                activation_protocol=activation_protocol,
                 return_stacks=return_stacks,
                 progress_callback=progress_callback,
                 downsample=downsample,
@@ -1152,16 +1150,16 @@ def fit_and_apply_model_background_to_stack(
     nbr_channels: int = 1,
     stack_length: Optional[int] = 45,
     threshold_on_std: float = 1,
-    operation: str = "divide",
-    model: str = "paraboloid",
+    operation: Literal["divide", "subtract"] = "divide",
+    model: Literal["paraboloid", "plane"] = "paraboloid",
     clip: bool = False,
     export: bool = False,
-    activation_protocol: list[list] = [["gauss", 2], ["std", 4]],
+    activation_protocol: List[List[Any]] = [["gauss", 2], ["std", 4]],
     prefix: str = "Corrected",
     return_stacks: bool = True,
     progress_callback: Optional[Callable] = None,
     downsample: int = 10,
-    subset_indices: Optional[list[int]] = None,
+    subset_indices: Optional[List[int]] = None,
 ) -> Optional[np.ndarray]:
     """
     Fit and apply a background correction model to an image stack.
@@ -1179,15 +1177,13 @@ def fit_and_apply_model_background_to_stack(
             The index of the target channel for background correction (default is 0).
     nbr_channels : int, optional
             The number of channels in the image stack (default is 1).
-    subset_indices : list of int, optional
-            List of absolute frame indices to process (default is None).
     stack_length : int, optional
             The length of the stack (default is 45).
     threshold_on_std : float, optional
             The threshold value on the standard deviation for masking (default is 1).
-    operation : str, optional
+    operation : {'divide', 'subtract'}, optional
             The operation to apply for background correction, either 'divide' or 'subtract' (default is 'divide').
-    model : str, optional
+    model : {'paraboloid', 'plane'}, optional
             The background correction model to use, either 'paraboloid' or 'plane' (default is 'paraboloid').
     clip : bool, optional
             Whether to clip the corrected image to ensure non-negative values (default is False).
@@ -1197,19 +1193,19 @@ def fit_and_apply_model_background_to_stack(
             The activation protocol consisting of filters and their respective parameters (default is [['gauss',2],['std',4]]).
     prefix : str, optional
             The prefix for exported corrected stacks (default is 'Corrected').
-    subset_indices : list of int, optional
-            List of absolute frame indices to process (default is None).
     return_stacks : bool, optional
             Whether to return the corrected stacks (default is True).
     progress_callback : callable, optional
             A callback function to be called at each step of the process (default is None).
     downsample : int, optional
             The downsampling factor to reduce the number of points used for fitting (default is 10).
+    subset_indices : list of int, optional
+            List of absolute frame indices to process (default is None).
 
     Returns
     -------
-    numpy.ndarray
-            The corrected image stack.
+    numpy.ndarray, optional
+            The corrected image stack if `return_stacks` is True, otherwise None.
 
     Notes
     -----
@@ -1341,13 +1337,13 @@ def fit_and_apply_model_background_to_stack(
 def field_correction(
     img: np.ndarray,
     threshold: float = 1,
-    operation: str = "divide",
-    model: str = "paraboloid",
+    operation: Literal["divide", "subtract"] = "divide",
+    model: Literal["paraboloid", "plane"] = "paraboloid",
     clip: bool = False,
     return_bg: bool = False,
-    activation_protocol: List[List] = [["gauss", 2], ["std", 4]],
+    activation_protocol: List[List[Any]] = [["gauss", 2], ["std", 4]],
     downsample: int = 10,
-):
+) -> Union[np.ndarray, tuple[np.ndarray, np.ndarray]]:
     """
     Apply field correction to an image.
 
@@ -1361,9 +1357,9 @@ def field_correction(
             The input image to be corrected.
     threshold : float, optional
             The threshold value on the image, post activation protocol for masking out cells (default is 1).
-    operation : str, optional
+    operation : {'divide', 'subtract'}, optional
             The operation to apply for background correction, either 'divide' or 'subtract' (default is 'divide').
-    model : str, optional
+    model : {'paraboloid', 'plane'}, optional
             The background correction model to use, either 'paraboloid' or 'plane' (default is 'paraboloid').
     clip : bool, optional
             Whether to clip the corrected image to ensure non-negative values (default is False).
@@ -1376,7 +1372,7 @@ def field_correction(
 
     Returns
     -------
-    numpy.ndarray or tuple
+    numpy.ndarray or tuple of (numpy.ndarray, numpy.ndarray)
             The corrected image or a tuple containing the corrected image and the background, depending on the value of `return_bg`.
 
     Notes
@@ -1428,13 +1424,11 @@ def field_correction(
     else:
         return correction.copy()
 
-    return correction.copy()
-
 
 def fit_background_model(
     img: np.ndarray,
     cell_masks: Optional[np.ndarray] = None,
-    model: str = "paraboloid",
+    model: Literal["paraboloid", "plane"] = "paraboloid",
     edge_exclusion: Optional[int] = None,
     downsample: int = 10,
 ) -> Optional[np.ndarray]:
@@ -1450,7 +1444,7 @@ def fit_background_model(
             The input image data.
     cell_masks : numpy.ndarray, optional
             An array specifying cell masks. If provided, areas covered by cell masks will be excluded from the fitting process.
-    model : str, optional
+    model : {'paraboloid', 'plane'}, optional
             The background model to fit, either 'paraboloid' or 'plane' (default is 'paraboloid').
     edge_exclusion : int or None, optional
             The size of the border to exclude from fitting (default is None).
@@ -1474,6 +1468,7 @@ def fit_background_model(
     fit_plane : Function to fit a plane model to an image.
     """
 
+    bg: Optional[np.ndarray] = None
     if model == "paraboloid":
         bg = fit_paraboloid(
             img.astype(float),
@@ -1494,8 +1489,8 @@ def fit_background_model(
 
 def correct_channel_offset(
     experiment: str,
-    well_option: Union[str, int, list] = "*",
-    position_option: Union[str, int, list] = "*",
+    well_option: Union[str, int, List[Union[str, int]]] = "*",
+    position_option: Union[str, int, List[Union[str, int]]] = "*",
     target_channel: str = "channel_name",
     correction_horizontal: int = 0,
     correction_vertical: int = 0,
@@ -1506,8 +1501,8 @@ def correct_channel_offset(
     movie_prefix: Optional[str] = None,
     export_prefix: str = "Corrected",
     progress_callback: Optional[Callable] = None,
-    **kwargs,
-) -> Optional[list[np.ndarray]]:
+    **kwargs: Any,
+) -> Optional[List[np.ndarray]]:
     """
     Correct the channel shift (chromatic aberration) for an entire experiment.
 
@@ -1518,10 +1513,10 @@ def correct_channel_offset(
     ----------
     experiment : str
             The path to the experiment directory.
-    well_option : str, optional
-            The option to select specific wells (default is '*').
-    position_option : str, optional
-            The option to select specific positions (default is '*').
+    well_option : str, int, or list of int, optional
+            The option to select specific wells. '*' indicates all wells. Defaults to '*'.
+    position_option : str, int, or list of int, optional
+            The option to select specific positions. '*' indicates all positions. Defaults to '*'.
     target_channel : str, optional
             The name of the target channel for correction (default is "channel_name").
     correction_horizontal : int, optional
@@ -1542,7 +1537,7 @@ def correct_channel_offset(
             The prefix for exported corrected stacks (default is 'Corrected').
     progress_callback : callable, optional
             A callback function to be called at each step of the process (default is None).
-    **kwargs : dict
+    **kwargs : Any
             Additional keyword arguments.
 
     Returns

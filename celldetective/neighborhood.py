@@ -1785,11 +1785,11 @@ def mask_contact_neighborhood(
 def compute_contact_neighborhood_at_position(
     pos: str,
     distance: Union[float, List[float]],
-    population: Union[str, List[str]] = ["targets", "effectors"],
-    theta_dist: Optional[Union[float, List[float]]] = None,
+    population: List[str] = ["effectors", "targets"],
+    theta_dist: Union[float, List[float]] = 20,
     img_shape: Tuple[int, int] = (2048, 2048),
-    return_tables: bool = False,
-    clear_neigh: bool = False,
+    return_tables: bool = True,
+    clear_neigh: bool = True,
     event_time_col: Optional[str] = None,
     neighborhood_kwargs: Dict[str, Any] = {
         "mode": "two-pop",
@@ -1800,7 +1800,7 @@ def compute_contact_neighborhood_at_position(
         "attention_weight": True,
         "symmetrize": True,
     },
-) -> Optional[Union[pd.DataFrame, Tuple[pd.DataFrame, pd.DataFrame]]]:
+) -> Optional[Tuple[pd.DataFrame, ...]]:
     """
     Computes neighborhood metrics for specified cell populations within a given position, based on distance criteria and additional parameters.
 
