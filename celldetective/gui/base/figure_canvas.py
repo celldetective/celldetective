@@ -1,4 +1,8 @@
+from typing import Optional
+
+from matplotlib.figure import Figure
 from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QCloseEvent, QResizeEvent
 from PyQt5.QtWidgets import QVBoxLayout
 
 from celldetective.gui.base.components import CelldetectiveWidget

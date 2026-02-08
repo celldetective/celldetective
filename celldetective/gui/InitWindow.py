@@ -6,8 +6,8 @@ import time
 from glob import glob
 from subprocess import Popen, check_output
 
-from PyQt5.QtCore import QUrl, Qt, QThread, QCloseEvent
-from PyQt5.QtGui import QDesktopServices, QIntValidator
+from PyQt5.QtCore import QUrl, Qt, QThread
+from PyQt5.QtGui import QCloseEvent, QDesktopServices, QIntValidator
 from PyQt5.QtWidgets import (
     QAction,
     QApplication,

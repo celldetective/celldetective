@@ -1,3 +1,6 @@
+from typing import Any, Optional, Tuple
+
+import matplotlib.axes
 import numpy as np
 from PyQt5.QtCore import QSize
 from PyQt5.QtWidgets import QLineEdit, QListWidget, QHBoxLayout, QPushButton, QLabel

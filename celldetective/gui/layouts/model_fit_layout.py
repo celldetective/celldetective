@@ -1,3 +1,5 @@
+from typing import Optional
+
 import numpy as np
 from PyQt5.QtCore import QSize, QThread, pyqtSignal
 from PyQt5.QtGui import QIntValidator
@@ -11,6 +13,7 @@ from PyQt5.QtWidgets import (
     QSpacerItem,
     QSizePolicy,
     QMessageBox,
+    QMainWindow,
 )
 from fonticon_mdi6 import MDI6
 from superqt.fonticon import icon

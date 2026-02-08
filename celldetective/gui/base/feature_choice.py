@@ -1,7 +1,7 @@
 import ast
 import os
 from celldetective import get_software_location
-from PyQt5.QtWidgets import QComboBox, QPushButton, QVBoxLayout
+from PyQt5.QtWidgets import QComboBox, QMainWindow, QPushButton, QVBoxLayout
 
 from celldetective.gui.base.components import CelldetectiveWidget
 from celldetective.gui.base.utils import center_window

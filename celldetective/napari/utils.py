@@ -2,6 +2,7 @@ import gc
 import json
 import os
 from pathlib import Path, PurePath
+from typing import Any, Callable, Dict, Optional, Union
 
 import napari
 import numpy as np

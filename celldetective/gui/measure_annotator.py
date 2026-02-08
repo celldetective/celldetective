@@ -13,8 +13,8 @@ from PyQt5.QtWidgets import (
     QButtonGroup,
     QMainWindow,
 )
-from PyQt5.QtCore import Qt, QSize, QCloseEvent
-from PyQt5.QtGui import QIntValidator, QKeySequence
+from PyQt5.QtCore import Qt, QSize
+from PyQt5.QtGui import QIntValidator, QKeySequence, QCloseEvent
 from matplotlib.axes import Axes
 from typing import Optional, Union, Any
 import numpy as np

@@ -11,7 +11,8 @@ from PyQt5.QtWidgets import (
     QComboBox,
     QMainWindow,
 )
-from PyQt5.QtCore import Qt, QSize, QCloseEvent
+from PyQt5.QtCore import Qt, QSize
+from PyQt5.QtGui import QCloseEvent
 from superqt import QLabeledSlider, QLabeledDoubleSlider, QSearchableComboBox
 from superqt.fonticon import icon
 from fonticon_mdi6 import MDI6
