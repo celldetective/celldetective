@@ -11,6 +11,7 @@ from PyQt5.QtWidgets import (
     QPushButton,
     QMessageBox,
     QLineEdit,
+    QMainWindow,
 )
 from superqt import QLabeledSlider
 
@@ -25,7 +26,9 @@ logger = get_logger(__name__)
 
 class DifferentiateColWidget(CelldetectiveWidget):
 
-    def __init__(self, parent_window, column=None):
+    def __init__(
+        self, parent_window: QMainWindow, column: Optional[str] = None
+    ) -> None:
         """
         Initialize the DifferentiateColWidget.
 
@@ -116,7 +119,13 @@ class DifferentiateColWidget(CelldetectiveWidget):
 
 class OperationOnColsWidget(CelldetectiveWidget):
 
-    def __init__(self, parent_window, column1=None, column2=None, operation="divide"):
+    def __init__(
+        self,
+        parent_window: QMainWindow,
+        column1: Optional[str] = None,
+        column2: Optional[str] = None,
+        operation: str = "divide",
+    ) -> None:
         """
         Initialize the OperationOnColsWidget.
 

@@ -2,7 +2,7 @@ import os
 from glob import glob
 from pathlib import Path, PosixPath, PurePosixPath, WindowsPath
 from shutil import copyfile
-from typing import Union, List, Tuple
+from typing import Union, List, Tuple, Optional, Dict, Any, Sequence
 
 import numpy as np
 from natsort import natsorted
@@ -29,7 +29,7 @@ from tifffile import imread, memmap
 from magicgui import magicgui
 
 
-def extract_well_from_position(pos_path):
+def extract_well_from_position(pos_path: str) -> str:
     """
     Extracts the well directory path from a given position directory path.
 
@@ -66,7 +66,7 @@ def extract_well_from_position(pos_path):
     return well_path
 
 
-def extract_experiment_from_position(pos_path):
+def extract_experiment_from_position(pos_path: str) -> str:
     """
     Extracts the experiment directory path from a given position directory path.
 
@@ -104,7 +104,7 @@ def extract_experiment_from_position(pos_path):
     return experiment
 
 
-def get_experiment_wells(experiment):
+def get_experiment_wells(experiment: str) -> np.ndarray:
     """
     Retrieves the list of well directories from a given experiment directory, sorted
     naturally and returned as a NumPy array of strings.
@@ -138,7 +138,7 @@ def get_experiment_wells(experiment):
     return np.array(wells, dtype=str)
 
 
-def extract_well_name_and_number(well):
+def extract_well_name_and_number(well: str) -> Tuple[str, int]:
     """
     Extract the well name and number from a given well path.
 
@@ -180,7 +180,7 @@ def extract_well_name_and_number(well):
     return well_name, well_number
 
 
-def extract_position_name(pos):
+def extract_position_name(pos: str) -> str:
     """
     Extract the position name from a given position path.
 
@@ -217,7 +217,9 @@ def extract_position_name(pos):
     return pos_name
 
 
-def extract_experiment_channels(experiment):
+def extract_experiment_channels(
+    experiment: Union[str, Path],
+) -> Tuple[np.ndarray, np.ndarray]:
     """
     Extracts channel names and their indices from an experiment project.
 
@@ -248,7 +250,7 @@ def extract_experiment_channels(experiment):
     return _extract_channels_from_config(config)
 
 
-def get_spatial_calibration(experiment):
+def get_spatial_calibration(experiment: Union[str, Path]) -> float:
     """
     Retrieves the spatial calibration factor for an experiment.
 
@@ -292,7 +294,7 @@ def get_spatial_calibration(experiment):
     return px_to_um
 
 
-def get_temporal_calibration(experiment):
+def get_temporal_calibration(experiment: Union[str, Path]) -> float:
     """
     Retrieves the temporal calibration factor for an experiment.
 
@@ -336,7 +338,7 @@ def get_temporal_calibration(experiment):
     return frame_to_min
 
 
-def get_experiment_metadata(experiment):
+def get_experiment_metadata(experiment: Union[str, Path]) -> Dict[str, Any]:
     """
     Get experiment metadata.
 
@@ -355,7 +357,7 @@ def get_experiment_metadata(experiment):
     return metadata
 
 
-def get_experiment_labels(experiment):
+def get_experiment_labels(experiment: Union[str, Path]) -> Dict[str, Any]:
     """
     Get experiment labels.
 
@@ -386,7 +388,9 @@ def get_experiment_labels(experiment):
     return labels
 
 
-def get_experiment_concentrations(experiment, dtype=str):
+def get_experiment_concentrations(
+    experiment: Union[str, Path], dtype: Any = str
+) -> np.ndarray:
     """
     Retrieves the concentrations associated with each well in an experiment.
 
@@ -444,7 +448,9 @@ def get_experiment_concentrations(experiment, dtype=str):
     return np.array([dtype(c) for c in concentrations])
 
 
-def get_experiment_cell_types(experiment, dtype=str):
+def get_experiment_cell_types(
+    experiment: Union[str, Path], dtype: Any = str
+) -> np.ndarray:
     """
     Retrieves the cell types associated with each well in an experiment.
 
@@ -498,7 +504,9 @@ def get_experiment_cell_types(experiment, dtype=str):
     return np.array([dtype(c) for c in cell_types])
 
 
-def get_experiment_antibodies(experiment, dtype=str):
+def get_experiment_antibodies(
+    experiment: Union[str, Path], dtype: Any = str
+) -> np.ndarray:
     """
     Retrieve the list of antibodies used in an experiment.
 
@@ -549,46 +557,48 @@ def get_experiment_antibodies(experiment, dtype=str):
     return np.array([dtype(c) for c in antibodies])
 
 
-def get_experiment_pharmaceutical_agents(experiment, dtype=str):
+def get_experiment_pharmaceutical_agents(
+    experiment: Union[str, Path], dtype: Any = str
+) -> np.ndarray:
     """
-    Retrieves the antibodies associated with each well in an experiment.
+    Retrieves the pharmaceutical agents associated with each well in an experiment.
 
     Parameters
     ----------
     experiment : str
             The file system path to the experiment directory.
     dtype : type, optional
-            The data type to which the antibodies should be converted (default is `str`).
+            The data type to which the agents should be converted (default is `str`).
 
     Returns
     -------
     numpy.ndarray
-            An array of antibodies for each well, converted to the specified data type.
+            An array of pharmaceutical agents for each well, converted to the specified data type.
 
     Raises
     ------
     AssertionError
             If the configuration file (`config.ini`) does not exist in the specified experiment directory.
     KeyError
-            If the "antibodies" key is not found under the "Labels" section in the configuration file.
+            If the "pharmaceutical_agents" key is not found under the "Labels" section in the configuration file.
     ValueError
-            If the retrieved antibody values cannot be converted to the specified data type.
+            If the retrieved agent values cannot be converted to the specified data type.
 
     Notes
     -----
     - The function retrieves the configuration file using `get_config()` and expects a section `Labels` containing
-      a key `antibodies`.
-    - The antibody names are assumed to be comma-separated values.
-    - If the number of wells does not match the number of antibodies, the function generates a default set
+      a key `pharmaceutical_agents`.
+    - The agent names are assumed to be comma-separated values.
+    - If the number of wells does not match the number of agents, the function generates a default set
       of values ranging from 0 to the number of wells minus 1.
-    - The resulting antibody names are converted to the specified `dtype` before being returned.
+    - The resulting agent names are converted to the specified `dtype` before being returned.
 
     Example
     -------
     >>> experiment = "/path/to/experiment"
-    >>> antibodies = get_experiment_antibodies(experiment, dtype=str)
-    >>> print(antibodies)
-    ['AntibodyA', 'AntibodyB', 'AntibodyC', 'AntibodyD']
+    >>> agents = get_experiment_pharmaceutical_agents(experiment, dtype=str)
+    >>> print(agents)
+    ['AgentA', 'AgentB', 'AgentC', 'AgentD']
 
     """
 
@@ -607,7 +617,9 @@ def get_experiment_pharmaceutical_agents(experiment, dtype=str):
     return np.array([dtype(c) for c in pharmaceutical_agents])
 
 
-def get_experiment_populations(experiment, dtype=str):
+def get_experiment_populations(
+    experiment: Union[str, Path], dtype: Any = str
+) -> List[Any]:
     """
     Get experiment populations.
 
@@ -682,7 +694,7 @@ def get_config(experiment: Union[str, Path]) -> str:
     return config
 
 
-def extract_experiment_from_well(well_path):
+def extract_experiment_from_well(well_path: str) -> str:
     """
     Extracts the experiment directory path from a given well directory path.
 
@@ -718,7 +730,9 @@ def extract_experiment_from_well(well_path):
     return experiment
 
 
-def collect_experiment_metadata(pos_path=None, well_path=None):
+def collect_experiment_metadata(
+    pos_path: Optional[str] = None, well_path: Optional[str] = None
+) -> Optional[Dict[str, Any]]:
     """
     Collects and organizes metadata for an experiment based on a given position or well directory path.
 
@@ -820,7 +834,7 @@ def interpret_wells_and_positions(
     experiment: str,
     well_option: Union[str, int, List[int]],
     position_option: Union[str, int, List[int]],
-) -> Union[Tuple[List[int], List[int]], None]:
+) -> Union[Tuple[List[int], Optional[List[int]]], None]:
     """
     Interpret well and position options for a given experiment.
 
@@ -852,7 +866,7 @@ def interpret_wells_and_positions(
 
     Examples
     --------
-    >>> experiment = ...  # Some experiment object
+    >>> experiment = "path/to/experiment"
     >>> interpret_wells_and_positions(experiment, '*', '*')
     (array([0, 1, 2, ..., n-1]), None)
 
@@ -890,7 +904,7 @@ def interpret_wells_and_positions(
     return well_indices, position_indices
 
 
-def get_position_movie_path(pos, prefix=""):
+def get_position_movie_path(pos: str, prefix: str = "") -> Optional[str]:
     """
     Get the path of the movie file for a given position.
 
@@ -937,7 +951,7 @@ def get_position_movie_path(pos, prefix=""):
     return stack_path
 
 
-def get_positions_in_well(well):
+def get_positions_in_well(well: str) -> np.ndarray:
     """
     Retrieves the list of position directories within a specified well directory,
     formatted as a NumPy array of strings.
@@ -984,7 +998,9 @@ def get_positions_in_well(well):
     return np.array(positions, dtype=str)
 
 
-def extract_experiment_folder_output(experiment_folder, destination_folder):
+def extract_experiment_folder_output(
+    experiment_folder: str, destination_folder: str
+) -> None:
     """
     Copies the output subfolder and associated tables from an experiment folder to a new location,
     making the experiment folder much lighter by only keeping essential data.
@@ -1067,7 +1083,7 @@ def extract_experiment_folder_output(experiment_folder, destination_folder):
                 copyfile(t, os.sep.join([output_tables_folder, os.path.split(t)[-1]]))
 
 
-def _get_contrast_limits(stack):
+def _get_contrast_limits(stack: np.ndarray) -> Optional[List[Tuple[float, float]]]:
     """
     Get contrast limits for viewing.
 
@@ -1100,7 +1116,7 @@ def _get_contrast_limits(stack):
 
 
 # --- Appended functions from antigravity branch ---
-def auto_load_number_of_frames(stack_path):
+def auto_load_number_of_frames(stack_path: str) -> Optional[int]:
     """
     Automatically load the number of frames from a stack.
 
@@ -1176,7 +1192,9 @@ def auto_load_number_of_frames(stack_path):
     return len_movie if "len_movie" in locals() else None
 
 
-def locate_stack(position, prefix="Aligned", lazy=False):
+def locate_stack(
+    position: str, prefix: str = "Aligned", lazy: bool = False
+) -> Union[np.ndarray, da.Array]:
     """
     Locate and load an image stack.
 
@@ -1247,7 +1265,12 @@ def locate_stack(position, prefix="Aligned", lazy=False):
     return stack
 
 
-def locate_labels(position, population="target", frames=None, lazy=False):
+def locate_labels(
+    position: str,
+    population: str = "target",
+    frames: Union[int, List[int], None] = None,
+    lazy: bool = False,
+) -> Union[np.ndarray, da.Array, List[Optional[np.ndarray]], None]:
     """
     Locate and load labels.
 
@@ -1337,7 +1360,9 @@ def locate_labels(position, population="target", frames=None, lazy=False):
     return labels
 
 
-def fix_missing_labels(position, population="target", prefix="Aligned"):
+def fix_missing_labels(
+    position: str, population: str = "target", prefix: str = "Aligned"
+) -> None:
     """
     Create empty label files for missing frames.
 
@@ -1388,8 +1413,11 @@ def fix_missing_labels(position, population="target", prefix="Aligned"):
 
 
 def locate_stack_and_labels(
-    position, prefix="Aligned", population="target", lazy=False
-):
+    position: str,
+    prefix: str = "Aligned",
+    population: str = "target",
+    lazy: bool = False,
+) -> Tuple[Union[np.ndarray, da.Array], Union[np.ndarray, da.Array]]:
     """
     Locate and load both stack and labels.
 
@@ -1422,7 +1450,9 @@ def locate_stack_and_labels(
     return stack, labels
 
 
-def load_tracking_data(position, prefix="Aligned", population="target"):
+def load_tracking_data(
+    position: str, prefix: str = "Aligned", population: str = "target"
+) -> Tuple[pd.DataFrame, Union[np.ndarray, da.Array], Union[np.ndarray, da.Array]]:
     """
     Load tracking data, labels, and stack.
 
@@ -1464,7 +1494,9 @@ def load_tracking_data(position, prefix="Aligned", population="target"):
     return trajectories, labels, stack
 
 
-def get_position_table(pos, population, return_path=False):
+def get_position_table(
+    pos: str, population: str, return_path: bool = False
+) -> Union[Optional[pd.DataFrame], Tuple[Optional[pd.DataFrame], str]]:
     """
     Retrieves the data table for a specified population at a given position.
 
@@ -1507,10 +1539,14 @@ def get_position_table(pos, population, return_path=False):
 
 
 def relabel_segmentation_lazy(
-    labels,
-    df,
-    column_labels={"track": "TRACK_ID", "frame": "FRAME", "label": "class_id"},
-):
+    labels: da.Array,
+    df: pd.DataFrame,
+    column_labels: Dict[str, str] = {
+        "track": "TRACK_ID",
+        "frame": "FRAME",
+        "label": "class_id",
+    },
+) -> da.Array:
     """
     Relabel segmentation lazily using dask.
 
@@ -1535,7 +1571,9 @@ def relabel_segmentation_lazy(
 
     indices = list(range(labels.shape[0]))
 
-    def relabel_frame(frame_data, frame_idx, df_subset):
+    def relabel_frame(
+        frame_data: np.ndarray, frame_idx: int, df_subset: pd.DataFrame
+    ) -> np.ndarray:
         """
         Relabel a single frame.
 
@@ -1613,7 +1651,9 @@ def relabel_segmentation_lazy(
     return da.stack(lazy_frames)
 
 
-def tracks_to_btrack(df, exclude_nans=False):
+def tracks_to_btrack(
+    df: pd.DataFrame, exclude_nans: bool = False
+) -> Tuple[np.ndarray, Dict[str, np.ndarray], Dict[str, Any]]:
     """
     Converts a dataframe of tracked objects into the bTrack output format.
 
@@ -1652,7 +1692,9 @@ def tracks_to_btrack(df, exclude_nans=False):
     return data, properties, graph
 
 
-def tracks_to_napari(df, exclude_nans=False):
+def tracks_to_napari(
+    df: pd.DataFrame, exclude_nans: bool = False
+) -> Tuple[np.ndarray, np.ndarray, Dict[str, np.ndarray], Dict[str, Any]]:
     """
     Convert tracks to Napari format.
 
@@ -1678,19 +1720,19 @@ def tracks_to_napari(df, exclude_nans=False):
 
 
 def relabel_segmentation(
-    labels,
-    df,
-    exclude_nans=True,
-    column_labels={
+    labels: np.ndarray,
+    df: pd.DataFrame,
+    exclude_nans: bool = True,
+    column_labels: Dict[str, str] = {
         "track": "TRACK_ID",
         "frame": "FRAME",
         "y": "POSITION_Y",
         "x": "POSITION_X",
         "label": "class_id",
     },
-    threads=1,
-    dialog=None,
-):
+    threads: int = 1,
+    dialog: Any = None,
+) -> np.ndarray:
     """
     Relabel segmentation based on tracking data.
 
@@ -1732,7 +1774,7 @@ def relabel_segmentation(
         dialog.setLabelText(f"Relabeling masks (using {n_threads} threads)...")
         QApplication.processEvents()
 
-    def rewrite_labels(indices):
+    def rewrite_labels(indices: List[int]) -> None:
         """
         Rewrite labels for a chunk of frames.
 
@@ -1806,14 +1848,14 @@ def relabel_segmentation(
 
 
 def _view_on_napari(
-    tracks=None,
-    stack=None,
-    labels=None,
-    track_props=None,
-    track_graph=None,
-    dialog=None,
-    widget_adder=None,
-):
+    tracks: Optional[np.ndarray] = None,
+    stack: Optional[np.ndarray] = None,
+    labels: Optional[np.ndarray] = None,
+    track_props: Optional[Dict[str, Any]] = None,
+    track_graph: Optional[Dict[str, Any]] = None,
+    dialog: Any = None,
+    widget_adder: Optional[callable] = None,
+) -> None:
     """
     View data on Napari.
 
@@ -1862,16 +1904,16 @@ def _view_on_napari(
 
 
 def view_tracks_in_napari(
-    position,
-    population,
-    stack=None,
-    labels=None,
-    relabel=True,
-    flush_memory=True,
-    threads=1,
-    lazy=False,
-    dialog=None,
-):
+    position: str,
+    population: str,
+    stack: Optional[np.ndarray] = None,
+    labels: Optional[np.ndarray] = None,
+    relabel: bool = True,
+    flush_memory: bool = True,
+    threads: int = 1,
+    lazy: bool = False,
+    dialog: Any = None,
+) -> Optional[bool]:
     """
     View tracks in Napari for a given position and population.
 
@@ -1934,7 +1976,7 @@ def view_tracks_in_napari(
 
     vertices, tracks, properties, graph = tracks_to_napari(df, exclude_nans=True)
 
-    def add_export_widget(viewer):
+    def add_export_widget(viewer: napari.Viewer) -> None:
         """
         Add export widget to viewer.
 
@@ -2004,18 +2046,18 @@ def view_tracks_in_napari(
 
 
 def control_tracking_table(
-    position,
-    calibration=1,
-    prefix="Aligned",
-    population="target",
-    column_labels={
+    position: str,
+    calibration: float = 1.0,
+    prefix: str = "Aligned",
+    population: str = "target",
+    column_labels: Dict[str, str] = {
         "track": "TRACK_ID",
         "frame": "FRAME",
         "y": "POSITION_Y",
         "x": "POSITION_X",
         "label": "class_id",
     },
-):
+) -> None:
     """
     Control tracking table by viewing in Napari.
 
@@ -2052,8 +2094,11 @@ def control_tracking_table(
 
 
 def auto_correct_masks(
-    masks, bbox_factor: float = 1.75, min_area: int = 9, fill_labels: bool = False
-):
+    masks: np.ndarray,
+    bbox_factor: float = 1.75,
+    min_area: int = 9,
+    fill_labels: bool = False,
+) -> np.ndarray:
     """
     Auto-correct masks by removing small objects and filling holes.
 

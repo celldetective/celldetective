@@ -35,7 +35,7 @@ logger = get_logger(__name__)
 
 class PreprocessingPanel(QFrame, Styles):
 
-    def __init__(self, parent_window):
+    def __init__(self, parent_window: QMainWindow) -> None:
         """
         Initialize the PreprocessingPanel.
 

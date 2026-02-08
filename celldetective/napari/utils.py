@@ -33,15 +33,15 @@ logger = get_logger()
 
 
 def control_tracks(
-    position,
-    prefix="Aligned",
-    population="target",
-    relabel=True,
-    flush_memory=True,
-    threads=1,
-    progress_callback=None,
-    prepare_only=False,
-):
+    position: str,
+    prefix: str = "Aligned",
+    population: str = "target",
+    relabel: bool = True,
+    flush_memory: bool = True,
+    threads: int = 1,
+    progress_callback: Optional[Callable[[int], bool]] = None,
+    prepare_only: bool = False,
+) -> Optional[Union[napari.Viewer, Dict[str, Any]]]:
     """
     Controls the tracking of cells or objects within a given position by locating the relevant image stack and label data,
     and then visualizing and managing the tracks in the Napari viewer.
@@ -117,7 +117,9 @@ def control_tracks(
     )
 
 
-def tracks_to_napari(df, exclude_nans=False):
+def tracks_to_napari(
+    df: pd.DataFrame, exclude_nans: bool = False
+) -> Tuple[np.ndarray, np.ndarray, Dict[str, Any], Dict[str, Any]]:
     """
     Convert a DataFrame of tracks to Napari-compatible format.
 
@@ -144,16 +146,16 @@ def tracks_to_napari(df, exclude_nans=False):
 
 
 def view_tracks_in_napari(
-    position,
-    population,
-    stack=None,
-    labels=None,
-    relabel=True,
-    flush_memory=True,
-    threads=1,
-    progress_callback=None,
-    prepare_only=False,
-):
+    position: str,
+    population: str,
+    stack: Optional[np.ndarray] = None,
+    labels: Optional[np.ndarray] = None,
+    relabel: bool = True,
+    flush_memory: bool = True,
+    threads: int = 1,
+    progress_callback: Optional[Callable[[int], bool]] = None,
+    prepare_only: bool = False,
+) -> Optional[Union[napari.Viewer, Dict[str, Any]]]:
     """
     View tracks in Napari.
 
@@ -205,7 +207,7 @@ def view_tracks_in_napari(
     if (labels is not None) * relabel:
         print("Replacing the cell mask labels with the track ID...")
 
-        def wrapped_callback(p):
+        def wrapped_callback(p: int) -> bool:
             """
             Wrap the progress callback to scale it.
 
@@ -251,18 +253,18 @@ def view_tracks_in_napari(
 
 
 def launch_napari_viewer(
-    stack,
-    labels,
-    vertices,
-    tracks,
-    properties,
-    graph,
-    shared_data,
-    contrast_limits,
-    flush_memory=True,
-    block=True,
-    progress_callback=None,
-):
+    stack: np.ndarray,
+    labels: np.ndarray,
+    vertices: np.ndarray,
+    tracks: np.ndarray,
+    properties: Dict[str, Any],
+    graph: Dict[str, Any],
+    shared_data: Dict[str, Any],
+    contrast_limits: List[Tuple[float, float]],
+    flush_memory: bool = True,
+    block: bool = True,
+    progress_callback: Optional[Callable[[int], bool]] = None,
+) -> napari.Viewer:
     """
     Launch the Napari viewer with the provided data.
 
@@ -309,7 +311,9 @@ def launch_napari_viewer(
     viewer.add_points(vertices, size=4, name="points", opacity=0.3)
     viewer.add_tracks(tracks, properties=properties, graph=graph, name="tracks")
 
-    def lock_controls(layer, widgets=(), locked=True):
+    def lock_controls(
+        layer: napari.layers.Layer, widgets: Tuple[str, ...] = (), locked: bool = True
+    ) -> None:
         """
         Lock or unlock controls for a layer.
 
@@ -396,7 +400,7 @@ def launch_napari_viewer(
 
     export_table_widget.native.setStyleSheet(Styles().button_style_sheet)
 
-    def label_changed(event):
+    def label_changed(event: str) -> None:
         """
         Handle label selection change.
 
@@ -416,7 +420,9 @@ def launch_napari_viewer(
     viewer.window.add_dock_widget(export_table_widget, area="right")
 
     @labels_layer.mouse_double_click_callbacks.append
-    def on_second_click_of_double_click(layer, event):
+    def on_second_click_of_double_click(
+        layer: napari.layers.Labels, event: napari.utils.events.Event
+    ) -> None:
         """
         Handle double click on the labels layer.
 
@@ -580,8 +586,17 @@ def launch_napari_viewer(
 
 
 def load_napari_data(
-    position, prefix="Aligned", population="target", return_stack=True
-):
+    position: str,
+    prefix: str = "Aligned",
+    population: str = "target",
+    return_stack: bool = True,
+) -> Tuple[
+    Optional[np.ndarray],
+    Optional[Dict[str, Any]],
+    Optional[Dict[str, Any]],
+    Optional[np.ndarray],
+    Optional[np.ndarray],
+]:
     """
     Load the necessary data for visualization in napari.
 
@@ -670,8 +685,11 @@ def load_napari_data(
 
 
 def control_segmentation_napari(
-    position, prefix="Aligned", population="target", flush_memory=False
-):
+    position: str,
+    prefix: str = "Aligned",
+    population: str = "target",
+    flush_memory: bool = False,
+) -> None:
     """
 
     Control the visualization of segmentation labels using the napari viewer.
@@ -961,7 +979,9 @@ def control_segmentation_napari(
     save_widget.native.setStyleSheet(Styles().button_style_sheet)
     export_widget.native.setStyleSheet(Styles().button_style_sheet)
 
-    def lock_controls(layer, widgets=(), locked=True):
+    def lock_controls(
+        layer: napari.layers.Layer, widgets: Tuple[str, ...] = (), locked: bool = True
+    ) -> None:
         """
         Lock or unlock controls.
 
@@ -1002,7 +1022,7 @@ def control_segmentation_napari(
     logger.info("napari viewer was successfully closed...")
 
 
-def correct_annotation(filename):
+def correct_annotation(filename: str) -> None:
     """
     New function to reannotate an annotation image in post, using napari and save update inplace.
 
@@ -1071,7 +1091,11 @@ def correct_annotation(filename):
     viewer.show(block=False)
 
 
-def _view_on_napari(tracks=None, stack=None, labels=None):
+def _view_on_napari(
+    tracks: Optional[pd.DataFrame] = None,
+    stack: Optional[np.ndarray] = None,
+    labels: Optional[np.ndarray] = None,
+) -> None:
     """
 
     Visualize tracks, stack, and labels using Napari.
@@ -1124,18 +1148,18 @@ def _view_on_napari(tracks=None, stack=None, labels=None):
 
 
 def control_tracking_table(
-    position,
-    calibration=1,
-    prefix="Aligned",
-    population="target",
-    column_labels={
+    position: str,
+    calibration: float = 1,
+    prefix: str = "Aligned",
+    population: str = "target",
+    column_labels: Dict[str, str] = {
         "track": "TRACK_ID",
         "frame": "FRAME",
         "y": "POSITION_Y",
         "x": "POSITION_X",
         "label": "class_id",
     },
-):
+) -> None:
     """
 
     Control the tracking table and visualize tracks using Napari.

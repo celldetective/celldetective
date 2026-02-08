@@ -10,7 +10,14 @@ class FigureCanvas(CelldetectiveWidget):
     Generic figure canvas.
     """
 
-    def __init__(self, fig, title="", interactive=True):
+    def __init__(
+        self,
+        fig: Figure,
+        title: Optional[str] = None,
+        interactive: Optional[bool] = False,
+        *args,
+        **kwargs,
+    ) -> None:
         """
         Initialize the FigureCanvas.
 
@@ -46,7 +53,7 @@ class FigureCanvas(CelldetectiveWidget):
         # center_window(self)
         self.setAttribute(Qt.WA_DeleteOnClose)
 
-    def resizeEvent(self, event):
+    def resizeEvent(self, event: QResizeEvent) -> None:
         """
         Handle resize events.
 
@@ -75,7 +82,7 @@ class FigureCanvas(CelldetectiveWidget):
         """Draw the canvas."""
         self.canvas.draw()
 
-    def closeEvent(self, event):
+    def closeEvent(self, event: QCloseEvent) -> None:
         """
         Delete figure on closing window.
 

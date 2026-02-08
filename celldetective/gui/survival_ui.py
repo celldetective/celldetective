@@ -5,6 +5,7 @@ from PyQt5.QtWidgets import (
     QLabel,
     QHBoxLayout,
     QPushButton,
+    QMainWindow,
 )
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QDoubleValidator
@@ -46,7 +47,7 @@ class ConfigSurvival(CelldetectiveWidget):
 
     """
 
-    def __init__(self, parent_window=None):
+    def __init__(self, parent_window: Optional[QMainWindow] = None) -> None:
         """
         Initialize the ConfigSurvival widget.
 

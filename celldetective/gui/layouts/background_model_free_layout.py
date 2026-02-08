@@ -1,4 +1,5 @@
 import os
+from typing import Optional
 
 from PyQt5.QtCore import QSize, Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QIntValidator, QDoubleValidator
@@ -14,6 +15,10 @@ from PyQt5.QtWidgets import (
     QHBoxLayout,
     QMessageBox,
     QDialog,
+    QMainWindow,
+    QVBoxLayout,
+    QWidget,
+    QDoubleSpinBox,
 )
 from fonticon_mdi6 import MDI6
 from superqt import QLabeledRangeSlider, QLabeledSlider, QLabeledDoubleRangeSlider
@@ -34,7 +39,7 @@ logger = get_logger(__name__)
 class BackgroundModelFreeCorrectionLayout(QGridLayout, Styles):
     """docstring for ClassName"""
 
-    def __init__(self, parent_window=None, *args):
+    def __init__(self, parent_window: Optional[QMainWindow] = None) -> None:
         """
         Initialize the BackgroundModelFreeCorrectionLayout.
 
@@ -45,7 +50,7 @@ class BackgroundModelFreeCorrectionLayout(QGridLayout, Styles):
         *args
             Variable length argument list.
         """
-        super().__init__(*args)
+        super().__init__()
 
         self.parent_window = parent_window
 
@@ -479,7 +484,7 @@ class BackgroundModelFreeCorrectionLayout(QGridLayout, Styles):
         self.bg_worker.progress.connect(self.bg_progress.setValue)
         self.bg_worker.status_update.connect(self.bg_progress.setLabelText)
 
-        def on_finished(bg):
+        def on_finished(self, bg: list) -> None:
             """
             Handle background estimation completion.
 
@@ -521,7 +526,15 @@ class BackgroundEstimatorThread(QThread):
     finished_with_result = pyqtSignal(object)
     status_update = pyqtSignal(str)
 
-    def __init__(self, exp_dir, well_idx, frame_range, channel, threshold, mode):
+    def __init__(
+        self,
+        exp_dir: str,
+        well_idx: int,
+        frame_range: tuple,
+        channel: str,
+        threshold: float,
+        mode: str,
+    ) -> None:
         """
         Initialize the BackgroundEstimatorThread.
 

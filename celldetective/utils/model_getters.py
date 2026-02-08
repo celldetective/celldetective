@@ -1,13 +1,18 @@
-import os
 from glob import glob
 from shutil import rmtree
+from typing import List, Tuple, Union
 
 from natsort import natsorted
 
 from celldetective.utils.downloaders import get_zenodo_files
 
 
-def get_tracking_configs_list(return_path=False):
+import os
+
+
+def get_tracking_configs_list(
+    return_path: bool = False,
+) -> Union[List[str], Tuple[List[str], str]]:
     """
 
     Retrieve a list of available tracking configurations.
@@ -59,7 +64,9 @@ def get_tracking_configs_list(return_path=False):
         return available_models, modelpath
 
 
-def get_signal_models_list(return_path=False):
+def get_signal_models_list(
+    return_path: bool = False,
+) -> Union[List[str], Tuple[List[str], str]]:
     """
 
     Retrieve a list of available signal detection models.
@@ -122,7 +129,9 @@ def get_signal_models_list(return_path=False):
         return available_models, modelpath
 
 
-def get_pair_signal_models_list(return_path=False):
+def get_pair_signal_models_list(
+    return_path: bool = False,
+) -> Union[List[str], Tuple[List[str], str]]:
     """
 
     Retrieve a list of available signal detection models.
@@ -178,7 +187,9 @@ def get_pair_signal_models_list(return_path=False):
         return available_models, modelpath
 
 
-def get_segmentation_models_list(mode="targets", return_path=False):
+def get_segmentation_models_list(
+    mode: str = "targets", return_path: bool = False
+) -> Union[List[str], Tuple[List[str], str]]:
     """
     Get available segmentation models.
 
@@ -236,7 +247,9 @@ def get_segmentation_models_list(mode="targets", return_path=False):
         return available_models, modelpath
 
 
-def get_segmentation_datasets_list(return_path=False):
+def get_segmentation_datasets_list(
+    return_path: bool = False,
+) -> Union[List[str], Tuple[List[str], str]]:
     """
     Retrieves a list of available segmentation datasets from both the local 'celldetective/datasets/segmentation_annotations'
     directory and a Zenodo repository, optionally returning the path to the local datasets directory.
@@ -288,7 +301,9 @@ def get_segmentation_datasets_list(return_path=False):
         return available_datasets, datasets_path
 
 
-def get_signal_datasets_list(return_path=False):
+def get_signal_datasets_list(
+    return_path: bool = False,
+) -> Union[List[str], Tuple[List[str], str]]:
     """
     Retrieves a list of available signal datasets from both the local 'celldetective/datasets/signal_annotations' directory
     and a Zenodo repository, optionally returning the path to the local datasets directory.

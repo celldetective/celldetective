@@ -3,7 +3,7 @@ import os
 from glob import glob
 
 import numpy as np
-from PyQt5.QtCore import Qt, QSize, QThread
+from PyQt5.QtCore import Qt, QSize, QThread, QCloseEvent
 from PyQt5.QtGui import QDoubleValidator, QIntValidator
 from PyQt5.QtWidgets import (
     QAction,
@@ -71,7 +71,7 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
 
     """
 
-    def __init__(self, parent_window=None):
+    def __init__(self, parent_window: Optional[QMainWindow] = None) -> None:
         """
         Initialize the ThresholdConfigWizard.
 
@@ -134,7 +134,7 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
         self.bg_loader = BackgroundLoader()
         self.bg_loader.start()
 
-    def closeEvent(self, event):
+    def closeEvent(self, event: QCloseEvent) -> None:
         """
         Clean up resources on close.
 
@@ -634,7 +634,7 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
         self.reload_frame()
         self.update_histogram()
 
-    def threshold_changed(self, value):
+    def threshold_changed(self, value: list) -> None:
         """
         Move the threshold values on histogram, when slider is moved.
 

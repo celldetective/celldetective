@@ -1,4 +1,6 @@
 import os
+from typing import Optional, List, Union, Tuple, Any, Callable
+import pandas as pd
 
 import numpy as np
 
@@ -25,7 +27,9 @@ from celldetective.utils.parsing import (
 logger = get_logger()
 
 
-def get_position_table(pos, population, return_path=False):
+def get_position_table(
+    pos: str, population: str, return_path: bool = False
+) -> Union[Optional[pd.DataFrame], Tuple[Optional[pd.DataFrame], str]]:
     """
     Retrieves the data table for a specified population at a given position, optionally returning the table's file path.
 
@@ -62,8 +66,6 @@ def get_position_table(pos, population, return_path=False):
 
     """
 
-    import pandas as pd
-
     if not pos.endswith(os.sep):
         table = os.sep.join([pos, "output", "tables", f"trajectories_{population}.csv"])
     else:
@@ -86,7 +88,9 @@ def get_position_table(pos, population, return_path=False):
         return df_pos
 
 
-def get_position_pickle(pos, population, return_path=False):
+def get_position_pickle(
+    pos: str, population: str, return_path: bool = False
+) -> Union[Optional[pd.DataFrame], Tuple[Optional[pd.DataFrame], str]]:
     """
     Retrieves the data table for a specified population at a given position, optionally returning the table's file path.
 
@@ -142,14 +146,14 @@ def get_position_pickle(pos, population, return_path=False):
 
 
 def load_experiment_tables(
-    experiment,
-    population="targets",
-    well_option="*",
-    position_option="*",
-    return_pos_info=False,
-    load_pickle=False,
-    progress_callback=None,
-):
+    experiment: str,
+    population: str = "targets",
+    well_option: Union[str, List[str]] = "*",
+    position_option: Union[str, List[Union[int, str]]] = "*",
+    return_pos_info: bool = False,
+    load_pickle: bool = False,
+    progress_callback: Optional[Callable[[float, float], bool]] = None,
+) -> Union[Optional[pd.DataFrame], Tuple[Optional[pd.DataFrame], pd.DataFrame]]:
     """
     Load tabular data for an experiment, optionally including position-level information.
 
@@ -208,8 +212,6 @@ def load_experiment_tables(
     >>> df = load_experiment_tables("experiment_01", load_pickle=True)
 
     """
-
-    import pandas as pd
 
     config = get_config(experiment)
     wells = get_experiment_wells(experiment)
@@ -335,7 +337,9 @@ def load_experiment_tables(
         return df
 
 
-def load_tracking_data(position, prefix="Aligned", population="target"):
+def load_tracking_data(
+    position: str, prefix: str = "Aligned", population: str = "target"
+) -> Tuple[pd.DataFrame, np.ndarray, np.ndarray]:
     """
 
     Load the tracking data, labels, and stack for a given position and population.
@@ -372,8 +376,6 @@ def load_tracking_data(position, prefix="Aligned", population="target"):
 
     """
 
-    import pandas as pd
-
     position = position.replace("\\", "/")
     if population.lower() == "target" or population.lower() == "targets":
         trajectories = pd.read_csv(
@@ -396,7 +398,7 @@ def load_tracking_data(position, prefix="Aligned", population="target"):
     return trajectories, labels, stack
 
 
-def interpret_tracking_configuration(config):
+def interpret_tracking_configuration(config: Optional[str]) -> Union[str, Any]:
     """
     Interpret and resolve the path for a tracking configuration file.
 

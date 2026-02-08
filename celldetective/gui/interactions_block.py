@@ -37,7 +37,7 @@ logger = get_logger(__name__)
 
 
 class NeighPanel(QFrame, Styles):
-    def __init__(self, parent_window):
+    def __init__(self, parent_window: QMainWindow) -> None:
         """
         Initialize the NeighPanel.
 
@@ -451,7 +451,7 @@ class NeighPanel(QFrame, Styles):
 
         self.df = None
 
-        def on_table_loaded(df):
+        def on_table_loaded(self, df: pd.DataFrame) -> None:
             """
             Callback when table is loaded.
 

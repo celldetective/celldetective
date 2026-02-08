@@ -6,6 +6,8 @@ from PyQt5.QtWidgets import (
     QLabel,
     QHBoxLayout,
     QPushButton,
+    QButtonGroup,
+    QMainWindow,
 )
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QDoubleValidator
@@ -36,6 +38,7 @@ from matplotlib import colormaps
 import matplotlib.cm
 from celldetective.relative_measurements import expand_pair_table
 from celldetective.neighborhood import extract_neighborhood_in_pair_table
+from typing import Optional, Union
 
 logger = get_logger(__name__)
 
@@ -46,7 +49,7 @@ class ConfigSignalPlot(CelldetectiveWidget):
 
     """
 
-    def __init__(self, parent_window=None):
+    def __init__(self, parent_window: Optional[QMainWindow] = None) -> None:
         """
         Initialize the ConfigSignalPlot widget.
 
@@ -88,7 +91,7 @@ class ConfigSignalPlot(CelldetectiveWidget):
         if self.auto_close:
             self.close()
 
-    def interpret_pos_location(self):
+    def interpret_pos_location(self) -> None:
         """
         Read the well/position selection from the control panel to decide which data to load
         Set position_indices to None if all positions must be taken
@@ -104,7 +107,7 @@ class ConfigSignalPlot(CelldetectiveWidget):
         if not self.parent_window.parent_window.position_list.isAnySelected():
             self.position_indices = None
 
-    def populate_widget(self):
+    def populate_widget(self) -> None:
         """
         Create the multibox design.
 
@@ -251,7 +254,7 @@ class ConfigSignalPlot(CelldetectiveWidget):
         # self.setCentralWidget(self.scroll_area)
         # self.show()
 
-    def set_classes_and_times(self):
+    def set_classes_and_times(self) -> None:
         """
         Update available classes and time points based on the selected population.
         """
@@ -393,7 +396,7 @@ class ConfigSignalPlot(CelldetectiveWidget):
         for i in range(len(self.class_columns)):
             self.cbs[1].setItemData(i, self.class_columns[i], Qt.ToolTipRole)
 
-    def ask_for_feature(self):
+    def ask_for_feature(self) -> None:
         """
         Open a dialog to select a numeric feature for plotting.
         """
@@ -418,7 +421,7 @@ class ConfigSignalPlot(CelldetectiveWidget):
         self.feature_choice_widget.show()
         center_window(self.feature_choice_widget)
 
-    def ask_for_features(self):
+    def ask_for_features(self) -> None:
         """
         Open a dialog to select numeric features for plotting with a searchable combobox.
         """
@@ -451,7 +454,7 @@ class ConfigSignalPlot(CelldetectiveWidget):
     # 	else:
     # 		self.feature_two_cb.setEnabled(False)
 
-    def compute_signals(self):
+    def compute_signals(self) -> None:
         """
         Compute signal functions and prepare the plot widget.
         """
@@ -495,7 +498,7 @@ class ConfigSignalPlot(CelldetectiveWidget):
                 except Exception as e:
                     logger.debug(f"Error creating plot widget: {e}")
 
-    def process_signal(self):
+    def process_signal(self) -> None:
         """
         Process the signal plotting request.
         """
@@ -522,7 +525,7 @@ class ConfigSignalPlot(CelldetectiveWidget):
 
         # self.plotvbox.addWidget(self.line_choice_widget, alignment=Qt.AlignCenter)
 
-    def load_available_tables(self):
+    def load_available_tables(self) -> None:
         """
         Load the tables of the selected wells/positions from the control Panel for the population of interest
 
@@ -563,7 +566,7 @@ class ConfigSignalPlot(CelldetectiveWidget):
                 :, ["well_path", "well_index", "well_name", "well_number", "well_alias"]
             ].drop_duplicates()
 
-    def compute_signal_functions(self):
+    def compute_signal_functions(self) -> None:
         """
         Compute mean signals and standard deviations for the selected data.
         """
@@ -719,8 +722,12 @@ class ConfigSignalPlot(CelldetectiveWidget):
         self.df_well_info.loc[:, "select"] = True
 
     def generate_synchronized_matrix(
-        self, well_group, feature_selected, cclass, max_time
-    ):
+        self,
+        well_group: pd.DataFrame,
+        feature_selected: str,
+        cclass: Union[int, list],
+        max_time: int,
+    ) -> Optional[np.ndarray]:
         """
         Generate a synchronized matrix of feature values.
 

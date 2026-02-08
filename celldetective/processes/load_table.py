@@ -1,5 +1,6 @@
 import time
-from multiprocessing import Process
+from multiprocessing import Process, Queue
+from typing import Optional, Dict, Any
 from celldetective.utils.data_loaders import load_experiment_tables
 from celldetective import get_logger
 
@@ -8,7 +9,13 @@ logger = get_logger()
 
 class TableLoaderProcess(Process):
 
-    def __init__(self, queue=None, process_args=None, *args, **kwargs):
+    def __init__(
+        self,
+        queue: Optional[Queue] = None,
+        process_args: Optional[Dict[str, Any]] = None,
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
         """
         Initialize the process.
 
@@ -35,7 +42,7 @@ class TableLoaderProcess(Process):
     def run(self):
         """Run the table loading process."""
 
-        def progress(well_progress, pos_progress):
+        def progress(well_progress: float, pos_progress: float) -> bool:
             """
             Report progress.
 

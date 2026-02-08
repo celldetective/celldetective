@@ -1,7 +1,8 @@
 import time
 import os
 import gc
-from multiprocessing import Process
+from multiprocessing import Process, Queue
+from typing import Optional, Dict, Any
 from pathlib import Path
 
 from celldetective.log_manager import get_logger
@@ -15,7 +16,9 @@ class UnifiedBatchProcess(Process):
     in a sequential manner for each position, updating a multi-bar progress window.
     """
 
-    def __init__(self, queue, process_args=None):
+    def __init__(
+        self, queue: Queue, process_args: Optional[Dict[str, Any]] = None
+    ) -> None:
         """
         Initialize the unified batch process.
 

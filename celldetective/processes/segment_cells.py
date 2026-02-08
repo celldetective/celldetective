@@ -1,4 +1,5 @@
-from multiprocessing import Process
+from multiprocessing import Process, Queue
+from typing import Optional, Dict, Any, List, Union
 import time
 import datetime
 import os
@@ -37,7 +38,7 @@ from celldetective.utils.parsing import (
 logger = get_logger(__name__)
 
 
-def _create_preview_overlay(image, mask):
+def _create_preview_overlay(image: np.ndarray, mask: np.ndarray) -> np.ndarray:
     """
     Create a preview overlay of the segmentation mask on the image.
 
@@ -88,7 +89,13 @@ def _create_preview_overlay(image, mask):
 
 class BaseSegmentProcess(Process):
 
-    def __init__(self, queue=None, process_args=None, *args, **kwargs):
+    def __init__(
+        self,
+        queue: Optional[Queue] = None,
+        process_args: Optional[Dict[str, Any]] = None,
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
         """
         Initialize the process.
 
@@ -136,7 +143,7 @@ class BaseSegmentProcess(Process):
         self.read_instructions()
         self.extract_experiment_parameters()
 
-    def setup_for_position(self, pos_path):
+    def setup_for_position(self, pos_path: str) -> None:
         """
         Setup the process for a specific position.
 
@@ -267,7 +274,7 @@ class SegmentCellDLProcess(BaseSegmentProcess):
         self.sum_done = 0
         self.t0 = time.time()
 
-    def setup_for_position(self, pos_path):
+    def setup_for_position(self, pos_path: str) -> None:
         """
         Setup the process for a specific position.
 
@@ -372,7 +379,9 @@ class SegmentCellDLProcess(BaseSegmentProcess):
         if not self.use_gpu:
             os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
-    def process_position(self, model=None, scale_model=None):
+    def process_position(
+        self, model: Optional[Any] = None, scale_model: Optional[Any] = None
+    ) -> None:
         """
         Process a single position.
 
@@ -685,7 +694,7 @@ class SegmentCellThresholdProcess(BaseSegmentProcess):
             np.arange(self.nbr_channels), self.len_movie, self.nbr_channels
         )
 
-    def parallel_job(self, indices):
+    def parallel_job(self, indices: List[int]) -> None:
         """
         Run the parallel segmentation job.
 

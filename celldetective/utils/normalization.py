@@ -1,9 +1,17 @@
 import gc
+from typing import Optional, Union, Tuple, List, Any
 
 import numpy as np
 
 
-def normalize_mi_ma(x, mi, ma, clip=False, eps=1e-20, dtype=np.float32):
+def normalize_mi_ma(
+    x: np.ndarray,
+    mi: Union[float, np.ndarray],
+    ma: Union[float, np.ndarray],
+    clip: bool = False,
+    eps: float = 1e-20,
+    dtype: Optional[Any] = np.float32,
+) -> np.ndarray:
     """
     Normalize array between min and max.
 
@@ -47,14 +55,14 @@ def normalize_mi_ma(x, mi, ma, clip=False, eps=1e-20, dtype=np.float32):
 
 
 def normalize(
-    frame,
-    percentiles=(0.0, 99.99),
-    values=None,
-    ignore_gray_value=0.0,
-    clip=False,
-    amplification=None,
-    dtype=float,
-):
+    frame: np.ndarray,
+    percentiles: Tuple[float, float] = (0.0, 99.99),
+    values: Optional[Tuple[float, float]] = None,
+    ignore_gray_value: Optional[float] = 0.0,
+    clip: bool = False,
+    amplification: Optional[float] = None,
+    dtype: Any = float,
+) -> np.ndarray:
     """
 
     Normalize the intensity values of a frame.
@@ -140,13 +148,13 @@ def normalize(
 
 def normalize_multichannel(
     multichannel_frame: np.ndarray,
-    percentiles=None,
-    values=None,
-    ignore_gray_value=0.0,
-    clip=False,
-    amplification=None,
-    dtype=float,
-):
+    percentiles: Optional[Union[Tuple[float, float], List[Tuple[float, float]]]] = None,
+    values: Optional[Union[Tuple[float, float], List[Tuple[float, float]]]] = None,
+    ignore_gray_value: float = 0.0,
+    clip: bool = False,
+    amplification: Optional[float] = None,
+    dtype: Any = float,
+) -> np.ndarray:
     """
     Normalizes a multichannel frame by adjusting the intensity values of each channel based on specified percentiles,
     direct value ranges, or amplification factors, with options to ignore a specific gray value and to clip the output.
@@ -236,7 +244,11 @@ def normalize_multichannel(
     return np.moveaxis(mf_new, 0, -1)
 
 
-def get_stack_normalization_values(stack, percentiles=None, ignore_gray_value=0.0):
+def get_stack_normalization_values(
+    stack: np.ndarray,
+    percentiles: Optional[Union[Tuple[float, float], List[Tuple[float, float]]]] = None,
+    ignore_gray_value: float = 0.0,
+) -> List[Tuple[float, float]]:
     """
     Computes the normalization value ranges (minimum and maximum) for each channel in a 4D stack based on specified percentiles.
 
@@ -308,11 +320,11 @@ def get_stack_normalization_values(stack, percentiles=None, ignore_gray_value=0.
 
 
 def normalize_per_channel(
-    X,
-    normalization_percentile_mode=True,
-    normalization_values=[0.1, 99.99],
-    normalization_clipping=False,
-):
+    X: List[np.ndarray],
+    normalization_percentile_mode: Union[bool, List[bool]] = True,
+    normalization_values: Union[List[float], List[List[float]]] = [0.1, 99.99],
+    normalization_clipping: Union[bool, List[bool]] = False,
+) -> List[np.ndarray]:
     """
     Applies per-channel normalization to a list of multi-channel images.
 

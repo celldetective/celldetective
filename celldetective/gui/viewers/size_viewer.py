@@ -41,14 +41,14 @@ class CellSizeViewer(StackVisualizer):
 
     def __init__(
         self,
-        initial_diameter=40,
-        set_radius_in_list=False,
-        diameter_slider_range=(0, 500),
-        parent_le=None,
-        parent_list_widget=None,
-        *args,
-        **kwargs,
-    ):
+        initial_diameter: int = 40,
+        set_radius_in_list: bool = False,
+        diameter_slider_range: Tuple[int, int] = (5, 200),
+        parent_le: Optional[QLineEdit] = None,
+        parent_list_widget: Optional[QListWidget] = None,
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
         """
         Initialize the CellSizeViewer.
 
@@ -129,7 +129,7 @@ class CellSizeViewer(StackVisualizer):
         self.parent_list_widget.addItems([str(val)])
         self.close()
 
-    def on_xlims_or_ylims_change(self, event_ax):
+    def on_xlims_or_ylims_change(self, event_ax: matplotlib.axes.Axes) -> None:
         """
         Update the circle position on axis limits change.
 
@@ -181,7 +181,7 @@ class CellSizeViewer(StackVisualizer):
         self.diameter_slider.valueChanged.connect(self.change_diameter)
         self.canvas.layout.addLayout(diameter_layout)
 
-    def change_diameter(self, value):
+    def change_diameter(self, value: float) -> None:
         """
         Change the diameter of the circle.
 

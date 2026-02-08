@@ -5,6 +5,7 @@ Copright © 2022 Laboratoire Adhesion et Inflammation, Authored by Remy Torro.
 import argparse
 import datetime
 import os
+from typing import List
 import json
 from celldetective.utils.model_loaders import locate_segmentation_model
 from celldetective.utils.image_loaders import (
@@ -175,7 +176,7 @@ with open(pos + f"log_{mode}.json", "a") as f:
 
 
 # Loop over all frames and segment
-def segment_index(indices):
+def segment_index(indices: List[int]) -> None:
     """
     Segment a chunk of frames.
 

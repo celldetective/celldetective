@@ -1,9 +1,10 @@
 import os
 from glob import glob
 from pathlib import Path
+from typing import Optional, Union, List, Tuple, Any
 
 import numpy as np
-from PyQt5.QtCore import QSize, Qt
+from PyQt5.QtCore import QSize, Qt, QEvent
 from PyQt5.QtWidgets import (
     QListWidget,
     QLineEdit,
@@ -64,18 +65,18 @@ class CellEdgeVisualizer(StackVisualizer):
 
     def __init__(
         self,
-        cell_type="effectors",
-        edge_range=(-30, 30),
-        invert=False,
-        parent_list_widget=None,
-        parent_le=None,
-        labels=None,
-        initial_edge=5,
-        initial_mask_alpha=0.5,
-        single_value_mode=False,
-        *args,
-        **kwargs,
-    ):
+        cell_type: str = "effectors",
+        edge_range: Tuple[int, int] = (-30, 30),
+        invert: bool = False,
+        parent_list_widget: Optional[QListWidget] = None,
+        parent_le: Optional[QLineEdit] = None,
+        labels: Optional[np.ndarray] = None,
+        initial_edge: int = 5,
+        initial_mask_alpha: float = 0.5,
+        single_value_mode: bool = False,
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
         """
         Initialize the CellEdgeVisualizer.
 
@@ -130,7 +131,7 @@ class CellEdgeVisualizer(StackVisualizer):
         if isinstance(self.parent_le, QLineEdit):
             self.generate_add_to_le_btn()
 
-    def closeEvent(self, event):
+    def closeEvent(self, event: QEvent) -> None:
         """
         Handle the close event.
 
@@ -327,7 +328,7 @@ class CellEdgeVisualizer(StackVisualizer):
         self.opacity_slider.valueChanged.connect(self.change_mask_opacity)
         self.canvas.layout.addLayout(opacity_layout)
 
-    def change_mask_opacity(self, value):
+    def change_mask_opacity(self, value: float) -> None:
         """
         Change the opacity of the mask.
 
@@ -342,7 +343,7 @@ class CellEdgeVisualizer(StackVisualizer):
         self.im_mask.set_alpha(self.mask_alpha)
         self.canvas.canvas.draw_idle()
 
-    def change_edge_size(self, value):
+    def change_edge_size(self, value: Union[Tuple[int, int], int, float]) -> None:
         """
         Change the edge size.
 
@@ -357,7 +358,7 @@ class CellEdgeVisualizer(StackVisualizer):
         self.im_mask.set_data(mask)
         self.canvas.canvas.draw_idle()
 
-    def change_frame(self, value):
+    def change_frame(self, value: int) -> None:
         """
         Change the displayed frame and update the edge labels.
 

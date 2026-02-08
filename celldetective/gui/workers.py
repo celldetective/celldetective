@@ -2,6 +2,7 @@ from multiprocessing import Queue
 from PyQt5.QtWidgets import QPushButton, QVBoxLayout, QHBoxLayout, QLabel, QProgressBar
 from PyQt5.QtCore import QRunnable, QObject, pyqtSignal, QThreadPool, QSize, Qt
 from PyQt5.QtGui import QPixmap, QImage
+from typing import Optional, Any, Dict, List, Tuple, Union
 import math
 import numpy as np
 
@@ -16,14 +17,14 @@ class ProgressWindow(CelldetectiveDialog):
 
     def __init__(
         self,
-        process=None,
-        parent_window=None,
-        title="",
-        position_info=True,
-        process_args=None,
-        well_label="Well progress:",
-        pos_label="Position progress:",
-    ):
+        process: Optional[Any] = None,
+        parent_window: Optional[Any] = None,
+        title: str = "",
+        position_info: bool = True,
+        process_args: Optional[Dict[str, Any]] = None,
+        well_label: str = "Well progress:",
+        pos_label: str = "Position progress:",
+    ) -> None:
         """
         Initialize the ProgressWindow.
 
@@ -154,7 +155,7 @@ class ProgressWindow(CelldetectiveDialog):
         self.setModal(True)
         # center_window(self)
 
-    def closeEvent(self, evnt):
+    def closeEvent(self, evnt: Any) -> None:
         """
         Handle close event.
 
@@ -166,27 +167,27 @@ class ProgressWindow(CelldetectiveDialog):
         evnt.ignore()
         self.setWindowState(Qt.WindowMinimized)
 
-    def __run_net(self):
+    def __run_net(self) -> None:
         """Start the runner."""
         # self.__btn_run.setDisabled(True)
         self.__btn_stp.setEnabled(True)
         self.__label.setText("Running...")
         self.pool.start(self.__runner)
 
-    def __stp_net(self):
+    def __stp_net(self) -> None:
         """Stop the runner."""
         self.__runner.close()
         logger.info("\n Job cancelled... Abort.")
         self.reject()
 
-    def __on_finished(self):
+    def __on_finished(self) -> None:
         """Handle process completion."""
         self.__btn_stp.setDisabled(True)
         self.__label.setText("\nFinished!")
         self.__runner.close()
         self.accept()
 
-    def __on_error(self, message="Error"):
+    def __on_error(self, message: str = "Error") -> None:
         """
         Handle process error.
 
@@ -211,7 +212,7 @@ class ProgressWindow(CelldetectiveDialog):
 
         self.reject()
 
-    def update_image(self, img_data):
+    def update_image(self, img_data: Optional[np.ndarray]) -> None:
         """
         Update the image preview.
 
@@ -279,9 +280,9 @@ class Runner(QRunnable):
 
     def __init__(
         self,
-        process=None,
-        process_args=None,
-    ):
+        process: Optional[Any] = None,
+        process_args: Optional[Dict[str, Any]] = None,
+    ) -> None:
         """
         Initialize the Runner.
 
@@ -299,7 +300,7 @@ class Runner(QRunnable):
         self.__process = process(self.__queue, process_args=process_args)
         self.signals = RunnerSignal()
 
-    def run(self):
+    def run(self) -> None:
         """Run the process."""
         logger.info("Starting Process (runner-side)...")
         self.__process.start()
@@ -367,7 +368,7 @@ class Runner(QRunnable):
                 logger.error(e)
                 pass
 
-    def close(self):
+    def close(self) -> None:
         """Close the process."""
         self.__process.end_process()
 
@@ -396,12 +397,12 @@ class GenericProgressWindow(CelldetectiveDialog):
 
     def __init__(
         self,
-        process=None,
-        parent_window=None,
-        title="",
-        process_args=None,
-        label_text="Progress:",
-    ):
+        process: Optional[Any] = None,
+        parent_window: Optional[Any] = None,
+        title: str = "",
+        process_args: Optional[Dict[str, Any]] = None,
+        label_text: str = "Progress:",
+    ) -> None:
         """
         Initialize the GenericProgressWindow.
 
@@ -469,7 +470,7 @@ class GenericProgressWindow(CelldetectiveDialog):
         self.__run_net()
         self.setModal(True)
 
-    def closeEvent(self, evnt):
+    def closeEvent(self, evnt: Any) -> None:
         """
         Handle close event.
 
@@ -481,26 +482,26 @@ class GenericProgressWindow(CelldetectiveDialog):
         evnt.ignore()
         self.setWindowState(Qt.WindowMinimized)
 
-    def __run_net(self):
+    def __run_net(self) -> None:
         """Start the runner."""
         self.__btn_stp.setEnabled(True)
         self.__label.setText("Running...")
         self.pool.start(self.__runner)
 
-    def __stp_net(self):
+    def __stp_net(self) -> None:
         """Stop the runner."""
         self.__runner.close()
         logger.info("\n Job cancelled... Abort.")
         self.reject()
 
-    def __on_finished(self):
+    def __on_finished(self) -> None:
         """Handle process completion."""
         self.__btn_stp.setDisabled(True)
         self.__label.setText("\nFinished!")
         self.__runner.close()
         self.accept()
 
-    def __on_error(self, message="Error"):
+    def __on_error(self, message: str = "Error") -> None:
         """
         Handle process error.
 

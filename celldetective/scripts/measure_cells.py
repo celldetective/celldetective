@@ -4,6 +4,7 @@ Copright © 2022 Laboratoire Adhesion et Inflammation, Authored by Remy Torro.
 
 import argparse
 import os
+from typing import List
 import json
 from celldetective.utils.image_loaders import (
     locate_labels,
@@ -285,7 +286,7 @@ with open(pos + f"log_{mode}.json", "a") as f:
     f.write(log + "\n")
 
 
-def measure_index(indices):
+def measure_index(indices: List[int]) -> None:
     """
     Measure features for a chunk of frames.
 

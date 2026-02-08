@@ -1,7 +1,8 @@
+import numpy as np
 from scipy.ndimage import zoom
 
 
-def _rescale_labels(lbl, scale_model=1):
+def _rescale_labels(lbl: np.ndarray, scale_model: float = 1) -> np.ndarray:
     """
     Rescale label image.
 

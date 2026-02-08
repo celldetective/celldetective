@@ -1,11 +1,12 @@
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QVBoxLayout, QLabel, QButtonGroup, QRadioButton, QHBoxLayout
+from typing import Optional
 
 
 class OperationLayout(QVBoxLayout):
     """docstring for ClassName"""
 
-    def __init__(self, ratio=(0.25, 0.75), *args):
+    def __init__(self, ratio: Optional[tuple] = (0.25, 0.75), *args, **kwargs) -> None:
         """
         Initialize the OperationLayout.
 

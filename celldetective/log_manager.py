@@ -9,7 +9,9 @@ CONSOLE_FORMAT = "[%(levelname)s] %(message)s"
 FILE_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 
 
-def setup_global_logging(level=logging.INFO, log_file=None):
+def setup_global_logging(
+    level: int = logging.INFO, log_file: Optional[str] = None
+) -> logging.Logger:
     """
     Sets up the global logger for the application.
 
@@ -52,7 +54,9 @@ def setup_global_logging(level=logging.INFO, log_file=None):
                 lib_logger.addHandler(file_handler)
 
     # Hook to capture uncaught exceptions
-    def handle_exception(exc_type, exc_value, exc_traceback):
+    def handle_exception(
+        exc_type: type, exc_value: Exception, exc_traceback: Any
+    ) -> None:
         """
         Handle uncaught exceptions.
 
@@ -77,7 +81,7 @@ def setup_global_logging(level=logging.INFO, log_file=None):
     return root_logger
 
 
-def get_logger(name="celldetective"):
+def get_logger(name: str = "celldetective") -> logging.Logger:
     """
     Returns a logger with the specified name, defaulting to the package logger.
 

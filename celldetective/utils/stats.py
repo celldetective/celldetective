@@ -1,4 +1,4 @@
-from typing import Optional, Union, List
+from typing import Optional, Union, List, Any
 
 import pandas as pd
 from cliffs_delta import cliffs_delta
@@ -9,9 +9,9 @@ def test_2samp_generic(
     data: pd.DataFrame,
     feature: Optional[str] = None,
     groupby_cols: Optional[Union[str, List[str]]] = None,
-    method="ks_2samp",
-    *args,
-    **kwargs,
+    method: str = "ks_2samp",
+    *args: Any,
+    **kwargs: Any,
 ) -> pd.DataFrame:
     """
     Performs pairwise statistical tests between groups of data, comparing a specified feature using a chosen method.

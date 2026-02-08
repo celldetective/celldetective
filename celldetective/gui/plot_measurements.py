@@ -13,6 +13,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, QRect
 from PyQt5.QtGui import QDoubleValidator
+from typing import Optional, Union, List, Tuple, Any, Dict
 
 from celldetective.gui.base.components import CelldetectiveWidget
 from celldetective.gui.base.figure_canvas import FigureCanvas
@@ -49,7 +50,7 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
 
     """
 
-    def __init__(self, parent_window=None):
+    def __init__(self, parent_window: Optional[Any] = None) -> None:
         """
         Initialize the ConfigMeasurementsPlot widget.
 
@@ -102,7 +103,7 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
             self.close()
         self.hue_colors = {0: self.palette[0], 1: self.palette[3]}
 
-    def interpret_pos_location(self):
+    def interpret_pos_location(self) -> None:
         """
         Read the well/position selection from the control panel to decide which data to load
         Set position_indices to None if all positions must be taken
@@ -119,7 +120,7 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
         else:
             self.position_indices = np.array([self.position_option], dtype=int)
 
-    def populate_widget(self):
+    def populate_widget(self) -> None:
         """
         Create the multibox design.
 
@@ -214,7 +215,7 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
 
     # self.setCentralWidget(self.scroll_area)
     # self.show()
-    def class_enable(self):
+    def class_enable(self) -> None:
         """
         Enable or disable the class selection combobox based on the checkbox state.
         """
@@ -224,7 +225,7 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
         else:
             self.cbs[1].setEnabled(False)
 
-    def group_enable(self):
+    def group_enable(self) -> None:
         """
         Enable or disable the group selection combobox based on the checkbox state.
         """
@@ -234,7 +235,7 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
         else:
             self.cbs[2].setEnabled(False)
 
-    def set_classes_and_times(self):
+    def set_classes_and_times(self) -> Optional[None]:
         """
         Update available classes and groups based on the selected population.
         """
@@ -277,7 +278,7 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
         self.cbs[2].clear()
         self.cbs[2].addItems(np.unique(group_columns))
 
-    def ask_for_feature(self):
+    def ask_for_feature(self) -> None:
         """
         Open a dialog to select a numeric feature for plotting.
         """
@@ -302,7 +303,7 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
         self.feature_choice_widget.show()
         center_window(self.feature_choice_widget)
 
-    def ask_for_features(self):
+    def ask_for_features(self) -> None:
         """
         Open a dialog to select numeric features for plotting.
         """
@@ -344,7 +345,7 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
         self.feature_choice_widget.show()
         center_window(self.feature_choice_widget)
 
-    def enable_second_feature(self):
+    def enable_second_feature(self) -> None:
         """
         Enable or disable the second feature selection combobox.
         """
@@ -353,7 +354,7 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
         else:
             self.feature_two_cb.setEnabled(False)
 
-    def compute_signals(self):
+    def compute_signals(self) -> None:
         """
         Compute signal functions and prepare the plot widget.
         """
@@ -547,7 +548,7 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
             )
             self.scroll.show()
 
-    def process_signal(self):
+    def process_signal(self) -> Optional[None]:
         """
         Process the signal plotting request.
         """
@@ -563,7 +564,7 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
         else:
             return None
 
-    def generate_pos_selection_widget(self):
+    def generate_pos_selection_widget(self) -> None:
         """
         Generate widgets for selecting positions or wells to display.
         """
@@ -606,7 +607,7 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
 
         self.plotvbox.addWidget(self.line_choice_widget, alignment=Qt.AlignCenter)
 
-    def load_available_tables(self):
+    def load_available_tables(self) -> Optional[None]:
         """
         Load the tables of the selected wells/positions from the control Panel for the population of interest
 
@@ -647,7 +648,7 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
                 :, ["well_path", "well_index", "well_name", "well_number", "well_alias"]
             ].drop_duplicates()
 
-    def compute_signal_functions(self):
+    def compute_signal_functions(self) -> Optional[None]:
         """
         Load data and prepare it for plotting.
         """
@@ -743,8 +744,12 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
         self.plot_data = pd.concat(full_data, ignore_index=True)
 
     def generate_synchronized_matrix(
-        self, well_group, feature_selected, cclass, max_time
-    ):
+        self,
+        well_group: pd.DataFrame,
+        feature_selected: str,
+        cclass: Union[int, List[int]],
+        max_time: int,
+    ) -> np.ndarray:
         """
         Generate a synchronized matrix of feature values.
 
@@ -822,7 +827,7 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
                     pass
         return matrix
 
-    def col_mean(self, matrix):
+    def col_mean(self, matrix: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """
         Compute the column-wise mean and standard deviation of a matrix.
 
@@ -850,7 +855,7 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
 
         return mean_line, std_line
 
-    def initialize_axis(self):
+    def initialize_axis(self) -> None:
         """
         Initialize the plot axis settings.
         """
@@ -1011,7 +1016,7 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
         # ax.set_ylim(0.95,1.3)
         plt.tight_layout()
 
-    def plot_survivals(self, id):
+    def plot_survivals(self, id: int) -> None:
         """
         Plot the survival curves (or boxplots/boxenplots) for the selected data.
 
@@ -1184,17 +1189,17 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
 
     def plot_line(
         self,
-        line,
-        color,
-        label,
-        mean_signal,
-        ci_option=True,
-        cell_lines_option=False,
-        alpha_ci=0.5,
-        alpha_cell_lines=0.5,
-        std_signal=None,
-        matrix=None,
-    ):
+        line: pd.DataFrame,
+        color: str,
+        label: str,
+        mean_signal: str,
+        ci_option: bool = True,
+        cell_lines_option: bool = False,
+        alpha_ci: float = 0.5,
+        alpha_cell_lines: float = 0.5,
+        std_signal: Optional[str] = None,
+        matrix: Optional[str] = None,
+    ) -> None:
         """
         Plot a single line with optional confidence intervals and individual cell lines.
 
@@ -1276,7 +1281,7 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
         except Exception as e:
             print(f"Exception {e}")
 
-    def switch_to_log(self):
+    def switch_to_log(self) -> None:
         """
         Switch threshold histogram to log scale. Auto adjust.
         """
@@ -1291,7 +1296,7 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
         # self.ax.autoscale()
         self.survival_window.canvas.draw_idle()
 
-    def show_hide_legend(self):
+    def show_hide_legend(self) -> None:
         """
         Toggle the visibility of the plot legend.
         """
@@ -1306,7 +1311,7 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
 
         self.survival_window.canvas.draw_idle()
 
-    def look_for_metadata(self):
+    def look_for_metadata(self) -> None:
         """
         Search for metadata files in the experiment directory.
         """
@@ -1322,7 +1327,7 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
         if len(self.metafiles) > 0:
             self.metadata_found = True
 
-    def switch_selection_mode(self, id):
+    def switch_selection_mode(self, id: int) -> None:
         """
         Switch between name-based and spatial selection modes.
 
@@ -1344,7 +1349,7 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
                 self.position_scatter.show()
             self.line_choice_widget.hide()
 
-    def load_coordinates(self):
+    def load_coordinates(self) -> Optional[None]:
         """
         Read metadata and try to extract position coordinates
         """
@@ -1375,7 +1380,7 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
                 self.df_pos_info.loc[pos_loc, "y"] = coords[1]
                 self.df_pos_info.loc[pos_loc, "metadata_tag"] = pos_label
 
-    def update_annot(self, ind):
+    def update_annot(self, ind: Dict[str, Any]) -> None:
         """
         Update the annotation text and position for the hover event.
 
@@ -1392,7 +1397,7 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
         self.annot.get_bbox_patch().set_facecolor("k")
         self.annot.get_bbox_patch().set_alpha(0.4)
 
-    def hover(self, event):
+    def hover(self, event: Any) -> None:
         """
         Handle the hover event on the scatter plot.
 
@@ -1413,7 +1418,7 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
                     self.annot.set_visible(False)
                     self.fig_scatter.canvas.draw_idle()
 
-    def unselect_position(self, event):
+    def unselect_position(self, event: Any) -> None:
         """
         Handle the selection/unselection of a position on the scatter plot.
 
@@ -1451,7 +1456,7 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
         self.position_scatter.canvas.draw_idle()
         self.plot_survivals(0)
 
-    def select_survival_lines(self):
+    def select_survival_lines(self) -> None:
         """
         Update selected wells or positions based on checkboxes and refresh the plot.
         """
@@ -1494,7 +1499,9 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
             self.sc.set_color(self.select_color(self.df_pos_info["select"].values))
             self.position_scatter.canvas.draw_idle()
 
-    def select_color(self, selection):
+    def select_color(
+        self, selection: Union[np.ndarray, List[bool]]
+    ) -> List[Tuple[float, ...]]:
         """
         Get the colors for the points based on their selection state.
 
@@ -1511,7 +1518,7 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
         colors = [tab10(0) if s else tab10(0.1) for s in selection]
         return colors
 
-    def plot_spatial_location(self):
+    def plot_spatial_location(self) -> None:
         """
         Plot the spatial location of the positions.
         """
@@ -1540,7 +1547,7 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
         except Exception as e:
             pass
 
-    def switch_ref_time_mode(self):
+    def switch_ref_time_mode(self) -> None:
         """
         Toggle between absolute time and reference event time modes.
         """
@@ -1551,7 +1558,7 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
             self.frame_slider.setEnabled(False)
             self.cbs[-1].setEnabled(True)
 
-    def switch_ci(self):
+    def switch_ci(self) -> None:
         """
         Toggle the visibility of confidence intervals.
         """
@@ -1563,7 +1570,7 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
         self.show_ci = not self.show_ci
         self.plot_survivals(0)
 
-    def switch_cell_lines(self):
+    def switch_cell_lines(self) -> None:
         """
         Toggle the visibility of individual cell lines.
         """
@@ -1575,7 +1582,7 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
         self.show_cell_lines = not self.show_cell_lines
         self.plot_survivals(0)
 
-    def set_class_to_plot(self):
+    def set_class_to_plot(self) -> None:
         """
         Set the target class(es) to plot based on the radio button selection.
         """

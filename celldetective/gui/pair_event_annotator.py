@@ -13,8 +13,17 @@ from PyQt5.QtWidgets import (
     QLineEdit,
     QButtonGroup,
 )
-from PyQt5.QtCore import Qt, QSize
-from PyQt5.QtGui import QKeySequence
+from PyQt5.QtCore import (
+    Qt,
+    QSize,
+    QThread,
+    pyqtSignal,
+    QTimer,
+    QPoint,
+    QModelIndex,
+    QCloseEvent,
+)
+from PyQt5.QtGui import QKeySequence, QMouseEvent, QResizeEvent
 from celldetective.gui.base.styles import Styles
 from celldetective.gui.base.components import (
     CelldetectiveMainWindow,
@@ -64,7 +73,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
 
     """
 
-    def __init__(self, parent=None):
+    def __init__(self, parent: Optional[QWidget] = None) -> None:
         """
         Initialize the annotator.
 
@@ -219,7 +228,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
 
         # self.cell_fcanvas.setMinimumHeight(int(0.3*self.screen_height))
 
-    def resizeEvent(self, event):
+    def resizeEvent(self, event: QResizeEvent) -> None:
         """
         Handle resize event.
 
@@ -1615,7 +1624,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         self.update_signal_choices(1)
         self.update_signal_choices(2)
 
-    def update_signal_choices(self, index):
+    def update_signal_choices(self, index: int) -> None:
         """
         Update signal choices.
 
@@ -1977,7 +1986,9 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         for population in self.dataframes.keys():
             self.refresh_scatter_from_trajectories(population)
 
-    def refresh_scatter_from_trajectories(self, population, clear_selection=True):
+    def refresh_scatter_from_trajectories(
+        self, population: str, clear_selection: bool = True
+    ) -> None:
         """
         Refresh scatter from trajectories.
 
@@ -2071,7 +2082,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
             self.fraction = 0.25
             self.anim_interval = 33
 
-    def prepare_stack(self, progress_callback=None):
+    def prepare_stack(self, progress_callback: Optional[callable] = None) -> None:
         """
         Load the stack images.
 
@@ -2241,7 +2252,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         except Exception as e:
             print(f"DEBUG: Error recreating animation: {e}")
 
-    def closeEvent(self, event):
+    def closeEvent(self, event: QCloseEvent) -> None:
         """
         Handle close event.
 
@@ -2431,7 +2442,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
 
         # self.plot_signals()
 
-    def on_scatter_pick(self, event):
+    def on_scatter_pick(self, event: "matplotlib.backend_bases.PickEvent") -> None:
         """
         Handle scatter pick event.
 
@@ -2759,7 +2770,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
             init_colors[t][idx] = colors[t][idx].copy()
             colors[t][idx] = "black"
 
-    def get_neighbors_of_selected_cell(self, selected_cell):
+    def get_neighbors_of_selected_cell(self, selected_cell: int) -> None:
         """
         Get neighbors of the selected cell.
 
@@ -2782,7 +2793,9 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         # else:
         self.neighbor_track_of_interest = None
 
-    def identify_closest_marker(self, event):
+    def identify_closest_marker(
+        self, event: "matplotlib.backend_bases.PickEvent"
+    ) -> None:
         """
         Identify the closest marker to the pick event.
 
@@ -2986,7 +2999,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         except Exception as e:
             print(e)
 
-    def draw_frame(self, framedata):
+    def draw_frame(self, framedata: int) -> None:
         """
         Update plot elements at each timestep of the loop.
 

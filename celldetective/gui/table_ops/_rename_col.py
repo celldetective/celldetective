@@ -1,5 +1,6 @@
+from typing import Optional, Any
 from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QHBoxLayout, QLineEdit, QPushButton
+from PyQt5.QtWidgets import QHBoxLayout, QLineEdit, QPushButton, QMainWindow
 
 from celldetective.gui.base.components import CelldetectiveWidget
 from celldetective.gui.base.utils import center_window
@@ -8,7 +9,9 @@ from celldetective.gui.gui_utils import PandasModel
 
 class RenameColWidget(CelldetectiveWidget):
 
-    def __init__(self, parent_window, column=None):
+    def __init__(
+        self, parent_window: QMainWindow, column: Optional[str] = None
+    ) -> None:
         """
         Initialize the RenameColWidget.
 

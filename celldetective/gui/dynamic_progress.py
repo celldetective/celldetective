@@ -10,6 +10,7 @@ from PyQt5.QtWidgets import (
     QPushButton,
     QSizePolicy,
     QVBoxLayout,
+    QWidget,
 )
 from fonticon_mdi6 import MDI6
 from matplotlib import pyplot as plt
@@ -29,13 +30,13 @@ class DynamicProgressDialog(QDialog, Styles):
 
     def __init__(
         self,
-        title="Training Progress",
-        label_text="Launching the training script...",
-        minimum=0,
-        maximum=100,
-        max_epochs=100,
-        parent=None,
-    ):
+        title: str = "Training Progress",
+        label_text: str = "Launching the training script...",
+        minimum: int = 0,
+        maximum: int = 100,
+        max_epochs: int = 100,
+        parent: Optional[QWidget] = None,
+    ) -> None:
         """
         Initialize the DynamicProgressDialog.
 
@@ -183,7 +184,7 @@ class DynamicProgressDialog(QDialog, Styles):
         else:
             self.ax.set_yscale("linear")
 
-    def show_result(self, results):
+    def show_result(self, results: dict) -> None:
         """
         Display final results (Confusion Matrix or Regression Plot).
 
@@ -345,7 +346,7 @@ class DynamicProgressDialog(QDialog, Styles):
         self.canceled.emit()
         self.reject()
 
-    def update_progress(self, value, text=None):
+    def update_progress(self, value: int, text: Optional[str] = None) -> None:
         """
         Update the progress bar.
 
@@ -360,7 +361,7 @@ class DynamicProgressDialog(QDialog, Styles):
         if text:
             self.status_label.setText(text)
 
-    def update_plot(self, epoch_data):
+    def update_plot(self, epoch_data: dict) -> None:
         """
         Update the plot with new epoch data.
 
@@ -498,7 +499,7 @@ class DynamicProgressDialog(QDialog, Styles):
             except:
                 pass
 
-    def update_status(self, text):
+    def update_status(self, text: str) -> None:
         """
         Update the status label.
 

@@ -7,6 +7,7 @@ from PyQt5.QtWidgets import (
     QLabel,
     QHBoxLayout,
     QPushButton,
+    QMainWindow,
 )
 from PyQt5.QtCore import Qt, QSize
 from celldetective.gui.gui_utils import DistanceChoice
@@ -33,12 +34,12 @@ class SettingsNeighborhood(CelldetectiveWidget):
 
     def __init__(
         self,
-        neighborhood_type="distance_threshold",
-        neighborhood_parameter_name="threshold distance",
-        parent_window=None,
+        neighborhood_type: str = "distance_threshold",
+        neighborhood_parameter_name: str = "threshold distance",
+        parent_window: Optional[QMainWindow] = None,
         *args,
         **kwargs,
-    ):
+    ) -> None:
         """
         Initialize the SettingsNeighborhood widget.
 
@@ -429,7 +430,9 @@ class SettingsNeighborhood(CelldetectiveWidget):
             )
             self.neighbor_switch_status_btn.setIconSize(QSize(20, 20))
 
-    def locate_population_specific_columns(self, population):
+    def locate_population_specific_columns(
+        self, population: str
+    ) -> Tuple[List[str], List[str], List[str], List[str]]:
         """
         Locate specific columns for a population.
 

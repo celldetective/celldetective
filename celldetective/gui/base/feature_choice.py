@@ -39,7 +39,7 @@ def get_extra_properties_functions():
 
 class FeatureChoice(CelldetectiveWidget):
 
-    def __init__(self, parent_window):
+    def __init__(self, parent_window: QMainWindow) -> None:
         """
         Initialize the FeatureChoice widget.
 

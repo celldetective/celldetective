@@ -2,6 +2,7 @@ import os
 from subprocess import Popen
 
 from PyQt5.QtWidgets import (
+    QMainWindow,
     QVBoxLayout,
     QScrollArea,
     QLabel,
@@ -20,7 +21,7 @@ from celldetective.gui.base.components import CelldetectiveWidget
 
 class ConfigEditor(CelldetectiveWidget):
 
-    def __init__(self, parent_window):
+    def __init__(self, parent_window: QMainWindow) -> None:
         """
         Load and edit the experiment config.
 

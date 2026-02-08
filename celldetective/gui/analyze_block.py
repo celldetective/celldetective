@@ -17,7 +17,7 @@ from celldetective.gui.base.utils import center_window
 
 
 class AnalysisPanel(QFrame, Styles):
-    def __init__(self, parent_window, title=None):
+    def __init__(self, parent_window: QMainWindow, title: Optional[str] = None) -> None:
         """
         Initialize the AnalysisPanel.
 

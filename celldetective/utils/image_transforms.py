@@ -1,9 +1,10 @@
 import collections
+from typing import Optional, Union, Tuple, List, Any, Iterable, Dict
 
 import numpy as np
 
 
-def consume(iterator):
+def consume(iterator: Iterable[Any]) -> None:
     """
     adapted from https://github.com/CSBDeep/CSBDeep/blob/main/csbdeep/utils/utils.py
 
@@ -15,7 +16,12 @@ def consume(iterator):
     collections.deque(iterator, maxlen=0)
 
 
-def axes_check_and_normalize(axes, length=None, disallowed=None, return_allowed=False):
+def axes_check_and_normalize(
+    axes: str,
+    length: Optional[int] = None,
+    disallowed: Optional[str] = None,
+    return_allowed: bool = False,
+) -> Union[str, Tuple[str, str]]:
     """
     adapted from https://github.com/CSBDeep/CSBDeep/blob/main/csbdeep/utils/utils.py
     S(ample), T(ime), C(hannel), Z, Y, X
@@ -41,7 +47,7 @@ def axes_check_and_normalize(axes, length=None, disallowed=None, return_allowed=
     return (axes, allowed) if return_allowed else axes
 
 
-def axes_dict(axes):
+def axes_dict(axes: str) -> Dict[str, Optional[int]]:
     """
     adapted from https://github.com/CSBDeep/CSBDeep/blob/main/csbdeep/utils/utils.py
     from axes string to dict
@@ -56,7 +62,9 @@ def axes_dict(axes):
     # return collections.namedtuple('Axes',list(allowed))(*[None if axes.find(a) == -1 else axes.find(a) for a in allowed ])
 
 
-def move_image_axes(x, fr, to, adjust_singletons=False):
+def move_image_axes(
+    x: np.ndarray, fr: str, to: str, adjust_singletons: bool = False
+) -> np.ndarray:
     """
     adapted from https://github.com/CSBDeep/CSBDeep/blob/main/csbdeep/utils/utils.py
     x: ndarray
@@ -110,7 +118,9 @@ def move_image_axes(x, fr, to, adjust_singletons=False):
     return np.moveaxis(x, [ax_from[a] for a in fr], [ax_to[a] for a in fr])
 
 
-def estimate_unreliable_edge(activation_protocol=[["gauss", 2], ["std", 4]]):
+def estimate_unreliable_edge(
+    activation_protocol: Optional[List[List[Any]]] = [["gauss", 2], ["std", 4]]
+) -> Optional[int]:
     """
     Safely estimate the distance to the edge of an image in which the filtered image values can be artefactual.
 
@@ -149,7 +159,7 @@ def estimate_unreliable_edge(activation_protocol=[["gauss", 2], ["std", 4]]):
         return edge
 
 
-def unpad(img, pad):
+def unpad(img: np.ndarray, pad: int) -> np.ndarray:
     """
     Remove padding from an image.
 
@@ -199,7 +209,7 @@ def unpad(img, pad):
     return img[pad:-pad, pad:-pad]
 
 
-def mask_edges(binary_mask, border_size):
+def mask_edges(binary_mask: np.ndarray, border_size: int) -> np.ndarray:
     """
     Mask the edges of a binary mask.
 
@@ -254,7 +264,9 @@ def mask_edges(binary_mask, border_size):
     return binary_mask
 
 
-def _estimate_scale_factor(spatial_calibration, required_spatial_calibration):
+def _estimate_scale_factor(
+    spatial_calibration: Optional[float], required_spatial_calibration: Optional[float]
+) -> Optional[float]:
     """
     Estimates the scale factor needed to adjust spatial calibration to a required value.
 
@@ -309,13 +321,13 @@ def _estimate_scale_factor(spatial_calibration, required_spatial_calibration):
 
 
 def threshold_image(
-    img,
-    min_threshold,
-    max_threshold,
-    foreground_value=255.0,
-    fill_holes=True,
-    edge_exclusion=None,
-):
+    img: np.ndarray,
+    min_threshold: float,
+    max_threshold: float,
+    foreground_value: float = 255.0,
+    fill_holes: bool = True,
+    edge_exclusion: Optional[int] = None,
+) -> np.ndarray:
     """
 
     Threshold the input image to create a binary mask.

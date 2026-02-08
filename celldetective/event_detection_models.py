@@ -1913,8 +1913,12 @@ class SignalDetectionModel(object):
 
 
 def residual_block1D(
-    x, number_of_filters, kernel_size=8, match_filter_size=True, connection="identity"
-):
+    x: Any,
+    number_of_filters: int,
+    kernel_size: int = 8,
+    match_filter_size: bool = True,
+    connection: str = "identity",
+) -> Any:
     """
 
     Create a 1D residual block.
@@ -1992,14 +1996,14 @@ def residual_block1D(
 
 
 def MultiscaleResNetModel(
-    n_channels,
-    n_classes=3,
-    dropout_rate=0,
-    dense_collection=0,
-    use_pooling=True,
-    header="classifier",
-    model_signal_length=128,
-):
+    n_channels: int,
+    n_classes: int = 3,
+    dropout_rate: float = 0.0,
+    dense_collection: int = 0,
+    use_pooling: bool = True,
+    header: str = "classifier",
+    model_signal_length: int = 128,
+) -> Model:
     """
 
     Define a generic ResNet 1D encoder model.
@@ -2095,16 +2099,16 @@ def MultiscaleResNetModel(
 
 
 def ResNetModelCurrent(
-    n_channels,
-    n_slices,
-    depth=2,
-    use_pooling=True,
-    n_classes=3,
-    dropout_rate=0.1,
-    dense_collection=512,
-    header="classifier",
-    model_signal_length=128,
-):
+    n_channels: int,
+    n_slices: int,
+    depth: int = 2,
+    use_pooling: bool = True,
+    n_classes: int = 3,
+    dropout_rate: float = 0.1,
+    dense_collection: int = 512,
+    header: str = "classifier",
+    model_signal_length: int = 128,
+) -> Model:
     """
     Creates a ResNet-based model tailored for signal classification or regression tasks.
 
@@ -2277,8 +2281,11 @@ def _get_time_history_class():
 
 
 def _interpret_normalization_parameters(
-    n_channels, normalization_percentile, normalization_values, normalization_clip
-):
+    n_channels: int,
+    normalization_percentile: Optional[Union[List[bool], bool]] = None,
+    normalization_values: Optional[Union[List[List[float]], List[float]]] = None,
+    normalization_clip: Optional[Union[List[bool], bool]] = None,
+) -> Tuple[List[bool], List[List[float]], List[bool]]:
     """
     Interprets and validates normalization parameters for each channel.
 
@@ -2345,15 +2352,15 @@ def _interpret_normalization_parameters(
 
 
 def normalize_signal_set(
-    signal_set,
-    channel_option,
-    percentile_alive=[0.01, 99.99],
-    percentile_dead=[0.5, 99.999],
-    percentile_generic=[0.01, 99.99],
-    normalization_percentile=None,
-    normalization_values=None,
-    normalization_clip=None,
-):
+    signal_set: np.ndarray,
+    channel_option: List[str],
+    percentile_alive: List[float] = [0.01, 99.99],
+    percentile_dead: List[float] = [0.5, 99.999],
+    percentile_generic: List[float] = [0.01, 99.99],
+    normalization_percentile: Optional[List[bool]] = None,
+    normalization_values: Optional[List[List[float]]] = None,
+    normalization_clip: Optional[List[bool]] = None,
+) -> np.ndarray:
     """
     Normalizes a set of single-cell signals across specified channels using given percentile values or specific normalization parameters.
 
@@ -2446,7 +2453,7 @@ def normalize_signal_set(
     return signal_set
 
 
-def pad_to_model_length(signal_set, model_signal_length):
+def pad_to_model_length(signal_set: np.ndarray, model_signal_length: int) -> np.ndarray:
     """
 
     Pad the signal set to match the specified model signal length.
@@ -2485,13 +2492,13 @@ def pad_to_model_length(signal_set, model_signal_length):
 
 
 def augmenter(
-    signal,
-    time_of_interest,
-    cclass,
-    model_signal_length,
-    time_shift=True,
-    probability=0.95,
-):
+    signal: np.ndarray,
+    time_of_interest: float,
+    cclass: np.ndarray,
+    model_signal_length: int,
+    time_shift: bool = True,
+    probability: float = 0.95,
+) -> Tuple[np.ndarray, float, np.ndarray]:
     """
     Randomly augments single-cell signals to simulate variations in noise, intensity ratios, and event times.
 
@@ -2552,7 +2559,7 @@ def augmenter(
     return signal, time_of_interest / model_signal_length, cclass
 
 
-def random_intensity_change(signal):
+def random_intensity_change(signal: np.ndarray) -> np.ndarray:
     """
 
     Randomly change the intensity of a signal.
@@ -2585,7 +2592,7 @@ def random_intensity_change(signal):
     return signal
 
 
-def gauss_noise(signal):
+def gauss_noise(signal: np.ndarray) -> np.ndarray:
     """
 
     Add Gaussian noise to a signal.
@@ -2618,7 +2625,12 @@ def gauss_noise(signal):
     return signal
 
 
-def random_time_shift(signal, time_of_interest, cclass, model_signal_length):
+def random_time_shift(
+    signal: np.ndarray,
+    time_of_interest: Union[int, float],
+    cclass: np.ndarray,
+    model_signal_length: int,
+) -> Tuple[np.ndarray, float, np.ndarray]:
     """
 
     Randomly shift the signals to another time.

@@ -1,7 +1,4 @@
-from typing import List
-
-import numpy as np
-from PyQt5.QtCore import QSize, Qt
+from typing import List, Optional
 from PyQt5.QtWidgets import (
     QComboBox,
     QHBoxLayout,
@@ -9,17 +6,22 @@ from PyQt5.QtWidgets import (
     QLineEdit,
     QPushButton,
     QVBoxLayout,
+    QMainWindow,
 )
-from fonticon_mdi6 import MDI6
-from superqt.fonticon import icon
 
+# ... other imports ...
 from celldetective.gui.base.components import CelldetectiveWidget
 from celldetective.gui.gui_utils import PandasModel
 from celldetective.gui.base.utils import center_window
 
 
 class MergeGroupWidget(CelldetectiveWidget):
-    def __init__(self, parent_window, columns: List[str] = [], n_cols_init: int = 3):
+    def __init__(
+        self,
+        parent_window: QMainWindow,
+        columns: List[str] = [],
+        n_cols_init: int = 3,
+    ) -> None:
         """
         Initialize the MergeGroupWidget.
 

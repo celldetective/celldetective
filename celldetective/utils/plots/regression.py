@@ -1,8 +1,11 @@
-import numpy as np
 from matplotlib import pyplot as plt
+from typing import Union, Optional
+import numpy as np
 
 
-def regression_plot(y_pred, y_true, savepath=None):
+def regression_plot(
+    y_pred: np.ndarray, y_true: np.ndarray, savepath: Optional[str] = None
+) -> None:
     """
 
     Create a regression plot to compare predicted and ground truth values.

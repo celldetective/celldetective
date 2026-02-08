@@ -1,5 +1,6 @@
 from PyQt5.QtCore import QTimer
-from PyQt5.QtWidgets import QListWidget, QVBoxLayout
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QListWidget, QListWidgetItem, QPushButton
+from typing import Optional
 
 from celldetective.gui.base.components import CelldetectiveWidget
 from celldetective.gui.base.utils import center_window
@@ -50,7 +51,12 @@ class ListWidget(CelldetectiveWidget):
             internal `items` list accordingly.
     """
 
-    def __init__(self, choiceWidget, initial_features, dtype=str, *args, **kwargs):
+    def __init__(
+        self,
+        choiceWidget: type,
+        initial_features: list,
+        dtype: Optional[type] = str,
+    ) -> None:
         """
         Initialize the ListWidget.
 
@@ -98,7 +104,7 @@ class ListWidget(CelldetectiveWidget):
         except Exception as e:
             pass
 
-    def addItemToList(self, item):
+    def addItemToList(self, item: str) -> None:
         """
         Add an item to the list widget.
 

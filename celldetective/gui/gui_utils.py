@@ -28,6 +28,9 @@ from celldetective import get_software_location
 from celldetective.filters import *
 from os import sep
 import json
+from typing import Optional, List, Tuple, Dict, Any, Union
+import pandas as pd
+import numpy as np
 
 
 class PreprocessingLayout(QVBoxLayout, Styles):
@@ -37,11 +40,11 @@ class PreprocessingLayout(QVBoxLayout, Styles):
 
     def __init__(
         self,
-        parent_window=None,
-        apply_btn_option=True,
-        extra_widget=None,
-        *args,
-        **kwargs,
+        parent_window: Optional[Any] = None,
+        apply_btn_option: bool = True,
+        extra_widget: Optional[Any] = None,
+        *args: Any,
+        **kwargs: Any,
     ):
         """
         Initialize the PreprocessingLayout.
@@ -63,7 +66,7 @@ class PreprocessingLayout(QVBoxLayout, Styles):
         self.generate_components()
         self.add_to_layout()
 
-    def add_to_layout(self):
+    def add_to_layout(self) -> None:
         """
         Add widgets to the layout.
         """
@@ -86,7 +89,7 @@ class PreprocessingLayout(QVBoxLayout, Styles):
         if self.apply_btn_option:
             self.addWidget(self.apply_btn, 5)
 
-    def generate_components(self):
+    def generate_components(self) -> None:
         """
         Generate and configure the UI components.
         """
@@ -124,7 +127,7 @@ class PreprocessingLayout(QVBoxLayout, Styles):
             self.apply_btn.setStyleSheet(self.button_style_sheet)
             self.apply_btn.clicked.connect(self.parent_window.preprocess_image)
 
-    def help_prefilter(self):
+    def help_prefilter(self) -> Optional[None]:
         """
         Helper for prefiltering strategy
         """
@@ -160,7 +163,13 @@ class PreprocessingLayout(QVBoxLayout, Styles):
 
 class PreprocessingLayout2(PreprocessingLayout):
 
-    def __init__(self, fraction=75, extra_widget=None, *args, **kwargs):
+    def __init__(
+        self,
+        fraction: int = 75,
+        extra_widget: Optional[Any] = None,
+        *args: Any,
+        **kwargs: Any,
+    ):
         """
         Initialize the PreprocessingLayout2.
 
@@ -180,7 +189,7 @@ class PreprocessingLayout2(PreprocessingLayout):
         self.preprocess_lbl.setStyleSheet("")
         self.setContentsMargins(0, 0, 0, 0)
 
-    def add_to_layout(self):
+    def add_to_layout(self) -> None:
         """
         Add widgets to the horizontal layout (compact version).
         """
@@ -213,7 +222,7 @@ class PandasModel(QAbstractTableModel):
     from https://stackoverflow.com/questions/31475965/fastest-way-to-populate-qtableview-from-pandas-data-frame
     """
 
-    def __init__(self, data):
+    def __init__(self, data: pd.DataFrame):
         """
         Initialize the PandasModel.
 
@@ -226,7 +235,7 @@ class PandasModel(QAbstractTableModel):
         self._data = data
         self.colors = dict()
 
-    def rowCount(self, parent=None):
+    def rowCount(self, parent: Any = None) -> int:
         """
         Return the number of rows.
 
@@ -242,7 +251,7 @@ class PandasModel(QAbstractTableModel):
         """
         return self._data.shape[0]
 
-    def columnCount(self, parent=None):
+    def columnCount(self, parent: Any = None) -> int:
         """
         Return the number of columns.
 
@@ -258,7 +267,7 @@ class PandasModel(QAbstractTableModel):
         """
         return self._data.shape[1]
 
-    def data(self, index, role=Qt.DisplayRole):
+    def data(self, index: Any, role: int = Qt.DisplayRole) -> Any:
         """
         Return the data for the given index and role.
 
@@ -283,7 +292,7 @@ class PandasModel(QAbstractTableModel):
                     return color
         return None
 
-    def headerData(self, rowcol, orientation, role):
+    def headerData(self, rowcol: int, orientation: int, role: int) -> Any:
         """
         Return the header data for the given row/column and orientation.
 
@@ -307,7 +316,7 @@ class PandasModel(QAbstractTableModel):
             return self._data.index[rowcol]
         return None
 
-    def change_color(self, row, column, color):
+    def change_color(self, row: int, column: int, color: Any) -> None:
         """
         Change the background color of a specific cell.
 
@@ -327,7 +336,12 @@ class PandasModel(QAbstractTableModel):
 
 class GenericOpColWidget(CelldetectiveWidget):
 
-    def __init__(self, parent_window, column=None, title=""):
+    def __init__(
+        self,
+        parent_window: Any,
+        column: Optional[str] = None,
+        title: str = "",
+    ):
         """
         Initialize the GenericOpColWidget.
 
@@ -376,7 +390,7 @@ class GenericOpColWidget(CelldetectiveWidget):
         self.setAttribute(Qt.WA_DeleteOnClose)
         center_window(self)
 
-    def launch_operation(self):
+    def launch_operation(self) -> None:
         """
         Execute the operation and update the table model.
         """
@@ -386,7 +400,7 @@ class GenericOpColWidget(CelldetectiveWidget):
         self.parent_window.table_view.setModel(self.parent_window.model)
         self.close()
 
-    def compute(self):
+    def compute(self) -> None:
         """
         Perform the computation. Should be overridden by subclasses.
         """
@@ -431,15 +445,15 @@ class QuickSliderLayout(QHBoxLayout):
 
     def __init__(
         self,
-        label=None,
-        slider=None,
-        layout_ratio=(0.25, 0.75),
-        slider_initial_value=1,
-        slider_range=(0, 1),
-        slider_tooltip=None,
-        decimal_option=True,
-        precision=3,
-        *args,
+        label: Optional[str] = None,
+        slider: Optional[Any] = None,
+        layout_ratio: Tuple[float, float] = (0.25, 0.75),
+        slider_initial_value: Union[int, float] = 1,
+        slider_range: Tuple[Union[int, float], Union[int, float]] = (0, 1),
+        slider_tooltip: Optional[str] = None,
+        decimal_option: bool = True,
+        precision: float = 3,
+        *args: Any,
     ):
         """
         Initialize the QuickSliderLayout.
@@ -525,7 +539,13 @@ class ExportPlotBtn(QPushButton, Styles):
             The figure is then saved in the specified format and location.
     """
 
-    def __init__(self, fig, export_dir=None, *args, **kwargs):
+    def __init__(
+        self,
+        fig: Any,
+        export_dir: Optional[str] = None,
+        *args: Any,
+        **kwargs: Any,
+    ):
         """
         Initialize the ExportPlotBtn.
 
@@ -554,7 +574,7 @@ class ExportPlotBtn(QPushButton, Styles):
         self.setIconSize(QSize(20, 20))
         self.clicked.connect(self.save_plot)
 
-    def save_plot(self):
+    def save_plot(self) -> None:
         """
         Opens a file dialog for the user to specify the location and name to save the plot.
 
@@ -576,7 +596,7 @@ class ExportPlotBtn(QPushButton, Styles):
 
 class FilterChoice(CelldetectiveWidget):
 
-    def __init__(self, parent_window):
+    def __init__(self, parent_window: Any):
         """
         Initialize the FilterChoice widget.
 
@@ -642,7 +662,7 @@ class FilterChoice(CelldetectiveWidget):
         self.update_arguments()
         center_window(self)
 
-    def add_current_feature(self):
+    def add_current_feature(self) -> None:
         """
         Add the selected filter and its arguments to the processing list.
         """
@@ -669,7 +689,7 @@ class FilterChoice(CelldetectiveWidget):
         self.parent_window.list_widget.addItems([filtername])
         self.close()
 
-    def update_arguments(self):
+    def update_arguments(self) -> None:
         """
         Update the argument fields based on the selected filter.
         """
@@ -703,7 +723,7 @@ class OperationChoice(CelldetectiveWidget):
 
     """
 
-    def __init__(self, parent_window):
+    def __init__(self, parent_window: Any):
         """
         Initialize the OperationChoice widget.
 
@@ -741,7 +761,7 @@ class OperationChoice(CelldetectiveWidget):
         layout.addWidget(self.combo_box)
         layout.addWidget(self.add_btn)
 
-    def add_current_feature(self):
+    def add_current_feature(self) -> None:
         """
         Add the selected operation to the list.
         """
@@ -752,7 +772,7 @@ class OperationChoice(CelldetectiveWidget):
 
 class GeometryChoice(CelldetectiveWidget, Styles):
 
-    def __init__(self, parent_window):
+    def __init__(self, parent_window: Any):
         """
         Initialize the GeometryChoice widget.
 
@@ -801,7 +821,7 @@ class GeometryChoice(CelldetectiveWidget, Styles):
         for el in self.outer_to_hide:
             el.hide()
 
-    def activate_outer_value(self):
+    def activate_outer_value(self) -> None:
         """
         Toggle the visibility of the outer distance input fields.
         """
@@ -814,7 +834,7 @@ class GeometryChoice(CelldetectiveWidget, Styles):
             for el in self.outer_to_hide:
                 el.hide()
 
-    def add_current_feature(self):
+    def add_current_feature(self) -> None:
         """
         Add the selected distance(s) to the list.
         """
@@ -831,7 +851,7 @@ class GeometryChoice(CelldetectiveWidget, Styles):
 
 class DistanceChoice(CelldetectiveWidget):
 
-    def __init__(self, parent_window):
+    def __init__(self, parent_window: Any):
         """
         Initialize the DistanceChoice widget.
 
@@ -864,7 +884,7 @@ class DistanceChoice(CelldetectiveWidget):
         layout.addLayout(dist_layout)
         layout.addWidget(self.add_btn)
 
-    def add_current_feature(self):
+    def add_current_feature(self) -> None:
         """
         Add the selected distance to the list.
         """
@@ -914,11 +934,11 @@ class ThresholdLineEdit(QLineEdit):
 
     def __init__(
         self,
-        init_value=2.0,
-        connected_buttons=None,
-        placeholder="px > thresh are masked",
-        value_type="float",
-        *args,
+        init_value: Union[float, int] = 2.0,
+        connected_buttons: Optional[Union[Any, List[Any]]] = None,
+        placeholder: str = "px > thresh are masked",
+        value_type: str = "float",
+        *args: Any,
     ):
         """
         Initialize the ThresholdLineEdit.
@@ -955,7 +975,7 @@ class ThresholdLineEdit(QLineEdit):
             self.textChanged.connect(self.enable_btn)
         self.set_threshold(self.init_value)
 
-    def enable_btn(self):
+    def enable_btn(self) -> None:
         """
         Enable or disable connected QPushButtons based on the threshold value.
 
@@ -976,7 +996,7 @@ class ThresholdLineEdit(QLineEdit):
             for c in cbs:
                 c.setEnabled(True)
 
-    def set_threshold(self, value):
+    def set_threshold(self, value: Union[float, int]) -> None:
         """
         Set the input field to the specified threshold value.
 
@@ -991,7 +1011,7 @@ class ThresholdLineEdit(QLineEdit):
         except:
             print("Please provide a valid threshold value...")
 
-    def get_threshold(self, show_warning=True):
+    def get_threshold(self, show_warning: bool = True) -> Optional[Union[float, int]]:
         """
         Retrieve the current threshold value from the input field.
 
@@ -1028,7 +1048,7 @@ class ThresholdLineEdit(QLineEdit):
         return thresh
 
 
-def color_from_status(status, recently_modified=False):
+def color_from_status(status: int, recently_modified: bool = False) -> str:
     """
     Returns a color string based on the status and modification state.
 
@@ -1064,7 +1084,9 @@ def color_from_status(status, recently_modified=False):
             return "k"
 
 
-def color_from_state(state, recently_modified=False):
+def color_from_state(
+    state: Union[List[Any], np.ndarray], recently_modified: bool = False
+) -> Dict[Any, Any]:
     """
     Generate a color map based on unique values in the provided state array.
 
@@ -1121,7 +1143,7 @@ def color_from_state(state, recently_modified=False):
     return color_map
 
 
-def color_from_class(cclass, recently_modified=False):
+def color_from_class(cclass: int, recently_modified: bool = False) -> str:
     """
     Returns a color string based on the class and modification state.
 
@@ -1159,7 +1181,7 @@ def color_from_class(cclass, recently_modified=False):
 
 class ChannelChoice(CelldetectiveWidget):
 
-    def __init__(self, parent_window):
+    def __init__(self, parent_window: Any):
         """
         Initialize the ChannelChoice widget.
 
@@ -1188,7 +1210,7 @@ class ChannelChoice(CelldetectiveWidget):
         layout.addWidget(self.combo_box)
         layout.addWidget(self.add_btn)
 
-    def add_current_channel(self):
+    def add_current_channel(self) -> None:
         """
         Add the selected channel to the list.
         """
@@ -1197,7 +1219,7 @@ class ChannelChoice(CelldetectiveWidget):
         self.close()
 
 
-def help_generic(tree):
+def help_generic(tree: Dict[str, Any]) -> Any:
     """
     Interactively traverse a decision tree to provide user guidance based on a nested dictionary structure.
 
@@ -1244,7 +1266,7 @@ def help_generic(tree):
     return tree
 
 
-def generic_msg(text):
+def generic_msg(text: str) -> Optional[str]:
     """
     Display a message box with a question and capture the user's response.
 

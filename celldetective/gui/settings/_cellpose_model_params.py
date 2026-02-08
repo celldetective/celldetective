@@ -49,7 +49,11 @@ class CellposeParamsWidget(CelldetectiveWidget):
     set_cellpose_scale_btn: QPushButton = QPushButton("set")
     cellprob_slider: QLabeledDoubleSlider = QLabeledDoubleSlider()
 
-    def __init__(self, parent_window=None, model_name="CP_cyto2", *args):
+    def __init__(
+        self,
+        parent_window: Optional[QMainWindow] = None,
+        model_name: Optional[str] = None,
+    ) -> None:
         """
         Initialize the CellposeParamsWidget.
 

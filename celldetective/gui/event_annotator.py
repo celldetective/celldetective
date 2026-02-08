@@ -13,9 +13,10 @@ from PyQt5.QtWidgets import (
     QSlider,
     QAction,
     QMenu,
+    QWidget,
 )
 from celldetective.gui.interactive_timeseries_viewer import InteractiveEventViewer
-from PyQt5.QtCore import Qt, QSize, QThread, pyqtSignal, QTimer
+from PyQt5.QtCore import Qt, QSize, QThread, pyqtSignal, QTimer, QCloseEvent
 from PyQt5.QtGui import QKeySequence, QIntValidator
 
 from celldetective.gui.gui_utils import color_from_state
@@ -61,7 +62,7 @@ class StackLoaderThread(QThread):
     status_update = pyqtSignal(str)
     finished = pyqtSignal()
 
-    def __init__(self, annotator):
+    def __init__(self, annotator: QWidget) -> None:
         """
         Initialize the loader thread.
 
@@ -81,7 +82,7 @@ class StackLoaderThread(QThread):
     def run(self):
         """Run the thread."""
 
-        def callback(progress, status=""):
+        def callback(progress: int, status: str = "") -> bool:
             """
             Callback to update progress.
 
@@ -175,7 +176,7 @@ class EventAnnotator(BaseAnnotator):
 
         self._loader_thread.start()
 
-    def _on_load_progress(self, value):
+    def _on_load_progress(self, value: int) -> None:
         """
         Update progress dialog.
 
@@ -187,7 +188,7 @@ class EventAnnotator(BaseAnnotator):
         if hasattr(self, "_progress_dialog") and self._progress_dialog:
             self._progress_dialog.setValue(value)
 
-    def _on_load_status(self, status):
+    def _on_load_status(self, status: str) -> None:
         """
         Update progress dialog label.
 
@@ -467,7 +468,7 @@ class EventAnnotator(BaseAnnotator):
         self.class_scatter.set_offsets(self.positions[self.framedata])
         self.class_scatter.set_edgecolor(self.colors[self.framedata][:, 0])
 
-    def compute_status_and_colors(self, i):
+    def compute_status_and_colors(self, i: int) -> None:
         """
         Compute the status and colors of the cells.
 
@@ -845,7 +846,7 @@ class EventAnnotator(BaseAnnotator):
                 self.colors[frame] = group[["class_color", "status_color"]].to_numpy()
                 self.tracks[frame] = group["TRACK_ID"].to_numpy()
 
-    def prepare_stack(self, progress_callback=None):
+    def prepare_stack(self, progress_callback: Optional[callable] = None) -> None:
         """
         Load the stack images.
 
@@ -932,7 +933,7 @@ class EventAnnotator(BaseAnnotator):
                     self.stack[np.where(self.stack > 0.0)]
                 )
 
-    def closeEvent(self, event):
+    def closeEvent(self, event: QCloseEvent) -> None:
         """
         Handle close event.
 
@@ -1039,7 +1040,7 @@ class EventAnnotator(BaseAnnotator):
         self._pick_cid = self.fig.canvas.mpl_connect("pick_event", self.on_scatter_pick)
         self.fcanvas.canvas.draw()
 
-    def select_single_cell(self, index, timepoint):
+    def select_single_cell(self, index: int, timepoint: int) -> None:
         """
         Select a single cell.
 
@@ -1126,7 +1127,7 @@ class EventAnnotator(BaseAnnotator):
             print(f"L1170 {e=}")
             pass
 
-    def draw_frame(self, framedata):
+    def draw_frame(self, framedata: int) -> Tuple[Any, ...]:
         """
         Update plot elements at each timestep of the loop.
 

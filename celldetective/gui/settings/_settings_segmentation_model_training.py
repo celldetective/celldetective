@@ -10,8 +10,9 @@ from PyQt5.QtWidgets import (
     QHBoxLayout,
     QPushButton,
     QMessageBox,
+    QMainWindow,
 )
-from PyQt5.QtCore import Qt, QSize, QThreadPool, QThread
+from PyQt5.QtCore import Qt, QSize, QThreadPool, QThread, QCloseEvent
 from celldetective.gui.base.components import generic_message
 from celldetective.gui.base.channel_norm_generator import ChannelNormGenerator
 import multiprocessing
@@ -58,7 +59,7 @@ class SettingsSegmentationModelTraining(CelldetectiveSettingsPanel):
 
     """
 
-    def __init__(self, parent_window=None):
+    def __init__(self, parent_window: Optional[QMainWindow] = None) -> None:
         """
         Initialize the SettingsSegmentationModelTraining widget.
 
@@ -93,7 +94,7 @@ class SettingsSegmentationModelTraining(CelldetectiveSettingsPanel):
         self.bg_loader = BackgroundLoader()
         self.bg_loader.start()
 
-    def closeEvent(self, event):
+    def closeEvent(self, event: QCloseEvent) -> None:
         """
         Handle the close event.
 
@@ -784,7 +785,7 @@ class SettingsSegmentationModelTraining(CelldetectiveSettingsPanel):
         idx = self.parent_window.seg_model_list.findText(self.modelname_le.text())
         self.parent_window.seg_model_list.setCurrentIndex(idx)
 
-    def on_training_error(self, message):
+    def on_training_error(self, message: str) -> None:
         """
         Handle training error.
 

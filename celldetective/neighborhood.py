@@ -33,6 +33,7 @@ from celldetective.utils.data_cleaning import extract_identity_col
 from scipy.spatial.distance import cdist
 from celldetective.utils.image_loaders import locate_labels
 from celldetective.utils.data_loaders import get_position_table, get_position_pickle
+from PyQt5.QtCore import QPoint
 
 abs_path = os.sep.join(
     [os.path.split(os.path.dirname(os.path.realpath(__file__)))[0], "celldetective"]
@@ -64,8 +65,10 @@ def _fill_distance_neighborhood_at_t(
     ----------
     time_index : int
         The time point to process.
-    setA, setB : pandas.DataFrame
-        The datasets for population A and B.
+    setA : pandas.DataFrame
+        Dataset for population A.
+    setB : pandas.DataFrame
+        Dataset for population B.
     dist_map : ndarray
         Distance matrix between cells in setA and setB.
     attention_weight : bool, optional
@@ -82,10 +85,14 @@ def _fill_distance_neighborhood_at_t(
         IDs of closest cells in setA.
     neigh_col : str
         Column name to store neighborhood data.
-    column_labelsA, column_labelsB : dict
-        Column mapping for sets A and B.
-    statusA, statusB : str
-        Column names for status in sets A and B.
+    column_labelsA : dict, optional
+        Column mapping for set A.
+    column_labelsB : dict, optional
+        Column mapping for set B.
+    statusA : str, optional
+        Column name for status in set A.
+    statusB : str, optional
+        Column name for status in set B.
     distance : float, optional
         Distance threshold. Default is 10.
     """
@@ -253,8 +260,10 @@ def _fill_contact_neighborhood_at_t(
     ----------
     time_index : int
         The time point to process.
-    setA, setB : pandas.DataFrame
-        The datasets for population A and B.
+    setA : pandas.DataFrame
+        Dataset for population A.
+    setB : pandas.DataFrame
+        Dataset for population B.
     dist_map : ndarray
         Distance matrix between cells.
     intersection_map : ndarray, optional
@@ -273,10 +282,14 @@ def _fill_contact_neighborhood_at_t(
         IDs of closest cells in setA.
     neigh_col : str
         Column name to store neighborhood data.
-    column_labelsA, column_labelsB : dict
-        Column mapping for sets A and B.
-    statusA, statusB : str
-        Column names for status in sets A and B.
+    column_labelsA : dict, optional
+        Column mapping for set A.
+    column_labelsB : dict, optional
+        Column mapping for set B.
+    statusA : str, optional
+        Column name for status in set A.
+    statusB : str, optional
+        Column name for status in set B.
     d_filter : float, optional
         Distance filter threshold. Default is 10.
     """
@@ -459,23 +472,30 @@ def _compute_mask_contact_dist_map(
 
     Parameters
     ----------
-    setA, setB : pandas.DataFrame
-        The datasets for population A and B.
-    labelsA : ndarray
-        Label image for set A.
-    labelsB : ndarray, optional
-        Label image for set B.
+    setA : pandas.DataFrame
+        Dataset A.
+    setB : pandas.DataFrame, optional
+        Dataset B. Default is None.
+    labelsA : numpy.ndarray
+        Labels for setA.
+    labelsB : numpy.ndarray, optional
+        Labels for setB. Default is None.
     distance : float, optional
-        Distance threshold for contact. Default is 10.
+        Distance threshold. Default is 10.
     mode : str, optional
-        Mode of interaction ('self' or 'two-pop'). Default is 'self'.
-    column_labelsA, column_labelsB : dict, optional
-        Column mapping for sets A and B.
-
-    Returns
-    -------
-    dist_map : ndarray
-        Calculated distance map.
+        Distance mode ("self", "inter"). Default is "self".
+    column_labelsA : dict, optional
+        Column labels for setA. Default is None.
+    column_labelsB : dict, optional
+        Column labels for setB. Default is None.
+    PxToUm : float, optional
+        Pixel to micron conversion factor. Default is 1.
+    scale : float, optional
+        Scale factor. Default is 1.
+    use_weighted_centroid : bool, optional
+        Whether to use weighted centroid. Default is False.
+    weight_col : str, optional
+        Name of the weight column. Default is "".
     intersection_map : ndarray
         Map of intersection areas (in pixels).
     """
@@ -721,8 +741,10 @@ def distance_cut_neighborhood(
 
     Parameters
     ----------
-    setA,setB : pandas DataFrame
-            Trajectory or position sets A and B.
+    setA : pandas.DataFrame
+        Trajectory or position set A.
+    setB : pandas.DataFrame
+        Trajectory or position set B.
     distance : float
             Cut-distance in pixels to match neighboring pairs.
     mode: str
@@ -1257,6 +1279,8 @@ def mean_neighborhood_before_event(
     event_time_col : str or None
             The column name indicating the event time for each cell track. If None, the maximum frame number in the
             dataframe is used as the event time for all tracks.
+    metrics : list, optional
+            List of metrics to compute. Default is ["inclusive", "exclusive", "intermediate"].
 
     Returns
     -------
@@ -1375,6 +1399,8 @@ def mean_neighborhood_after_event(
     event_time_col : str or None
             The column name indicating the event time for each cell track. If None, the maximum frame number in the
             dataframe is used as the event time for all tracks.
+    metrics : list, optional
+            List of metrics to compute. Default is ["inclusive", "exclusive", "intermediate"].
 
     Returns
     -------

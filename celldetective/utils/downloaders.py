@@ -11,11 +11,14 @@ from tqdm import tqdm
 
 from celldetective.utils.io import remove_file_if_exists
 from celldetective import get_logger
+from typing import Optional, List, Union, Tuple
 
 logger = get_logger()
 
 
-def get_zenodo_files(cat=None):
+def get_zenodo_files(
+    cat: Optional[str] = None,
+) -> Union[List[str], Tuple[List[str], List[str]]]:
     """
     Get list of files available on Zenodo.
 
@@ -80,7 +83,7 @@ def get_zenodo_files(cat=None):
         return all_files_short, categories
 
 
-def download_url_to_file(url, dst, progress=True):
+def download_url_to_file(url: str, dst: str, progress: bool = True) -> None:
     r"""
     Download object at the given URL to a local path.
     Thanks to torch, slightly modified, from Cellpose
@@ -207,7 +210,7 @@ def download_url_to_file(url, dst, progress=True):
         remove_file_if_exists(f.name)
 
 
-def download_zenodo_file(file, output_dir):
+def download_zenodo_file(file: str, output_dir: str) -> None:
     """
     Download a file from Zenodo.
 

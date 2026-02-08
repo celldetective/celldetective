@@ -1,5 +1,15 @@
 import pandas as pd
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import (
+    Qt,
+    QSize,
+    QThread,
+    pyqtSignal,
+    QTimer,
+    QPoint,
+    QModelIndex,
+    QCloseEvent,
+)
+from PyQt5.QtGui import QMouseEvent, QResizeEvent
 from PyQt5.QtWidgets import (
     QComboBox,
     QDialog,
@@ -11,6 +21,7 @@ from PyQt5.QtWidgets import (
 )
 from matplotlib import pyplot as plt
 from matplotlib.widgets import RectangleSelector
+from typing import Optional
 
 from celldetective.gui.base.styles import Styles
 from celldetective.gui.base.figure_canvas import FigureCanvas
@@ -22,12 +33,12 @@ logger = get_logger(__name__)
 class InteractiveEventViewer(QDialog, Styles):
     def __init__(
         self,
-        table_path,
-        signal_name=None,
-        event_label=None,
-        df=None,
-        callback=None,
-        parent=None,
+        table_path: str,
+        signal_name: Optional[str] = None,
+        event_label: Optional[str] = None,
+        df: Optional[pd.DataFrame] = None,
+        callback: Optional[callable] = None,
+        parent: Optional["QWidget"] = None,
     ):
         """
         Initialize the InteractiveEventViewer.
@@ -68,14 +79,14 @@ class InteractiveEventViewer(QDialog, Styles):
         self.init_ui()
         self.plot_signals()
 
-    def notify_update(self):
+    def notify_update(self) -> None:
         """
         Notify the callback function about updates.
         """
         if self.callback:
             self.callback()
 
-    def detect_columns(self):
+    def detect_columns(self) -> None:
         """
         Auto-detect the columns for classes, times, and statuses in the dataframe.
         """
@@ -192,7 +203,7 @@ class InteractiveEventViewer(QDialog, Styles):
             else:
                 self.signal_name = cols[0]
 
-    def set_active_event_type(self, type_name):
+    def set_active_event_type(self, type_name: str) -> None:
         """
         Set the active event type.
 
@@ -207,7 +218,7 @@ class InteractiveEventViewer(QDialog, Styles):
         self.time_col = info["time"]
         self.status_col = info["status"]
 
-    def init_ui(self):
+    def init_ui(self) -> None:
         """
         Initialize the user interface.
         """
@@ -297,7 +308,7 @@ class InteractiveEventViewer(QDialog, Styles):
         )
         layout.addWidget(self.info_label)
 
-    def change_event_type(self, text):
+    def change_event_type(self, text: str) -> None:
         """
         Change the current event type and update the plot.
 
@@ -309,7 +320,7 @@ class InteractiveEventViewer(QDialog, Styles):
         self.set_active_event_type(text)
         self.plot_signals()
 
-    def change_signal(self, text):
+    def change_signal(self, text: str) -> None:
         """
         Change the signal to plot.
 
@@ -321,7 +332,7 @@ class InteractiveEventViewer(QDialog, Styles):
         self.signal_name = text
         self.plot_signals()
 
-    def keyPressEvent(self, event):
+    def keyPressEvent(self, event: "QKeyEvent") -> None:
         """
         Handle key press events for shifting signals.
 
@@ -368,7 +379,7 @@ class InteractiveEventViewer(QDialog, Styles):
         else:
             super().keyPressEvent(event)
 
-    def plot_signals(self, id=None):
+    def plot_signals(self, id: Optional[int] = None) -> None:
         """
         Plot the signals for the current event type and options.
 
@@ -451,7 +462,7 @@ class InteractiveEventViewer(QDialog, Styles):
 
         self.canvas.draw()
 
-    def on_select_rect(self, eclick, erelease):
+    def on_select_rect(self, eclick: "MouseEvent", erelease: "MouseEvent") -> None:
         """
         Handle rectangle selection on the plot.
 
@@ -501,7 +512,7 @@ class InteractiveEventViewer(QDialog, Styles):
         self.canvas.draw()
         self.info_label.setText(f"Selected {len(self.selected_tracks)} tracks.")
 
-    def set_class(self, class_val):
+    def set_class(self, class_val: int) -> None:
         """
         Set class for selected tracks.
 
@@ -530,7 +541,7 @@ class InteractiveEventViewer(QDialog, Styles):
 
         self.notify_update()
 
-    def reject_selection(self):
+    def reject_selection(self) -> None:
         """
         Mark selected tracks as 'No Event' (Class 1).
         """

@@ -1,4 +1,5 @@
-from PyQt5.QtWidgets import QCheckBox
+from typing import Optional
+from PyQt5.QtWidgets import QCheckBox, QMainWindow
 from PyQt5.QtCore import QSize
 from superqt.fonticon import icon
 from fonticon_mdi6 import MDI6
@@ -9,7 +10,7 @@ import os
 
 class SettingsSegmentation(CelldetectiveSettingsPanel):
 
-    def __init__(self, parent_window=None):
+    def __init__(self, parent_window: Optional[QMainWindow] = None) -> None:
         """
         Initialize the SettingsSegmentation widget.
 

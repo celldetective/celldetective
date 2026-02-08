@@ -12,6 +12,9 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, QSize
 from PyQt5.QtGui import QDoubleValidator
+from typing import Optional, List, Union, Tuple, Dict, Any
+import pandas as pd
+import numpy as np
 
 from celldetective.gui.gui_utils import ExportPlotBtn, QuickSliderLayout
 from celldetective.gui.base.figure_canvas import FigureCanvas
@@ -44,14 +47,14 @@ class GenericSignalPlotWidget(CelldetectiveWidget):
 
     def __init__(
         self,
-        df=None,
-        df_pos_info=None,
-        df_well_info=None,
-        feature_selected=None,
-        parent_window=None,
-        title="plot",
-        *args,
-        **kwargs,
+        df: Optional[pd.DataFrame] = None,
+        df_pos_info: Optional[pd.DataFrame] = None,
+        df_well_info: Optional[pd.DataFrame] = None,
+        feature_selected: Optional[str] = None,
+        parent_window: Optional[Any] = None,
+        title: str = "plot",
+        *args: Any,
+        **kwargs: Any,
     ):
         """
         Initialize the GenericSignalPlotWidget.
@@ -104,7 +107,7 @@ class GenericSignalPlotWidget(CelldetectiveWidget):
         self.fig.tight_layout()
         self.setLayout(self.layout)
 
-    def populate_widget(self):
+    def populate_widget(self) -> None:
         """
         Populate the widget with controls and plot area.
         """
@@ -336,7 +339,7 @@ class GenericSignalPlotWidget(CelldetectiveWidget):
         self.generate_pos_selection_widget()
         self.select_btn_group.buttons()[0].click()
 
-    def submit_alpha(self, value):
+    def submit_alpha(self, value: Union[float, int]) -> Optional[None]:
         """
         Update the alpha value for single-cell lines.
 
@@ -358,7 +361,7 @@ class GenericSignalPlotWidget(CelldetectiveWidget):
         self.alpha_setting = alpha
         self.plot_signals(0)
 
-    def rescale_y_axis(self):
+    def rescale_y_axis(self) -> Optional[None]:
         """
         Rescale the Y-axis based on the user input.
         """
@@ -376,7 +379,7 @@ class GenericSignalPlotWidget(CelldetectiveWidget):
             self.scaling_factor = float(new_scale)
             self.plot_signals(0)
 
-    def switch_selection_mode(self, id):
+    def switch_selection_mode(self, id: int) -> None:
         """
         Switch the selection mode between 'by name' and 'spatially'.
 
@@ -398,7 +401,7 @@ class GenericSignalPlotWidget(CelldetectiveWidget):
                 self.position_scatter.show()
             self.line_choice_widget.hide()
 
-    def set_class_to_plot(self):
+    def set_class_to_plot(self) -> None:
         """
         Set the class of cells to plot (events, no events, or all).
         """
@@ -412,7 +415,7 @@ class GenericSignalPlotWidget(CelldetectiveWidget):
 
         self.plot_signals(0)
 
-    def generate_pos_selection_widget(self):
+    def generate_pos_selection_widget(self) -> None:
         """
         Generate the widget for selecting positions or wells to display.
         """
@@ -476,7 +479,7 @@ class GenericSignalPlotWidget(CelldetectiveWidget):
         self.layout.addWidget(self.line_choice_widget)
         # self.layout.addLayout(self.line_check_vbox)
 
-    def look_for_metadata(self):
+    def look_for_metadata(self) -> None:
         """
         Search for metadata files in the experiment directory.
         """
@@ -496,7 +499,7 @@ class GenericSignalPlotWidget(CelldetectiveWidget):
         if len(self.metafiles) > 0:
             self.metadata_found = True
 
-    def load_coordinates(self):
+    def load_coordinates(self) -> Optional[None]:
         """
         Read metadata and try to extract position coordinates
         """
@@ -527,7 +530,7 @@ class GenericSignalPlotWidget(CelldetectiveWidget):
                 self.df_pos_info.loc[pos_loc, "y"] = coords[1]
                 self.df_pos_info.loc[pos_loc, "metadata_tag"] = pos_label
 
-    def plot_spatial_location(self):
+    def plot_spatial_location(self) -> None:
         """
         Plot the spatial location of the positions.
         """
@@ -573,7 +576,7 @@ class GenericSignalPlotWidget(CelldetectiveWidget):
         except (KeyError, TypeError) as e:
             logger.debug(f"Could not plot spatial location: {e}")
 
-    def update_annot(self, ind):
+    def update_annot(self, ind: Dict[str, Any]) -> None:
         """
         Update the annotation tool tip.
 
@@ -590,7 +593,7 @@ class GenericSignalPlotWidget(CelldetectiveWidget):
         self.annot.get_bbox_patch().set_facecolor("k")
         self.annot.get_bbox_patch().set_alpha(0.4)
 
-    def hover(self, event):
+    def hover(self, event: Any) -> None:
         """
         Handle hover events on the scatter plot.
 
@@ -611,7 +614,7 @@ class GenericSignalPlotWidget(CelldetectiveWidget):
                     self.annot.set_visible(False)
                     self.fig_scatter.canvas.draw_idle()
 
-    def unselect_position(self, event):
+    def unselect_position(self, event: Any) -> None:
         """
         Handle pick events to select/deselect positions.
 
@@ -648,7 +651,7 @@ class GenericSignalPlotWidget(CelldetectiveWidget):
         self.position_scatter.canvas.draw_idle()
         self.plot_signals(0)
 
-    def select_color(self, selection):
+    def select_color(self, selection: np.ndarray) -> List[Any]:
         """
         Get the colors for the points based on their selection status.
 
@@ -665,7 +668,7 @@ class GenericSignalPlotWidget(CelldetectiveWidget):
         colors = [tab10(0) if s else tab10(0.1) for s in selection]
         return colors
 
-    def initialize_axis(self):
+    def initialize_axis(self) -> None:
         """
         Initialize the plot axis.
         """
@@ -710,7 +713,7 @@ class GenericSignalPlotWidget(CelldetectiveWidget):
             if leg is not None:
                 leg.set_visible(True)
 
-    def show_hide_legend(self):
+    def show_hide_legend(self) -> None:
         """Toggle legend visibility and replot to sync state."""
         if self.legend_visible:
             self.legend_visible = False
@@ -722,7 +725,7 @@ class GenericSignalPlotWidget(CelldetectiveWidget):
         # Replot to sync legend state
         self.plot_signals(0)
 
-    def switch_to_log(self):
+    def switch_to_log(self) -> None:
         """
         Switch threshold histogram to log scale. Auto adjust.
         """
@@ -739,7 +742,7 @@ class GenericSignalPlotWidget(CelldetectiveWidget):
         # self.ax.autoscale()
         self.plot_widget.canvas.draw_idle()
 
-    def plot_signals(self, id):
+    def plot_signals(self, id: int) -> None:
         """
         Plot the signals based on the selected mode and options.
 
@@ -920,16 +923,16 @@ class GenericSignalPlotWidget(CelldetectiveWidget):
 
     def plot_line(
         self,
-        line,
-        color,
-        label,
-        mean_signal_type,
-        ci_option=True,
-        cell_lines_option=False,
-        alpha_ci=0.5,
-        std_signal=None,
-        matrix=None,
-    ):
+        line: Any,
+        color: Union[str, Tuple[float, ...]],
+        label: Optional[str],
+        mean_signal_type: str,
+        ci_option: bool = True,
+        cell_lines_option: bool = False,
+        alpha_ci: float = 0.5,
+        std_signal: Optional[str] = None,
+        matrix: Optional[str] = None,
+    ) -> None:
         """
         Plot a signal line with optional confidence intervals and individual cell lines.
 
@@ -939,7 +942,7 @@ class GenericSignalPlotWidget(CelldetectiveWidget):
             The data line containing signal information.
         color : str or tuple
             The color of the line.
-        label : str
+        label : str or None
             The label for the legend.
         mean_signal_type : str
             The key for the mean signal in `line`.
@@ -996,7 +999,7 @@ class GenericSignalPlotWidget(CelldetectiveWidget):
                         alpha=self.alpha_setting,
                     )
 
-    def switch_ci(self):
+    def switch_ci(self) -> None:
         """
         Toggle the visibility of confidence intervals or standard deviation.
         """
@@ -1015,7 +1018,7 @@ class GenericSignalPlotWidget(CelldetectiveWidget):
         except Exception as e:
             logger.debug(f"Error plotting signals: {e}")
 
-    def switch_cell_lines(self):
+    def switch_cell_lines(self) -> None:
         """
         Toggle the visibility of individual cell signal lines.
         """
@@ -1029,7 +1032,7 @@ class GenericSignalPlotWidget(CelldetectiveWidget):
         self.show_cell_lines = not self.show_cell_lines
         self.plot_signals(0)
 
-    def select_lines(self):
+    def select_lines(self) -> None:
         """
         Update the selection of lines (wells or positions) based on user checkboxes.
         """
@@ -1056,7 +1059,7 @@ class GenericSignalPlotWidget(CelldetectiveWidget):
 
 class SurvivalPlotWidget(GenericSignalPlotWidget):
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs: Any):
         """
         Initialize the SurvivalPlotWidget.
 
@@ -1076,7 +1079,7 @@ class SurvivalPlotWidget(GenericSignalPlotWidget):
         self.export_tabular_btn.show()
         self.export_tabular_btn.clicked.connect(self.set_table_options)
 
-    def switch_to_log(self):
+    def switch_to_log(self) -> None:
         """
         Switch threshold histogram to log scale. Auto adjust.
         """
@@ -1094,7 +1097,7 @@ class SurvivalPlotWidget(GenericSignalPlotWidget):
         # self.ax.autoscale()
         self.plot_widget.canvas.draw_idle()
 
-    def initialize_axis(self):
+    def initialize_axis(self) -> None:
         """
         Initialize the plot axis for survival curves.
         """
@@ -1131,7 +1134,7 @@ class SurvivalPlotWidget(GenericSignalPlotWidget):
             if leg is not None:
                 leg.set_visible(True)
 
-    def plot_signals(self, id):
+    def plot_signals(self, id: int) -> None:
         """
         Plot the survival signals based on the selected mode and options.
 
@@ -1276,7 +1279,15 @@ class SurvivalPlotWidget(GenericSignalPlotWidget):
 
         self.plot_widget.canvas.draw()
 
-    def plot_line(self, line, color, label, ci_option=True, legend=None, alpha_ci=0.5):
+    def plot_line(
+        self,
+        line: Any,
+        color: Union[str, Tuple[float, ...]],
+        label: Optional[str],
+        ci_option: bool = True,
+        legend: Optional[bool] = None,
+        alpha_ci: float = 0.5,
+    ) -> None:
         """
         Plot a survival curve.
 
@@ -1307,7 +1318,7 @@ class SurvivalPlotWidget(GenericSignalPlotWidget):
                 xlabel="timeline [min]",
             )
 
-    def set_table_options(self):
+    def set_table_options(self) -> None:
         """
         Open the configuration window for exporting survival data to a table.
         """
@@ -1360,7 +1371,7 @@ class SurvivalPlotWidget(GenericSignalPlotWidget):
         center_window(self.config_table_wg)
         self.config_table_wg.show()
 
-    def activate_sliders(self):
+    def activate_sliders(self) -> None:
         """
         Enable or disable sliders based on the selected export option.
         """
@@ -1374,7 +1385,7 @@ class SurvivalPlotWidget(GenericSignalPlotWidget):
             self.ec_slider.setEnabled(True)
             self.single_timepoint_slider.setEnabled(False)
 
-    def assemble_survival_data(self):
+    def assemble_survival_data(self) -> Optional[None]:
         """
         Assemble the survival data based on the selected options and display it in a table.
         """

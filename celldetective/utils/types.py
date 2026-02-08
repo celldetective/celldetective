@@ -27,7 +27,7 @@ def is_integer_array(arr: np.ndarray) -> bool:
         return False
 
 
-def test_bool_array(array):
+def test_bool_array(array: np.ndarray) -> np.ndarray:
     """
     Convert boolean array to integer array if needed.
 

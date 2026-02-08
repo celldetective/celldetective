@@ -1,10 +1,11 @@
 from skimage.measure._regionprops import (
     RegionProperties,
-    regionprops,
+    regionprops as skimage_regionprops,
     _cached,
-    _props_to_dict,
+    _props_to_dict as skimage_props_to_dict,
     _infer_number_of_required_args,
 )
+from typing import Optional, List, Union, Dict, Any, Tuple
 import numpy as np
 import inspect
 import json
@@ -89,7 +90,9 @@ class CustomRegionProps(RegionProperties):
     From https://github.com/scikit-image/scikit-image/blob/main/skimage/measure/_regionprops.py with a modification to not mask the intensity image itself before measurements
     """
 
-    def __init__(self, channel_names, *args, **kwargs):
+    def __init__(
+        self, channel_names: Optional[List[str]], *args: Any, **kwargs: Any
+    ) -> None:
         """
         Initialize CustomRegionProps.
 
@@ -108,7 +111,7 @@ class CustomRegionProps(RegionProperties):
             self.channel_names = list(self.channel_names)
         super().__init__(*args, **kwargs)
 
-    def __getattr__(self, attr):
+    def __getattr__(self, attr: str) -> Any:
         """
         Get attribute.
 
@@ -236,15 +239,15 @@ class CustomRegionProps(RegionProperties):
 
 
 def regionprops(
-    label_image,
-    intensity_image=None,
-    cache=True,
-    channel_names=None,
+    label_image: np.ndarray,
+    intensity_image: Optional[np.ndarray] = None,
+    cache: bool = True,
+    channel_names: Optional[List[str]] = None,
     *,
-    extra_properties=None,
-    spacing=None,
-    offset=None,
-):
+    extra_properties: Optional[List[Any]] = None,
+    spacing: Optional[Tuple[float, ...]] = None,
+    offset: Optional[np.ndarray] = None,
+) -> List[CustomRegionProps]:
     """
     Measure properties of labeled image regions.
 
@@ -326,7 +329,11 @@ def regionprops(
     return regions
 
 
-def _props_to_dict(regions, properties=("label", "bbox"), separator="-"):
+def _props_to_dict(
+    regions: List[CustomRegionProps],
+    properties: Tuple[str, ...] = ("label", "bbox"),
+    separator: str = "-",
+) -> Dict[str, np.ndarray]:
     """
     Convert region properties to dictionary.
 
@@ -399,16 +406,16 @@ def _props_to_dict(regions, properties=("label", "bbox"), separator="-"):
 
 
 def regionprops_table(
-    label_image,
-    intensity_image=None,
-    properties=("label", "bbox"),
+    label_image: np.ndarray,
+    intensity_image: Optional[np.ndarray] = None,
+    properties: Tuple[str, ...] = ("label", "bbox"),
     *,
-    cache=True,
-    separator="-",
-    extra_properties=None,
-    spacing=None,
-    channel_names=None,
-):
+    cache: bool = True,
+    separator: str = "-",
+    extra_properties: Optional[List[Any]] = None,
+    spacing: Optional[Tuple[float, ...]] = None,
+    channel_names: Optional[List[str]] = None,
+) -> Dict[str, np.ndarray]:
     """
     Compute region properties and return as a pandas-compatible table.
 

@@ -1,5 +1,6 @@
 from subprocess import Popen
 
+from typing import Optional, List, Tuple, Dict, Any
 from PyQt5.QtWidgets import (
     QMessageBox,
     QComboBox,
@@ -53,7 +54,7 @@ class SettingsMeasurements(CelldetectiveSettingsPanel):
 
     """
 
-    def __init__(self, parent_window=None):
+    def __init__(self, parent_window: Optional[QMainWindow] = None) -> None:
         """
         Initialize the SettingsMeasurements widget.
 
@@ -933,7 +934,7 @@ class SettingsMeasurements(CelldetectiveSettingsPanel):
 
             self.test_mask = imread(masks[self.mid_time])
 
-    def switch_channel_contour(self, value):
+    def switch_channel_contour(self, value: int) -> None:
         """
         Adjust intensity values when changing channels in the contour visualizer.
 
@@ -959,7 +960,7 @@ class SettingsMeasurements(CelldetectiveSettingsPanel):
         )
         self.fig_contour.canvas.draw_idle()
 
-    def contrast_im_contour(self, value):
+    def contrast_im_contour(self, value: List[float]) -> None:
         """
         Contrast the image for contour visualization.
 
@@ -973,7 +974,7 @@ class SettingsMeasurements(CelldetectiveSettingsPanel):
         self.im_contour.set_clim(vmin=vmin, vmax=vmax)
         self.fig_contour.canvas.draw_idle()
 
-    def make_contour_transparent(self, value):
+    def make_contour_transparent(self, value: float) -> None:
         """
         Make the contour transparent.
 
@@ -1019,7 +1020,7 @@ class SettingsMeasurements(CelldetectiveSettingsPanel):
                         self.normalisation_list.takeItem(index)
                         return True
 
-    def display_message_box(self, missing_info):
+    def display_message_box(self, missing_info: str) -> None:
         """
         Display a warning message box.
 

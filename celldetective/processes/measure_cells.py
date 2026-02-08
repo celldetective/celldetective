@@ -45,7 +45,13 @@ class MeasurementProcess(Process):
     mode: Optional[str] = None
     n_threads: int = 1
 
-    def __init__(self, queue=None, process_args=None):
+    def __init__(
+        self,
+        queue: Optional[Queue] = None,
+        process_args: Optional[Dict[str, Any]] = None,
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
         """
         Initialize the process.
 
@@ -323,7 +329,7 @@ class MeasurementProcess(Process):
         if len_movie_auto is not None:
             self.len_movie = len_movie_auto
 
-    def parallel_job(self, indices):
+    def parallel_job(self, indices: List[int]) -> List[pd.DataFrame]:
         """
         Run measurements in parallel for a chunk of frames.
 
@@ -498,7 +504,7 @@ class MeasurementProcess(Process):
 
         return measurements
 
-    def setup_for_position(self, pos):
+    def setup_for_position(self, pos: str) -> None:
         """
         Setup the process for a specific position.
 

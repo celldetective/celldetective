@@ -2,6 +2,7 @@
 Copyright © 2023 Laboratoire Adhesion et Inflammation, Authored by Remy Torro.
 """
 
+from typing import Optional, List, Tuple
 from PyQt5.QtWidgets import (
     QRadioButton,
     QButtonGroup,
@@ -17,6 +18,7 @@ from PyQt5.QtWidgets import (
     QLabel,
     QHBoxLayout,
     QPushButton,
+    QMainWindow,
 )
 from PyQt5.QtCore import Qt, QSize
 from matplotlib import pyplot as plt
@@ -55,7 +57,7 @@ class SettingsTracking(CelldetectiveSettingsPanel):
 
     """
 
-    def __init__(self, parent_window=None):
+    def __init__(self, parent_window: Optional[QMainWindow] = None) -> None:
         """
         Initialize the SettingsTracking widget.
 

@@ -42,7 +42,7 @@ def _fix_no_contrast(frames: np.ndarray, value: Union[float, int] = 1):
     return frames
 
 
-def interpolate_nan_multichannel(frames):
+def interpolate_nan_multichannel(frames: np.ndarray) -> np.ndarray:
     """
     Interpolate NaNs in a multichannel image.
 
@@ -64,7 +64,7 @@ def interpolate_nan_multichannel(frames):
     return frames
 
 
-def interpolate_nan(img, method="nearest"):
+def interpolate_nan(img: np.ndarray, method: str = "nearest") -> np.ndarray:
     """
     Interpolate NaN on single channel array 2D
 

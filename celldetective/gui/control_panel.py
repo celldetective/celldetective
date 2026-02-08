@@ -18,7 +18,7 @@ from celldetective.gui.base.components import (
     QHSeperationLine,
 )
 
-from PyQt5.QtCore import Qt, QSize, QThread
+from PyQt5.QtCore import Qt, QSize, QThread, QCloseEvent
 from celldetective.gui.base.components import generic_message
 from celldetective.utils.parsing import (
     config_section_to_dict,
@@ -74,7 +74,9 @@ class BackgroundLoader(QThread):
 
 class ControlPanel(CelldetectiveMainWindow):
 
-    def __init__(self, parent_window=None, exp_dir=""):
+    def __init__(
+        self, parent_window: Optional[QMainWindow] = None, exp_dir: str = ""
+    ) -> None:
         """
         Initialize the ControlPanel.
 
@@ -443,7 +445,7 @@ class ControlPanel(CelldetectiveMainWindow):
         self.metadata = config_section_to_dict(self.exp_config, "Metadata")
         logger.info("Experiment configuration successfully read...")
 
-    def closeEvent(self, event):
+    def closeEvent(self, event: QCloseEvent) -> None:
         """
         Close child windows if closed.
 

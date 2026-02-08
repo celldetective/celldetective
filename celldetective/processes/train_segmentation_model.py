@@ -1,5 +1,5 @@
 from distutils.dir_util import copy_tree
-from multiprocessing import Process
+from multiprocessing import Process, Queue, Event
 import time
 import os
 import shutil
@@ -27,7 +27,12 @@ logger = get_logger()
 
 class ProgressCallback(Callback):
 
-    def __init__(self, queue=None, epochs=100, stop_event=None):
+    def __init__(
+        self,
+        queue: Optional[Queue] = None,
+        epochs: int = 100,
+        stop_event: Optional[Event] = None,
+    ) -> None:
         """
         Initialize the callback.
 
@@ -46,7 +51,7 @@ class ProgressCallback(Callback):
         self.stop_event = stop_event
         self.t0 = time.time()
 
-    def on_epoch_end(self, epoch, logs=None):
+    def on_epoch_end(self, epoch: int, logs: Optional[Dict[str, Any]] = None) -> None:
         """
         Called at the end of an epoch.
 
@@ -87,7 +92,9 @@ class ProgressCallback(Callback):
 
 
 class QueueLoggingHandler(logging.Handler):
-    def __init__(self, queue, total_epochs, stop_event=None):
+    def __init__(
+        self, queue: Queue, total_epochs: int, stop_event: Optional[Event] = None
+    ) -> None:
         """
         Initialize the logging handler.
 
@@ -110,7 +117,7 @@ class QueueLoggingHandler(logging.Handler):
         )
         self.t0 = time.time()
 
-    def emit(self, record):
+    def emit(self, record: logging.LogRecord) -> None:
         """
         Emit a log record.
 
@@ -154,7 +161,13 @@ class QueueLoggingHandler(logging.Handler):
 
 class TrainSegModelProcess(Process):
 
-    def __init__(self, queue=None, process_args=None, *args, **kwargs):
+    def __init__(
+        self,
+        queue: Optional[Queue] = None,
+        process_args: Optional[Dict[str, Any]] = None,
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
         """
         Initialize the process.
 
@@ -345,7 +358,13 @@ class TrainSegModelProcess(Process):
         import sys
 
         class StreamToQueue:
-            def __init__(self, queue, total_epochs, original_stream, stop_event=None):
+            def __init__(
+                self,
+                queue: Queue,
+                total_epochs: int,
+                original_stream: Any,
+                stop_event: Optional[Event] = None,
+            ) -> None:
                 """
                 Initialize the stream parser.
 
@@ -373,7 +392,7 @@ class TrainSegModelProcess(Process):
                 self.t0 = time.time()
                 self.buffer = ""
 
-            def write(self, message):
+            def write(self, message: str) -> None:
                 """
                 Write a message to the stream.
 
@@ -500,7 +519,7 @@ class TrainSegModelProcess(Process):
             "dataset": {"train": self.files_train, "validation": self.files_val},
         }
 
-        def make_json_safe(obj):
+        def make_json_safe(obj: Any) -> Any:
             """
             Convert object to JSON-serializable format.
 
@@ -674,7 +693,7 @@ class TrainSegModelProcess(Process):
             "dataset": {"train": self.files_train, "validation": self.files_val},
         }
 
-        def make_json_safe(obj):
+        def make_json_safe(obj: Any) -> Any:
             """
             Convert object to JSON-serializable format.
 

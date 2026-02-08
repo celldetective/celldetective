@@ -12,7 +12,13 @@ from celldetective.utils.model_loaders import locate_signal_model
 
 class SignalModelParamsWidget(CelldetectiveWidget):
 
-    def __init__(self, parent_window=None, model_name=None, *args, **kwargs):
+    def __init__(
+        self,
+        parent_window: Optional[QMainWindow] = None,
+        model_name: Optional[str] = None,
+        *args,
+        **kwargs,
+    ) -> None:
         """
         Initialize the SignalModelParamsWidget.
 

@@ -1,7 +1,8 @@
 import os
 import ssl
 from tqdm import tqdm
-from multiprocessing import Process
+from multiprocessing import Process, Queue
+from typing import Optional, Dict, Any
 from glob import glob
 import shutil
 from urllib.request import urlopen
@@ -14,7 +15,13 @@ import json
 
 class DownloadProcess(Process):
 
-    def __init__(self, queue=None, process_args=None, *args, **kwargs):
+    def __init__(
+        self,
+        queue: Optional[Queue] = None,
+        process_args: Optional[Dict[str, Any]] = None,
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
         """
         Initialize the process.
 
@@ -59,7 +66,7 @@ class DownloadProcess(Process):
         self.sum_done = 0
         self.t0 = time.time()
 
-    def download_url_to_file(self, url, dst):
+    def download_url_to_file(self, url: str, dst: str) -> Optional[None]:
         """
         Download a file from a URL.
 

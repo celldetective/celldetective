@@ -1,24 +1,26 @@
 import random
+from typing import Optional, Union, Tuple, Any
 
 import numpy as np
 from scipy.ndimage import shift
 from skimage.filters import gaussian
 from skimage.util import random_noise
 
+
 def augmenter(
-    x,
-    y,
-    flip=True,
-    gauss_blur=True,
-    noise_option=True,
-    shift=True,
-    channel_extinction=True,
-    extinction_probability=0.1,
-    clip=False,
-    max_sigma_blur=4,
-    apply_noise_probability=0.5,
-    augment_probability=0.9,
-):
+    x: np.ndarray,
+    y: np.ndarray,
+    flip: bool = True,
+    gauss_blur: bool = True,
+    noise_option: bool = True,
+    shift: bool = True,
+    channel_extinction: bool = True,
+    extinction_probability: float = 0.1,
+    clip: bool = False,
+    max_sigma_blur: int = 4,
+    apply_noise_probability: float = 0.5,
+    augment_probability: float = 0.9,
+) -> Tuple[np.ndarray, np.ndarray]:
     """
     Applies a series of augmentation techniques to images and their corresponding masks for deep learning training.
 
@@ -109,7 +111,9 @@ def augmenter(
     return x, y
 
 
-def noise(x, apply_probability=0.5, clip_option=False):
+def noise(
+    x: np.ndarray, apply_probability: float = 0.5, clip_option: bool = False
+) -> np.ndarray:
     """
     Applies random noise to each channel of a multichannel image based on a specified probability.
 
@@ -172,7 +176,7 @@ def noise(x, apply_probability=0.5, clip_option=False):
     return x_noise
 
 
-def random_fliprot(img, mask):
+def random_fliprot(img: np.ndarray, mask: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     """
     Randomly flips and rotates an image and its corresponding mask.
 
@@ -212,7 +216,9 @@ def random_fliprot(img, mask):
     return img, mask
 
 
-def random_shift(image, mask, max_shift_amplitude=0.1):
+def random_shift(
+    image: np.ndarray, mask: np.ndarray, max_shift_amplitude: float = 0.1
+) -> Tuple[np.ndarray, np.ndarray]:
     """
     Randomly shifts an image and its corresponding mask along the X and Y axes.
 
@@ -271,7 +277,7 @@ def random_shift(image, mask, max_shift_amplitude=0.1):
     return image, mask
 
 
-def blur(x, max_sigma=4.0):
+def blur(x: np.ndarray, max_sigma: float = 4.0) -> np.ndarray:
     """
     Applies a random Gaussian blur to an image.
 

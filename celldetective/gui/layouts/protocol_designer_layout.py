@@ -22,13 +22,13 @@ class ProtocolDesignerLayout(QVBoxLayout, Styles):
 
     def __init__(
         self,
-        parent_window=None,
-        tab_layouts=[],
-        tab_names=[],
-        title="",
-        list_title="",
+        parent_window: Optional[QMainWindow] = None,
+        tab_layouts: Optional[list] = None,
+        tab_names: Optional[list] = None,
+        title: Optional[str] = "Protocol Designer",
+        list_title: Optional[str] = "Order",
         *args,
-    ):
+    ) -> None:
         """
         Initialize the ProtocolDesignerLayout.
 

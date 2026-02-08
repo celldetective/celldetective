@@ -1,4 +1,5 @@
-from multiprocessing import Process
+from multiprocessing import Process, Queue
+from typing import Optional, Dict, Any
 import os
 import numpy as np
 import pandas as pd
@@ -21,7 +22,11 @@ class SignalAnalysisProcess(Process):
     model_name = None
     use_gpu = True
 
-    def __init__(self, queue=None, process_args=None):
+    def __init__(
+        self,
+        queue: Optional[Queue] = None,
+        process_args: Optional[Dict[str, Any]] = None,
+    ) -> None:
         """
         Initialize the process.
 
@@ -32,7 +37,7 @@ class SignalAnalysisProcess(Process):
         process_args : dict
             Arguments for the process.
         """
-        super().__init__()
+        super().__init__(*args, **kwargs)
         self.queue = queue
         if process_args is not None:
             for key, value in process_args.items():
@@ -45,7 +50,7 @@ class SignalAnalysisProcess(Process):
             "y": "POSITION_Y",
         }
 
-    def setup_for_position(self, pos):
+    def setup_for_position(self, pos: str) -> None:
         """
         Setup the process for a specific position.
 
@@ -57,7 +62,7 @@ class SignalAnalysisProcess(Process):
         self.pos = pos
         self.pos_path = rf"{pos}"
 
-    def process_position(self, model=None):
+    def process_position(self, model: Optional[Any] = None) -> None:
         """
         Process the position for signal analysis.
 

@@ -1,4 +1,5 @@
-from multiprocessing import Process
+from multiprocessing import Process, Queue
+from typing import Optional, Dict, Any
 import time
 import os
 from pathlib import PurePath, Path
@@ -16,7 +17,11 @@ logger = get_logger(__name__)
 
 class BackgroundCorrectionProcess(Process):
 
-    def __init__(self, queue=None, process_args=None):
+    def __init__(
+        self,
+        queue: Optional[Queue] = None,
+        process_args: Optional[Dict[str, Any]] = None,
+    ) -> None:
         """
         Initialize the process.
 

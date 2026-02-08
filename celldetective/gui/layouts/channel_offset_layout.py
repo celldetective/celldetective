@@ -13,7 +13,9 @@ logger = get_logger(__name__)
 
 class ChannelOffsetOptionsLayout(QVBoxLayout, Styles):
 
-    def __init__(self, parent_window=None, *args, **kwargs):
+    def __init__(
+        self, parent_window: Optional[QMainWindow] = None, *args, **kwargs
+    ) -> None:
         """
         Initialize the ChannelOffsetOptionsLayout.
 

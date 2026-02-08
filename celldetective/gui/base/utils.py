@@ -1,8 +1,9 @@
-from PyQt5.QtWidgets import QApplication
+from PyQt5.QtWidgets import QApplication, QDesktopWidget, QMainWindow, QWidget
+from typing import Union
 from prettytable import PrettyTable
 
 
-def center_window(window):
+def center_window(window: Union[QMainWindow, QWidget]) -> None:
     """
     Centers the given window in the middle of the screen.
 

@@ -1,12 +1,24 @@
 from collections import OrderedDict
+from typing import Optional, List, Union, Tuple, Dict, Any
 
 import numpy as np
-from PyQt5.QtCore import Qt, QThread, pyqtSignal, QMutex, QWaitCondition
-from PyQt5.QtWidgets import QHBoxLayout, QAction, QLabel, QComboBox
+from PyQt5.QtCore import Qt, QThread, pyqtSignal, QMutex, QWaitCondition, QEvent
+from PyQt5.QtWidgets import (
+    QHBoxLayout,
+    QAction,
+    QLabel,
+    QComboBox,
+    QMainWindow,
+    QWidget,
+    QLineEdit,
+    QListWidget,
+)
 from fonticon_mdi6 import MDI6
 from superqt import QLabeledDoubleRangeSlider, QLabeledSlider
 from superqt.fonticon import icon
 import matplotlib.gridspec as gridspec
+import matplotlib.axes
+import matplotlib.backend_bases
 
 from celldetective.gui.base.components import CelldetectiveWidget
 from celldetective.gui.base.utils import center_window
@@ -23,7 +35,14 @@ logger = get_logger(__name__)
 class StackLoader(QThread):
     frame_loaded = pyqtSignal(int, int, np.ndarray)  # channel, frame_idx, image
 
-    def __init__(self, stack_path, img_num_per_channel, n_channels):
+    def __init__(
+        self,
+        stack_path: str,
+        img_num_per_channel: np.ndarray,
+        n_channels: int,
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
         """
         Initialize the StackLoader.
 
@@ -47,7 +66,9 @@ class StackLoader(QThread):
         self.mutex = QMutex()
         self.condition = QWaitCondition()
 
-    def update_priority(self, channel, frame, current_cache_keys):
+    def update_priority(
+        self, channel: int, frame: int, current_cache_keys: List[Any]
+    ) -> None:
         """
         Update the loading priority.
 
@@ -184,19 +205,21 @@ class StackVisualizer(CelldetectiveWidget):
 
     def __init__(
         self,
-        stack=None,
-        stack_path=None,
-        frame_slider=True,
-        contrast_slider=True,
-        channel_cb=False,
-        channel_names=None,
-        n_channels=1,
-        target_channel=0,
-        window_title="View",
-        PxToUm=None,
-        background_color="transparent",
-        imshow_kwargs=None,
-    ):
+        stack: Optional[np.ndarray] = None,
+        stack_path: Optional[str] = None,
+        frame_slider: bool = True,
+        contrast_slider: bool = True,
+        channel_cb: bool = True,
+        channel_names: Optional[List[str]] = None,
+        n_channels: int = 1,
+        target_channel: int = 0,
+        window_title: str = "StackVisualizer",
+        PxToUm: float = 1.0,
+        background_color: str = "white",
+        imshow_kwargs: Dict[str, Any] = {"cmap": "gray"},
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
         """
         Initialize the StackVisualizer.
 
@@ -483,7 +506,7 @@ class StackVisualizer(CelldetectiveWidget):
             self.canvas.draw()
             self.info_lbl.setText("")
 
-    def on_line_press(self, event):
+    def on_line_press(self, event: matplotlib.backend_bases.MouseEvent) -> None:
         """
         Handle mouse press event for line drawing.
 
@@ -521,7 +544,7 @@ class StackVisualizer(CelldetectiveWidget):
         self.ax.draw_artist(self.line_artist)
         self.canvas.canvas.blit(self.ax.bbox)
 
-    def on_line_drag(self, event):
+    def on_line_drag(self, event: matplotlib.backend_bases.MouseEvent) -> None:
         """
         Handle mouse drag event for line drawing.
 
@@ -621,7 +644,7 @@ class StackVisualizer(CelldetectiveWidget):
 
         self.fig.canvas.draw_idle()
 
-    def on_line_release(self, event):
+    def on_line_release(self, event: matplotlib.backend_bases.MouseEvent) -> None:
         """
         Handle mouse release event for line drawing.
 
@@ -848,7 +871,7 @@ class StackVisualizer(CelldetectiveWidget):
         layout.addWidget(self.frame_slider, 85)
         self.canvas.layout.addLayout(layout)
 
-    def set_target_channel(self, value):
+    def set_target_channel(self, value: int) -> None:
         """
         Set the target channel.
 
@@ -863,7 +886,7 @@ class StackVisualizer(CelldetectiveWidget):
         self.canvas.draw()
         self.update_profile()
 
-    def change_contrast(self, value):
+    def change_contrast(self, value: Tuple[float, float]) -> None:
         """
         Change the contrast.
 
@@ -877,7 +900,7 @@ class StackVisualizer(CelldetectiveWidget):
             self.im.set_clim(vmin=value[0], vmax=value[1])
             self.canvas.draw()
 
-    def set_channel_index(self, value):
+    def set_channel_index(self, value: int) -> None:
         """
         Set the channel index.
 
@@ -899,7 +922,7 @@ class StackVisualizer(CelldetectiveWidget):
                 self.canvas.draw()
                 self.update_profile()
 
-    def change_frame_from_channel_switch(self, value):
+    def change_frame_from_channel_switch(self, value: int) -> None:
         """
         Update frame when channel switches.
 
@@ -920,7 +943,7 @@ class StackVisualizer(CelldetectiveWidget):
             self.channel_trigger = False
             self.canvas.draw()
 
-    def change_frame(self, value):
+    def change_frame(self, value: int) -> None:
         """
         Change the displayed frame.
 
@@ -988,7 +1011,7 @@ class StackVisualizer(CelldetectiveWidget):
         self.canvas.canvas.draw_idle()
         self.update_profile()
 
-    def on_frame_loaded(self, channel, frame, image):
+    def on_frame_loaded(self, channel: int, frame: int, image: np.ndarray) -> None:
         """
         Callback from loader thread.
 
@@ -1015,7 +1038,7 @@ class StackVisualizer(CelldetectiveWidget):
             # Refresh
             self.change_frame(self.current_time_index)
 
-    def closeEvent(self, event):
+    def closeEvent(self, event: QEvent) -> None:
         """
         Handle the close event.
 

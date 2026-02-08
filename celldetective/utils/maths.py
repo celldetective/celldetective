@@ -1,5 +1,6 @@
-from typing import Union, List
 import numpy as np
+import pandas as pd
+from typing import Union, List, Optional, Any, Tuple
 
 
 from celldetective import get_logger
@@ -56,7 +57,9 @@ def step_function(t: Union[np.ndarray, List], t_shift: float, dt: float) -> np.n
                 return 1 / (1 + np.exp(-(t - t_shift) / dt))
 
 
-def derivative(x, timeline, window, mode="bi"):
+def derivative(
+    x: np.ndarray, timeline: np.ndarray, window: int, mode: str = "bi"
+) -> np.ndarray:
     """
     Compute the derivative of a given array of values with respect to time using a specified numerical differentiation method.
 
@@ -133,7 +136,9 @@ def derivative(x, timeline, window, mode="bi"):
     return dxdt
 
 
-def differentiate_per_track(tracks, measurement, window_size=3, mode="bi"):
+def differentiate_per_track(
+    tracks: pd.DataFrame, measurement: str, window_size: int = 3, mode: str = "bi"
+) -> pd.DataFrame:
     """
     Compute derivate of a measurement per track.
 
@@ -169,7 +174,9 @@ def differentiate_per_track(tracks, measurement, window_size=3, mode="bi"):
     return tracks
 
 
-def velocity_per_track(tracks, window_size=3, mode="bi"):
+def velocity_per_track(
+    tracks: pd.DataFrame, window_size: int = 3, mode: str = "bi"
+) -> pd.DataFrame:
     """
     Compute velocity per track.
 
@@ -205,7 +212,9 @@ def velocity_per_track(tracks, window_size=3, mode="bi"):
     return tracks
 
 
-def velocity(x, y, timeline, window, mode="bi"):
+def velocity(
+    x: np.ndarray, y: np.ndarray, timeline: np.ndarray, window: int, mode: str = "bi"
+) -> np.ndarray:
     """
     Compute the velocity vector of a given 2D trajectory represented by arrays of x and y coordinates
     with respect to time using a specified numerical differentiation method.
@@ -272,7 +281,7 @@ def velocity(x, y, timeline, window, mode="bi"):
     return v
 
 
-def magnitude_velocity(v_matrix):
+def magnitude_velocity(v_matrix: np.ndarray) -> np.ndarray:
     """
     Compute the magnitude of velocity vectors given a matrix representing 2D velocity vectors.
 
@@ -316,7 +325,7 @@ def magnitude_velocity(v_matrix):
     return magnitude
 
 
-def orientation(v_matrix):
+def orientation(v_matrix: np.ndarray) -> np.ndarray:
     """
     Compute the orientation angles (in radians) of 2D velocity vectors given a matrix representing velocity vectors.
 
@@ -355,7 +364,7 @@ def orientation(v_matrix):
     return orientation_array
 
 
-def safe_log(array):
+def safe_log(array: Union[int, float, List, np.ndarray]) -> Union[float, np.ndarray]:
     """
     Safely computes the base-10 logarithm for numeric inputs, handling invalid or non-positive values.
 

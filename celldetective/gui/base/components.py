@@ -16,9 +16,11 @@ from PyQt5.QtWidgets import (
     QPushButton,
     QFrame,
 )
-from PyQt5.QtCore import Qt, pyqtSignal, QEvent
+from PyQt5.QtCore import Qt, pyqtSignal, QEvent, QModelIndex, QObject
+from PyQt5.QtGui import QPaintEvent
 from superqt.fonticon import icon
 from celldetective.gui.base.styles import Styles
+from typing import Optional
 
 
 class CelldetectiveWidget(QWidget, Styles):
@@ -47,22 +49,22 @@ class CelldetectiveDialog(QDialog, Styles):
 class CelldetectiveProgressDialog(QProgressDialog, Styles):
     def __init__(
         self,
-        label_text,
-        cancel_button_text="Cancel",
-        minimum=0,
-        maximum=100,
-        parent=None,
-        window_title="Please wait",
-    ):
+        title: Optional[str] = "Progress",
+        label_text: Optional[str] = "Processing...",
+        minimum: Optional[int] = 0,
+        maximum: Optional[int] = 100,
+        parent: Optional[QWidget] = None,
+        window_title: Optional[str] = "Progress Dialog",
+    ) -> None:
         """
         Initialize the CelldetectiveProgressDialog.
 
         Parameters
         ----------
+        title : str, optional
+            The title of the dialog.
         label_text : str
             The label text.
-        cancel_button_text : str, optional
-            The cancel button text.
         minimum : int, optional
             The minimum value.
         maximum : int, optional
@@ -72,7 +74,9 @@ class CelldetectiveProgressDialog(QProgressDialog, Styles):
         window_title : str, optional
             The window title.
         """
-        super().__init__(label_text, cancel_button_text, minimum, maximum, parent)
+        super().__init__(
+            label_text, "Cancel", minimum, maximum, parent
+        )  # The super call needs to match the original parameters, not the new ones.
         self.setWindowIcon(self.celldetective_icon)
         self.setWindowTitle(window_title)
         self.setWindowModality(Qt.WindowModal)
@@ -89,7 +93,7 @@ class CelldetectiveProgressDialog(QProgressDialog, Styles):
         self.setMinimumWidth(width)
 
 
-def generic_message(message, msg_type="warning"):
+def generic_message(message: str, msg_type: Optional[str] = "info") -> None:
     """
     Show a generic message box.
 
@@ -122,7 +126,13 @@ class QCheckableComboBox(QComboBox):
 
     activated = pyqtSignal(str)
 
-    def __init__(self, obj="", parent_window=None, *args, **kwargs):
+    def __init__(
+        self,
+        obj: Optional[str] = None,
+        parent_window: Optional[QMainWindow] = None,
+        *args,
+        **kwargs,
+    ) -> None:
         """
         Initialize the QCheckableComboBox.
 
@@ -153,14 +163,14 @@ class QCheckableComboBox(QComboBox):
         self.view().viewport().installEventFilter(self)
         self.view().pressed.connect(self.handleItemPressed)
 
-    def clear(self):
+    def clear(self) -> None:
         """Clear the combo box and uncheck all items."""
 
         self.unselectAll()
         self.toolMenu.clear()
         super().clear()
 
-    def handleItemPressed(self, index):
+    def handleItemPressed(self, index: QModelIndex) -> None:
         """
         Handle item press events to toggle check state.
 
@@ -198,7 +208,7 @@ class QCheckableComboBox(QComboBox):
 
         self.activated.emit(self.title())
 
-    def setCurrentIndex(self, index):
+    def setCurrentIndex(self, index: int) -> None:
         """
         Set the current index and toggle its state.
 
@@ -215,7 +225,7 @@ class QCheckableComboBox(QComboBox):
 
         self.handleItemPressed(modelIndex)
 
-    def selectAll(self):
+    def selectAll(self) -> None:
         """Select all items."""
 
         actions = self.toolMenu.actions()
@@ -224,7 +234,7 @@ class QCheckableComboBox(QComboBox):
                 self.setCurrentIndex(i)
         self.anySelected = True
 
-    def unselectAll(self):
+    def unselectAll(self) -> None:
         """Unselect all items."""
 
         actions = self.toolMenu.actions()
@@ -233,11 +243,11 @@ class QCheckableComboBox(QComboBox):
                 self.setCurrentIndex(i)
         self.anySelected = False
 
-    def title(self):
+    def title(self) -> str:
         """Return the current title."""
         return self._title
 
-    def setTitle(self, title):
+    def setTitle(self, title: str) -> None:
         """
         Set the title of the combo box.
 
@@ -250,7 +260,7 @@ class QCheckableComboBox(QComboBox):
         self.update()
         self.repaint()
 
-    def paintEvent(self, event):
+    def paintEvent(self, event: QPaintEvent) -> None:
         """
         Paint the combo box.
 
@@ -268,7 +278,7 @@ class QCheckableComboBox(QComboBox):
         painter.drawComplexControl(QStyle.CC_ComboBox, opt)
         painter.drawControl(QStyle.CE_ComboBoxLabel, opt)
 
-    def addItem(self, item, tooltip=None):
+    def addItem(self, item: str, tooltip: Optional[str] = None) -> None:
         """
         Add an item to the combo box.
 
@@ -289,7 +299,7 @@ class QCheckableComboBox(QComboBox):
         action = self.toolMenu.addAction(item)
         action.setCheckable(True)
 
-    def addItems(self, items):
+    def addItems(self, items: list[str]) -> None:
         """
         Add multiple items to the combo box.
 
@@ -309,7 +319,7 @@ class QCheckableComboBox(QComboBox):
             action = self.toolMenu.addAction(item)
             action.setCheckable(True)
 
-    def getSelectedIndices(self):
+    def getSelectedIndices(self) -> list[int]:
         """Return the indices of selected items."""
 
         actions = self.toolMenu.actions()
@@ -318,25 +328,25 @@ class QCheckableComboBox(QComboBox):
 
         return list(idx_selected)
 
-    def currentText(self):
+    def currentText(self) -> str:
         """Return the current text."""
         return self.title()
 
-    def isMultipleSelection(self):
+    def isMultipleSelection(self) -> bool:
         """Check if multiple items are selected."""
         return self.currentText().startswith("Multiple")
 
-    def isSingleSelection(self):
+    def isSingleSelection(self) -> bool:
         """Check if a single item is selected."""
         return not self.currentText().startswith(
             "Multiple"
         ) and not self.title().startswith("No")
 
-    def isAnySelected(self):
+    def isAnySelected(self) -> bool:
         """Check if any item is selected."""
         return not self.title().startswith("No")
 
-    def eventFilter(self, source, event):
+    def eventFilter(self, source: QObject, event: QEvent) -> bool:
         """
         Filter events to keep the popup open on click.
 
@@ -358,7 +368,7 @@ class QHSeperationLine(QFrame):
     a horizontal seperation line\n
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the QHSeperationLine."""
         super().__init__()
         self.setMinimumWidth(1)
@@ -369,7 +379,13 @@ class QHSeperationLine(QFrame):
 
 
 class HoverButton(QPushButton):
-    def __init__(self, text, icon_enum, default_color="black", hover_color="white"):
+    def __init__(
+        self,
+        text: str,
+        icon_enum: str,
+        default_color: Optional[str] = "gray",
+        hover_color: Optional[str] = "white",
+    ) -> None:
         """
         Initialize the HoverButton.
 
@@ -390,7 +406,7 @@ class HoverButton(QPushButton):
         self.hover_color = hover_color
         self.setIcon(icon(self.icon_enum, color=self.default_color))
 
-    def enterEvent(self, event):
+    def enterEvent(self, event: QEvent) -> None:
         """
         Change icon color on hover enter.
 
@@ -402,7 +418,7 @@ class HoverButton(QPushButton):
         self.setIcon(icon(self.icon_enum, color=self.hover_color))
         super().enterEvent(event)
 
-    def leaveEvent(self, event):
+    def leaveEvent(self, event: QEvent) -> None:
         """
         Revert icon color on hover leave.
 

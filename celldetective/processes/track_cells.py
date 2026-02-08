@@ -1,4 +1,4 @@
-from multiprocessing import Process
+from multiprocessing import Process, Queue
 import time
 from pathlib import Path, PurePath
 from glob import glob
@@ -35,7 +35,13 @@ logger = get_logger(__name__)
 
 class TrackingProcess(Process):
 
-    def __init__(self, queue=None, process_args=None, *args, **kwargs):
+    def __init__(
+        self,
+        queue: Optional[Queue] = None,
+        process_args: Optional[Dict[str, Any]] = None,
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
         """
         Initialize the process.
 
@@ -250,7 +256,7 @@ class TrackingProcess(Process):
         if len_movie_auto is not None:
             self.len_movie = len_movie_auto
 
-    def parallel_job(self, indices):
+    def parallel_job(self, indices: List[int]) -> List[pd.DataFrame]:
         """
         Run the parallel tracking job.
 
@@ -336,7 +342,7 @@ class TrackingProcess(Process):
 
         return props
 
-    def setup_for_position(self, pos):
+    def setup_for_position(self, pos: str) -> None:
         """
         Setup the process for a specific position.
 

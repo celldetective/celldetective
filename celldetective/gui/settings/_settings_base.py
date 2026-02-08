@@ -14,11 +14,12 @@ from celldetective.gui.base.components import (
     CelldetectiveWidget,
 )
 from PyQt5.QtGui import QDoubleValidator, QIntValidator
+from typing import Optional
 
 
 class CelldetectiveSettingsPanel(CelldetectiveMainWindow):
 
-    def __init__(self, title=""):
+    def __init__(self, title: Optional[str] = None) -> None:
         """
         Initialize the CelldetectiveSettingsPanel.
 

@@ -5,6 +5,7 @@ Copright © 2023 Laboratoire Adhesion et Inflammation, Authored by Remy Torro.
 import argparse
 import os
 import shutil
+from typing import Dict, Any, Union
 from glob import glob
 import json
 from tqdm import tqdm
@@ -20,7 +21,7 @@ from art import tprint
 from distutils.dir_util import copy_tree
 
 
-def save_json(data, fpath, **kwargs):
+def save_json(data: Dict[str, Any], fpath: str, **kwargs: Any) -> None:
     """
     Save dictionary to JSON file.
 
@@ -369,7 +370,7 @@ elif model_type == "stardist":
         "dataset": {"train": files_train, "validation": files_val},
     }
 
-    def make_json_safe(obj):
+    def make_json_safe(obj: Any) -> Any:
         """
         Convert object to JSON-serializable format.
 

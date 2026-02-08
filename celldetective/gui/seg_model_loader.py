@@ -31,7 +31,7 @@ class SegmentationModelLoader(CelldetectiveWidget):
     Upload a segmentation model or define a Threshold pipeline.
     """
 
-    def __init__(self, parent_window):
+    def __init__(self, parent_window: QMainWindow) -> None:
         """
         Initialize the SegmentationModelLoader.
 

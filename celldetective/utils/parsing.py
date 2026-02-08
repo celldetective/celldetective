@@ -3,12 +3,12 @@ import json
 import os
 import re
 from pathlib import PurePath, Path
-from typing import Union, Dict
+from typing import Union, Dict, List, Tuple, Optional, Any
 
 import numpy as np
 
 
-def _get_normalize_kwargs_from_config(config):
+def _get_normalize_kwargs_from_config(config: Union[Dict, str]) -> Dict[str, Any]:
     """
     Get normalization kwargs from config.
 
@@ -97,7 +97,9 @@ def config_section_to_dict(
     return dict1
 
 
-def _extract_channel_indices_from_config(config, channels_to_extract):
+def _extract_channel_indices_from_config(
+    config: configparser.ConfigParser, channels_to_extract: Union[List[str], str]
+) -> Optional[List[Optional[int]]]:
     """
     Extracts the indices of specified channels from a configuration object.
 
@@ -157,7 +159,9 @@ def _extract_channel_indices_from_config(config, channels_to_extract):
     return channels
 
 
-def _extract_nbr_channels_from_config(config, return_names=False):
+def _extract_nbr_channels_from_config(
+    config: Union[Dict, str], return_names: bool = False
+) -> Union[int, Tuple[int, List[str]]]:
     """
     Extract number of channels from config.
 
@@ -270,7 +274,7 @@ def _extract_nbr_channels_from_config(config, return_names=False):
         return nbr_channels
 
 
-def _extract_labels_from_config(config, number_of_wells):
+def _extract_labels_from_config(config: str, number_of_wells: int) -> np.ndarray:
     """
 
     Extract each well's biological condition from the configuration file
@@ -325,7 +329,7 @@ def _extract_labels_from_config(config, number_of_wells):
     return labels
 
 
-def _extract_channels_from_config(config):
+def _extract_channels_from_config(config: str) -> Tuple[np.ndarray, np.ndarray]:
     """
     Extracts channel names and their indices from an experiment configuration.
 
@@ -376,8 +380,10 @@ def _extract_channels_from_config(config):
 
 
 def _get_normalize_kwargs(
-    normalization_percentile, normalization_values, normalization_clip
-):
+    normalization_percentile: List[bool],
+    normalization_values: List[float],
+    normalization_clip: bool,
+) -> Dict[str, Any]:
     """
     Get normalization kwargs.
 
@@ -409,7 +415,7 @@ def _get_normalize_kwargs(
     return {"percentiles": percentiles, "values": values, "clip": normalization_clip}
 
 
-def demangle_column_name(name):
+def demangle_column_name(name: str) -> str:
     """
     Demangle column name.
 
@@ -484,7 +490,7 @@ def extract_cols_from_query(query: str):
     return list([demangle_column_name(c) for c in cols])
 
 
-def parse_isotropic_radii(string):
+def parse_isotropic_radii(string: str) -> List[Union[int, List[int]]]:
     """
     Parse a string representing isotropic radii into a structured list.
 

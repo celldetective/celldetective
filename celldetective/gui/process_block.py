@@ -12,6 +12,7 @@ from PyQt5.QtWidgets import (
     QApplication,
 )
 from PyQt5.QtCore import Qt, QSize, QTimer, QThread, pyqtSignal
+from typing import Optional, Any, List, Dict, Union, Tuple
 from superqt.fonticon import icon
 from fonticon_mdi6 import MDI6
 import gc
@@ -46,7 +47,7 @@ class NapariLoaderThread(QThread):
     status = pyqtSignal(str)
     finished_with_result = pyqtSignal(object)
 
-    def __init__(self, pos, prefix, population, threads):
+    def __init__(self, pos: str, prefix: str, population: str, threads: int) -> None:
         """
         Initialize the NapariLoaderThread.
 
@@ -68,17 +69,17 @@ class NapariLoaderThread(QThread):
         self.threads = threads
         self._is_cancelled = False
 
-    def stop(self):
+    def stop(self) -> None:
         """Stop the thread."""
         self._is_cancelled = True
 
-    def run(self):
+    def run(self) -> None:
         """
         Run the thread to load tracks into Napari.
         """
         from celldetective.napari.utils import control_tracks
 
-        def callback(p):
+        def callback(p: int) -> bool:
             """
             Callback to update progress.
 
@@ -130,7 +131,7 @@ logger = logging.getLogger("celldetective")
 
 class ProcessPanel(QFrame, Styles):
 
-    def __init__(self, parent_window, mode):
+    def __init__(self, parent_window: Any, mode: str) -> None:
         """
         Initialize the ProcessPanel.
 
@@ -167,7 +168,7 @@ class ProcessPanel(QFrame, Styles):
         self.grid.setContentsMargins(5, 5, 5, 5)
         self.generate_header()
 
-    def generate_header(self):
+    def generate_header(self) -> None:
         """
         Read the mode and prepare a collapsable block to process a specific cell population.
 
@@ -222,7 +223,7 @@ class ProcessPanel(QFrame, Styles):
         self.collapse_btn.clicked.connect(self.collapse_advanced)
         self.ContentsFrame.hide()
 
-    def collapse_advanced(self):
+    def collapse_advanced(self) -> None:
         """
         Toggle the visibility of the advanced options block.
         """
@@ -254,7 +255,7 @@ class ProcessPanel(QFrame, Styles):
             except:
                 pass
 
-    def populate_contents(self):
+    def populate_contents(self) -> None:
         """
         Populate the content frame with processing options.
         """
@@ -292,7 +293,7 @@ class ProcessPanel(QFrame, Styles):
             action.toggled.connect(self.check_readiness)
         self.check_readiness()
 
-    def check_readiness(self):
+    def check_readiness(self) -> None:
         """
         Check if any action is selected and enable/disable the submit button accordingly.
         """
@@ -306,7 +307,7 @@ class ProcessPanel(QFrame, Styles):
         else:
             self.submit_btn.setEnabled(False)
 
-    def generate_measure_options(self):
+    def generate_measure_options(self) -> None:
         """
         Generate options for measurement configuration.
         """
@@ -354,7 +355,7 @@ class ProcessPanel(QFrame, Styles):
 
         self.grid_contents.addLayout(measure_layout, 5, 0, 1, 4)
 
-    def generate_signal_analysis_options(self):
+    def generate_signal_analysis_options(self) -> None:
         """
         Generate options for signal analysis configuration.
         """
@@ -421,7 +422,7 @@ class ProcessPanel(QFrame, Styles):
 
         self.grid_contents.addLayout(signal_layout, 6, 0, 1, 4)
 
-    def refresh_signal_models(self):
+    def refresh_signal_models(self) -> None:
         """
         Refresh the list of available signal models.
         """
@@ -440,7 +441,7 @@ class ProcessPanel(QFrame, Styles):
                 i, self.signal_models[i], Qt.ToolTipRole
             )
 
-    def generate_tracking_options(self):
+    def generate_tracking_options(self) -> None:
         """
         Generate options for tracking configuration.
         """
@@ -499,7 +500,7 @@ class ProcessPanel(QFrame, Styles):
 
         self.grid_contents.addLayout(grid_track, 4, 0, 1, 4)
 
-    def delete_tracks(self):
+    def delete_tracks(self) -> Optional[None]:
         """
         Delete existing tracks for the current population.
         """
@@ -564,7 +565,7 @@ class ProcessPanel(QFrame, Styles):
         else:
             return None
 
-    def generate_segmentation_options(self):
+    def generate_segmentation_options(self) -> None:
         """
         Generate options for segmentation configuration.
         """
@@ -654,7 +655,7 @@ class ProcessPanel(QFrame, Styles):
         self.seg_model_list.setEnabled(False)
         self.grid_contents.addLayout(seg_option_vbox, 2, 0, 1, 4)
 
-    def flip_segmentation(self):
+    def flip_segmentation(self) -> None:
         """
         Flip the segmentation order (reverse frames).
         """
@@ -675,7 +676,7 @@ class ProcessPanel(QFrame, Styles):
                 "Flip the order of the frames for segmentation."
             )
 
-    def help_segmentation(self):
+    def help_segmentation(self) -> Optional[None]:
         """
         Widget with different decision helper decision trees.
         """
@@ -706,7 +707,7 @@ class ProcessPanel(QFrame, Styles):
 
         return None
 
-    def help_seg_strategy(self):
+    def help_seg_strategy(self) -> Optional[None]:
         """
         Helper for segmentation strategy between threshold-based and Deep learning.
         """
@@ -739,7 +740,7 @@ class ProcessPanel(QFrame, Styles):
             if returnValue == QMessageBox.Ok:
                 return None
 
-    def help_seg_dl_strategy(self):
+    def help_seg_dl_strategy(self) -> Optional[None]:
         """
         Helper for DL segmentation strategy, between pretrained models and custom models.
         """
@@ -769,7 +770,7 @@ class ProcessPanel(QFrame, Styles):
             if returnValue == QMessageBox.Ok:
                 return None
 
-    def help_tracking(self):
+    def help_tracking(self) -> Optional[None]:
         """
         Helper for segmentation strategy between threshold-based and Deep learning.
         """
@@ -794,7 +795,7 @@ class ProcessPanel(QFrame, Styles):
             if returnValue == QMessageBox.Ok:
                 return None
 
-    def check_segmentation(self):
+    def check_segmentation(self) -> Optional[None]:
         """
         Check if segmentation labels exist, otherwise prompt to create them.
 
@@ -895,7 +896,7 @@ class ProcessPanel(QFrame, Styles):
 
             gc.collect()
 
-    def check_signals(self):
+    def check_signals(self) -> None:
         """
         Check and load signals for the selected position(s).
         """
@@ -950,7 +951,7 @@ class ProcessPanel(QFrame, Styles):
                 )
                 self.signal_progress.canceled.connect(self.signal_loader.stop)
 
-                def on_finished():
+                def on_finished() -> None:
                     """
                     Handle completion of the signal loader.
                     """
@@ -981,7 +982,7 @@ class ProcessPanel(QFrame, Styles):
             # Multi position explorer: redirect to TableUI with progress bar
             self.view_table_ui()
 
-    def check_measurements(self):
+    def check_measurements(self) -> None:
         """
         Check and initiate measurement annotation for the selected position(s).
         """
@@ -1018,7 +1019,7 @@ class ProcessPanel(QFrame, Styles):
             # Multi position explorer: redirect to TableUI with progress bar
             self.view_table_ui()
 
-    def enable_segmentation_model_list(self):
+    def enable_segmentation_model_list(self) -> None:
         """
         Enable or disable the segmentation model list based on the checkbox state.
         """
@@ -1027,7 +1028,7 @@ class ProcessPanel(QFrame, Styles):
         else:
             self.seg_model_list.setEnabled(False)
 
-    def enable_signal_model_list(self):
+    def enable_signal_model_list(self) -> None:
         """
         Enable or disable the signal model list based on the checkbox state.
         """
@@ -1036,7 +1037,7 @@ class ProcessPanel(QFrame, Styles):
         else:
             self.signal_models_list.setEnabled(False)
 
-    def init_seg_model_list(self):
+    def init_seg_model_list(self) -> None:
         """
         Initialize the segmentation model list with available models.
         """
@@ -1083,7 +1084,7 @@ class ProcessPanel(QFrame, Styles):
     # 	else:
     # 		self.all_ticked = True
 
-    def upload_segmentation_model(self):
+    def upload_segmentation_model(self) -> None:
         """
         Open the generic segmentation model loader.
         """
@@ -1094,7 +1095,7 @@ class ProcessPanel(QFrame, Styles):
         self.seg_model_loader.show()
         center_window(self.seg_model_loader)
 
-    def open_tracking_configuration_ui(self):
+    def open_tracking_configuration_ui(self) -> None:
         """
         Open the tracking configuration UI.
         """
@@ -1105,7 +1106,7 @@ class ProcessPanel(QFrame, Styles):
         self.settings_tracking.show()
         center_window(self.settings_tracking)
 
-    def open_signal_model_config_ui(self):
+    def open_signal_model_config_ui(self) -> None:
         """
         Open the signal model training configuration UI.
         """
@@ -1120,7 +1121,7 @@ class ProcessPanel(QFrame, Styles):
         self.settings_event_detection_training.show()
         center_window(self.settings_event_detection_training)
 
-    def open_segmentation_model_config_ui(self):
+    def open_segmentation_model_config_ui(self) -> None:
         """
         Open the segmentation model training configuration UI.
         """
@@ -1133,7 +1134,7 @@ class ProcessPanel(QFrame, Styles):
         self.settings_segmentation_training.show()
         center_window(self.settings_segmentation_training)
 
-    def open_measurement_configuration_ui(self):
+    def open_measurement_configuration_ui(self) -> None:
         """
         Open the measurement configuration UI.
         """
@@ -1146,7 +1147,7 @@ class ProcessPanel(QFrame, Styles):
         self.settings_measurements.show()
         center_window(self.settings_measurements)
 
-    def open_segmentation_configuration_ui(self):
+    def open_segmentation_configuration_ui(self) -> None:
         """
         Open the segmentation configuration UI.
         """
@@ -1158,7 +1159,7 @@ class ProcessPanel(QFrame, Styles):
         self.settings_segmentation = SettingsSegmentation(self)
         self.settings_segmentation.show()
 
-    def open_classifier_ui(self):
+    def open_classifier_ui(self) -> Optional[None]:
         """
         Open the classifier widget for the current population.
         """
@@ -1182,7 +1183,7 @@ class ProcessPanel(QFrame, Styles):
             self.classifier_widget.show()
             try:
 
-                def post_widget(wdg):
+                def post_widget(wdg: Any) -> None:
                     """
                     Resize and center the widget.
 
@@ -1201,7 +1202,7 @@ class ProcessPanel(QFrame, Styles):
             except Exception as _:
                 pass
 
-    def open_signal_annotator_configuration_ui(self):
+    def open_signal_annotator_configuration_ui(self) -> None:
         """
         Open the signal annotator configuration UI.
         """
@@ -1218,7 +1219,7 @@ class ProcessPanel(QFrame, Styles):
         except Exception as _:
             pass
 
-    def reset_generalist_setup(self, index):
+    def reset_generalist_setup(self, index: int) -> None:
         """
         Reset generalist model calibration flags.
 
@@ -1231,13 +1232,13 @@ class ProcessPanel(QFrame, Styles):
         self.stardist_calibrated = False
         self.segChannelsSet = False
 
-    def reset_signals(self):
+    def reset_signals(self) -> None:
         """
         Reset signal channel settings.
         """
         self.signalChannelsSet = False
 
-    def process_population(self):
+    def process_population(self) -> Optional[None]:
         """
         Execute the processing pipeline for the selected population.
         """
@@ -1672,7 +1673,7 @@ class ProcessPanel(QFrame, Styles):
         self.reset_generalist_setup(0)
         self.reset_signals()
 
-    def open_napari_tracking(self):
+    def open_napari_tracking(self) -> None:
         """
         Open the tracks in Napari for visualization.
         """
@@ -1705,7 +1706,7 @@ class ProcessPanel(QFrame, Styles):
         self.napari_loader.status.connect(self.napari_progress.setLabelText)
         self.napari_progress.canceled.connect(self.napari_loader.stop)
 
-        def on_finished(result):
+        def on_finished(result: Union[Dict, Exception, None]) -> None:
             """
             Handle completion of Napari loading.
 
@@ -1740,7 +1741,7 @@ class ProcessPanel(QFrame, Styles):
                 self.napari_progress.setRange(0, 0)
                 QApplication.processEvents()
 
-                def progress_cb(msg):
+                def progress_cb(msg: str) -> None:
                     """
                     Callback for Napari loading progress.
 
@@ -1783,7 +1784,7 @@ class ProcessPanel(QFrame, Styles):
         self.napari_loader.finished_with_result.connect(on_finished)
         self.napari_loader.start()
 
-    def view_table_ui(self):
+    def view_table_ui(self) -> None:
         """
         Load and display the results table.
 
@@ -1819,7 +1820,7 @@ class ProcessPanel(QFrame, Styles):
             else:
                 total_positions += len(positions)
 
-        def show_table(df):
+        def show_table(df: Optional[pd.DataFrame]) -> None:
             """
             Display the dataframe in TableUI.
 
@@ -1873,7 +1874,7 @@ class ProcessPanel(QFrame, Styles):
 
             self.df = None
 
-            def on_table_loaded(df):
+            def on_table_loaded(df: Optional[pd.DataFrame]) -> None:
                 """
                 Callback when table is loaded asynchronously.
 
@@ -1897,7 +1898,7 @@ class ProcessPanel(QFrame, Styles):
             self.job._ProgressWindow__runner.signals.result.connect(on_table_loaded)
             self.job.exec_()
 
-    def load_available_tables(self):
+    def load_available_tables(self) -> None:
         """
         Load the tables of the selected wells/positions from the control Panel for the population of interest
 
@@ -1998,7 +1999,7 @@ class ProcessPanel(QFrame, Styles):
             seen = set()
             self.signals = [x for x in self.signals if not (x in seen or seen.add(x))]
 
-    def set_cellpose_scale(self):
+    def set_cellpose_scale(self) -> None:
         """
         Set parameters for Cellpose models.
 
@@ -2039,7 +2040,7 @@ class ProcessPanel(QFrame, Styles):
         self.diamWidget.close()
         self.process_population()
 
-    def set_stardist_scale(self):
+    def set_stardist_scale(self) -> None:
         """
         Set parameters for StarDist models.
 
@@ -2063,7 +2064,7 @@ class ProcessPanel(QFrame, Styles):
         self.diamWidget.close()
         self.process_population()
 
-    def set_selected_channels_for_segmentation(self):
+    def set_selected_channels_for_segmentation(self) -> None:
         """
         Set channels for segmentation models.
 
@@ -2096,7 +2097,7 @@ class ProcessPanel(QFrame, Styles):
         self.segChannelWidget.close()
         self.process_population()
 
-    def set_selected_signals_for_event_detection(self):
+    def set_selected_signals_for_event_detection(self) -> None:
         """
         Set channels for event detection models.
 

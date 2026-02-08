@@ -1,4 +1,12 @@
-from PyQt5.QtWidgets import QVBoxLayout, QComboBox, QHBoxLayout, QLabel, QPushButton
+from typing import Optional
+from PyQt5.QtWidgets import (
+    QVBoxLayout,
+    QComboBox,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QMainWindow,
+)
 
 from celldetective.gui.base.components import CelldetectiveWidget
 from celldetective.gui.base.utils import center_window
@@ -22,8 +30,12 @@ class StarDistParamsWidget(CelldetectiveWidget):
     """
 
     def __init__(
-        self, parent_window=None, model_name="SD_versatile_fluo", *args, **kwargs
-    ):
+        self,
+        parent_window: Optional[QMainWindow] = None,
+        model_name: str = "SD_versatile_fluo",
+        *args,
+        **kwargs,
+    ) -> None:
         """
         Initialize the StarDistParamsWidget.
 

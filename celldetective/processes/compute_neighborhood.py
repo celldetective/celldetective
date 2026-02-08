@@ -1,4 +1,5 @@
-from multiprocessing import Process
+from multiprocessing import Process, Queue
+from typing import Optional, Dict, Any, List, Union, Tuple
 import time
 import os
 
@@ -27,7 +28,11 @@ from celldetective.relative_measurements import measure_pair_signals_at_position
 
 class NeighborhoodProcess(Process):
 
-    def __init__(self, queue=None, process_args=None):
+    def __init__(
+        self,
+        queue: Optional[Queue] = None,
+        process_args: Optional[Dict[str, Any]] = None,
+    ) -> None:
         """
         Initialize the process.
 
@@ -68,26 +73,26 @@ class NeighborhoodProcess(Process):
 
     def mask_contact_neighborhood(
         self,
-        setA,
-        setB,
-        labelsA,
-        labelsB,
-        distance,
-        mode="two-pop",
-        status=None,
-        not_status_option=None,
-        compute_cum_sum=True,
-        attention_weight=True,
-        symmetrize=True,
-        include_dead_weight=True,
-        column_labels={
+        setA: pd.DataFrame,
+        setB: pd.DataFrame,
+        labelsA: List[Optional[np.ndarray]],
+        labelsB: Optional[List[Optional[np.ndarray]]],
+        distance: Union[int, List[int]],
+        mode: str = "two-pop",
+        status: Optional[List[str]] = None,
+        not_status_option: Optional[List[bool]] = None,
+        compute_cum_sum: bool = True,
+        attention_weight: bool = True,
+        symmetrize: bool = True,
+        include_dead_weight: bool = True,
+        column_labels: Dict[str, str] = {
             "track": "TRACK_ID",
             "time": "FRAME",
             "x": "POSITION_X",
             "y": "POSITION_Y",
             "mask_id": "class_id",
         },
-    ):
+    ) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """
         Compute the neighborhood based on mask contact.
 
@@ -255,23 +260,23 @@ class NeighborhoodProcess(Process):
 
     def distance_cut_neighborhood(
         self,
-        setA,
-        setB,
-        distance,
-        mode="two-pop",
-        status=None,
-        not_status_option=None,
-        compute_cum_sum=True,
-        attention_weight=True,
-        symmetrize=True,
-        include_dead_weight=True,
-        column_labels={
+        setA: pd.DataFrame,
+        setB: pd.DataFrame,
+        distance: Union[float, List[float]],
+        mode: str = "two-pop",
+        status: Optional[List[str]] = None,
+        not_status_option: Optional[List[bool]] = None,
+        compute_cum_sum: bool = True,
+        attention_weight: bool = True,
+        symmetrize: bool = True,
+        include_dead_weight: bool = True,
+        column_labels: Dict[str, str] = {
             "track": "TRACK_ID",
             "time": "FRAME",
             "x": "POSITION_X",
             "y": "POSITION_Y",
         },
-    ):
+    ) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """
         Compute the neighborhood based on distance cut.
 
@@ -421,15 +426,15 @@ class NeighborhoodProcess(Process):
 
     def compute_neighborhood_at_position(
         self,
-        pos,
-        distance,
-        population=["targets", "effectors"],
-        theta_dist=None,
-        img_shape=(2048, 2048),
-        return_tables=False,
-        clear_neigh=False,
-        event_time_col=None,
-        neighborhood_kwargs={
+        pos: str,
+        distance: Union[float, List[float]],
+        population: Union[str, List[str]] = ["targets", "effectors"],
+        theta_dist: Optional[Union[float, List[float]]] = None,
+        img_shape: Tuple[int, int] = (2048, 2048),
+        return_tables: bool = False,
+        clear_neigh: bool = False,
+        event_time_col: Optional[str] = None,
+        neighborhood_kwargs: Dict[str, Any] = {
             "mode": "two-pop",
             "status": None,
             "not_status_option": None,
@@ -438,7 +443,7 @@ class NeighborhoodProcess(Process):
             "attention_weight": True,
             "symmetrize": True,
         },
-    ):
+    ) -> Optional[Tuple[pd.DataFrame, pd.DataFrame]]:
         """
         Compute the neighborhood at a specific position.
 
@@ -648,15 +653,15 @@ class NeighborhoodProcess(Process):
 
     def compute_contact_neighborhood_at_position(
         self,
-        pos,
-        distance,
-        population=["targets", "effectors"],
-        theta_dist=None,
-        img_shape=(2048, 2048),
-        return_tables=False,
-        clear_neigh=False,
-        event_time_col=None,
-        neighborhood_kwargs={
+        pos: str,
+        distance: Union[int, List[int]],
+        population: Union[str, List[str]] = ["targets", "effectors"],
+        theta_dist: Optional[Union[int, List[int]]] = None,
+        img_shape: Tuple[int, int] = (2048, 2048),
+        return_tables: bool = False,
+        clear_neigh: bool = False,
+        event_time_col: Optional[str] = None,
+        neighborhood_kwargs: Dict[str, Any] = {
             "mode": "two-pop",
             "status": None,
             "not_status_option": None,
@@ -665,7 +670,7 @@ class NeighborhoodProcess(Process):
             "attention_weight": True,
             "symmetrize": True,
         },
-    ):
+    ) -> Optional[Tuple[pd.DataFrame, pd.DataFrame]]:
         """
         Compute the contact neighborhood at a specific position.
 

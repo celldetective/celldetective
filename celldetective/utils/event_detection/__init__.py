@@ -1,8 +1,11 @@
 from celldetective.event_detection_models import SignalDetectionModel
 from celldetective.utils.model_loaders import locate_signal_model
+from typing import Optional
 
 
-def _prep_event_detection_model(model_name=None, use_gpu=True):
+def _prep_event_detection_model(
+    model_name: Optional[str] = None, use_gpu: bool = True
+) -> SignalDetectionModel:
     """
     Prepare event detection model for inference.
 

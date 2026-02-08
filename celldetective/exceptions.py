@@ -7,7 +7,7 @@ class EmptyQueryError(QueryError):
 
 
 class MissingColumnsError(QueryError):
-    def __init__(self, missing_cols):
+    def __init__(self, missing_cols: list) -> None:
         """
         Initialize the MissingColumnsError.
 

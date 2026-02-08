@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import QHBoxLayout, QLineEdit, QPushButton
+from PyQt5.QtWidgets import QHBoxLayout, QLineEdit, QPushButton, QMainWindow
 
 from celldetective.gui.base.components import CelldetectiveWidget
 from celldetective.gui.base.utils import center_window
@@ -6,7 +6,7 @@ from celldetective.gui.base.utils import center_window
 
 class QueryWidget(CelldetectiveWidget):
 
-    def __init__(self, parent_window):
+    def __init__(self, parent_window: QMainWindow) -> None:
         """
         Initialize the QueryWidget.
 

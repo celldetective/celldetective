@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Union
+from typing import Union, Optional, Any, Tuple, Dict
 import os
 
 os.environ["TF_CPP_MIN_VLOG_LEVEL"] = "3"
@@ -62,8 +62,11 @@ def _prep_stardist_model(
 
 
 def _segment_image_with_stardist_model(
-    img, model=None, return_details=False, channel_axis=-1
-):
+    img: np.ndarray,
+    model: Any = None,
+    return_details: bool = False,
+    channel_axis: int = -1,
+) -> Union[np.ndarray, Tuple[np.ndarray, Dict]]:
     """
     Segments an input image using a StarDist model.
 

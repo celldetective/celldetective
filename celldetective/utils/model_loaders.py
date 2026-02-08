@@ -1,10 +1,13 @@
 import os
 from glob import glob
+from typing import Optional
 
 from celldetective.utils.downloaders import get_zenodo_files, download_zenodo_file
 
 
-def locate_signal_model(name, path=None, pairs=False):
+def locate_signal_model(
+    name: str, path: Optional[str] = None, pairs: bool = False
+) -> Optional[str]:
     """
     Locate a signal detection model by name, either locally or from Zenodo.
 
@@ -89,7 +92,7 @@ def locate_signal_model(name, path=None, pairs=False):
     return match
 
 
-def locate_pair_signal_model(name, path=None):
+def locate_pair_signal_model(name: str, path: Optional[str] = None) -> Optional[str]:
     """
     Locate a pair signal detection model by name.
 
@@ -137,13 +140,22 @@ def locate_pair_signal_model(name, path=None):
     modelpath = os.sep.join([main_dir, "models", "pair_signal_detection", os.sep])
     print(f"Looking for {name} in {modelpath}")
     models = glob(modelpath + f"*{os.sep}")
-    if path is not None:
-        if not path.endswith(os.sep):
-            path += os.sep
-        models += glob(path + f"*{os.sep}")
+    match = None
+    for m in models:
+        if name == m.replace("\\", os.sep).split(os.sep)[-2]:
+            match = m
+            return match
+    # else no match, try zenodo
+    files, categories = get_zenodo_files()
+    if name in files:
+        index = files.index(name)
+        cat = categories[index]
+        download_zenodo_file(name, os.sep.join([main_dir, cat]))
+        match = os.sep.join([main_dir, cat, name]) + os.sep
+    return match
 
 
-def locate_segmentation_model(name, download=True):
+def locate_segmentation_model(name: str, download: bool = True) -> Optional[str]:
     """
     Locates a specified segmentation model within the local 'celldetective' directory or
     downloads it from Zenodo if not found locally.
@@ -158,6 +170,8 @@ def locate_segmentation_model(name, download=True):
     ----------
     name : str
             The name of the segmentation model to locate.
+    download : bool, optional
+            Whether to download the model from Zenodo if not found locally. Default is True.
 
     Returns
     -------
@@ -196,7 +210,7 @@ def locate_segmentation_model(name, download=True):
     return match
 
 
-def locate_segmentation_dataset(name):
+def locate_segmentation_dataset(name: str) -> Optional[str]:
     """
     Locates a specified segmentation dataset within the local 'celldetective/datasets/segmentation_annotations' directory
     or downloads it from Zenodo if not found locally.
@@ -246,7 +260,7 @@ def locate_segmentation_dataset(name):
     return match
 
 
-def locate_signal_dataset(name):
+def locate_signal_dataset(name: str) -> Optional[str]:
     """
     Locates a specified signal dataset within the local 'celldetective/datasets/signal_annotations' directory or downloads
     it from Zenodo if not found locally.

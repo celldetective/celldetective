@@ -1,6 +1,6 @@
 import os
 from pathlib import Path
-from typing import Union
+from typing import Union, Any
 import numpy as np
 
 from celldetective.utils.image_transforms import (
@@ -31,7 +31,9 @@ def remove_file_if_exists(file: Union[str, Path]):
             print(e)
 
 
-def save_tiff_imagej_compatible(file, img, axes, **imsave_kwargs):
+def save_tiff_imagej_compatible(
+    file: Union[str, Path], img: np.ndarray, axes: str, **imsave_kwargs: Any
+) -> None:
     """Save image in ImageJ-compatible TIFF format.
     adapted from https://github.com/CSBDeep/CSBDeep/blob/main/csbdeep/utils/utils.py
 

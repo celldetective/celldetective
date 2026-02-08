@@ -15,6 +15,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QBrush, QColor
+from typing import Optional, Any, Union, List, Tuple, Dict
 
 from celldetective.gui.gui_utils import (
     PandasModel,
@@ -51,7 +52,14 @@ logger = get_logger(__name__)
 
 class PivotTableUI(CelldetectiveWidget):
 
-    def __init__(self, data, title="", mode=None, *args, **kwargs):
+    def __init__(
+        self,
+        data: pd.DataFrame,
+        title: str = "",
+        mode: Optional[str] = None,
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
         """
         Initialize the PivotTableUI.
 
@@ -95,14 +103,14 @@ class PivotTableUI(CelldetectiveWidget):
         self.setAttribute(Qt.WA_DeleteOnClose)
         center_window(self)
 
-    def showdata(self):
+    def showdata(self) -> None:
         """
         Display the data in the table view.
         """
         self.model = PandasModel(self.data)
         self.table.setModel(self.model)
 
-    def set_cell_color(self, row, column, color="red"):
+    def set_cell_color(self, row: int, column: int, color: str = "red") -> None:
         """
         Set the background color of a specific cell.
 
@@ -119,7 +127,7 @@ class PivotTableUI(CelldetectiveWidget):
             row, column, QBrush(QColor(color))
         )  # eval(f"Qt.{color}")
 
-    def color_cells_cliff(self):
+    def color_cells_cliff(self) -> None:
         """
         Color cells based on Cliff's Delta values.
         """
@@ -154,7 +162,7 @@ class PivotTableUI(CelldetectiveWidget):
 		"""
         self.information_label.setText(html_caption)
 
-    def color_cells_pvalue(self):
+    def color_cells_pvalue(self) -> None:
         """
         Color cells based on p-values.
         """
@@ -197,15 +205,15 @@ class TableUI(CelldetectiveMainWindow):
 
     def __init__(
         self,
-        data,
-        title,
-        population="targets",
-        plot_mode="plot_track_signals",
-        save_inplace_option=False,
-        collapse_tracks_option=True,
-        *args,
-        **kwargs,
-    ):
+        data: pd.DataFrame,
+        title: str,
+        population: str = "targets",
+        plot_mode: str = "plot_track_signals",
+        save_inplace_option: bool = False,
+        collapse_tracks_option: bool = True,
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
         """
         Initialize the TableUI.
 
@@ -273,7 +281,7 @@ class TableUI(CelldetectiveMainWindow):
         self.table_view.setModel(self.model)
         self.table_view.resizeColumnsToContents()
 
-    def resizeEvent(self, event):
+    def resizeEvent(self, event: Any) -> None:
         """
         Handle resize event to adjust layout.
 
@@ -291,7 +299,7 @@ class TableUI(CelldetectiveMainWindow):
             # fig not yet created
             pass
 
-    def _get_selected_columns(self, max_cols=None):
+    def _get_selected_columns(self, max_cols: Optional[int] = None) -> List[str]:
         """
         Get selected column names from the table view.
 
@@ -316,7 +324,7 @@ class TableUI(CelldetectiveMainWindow):
             return result[:max_cols]
         return result
 
-    def _create_actions(self):
+    def _create_actions(self) -> None:
         """
         Create menu actions.
         """
@@ -438,7 +446,7 @@ class TableUI(CelldetectiveMainWindow):
         # #self.onehot_action.setShortcut("Ctrl+D")
         # self.mathMenu.addAction(self.onehot_action)
 
-    def collapse_pairs_in_neigh(self):
+    def collapse_pairs_in_neigh(self) -> None:
         """
         Open the widget to collapse pairs in a specific neighborhood.
         """
@@ -508,7 +516,7 @@ class TableUI(CelldetectiveMainWindow):
         self.selectNeighWidget.show()
         center_window(self.selectNeighWidget)
 
-    def prepare_table_at_neighborhood(self):
+    def prepare_table_at_neighborhood(self) -> None:
         """
         Prepare the data table for the selected neighborhood and collapse options.
         """
@@ -575,7 +583,7 @@ class TableUI(CelldetectiveMainWindow):
         if not skip_projection:
             self.set_projection_mode_tracks()
 
-    def update_neighborhoods(self):
+    def update_neighborhoods(self) -> None:
         """
         Update the available neighborhoods based on the selected reference population.
         """
@@ -593,7 +601,7 @@ class TableUI(CelldetectiveMainWindow):
         self.neigh_cb.clear()
         self.neigh_cb.addItems(neigh_cols)
 
-    def merge_tables(self):
+    def merge_tables(self) -> None:
         """
         Merge tables for pairs.
         """
@@ -604,7 +612,7 @@ class TableUI(CelldetectiveMainWindow):
         )
         self.subtable.show()
 
-    def delete_columns(self):
+    def delete_columns(self) -> Optional[None]:
         """
         Delete selected columns from the table.
         """
@@ -628,7 +636,7 @@ class TableUI(CelldetectiveMainWindow):
         self.model = PandasModel(self.data)
         self.table_view.setModel(self.model)
 
-    def rename_column(self):
+    def rename_column(self) -> Optional[None]:
         """
         Rename the selected column.
         """
@@ -654,7 +662,7 @@ class TableUI(CelldetectiveMainWindow):
         self.renameWidget = RenameColWidget(self, selected_col)
         self.renameWidget.show()
 
-    def save_as_csv_inplace_per_pos(self):
+    def save_as_csv_inplace_per_pos(self) -> None:
         """
         Save each position's table in its respective folder.
 
@@ -677,7 +685,7 @@ class TableUI(CelldetectiveMainWindow):
             )
         logger.info("Done saving tables.")
 
-    def divide_signals(self):
+    def divide_signals(self) -> None:
         """
         Divide two selected signal columns.
         """
@@ -690,7 +698,7 @@ class TableUI(CelldetectiveMainWindow):
         )
         self.divWidget.show()
 
-    def multiply_signals(self):
+    def multiply_signals(self) -> None:
         """
         Multiply two selected signal columns.
         """
@@ -703,7 +711,7 @@ class TableUI(CelldetectiveMainWindow):
         )
         self.mulWidget.show()
 
-    def add_signals(self):
+    def add_signals(self) -> None:
         """
         Add two selected signal columns.
         """
@@ -716,7 +724,7 @@ class TableUI(CelldetectiveMainWindow):
         )
         self.addiWidget.show()
 
-    def subtract_signals(self):
+    def subtract_signals(self) -> None:
         """
         Subtract two selected signal columns.
         """
@@ -729,21 +737,21 @@ class TableUI(CelldetectiveMainWindow):
         )
         self.subWidget.show()
 
-    def differenciate_selected_feature(self):
+    def differenciate_selected_feature(self) -> None:
         """Open widget to differentiate the selected column."""
         selected = self._get_selected_columns(max_cols=1)
         selected_col = selected[0] if selected else None
         self.diffWidget = DifferentiateColWidget(self, selected_col)
         self.diffWidget.show()
 
-    def take_log_of_selected_feature(self):
+    def take_log_of_selected_feature(self) -> None:
         """Open widget to take log of the selected column."""
         selected = self._get_selected_columns(max_cols=1)
         selected_col = selected[0] if selected else None
         self.LogWidget = LogColWidget(self, selected_col)
         self.LogWidget.show()
 
-    def merge_classification_features(self):
+    def merge_classification_features(self) -> None:
         """Open widget to merge selected classification columns."""
         col_selection = self._get_selected_columns()
 
@@ -753,21 +761,21 @@ class TableUI(CelldetectiveMainWindow):
         self.merge_classification_widget = MergeGroupWidget(self, columns=col_selection)
         self.merge_classification_widget.show()
 
-    def calibrate_selected_feature(self):
+    def calibrate_selected_feature(self) -> None:
         """Open widget to calibrate the selected column."""
         selected = self._get_selected_columns(max_cols=1)
         selected_col = selected[0] if selected else None
         self.calWidget = CalibrateColWidget(self, selected_col)
         self.calWidget.show()
 
-    def take_abs_of_selected_feature(self):
+    def take_abs_of_selected_feature(self) -> None:
         """Open widget to take absolute value of the selected column."""
         selected = self._get_selected_columns(max_cols=1)
         selected_col = selected[0] if selected else None
         self.absWidget = AbsColWidget(self, selected_col)
         self.absWidget.show()
 
-    def transform_one_hot_cols_to_categorical(self):
+    def transform_one_hot_cols_to_categorical(self) -> None:
         """
         Transform one-hot encoded columns to a single categorical column.
         """
@@ -783,7 +791,7 @@ class TableUI(CelldetectiveMainWindow):
         self.mergewidget = MergeOneHotWidget(self, selected_columns=selected_cols)
         self.mergewidget.show()
 
-    def groupby_time_table(self):
+    def groupby_time_table(self) -> None:
         """
 
         Perform a time average across each track for all features
@@ -799,7 +807,7 @@ class TableUI(CelldetectiveMainWindow):
         )
         self.subtable.show()
 
-    def perform_query(self):
+    def perform_query(self) -> None:
         """
 
         Perform a time average across each track for all features
@@ -815,7 +823,7 @@ class TableUI(CelldetectiveMainWindow):
         # self.subtable = TableUI(timeseries,"Group by frames", plot_mode="plot_timeseries")
         # self.subtable.show()
 
-    def set_projection_mode_neigh(self):
+    def set_projection_mode_neigh(self) -> None:
         """
         Set projection mode for neighbors.
         """
@@ -830,7 +838,7 @@ class TableUI(CelldetectiveMainWindow):
         self.current_data = self.data
         self.set_projection_mode_tracks()
 
-    def set_projection_mode_ref(self):
+    def set_projection_mode_ref(self) -> None:
         """
         Set projection mode for reference cells.
         """
@@ -845,7 +853,7 @@ class TableUI(CelldetectiveMainWindow):
         self.current_data = self.data
         self.set_projection_mode_tracks()
 
-    def set_projection_mode_tracks(self):
+    def set_projection_mode_tracks(self) -> None:
         """
         Set projection mode for tracks.
         """
@@ -943,7 +951,7 @@ class TableUI(CelldetectiveMainWindow):
         self.projectionWidget.show()
         center_window(self.projectionWidget)
 
-    def enable_projection_options(self):
+    def enable_projection_options(self) -> None:
         """
         Enable/disable projection options based on the selected mode.
         """
@@ -964,7 +972,7 @@ class TableUI(CelldetectiveMainWindow):
             self.per_status_cb.setEnabled(True)
             self.status_operation.setEnabled(True)
 
-    def set_1D_plot_params(self):
+    def set_1D_plot_params(self) -> None:
         """
         Open the 1D plot parameter configuration window.
         """
@@ -1074,7 +1082,7 @@ class TableUI(CelldetectiveMainWindow):
         self.plot1Dparams.show()
         center_window(self.plot1Dparams)
 
-    def plot1d(self):
+    def plot1d(self) -> None:
         """
         Generate the 1D plot based on selected parameters.
         """
@@ -1386,7 +1394,7 @@ class TableUI(CelldetectiveMainWindow):
         if self.pvalue_check.isChecked():
             self.compute_pvalue()
 
-    def extract_groupby_cols(self):
+    def extract_groupby_cols(self) -> Tuple[List[str], str]:
         """
         Extract the columns to group by for effect size or p-value computation.
 
@@ -1418,7 +1426,7 @@ class TableUI(CelldetectiveMainWindow):
 
         return groupby_cols, y
 
-    def compute_effect_size(self):
+    def compute_effect_size(self) -> Optional[None]:
         """
         Compute Cliff's Delta effect size for the current selection.
         """
@@ -1438,7 +1446,7 @@ class TableUI(CelldetectiveMainWindow):
         )
         self.effect_size_table.show()
 
-    def compute_pvalue(self):
+    def compute_pvalue(self) -> Optional[None]:
         """
         Compute the p-value using the KS test for the current selection.
         """
@@ -1458,7 +1466,7 @@ class TableUI(CelldetectiveMainWindow):
         )
         self.pval_table.show()
 
-    def set_proj_mode(self):
+    def set_proj_mode(self) -> None:
         """
         Apply the selected projection mode to the data and show the result.
         """
@@ -1580,7 +1588,7 @@ class TableUI(CelldetectiveMainWindow):
     # 	self.subtable = TrajectoryTablePanel(self.data.groupby("TRACK_ID").mean(),"Group by tracks", plot_mode="scatter")
     # 	self.subtable.show()
 
-    def _createMenuBar(self):
+    def _createMenuBar(self) -> None:
         """
         Create the menu bar for the main window.
         """
@@ -1592,7 +1600,7 @@ class TableUI(CelldetectiveMainWindow):
         self.mathMenu = QMenu("&Math", self)
         menuBar.addMenu(self.mathMenu)
 
-    def save_as_csv(self):
+    def save_as_csv(self) -> None:
         """
         Save the current table data as a CSV file.
         """
@@ -1615,7 +1623,7 @@ class TableUI(CelldetectiveMainWindow):
                 self.data = self.data.drop(invalid_cols, axis=1)
             self.data.to_csv(file_name, index=False)
 
-    def plot_instantaneous(self):
+    def plot_instantaneous(self) -> None:
         """
         Refresh the plot for instantaneous values.
         """
@@ -1627,7 +1635,7 @@ class TableUI(CelldetectiveMainWindow):
         elif self.plot_mode == "static":
             self.plot()
 
-    def plot(self):
+    def plot(self) -> None:
         """
         Plot the data based on the current mode.
         """

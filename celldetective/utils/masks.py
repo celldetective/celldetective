@@ -1,4 +1,4 @@
-from typing import Union, List, Tuple
+from typing import Union, List, Tuple, Optional, Any
 
 import numpy as np
 from scipy import ndimage
@@ -9,7 +9,12 @@ from celldetective.log_manager import get_logger
 logger = get_logger(__name__)
 
 
-def contour_of_instance_segmentation(label, distance, sdf=None, voronoi_map=None):
+def contour_of_instance_segmentation(
+    label: np.ndarray,
+    distance: Union[int, float, List, Tuple, str],
+    sdf: Optional[np.ndarray] = None,
+    voronoi_map: Optional[np.ndarray] = None,
+) -> np.ndarray:
     """
 
     Generate an instance mask containing the contour of the segmented objects.
@@ -135,7 +140,12 @@ def contour_of_instance_segmentation(label, distance, sdf=None, voronoi_map=None
     return border_label
 
 
-def create_patch_mask(h, w, center=None, radius=None):
+def create_patch_mask(
+    h: int,
+    w: int,
+    center: Optional[Tuple[int, int]] = None,
+    radius: Optional[Union[int, float, List[Union[int, float]]]] = None,
+) -> np.ndarray:
     """
 
     Create a circular patch mask of given dimensions.

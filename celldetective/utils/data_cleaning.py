@@ -1,5 +1,5 @@
 import re
-from typing import Optional, List
+from typing import Optional, List, Union, Dict, Any, Tuple
 
 import numpy as np
 import pandas as pd
@@ -125,7 +125,7 @@ def _mask_intensity_measurements(df: pd.DataFrame, mask_channels: Optional[List[
     return df
 
 
-def extract_cols_from_table_list(tables, nrows=1):
+def extract_cols_from_table_list(tables: List[str], nrows: int = 1) -> np.ndarray:
     """
     Extracts a unique list of column names from a list of CSV tables.
 
@@ -162,7 +162,7 @@ def extract_cols_from_table_list(tables, nrows=1):
     return all_columns
 
 
-def extract_identity_col(trajectories):
+def extract_identity_col(trajectories: pd.DataFrame) -> Optional[str]:
     """
     Determines the identity column name in a DataFrame of trajectories.
 
@@ -194,7 +194,9 @@ def extract_identity_col(trajectories):
     return None
 
 
-def rename_intensity_column(df, channels):
+def rename_intensity_column(
+    df: pd.DataFrame, channels: Union[List[str], np.ndarray]
+) -> pd.DataFrame:
     """
 
     Rename intensity columns in a DataFrame based on the provided channel names.
@@ -351,7 +353,11 @@ def rename_intensity_column(df, channels):
     return df
 
 
-def remove_redundant_features(features, reference_features, channel_names=None):
+def remove_redundant_features(
+    features: List[str],
+    reference_features: List[str],
+    channel_names: Optional[List[str]] = None,
+) -> List[str]:
     """
 
     Remove redundant features from a list of features based on a reference feature list.
@@ -415,14 +421,14 @@ def remove_redundant_features(features, reference_features, channel_names=None):
 
 
 def remove_trajectory_measurements(
-    trajectories,
-    column_labels={
+    trajectories: pd.DataFrame,
+    column_labels: Dict[str, str] = {
         "track": "TRACK_ID",
         "time": "FRAME",
         "x": "POSITION_X",
         "y": "POSITION_Y",
     },
-):
+) -> pd.DataFrame:
     """
     Clear a measurement table, while keeping the tracking information.
 
@@ -496,12 +502,12 @@ def remove_trajectory_measurements(
 
 
 def collapse_trajectories_by_status(
-    df,
-    status=None,
-    projection="mean",
-    population="effectors",
-    groupby_columns=["position", "TRACK_ID"],
-):
+    df: pd.DataFrame,
+    status: Optional[str] = None,
+    projection: str = "mean",
+    population: str = "effectors",
+    groupby_columns: List[str] = ["position", "TRACK_ID"],
+) -> Optional[pd.DataFrame]:
     """
     Collapse trajectories based on status.
 
@@ -596,7 +602,9 @@ def collapse_trajectories_by_status(
     return group_table
 
 
-def tracks_to_btrack(df, exclude_nans=False):
+def tracks_to_btrack(
+    df: pd.DataFrame, exclude_nans: bool = False
+) -> Tuple[np.ndarray, Dict[str, np.ndarray], Dict[Any, Any]]:
     """
     Converts a dataframe of tracked objects into the bTrack output format.
     The function prepares tracking data, properties, and an empty graph structure for further processing.

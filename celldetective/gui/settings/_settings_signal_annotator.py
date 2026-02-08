@@ -2,6 +2,7 @@
 Copyright © 2023 Laboratoire Adhesion et Inflammation, Authored by Remy Torro.
 """
 
+from typing import Optional
 from PyQt5.QtWidgets import (
     QComboBox,
     QLabel,
@@ -10,6 +11,7 @@ from PyQt5.QtWidgets import (
     QPushButton,
     QVBoxLayout,
     QHBoxLayout,
+    QMainWindow,
 )
 from PyQt5.QtCore import Qt, QSize
 from celldetective.gui.base.components import QHSeperationLine
@@ -29,7 +31,7 @@ class SettingsSignalAnnotator(CelldetectiveSettingsPanel):
 
     """
 
-    def __init__(self, parent_window=None):
+    def __init__(self, parent_window: Optional[QMainWindow] = None) -> None:
         """
         Initialize the SettingsSignalAnnotator.
 

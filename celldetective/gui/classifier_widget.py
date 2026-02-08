@@ -9,8 +9,9 @@ from PyQt5.QtWidgets import (
     QRadioButton,
     QButtonGroup,
     QComboBox,
+    QMainWindow,
 )
-from PyQt5.QtCore import Qt, QSize
+from PyQt5.QtCore import Qt, QSize, QCloseEvent
 from superqt import QLabeledSlider, QLabeledDoubleSlider, QSearchableComboBox
 from superqt.fonticon import icon
 from fonticon_mdi6 import MDI6
@@ -33,7 +34,7 @@ from celldetective.measure import (
 
 class ClassifierWidget(CelldetectiveWidget):
 
-    def __init__(self, parent_window):
+    def __init__(self, parent_window: QMainWindow) -> None:
         """
         Initialize the ClassifierWidget.
 
@@ -333,7 +334,7 @@ class ClassifierWidget(CelldetectiveWidget):
         self.propscanvas.canvas.draw_idle()
         self.propscanvas.canvas.setMinimumHeight(self.screen_height // 5)
 
-    def closeEvent(self, event):
+    def closeEvent(self, event: QCloseEvent) -> None:
         """
         Handle the close event to clean up matplotlib figures.
 
@@ -347,7 +348,7 @@ class ClassifierWidget(CelldetectiveWidget):
         plt.close(self.fig_props)
         super().closeEvent(event)
 
-    def update_props_scatter(self, feature_changed=True):
+    def update_props_scatter(self, feature_changed: bool = True) -> None:
         """
         Update the properties scatter plot.
 
@@ -498,7 +499,7 @@ class ClassifierWidget(CelldetectiveWidget):
 
         self.update_props_scatter(feature_changed=False)
 
-    def set_frame(self, value):
+    def set_frame(self, value: int) -> None:
         """
         Set the current frame for visualization.
 
@@ -514,7 +515,7 @@ class ClassifierWidget(CelldetectiveWidget):
         self.ax_props.set_xlim(xlim)
         self.ax_props.set_ylim(ylim)
 
-    def set_transparency(self, value):
+    def set_transparency(self, value: float) -> None:
         """
         Set the transparency of the scatter plot markers.
 
@@ -678,7 +679,7 @@ class ClassifierWidget(CelldetectiveWidget):
             if returnValue == QMessageBox.Ok:
                 return None
 
-    def switch_to_log(self, i):
+    def switch_to_log(self, i: int) -> None:
         """
         Switch threshold histogram to log scale. Auto adjust.
 

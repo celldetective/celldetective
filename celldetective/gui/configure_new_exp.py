@@ -11,6 +11,7 @@ from PyQt5.QtWidgets import (
     QLabel,
     QLineEdit,
     QPushButton,
+    QMainWindow,
 )
 from PyQt5.QtGui import QIntValidator, QDoubleValidator
 from celldetective.gui.gui_utils import help_generic
@@ -37,7 +38,7 @@ logger = logging.getLogger(__name__)
 
 class ConfigNewExperiment(CelldetectiveMainWindow):
 
-    def __init__(self, parent_window=None):
+    def __init__(self, parent_window: Optional[QMainWindow] = None) -> None:
         """
         Initialize the ConfigNewExperiment window.
 
@@ -410,7 +411,7 @@ class ConfigNewExperiment(CelldetectiveMainWindow):
             self.sliders[-1], len(self.channels) + 1, 1, 1, 2, alignment=Qt.AlignRight
         )
 
-    def show_slider(self, index):
+    def show_slider(self, index: int) -> None:
         """
         Enable or disable the slider for a channel based on the checkbox state.
 
@@ -486,7 +487,7 @@ class ConfigNewExperiment(CelldetectiveMainWindow):
         center_window(self.CustomPopWidget)
         self.CustomPopWidget.show()
 
-    def check_population_name(self, text):
+    def check_population_name(self, text: str) -> None:
         """
         Validate the population name.
 
@@ -714,7 +715,7 @@ class ConfigNewExperiment(CelldetectiveMainWindow):
 
 
 class SetupConditionLabels(CelldetectiveWidget):
-    def __init__(self, parent_window, n_wells):
+    def __init__(self, parent_window: CelldetectiveMainWindow, n_wells: int) -> None:
         """
         Initialize the SetupConditionLabels window.
 
@@ -813,7 +814,7 @@ class SetupConditionLabels(CelldetectiveWidget):
 
             self.layout.addLayout(hbox)
 
-    def update_placeholders(self, new_unit):
+    def update_placeholders(self, new_unit: str) -> None:
         """
         Update the placeholder text for concentration inputs.
 

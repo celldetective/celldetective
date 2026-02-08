@@ -1,4 +1,5 @@
-from multiprocessing import Process
+from multiprocessing import Process, Queue, Event
+from typing import Optional, Dict, Any
 import time
 import os
 import json
@@ -28,7 +29,12 @@ class ProgressCallback(Callback):
         Event to signal stopping.
     """
 
-    def __init__(self, queue=None, total_epochs=100, stop_event=None):
+    def __init__(
+        self,
+        queue: Optional[Queue] = None,
+        total_epochs: int = 100,
+        stop_event: Optional[Event] = None,
+    ) -> None:
         """
         Initialize the callback.
 
@@ -48,7 +54,7 @@ class ProgressCallback(Callback):
         self.t0 = time.time()
         self.stop_event = stop_event
 
-    def on_epoch_begin(self, epoch, logs=None):
+    def on_epoch_begin(self, epoch: int, logs: Optional[Dict[str, Any]] = None) -> None:
         """
         Called at the beginning of an epoch.
 
@@ -61,7 +67,7 @@ class ProgressCallback(Callback):
         """
         self.epoch_start_time = time.time()
 
-    def on_batch_end(self, batch, logs=None):
+    def on_batch_end(self, batch: int, logs: Optional[Dict[str, Any]] = None) -> None:
         """
         Called at the end of a batch.
 
@@ -88,7 +94,7 @@ class ProgressCallback(Callback):
                     }
                 )
 
-    def on_epoch_end(self, epoch, logs=None):
+    def on_epoch_end(self, epoch: int, logs: Optional[Dict[str, Any]] = None) -> None:
         """
         Called at the end of an epoch.
 
@@ -146,7 +152,7 @@ class ProgressCallback(Callback):
                 }
             self.queue.put(msg)
 
-    def on_training_result(self, result):
+    def on_training_result(self, result: Dict[str, Any]) -> None:
         """
         Handle training result.
 
@@ -175,7 +181,13 @@ class TrainSignalModelProcess(Process):
         Arbitrary keyword arguments.
     """
 
-    def __init__(self, queue=None, process_args=None, *args, **kwargs):
+    def __init__(
+        self,
+        queue: Optional[Queue] = None,
+        process_args: Optional[Dict[str, Any]] = None,
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
         """
         Initialize the process.
 

@@ -2,7 +2,7 @@ import gc
 import json
 import os
 from glob import glob
-from typing import Optional
+from typing import Optional, List, Union, Tuple, Dict, Any
 
 import numpy as np
 from celldetective.utils.io import save_tiff_imagej_compatible
@@ -27,7 +27,7 @@ logging.getLogger("tifffile").setLevel(logging.ERROR)
 warnings.filterwarnings("ignore", message=".*MMStack series is missing files.*")
 
 
-def locate_stack(position, prefix="Aligned"):
+def locate_stack(position: str, prefix: str = "Aligned") -> np.ndarray:
     """
 
     Locate and load a stack of images.
@@ -89,7 +89,11 @@ def locate_stack(position, prefix="Aligned"):
     return stack
 
 
-def locate_labels(position, population="target", frames=None):
+def locate_labels(
+    position: str,
+    population: str = "target",
+    frames: Optional[Union[int, List[int], np.ndarray]] = None,
+) -> Union[np.ndarray, List[Optional[np.ndarray]], None]:
     """
     Locate and load label images for a given position and population in an experiment.
 
@@ -112,7 +116,7 @@ def locate_labels(position, population="target", frames=None):
 
     Returns
     -------
-    numpy.ndarray or list of numpy.ndarray
+    numpy.ndarray or list of numpy.ndarray or None
             If `frames` is `None` or a single integer, returns a NumPy array of the corresponding
             labels. If `frames` is a list or array, returns a list of NumPy arrays for each frame.
             If a frame is not found, `None` is returned for that frame.
@@ -194,7 +198,9 @@ def locate_labels(position, population="target", frames=None):
     return labels
 
 
-def locate_stack_and_labels(position, prefix="Aligned", population="target"):
+def locate_stack_and_labels(
+    position: str, prefix: str = "Aligned", population: str = "target"
+) -> Tuple[np.ndarray, Union[np.ndarray, List[Optional[np.ndarray]], None]]:
     """
 
     Locate and load the stack and corresponding segmentation labels.
@@ -246,7 +252,7 @@ def locate_stack_and_labels(position, prefix="Aligned", population="target"):
     return stack, labels
 
 
-def auto_load_number_of_frames(stack_path):
+def auto_load_number_of_frames(stack_path: str) -> Optional[int]:
     """
     Automatically determine the number of frames in a TIFF image stack.
 
@@ -356,7 +362,12 @@ def auto_load_number_of_frames(stack_path):
     return len_movie if "len_movie" in locals() else None
 
 
-def _load_frames_to_segment(file, indices, scale_model=None, normalize_kwargs=None):
+def _load_frames_to_segment(
+    file: str,
+    indices: Union[List[int], np.ndarray],
+    scale_model: Optional[float] = None,
+    normalize_kwargs: Optional[Dict[str, Any]] = None,
+) -> np.ndarray:
     """
     Load frames for segmentation.
 
@@ -392,7 +403,9 @@ def _load_frames_to_segment(file, indices, scale_model=None, normalize_kwargs=No
     return frames
 
 
-def _load_frames_to_measure(file, indices):
+def _load_frames_to_measure(
+    file: str, indices: Union[List[int], np.ndarray]
+) -> Optional[np.ndarray]:
     """
     Load frames for measurement.
 
@@ -412,13 +425,13 @@ def _load_frames_to_measure(file, indices):
 
 
 def load_frames(
-    img_nums,
-    stack_path,
-    scale=None,
-    normalize_input=True,
-    dtype=np.float64,
-    normalize_kwargs={"percentiles": (0.0, 99.99)},
-):
+    img_nums: Union[int, List[int], np.ndarray],
+    stack_path: str,
+    scale: Optional[float] = None,
+    normalize_input: bool = True,
+    dtype: type = np.float64,
+    normalize_kwargs: Dict[str, Any] = {"percentiles": (0.0, 99.99)},
+) -> Optional[np.ndarray]:
     """
     Loads and optionally normalizes and rescales specified frames from a stack located at a given path.
 
@@ -611,7 +624,9 @@ def zoom_multiframes(frames: np.ndarray, zoom_factor: float) -> np.ndarray:
     return frames
 
 
-def fix_missing_labels(position, population="target", prefix="Aligned"):
+def fix_missing_labels(
+    position: str, population: str = "target", prefix: str = "Aligned"
+) -> None:
     """
     Fix missing label files by creating empty label images for frames that do not have corresponding label files.
 
@@ -676,7 +691,11 @@ def fix_missing_labels(position, population="target", prefix="Aligned"):
     # imwrite(os.sep.join([path, file]), template.astype(int))
 
 
-def _get_img_num_per_channel(channels_indices, len_movie, nbr_channels):
+def _get_img_num_per_channel(
+    channels_indices: Union[int, List[Optional[int]], np.ndarray],
+    len_movie: int,
+    nbr_channels: int,
+) -> np.ndarray:
     """
     Calculates the image frame numbers for each specified channel in a multi-channel movie.
 
@@ -745,7 +764,9 @@ def _get_img_num_per_channel(channels_indices, len_movie, nbr_channels):
     return img_num_all_channels
 
 
-def _extract_channel_indices(channels, required_channels):
+def _extract_channel_indices(
+    channels: Optional[List[str]], required_channels: List[str]
+) -> List[Optional[int]]:
     """
     Extracts the indices of required channels from a list of available channels.
 
@@ -764,8 +785,8 @@ def _extract_channel_indices(channels, required_channels):
 
     Returns
     -------
-    ndarray or None
-            An array of indices indicating the positions of the required channels within the list of available
+    list of int or None
+            A list of indices indicating the positions of the required channels within the list of available
             channels. Returns None if there is a mismatch between required and available channels.
 
     Notes
@@ -804,8 +825,11 @@ def _extract_channel_indices(channels, required_channels):
 
 
 def load_image_dataset(
-    datasets, channels, train_spatial_calibration=None, mask_suffix="labelled"
-):
+    datasets: List[str],
+    channels: Union[str, List[str]],
+    train_spatial_calibration: Optional[float] = None,
+    mask_suffix: str = "labelled",
+) -> Tuple[List[np.ndarray], List[np.ndarray], List[str]]:
     """
     Loads image and corresponding mask datasets, optionally applying spatial calibration adjustments.
 
@@ -828,8 +852,8 @@ def load_image_dataset(
     Returns
     -------
     tuple of lists
-            A tuple containing two lists: `X` for images and `Y` for corresponding masks. Both lists contain
-            numpy arrays of loaded and optionally transformed images and masks.
+            A tuple containing three lists: `X` for images, `Y` for corresponding masks, and `files` for the
+            original file paths. All lists contain elements corresponding to the loaded samples.
 
     Raises
     ------
@@ -851,7 +875,7 @@ def load_image_dataset(
     --------
     >>> datasets = ['/path/to/dataset1', '/path/to/dataset2']
     >>> channels = ['DAPI', 'GFP']
-    >>> X, Y = load_image_dataset(datasets, channels, train_spatial_calibration=0.65)
+    >>> X, Y, files = load_image_dataset(datasets, channels, train_spatial_calibration=0.65)
     # Loads DAPI and GFP channels from specified datasets, rescaling images to match a spatial calibration of 0.65.
     """
 

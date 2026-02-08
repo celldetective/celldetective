@@ -15,7 +15,12 @@ from celldetective.gui.base.styles import Styles
 class ChannelNormGenerator(QVBoxLayout, Styles):
     """Generator for list of channels"""
 
-    def __init__(self, parent_window=None, init_n_channels=4, mode="signals", *args):
+    def __init__(
+        self,
+        parent_window: Optional[QMainWindow] = None,
+        init_n_channels: Optional[int] = None,
+        mode: Optional[str] = "segmentation",
+    ) -> None:
         """
         Initialize the ChannelNormGenerator.
 
@@ -50,7 +55,7 @@ class ChannelNormGenerator(QVBoxLayout, Styles):
         self.generate_widgets()
         self.add_to_layout()
 
-    def add_items_truncated(self, combo, items):
+    def add_items_truncated(self, combo: QComboBox, items: list) -> None:
         """
         Add items to a combobox with truncated text and full text in tooltip/data.
 
@@ -304,7 +309,7 @@ class ChannelNormGenerator(QVBoxLayout, Styles):
         add_hbox.addWidget(self.add_col_btn, 33, alignment=Qt.AlignRight)
         self.addLayout(add_hbox)
 
-    def switch_normalization_mode(self, index):
+    def switch_normalization_mode(self, index: int) -> None:
         """
         Use absolute or percentile values for the normalization of each individual channel.
 
@@ -345,7 +350,7 @@ class ChannelNormGenerator(QVBoxLayout, Styles):
             self.normalization_max_value_lbl[index].setText("Max: ")
             self.normalization_max_value_le[index].setText("1000")
 
-    def switch_clipping_mode(self, index):
+    def switch_clipping_mode(self, index: int) -> None:
         """
         Switch the clipping mode for a specific channel.
 

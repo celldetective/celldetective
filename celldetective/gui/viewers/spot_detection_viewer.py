@@ -1,6 +1,8 @@
 import os
 from glob import glob
 from pathlib import Path
+from typing import Optional, Union, List, Any
+import matplotlib.backend_bases
 
 import numpy as np
 from PyQt5.QtCore import QSize
@@ -16,7 +18,7 @@ from PyQt5.QtWidgets import (
     QSizePolicy,
     QWidget,
 )
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QEvent
 from celldetective.gui.base.utils import center_window
 from fonticon_mdi6 import MDI6
 from natsort import natsorted
@@ -37,18 +39,18 @@ class SpotDetectionVisualizer(StackVisualizer):
 
     def __init__(
         self,
-        parent_channel_cb=None,
-        parent_diameter_le=None,
-        parent_threshold_le=None,
-        parent_preprocessing_list=None,
-        cell_type="targets",
-        labels=None,
-        initial_diameter=None,
-        initial_threshold=None,
-        initial_preprocessing=None,
-        *args,
-        **kwargs,
-    ):
+        parent_channel_cb: Optional[QComboBox] = None,
+        parent_diameter_le: Optional[QLineEdit] = None,
+        parent_threshold_le: Optional[QLineEdit] = None,
+        parent_preprocessing_list: Optional[Any] = None,
+        cell_type: str = "targets",
+        labels: Optional[np.ndarray] = None,
+        initial_diameter: Optional[float] = None,
+        initial_threshold: Optional[float] = None,
+        initial_preprocessing: Optional[List[Any]] = None,
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
         """
         Initialize the SpotDetectionVisualizer.
 
@@ -155,7 +157,7 @@ class SpotDetectionVisualizer(StackVisualizer):
                 self.preprocessing.list.addItemToList(it)
             self.preprocessing.list.items = list(initial_preprocessing)
 
-    def closeEvent(self, event):
+    def closeEvent(self, event: QEvent) -> None:
         """
         Clean up resources on close.
 
@@ -176,7 +178,9 @@ class SpotDetectionVisualizer(StackVisualizer):
 
         super().closeEvent(event)
 
-    def update_marker_sizes(self, event=None):
+    def update_marker_sizes(
+        self, event: Optional[matplotlib.backend_bases.Event] = None
+    ) -> None:
         """
         Update the size of the markers in the scatter plot.
 
@@ -220,7 +224,7 @@ class SpotDetectionVisualizer(StackVisualizer):
         )
         self.canvas.canvas.draw()
 
-    def change_frame(self, value):
+    def change_frame(self, value: int) -> None:
         """
         Change the displayed frame.
 
@@ -378,7 +382,7 @@ class SpotDetectionVisualizer(StackVisualizer):
     # 	else:
     # 		self.invert = False
 
-    def set_detection_channel_index(self, value):
+    def set_detection_channel_index(self, value: int) -> None:
         """
         Set the detection channel index.
 

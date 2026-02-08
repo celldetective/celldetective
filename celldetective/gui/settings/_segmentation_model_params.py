@@ -18,8 +18,12 @@ from celldetective.utils.model_loaders import locate_segmentation_model
 class SegModelParamsWidget(CelldetectiveWidget):
 
     def __init__(
-        self, parent_window=None, model_name="SD_versatile_fluo", *args, **kwargs
-    ):
+        self,
+        parent_window: Optional[QMainWindow] = None,
+        model_name: Optional[str] = "SD_versatile_fluo",
+        *args,
+        **kwargs,
+    ) -> None:
         """
         Initialize the SegModelParamsWidget.
 

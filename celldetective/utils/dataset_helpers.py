@@ -1,10 +1,11 @@
 import numpy as np
+from typing import List, Dict, Any, Optional, Union
 from celldetective import get_logger
 
 logger = get_logger()
 
 
-def split_by_ratio(arr, *ratios):
+def split_by_ratio(arr: np.ndarray, *ratios: float) -> List[List[Any]]:
     """
 
     Split an array into multiple chunks based on given ratios.
@@ -51,7 +52,7 @@ def split_by_ratio(arr, *ratios):
     return [x.tolist() for x in np.split(arr, ind)][: len(ratios)]
 
 
-def compute_weights(y):
+def compute_weights(y: np.ndarray) -> Dict[Any, float]:
     """
 
     Compute class weights based on the input labels.
@@ -103,8 +104,13 @@ def compute_weights(y):
 
 
 def train_test_split(
-    data_x, data_y1, data_class=None, validation_size=0.25, test_size=0, n_iterations=10
-):
+    data_x: np.ndarray,
+    data_y1: np.ndarray,
+    data_class: Optional[np.ndarray] = None,
+    validation_size: float = 0.25,
+    test_size: float = 0,
+    n_iterations: int = 10,
+) -> Dict[str, np.ndarray]:
     """
 
     Split the dataset into training, validation, and test sets.

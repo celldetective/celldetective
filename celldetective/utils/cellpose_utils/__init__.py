@@ -1,17 +1,17 @@
 from pathlib import Path
-from typing import Union, Optional
+from typing import Union, Optional, Any
 
 import numpy as np
 
 
 def _segment_image_with_cellpose_model(
-    img,
-    model=None,
-    diameter=None,
-    cellprob_threshold=None,
-    flow_threshold=None,
-    channel_axis=-1,
-):
+    img: np.ndarray,
+    model: Any = None,
+    diameter: Optional[float] = None,
+    cellprob_threshold: Optional[float] = None,
+    flow_threshold: Optional[float] = None,
+    channel_axis: int = -1,
+) -> np.ndarray:
     """
     Segments an input image using a Cellpose model.
 

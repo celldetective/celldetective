@@ -21,7 +21,12 @@ logger = get_logger(__name__)
 
 class ChannelOffsetViewer(StackVisualizer):
 
-    def __init__(self, parent_window=None, *args, **kwargs):
+    def __init__(
+        self,
+        *args: Any,
+        parent_window: Optional[QMainWindow] = None,
+        **kwargs: Any,
+    ) -> None:
         """
         Initialize the ChannelOffsetViewer.
 
@@ -139,7 +144,7 @@ class ChannelOffsetViewer(StackVisualizer):
         self.overlay_contrast_slider.valueChanged.connect(self.change_contrast_overlay)
         self.canvas.layout.addLayout(contrast_layout)
 
-    def set_overlay_channel_index(self, value):
+    def set_overlay_channel_index(self, value: int) -> None:
         """
         Set the overlay channel index.
 
@@ -219,7 +224,7 @@ class ChannelOffsetViewer(StackVisualizer):
 
         self.canvas.layout.addLayout(shift_layout)
 
-    def change_overlay_frame(self, value):
+    def change_overlay_frame(self, value: int) -> None:
         """
         Change the displayed overlay frame.
 
@@ -299,7 +304,7 @@ class ChannelOffsetViewer(StackVisualizer):
             normalize_input=False,
         ).astype(float)[:, :, 0]
 
-    def change_contrast_overlay(self, value):
+    def change_contrast_overlay(self, value: Tuple[float, float]) -> None:
         """
         Change the contract of the overlay.
 
@@ -315,7 +320,7 @@ class ChannelOffsetViewer(StackVisualizer):
         self.im_overlay.set_clim(vmin=vmin, vmax=vmax)
         self.fig.canvas.draw_idle()
 
-    def change_alpha_overlay(self, value):
+    def change_alpha_overlay(self, value: float) -> None:
         """
         Change the transparency of the overlay.
 

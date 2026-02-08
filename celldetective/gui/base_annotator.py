@@ -54,7 +54,9 @@ logger = get_logger(__name__)
 
 class BaseAnnotator(CelldetectiveMainWindow, Styles):
 
-    def __init__(self, parent_window=None, read_config=True):
+    def __init__(
+        self, parent_window: Optional[QMainWindow] = None, read_config: bool = True
+    ) -> None:
         """
         Initialize the BaseAnnotator.
 
@@ -388,7 +390,7 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
                 self.signal_choice_cb[i].setCurrentIndex(0)
             self.signal_choice_cb[i].currentIndexChanged.connect(self.plot_signals)
 
-    def on_scatter_pick(self, event):
+    def on_scatter_pick(self, event: Any) -> None:
         """
         Handle scatter plot pick events.
 
@@ -547,7 +549,7 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
         self.cell_ax.legend(fontsize=8)
         self.cell_fcanvas.canvas.draw()
 
-    def resizeEvent(self, event):
+    def resizeEvent(self, event: QResizeEvent) -> None:
         """
         Handle resize events.
 
@@ -922,7 +924,7 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
         self.suppr_btn.click()
         self.correct_btn.click()
 
-    def closeEvent(self, event):
+    def closeEvent(self, event: QCloseEvent) -> None:
         """
         Handle close event.
 

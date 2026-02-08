@@ -33,7 +33,7 @@ logger = get_logger(__name__)
 class BackgroundFitCorrectionLayout(QGridLayout, Styles):
     """docstring for ClassName"""
 
-    def __init__(self, parent_window=None, *args):
+    def __init__(self, parent_window: Optional[QMainWindow] = None, *args) -> None:
         """
         Initialize the BackgroundFitCorrectionLayout.
 
@@ -293,7 +293,7 @@ class BackgroundFitCorrectionLayout(QGridLayout, Styles):
             BackgroundCorrectionProcess, process_args=process_args
         )
 
-        def on_result(corrected_stack):
+        def on_result(corrected_stack: np.ndarray) -> None:
             """
             Handle the result of the preview worker.
 
@@ -339,11 +339,11 @@ class BackgroundFitCorrectionLayout(QGridLayout, Styles):
             else:
                 print("Corrected stack could not be generated...")
 
-        def on_finished():
+        def on_finished() -> None:
             """Handle completion of the preview worker."""
             self.bg_progress.close()
 
-        def on_error(msg):
+        def on_error(msg: str) -> None:
             """
             Handle errors from the preview worker.
 
@@ -369,7 +369,7 @@ class PreviewWorker(QThread):
     result_ready = pyqtSignal(object)
     error = pyqtSignal(str)
 
-    def __init__(self, process_class, process_args):
+    def __init__(self, process_class: type, process_args: dict) -> None:
         """
         Initialize the PreviewWorker.
 

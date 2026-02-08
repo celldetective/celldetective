@@ -1,5 +1,13 @@
+from typing import Optional, List
 from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton
+from PyQt5.QtWidgets import (
+    QVBoxLayout,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QPushButton,
+    QMainWindow,
+)
 from fonticon_mdi6 import MDI6
 from superqt import QSearchableComboBox
 from superqt.fonticon import icon
@@ -11,7 +19,9 @@ from celldetective.gui.gui_utils import PandasModel
 
 class MergeOneHotWidget(CelldetectiveWidget):
 
-    def __init__(self, parent_window, selected_columns=None):
+    def __init__(
+        self, parent_window: QMainWindow, selected_columns: Optional[List[str]] = None
+    ) -> None:
         """
         Initialize the MergeOneHotWidget.
 

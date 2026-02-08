@@ -2,6 +2,8 @@ from collections import OrderedDict
 
 import numpy as np
 from PyQt5.QtWidgets import QLineEdit, QHBoxLayout, QPushButton, QLabel
+from PyQt5.QtCore import QEvent
+from typing import Optional, Union, List, Any, Callable
 from superqt import QLabeledDoubleSlider
 
 from celldetective.gui.gui_utils import QuickSliderLayout
@@ -41,16 +43,16 @@ class ThresholdedStackVisualizer(StackVisualizer):
 
     def __init__(
         self,
-        preprocessing=None,
-        parent_le=None,
-        initial_threshold=5,
-        initial_mask_alpha=0.5,
-        show_opacity_slider=True,
-        show_threshold_slider=True,
-        fill_holes=True,
-        *args,
-        **kwargs,
-    ):
+        preprocessing: Optional[List[Any]] = None,
+        parent_le: Optional[Any] = None,
+        initial_threshold: Optional[Union[float, List[float]]] = 5,
+        initial_mask_alpha: float = 0.5,
+        show_opacity_slider: bool = True,
+        show_threshold_slider: bool = True,
+        fill_holes: bool = True,
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
         """
         Initialize the ThresholdedStackVisualizer.
 
@@ -126,7 +128,7 @@ class ThresholdedStackVisualizer(StackVisualizer):
         apply_hbox.addWidget(QLabel(""), 33)
         self.canvas.layout.addLayout(apply_hbox)
 
-    def closeEvent(self, event):
+    def closeEvent(self, event: QEvent) -> None:
         """
         Handle the close event.
 
@@ -205,7 +207,7 @@ class ThresholdedStackVisualizer(StackVisualizer):
         if self.show_opacity_slider:
             self.canvas.layout.addLayout(opacity_layout)
 
-    def change_mask_opacity(self, value):
+    def change_mask_opacity(self, value: float) -> None:
         """
         Change the opacity of the mask.
 
@@ -219,7 +221,7 @@ class ThresholdedStackVisualizer(StackVisualizer):
         self.im_mask.set_alpha(self.mask_alpha)
         self.canvas.canvas.draw_idle()
 
-    def change_threshold(self, value):
+    def change_threshold(self, value: Union[float, List[float], np.ndarray]) -> None:
         """
         Change the threshold value.
 
@@ -255,7 +257,7 @@ class ThresholdedStackVisualizer(StackVisualizer):
                 self.im_mask.set_data(mask)
             self.canvas.canvas.draw_idle()
 
-    def change_frame(self, value):
+    def change_frame(self, value: int) -> None:
         """
         Change the displayed frame and update the threshold.
 
@@ -279,7 +281,9 @@ class ThresholdedStackVisualizer(StackVisualizer):
             self.thresholded = False
             self.init_contrast = False
 
-    def compute_mask(self, threshold_value):
+    def compute_mask(
+        self, threshold_value: Union[float, List[float], np.ndarray]
+    ) -> None:
         """
         Compute the mask based on the threshold value.
 
@@ -371,7 +375,7 @@ class ThresholdedStackVisualizer(StackVisualizer):
             # We don't cache this as it's just a reference or light copy of init_frame
             self.processed_image = self.init_frame.astype(float)
 
-    def set_preprocessing(self, activation_protocol):
+    def set_preprocessing(self, activation_protocol: List[Any]) -> None:
         """
         Set the preprocessing protocol.
 

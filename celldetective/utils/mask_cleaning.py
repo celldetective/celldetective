@@ -1,5 +1,5 @@
-import concurrent.futures
 import threading
+from typing import Union, Optional, Any, List, Dict, Tuple, Callable
 
 import numpy as np
 import pandas as pd
@@ -10,9 +10,10 @@ from tqdm import tqdm
 from celldetective.utils.image_loaders import load_frames
 from scipy.ndimage import binary_fill_holes
 from scipy.ndimage import find_objects
+import concurrent.futures
 
 
-def fill_label_holes(lbl_img, **kwargs):
+def fill_label_holes(lbl_img: np.ndarray, **kwargs: Any) -> np.ndarray:
     """
     Fill small holes in label image.
     from https://github.com/stardist/stardist/blob/main/stardist/utils.py
@@ -31,7 +32,9 @@ def fill_label_holes(lbl_img, **kwargs):
     """
 
     # TODO: refactor 'fill_label_holes' and 'edt_prob' to share code
-    def grow(sl, interior):
+    def grow(
+        sl: Tuple[slice, ...], interior: List[Tuple[bool, bool]]
+    ) -> Tuple[slice, ...]:
         """
         Grow slice.
 
@@ -46,7 +49,7 @@ def fill_label_holes(lbl_img, **kwargs):
             slice(s.start - int(w[0]), s.stop + int(w[1])) for s, w in zip(sl, interior)
         )
 
-    def shrink(interior):
+    def shrink(interior: List[Tuple[bool, bool]]) -> Tuple[slice, ...]:
         """
         Shrink slice.
 
@@ -75,7 +78,11 @@ def fill_label_holes(lbl_img, **kwargs):
     return lbl_img_filled
 
 
-def _check_label_dims(lbl, file=None, template=None):
+def _check_label_dims(
+    lbl: np.ndarray,
+    file: Optional[Union[str, Path]] = None,
+    template: Optional[np.ndarray] = None,
+) -> np.ndarray:
     """
     Check and resize label image to match template dimensions.
 
@@ -107,8 +114,11 @@ def _check_label_dims(lbl, file=None, template=None):
 
 
 def auto_correct_masks(
-    masks, bbox_factor: float = 1.75, min_area: int = 9, fill_labels: bool = False
-):
+    masks: np.ndarray,
+    bbox_factor: float = 1.75,
+    min_area: int = 9,
+    fill_labels: bool = False,
+) -> np.ndarray:
     """
     Correct segmentation masks to ensure consistency and remove anomalies.
 
@@ -215,19 +225,19 @@ def auto_correct_masks(
 
 
 def relabel_segmentation(
-    labels,
-    df,
-    exclude_nans=True,
-    column_labels={
+    labels: np.ndarray,
+    df: pd.DataFrame,
+    exclude_nans: bool = True,
+    column_labels: Dict[str, str] = {
         "track": "TRACK_ID",
         "frame": "FRAME",
         "y": "POSITION_Y",
         "x": "POSITION_X",
         "label": "class_id",
     },
-    threads=1,
-    progress_callback=None,
-):
+    threads: int = 1,
+    progress_callback: Optional[Callable[[float], bool]] = None,
+) -> Optional[np.ndarray]:
     """
     Relabel the segmentation labels with the tracking IDs from the tracks.
 
@@ -309,7 +319,7 @@ def relabel_segmentation(
     shared_progress = {"val": 0, "lock": threading.Lock()}
     total_frames = len(df[column_labels["frame"]].dropna().unique())
 
-    def rewrite_labels(indices):
+    def rewrite_labels(indices: List[int]) -> None:
         """
         Rewrite labels for a batch of frames.
 

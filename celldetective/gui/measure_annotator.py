@@ -8,9 +8,15 @@ from PyQt5.QtWidgets import (
     QMessageBox,
     QSlider,
     QComboBox,
+    QCheckBox,
+    QRadioButton,
+    QButtonGroup,
+    QMainWindow,
 )
-from PyQt5.QtCore import Qt, QSize
+from PyQt5.QtCore import Qt, QSize, QCloseEvent
 from PyQt5.QtGui import QIntValidator, QKeySequence
+from matplotlib.axes import Axes
+from typing import Optional, Union, Any
 import numpy as np
 import pandas as pd
 import os
@@ -34,7 +40,7 @@ logger = get_logger(__name__)
 
 
 class AnnotatorStackVisualizer(CellEdgeVisualizer):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         """
         Initialize the AnnotatorStackVisualizer.
 
@@ -49,7 +55,7 @@ class AnnotatorStackVisualizer(CellEdgeVisualizer):
         super().__init__(*args, **kwargs)
         self.compact_layout()
 
-    def generate_figure_canvas(self):
+    def generate_figure_canvas(self) -> None:
         """
         Generate the figure canvas and initialize custom overlays.
         """
@@ -58,12 +64,12 @@ class AnnotatorStackVisualizer(CellEdgeVisualizer):
         # Force layout update
         self.compact_layout()
 
-    def generate_custom_overlays(self):
+    def generate_custom_overlays(self) -> None:
         """Initialize scatter artists."""
         self.scat_markers = self.ax.scatter([], [], color="tab:red", picker=True)
         # CellEdgeVisualizer handles self.im_mask
 
-    def update_overlays(self, positions, colors):
+    def update_overlays(self, positions: np.ndarray, colors: np.ndarray) -> None:
         """
         Update the scatter plot overlays with new positions and colors.
 
@@ -86,14 +92,14 @@ class AnnotatorStackVisualizer(CellEdgeVisualizer):
 
         self.canvas.canvas.draw_idle()
 
-    def generate_edge_slider(self):
+    def generate_edge_slider(self) -> None:
         """
         Override to hide the edge slider.
         """
         # Override to hide edge slider
         pass
 
-    def generate_opacity_slider(self):
+    def generate_opacity_slider(self) -> None:
         """
         Generate a compact opacity slider for the mask.
         """
@@ -112,7 +118,7 @@ class AnnotatorStackVisualizer(CellEdgeVisualizer):
         layout.addWidget(self.opacity_slider, 85)
         self.canvas.layout.addLayout(layout)
 
-    def compact_layout(self):
+    def compact_layout(self) -> None:
         """
         Reduce margins and spacing for a more compact layout.
         """
@@ -131,7 +137,7 @@ class AnnotatorStackVisualizer(CellEdgeVisualizer):
 
 class MeasureAnnotator(BaseAnnotator):
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         """
         Initialize the MeasureAnnotator.
         """
@@ -186,7 +192,7 @@ class MeasureAnnotator(BaseAnnotator):
         else:
             self.close()
 
-    def locate_tracks(self):
+    def locate_tracks(self) -> None:
         """
         Locate the tracks.
         """
@@ -381,7 +387,7 @@ class MeasureAnnotator(BaseAnnotator):
             x = self.df_tracks[self.columns_to_rescale].values
             self.MinMaxScaler.fit(x)
 
-    def populate_options_layout(self):
+    def populate_options_layout(self) -> None:
         """Populate the options layout."""
         # clear options hbox
         for i in reversed(range(self.options_hbox.count())):
@@ -408,7 +414,7 @@ class MeasureAnnotator(BaseAnnotator):
 
         self.options_hbox.addLayout(time_option_hbox)
 
-    def update_widgets(self):
+    def update_widgets(self) -> None:
         """Update widgets."""
         self.class_label.setText("characteristic \n group: ")
         self.update_class_cb()
@@ -418,7 +424,7 @@ class MeasureAnnotator(BaseAnnotator):
         self.export_btn.disconnect()
         self.export_btn.clicked.connect(self.export_measurements)
 
-    def update_class_cb(self):
+    def update_class_cb(self) -> None:
         """Update class combo box."""
         self.class_choice_cb.disconnect()
         self.class_choice_cb.clear()
@@ -462,7 +468,7 @@ class MeasureAnnotator(BaseAnnotator):
             self.class_choice_cb.setCurrentText(self.status_name)
         self.class_choice_cb.currentIndexChanged.connect(self.changed_class)
 
-    def populate_window(self):
+    def populate_window(self) -> None:
         """Populate the window."""
         super().populate_window()
         # Left panel updates
@@ -505,13 +511,13 @@ class MeasureAnnotator(BaseAnnotator):
         self.plot_signals()
         self.compact_layout_main()
 
-    def compact_layout_main(self):
+    def compact_layout_main(self) -> None:
         """Compact the main layout."""
         # Attempt to compact the viewer layout one more time from the main window side
         if hasattr(self, "viewer"):
             self.viewer.compact_layout()
 
-    def sync_frame(self, value):
+    def sync_frame(self, value: int) -> None:
         """
         Callback when StackVisualizer frame changes.
 
@@ -524,7 +530,7 @@ class MeasureAnnotator(BaseAnnotator):
         self.current_frame = value
         self.update_frame_logic()
 
-    def plot_signals(self):
+    def plot_signals(self) -> None:
         """Delegate signal plotting but check for viewer availability"""
         if not hasattr(self, "viewer"):
             return
@@ -639,7 +645,7 @@ class MeasureAnnotator(BaseAnnotator):
 
         self.cell_fcanvas.canvas.draw()
 
-    def plot_red_points(self, ax):
+    def plot_red_points(self, ax: Axes) -> None:
         """
         Plot red points on the axes.
 
@@ -673,7 +679,7 @@ class MeasureAnnotator(BaseAnnotator):
         )  # Plot red points representing cells
         self.cell_fcanvas.canvas.draw()
 
-    def select_single_cell(self, index, timepoint):
+    def select_single_cell(self, index: int, timepoint: int) -> None:
         """
         Select a single cell.
 
@@ -716,13 +722,13 @@ class MeasureAnnotator(BaseAnnotator):
 
         self.draw_frame(self.current_frame)
 
-    def cancel_selection(self):
+    def cancel_selection(self) -> None:
         """Cancel selection."""
         super().cancel_selection()
         self.event = None
         self.draw_frame(self.current_frame)
 
-    def export_measurements(self):
+    def export_measurements(self) -> None:
         """Export measurements to file."""
         logger.info("User interactions: Exporting measurements...")
         # Implementation same as before
@@ -753,7 +759,7 @@ class MeasureAnnotator(BaseAnnotator):
             except Exception as e:
                 logger.error(f"Error {e}...")
 
-    def write_new_event_class(self):
+    def write_new_event_class(self) -> None:
         """Write new event class."""
         if self.class_name_le.text() == "":
             self.target_class = "group"
@@ -787,7 +793,7 @@ class MeasureAnnotator(BaseAnnotator):
         self.class_choice_cb.setCurrentIndex(idx)
         self.newClassWidget.close()
 
-    def hide_annotation_buttons(self):
+    def hide_annotation_buttons(self) -> None:
         """Hide annotation buttons."""
 
         for a in self.annotation_btns_to_hide:
@@ -796,7 +802,7 @@ class MeasureAnnotator(BaseAnnotator):
         self.time_of_interest_le.setText("")
         self.time_of_interest_le.setEnabled(False)
 
-    def show_annotation_buttons(self):
+    def show_annotation_buttons(self) -> None:
         """Show annotation buttons."""
 
         for a in self.annotation_btns_to_hide:
@@ -809,7 +815,7 @@ class MeasureAnnotator(BaseAnnotator):
         self.correct_btn.disconnect()
         self.correct_btn.clicked.connect(self.apply_modification)
 
-    def give_cell_information(self):
+    def give_cell_information(self) -> None:
         """Display cell information."""
 
         try:
@@ -839,7 +845,7 @@ class MeasureAnnotator(BaseAnnotator):
         except Exception as e:
             logger.error(f"Error in give_cell_information: {e}")
 
-    def create_new_event_class(self):
+    def create_new_event_class(self) -> None:
         """Create a new event class."""
 
         # display qwidget to name the event
@@ -867,7 +873,7 @@ class MeasureAnnotator(BaseAnnotator):
         self.newClassWidget.show()
         center_window(self.newClassWidget)
 
-    def apply_modification(self):
+    def apply_modification(self) -> None:
         """Apply modification to the cell."""
         if self.time_of_interest_le.text() != "":
             status = int(self.time_of_interest_le.text())
@@ -925,7 +931,7 @@ class MeasureAnnotator(BaseAnnotator):
 
         self.draw_frame(self.current_frame)
 
-    def assign_color_state(self, state):
+    def assign_color_state(self, state: Union[int, str]) -> list:
         """
         Assign color based on state.
 
@@ -946,7 +952,7 @@ class MeasureAnnotator(BaseAnnotator):
             pass
         return self.state_color_map[state]
 
-    def on_scatter_pick(self, event):
+    def on_scatter_pick(self, event: "matplotlib.backend_bases.PickEvent") -> None:
         """
         Handle pick event on scatter plot.
 
@@ -987,7 +993,7 @@ class MeasureAnnotator(BaseAnnotator):
             self.selection = [[idx, self.current_frame]]
             self.select_single_cell(idx, self.current_frame)
 
-    def draw_frame(self, framedata):
+    def draw_frame(self, framedata: int) -> None:
         """
         Update plot elements at each timestep of the loop.
         Using StackVisualizer overlay update.
@@ -1017,7 +1023,7 @@ class MeasureAnnotator(BaseAnnotator):
             colors=cols,
         )
 
-    def make_status_column(self):
+    def make_status_column(self) -> None:
         """Create the status column."""
         if self.status_name == "state_firstdetection":
             pass
@@ -1030,7 +1036,7 @@ class MeasureAnnotator(BaseAnnotator):
                 self.assign_color_state
             )
 
-    def extract_scatter_from_trajectories(self):
+    def extract_scatter_from_trajectories(self) -> None:
         """Extract scatter data from trajectories."""
 
         self.positions = []
@@ -1059,7 +1065,7 @@ class MeasureAnnotator(BaseAnnotator):
                     self.df_tracks.loc[self.df_tracks["FRAME"] == t, "ID"].to_numpy()
                 )
 
-    def compute_status_and_colors(self, index=0):
+    def compute_status_and_colors(self, index: Optional[int] = None) -> None:
         """
         Compute status and colors.
 

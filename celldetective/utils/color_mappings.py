@@ -1,4 +1,4 @@
-def color_from_status(status, recently_modified=False):
+def color_from_status(status: int, recently_modified: bool = False) -> str:
     """
     Get color based on status.
 
@@ -35,7 +35,7 @@ def color_from_status(status, recently_modified=False):
             return "k"
 
 
-def color_from_class(cclass, recently_modified=False):
+def color_from_class(cclass: int, recently_modified: bool = False) -> str:
     """
     Get color based on class.
 

@@ -34,7 +34,7 @@ abs_path = os.sep.join(
 )
 
 
-def measure_pairs(pos, neighborhood_protocol):
+def measure_pairs(pos: str, neighborhood_protocol: dict) -> Optional[pd.DataFrame]:
     """
     Measures properties of cell pairs defined by a neighborhood protocol at a specific position.
 
@@ -230,8 +230,10 @@ def measure_pairs(pos, neighborhood_protocol):
 
 
 def measure_pair_signals_at_position(
-    pos, neighborhood_protocol, velocity_kwargs={"window": 3, "mode": "bi"}
-):
+    pos: str,
+    neighborhood_protocol: dict,
+    velocity_kwargs: dict = {"window": 3, "mode": "bi"},
+) -> Optional[pd.DataFrame]:
     """
     Measures signals and temporal properties for cell pairs at a specific position.
 
@@ -665,7 +667,9 @@ def measure_pair_signals_at_position(
         )
 
 
-def timeline_matching(timeline1, timeline2):
+def timeline_matching(
+    timeline1: np.ndarray, timeline2: np.ndarray
+) -> Tuple[np.ndarray, List[int], List[int]]:
     """
     Match two timelines and create a unified timeline with corresponding indices.
 
@@ -718,7 +722,7 @@ def timeline_matching(timeline1, timeline2):
     return full_timeline, index1, index2
 
 
-def rel_measure_at_position(pos):
+def rel_measure_at_position(pos: str) -> None:
     """
     Executes the relative measurement script for a given position.
 
@@ -794,7 +798,9 @@ def rel_measure_at_position(pos):
 # 	return probs
 
 
-def update_effector_table(df_relative, df_effector):
+def update_effector_table(
+    df_relative: pd.DataFrame, df_effector: pd.DataFrame
+) -> pd.DataFrame:
     """
     Updates the effector table to mark effectors that are part of a neighborhood.
 
@@ -823,7 +829,9 @@ def update_effector_table(df_relative, df_effector):
     return df_effector
 
 
-def extract_neighborhoods_from_pickles(pos, populations=["targets", "effectors"]):
+def extract_neighborhoods_from_pickles(
+    pos: str, populations: List[str] = ["targets", "effectors"]
+) -> List[dict]:
     """
     Extract neighborhood protocols from pickle files located at a given position.
 
@@ -906,7 +914,9 @@ def extract_neighborhoods_from_pickles(pos, populations=["targets", "effectors"]
     return neighborhood_protocols
 
 
-def extract_neighborhood_settings(neigh_string, population="targets"):
+def extract_neighborhood_settings(
+    neigh_string: str, population: str = "targets"
+) -> dict:
     """
     Extract neighborhood settings from a given string.
 
@@ -1012,7 +1022,7 @@ def extract_neighborhood_settings(neigh_string, population="targets"):
     return neigh_protocol
 
 
-def expand_pair_table(data):
+def expand_pair_table(data: pd.DataFrame) -> pd.DataFrame:
     """
     Expands a pair table by merging reference and neighbor trajectory data from CSV files based on the specified
     reference and neighbor populations, and their associated positions and frames.

@@ -5,6 +5,7 @@ Copright © 2022 Laboratoire Adhesion et Inflammation, Authored by Remy Torro.
 import argparse
 import datetime
 import os
+from typing import List, Optional
 import json
 from celldetective.utils.data_loaders import interpret_tracking_configuration
 from celldetective.utils.image_loaders import (
@@ -206,7 +207,7 @@ if not btrack_option:
     haralick_options = None
 
 
-def measure_index(indices):
+def measure_index(indices: List[int]) -> List[pd.DataFrame]:
     """
     Measure features for a chunk of frames for tracking.
 

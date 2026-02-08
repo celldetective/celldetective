@@ -58,7 +58,11 @@ class SettingsEventDetectionModelTraining(CelldetectiveSettingsPanel):
 
     """
 
-    def __init__(self, parent_window=None, signal_mode="single-cells"):
+    def __init__(
+        self,
+        parent_window: Optional[QMainWindow] = None,
+        signal_mode: Optional[str] = None,
+    ) -> None:
         """
         Initialize the SettingsEventDetectionModelTraining widget.
 
@@ -773,7 +777,7 @@ class SettingsEventDetectionModelTraining(CelldetectiveSettingsPanel):
         self.parent_window.refresh_signal_models()
         # MessageBox removed to allow viewing results in popup
 
-    def on_training_error(self, message):
+    def on_training_error(self, message: str) -> None:
         """
         Handle training errors.
 
