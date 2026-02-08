@@ -22,6 +22,8 @@ Input
 Requires pre-computed tracking tables (`pkl` or `csv`) containing neighborhood information columns.
 """
 
+from typing import List, Optional, Tuple
+
 import pandas as pd
 import numpy as np
 from celldetective.utils.maths import derivative

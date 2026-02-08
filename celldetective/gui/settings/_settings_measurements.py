@@ -12,6 +12,7 @@ from PyQt5.QtWidgets import (
     QLabel,
     QHBoxLayout,
     QPushButton,
+    QMainWindow,
 )
 from PyQt5.QtCore import Qt, QSize, QTimer
 

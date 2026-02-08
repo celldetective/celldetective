@@ -1,8 +1,10 @@
+from typing import Any, Optional
+
 from glob import glob
 import os
 import numpy as np
 import pandas as pd
-from PyQt5.QtGui import QKeySequence
+from PyQt5.QtGui import QCloseEvent, QKeySequence, QResizeEvent
 from PyQt5.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -16,6 +18,7 @@ from PyQt5.QtWidgets import (
     QPushButton,
     QComboBox,
     QLabel,
+    QMainWindow,
 )
 from PyQt5.QtCore import QSize, Qt
 import matplotlib.pyplot as plt

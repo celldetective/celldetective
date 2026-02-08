@@ -1,3 +1,5 @@
+from typing import Optional
+
 from PyQt5.QtCore import QSize, Qt
 from PyQt5.QtWidgets import (
     QVBoxLayout,
@@ -7,6 +9,7 @@ from PyQt5.QtWidgets import (
     QListWidget,
     QPushButton,
     QHBoxLayout,
+    QMainWindow,
 )
 from fonticon_mdi6 import MDI6
 from superqt.fonticon import icon

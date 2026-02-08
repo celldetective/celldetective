@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import List, Optional, Tuple
 
 from PyQt5.QtWidgets import (
     QApplication,

@@ -10,6 +10,7 @@ from PyQt5.QtWidgets import (
     QFrame,
     QGridLayout,
     QLabel,
+    QMainWindow,
     QMessageBox,
     QPushButton,
     QVBoxLayout,
