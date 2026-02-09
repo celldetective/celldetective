@@ -170,10 +170,10 @@ class PivotTableUI(CelldetectiveWidget):
 
         color_codes = {
             "ns": "#fee5d9",
-            "*(<0.05)": "#fcae91",
-            "**(<0.01)": "#fb6a4a",
-            "***(<0.001)": "#de2d26",
-            "****(<0.0001)": "#a50f15",
+            "*": "#fcae91",
+            "**": "#fb6a4a",
+            "***": "#de2d26",
+            "****": "#a50f15",
         }
 
         for i in range(self.data.shape[0]):
