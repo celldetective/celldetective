@@ -85,8 +85,10 @@ class StackLoader(QThread):
 
     def stop(self):
         """Stop the loader thread."""
+        self.mutex.lock()
         self.running = False
         self.condition.wakeAll()
+        self.mutex.unlock()
         self.wait()
 
     def run(self):
@@ -101,6 +103,10 @@ class StackLoader(QThread):
             p_frame = self.priority_frame
             keys_snapshot = list(self.cache_keys)
             self.mutex.unlock()
+
+            # Check running flag again after releasing mutex
+            if not self.running:
+                break
 
             # Determine next frame to load
             # Strategy: look around priority frame
@@ -127,6 +133,10 @@ class StackLoader(QThread):
                         break
 
             if found:
+                # Check running before potentially slow I/O operation
+                if not self.running:
+                    break
+
                 try:
                     # Load the frame
                     from celldetective.utils.image_loaders import load_frames
@@ -137,27 +147,29 @@ class StackLoader(QThread):
                         normalize_input=False,
                     )[:, :, 0]
 
-                    self.frame_loaded.emit(t_ch, frame_to_load, img)
+                    # Only emit if still running
+                    if self.running:
+                        self.frame_loaded.emit(t_ch, frame_to_load, img)
 
                     # Update snapshot locally to avoid reloading immediately in next loop
                     self.mutex.lock()
-                    self.cache_keys.add((t_ch, frame_to_load))
+                    if self.running:
+                        self.cache_keys.add((t_ch, frame_to_load))
                     self.mutex.unlock()
 
                 except Exception as e:
                     logger.debug(f"Error loading frame {frame_to_load}: {e}")
                     # Prepare to wait to avoid spin loop on error
-                    self.msleep(100)
+                    if self.running:
+                        self.msleep(100)
 
             else:
                 # If nothing to load, wait
                 self.mutex.lock()
-                self.condition.wait(self.mutex, 500)  # Wait 500ms or until new priority
-
                 if not self.running:
                     self.mutex.unlock()
                     break
-
+                self.condition.wait(self.mutex, 500)  # Wait 500ms or until new priority
                 self.mutex.unlock()
 
 
