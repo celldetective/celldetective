@@ -43,7 +43,7 @@ from celldetective.utils.image_cleaning import (
     _fix_no_contrast,
     interpolate_nan_multichannel,
 )
-from celldetective.napari.utils import _view_on_napari
+
 from celldetective.filters import *
 from celldetective.utils.stardist_utils import (
     _prep_stardist_model,
@@ -257,6 +257,8 @@ def segment(
     labels = np.array(labels, dtype=int)
 
     if view_on_napari:
+        from celldetective.napari.utils import _view_on_napari
+
         _view_on_napari(tracks=None, stack=stack, labels=labels)
 
     return labels
@@ -341,6 +343,8 @@ def segment_from_thresholds(
 
     masks = np.array(masks, dtype=np.int16)
     if view_on_napari:
+        from celldetective.napari.utils import _view_on_napari
+
         _view_on_napari(tracks=None, stack=stack, labels=masks)
     return masks
 
@@ -735,6 +739,8 @@ def segment_at_position(
     if return_labels or view_on_napari:
         labels = locate_labels(pos, population=mode)
     if view_on_napari:
+        from celldetective.napari.utils import _view_on_napari
+
         if stack_prefix is None:
             stack_prefix = ""
         stack = locate_stack(pos, prefix=stack_prefix)
