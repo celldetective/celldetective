@@ -167,3 +167,5 @@ celldetective/datasets/segmentation_annotations/*/
 celldetective/models/*/*/
 docs/source/generated/
 
+audit_report.json
+demo_adcc
