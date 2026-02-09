@@ -100,12 +100,16 @@ class ChannelOffsetViewer(StackVisualizer):
 
     def generate_overlay_imshow(self):
         """Generate the overlay image show."""
+        kwargs = self.imshow_kwargs.copy()
+        if "cmap" in kwargs:
+            kwargs.pop("cmap")
+
         self.im_overlay = self.ax.imshow(
             self.overlay_init_frame,
             cmap="Blues",
             interpolation="none",
             alpha=0.5,
-            **self.imshow_kwargs,
+            **kwargs,
         )
 
     def generate_overlay_alpha_slider(self):

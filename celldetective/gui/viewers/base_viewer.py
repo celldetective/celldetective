@@ -1059,7 +1059,10 @@ class StackVisualizer(CelldetectiveWidget):
             self.loader_thread = None
         if hasattr(self, "frame_cache") and isinstance(self.frame_cache, OrderedDict):
             self.frame_cache.clear()
-        self.canvas.close()
+        try:
+            self.canvas.close()
+        except RuntimeError:
+            pass
 
     def __del__(self):
         """Destructor to clean up threads."""
