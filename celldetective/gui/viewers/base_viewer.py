@@ -1,5 +1,5 @@
 from collections import OrderedDict
-from typing import Optional, List, Tuple, Dict, Any
+from typing import Optional, List, Tuple, Dict, Any, Union
 
 import numpy as np
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QMutex, QWaitCondition, QEvent
@@ -200,7 +200,7 @@ class StackVisualizer(CelldetectiveWidget):
 
     def __init__(
         self,
-        stack: Optional[np.ndarray] | Optional[List[np.ndarray]] = None,
+        stack: Optional[Union[np.ndarray, List[np.ndarray]]] = None,
         stack_path: Optional[str] = None,
         frame_slider: bool = True,
         contrast_slider: bool = True,
