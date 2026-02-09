@@ -21,7 +21,7 @@ Dependencies
 -   `lifelines`: Used for Kaplan-Meier fitting and survival analysis statistics.
 """
 
-from typing import Any, List, Optional, Union, Tuple, Sequence
+from typing import List, Optional, Tuple, Sequence
 import numpy as np
 import pandas as pd
 from lifelines import KaplanMeierFitter

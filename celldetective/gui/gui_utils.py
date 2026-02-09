@@ -448,7 +448,7 @@ class QuickSliderLayout(QHBoxLayout):
         label: Optional[str] = None,
         slider: Optional[Any] = None,
         layout_ratio: Tuple[float, float] = (0.25, 0.75),
-        slider_initial_value: Union[int, float] = 1,
+        slider_initial_value: Union[int, float, Tuple[float, float]] = 1,
         slider_range: Tuple[Union[int, float], Union[int, float]] = (0, 1),
         slider_tooltip: Optional[str] = None,
         decimal_option: bool = True,
@@ -467,7 +467,7 @@ class QuickSliderLayout(QHBoxLayout):
         layout_ratio : tuple of float, optional
             Defines the width ratio between the label and the slider in the layout. The first element is the
             ratio for the label, and the second is for the slider (default is (0.25, 0.75)).
-        slider_initial_value : int or float, optional
+        slider_initial_value : int or float or tuple of float, optional
             The initial value to set for the slider (default is 1).
         slider_range : tuple of int or float, optional
             A tuple specifying the minimum and maximum values for the slider (default is (0, 1)).

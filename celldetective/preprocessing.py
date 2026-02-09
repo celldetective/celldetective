@@ -23,7 +23,7 @@ Notes
 The module relies heavily on the directory structure and configuration files of the experiment to locate and process images.
 """
 
-from typing import List, Optional, Union, Callable, Any, Tuple, Dict, Literal
+from typing import List, Optional, Union, Callable, Any, Dict, Literal
 import numpy as np
 import os
 from celldetective.utils.image_loaders import (

@@ -25,7 +25,7 @@ Segmentation parameters are typically passed via a dictionary or configuration o
 
 import json
 import os
-from typing import List, Optional, Union, Tuple, Any, Dict
+from typing import Dict
 
 from celldetective.utils.model_loaders import locate_segmentation_model
 from celldetective.utils.normalization import normalize_multichannel
@@ -610,9 +610,9 @@ def apply_watershed(
     markers, _ = ndi.label(mask)
     labels = watershed(-distance, markers, mask=binary_image)
     if fill_holes:
-        try:
-            from celldetective.utils.mask_cleaning import fill_label_holes
+        from celldetective.utils.mask_cleaning import fill_label_holes
 
+        try:
             labels = fill_label_holes(labels)
         except ImportError as ie:
             logger.warning(f"Stardist not found, cannot fill holes... {ie}")

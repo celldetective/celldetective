@@ -1,10 +1,11 @@
 import json
 import os
 from glob import glob
+from typing import Optional
 
 import numpy as np
-from PyQt5.QtCore import Qt, QSize, QThread, QCloseEvent
-from PyQt5.QtGui import QDoubleValidator, QIntValidator
+from PyQt5.QtCore import Qt, QSize, QThread
+from PyQt5.QtGui import QDoubleValidator, QIntValidator, QCloseEvent
 from PyQt5.QtWidgets import (
     QAction,
     QMenu,
@@ -21,6 +22,7 @@ from PyQt5.QtWidgets import (
     QApplication,
     QRadioButton,
     QButtonGroup,
+    QMainWindow,
 )
 from fonticon_mdi6 import MDI6
 
@@ -717,7 +719,6 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
     def apply_watershed_to_selection(self):
         """Apply watershed algorithm to the selection."""
 
-        import scipy.ndimage as ndi
         from celldetective.segmentation import apply_watershed
 
         if self.marker_option.isChecked():

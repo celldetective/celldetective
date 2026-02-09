@@ -1,34 +1,25 @@
 from PyQt5.QtWidgets import (
-    QComboBox,
     QLabel,
     QRadioButton,
-    QFileDialog,
     QApplication,
     QPushButton,
     QVBoxLayout,
     QHBoxLayout,
-    QMessageBox,
     QShortcut,
     QLineEdit,
-    QSlider,
     QAction,
-    QMenu,
     QWidget,
 )
 from celldetective.gui.interactive_timeseries_viewer import InteractiveEventViewer
-from PyQt5.QtCore import Qt, QSize, QThread, pyqtSignal, QTimer, QCloseEvent
-from PyQt5.QtGui import QKeySequence, QIntValidator
+from PyQt5.QtCore import Qt, QSize, QThread, pyqtSignal
+from PyQt5.QtGui import QKeySequence, QCloseEvent
 
-from celldetective.gui.gui_utils import color_from_state
-from celldetective.gui.base.utils import center_window, pretty_table
 from superqt import (
-    QLabeledDoubleSlider,
     QLabeledDoubleRangeSlider,
     QSearchableComboBox,
     QLabeledSlider,
 )
 from celldetective.utils.image_loaders import (
-    locate_labels,
     load_frames,
     _get_img_num_per_channel,
 )
@@ -44,16 +35,12 @@ from celldetective.gui.base.figure_canvas import FigureCanvas
 import numpy as np
 from superqt.fonticon import icon
 from fonticon_mdi6 import MDI6
-import os
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 import gc
 from matplotlib.animation import FuncAnimation
 from matplotlib.cm import tab10
-import pandas as pd
-from sklearn.preprocessing import MinMaxScaler
-from celldetective.gui.base.components import CelldetectiveWidget
-from celldetective.utils.masks import contour_of_instance_segmentation
+from typing import Optional, Tuple, Any
 from celldetective.gui.base_annotator import BaseAnnotator
 
 

@@ -6,7 +6,6 @@ from PyQt5.QtGui import QCloseEvent, QResizeEvent
 from PyQt5.QtWidgets import QVBoxLayout
 
 from celldetective.gui.base.components import CelldetectiveWidget
-from celldetective.gui.base.utils import center_window
 
 
 class FigureCanvas(CelldetectiveWidget):

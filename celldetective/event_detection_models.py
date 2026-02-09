@@ -20,7 +20,7 @@ Usage
 This module is typically used in conjunction with the `signals` module to process extracted signals and predict events.
 """
 
-from typing import List, Optional, Union, Callable, Any, Tuple, Dict, Literal
+from typing import List, Optional, Union, Any, Tuple, Dict, Literal
 import json
 import os
 import random

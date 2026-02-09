@@ -1,4 +1,3 @@
-import time
 from multiprocessing import Process, Queue
 from typing import Optional, Dict, Any
 from celldetective.utils.data_loaders import load_experiment_tables

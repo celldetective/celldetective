@@ -15,7 +15,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QBrush, QColor
-from typing import Optional, Any, Union, List, Tuple, Dict
+from typing import Optional, Any, List, Tuple
 import pandas as pd
 
 from celldetective.gui.gui_utils import (

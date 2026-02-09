@@ -9,6 +9,7 @@ from PyQt5.QtWidgets import (
     QFileDialog,
     QPushButton,
     QMessageBox,
+    QMainWindow,
 )
 from PyQt5.QtCore import Qt, QSize, QTimer
 from celldetective.gui.base.components import generic_message

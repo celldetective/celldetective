@@ -1,9 +1,17 @@
 import gc
+from typing import Any, Optional, Tuple
 
 import numpy as np
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QKeySequence
-from PyQt5.QtWidgets import QHBoxLayout, QLabel, QComboBox, QPushButton, QShortcut
+from PyQt5.QtWidgets import (
+    QHBoxLayout,
+    QLabel,
+    QComboBox,
+    QPushButton,
+    QShortcut,
+    QMainWindow,
+)
 from superqt import QLabeledDoubleSlider, QLabeledDoubleRangeSlider
 
 from celldetective.gui.base.components import QHSeperationLine

@@ -1,9 +1,11 @@
 import time
 
+from PyQt5.QtGui import QCloseEvent
 from PyQt5.QtWidgets import (
     QPushButton,
     QHBoxLayout,
     QLabel,
+    QMainWindow,
     QGridLayout,
     QFrame,
     QTabWidget,
@@ -18,7 +20,7 @@ from celldetective.gui.base.components import (
     QHSeperationLine,
 )
 
-from PyQt5.QtCore import Qt, QSize, QThread, QCloseEvent
+from PyQt5.QtCore import Qt, QSize, QThread
 from celldetective.gui.base.components import generic_message
 from celldetective.utils.parsing import (
     config_section_to_dict,
@@ -51,6 +53,7 @@ from superqt.fonticon import icon
 from fonticon_mdi6 import MDI6
 import gc
 import subprocess
+from typing import Optional
 
 import logging
 

@@ -1,10 +1,19 @@
 import os
 from functools import partial
 from glob import glob
+from typing import Optional
 
 import numpy as np
 from PyQt5.QtCore import QSize, Qt
-from PyQt5.QtWidgets import QVBoxLayout, QLabel, QPushButton, QLineEdit, QHBoxLayout
+from PyQt5.QtWidgets import (
+    QVBoxLayout,
+    QLabel,
+    QPushButton,
+    QLineEdit,
+    QHBoxLayout,
+    QMainWindow,
+    QComboBox,
+)
 from fonticon_mdi6 import MDI6
 from superqt import QSearchableComboBox
 from superqt.fonticon import icon
@@ -35,11 +44,11 @@ class ChannelNormGenerator(QVBoxLayout, Styles):
         *args
             Variable length argument list.
         """
-        super().__init__(*args)
+        super().__init__()
 
         self.parent_window = parent_window
         self.mode = mode
-        self.init_n_channels = init_n_channels
+        self.init_n_channels = init_n_channels if init_n_channels is not None else 4
 
         if hasattr(self.parent_window.parent_window, "locate_image"):
             self.attr_parent = self.parent_window.parent_window

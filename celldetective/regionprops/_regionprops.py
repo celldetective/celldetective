@@ -1,11 +1,9 @@
 from skimage.measure._regionprops import (
     RegionProperties,
-    regionprops as skimage_regionprops,
     _cached,
-    _props_to_dict as skimage_props_to_dict,
     _infer_number_of_required_args,
 )
-from typing import Optional, List, Union, Dict, Any, Tuple
+from typing import Optional, List, Dict, Any, Tuple
 import numpy as np
 import inspect
 import json

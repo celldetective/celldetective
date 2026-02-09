@@ -2,6 +2,8 @@ from multiprocessing import Process, Queue
 import time
 from pathlib import Path, PurePath
 from glob import glob
+from typing import Optional, Dict, Any, List
+
 from tqdm import tqdm
 import numpy as np
 import gc
@@ -16,7 +18,6 @@ from natsort import natsorted
 from art import tprint
 from celldetective.log_manager import get_logger
 import traceback
-from skimage.io import imread
 
 from celldetective.utils.data_cleaning import _mask_intensity_measurements
 from celldetective.utils.data_loaders import interpret_tracking_configuration

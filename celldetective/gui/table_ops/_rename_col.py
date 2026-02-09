@@ -1,4 +1,4 @@
-from typing import Optional, Any
+from typing import Optional
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QHBoxLayout, QLineEdit, QPushButton, QMainWindow
 

@@ -26,10 +26,7 @@ Dependencies
 import os
 import subprocess
 import json
-
-# TensorFlow imports are lazy-loaded in functions that need them to avoid
-# slow import times for modules that don't require TensorFlow.
-
+import numpy as np
 from celldetective.utils.model_loaders import locate_signal_model
 from celldetective.utils.data_loaders import get_position_table, get_position_pickle
 from celldetective.tracking import clean_trajectories, interpolate_nan_properties
@@ -41,7 +38,7 @@ from scipy.optimize import curve_fit
 import pandas as pd
 from pandas.api.types import is_numeric_dtype
 from scipy.stats import median_abs_deviation
-from typing import List, Optional, Union, Dict, Any, Tuple, Literal
+from typing import List, Optional, Union, Dict, Tuple, Literal
 
 abs_path = os.sep.join(
     [os.path.split(os.path.dirname(os.path.realpath(__file__)))[0], "celldetective"]

@@ -1,3 +1,5 @@
+from typing import Optional
+
 from PyQt5.QtWidgets import (
     QComboBox,
     QLineEdit,
@@ -10,7 +12,6 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QDoubleValidator
 from celldetective.gui.base.components import generic_message
-from celldetective.gui.base.utils import center_window
 from superqt import QColormapComboBox
 from celldetective.gui.generic_signal_plot import SurvivalPlotWidget
 from celldetective import (
@@ -30,7 +31,6 @@ import matplotlib.pyplot as plt
 plt.rcParams["svg.fonttype"] = "none"
 from glob import glob
 from celldetective import get_logger
-from celldetective.gui.base.styles import Styles
 from celldetective.gui.base.components import CelldetectiveWidget
 from matplotlib import colormaps
 from celldetective.events import compute_survival

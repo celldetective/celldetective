@@ -1,15 +1,7 @@
 import pandas as pd
 from PyQt5.QtCore import (
     Qt,
-    QSize,
-    QThread,
-    pyqtSignal,
-    QTimer,
-    QPoint,
-    QModelIndex,
-    QCloseEvent,
 )
-from PyQt5.QtGui import QMouseEvent, QResizeEvent
 from PyQt5.QtWidgets import (
     QComboBox,
     QDialog,

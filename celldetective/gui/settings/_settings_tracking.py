@@ -2,7 +2,7 @@
 Copyright © 2023 Laboratoire Adhesion et Inflammation, Authored by Remy Torro.
 """
 
-from typing import Optional, List, Tuple
+from typing import Optional
 from PyQt5.QtWidgets import (
     QRadioButton,
     QButtonGroup,
@@ -1291,7 +1291,7 @@ class SettingsTracking(CelldetectiveSettingsPanel):
             digitized_img = compute_haralick_features(
                 self.test_frame,
                 np.zeros(self.test_frame.shape[:2]),
-                channels=self.channel_names,
+                channels=list(self.channel_names),
                 return_digit_image_only=True,
                 **self.haralick_options,
             )
@@ -1326,7 +1326,7 @@ class SettingsTracking(CelldetectiveSettingsPanel):
             norm_img = compute_haralick_features(
                 self.test_frame,
                 np.zeros(self.test_frame.shape[:2]),
-                channels=self.channel_names,
+                channels=list(self.channel_names),
                 return_norm_image_only=True,
                 **self.haralick_options,
             )

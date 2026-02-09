@@ -3,7 +3,7 @@ from collections import OrderedDict
 import numpy as np
 from PyQt5.QtWidgets import QLineEdit, QHBoxLayout, QPushButton, QLabel
 from PyQt5.QtCore import QEvent
-from typing import Optional, Union, List, Any, Callable
+from typing import Optional, Union, List, Any
 from superqt import QLabeledDoubleSlider
 
 from celldetective.gui.gui_utils import QuickSliderLayout

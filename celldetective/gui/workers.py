@@ -2,12 +2,11 @@ from multiprocessing import Queue
 from PyQt5.QtWidgets import QPushButton, QVBoxLayout, QHBoxLayout, QLabel, QProgressBar
 from PyQt5.QtCore import QRunnable, QObject, pyqtSignal, QThreadPool, QSize, Qt
 from PyQt5.QtGui import QPixmap, QImage
-from typing import Optional, Any, Dict, List, Tuple, Union
+from typing import Optional, Any, Dict
 import math
 import numpy as np
 
 from celldetective.gui.base.components import CelldetectiveDialog
-from celldetective.gui.base.utils import center_window
 from celldetective.log_manager import get_logger
 
 logger = get_logger(__name__)

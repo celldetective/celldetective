@@ -98,7 +98,7 @@ def config_section_to_dict(
 
 
 def _extract_channel_indices_from_config(
-    config: configparser.ConfigParser, channels_to_extract: Union[List[str], str]
+    config: Union[Path, str], channels_to_extract: Union[List[str], str]
 ) -> Optional[List[Optional[int]]]:
     """
     Extracts the indices of specified channels from a configuration object.
@@ -110,8 +110,7 @@ def _extract_channel_indices_from_config(
 
     Parameters
     ----------
-    config : ConfigParser object
-            The configuration object parsed from a .ini or similar configuration file that includes channel settings.
+    config : path
     channels_to_extract : list of str
             A list of channel names for which indices are to be extracted from the configuration settings.
 

@@ -1,5 +1,5 @@
 import numpy as np
-from typing import List, Dict, Any, Optional, Union
+from typing import List, Dict, Any, Optional
 from celldetective import get_logger
 
 logger = get_logger()

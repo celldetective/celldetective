@@ -26,7 +26,7 @@ Copyright © 2022 Laboratoire Adhesion et Inflammation
 Authored by R. Torro, K. Dervanova, L. Limozin
 """
 
-from typing import Any, Dict, List, Optional, Tuple, Union, Literal, Callable
+from typing import Any, Dict, List, Optional, Tuple, Union, Literal
 import math
 import numpy as np
 import os
@@ -48,7 +48,6 @@ from celldetective.utils.data_cleaning import (
     remove_redundant_features,
     remove_trajectory_measurements,
 )
-from celldetective.utils.maths import step_function
 from celldetective.utils.image_cleaning import interpolate_nan
 from celldetective.preprocessing import field_correction
 from celldetective.log_manager import get_logger
@@ -539,7 +538,7 @@ def measure_features(
                     else:
                         corrected_image = field_correction(
                             img[:, :, ind].copy(),
-                            threshold_on_std=norm["threshold_on_std"],
+                            threshold=norm["threshold_on_std"],
                             operation=norm["operation"],
                             model=norm["model"],
                             clip=norm["clip"],

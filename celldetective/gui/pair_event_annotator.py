@@ -1,8 +1,9 @@
+from typing import Optional
+
 from PyQt5.QtWidgets import (
     QComboBox,
     QLabel,
     QRadioButton,
-    QLineEdit,
     QFileDialog,
     QApplication,
     QPushButton,
@@ -12,6 +13,7 @@ from PyQt5.QtWidgets import (
     QShortcut,
     QLineEdit,
     QButtonGroup,
+    QWidget,
 )
 from PyQt5.QtCore import (
     Qt,
@@ -21,9 +23,8 @@ from PyQt5.QtCore import (
     QTimer,
     QPoint,
     QModelIndex,
-    QCloseEvent,
 )
-from PyQt5.QtGui import QKeySequence, QMouseEvent, QResizeEvent
+from PyQt5.QtGui import QKeySequence, QMouseEvent, QResizeEvent, QCloseEvent
 from celldetective.gui.base.styles import Styles
 from celldetective.gui.base.components import (
     CelldetectiveMainWindow,

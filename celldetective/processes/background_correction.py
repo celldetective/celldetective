@@ -51,7 +51,7 @@ class BackgroundCorrectionProcess(Process):
         try:
             # Load config to get movie length for progress estimation
             self.config = PurePath(self.exp_dir, Path("config.ini"))
-            self.len_movie = float(
+            self.len_movie = int(
                 config_section_to_dict(self.config, "MovieSettings")["len_movie"]
             )
             self.nbr_channels = len(extract_experiment_channels(self.exp_dir)[0])
@@ -59,7 +59,7 @@ class BackgroundCorrectionProcess(Process):
                 self.config, [self.target_channel]
             )
             self.img_num_channels = _get_img_num_per_channel(
-                channel_indices, self.len_movie, self.nbr_channels
+                channel_indices, int(self.len_movie), self.nbr_channels
             )
 
             logger.info("Process initialized.")

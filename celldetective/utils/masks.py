@@ -1,9 +1,6 @@
-from typing import Union, List, Tuple, Optional, Any
+from typing import Union, List, Tuple, Optional
 
 import numpy as np
-from scipy import ndimage
-from scipy.ndimage import distance_transform_edt
-from skimage.morphology import disk
 from celldetective.log_manager import get_logger
 
 logger = get_logger(__name__)

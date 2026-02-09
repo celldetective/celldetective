@@ -4,6 +4,7 @@ import datetime
 import os
 import json
 from pathlib import Path, PurePath
+from queue import Queue
 
 from celldetective.utils.image_loaders import (
     auto_load_number_of_frames,
@@ -22,7 +23,7 @@ import numpy as np
 import concurrent.futures
 from natsort import natsorted
 from art import tprint
-from typing import Optional, Union
+from typing import Optional, Union, Dict, Any, List
 import gc
 from celldetective.measure import (
     measure_features,

@@ -1,5 +1,6 @@
 from pathlib import Path
-
+from typing import Optional
+from time import time
 from PyQt5.QtWidgets import (
     QMessageBox,
     QComboBox,
@@ -11,7 +12,7 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
     QLabel,
     QHBoxLayout,
-    QPushButton,
+    QPushButton, QMainWindow,
 )
 from PyQt5.QtCore import Qt, QSize, QThread
 from celldetective.gui.base.channel_norm_generator import ChannelNormGenerator

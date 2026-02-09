@@ -16,9 +16,6 @@ from PyQt5.QtWidgets import (
     QMessageBox,
     QDialog,
     QMainWindow,
-    QVBoxLayout,
-    QWidget,
-    QDoubleSpinBox,
 )
 from fonticon_mdi6 import MDI6
 from superqt import QLabeledRangeSlider, QLabeledSlider, QLabeledDoubleRangeSlider
@@ -595,7 +592,7 @@ class BackgroundEstimatorThread(QThread):
             bg = estimate_background_per_condition(
                 self.exp_dir,
                 well_option=self.well_idx,
-                frame_range=self.frame_range,
+                frame_range=list(self.frame_range),
                 target_channel=self.channel,
                 show_progress_per_pos=False,
                 threshold_on_std=self.threshold,

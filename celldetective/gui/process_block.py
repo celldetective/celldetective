@@ -12,7 +12,7 @@ from PyQt5.QtWidgets import (
     QApplication,
 )
 from PyQt5.QtCore import Qt, QSize, QTimer, QThread, pyqtSignal
-from typing import Optional, Any, List, Dict, Union, Tuple
+from typing import Optional, Any, Dict, Union
 from superqt.fonticon import icon
 from fonticon_mdi6 import MDI6
 import gc

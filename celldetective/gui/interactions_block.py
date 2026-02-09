@@ -13,6 +13,7 @@ from PyQt5.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QListWidget,
+    QMainWindow,
     QMessageBox,
     QPushButton,
     QVBoxLayout,
@@ -21,7 +22,6 @@ from fonticon_mdi6 import MDI6
 from natsort import natsorted
 from superqt.fonticon import icon
 
-import celldetective.gui.preprocessing_block
 from celldetective import get_software_location
 from celldetective.gui.base.components import QHSeperationLine, HoverButton
 
@@ -32,6 +32,7 @@ from celldetective.utils.data_loaders import load_experiment_tables
 from celldetective.utils.experiment import extract_position_name
 from celldetective.utils.model_getters import get_pair_signal_models_list
 from celldetective import get_logger
+import pandas as pd
 
 logger = get_logger(__name__)
 

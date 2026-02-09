@@ -1,5 +1,5 @@
 from collections import OrderedDict
-from typing import Optional, List, Union, Tuple, Dict, Any
+from typing import Optional, List, Tuple, Dict, Any
 
 import numpy as np
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QMutex, QWaitCondition, QEvent
@@ -8,16 +8,11 @@ from PyQt5.QtWidgets import (
     QAction,
     QLabel,
     QComboBox,
-    QMainWindow,
-    QWidget,
-    QLineEdit,
-    QListWidget,
 )
 from fonticon_mdi6 import MDI6
 from superqt import QLabeledDoubleRangeSlider, QLabeledSlider
 from superqt.fonticon import icon
 import matplotlib.gridspec as gridspec
-import matplotlib.axes
 import matplotlib.backend_bases
 
 from celldetective.gui.base.components import CelldetectiveWidget
@@ -205,7 +200,7 @@ class StackVisualizer(CelldetectiveWidget):
 
     def __init__(
         self,
-        stack: Optional[np.ndarray] = None,
+        stack: Optional[np.ndarray] | Optional[List[np.ndarray]] = None,
         stack_path: Optional[str] = None,
         frame_slider: bool = True,
         contrast_slider: bool = True,
@@ -761,7 +756,6 @@ class StackVisualizer(CelldetectiveWidget):
         self.ax.clear()
         self.im = self.ax.imshow(
             self.init_frame,
-            cmap="gray",
             interpolation="none",
             zorder=0,
             vmin=p01,

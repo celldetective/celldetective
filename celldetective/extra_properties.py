@@ -54,14 +54,13 @@ import warnings
 
 import numpy as np
 from scipy.ndimage import distance_transform_edt, center_of_mass
-from scipy.spatial.distance import euclidean
 from celldetective.utils.masks import contour_of_instance_segmentation
 from celldetective.utils.image_cleaning import interpolate_nan
 import skimage.measure as skm
 from celldetective.utils.mask_cleaning import fill_label_holes
 from celldetective.segmentation import segment_frame_from_thresholds
 from sklearn.metrics import r2_score
-from typing import Union, List, Optional, Any, Tuple
+from typing import Tuple
 
 
 # def area_detected_in_ricm(regionmask, intensity_image, target_channel='adhesion_channel'):

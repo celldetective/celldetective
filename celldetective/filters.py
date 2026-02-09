@@ -43,6 +43,8 @@ Authored by R. Torro, K. Dervanova, L. Limozin
 from typing import Any, List, Optional, Union, Tuple, Sequence
 import numpy as np
 
+from celldetective.utils.image_cleaning import interpolate_nan
+
 
 def gauss_filter(
     img: np.ndarray,

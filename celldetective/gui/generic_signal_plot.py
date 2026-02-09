@@ -13,8 +13,6 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QSize
 from PyQt5.QtGui import QDoubleValidator
 from typing import Optional, List, Union, Tuple, Dict, Any
-import pandas as pd
-import numpy as np
 
 from celldetective.gui.gui_utils import ExportPlotBtn, QuickSliderLayout
 from celldetective.gui.base.figure_canvas import FigureCanvas

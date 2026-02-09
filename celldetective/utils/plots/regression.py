@@ -1,5 +1,5 @@
 from matplotlib import pyplot as plt
-from typing import Union, Optional
+from typing import Optional
 import numpy as np
 
 

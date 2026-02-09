@@ -9,7 +9,6 @@ from urllib.request import urlopen
 import zipfile
 import tempfile
 import time
-from pathlib import Path
 import json
 
 

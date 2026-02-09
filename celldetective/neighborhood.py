@@ -33,7 +33,6 @@ from celldetective.utils.data_cleaning import extract_identity_col
 from scipy.spatial.distance import cdist
 from celldetective.utils.image_loaders import locate_labels
 from celldetective.utils.data_loaders import get_position_table, get_position_pickle
-from PyQt5.QtCore import QPoint
 
 abs_path = os.sep.join(
     [os.path.split(os.path.dirname(os.path.realpath(__file__)))[0], "celldetective"]

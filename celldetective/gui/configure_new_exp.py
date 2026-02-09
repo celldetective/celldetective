@@ -32,6 +32,7 @@ from celldetective.gui.base.components import (
     CelldetectiveMainWindow,
     CelldetectiveWidget,
 )
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 

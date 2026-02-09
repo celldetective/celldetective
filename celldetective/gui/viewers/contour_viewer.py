@@ -1,7 +1,7 @@
 import os
 from glob import glob
 from pathlib import Path
-from typing import Optional, Union, List, Tuple, Any
+from typing import Optional, Union, Tuple, Any
 
 import numpy as np
 from PyQt5.QtCore import QSize, Qt, QEvent
@@ -15,7 +15,7 @@ from PyQt5.QtWidgets import (
 )
 from fonticon_mdi6 import MDI6
 from natsort import natsorted
-from superqt import QLabeledSlider, QLabeledDoubleSlider, QLabeledRangeSlider
+from superqt import QLabeledDoubleSlider, QLabeledRangeSlider
 from superqt.fonticon import icon
 from collections import OrderedDict
 

@@ -1,5 +1,5 @@
 from PyQt5.QtCore import QTimer
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QListWidget, QListWidgetItem, QPushButton
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QListWidget
 from typing import Optional
 
 from celldetective.gui.base.components import CelldetectiveWidget

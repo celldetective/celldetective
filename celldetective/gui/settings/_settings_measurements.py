@@ -1,6 +1,6 @@
 from subprocess import Popen
 
-from typing import Optional, List, Tuple, Dict, Any
+from typing import Optional, List
 from PyQt5.QtWidgets import (
     QMessageBox,
     QComboBox,
@@ -826,7 +826,7 @@ class SettingsMeasurements(CelldetectiveSettingsPanel):
             digitized_img = compute_haralick_features(
                 self.test_frame,
                 np.zeros(self.test_frame.shape[:2]),
-                channels=self.channel_names,
+                channels=list(self.channel_names),
                 return_digit_image_only=True,
                 **self.haralick_options,
             )
@@ -865,7 +865,7 @@ class SettingsMeasurements(CelldetectiveSettingsPanel):
             norm_img = compute_haralick_features(
                 self.test_frame,
                 np.zeros(self.test_frame.shape[:2]),
-                channels=self.channel_names,
+                channels=list(self.channel_names),
                 return_norm_image_only=True,
                 **self.haralick_options,
             )

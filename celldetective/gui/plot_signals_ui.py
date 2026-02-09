@@ -6,7 +6,6 @@ from PyQt5.QtWidgets import (
     QLabel,
     QHBoxLayout,
     QPushButton,
-    QButtonGroup,
     QMainWindow,
 )
 from PyQt5.QtCore import Qt

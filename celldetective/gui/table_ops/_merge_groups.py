@@ -1,4 +1,8 @@
-from typing import List, Optional
+from typing import List
+
+import numpy as np
+from PyQt5 import Qt
+from PyQt5.QtCore import QSize
 from PyQt5.QtWidgets import (
     QComboBox,
     QHBoxLayout,
@@ -8,8 +12,9 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
     QMainWindow,
 )
+from fonticon_mdi6 import MDI6
+from superqt.fonticon import icon
 
-# ... other imports ...
 from celldetective.gui.base.components import CelldetectiveWidget
 from celldetective.gui.gui_utils import PandasModel
 from celldetective.gui.base.utils import center_window

@@ -195,5 +195,5 @@ class CellSizeViewer(StackVisualizer):
         """
         # Change the diameter of the circle
         self.diameter = value
-        self.circ.set_radius(self.diameter // 2 / self.PxToUm)
+        self.circ.set_radius(float(self.diameter // 2.0 / self.PxToUm))
         self.canvas.canvas.draw_idle()

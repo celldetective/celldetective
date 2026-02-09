@@ -1,5 +1,5 @@
 from multiprocessing import Process, Queue
-from typing import Optional, Dict, Any, List, Union
+from typing import Optional, Dict, Any, List
 import time
 import datetime
 import os

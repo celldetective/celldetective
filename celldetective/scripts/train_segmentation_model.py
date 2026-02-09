@@ -5,7 +5,7 @@ Copright © 2023 Laboratoire Adhesion et Inflammation, Authored by Remy Torro.
 import argparse
 import os
 import shutil
-from typing import Dict, Any, Union
+from typing import Dict, Any
 from glob import glob
 import json
 from tqdm import tqdm

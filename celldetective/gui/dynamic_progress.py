@@ -1,3 +1,5 @@
+from typing import Optional
+
 import numpy as np
 from PyQt5.QtCore import QTimer, Qt, pyqtSignal
 from PyQt5.QtWidgets import (

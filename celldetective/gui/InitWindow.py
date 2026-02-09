@@ -22,7 +22,6 @@ from PyQt5.QtWidgets import (
     QMessageBox,
     QVBoxLayout,
     QProgressDialog,
-    QMainWindow,
 )
 from fonticon_mdi6 import MDI6
 from psutil import cpu_count
@@ -77,7 +76,7 @@ class AppInitWindow(CelldetectiveMainWindow):
 
     def __init__(
         self,
-        parent_window: Optional[QMainWindow] = None,
+        parent_window: Optional[QApplication] = None,
         software_location: Optional[str] = None,
     ) -> None:
         """
@@ -583,7 +582,7 @@ class AppInitWindow(CelldetectiveMainWindow):
             elif self.number_of_wells > 1:
                 logger.info(f"Found {self.number_of_wells} wells...")
 
-            def log_position_stats(self, wells_list: list[str]) -> None:
+            def log_position_stats(wells_list: list[str]) -> None:
                 """
                 Log statistics about the number of positions per well.
 

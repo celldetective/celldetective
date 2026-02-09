@@ -1,7 +1,7 @@
 import os
 from glob import glob
 from pathlib import Path
-from typing import Optional, Union, List, Any
+from typing import Optional, List, Any
 import matplotlib.backend_bases
 
 import numpy as np

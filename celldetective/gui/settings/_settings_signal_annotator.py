@@ -15,7 +15,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, QSize
 from celldetective.gui.base.components import QHSeperationLine
-from superqt import QLabeledDoubleSlider, QLabeledSlider
+from superqt import QLabeledDoubleSlider
 from celldetective.utils.experiment import extract_experiment_channels
 import json
 import numpy as np

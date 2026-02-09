@@ -2,11 +2,13 @@ import os
 from glob import glob
 from pathlib import Path, PosixPath, PurePosixPath, WindowsPath
 from shutil import copyfile
-from typing import Union, List, Tuple, Optional, Dict, Any, Sequence
+from typing import Union, List, Tuple, Optional, Dict, Any
 
+import dask
 import numpy as np
 from natsort import natsorted
 
+from celldetective.utils.io import save_tiff_imagej_compatible
 from celldetective.utils.parsing import (
     _extract_channels_from_config,
     config_section_to_dict,
@@ -20,13 +22,7 @@ logger = get_logger(__name__)
 import napari
 import pandas as pd
 import dask.array as da
-import threading
-import concurrent.futures
-from skimage.measure import regionprops_table, label
-from tqdm import tqdm
 import gc
-from tifffile import imread, memmap
-from magicgui import magicgui
 
 
 def extract_well_from_position(pos_path: str) -> str:
@@ -1218,7 +1214,7 @@ def locate_stack(
     if not position.endswith(os.sep):
         position += os.sep
 
-    stack_path = glob.glob(position + os.sep.join(["movie", f"{prefix}*.tif"]))
+    stack_path = glob(position + os.sep.join(["movie", f"{prefix}*.tif"]))
     if not stack_path:
         raise FileNotFoundError(f"No movie with prefix {prefix} found...")
 
@@ -1300,15 +1296,15 @@ def locate_labels(
 
     if population.lower() == "target" or population.lower() == "targets":
         label_path = natsorted(
-            glob.glob(position + os.sep.join(["labels_targets", "*.tif"]))
+            glob(position + os.sep.join(["labels_targets", "*.tif"]))
         )
     elif population.lower() == "effector" or population.lower() == "effectors":
         label_path = natsorted(
-            glob.glob(position + os.sep.join(["labels_effectors", "*.tif"]))
+            glob(position + os.sep.join(["labels_effectors", "*.tif"]))
         )
     else:
         label_path = natsorted(
-            glob.glob(position + os.sep.join([f"labels_{population}", "*.tif"]))
+            glob(position + os.sep.join([f"labels_{population}", "*.tif"]))
         )
 
     label_names = [os.path.split(lbl)[-1] for lbl in label_path]
@@ -1386,17 +1382,17 @@ def fix_missing_labels(
 
     if population.lower() == "target" or population.lower() == "targets":
         label_path = natsorted(
-            glob.glob(position + os.sep.join(["labels_targets", "*.tif"]))
+            glob(position + os.sep.join(["labels_targets", "*.tif"]))
         )
         path = position + os.sep + "labels_targets"
     elif population.lower() == "effector" or population.lower() == "effectors":
         label_path = natsorted(
-            glob.glob(position + os.sep.join(["labels_effectors", "*.tif"]))
+            glob(position + os.sep.join(["labels_effectors", "*.tif"]))
         )
         path = position + os.sep + "labels_effectors"
     else:
         label_path = natsorted(
-            glob.glob(position + os.sep.join([f"labels_{population}", "*.tif"]))
+            glob(position + os.sep.join([f"labels_{population}", "*.tif"]))
         )
         path = position + os.sep + f"labels_{population}"
 
@@ -1992,11 +1988,6 @@ def view_tracks_in_napari(
             Export modifications made in the viewer.
             """
             # Lazy import to avoid circular dependency or heavy load
-            import json
-            from celldetective.tracking import (
-                write_first_detection_class,
-                clean_trajectories,
-            )
             from celldetective.utils import velocity_per_track
             from celldetective.gui.gui_utils import show_info
 

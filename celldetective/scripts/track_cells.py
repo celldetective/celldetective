@@ -4,8 +4,7 @@ Copright © 2022 Laboratoire Adhesion et Inflammation, Authored by Remy Torro.
 
 import argparse
 import datetime
-import os
-from typing import List, Optional
+from typing import List
 import json
 from celldetective.utils.data_loaders import interpret_tracking_configuration
 from celldetective.utils.image_loaders import (
@@ -16,9 +15,6 @@ from celldetective.utils.image_loaders import (
 )
 from celldetective.utils.experiment import (
     extract_position_name,
-    extract_experiment_channels,
-)
-from celldetective import (
     extract_experiment_channels,
 )
 from celldetective.utils.data_cleaning import _mask_intensity_measurements

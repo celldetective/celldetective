@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from typing import Union, List, Optional, Any, Tuple
+from typing import Union, List
 
 
 from celldetective import get_logger

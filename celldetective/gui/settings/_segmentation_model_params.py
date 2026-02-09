@@ -1,10 +1,18 @@
 import json
 import os
+from typing import Optional
 
 import numpy as np
 from PyQt5.QtCore import QSize, Qt
 from PyQt5.QtGui import QDoubleValidator
-from PyQt5.QtWidgets import QVBoxLayout, QComboBox, QPushButton, QHBoxLayout, QLabel
+from PyQt5.QtWidgets import (
+    QVBoxLayout,
+    QComboBox,
+    QPushButton,
+    QHBoxLayout,
+    QLabel,
+    QMainWindow,
+)
 from fonticon_mdi6 import MDI6
 from superqt.fonticon import icon
 
@@ -162,7 +170,7 @@ class SegModelParamsWidget(CelldetectiveWidget):
         if self.attr_parent.current_stack is not None:
             max_size = np.amax([self.attr_parent.shape_x, self.attr_parent.shape_y])
             self.viewer = CellSizeViewer(
-                initial_diameter=float(self.diameter_le.text().replace(",", ".")),
+                initial_diameter=int(self.diameter_le.text().replace(",", ".")),
                 parent_le=self.diameter_le,
                 stack_path=self.attr_parent.current_stack,
                 window_title=f"Position {self.attr_parent.position_list.currentText()}",

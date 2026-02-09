@@ -1,9 +1,17 @@
 import json
 import os
+from typing import Optional
 
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QDoubleValidator
-from PyQt5.QtWidgets import QVBoxLayout, QComboBox, QHBoxLayout, QLabel, QPushButton
+from PyQt5.QtWidgets import (
+    QVBoxLayout,
+    QComboBox,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QMainWindow,
+)
 
 from celldetective.gui.base.components import CelldetectiveWidget
 from celldetective.gui.base.utils import center_window

@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import QApplication, QDesktopWidget, QMainWindow, QWidget
+from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget
 from typing import Union
 from prettytable import PrettyTable
 

@@ -1,3 +1,7 @@
+from typing import Optional
+from time import time
+
+from PyQt5.QtGui import QCloseEvent
 from PyQt5.QtWidgets import (
     QRadioButton,
     QComboBox,
@@ -12,7 +16,7 @@ from PyQt5.QtWidgets import (
     QMessageBox,
     QMainWindow,
 )
-from PyQt5.QtCore import Qt, QSize, QThreadPool, QThread, QCloseEvent
+from PyQt5.QtCore import Qt, QSize, QThreadPool, QThread
 from celldetective.gui.base.components import generic_message
 from celldetective.gui.base.channel_norm_generator import ChannelNormGenerator
 import multiprocessing
@@ -633,7 +637,7 @@ class SettingsSegmentationModelTraining(CelldetectiveSettingsPanel):
         ):
             TrainSegModelProcess = self.bg_loader.TrainSegModelProcess
         else:
-            from celldetective.processes.train_signal_model import (
+            from celldetective.processes.train_segmentation_model import (
                 TrainSegModelProcess,
             )
 

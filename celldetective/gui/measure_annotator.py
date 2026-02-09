@@ -1,26 +1,19 @@
 from PyQt5.QtWidgets import (
-    QApplication,
     QHBoxLayout,
     QVBoxLayout,
     QLabel,
     QLineEdit,
     QPushButton,
     QMessageBox,
-    QSlider,
-    QComboBox,
-    QCheckBox,
-    QRadioButton,
-    QButtonGroup,
-    QMainWindow,
+    QFileDialog,
 )
 from PyQt5.QtCore import Qt, QSize
-from PyQt5.QtGui import QIntValidator, QKeySequence, QCloseEvent
+from PyQt5.QtGui import QIntValidator
 from matplotlib.axes import Axes
 from typing import Optional, Union, Any
 import numpy as np
 import pandas as pd
 import os
-import matplotlib.pyplot as plt
 from matplotlib.cm import tab10
 from superqt import QLabeledDoubleSlider
 from superqt.fonticon import icon
@@ -29,10 +22,8 @@ from fonticon_mdi6 import MDI6
 from celldetective.gui.base_annotator import BaseAnnotator
 from celldetective.gui.viewers.contour_viewer import CellEdgeVisualizer
 from celldetective.gui.base.components import CelldetectiveWidget
-from celldetective.gui.gui_utils import color_from_state, color_from_class
-from celldetective.utils.image_loaders import locate_labels, load_frames
-from celldetective.utils.masks import contour_of_instance_segmentation
-from celldetective.gui.base.figure_canvas import FigureCanvas
+from celldetective.gui.gui_utils import color_from_state
+from celldetective.utils.image_loaders import locate_labels
 from celldetective.gui.base.utils import center_window
 from celldetective import get_logger
 

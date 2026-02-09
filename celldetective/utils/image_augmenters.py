@@ -1,5 +1,5 @@
 import random
-from typing import Optional, Union, Tuple, Any
+from typing import Tuple
 
 import numpy as np
 from scipy.ndimage import shift
