@@ -128,35 +128,6 @@ class SignalDetectionModel(object):
     model_reg : keras Model
             The regression model for predicting the time of interest for signals.
 
-    Methods
-    -------
-    load_pretrained_model()
-            Loads the model and its configuration from the pretrained path.
-    create_models_from_scratch()
-            Creates new models for classification and regression from scratch.
-    prep_gpu()
-            Prepares GPU devices for training, if available.
-    fit_from_directory(ds_folders, ...)
-            Trains the model using data from specified directories.
-    fit(x_train, y_time_train, y_class_train, ...)
-            Trains the model using provided datasets.
-    predict_class(x, ...)
-            Predicts the class of input signals.
-    predict_time_of_interest(x, ...)
-            Predicts the time of interest for input signals.
-    plot_model_history(mode)
-            Plots the training history for the specified mode (classifier or regressor).
-    evaluate_regression_model()
-            Evaluates the regression model on test and validation data.
-    gather_callbacks(mode)
-            Gathers and prepares callbacks for training based on the specified mode.
-    generate_sets()
-            Generates training, validation, and test sets from loaded data.
-    augment_training_set()
-            Augments the training set with additional generated data.
-    load_and_normalize(subset)
-            Loads and normalizes signals from a subset of data.
-
     Notes
     -----
     - This class is designed to work with biological signal data, such as time series from microscopy imaging.

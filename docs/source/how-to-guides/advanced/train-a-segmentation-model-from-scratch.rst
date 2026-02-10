@@ -1,58 +1,92 @@
 How to train a segmentation model from scratch
 ==============================================
 
-This guide shows you how to train your own segmentation model in celldetective, on your data.
+This guide details the steps to train a custom segmentation model (:term:`StarDist` or :term:`Cellpose`) directly within Celldetective.
 
-Prepare your training data
---------------------------
+.. _prepare-training-data:
 
-Once you segment a movie, you can view and correct the outcome in napari by clicking on the eye button of the segmentation module. We provide you with an ``Export annotations`` button to automatically prepare the image you are looking at as a training sample for a segmentation model.
+Step 1: Prepare your training data
+----------------------------------
 
-.. note::
+Before training, you need a set of annotated images.
+
+1.  Open an experiment in Celldetective.
+2.  Navigate to the **Segmentation** module.
+3.  Load an image and use the **Eye icon** to open it in napari.
+4.  Correct the segmentation manually using napari's labels layer.
+   
+    .. note::
+        Ensure every cell in the image is annotated. Missing cells will be treated as background, teaching the model to ignore them.
+
+5.  Click the **Export annotations** button in Celldetective.
     
-    Make sure to annotate correctly all cells of the image before exporting the annotation, otherwise the model will be taught to learn mistakes!
+    This creates a folder named ``annotations_<population>`` in your experiment directory containing the raw images and corresponding label masks.
 
-The annotations are automatically stored in a folder created at the root of your experiment folder named ``annotations_*population*``. 
+Step 2: Configure the Model
+---------------------------
 
-Train a model in the GUI
-------------------------
+1.  In the **Segmentation** module, click the **TRAIN** button to open the training window.
+2.  **Select Model Architecture:** Choose between :term:`StarDist` (convex objects, nuclei) or :term:`Cellpose` (generalist, irregular shapes).
+3.  **Name your model:** Enter a unique name for your new model.
+4.  **(Optional) Transfer Learning:** To start from an existing model:
 
-Click on the ``TRAIN`` button of the segmentation module. Select between a StarDist or Cellpose model. You can load a previously downloaded model to perform a transfer on your new data. Set the channels, the normalization settings and the standardized spatial calibration for the input images. 
+    *   Click **Choose folder** under "Pretrained model".
+    *   Select a previously trained model folder (e.g., from `celldetective/models/segmentation_generic`).
+    *   This will automatically load the configuration (channels, normalization) of the pretrained model.
 
-.. note::
+Step 3: Configure Data and Channels
+-----------------------------------
+
+1.  **Select Training Data:**
+
+    *   Click **Choose folder** in the **DATA** section.
+    *   Navigate to and select your ``annotations_<population>`` folder (created in Step 1).
+    *   (Optional) You can also mix in built-in datasets by selecting one from the "include dataset" dropdown.
+
+2.  **Set Input Channels:**
+
+    *   Map the channels of your training images to the model inputs.
+    *   For :term:`StarDist`: Typically requires one channel (e.g., Nuclei/DAPI).
+    *   For :term:`Cellpose`: Can accept up to two channels (e.g., Cytoplasm + Nuclei). Set the second channel to "None" if training on a single channel.
+
+3.  **Define Normalization:**
+
+    *   For each channel, choose a normalization method (Percentile or Min/Max).
+    *   **Percentile:** (Recommended) Robust functionality that scales intensities based on image percentiles (e.g., 1st and 99.8th).
+    *   **Clip:** Check this to clamp values outside the normalization range.
+
+4.  **Spatial Calibration:**
+
+    *   This field is **auto-filled** with the pixel size (in microns) from your current experiment configuration.
+    *   Verify it matches your image resolution (e.g., `0.65`). Training with correct physical sizes ensures better generalization.
+
+
+Step 4: Adjust Hyperparameters
+------------------------------
+
+Micro-tune the training process in the **HYPERPARAMETERS** section:
+
+*   **Augmentation Factor:** Controls how much synthetic data is generated from your original images (rotation, flips, intensity changes). A value of `2.0` doubles your dataset size effectively.
+*   **Validation Split:** The fraction of data set aside to test the model's performance during training. Default is `0.2` (20%).
+*   **Epochs:** The number of complete passes through the training dataset.
+
+    *   :term:`StarDist`: Defaults around 100-500.
+    *   :term:`Cellpose`: Defaults around 100-500 depending on dataset size.
     
-    Cellpose requires at least two channels, but the second can be passed as ``None`` (black frame)
+*   **Batch Size:** Number of images processed at once. Reduce this if you run out of GPU memory (default: 8).
+*   :term:`Learning Rate`: The step size for the optimizer. Defaults are automatically set based on the model type (e.g., `0.0003` for :term:`StarDist`, `0.01` for :term:`Cellpose`), but can be adjusted for fine-tuning.
 
-.. note::
+Step 5: Run Training
+--------------------
 
-    The annotations you made with napari stored automatically the spatial calibration of your images, read from the experiment configuration
-
-
-Point towards your ``annotations_*population*`` folder to select the training data. Optionally, you can add one of two datasets we provide to segment:
-
-#. MCF-7 cell nuclei in the presence of NK cells
-#. NK cells in the presence of MCF-7 cells
-
-The ``augmentation_factor`` parameter indicates how the volume of training data is to be increased with augmentation, the validation split controls the amount of validation data (not augmented).
-
-Tune your hyperparameters: learning rate, batch size and the number of epochs. Training time will vary considerably depending on your hardware (NVIDIA GPU or not). Click on ``TRAIN``.
-
-.. _train-seg-models:
+1.  Click **Train** to start the process.
+2.  A progress window will appear, displaying the training loss and validation metrics in real-time.
+3.  Once completed, the model is automatically saved to the software's model library and selected in the Segmentation module for immediate use.
 
 .. figure:: ../../_static/train-segmentation-models.png
     :align: center
     :alt: segmentation_models
     
-    **Training segmentation models.** a) From top to bottom : the user chooses between a StarDist
-    and Cellpose model, and names the model. A pretrained model (generalist, specific) can
-    be loaded to perform transfer learning. The channels and their normalization settings are
-    defined. The desired spatial calibration for the input data is defined. In the ``DATA`` section,
-    the user can point towards a folder containing annotations generated with napari (e.g. the
-    ``annotations_*population*/`` folder). The user can include a dataset, a folder of annotations
-    integrated directly in Celldetective. The augmentation factor slider controls the volume of
-    augmented data in the train set. The validation split slider sets the volume of the validation
-    set. In the ``HYPERPARAMETERS`` section, the user must set the number of training epochs, the
-    learning rate and the batch size.
+    **The Segmentation Training Interface.** Overview of the configuration panels for Model selection, Data loading, and Hyperparameter tuning.
 
-Upon completion, the new model will be stored in the segmentation models zoo, ready to be applied to your data.
 

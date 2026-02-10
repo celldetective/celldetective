@@ -35,26 +35,27 @@ def locate_stack(position: str, prefix: str = "Aligned") -> np.ndarray:
     Parameters
     ----------
     position : str
-            The position folder within the well where the stack is located.
+        The position folder within the well where the stack is located.
     prefix : str, optional
-            The prefix used to identify the stack. The default is 'Aligned'.
+        The prefix used to identify the stack. The default is 'Aligned'.
 
     Returns
     -------
     stack : ndarray
-            The loaded stack as a NumPy array.
+        The loaded stack as a NumPy array with shape ``(T, Y, X, C)``.
 
     Raises
     ------
-    AssertionError
-            If no stack with the specified prefix is found.
+    FileNotFoundError
+        If no stack with the specified prefix is found.
 
     Notes
     -----
     This function locates and loads a stack of images based on the specified position and prefix.
     It assumes that the stack is stored in a directory named 'movie' within the specified position.
-    The function loads the stack as a NumPy array and performs shape manipulation to have the channels
-    at the end.
+    The function loads the stack as a NumPy array and reshapes it to ``(T, Y, X, C)`` using
+    TIFF metadata (ImageJ or OME-TIFF axes) when available, falling back to shape heuristics
+    otherwise. Both ``.tif`` and ``.ome.tif`` files are supported.
 
     Examples
     --------
@@ -70,8 +71,19 @@ def locate_stack(position: str, prefix: str = "Aligned") -> np.ndarray:
     if not stack_path:
         raise FileNotFoundError(f"No movie with prefix {prefix} found...")
 
-    stack = imread(stack_path[0].replace("\\", "/"))
-    stack_length = auto_load_number_of_frames(stack_path[0])
+    file_path = stack_path[0].replace("\\", "/")
+
+    # --- Try metadata-aware loading via TiffFile.series ---
+    try:
+        stack = _load_stack_from_series(file_path)
+        if stack is not None:
+            return stack
+    except Exception as e:
+        logger.debug(f"Metadata-aware loading failed, falling back to heuristics: {e}")
+
+    # --- Fallback: raw imread + shape heuristics ---
+    stack = imread(file_path)
+    stack_length = auto_load_number_of_frames(file_path)
 
     if stack.ndim == 4:
         stack = np.moveaxis(stack, 1, -1)
@@ -85,6 +97,72 @@ def locate_stack(position: str, prefix: str = "Aligned") -> np.ndarray:
             stack = stack[:, :, :, np.newaxis]
     elif stack.ndim == 2:
         stack = stack[np.newaxis, :, :, np.newaxis]
+
+    return stack
+
+
+def _load_stack_from_series(file_path: str) -> Optional[np.ndarray]:
+    """
+    Load a TIFF stack using ``TiffFile.series[0]`` metadata.
+
+    Uses the axis labels embedded in ImageJ or OME-TIFF metadata to
+    deterministically reshape the data to ``(T, Y, X, C)``.
+
+    Parameters
+    ----------
+    file_path : str
+        Path to the TIFF file.
+
+    Returns
+    -------
+    ndarray or None
+        Stack with shape ``(T, Y, X, C)``, or ``None`` if the file
+        lacks usable series metadata.
+    """
+    with TiffFile(file_path) as tif:
+        if not tif.series:
+            return None
+
+        series = tif.series[0]
+        axes = series.axes.upper()  # e.g. 'TCYX', 'YX', 'TYX'
+
+        if "Y" not in axes or "X" not in axes:
+            return None
+
+        stack = series.asarray()
+
+    # Build target axis order: move whatever we have into (T, Y, X, C)
+    # Add missing axes as singletons first
+    if "T" not in axes:
+        stack = np.expand_dims(stack, 0)
+        axes = "T" + axes
+    if "C" not in axes:
+        stack = np.expand_dims(stack, axis=axes.index("X") + 1)
+        axes = axes[: axes.index("X") + 1] + "C" + axes[axes.index("X") + 1 :]
+
+    # Drop Z if present (collapse into T or just squeeze)
+    if "Z" in axes:
+        z_idx = axes.index("Z")
+        if stack.shape[z_idx] == 1:
+            stack = np.squeeze(stack, axis=z_idx)
+            axes = axes.replace("Z", "")
+        else:
+            # Merge Z into T (treat Z-slices as frames)
+            t_idx = axes.index("T")
+            z_idx = axes.index("Z")
+            # Move Z next to T, then merge
+            stack = np.moveaxis(stack, z_idx, t_idx + 1)
+            new_shape = list(stack.shape)
+            new_shape[t_idx] = new_shape[t_idx] * new_shape[t_idx + 1]
+            del new_shape[t_idx + 1]
+            stack = stack.reshape(new_shape)
+            axes = axes.replace("Z", "")
+
+    # Reorder remaining axes to TYXC
+    target = "TYXC"
+    if axes != target:
+        perm = [axes.index(a) for a in target]
+        stack = np.transpose(stack, perm)
 
     return stack
 
@@ -305,49 +383,67 @@ def auto_load_number_of_frames(stack_path: str) -> Optional[int]:
 
     stack_path = stack_path.replace("\\", "/")
     n_channels = 1
+    len_movie = None
 
     with TiffFile(stack_path) as tif:
+        # --- Strategy 1: series metadata (works for OME-TIFF and ImageJ) ---
         try:
-            tif_tags = {}
-            for tag in tif.pages[0].tags.values():
-                name, value = tag.name, tag.value
-                tif_tags[name] = value
-            img_desc = tif_tags["ImageDescription"]
-            attr = img_desc.split("\n")
-            n_channels = int(
-                attr[np.argmax([s.startswith("channels") for s in attr])].split("=")[-1]
-            )
-        except Exception as e:
+            if tif.series:
+                series = tif.series[0]
+                axes = series.axes.upper()
+                shape = series.shape
+                if "T" in axes:
+                    len_movie = shape[axes.index("T")]
+                elif "Z" in axes and "C" in axes:
+                    # No T but has Z and C: single timepoint
+                    len_movie = 1
+                elif "Z" in axes:
+                    # Z without C: might be time or z-slices
+                    len_movie = shape[axes.index("Z")]
+                elif axes in ("YX", "CYX"):
+                    len_movie = 1
+        except Exception:
             pass
-        try:
-            # Try nframes
-            nslices = int(
-                attr[np.argmax([s.startswith("frames") for s in attr])].split("=")[-1]
-            )
-            if nslices > 1:
-                len_movie = nslices
-            else:
-                break_the_code()
-        except:
+
+        # --- Strategy 2: ImageJ tag parsing (existing logic) ---
+        if len_movie is None:
             try:
-                # try nslices
-                frames = int(
-                    attr[np.argmax([s.startswith("slices") for s in attr])].split("=")[
+                tif_tags = {}
+                for tag in tif.pages[0].tags.values():
+                    name, value = tag.name, tag.value
+                    tif_tags[name] = value
+                img_desc = tif_tags["ImageDescription"]
+                attr = img_desc.split("\n")
+                n_channels = int(
+                    attr[np.argmax([s.startswith("channels") for s in attr])].split(
+                        "="
+                    )[-1]
+                )
+            except Exception:
+                pass
+            try:
+                nslices = int(
+                    attr[np.argmax([s.startswith("frames") for s in attr])].split("=")[
                         -1
                     ]
                 )
-                len_movie = frames
-            except:
-                pass
+                if nslices > 1:
+                    len_movie = nslices
+                else:
+                    break_the_code()
+            except Exception:
+                try:
+                    frames = int(
+                        attr[np.argmax([s.startswith("slices") for s in attr])].split(
+                            "="
+                        )[-1]
+                    )
+                    len_movie = frames
+                except Exception:
+                    pass
 
-    try:
-        del tif
-        del tif_tags
-        del img_desc
-    except:
-        pass
-
-    if "len_movie" not in locals():
+    # --- Strategy 3: shape inference fallback ---
+    if len_movie is None:
         stack = imread(stack_path)
         len_movie = len(stack)
         if len_movie == n_channels and stack.ndim == 3:

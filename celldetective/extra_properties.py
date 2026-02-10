@@ -29,14 +29,33 @@ To be valid, a function in this module must adhere to the following signature:
 *   Must return a **scalar** (float or int).
 *   Returning `NaN` is permitted and handled.
 
+Code Examples
+-------------
+
+Here are some simple examples to illustrate the structure:
+
+.. code-block:: python
+
+    def area(regionmask, intensity_image, **kwargs):
+        return np.sum(regionmask)
+
+    def mean_intensity(regionmask, intensity_image, **kwargs):
+        # We select only the pixels within the cell mask
+        masked_pixels = intensity_image[regionmask]
+        return np.mean(masked_pixels)
+
+
 Naming and Indexing Rules
 -------------------------
 
 The name of the function determines the column name in the output measurement table.
 
 1.  **Channel Replacement**: If the function name contains the substring ``intensity``, it is automatically replaced by the actual channel name being measured.
+
     *   *Example:* ``intensity_mean`` -> ``green_channel_mean``
+
 2.  **Multi-channel Indexing**: Since these functions are often run on multiple channels, avoid using simple digits (0-9) in the function name if they could conflict with channel indexing.
+
     *   *Bad:* ``measure_ch1``
     *   *Good:* ``measure_channel_one``
 

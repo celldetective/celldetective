@@ -16,60 +16,39 @@ Off-software preprocessing
 Registration
 ~~~~~~~~~~~~
 
-We highly recommend aligning your movies before using Celldetective. A common tool for this is the **Linear Stack Alignment with SIFT Multichannel** plugin available in Fiji [#]_ , which can be activated by enabling the PTBIOP update site (see discussion here_).
+We highly recommend aligning your movies before using Celldetective to correct for stage drift. This is typically done using external tools like Fiji (ImageJ).
 
-.. _here: https://forum.image.sc/t/registration-of-multi-channel-timelapse-with-linear-stack-alignment-with-sift/50209/16
+.. seealso::
+    :doc:`how-to-guides/basics/register-stacks-with-fiji` for a step-by-step guide on using the customized Fiji macro for batch registration.
 
-To facilitate this step, we provide `a macro`_ that can be reused for preprocessing tasks in the ``movie/`` subfolder of each position folder.
-
-.. _`a macro`: align_macro.html
 
 
 In-software preprocessing
--------------------------
+--------------------------
 
-Sometimes, preprocessing your images directly within Celldetective can simplify segmentation and produce more controlled measurements. The **Preprocessing** module allows you to batch-correct stacks through the following steps:
+The **Preprocessing** module lets you batch-correct stacks directly within Celldetective. Corrected stacks are saved with the prefix ``Corrected_``.
 
+.. list-table::
+   :widths: 30 50 20
+   :header-rows: 1
 
-**Workflow: Applying a correction**
+   * - Task
+     - Description
+     - Guide
+   * - Background correction (Model Fit)
+     - Fits a 2D surface to the background, excluding cells. Best for single images with clear background.
+     - :doc:`how-to <how-to-guides/basics/correct-a-fluo-background>`
+   * - Background correction (Model Free)
+     - Computes a median background from multiple positions or timeframes. Best for batch processing well plates.
+     - :doc:`how-to <how-to-guides/basics/perform-model-free-background-correction>`
+   * - Channel offset correction
+     - Aligns channels that have pixel shifts between modalities.
+     - :doc:`how-to <how-to-guides/basics/align-channels>`
 
-1.  **Select a target channel** and define correction parameters (manually or visually).
-2.  **Add the correction protocol** to the list.
-3.  Repeat for other channels if needed.
-4.  **Submit** to apply corrections.
-
-The corrected stacks are saved with the prefix ``Corrected_``.
-
-Background correction
-~~~~~~~~~~~~~~~~~~~~~
-
-**Concept**
-
-Background correction removes uneven illumination or artifacts. Celldetective offers two approaches:
-
-1.  **Model Fit**: Fits a 2D mathematical surface (plane/paraboloid) to the image, excluding cells. Best for single images with clear background.
-2.  **Model Free**: Computes a median background from multiple positions or timeframes. Best for batch processing well plates.
-
-For technical details on these methods (Thresholds, Tile options), see the :ref:`Preprocessing Protocols Reference <ref_preprocessing_settings>`.
-
-
-Channel offset correction
-~~~~~~~~~~~~~~~~~~~~~~~~~
-
-In some optical microscopy setups, offsets between modalities can affect intensity measurements by misaligning channel data.
-
-With the **channel offset correction** module, you can:
-
-#. Estimate the offset between two channels.
-
-#. Use the Viewer to visualize a reference channel in grayscale and the overlayed channel to correct in blue.
-
-#. Adjust the overlay position using keyboard arrows until alignment is satisfactory.
-
-#. Apply the correction and add it to the protocol list.
+For a full list of parameters (thresholds, tile options, etc.), see the :ref:`Preprocessing Protocols Reference <ref_preprocessing_settings>`.
 
 
 Bibliography
 ------------
 
-.. [#] Schindelin, J., Arganda-Carreras, I., Frise, E. et al. Fiji: an open-source platform for biological-image analysis. Nat Methods 9, 676–682 (2012). https://doi.org/10.1038/nmeth.2019
+ Schindelin, J., Arganda-Carreras, I., Frise, E. et al. Fiji: an open-source platform for biological-image analysis. Nat Methods 9, 676–682 (2012). https://doi.org/10.1038/nmeth.2019

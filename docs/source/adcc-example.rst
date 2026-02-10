@@ -50,3 +50,4 @@ Once you are satisfied with the classification of lysis events, go to the ``Anal
 To view the collapsed signal response, with respect to the lysis event determined by the signal analysis model, click on the ``plot signals`` button of the ``Analyze`` tab. Select the ``targets`` population, set ``class_lysis`` as the class of interest and ``t_lysis`` as the time of interest. Submit. The visualizer will open. You can see the mean response for all cells or just the ones classified as dead. You can plot the actual single cell traces. 
 
 
+For more details on these analysis steps, see :doc:`how-to-guides/basics/plot-survival` and :doc:`measure`.

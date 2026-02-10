@@ -25,6 +25,7 @@ def contour_of_instance_segmentation(
             The instance segmentation labels.
     distance : int, float, list, tuple, or str
         The distance specification.
+
         - Scalar > 0: Inner contour (Erosion) from boundary to 'distance' pixels inside. Range [0, distance].
         - Scalar < 0: Outer contour (Dilation) from 'distance' pixels outside to boundary. Range [distance, 0].
         - Tuple/List (a, b): Explicit range in SDF space.

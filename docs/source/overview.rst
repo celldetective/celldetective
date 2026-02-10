@@ -15,27 +15,31 @@ Description
 
 Despite notable efforts in the development of user-friendly software that integrate state-of-the-art solutions to perform single cell analysis, very few are designed for time-lapse data and even less for multimodal problems where cells populations are mixed and can only be separated through the use of multimodal information. Few software solutions provide, to our knowledge, the extraction of response functions from single cell events, such as the dynamic survival of a population directly in the GUI, as coding skills are usually required to do so. We want to study complex data which is often multimodal time lapse microscopy images of interacting cell populations, without loss of generality. With a high need for an easy-to-use, no-coding-skill-required software adapted for images and intended for biologists, we introduce **Celldetective**, an open-source python-based software with the following highlight features:
 
-* **Comprehensive single-cell image analysis** : Celldetective ships segmentation, tracking, and measurement modules, as well as event detection from single-cell signals, for up to two populations of interest.
+* **Comprehensive single-cell image analysis** : Celldetective ships :doc:`segmentation <segment>`, :doc:`tracking <track>`, and :doc:`measurement <measure>` modules, as well as :doc:`event detection <signals-and-events>` from single-cell signals, for up to two populations of interest. Image preprocessing tools, including model-free and model-based background correction, are also provided to prepare data before analysis.
 
-* **Integration of state-of-the-art solutions** : Celldetective harnesses state-of-the-art segmentation techniques (StarDist [#]_, Cellpose [#]_ , [#]_) and tracking algorithm (bTrack [#]_), as well as the napari viewer [#]_ where applicable. These algorithms are interfaced to be well integrated and accessible for the target audience, in the context of complex biological applications.
+* **Integration of state-of-the-art solutions** : Celldetective harnesses state-of-the-art segmentation techniques (:term:`StarDist` [#]_, :term:`Cellpose` [#]_ , [#]_) as well as threshold-based segmentation, and tracking algorithms (:term:`bTrack` [#]_, :term:`trackpy`), along with the napari viewer [#]_ where applicable. These algorithms are interfaced to be well integrated and accessible for the target audience, in the context of complex biological applications.
 
-* **A framework for event description and annotations** : we propose a broad and intuitive framework to annotate and automate the detection of events from single-cell signals through Deep Learning signal classification and regression. The event formulation is directly exploited to define the population's survival responses.
 
-* **A neighborhood scheme to study cell-cell interactions** : we introduce a neighborhood scheme to relate the spatio-temporal distribution and measurements of two cell populations, allowing the study of how cell-cell interactions affect single-cell and population responses.
+* **Rich measurement capabilities** : beyond standard morphological and intensity features, Celldetective supports :doc:`Haralick texture analysis <how-to-guides/basics/measure-texture>`, :doc:`spot detection <how-to-guides/basics/detect-spots-within-cells>` within cells, radial intensity profiles, local intensity normalization, and user-defined custom measurements through an extensible :ref:`extra-properties system <extra_properties>`.
 
-* **Deep Learning customization in GUI** : Celldetective simplifies the specialization of Deep Learning models or the creation of new ones adapted to user data, by facilitating the creation of training sets and the training of such models, without having to write a single line of code.
 
-* **In-software analysis** : Celldetective ships visualization tools to collapse single-cell signals with respect to an event, build survival curves, compare measurement distributions across biological conditions.
+* **A framework for event description and annotations** : we propose a broad and intuitive framework to annotate and automate the :doc:`detection of events <signals-and-events>` from single-cell signals through Deep Learning signal classification and regression, assisted by an :doc:`interactive timeseries viewer <how-to-guides/basics/annotate-an-event>`. The event formulation is directly exploited to define the population's :doc:`survival responses <analysis>`.
 
-* **A library of segmentation and signal models**: we created specific models to investigate a co-culture of MCF-7 cells and primary NK cells, that are available directly in the software with a large collection of generalist models developed by the StarDist and Cellpose teams, which are a perfect starting point to segment single cells in a new biological system. 
+* **A neighborhood scheme to study cell-cell interactions** : we introduce a :doc:`neighborhood scheme <interactions>` to relate the spatio-temporal distribution and measurements of two cell populations, including relative and pair-level measurements. This allows the study of how cell-cell interactions affect single-cell and population responses.
+
+* **Deep Learning customization in GUI** : Celldetective simplifies the :doc:`specialization of Deep Learning models <how-to-guides/advanced/train-a-segmentation-model-from-scratch>` or the creation of new ones adapted to user data, by facilitating the creation of training sets and the training of such models, without having to write a single line of code.
+
+* **In-software analysis** : Celldetective ships a :doc:`Table Explorer <table_exploration>` with built-in data operations (arithmetic, differentiation, log, calibration, query filtering, column merging) and visualization tools to plot time series, build survival curves, compare measurement distributions across biological conditions using box plots, strip plots, or boxen plots. Statistical tests (Cliff's Delta effect size [#]_, Kolmogorov–Smirnov test [#]_ [#]_) are also available directly in the GUI.
+
+* **A library of segmentation and signal models**: we created specific models to investigate a co-culture of MCF-7 cells and primary NK cells, that are available directly in the software with a large collection of generalist models developed by the :term:`StarDist` and :term:`Cellpose` teams, which are a perfect starting point to segment single cells in a new biological system. 
 
 * **Accessible and open source** : Celldetective does not require any coding skills. The software, its models and datasets are made fully open source to encourage transparency and reproducibility.
 
 
- System requirements
+System requirements
 -------------------
 
-Celldetective is designed to run on standard workstations as well as high-performance clusters. It supports GPU acceleration (NVIDIA) for Deep Learning tasks but can run fully on CPU.
+Celldetective is designed to run on standard workstations. It supports GPU acceleration (NVIDIA) for Deep Learning tasks but can run fully on CPU with multithreading.
 
 For detailed hardware and software specifications, see the :ref:`System Requirements Reference <reference/system-requirements>`. 
 
@@ -52,3 +56,10 @@ Bibliography
 .. [#] Ulicna, K., Vallardi, G., Charras, G. & Lowe, A. R. Automated Deep Lineage Tree Analysis Using a Bayesian Single Cell Tracking Approach. Frontiers in Computer Science 3, (2021).
 
 .. [#] Ahlers, J. et al. napari: a multi-dimensional image viewer for Python. Zenodo https://doi.org/10.5281/zenodo.8115575 (2023).
+
+.. [#] Cliff, N. Dominance statistics: Ordinal analyses to answer ordinal questions. Psychological Bulletin 114, 494–509 (1993).
+
+.. [#] Kolmogorov, A. N. Sulla determinazione empirica di una legge di distribuzione. Giornale dell’Istituto Italiano degli Attuari 4, 83–91 (1933).
+
+.. [#] Smirnov, N. Table for estimating the goodness of fit of empirical distributions. Annals of Mathematical Statistics 19, 279–281 (1948).
+

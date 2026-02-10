@@ -137,8 +137,11 @@ Filters
    :members:
 
 
+.. _extra_properties:
+   
 Extra properties
 ----------------
+
 
 .. automodule:: celldetective.extra_properties
    :members:

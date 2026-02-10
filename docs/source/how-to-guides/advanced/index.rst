@@ -10,3 +10,6 @@ Advanced
    inject-metadata
    train-a-segmentation-model-from-scratch
    train-an-event-detection-model
+   transfer-a-segmentation-model
+   transfer-an-event-detection-model
+   write-a-custom-measurement

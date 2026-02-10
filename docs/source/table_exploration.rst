@@ -20,7 +20,7 @@ For a complete list of commands (including Keyboard Shortcuts), see the :ref:`Ta
 Plotting
 --------
 
-The Table UI offers versatile plotting capabilities. Select columns in the table and use **File > Plot...** (``Ctrl+P``) to visualize them.
+The Table UI offers versatile plotting capabilities. Select columns in the table and use **File > Plot...** (:kbd:`Ctrl+P`) to visualize them.
 
 1D Plotting
 ~~~~~~~~~~~
@@ -39,12 +39,12 @@ Time Series / Track Signals
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 When viewing track data, you can visualize signals over time:
 
-- **Plot instantaneous...** (``Ctrl+I``): Switches the plotting mode to show track signals when rows are selected, allowing you to see the temporal evolution of metrics for selected cells.
+- **Plot instantaneous...** (:kbd:`Ctrl+I`): Switches the plotting mode to show track signals when rows are selected, allowing you to see the temporal evolution of metrics for selected cells.
 
 Track Collapsing
 ----------------
 
-One of the most powerful features is the ability to aggregate data at the track level. This transforms your data from a **time-series format** (one row per timepoint) to a **track-based format** (one row per cell track). Use **File > Collapse tracks...** (``Ctrl+G``) to open the projection mode dialog.
+One of the most powerful features is the ability to aggregate data at the track level. This transforms your data from a **time-series format** (one row per timepoint) to a **track-based format** (one row per cell track). Use **File > Collapse tracks...** (:kbd:`Ctrl+G`) to open the projection mode dialog.
 
 Global Operation
 ~~~~~~~~~~~~~~~~

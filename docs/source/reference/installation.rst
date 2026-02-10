@@ -5,6 +5,25 @@ This page details advanced installation options and troubleshooting steps.
 
 .. _ref_dev_installation:
 
+Standard Installation
+---------------------
+
+We recommend using `conda` to create a clean environment for Celldetective.
+
+1.  **Create an environment** (Python 3.9 - 3.11):
+
+    .. code-block:: console
+
+        $ conda create -n celldetective python=3.11 pyqt
+        $ conda activate celldetective
+
+2.  **Install Celldetective**:
+
+    .. code-block:: console
+
+        $ pip install celldetective[all]
+
+
 Development Version
 -------------------
 

@@ -3,37 +3,24 @@ Get started
 
 .. _get_started:
 
+This guide will help you install Celldetective and launch your first session.
 
-Installation
-------------
+Step 1: Installation
+--------------------
 
-Standard Installation
-~~~~~~~~~~~~~~~~~~~~~
+Celldetective is a Python package typically installed via pip in a conda environment.
 
-We recommend using `conda` to create a clean environment for Celldetective.
+.. code-block:: console
 
-1.  **Create an environment** (Python 3.9 - 3.11):
+    $ pip install celldetective[all]
 
-    .. code-block:: console
-
-        $ conda create -n celldetective python=3.11 pyqt
-        $ conda activate celldetective
-
-2.  **Install Celldetective**:
-
-    .. code-block:: console
-
-        $ pip install celldetective
-
-**That's it!** You are ready to launch.
-
-*For development versions, troubleshooting (e.g., Visual C++ errors), or manual installation, see the :ref:`Installation Reference <ref_dev_installation>`.*
+For detailed instructions, troubleshooting, and GPU setup, see the :doc:`Installation Reference <reference/installation>`.
 
 
-Launching the GUI
------------------
+Step 2: Launching the GUI
+-------------------------
 
-Once the pip installation is complete, open a terminal and run:
+Once installed, open a terminal and run:
 
 .. code-block:: console
 
@@ -43,11 +30,15 @@ Once the pip installation is complete, open a terminal and run:
 .. figure:: _static/launch.gif
     :width: 100%
     :align: center
-    :alt: static_class
+    :alt: static_launch_gui
 
-    How to launch the software from a terminal, here, without an environment
+    Launching the software from a terminal.
 
 
-A startup image is displayed during the loading of the python libraries. Upon completion, the first window of the software opens. 
+Step 3: Next Steps
+------------------
 
-You can either create a new experiment (button New or shortcut Ctrl+N) or load one.
+Upon launch, you can create a new experiment or load an existing one.
+
+*   To understand the experiment structure, see :doc:`First Experiment <first-experiment>`.
+*   To create your first project, see :doc:`How to create an experiment <how-to-guides/basics/create-an-experiment>`.

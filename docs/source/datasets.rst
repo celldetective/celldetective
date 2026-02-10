@@ -39,19 +39,19 @@ ADCCFactory requires a specific folder tree, that mimics the organization of a `
 
 To generate automatically such a folder tree, open ADCCFactory and go to File>New experiment... or press Ctrl+N.
 
-.. figure:: _static/startup_new_exp.gif
-    :width: 400px
-    :align: center
-    :alt: startup_new_experiment
+.. .. figure:: _static/startup_new_exp.gif
+..     :width: 400px
+..     :align: center
+..     :alt: startup_new_experiment
     
     Press Ctrl+N or go to File>New experiment... to configure a new experiment folder
    
 A dialog window will ask you where you want to create the experiment folder. Then a second window will ask for complementary information needed to fill the configuration file.     
    
-.. image:: _static/configure_experiment.png
-    :width: 350px
-    :align: center
-    :alt: configure_experiment
+.. .. image:: _static/configure_experiment.png
+..     :width: 350px
+..     :align: center
+..     :alt: configure_experiment
 
 Once you press "Submit", these parameters create the experiment folder named "ExpLambda" in home/. At the root of the experiment folder is a configuration file that looks as follows:
 

@@ -10,26 +10,28 @@ Table Explorer (TableUI)
 
 **File Menu**
 
-*   **Save as...** (``Ctrl+S``): Export table to CSV.
+*   **Save as...** (:kbd:`Ctrl+S`): Export table to CSV.
 *   **Save inplace...**: Overwrite the original source file.
-*   **Plot...** (``Ctrl+P``): Open the Plotting Interface.
-*   **Plot instantaneous...** (``Ctrl+I``): Toggle row-selection plotting for track signals.
-*   **Collapse tracks...** (``Ctrl+G``): Open the Track Collapsing dialog.
+*   **Plot...** (:kbd:`Ctrl+P`): Open the Plotting Interface.
+*   **Plot instantaneous...** (:kbd:`Ctrl+I`): Toggle row-selection plotting for track signals.
+*   **Collapse tracks...** (:kbd:`Ctrl+G`): Open the Track Collapsing dialog.
 *   **Collapse pairs in neighborhood...**: Aggregate interaction data (Pair tables only).
-*   **Group by frames...** (``Ctrl+T``): Aggregate data by time frame.
+*   **Group by frames...** (:kbd:`Ctrl+T`): Aggregate data by time frame.
 *   **Query...**: Filter rows using Pandas query syntax.
 
 **Edit Menu**
 
-*   **Delete...** (``Del``): Delete selected columns.
+*   **Delete...** (:kbd:`Del`): Delete selected columns.
 *   **Rename...**: Rename the selected column.
 
 **Math Menu**
 
-*   **Calibrate...** (``Ctrl+C``): Multiply a column by a factor.
+*   **Calibrate...** (:kbd:`Ctrl+C`): Multiply a column by a factor.
 *   **Merge states...**: Combine multiple status columns.
-*   **Differentiate...** (``Ctrl+D``): Compute derivatives (e.g., speed from position).
+*   **Differentiate...** (:kbd:`Ctrl+D`): Compute derivatives (e.g., speed from position).
+
     *   *Options*: Window size, Mode (forward/backward/central).
+    
 *   **Absolute value...**: Compute ``abs(x)``.
 *   **Log (decimal)...**: Compute ``log10(x)``.
 *   **Arithmetic**: Add, Subtract, Multiply, or Divide two columns.
@@ -41,22 +43,21 @@ Signal Annotator / Viewer
 
 **Keyboard Shortcuts**
 
-+---------------------+---------------------------------------------------+
 | Shortcut            | Action                                            |
 +=====================+===================================================+
-| ``Space``           | Play / Stop animation                             |
+| :kbd:`Space`        | Play / Stop animation                             |
 +---------------------+---------------------------------------------------+
-| ``f``               | Jump to **First** frame                           |
+| :kbd:`f`            | Jump to **First** frame                           |
 +---------------------+---------------------------------------------------+
-| ``l``               | Jump to **Last** frame                            |
+| :kbd:`l`            | Jump to **Last** frame                            |
 +---------------------+---------------------------------------------------+
-| ``Ctrl+P``          | Open interactive signal plotter                   |
+| :kbd:`Ctrl+P`       | Open interactive signal plotter                   |
 +---------------------+---------------------------------------------------+
-| ``Esc``             | Cancel cell selection                             |
+| :kbd:`Esc`          | Cancel cell selection                             |
 +---------------------+---------------------------------------------------+
-| ``Del``             | Mark selected cell for deletion (cannot undo)     |
+| :kbd:`Del`          | Mark selected cell for deletion (cannot undo)     |
 +---------------------+---------------------------------------------------+
-| ``n``               | Reset cell class to "No Event"                    |
+| :kbd:`n`            | Reset cell class to "No Event"                    |
 +---------------------+---------------------------------------------------+
 
 **Mouse Interactions**
@@ -69,16 +70,16 @@ Signal Annotator / Viewer
 Interactive Plotter
 -------------------
 
-Accessed via ``Ctrl+P`` from the Signal Annotator or Table Explorer.
+Accessed via :kbd:`Ctrl+P` from the Signal Annotator or Table Explorer.
 
 **Keyboard Shortcuts**
 
 +---------------------+---------------------------------------------------+
 | Shortcut            | Action                                            |
 +=====================+===================================================+
-| ``Left / Right``    | Shift event time for selected traces              |
+| :kbd:`Left / Right` | Shift event time for selected traces              |
 +---------------------+---------------------------------------------------+
-| ``Ctrl+S``          | Save changes                                      |
+| :kbd:`Ctrl+S`       | Save changes                                      |
 +---------------------+---------------------------------------------------+
 
 **Mouse Interactions**
