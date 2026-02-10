@@ -1,8 +1,7 @@
 from typing import List
 
 import numpy as np
-from PyQt5 import Qt
-from PyQt5.QtCore import QSize
+from PyQt5.QtCore import Qt, QSize
 from PyQt5.QtWidgets import (
     QComboBox,
     QHBoxLayout,
