@@ -3,7 +3,7 @@ How to measure locally corrected intensities
 
 This guide shows you how to correct single-cell intensity measurements by subtracting or dividing by the local background around each cell.
 
-Reference keys: *local correction*, *background*, *single-cell measurement*
+Reference keys: :term:`local correction`, :term:`single-cell measurement`
 
 **Prerequisite:** You must have segmented the cells. Tracking is recommended but not required.
 

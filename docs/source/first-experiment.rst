@@ -1,5 +1,5 @@
-Tutorial: Your First Experiment
-===============================
+Your First Experiment
+=====================
 
 .. _first_experiment:
 
@@ -36,14 +36,13 @@ Step 2: Segment Cells
 
 Now we will detect the cells in the images. The demo dataset contains images of immune cells spreading on a surface.
 
-1.  In the **Experiment Overview** tab (center panel), click on **Run Analysis** to open the main interface.
-2.  Locate the **Process Effectors** block in the processing panel (expand it if necessary).
-3.  Check the **Segment** box.
-4.  In the **Model zoo** dropdown, select **lymphocytes_ricm**.
-5.  Click **Submit** to run segmentation.
+1.  Locate the **Process Effectors** block in the processing panel and expand it.
+2.  Check the **Segment** box.
+3.  In the **Model zoo** dropdown, select **lymphocytes_ricm**.
+4.  Click **Submit** to run segmentation.
 
     .. tip::
-        You can visualize the results immediately by clicking the :icon:`eye,black` button next to the segmentation entry. This opens Napari with the image and mask layers.
+        You can visualize and correct the segmentation results by clicking the :icon:`eye-outline,black` button next to the segmentation entry. This opens napari with the image and mask layers.
 
 
 Step 3: Track Cells
@@ -67,28 +66,37 @@ To analyze cellular dynamics, we need to extract quantitative features.
 2.  Click the :icon:`cog-outline,black` button next to it.
 3.  Ensure **area** and **intensity_mean** are listed in the features list.
 4.  Close the configuration window and click **Submit**.
-5.  Celldetective will extract these features for every cell at every time point.
+5.  Celldetective will measure these features for every cell at every time point.
 
 
-Step 5: Analyze Signals
------------------------
+Step 5: Analyze Time-Series
+---------------------------
 
 This is the core of Celldetective: analyzing how single-cell features change over time.
 
 1.  Scroll to the **Signal Analysis** section.
-2.  Click the :icon:`eye,black` button (Signal Annotator) to open the interactive viewer.
+2.  Click the :icon:`eye,black` button (Event Annotator) to open the interactive viewer.
 3.  **Click on any cell** in the movie.
-4.  The panel on the left will display its **Signal Traces** (e.g., Intensity vs Time).
-5.  You can inspect distinct behaviors, identifying events like cell division or death based on these traces.
+4.  The panel on the left will display its feature time-series (e.g., Intensity vs Time).
+
+.. tip::
+    **Detect Spreading Events**: In this demo, cells become dark (low intensity) when they spread. Let's annotate this using the **Classifier Widget**:
+
+    1.  In the **Measure** section, click the :icon:`scatter-plot,black` button (Classifier Widget).
+    2.  Set **class name** to ``spreading``.
+    3.  In the **classify** field, type ``intensity_mean < 1``.
+    4.  Check **Time correlated** and select **irreversible event**.
+    5.  Click **apply** to detect this event for all tracks.
+    6.  Reopen the Event Annotator (Step 5) to see the vertical lines marking the spreading time.
 
 
-Step 6: Visualize Results
--------------------------
+Step 6: Explore Results
+-----------------------
 
-1.  Go back to the **Tracking** section.
-2.  Click the :icon:`eye,black` button.
-3.  Napari will open showing the image, masks, and tracks.
-4.  Use the slider to watch the cells and their trails!
+You can now use dedicated tools to analyze your data:
+
+1.  **Survival Analysis**: Predict the time between first detection and spreading using the :doc:`Survival Plot <how-to-guides/basics/plot-survival>` (Start Event: ``t_firstdetection``, End Event: ``t_spreading``).
+2.  **Table Exploration**: Inspect feature distributions and correlations with the :doc:`Table Explorer <table_exploration>`.
 
 Congratulations! You have successfully processed your first experiment.
 
@@ -97,5 +105,4 @@ Next Steps
 
 *   Learn how to :doc:`create your own experiment <how-to-guides/basics/create-an-experiment>`.
 *   Try :doc:`conditional classification <how-to-guides/basics/perform-conditional-cell-classification>` to identify cell states.
-*   Perform :doc:`survival analysis <how-to-guides/basics/plot-survival>` on your tracked cells.
 *   Explore :doc:`measurement options <measure>`.

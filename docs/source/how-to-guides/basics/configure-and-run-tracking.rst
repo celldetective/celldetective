@@ -3,7 +3,7 @@ How to configure and run tracking
 
 This guide shows you how to set up a tracker and run it on your segmented data.
 
-Reference keys: *tracking*, :term:`cell population`
+Reference keys: :term:`tracking`, :term:`cell population`
 
 **Prerequisite:** You must have segmented masks for the population of interest.
 

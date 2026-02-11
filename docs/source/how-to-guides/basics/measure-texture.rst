@@ -3,7 +3,7 @@ How to measure single-cell texture
 
 This guide shows you how to measure :term:`Haralick Texture Features` on a per-cell basis.
 
-Reference keys: *texture*, *single-cell measurements*, :term:`Haralick Texture Features`, :term:`GLCM`
+Reference keys: :term:`texture`, :term:`single-cell measurement`
 
 **Prerequisite:** You must have segmented the cells. Tracking is recommended but not required.
 

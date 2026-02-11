@@ -3,7 +3,7 @@ How to synchronize single-cell timeseries over a population
 
 This guide shows you how to collapse single-cell signal traces into population-averaged time series, aligned to a reference event time.
 
-Reference keys: *mean signal*, *signal response*, *synchronize*, *population average*
+Reference keys: :term:`mean signal`, :term:`signal response`, :term:`population average`
 
 **Prerequisite:** You have segmented, tracked, measured, and annotated events for a cell population.
 

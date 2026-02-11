@@ -3,7 +3,7 @@ How to annotate an event
 
 This guide shows you how to annotate a single-cell event, either for manual characterisation or to create a dataset to train a deep learning event detection model.
 
-Reference keys: *event*, *event class*, *event time*
+Reference keys: :term:`event`, :term:`event class`, :term:`event time`
 
 
 **Prerequisite:** You have accurately segmented, **tracked** and measured a cell population of interest. This guide only applies to dynamic data.

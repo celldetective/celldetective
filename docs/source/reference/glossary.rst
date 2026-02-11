@@ -28,6 +28,9 @@ This glossary defines the key concepts used in the documentation.
     neighbor counts
         Metrics quantifying the number of neighboring cells within a defined :term:`neighborhood`, calculated using one of three methods: inclusive, exclusive, or intermediate (weighted).
 
+    threshold-based event detection
+        A method for detecting events by applying conditions on cell features. The conditions are evaluated at each time point, producing a binary signal per cell. The time of event is extracted by fitting a model to the binary signal.
+
     experiment project
         A **Celldetective experiment** consists of a folder and a configuration file in ``.ini`` format. The folder is organized hierarchically to support data from multiple wells and positions:
 
@@ -101,3 +104,15 @@ This glossary defines the key concepts used in the documentation.
 
     signal
         A quantitative measurement derived from an image channel (e.g., "Mean Intensity", "GFP Fluorescence") associated with a segmented object.
+
+    cell type
+        A classification of cells based on their morphology, function, or molecular markers (e.g., HeLa, T-cells).
+
+    antibody
+        A protein used to label specific cellular targets in immunofluorescence experiments.
+
+    concentration
+        The amount of a substance (e.g., drug, antibody) present in a solution, often expressed in µM, ng/mL, etc.
+
+    pharmaceutical agents
+        Drugs or chemical compounds applied to the cells to perturb their behavior or state.

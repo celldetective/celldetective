@@ -26,9 +26,8 @@ Contents
    
    get-started
    first-experiment
-   example_notebook
    adcc-example
-
+   example_notebook
 
 
 .. toctree::

@@ -3,7 +3,7 @@ How to detect an event using conditions
 
 This guide shows you how to detect time-correlated events (e.g., cell death, spreading) by applying feature-based classification rules that produce a binary signal, which is then fitted with a sigmoid to extract the event time.
 
-Reference keys: *event*, *event class*, *event time*, *threshold-based detection*
+Reference keys: :term:`event`, :term:`event class`, :term:`event time`, :term:`threshold-based event detection`
 
 **Prerequisite:** You have accurately segmented, **tracked**, and measured a cell population of interest. This guide only applies to dynamic data.
 

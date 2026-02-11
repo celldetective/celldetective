@@ -5,7 +5,7 @@ How to visualize cell-cell interactions
 
 This guide shows you how to use the **Pair Signal Viewer** to inspect the signals of interacting cell pairs.
 
-Reference keys: *neighborhood*, *pair measurements*, *signal viewer*
+Reference keys: :term:`neighborhood`, :term:`pair measurements`
 
 **Prerequisite:** You must have computed :doc:`neighborhoods <measure-cell-interactions>` and enabled **MEASURE PAIRS**.
 

@@ -3,7 +3,7 @@ How to annotate a group of cells
 
 This guide shows you how to create a characteristic group where each state is associated with a specific cell phenotype (within a population).
 
-Reference keys: *characteristic group*, *phenotype*
+Reference keys: :term:`characteristic group`, :term:`phenotype`
 
 **Prerequisite:** You have accurately segmented a cell population of interest, tracked it if relevant, and measured each single cell.
 

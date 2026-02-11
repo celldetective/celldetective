@@ -3,7 +3,7 @@ How to align two channels
 
 This guide shows you how to correct a spatial offset between two channels.
 
-Reference keys: *preprocessing*, *alignment*
+Reference keys: :term:`preprocessing`, :term:`alignment`
 
 Alignment protocol
 ~~~~~~~~~~~~~~~~~~

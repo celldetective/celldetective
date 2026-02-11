@@ -3,7 +3,7 @@ How to correct a fluorescent background
 
 This guide shows you how to subtract the background bulk fluorescence from a fluorescence image.
 
-Reference keys: *background correction*
+Reference keys: :term:`preprocessing`, :term:`background correction`
 
 Correction protocol
 ~~~~~~~~~~~~~~~~~~~

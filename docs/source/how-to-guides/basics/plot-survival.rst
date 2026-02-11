@@ -3,7 +3,7 @@ How to plot survival between two events
 
 This guide shows you how to generate Kaplan-Meier survival curves between two annotated events.
 
-Reference keys: *survival*, *Kaplan-Meier*, *event time*
+Reference keys: :term:`survival`, :term:`event time`
 
 **Prerequisite:** You have segmented, tracked, measured, and annotated events for a cell population. At least two events must be defined (a start reference and an end event).
 

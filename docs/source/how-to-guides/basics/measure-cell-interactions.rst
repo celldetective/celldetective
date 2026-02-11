@@ -3,7 +3,7 @@ How to measure cell-cell interactions
 
 This guide shows you how to quantify spatial relationships between two cell populations using the **Interactions** section of the control panel.
 
-Reference keys: *neighborhood*, *cell-cell interactions*
+Reference keys: :term:`neighborhood`, :term:`cell-cell interactions`
 
 **Prerequisite:** Both populations must be segmented. Tracking is recommended but not required.
 

@@ -3,7 +3,7 @@ How to measure edge intensity
 
 This guide shows you how to measure intensity features within specific contour bands relative to the cell boundary (e.g., peripheral or peri-cellular intensity).
 
-Reference keys: *contour*, *single-cell measurement*, *edge intensity*
+Reference keys: :term:`contour`, :term:`single-cell measurement`
 
 **Prerequisite:** You must have segmented the cells. Tracking is recommended but not required.
 
