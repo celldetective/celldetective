@@ -158,7 +158,7 @@ class StackLoader(QThread):
                     self.mutex.unlock()
 
                 except Exception as e:
-                    logger.debug(f"Error loading frame {frame_to_load}: {e}")
+                    # logger.debug(f"Error loading frame {frame_to_load}: {e}")
                     # Prepare to wait to avoid spin loop on error
                     if self.running:
                         self.msleep(100)
@@ -169,8 +169,13 @@ class StackLoader(QThread):
                 if not self.running:
                     self.mutex.unlock()
                     break
-                self.condition.wait(self.mutex, 500)  # Wait 500ms or until new priority
                 self.mutex.unlock()
+
+                # Wait loop with periodic checks
+                for _ in range(5):  # Wait up to 500ms
+                    if not self.running:
+                        break
+                    self.msleep(100)
 
 
 class StackVisualizer(CelldetectiveWidget):
@@ -1055,7 +1060,17 @@ class StackVisualizer(CelldetectiveWidget):
         """
         # Event handler for closing the widget
         if self.loader_thread:
+            # Disconnect signals to prevent events during shutdown
+            try:
+                self.loader_thread.frame_loaded.disconnect()
+            except Exception:
+                pass
+
             self.loader_thread.stop()
+            if not self.loader_thread.wait(2000):  # Wait up to 2 seconds
+                self.loader_thread.terminate()
+                self.loader_thread.wait()
+
             self.loader_thread = None
         if hasattr(self, "frame_cache") and isinstance(self.frame_cache, OrderedDict):
             self.frame_cache.clear()
