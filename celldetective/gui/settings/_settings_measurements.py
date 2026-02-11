@@ -900,6 +900,10 @@ class SettingsMeasurements(CelldetectiveSettingsPanel):
 
         if self.current_stack is not None:
 
+            self.locate_mask()
+            if self.test_mask is None:
+                return
+
             from celldetective.gui.viewers.contour_viewer import CellEdgeVisualizer
 
             self.viewer = CellEdgeVisualizer(
@@ -928,7 +932,14 @@ class SettingsMeasurements(CelldetectiveSettingsPanel):
         )
         masks = natsorted(glob(labels_path + "*.tif"))
         if len(masks) == 0:
-            print("no mask found")
+            msgBox = QMessageBox()
+            msgBox.setIcon(QMessageBox.Warning)
+            msgBox.setText(
+                f"No mask found in {labels_path}\nPlease segment your data first."
+            )
+            msgBox.setWindowTitle("Warning")
+            msgBox.setStandardButtons(QMessageBox.Ok)
+            msgBox.exec()
             self.test_mask = None
         else:
             from tifffile import imread
@@ -1065,6 +1076,9 @@ class SettingsMeasurements(CelldetectiveSettingsPanel):
         self.locate_image()
 
         if self.current_stack is not None:
+            self.locate_mask()
+            if self.test_mask is None:
+                return
 
             from celldetective.gui.viewers.contour_viewer import CellEdgeVisualizer
 

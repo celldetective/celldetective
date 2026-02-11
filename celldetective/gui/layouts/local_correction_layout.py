@@ -1,3 +1,9 @@
+from glob import glob
+from pathlib import Path
+from natsort import natsorted
+import os
+from PyQt5.QtWidgets import QMessageBox
+
 from PyQt5.QtGui import QIntValidator
 
 from celldetective.gui.layouts.model_fit_layout import BackgroundFitCorrectionLayout
@@ -50,6 +56,30 @@ class LocalCorrectionLayout(BackgroundFitCorrectionLayout):
 
         self.corrected_stack_viewer.hide()
 
+    def check_mask_existence(self, population: str) -> bool:
+        """Check if masks exist for the given population."""
+        if self.attr_parent.current_stack is None:
+            return False
+
+        labels_path = (
+            str(Path(self.attr_parent.current_stack).parent.parent)
+            + os.sep
+            + f"labels_{population}"
+            + os.sep
+        )
+        masks = natsorted(glob(labels_path + "*.tif"))
+        if len(masks) == 0:
+            msgBox = QMessageBox()
+            msgBox.setIcon(QMessageBox.Warning)
+            msgBox.setText(
+                f"No mask found in {labels_path}\nPlease segment your data first."
+            )
+            msgBox.setWindowTitle("Warning")
+            msgBox.setStandardButtons(QMessageBox.Ok)
+            msgBox.exec()
+            return False
+        return True
+
     def set_distance_graphically(self):
         """Set the distance graphically using the contour viewer."""
         from celldetective.gui.viewers.contour_viewer import CellEdgeVisualizer
@@ -59,9 +89,12 @@ class LocalCorrectionLayout(BackgroundFitCorrectionLayout):
         thresh = self.threshold_le.get_threshold()
 
         if self.attr_parent.current_stack is not None and thresh is not None:
+            population = self.parent_window.parent_window.mode
+            if not self.check_mask_existence(population):
+                return
 
             self.viewer = CellEdgeVisualizer(
-                cell_type=self.parent_window.parent_window.mode,
+                cell_type=population,
                 stack_path=self.attr_parent.current_stack,
                 parent_le=self.threshold_le,
                 n_channels=len(self.channel_names),

@@ -5,6 +5,7 @@ from PyQt5.QtWidgets import (
     QComboBox,
     QFrame,
     QCheckBox,
+    QMessageBox,
     QVBoxLayout,
     QLabel,
     QHBoxLayout,
@@ -21,6 +22,8 @@ import numpy as np
 import json
 import os
 from glob import glob
+from pathlib import Path
+from natsort import natsorted
 import pandas as pd
 from celldetective.gui.viewers.contour_viewer import CellEdgeVisualizer
 from celldetective.gui.viewers.size_viewer import CellSizeViewer
@@ -194,6 +197,30 @@ class SettingsNeighborhood(CelldetectiveWidget):
 
         grid.addWidget(self.ContentsMeasurements)
 
+    def check_mask_existence(self, population: str) -> bool:
+        """Check if masks exist for the given population."""
+        if self.attr_parent.current_stack is None:
+            return False
+
+        labels_path = (
+            str(Path(self.attr_parent.current_stack).parent.parent)
+            + os.sep
+            + f"labels_{population}"
+            + os.sep
+        )
+        masks = natsorted(glob(labels_path + "*.tif"))
+        if len(masks) == 0:
+            msgBox = QMessageBox()
+            msgBox.setIcon(QMessageBox.Warning)
+            msgBox.setText(
+                f"No mask found in {labels_path}\nPlease segment your data first."
+            )
+            msgBox.setWindowTitle("Warning")
+            msgBox.setStandardButtons(QMessageBox.Ok)
+            msgBox.exec()
+            return False
+        return True
+
     def view_current_stack_with_circle(self):
         """View the current stack with a circle visualization."""
         self.parent_window.parent_window.locate_image()
@@ -218,8 +245,12 @@ class SettingsNeighborhood(CelldetectiveWidget):
         """View the current stack with an edge visualization."""
         self.attr_parent.locate_image()
         if self.attr_parent.current_stack is not None:
+            population = self.reference_population_cb.currentText()
+            if not self.check_mask_existence(population):
+                return
+
             self.viewer = CellEdgeVisualizer(
-                cell_type=self.reference_population_cb.currentText(),
+                cell_type=population,
                 edge_range=(1, 30),
                 invert=True,
                 initial_edge=3,
