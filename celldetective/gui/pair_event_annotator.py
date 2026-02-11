@@ -3059,19 +3059,25 @@ class PairEventAnnotator(CelldetectiveMainWindow):
 
                         self.points.set_offsets(self.points_data[key])
                         colors_at_this_frame = self.lines_colors_status[self.framedata]
-                        colors = [
-                            colors_at_this_frame[
-                                (
-                                    colors_at_this_frame[:, 0]
-                                    == self.connections[point[0], point[1]][0][0]
-                                )
-                                & (
-                                    colors_at_this_frame[:, 1]
-                                    == self.connections[point[0], point[1]][0][1]
-                                )
-                            ][0][2]
-                            for point in self.points_data[key]
-                        ]
+                        colors = []
+                        if len(colors_at_this_frame) > 0:
+                            for point in self.points_data[key]:
+                                match = colors_at_this_frame[
+                                    (
+                                        colors_at_this_frame[:, 0]
+                                        == self.connections[point[0], point[1]][0][0]
+                                    )
+                                    & (
+                                        colors_at_this_frame[:, 1]
+                                        == self.connections[point[0], point[1]][0][1]
+                                    )
+                                ]
+                                if len(match) > 0:
+                                    colors.append(match[0][2])
+                                else:
+                                    colors.append("black")
+                        else:
+                            colors = ["black"] * len(self.points_data[key])
                         self.points.set_color(colors)
 
         if self.lines_list:
