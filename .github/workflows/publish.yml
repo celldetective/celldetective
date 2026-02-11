@@ -27,14 +27,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install setuptools wheel build
           
-      - name: Extract tag name
-        id: tag
-        run: echo "TAG_NAME=${GITHUB_REF#refs/tags/v}" >> $GITHUB_ENV
-        
-      - name: Update version file
-        run: |
-          echo "__version__ = \"${{ env.TAG_NAME }}\"" > celldetective/_version.py
-          
       - name: Build package
         run: |
           python setup.py sdist bdist_wheel

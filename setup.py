@@ -1,20 +1,9 @@
 from setuptools import setup
 import setuptools
 import os
-import re
 from pathlib import Path
 
 this_directory = Path(__file__).parent
-
-# Load version
-VERSIONFILE = "celldetective/_version.py"
-verstrline = open(VERSIONFILE, "rt").read()
-VSRE = r"^__version__ = ['\"]([^'\"]*)['\"]"
-mo = re.search(VSRE, verstrline, re.M)
-if mo:
-    verstr = mo.group(1)
-else:
-    raise RuntimeError("Unable to find version string in %s." % (VERSIONFILE,))
 
 
 def load_requirements(path):
@@ -38,7 +27,8 @@ requirements = load_requirements("requirements.txt")
 
 setup(
     name="celldetective",
-    version=verstr,
+    use_scm_version=True,
+    setup_requires=["setuptools_scm"],
     description="description",
     long_description=(this_directory / "README.md").read_text(),
     # long_description=open('README.rst',encoding="utf8").read(),
@@ -72,7 +62,7 @@ setup(
     install_requires=requirements,
     extras_require={
         "tensorflow": ["tensorflow~=2.15.0", "stardist"],
-        #"process": ["cellpose<3", "stardist", "tensorflow~=2.15.0"],
+        # "process": ["cellpose<3", "stardist", "tensorflow~=2.15.0"],
         "all": ["cellpose<3", "stardist", "tensorflow~=2.15.0"],
     },
     # dependency_links = links
