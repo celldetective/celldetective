@@ -21,6 +21,7 @@ from PyQt5.QtWidgets import (
 from fonticon_mdi6 import MDI6
 from natsort import natsorted
 from superqt.fonticon import icon
+from typing import Optional
 
 from celldetective import get_software_location
 from celldetective.gui.base.components import QHSeperationLine, HoverButton
@@ -428,13 +429,14 @@ class NeighPanel(QFrame, Styles):
         if self.df is None:
             logger.info("No table could be found...")
 
-    def view_table_ui(self):
+    def view_table_ui(self) -> None:
         """
         Open the table viewer for the selected data.
         """
         from celldetective.gui.tableUI import TableUI
         from celldetective.gui.workers import ProgressWindow
         from celldetective.processes.load_table import TableLoaderProcess
+        from celldetective.utils.experiment import interpret_wells_and_positions
 
         logger.info("Load table...")
 
@@ -442,30 +444,39 @@ class NeighPanel(QFrame, Styles):
         self.well_option = self.parent_window.well_list.getSelectedIndices()
         self.position_option = self.parent_window.position_list.getSelectedIndices()
 
-        process_args = {
-            "experiment": self.exp_dir,
-            "population": "pairs",
-            "well_option": self.well_option,
-            "position_option": self.position_option,
-            "show_frame_progress": False,
-        }
+        # Count selected positions
+        well_indices, position_indices = interpret_wells_and_positions(
+            self.exp_dir, self.well_option, self.position_option
+        )
+        total_positions = 0
+        from celldetective.utils.experiment import (
+            get_positions_in_well,
+            get_experiment_wells,
+        )
 
-        self.df = None
+        wells = get_experiment_wells(self.exp_dir)
+        for widx in well_indices:
+            positions = get_positions_in_well(wells[widx])
+            if position_indices is not None:
+                total_positions += len(position_indices)
+            else:
+                total_positions += len(positions)
 
-        def on_table_loaded(self, df: pd.DataFrame) -> None:
+        def show_table(df: Optional[pd.DataFrame]) -> None:
             """
-            Callback when table is loaded.
+            Display the dataframe in TableUI.
 
             Parameters
             ----------
             df : pandas.DataFrame
-                The loaded dataframe.
+                The dataframe to display.
             """
-            self.df = df
-            if self.df is not None:
-                plot_mode = "static"
+            if df is not None:
+                plot_mode = "plot_track_signals"
+                if "TRACK_ID" not in list(df.columns):
+                    plot_mode = "static"
                 self.tab_ui = TableUI(
-                    self.df,
+                    df,
                     f"{self.parent_window.well_list.currentText()}; Position {self.parent_window.position_list.currentText()}",
                     population="pairs",
                     plot_mode=plot_mode,
@@ -480,20 +491,54 @@ class NeighPanel(QFrame, Styles):
                 msgBox.setText("No table could be loaded...")
                 msgBox.setWindowTitle("Info")
                 msgBox.setStandardButtons(QMessageBox.Ok)
-                returnValue = msgBox.exec()
+                msgBox.exec()
 
-        self.job = ProgressWindow(
-            TableLoaderProcess,
-            parent_window=self,
-            title="Loading tables...",
-            process_args=process_args,
-            position_info=False,
-            well_label="Wells loaded:",
-            pos_label="Positions loaded:",
-        )
-        self.job._ProgressWindow__runner.signals.result.connect(on_table_loaded)
+        if total_positions == 1:
+            # Synchronous load for single position
+            from celldetective.utils.data_loaders import load_experiment_tables
 
-        result = self.job.exec_()
+            df = load_experiment_tables(
+                self.exp_dir,
+                population="pairs",
+                well_option=self.well_option,
+                position_option=self.position_option,
+            )
+            show_table(df)
+        else:
+            # Asynchronous load for multiple positions
+            process_args = {
+                "experiment": self.exp_dir,
+                "population": "pairs",
+                "well_option": self.well_option,
+                "position_option": self.position_option,
+                "show_frame_progress": False,
+            }
+
+            self.df = None
+
+            def on_table_loaded(df: Optional[pd.DataFrame]) -> None:
+                """
+                Callback when table is loaded asynchronously.
+
+                Parameters
+                ----------
+                df : pandas.DataFrame
+                    The loaded dataframe.
+                """
+                self.df = df
+                show_table(self.df)
+
+            self.job = ProgressWindow(
+                TableLoaderProcess,
+                parent_window=self,
+                title="Loading tables...",
+                process_args=process_args,
+                position_info=False,
+                well_label="Wells loaded:",
+                pos_label="Positions loaded:",
+            )
+            self.job._ProgressWindow__runner.signals.result.connect(on_table_loaded)
+            self.job.exec_()
 
     def activate_neigh_options(self):
         """
