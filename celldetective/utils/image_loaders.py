@@ -131,6 +131,15 @@ def _load_stack_from_series(file_path: str) -> Optional[np.ndarray]:
 
         stack = series.asarray()
 
+        # heuristic to fix missing T axis
+        if "T" not in axes:
+            if "C" in axes and stack.shape[axes.index("C")] > 5:
+                # C is likely T
+                axes = axes.replace("C", "T")
+            elif "Z" in axes and stack.shape[axes.index("Z")] > 5:
+                # Z is likely T
+                axes = axes.replace("Z", "T")
+
     # Build target axis order: move whatever we have into (T, Y, X, C)
     # Add missing axes as singletons first
     if "T" not in axes:
@@ -394,14 +403,17 @@ def auto_load_number_of_frames(stack_path: str) -> Optional[int]:
                 shape = series.shape
                 if "T" in axes:
                     len_movie = shape[axes.index("T")]
-                elif "Z" in axes and "C" in axes:
-                    # No T but has Z and C: single timepoint
-                    len_movie = 1
+                # elif "Z" in axes and "C" in axes:
+                #     # No T but has Z and C: single timepoint
+                #     len_movie = 1
                 elif "Z" in axes:
                     # Z without C: might be time or z-slices
                     len_movie = shape[axes.index("Z")]
                 elif axes in ("YX", "CYX"):
-                    len_movie = 1
+                    if "C" in axes and shape[axes.index("C")] > 5:
+                        len_movie = shape[axes.index("C")]
+                    else:
+                        len_movie = 1
         except Exception:
             pass
 

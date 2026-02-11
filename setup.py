@@ -28,7 +28,6 @@ requirements = load_requirements("requirements.txt")
 setup(
     name="celldetective",
     use_scm_version=True,
-    setup_requires=["setuptools_scm"],
     description="description",
     long_description=(this_directory / "README.md").read_text(),
     # long_description=open('README.rst',encoding="utf8").read(),

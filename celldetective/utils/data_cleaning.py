@@ -218,9 +218,18 @@ def rename_intensity_column(
     This function renames the intensity columns in a DataFrame based on the provided channel names.
     It searches for columns containing the substring 'intensity' in their names and replaces it with
     the respective channel name. The renaming is performed according to the order of the channels
-    provided in the `channels` list. If multiple channels are provided, the function assumes that the
-    intensity columns have a naming pattern that includes a numerical index indicating the channel.
-    If only one channel is provided, the function replaces 'intensity' with the single channel name.
+    provided in the `channels` list.
+
+    It also applies specific renaming rules for tuple properties:
+    - **Center of Mass**:
+        - `_0` -> `_distance`
+        - `_1` -> `_angle`
+        - `_2` -> `_dx`
+        - `_3` -> `_dy`
+    - **Radial Gradient**:
+        - `_0` -> `_slope`
+        - `_1` -> `_intercept`
+        - `_2` -> `_r2`
 
     Examples
     --------
@@ -229,7 +238,6 @@ def rename_intensity_column(
     >>> channels = ['channel1', 'channel2']
     >>> renamed_df = rename_intensity_column(df, channels)
     # Rename the intensity columns in the DataFrame based on the provided channel names.
-
     """
 
     channel_names = np.array(channels)
@@ -238,10 +246,93 @@ def rename_intensity_column(
 
     to_rename = {}
 
-    for k in range(len(intensity_cols)):
+    # Special handling for tuple properties (center_of_mass, radial_gradient)
+    tuple_props = ["center_of_mass", "radial_gradient"]
 
-        # identify if digit in section
-        sections = np.array(re.split("-|_", intensity_cols[k]))
+    for k in range(len(intensity_cols)):
+        col_name = intensity_cols[k]
+
+        # Check if this is a tuple property
+        is_tuple_prop = any(tp in col_name for tp in tuple_props)
+
+        if is_tuple_prop:
+            sections = np.array(re.split("-|_", col_name))
+            # Extract suffixes
+            digits = []
+            vals = []
+            for s in sections[::-1]:
+                if s.isdigit():
+                    digits.append(int(s))
+                    vals.append(s)
+                else:
+                    break
+            digits = digits[::-1]  # restore order [val, ch] or [val]
+
+            ch_idx = 0
+            val_idx = -1
+
+            # Case: Multi-channel tuple (func-val-ch)
+            if len(digits) >= 2:
+                val_idx = digits[-2]
+                ch_idx = digits[-1]
+                # Remove last two digits from name parts
+                base_sections = sections[:-2]
+
+            # Case: Single-channel tuple (func-val)
+            elif len(digits) == 1:
+                val_idx = digits[-1]
+                ch_idx = 0  # Assume channel 0
+                # Remove last digit
+                base_sections = sections[:-1]
+            else:
+                # No digits? Unexpected for tuple prop
+                base_sections = sections
+
+            if ch_idx < len(channel_names):
+                channel_name = channel_names[ch_idx]
+                new_name = "_".join(list(base_sections))
+                new_name = new_name.replace("intensity", channel_name)
+
+                # Apply value suffixes
+                if "center_of_mass" in col_name:
+                    is_edge = "edge" in col_name
+                    base = "edge_center_of_mass" if is_edge else "center_of_mass"
+
+                    if val_idx == 0:
+                        suffix = "_distance"
+                    elif val_idx == 1:
+                        suffix = "_angle"
+                    elif val_idx == 2:
+                        suffix = "_dx"
+                    elif val_idx == 3:
+                        suffix = "_dy"
+                    else:
+                        suffix = f"_{val_idx}"
+
+                    new_name = new_name.replace(
+                        "center_of_mass_displacement", base + suffix
+                    )
+                    new_name = new_name.replace("center_of_mass", base + suffix)
+
+                elif "radial_gradient" in col_name:
+                    if val_idx == 0:
+                        new_name = new_name.replace(
+                            "radial_gradient", "radial_intensity_slope"
+                        )
+                    elif val_idx == 1:
+                        new_name = new_name.replace(
+                            "radial_gradient", "radial_intensity_intercept"
+                        )
+                    elif val_idx == 2:
+                        new_name = new_name.replace(
+                            "radial_gradient", "radial_intensity_r2"
+                        )
+
+                to_rename.update({col_name: new_name})
+                continue
+
+        # Generic handling for scalar properties (existing logic)
+        sections = np.array(re.split("-|_", col_name))
         test_digit = np.array([False for s in sections])
         for j, s in enumerate(sections):
             if str(s).isdigit():
@@ -251,105 +342,23 @@ def rename_intensity_column(
         if np.any(test_digit):
             index = int(sections[np.where(test_digit)[0]][-1])
         else:
-            # Check if the column already contains a channel name (e.g., spot detection columns)
-            # If so, skip silently as no renaming is needed
-            already_named = any(ch in intensity_cols[k] for ch in channel_names)
+            # Check if the column already contains a channel name
+            already_named = any(ch in col_name for ch in channel_names)
             if not already_named:
-                print(
-                    f"No valid channel index found for {intensity_cols[k]}... Skipping the renaming for {intensity_cols[k]}..."
-                )
+                # Only warn if it looks like an intensity column that should have been renamed
+                pass
             continue
 
         channel_name = channel_names[np.where(channel_indices == index)[0]][0]
-        new_name = np.delete(
-            sections, np.where(test_digit)[0]
-        )  # np.where(test_digit)[0]
+        new_name = np.delete(sections, np.where(test_digit)[0])
         new_name = "_".join(list(new_name))
         new_name = new_name.replace("intensity", channel_name)
         new_name = new_name.replace("-", "_")
         new_name = new_name.replace("_nanmean", "_mean")
 
-        to_rename.update({intensity_cols[k]: new_name})
-
-        if "centre" in intensity_cols[k]:
-
-            measure = np.array(re.split("-|_", new_name))
-
-            if sections[-2] == "0":
-                new_name = np.delete(measure, -1)
-                new_name = "_".join(list(new_name))
-                if "edge" in intensity_cols[k]:
-                    new_name = new_name.replace(
-                        "center_of_mass_displacement",
-                        "edge_center_of_mass_displacement_in_px",
-                    )
-                else:
-                    new_name = new_name.replace(
-                        "center_of_mass", "center_of_mass_displacement_in_px"
-                    )
-                to_rename.update({intensity_cols[k]: new_name.replace("-", "_")})
-
-            elif sections[-2] == "1":
-                new_name = np.delete(measure, -1)
-                new_name = "_".join(list(new_name))
-                if "edge" in intensity_cols[k]:
-                    new_name = new_name.replace(
-                        "center_of_mass_displacement", "edge_center_of_mass_orientation"
-                    )
-                else:
-                    new_name = new_name.replace(
-                        "center_of_mass", "center_of_mass_orientation"
-                    )
-                to_rename.update({intensity_cols[k]: new_name.replace("-", "_")})
-
-            elif sections[-2] == "2":
-                new_name = np.delete(measure, -1)
-                new_name = "_".join(list(new_name))
-                if "edge" in intensity_cols[k]:
-                    new_name = new_name.replace(
-                        "center_of_mass_displacement", "edge_center_of_mass_x"
-                    )
-                else:
-                    new_name = new_name.replace("center_of_mass", "center_of_mass_x")
-                to_rename.update({intensity_cols[k]: new_name.replace("-", "_")})
-
-            elif sections[-2] == "3":
-                new_name = np.delete(measure, -1)
-                new_name = "_".join(list(new_name))
-                if "edge" in intensity_cols[k]:
-                    new_name = new_name.replace(
-                        "center_of_mass_displacement", "edge_center_of_mass_y"
-                    )
-                else:
-                    new_name = new_name.replace("center_of_mass", "center_of_mass_y")
-                to_rename.update({intensity_cols[k]: new_name.replace("-", "_")})
-
-        if "radial_gradient" in intensity_cols[k]:
-            # sections = np.array(re.split('-|_', intensity_columns[k]))
-            measure = np.array(re.split("-|_", new_name))
-
-            if sections[-2] == "0":
-                new_name = np.delete(measure, -1)
-                new_name = "_".join(list(measure))
-                new_name = new_name.replace("radial_gradient", "radial_gradient")
-                to_rename.update({intensity_cols[k]: new_name.replace("-", "_")})
-
-            elif sections[-2] == "1":
-                new_name = np.delete(measure, -1)
-                new_name = "_".join(list(measure))
-                new_name = new_name.replace("radial_gradient", "radial_intercept")
-                to_rename.update({intensity_cols[k]: new_name.replace("-", "_")})
-
-            elif sections[-2] == "2":
-                new_name = np.delete(measure, -1)
-                new_name = "_".join(list(measure))
-                new_name = new_name.replace(
-                    "radial_gradient", "radial_gradient_r2_score"
-                )
-                to_rename.update({intensity_cols[k]: new_name.replace("-", "_")})
+        to_rename.update({col_name: new_name})
 
     df = df.rename(columns=to_rename)
-
     return df
 
 

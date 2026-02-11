@@ -370,6 +370,8 @@ class CellEdgeVisualizer(StackVisualizer):
         # Change the displayed frame and update the edge labels
 
         super().change_frame(value)
+        if not hasattr(self, "im_mask"):
+            return
 
         # Check unified cache first
         if hasattr(self, "sdf_cache") and value in self.sdf_cache:

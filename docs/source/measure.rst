@@ -56,7 +56,8 @@ The segmentation mask defines the ROI over which single-cell measurements are pe
 
 .. seealso::
     :doc:`how-to-guides/basics/measure-peripheral-intensity` |
-    :doc:`how-to-guides/basics/measure-texture`
+    :doc:`how-to-guides/basics/measure-texture` |
+    :doc:`reference/measurements`
 
 
 Position-based measurements

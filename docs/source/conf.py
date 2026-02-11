@@ -3,86 +3,87 @@ import sys
 import os
 import re
 
-#sys.path.append('/home/limozin/Documents/GitHub/rtd-tutorial')
-sys.path.insert(0, os.path.abspath('./../../'))
-sys.path.insert(0, os.path.abspath('./../../examples/'))
+# sys.path.append('/home/limozin/Documents/GitHub/rtd-tutorial')
+sys.path.insert(0, os.path.abspath("./../../"))
+sys.path.insert(0, os.path.abspath("./../../examples/"))
 
-VERSIONFILE = os.path.abspath('./../../celldetective/_version.py')
+VERSIONFILE = os.path.abspath("./../../celldetective/_version.py")
 verstrline = open(VERSIONFILE, "rt").read()
-VSRE = r"^__version__ = ['\"]([^'\"]*)['\"]"
+VSRE = r"^__version__\s*=\s*(?:version\s*=\s*)?['\"]([^'\"]*)['\"]"
+
 mo = re.search(VSRE, verstrline, re.M)
 if mo:
-	verstr = mo.group(1)
+    verstr = mo.group(1)
 else:
-	raise RuntimeError("Unable to find version string in %s." % (VERSIONFILE,))
+    raise RuntimeError("Unable to find version string in %s." % (VERSIONFILE,))
 
 
 # Configuration file for the Sphinx documentation builder.
 
 # -- Project information
 
-project = 'celldetective'
-copyright = '2025, Laboratoire Adhésion et Inflammation (LAI) U1067 INSERM CNRS'
-author = 'Rémy Torro'
+project = "celldetective"
+copyright = "2025, Laboratoire Adhésion et Inflammation (LAI) U1067 INSERM CNRS"
+author = "Rémy Torro"
 
 release = verstr
-version = verstr #'1.2.2.post2'
+version = verstr  #'1.2.2.post2'
 
 # -- General configuration
 
 extensions = [
-	'nbsphinx',
-	"sphinx.ext.autodoc",
-	"sphinx.ext.intersphinx",
-	"sphinx.ext.mathjax",
-	"sphinx.ext.viewcode",
-	'sphinx.ext.napoleon',
-	'sphinx.ext.autosummary',
-    'hoverxref.extension',
-    'nbsphinx_link',
+    "nbsphinx",
+    "sphinx.ext.autodoc",
+    "sphinx.ext.intersphinx",
+    "sphinx.ext.mathjax",
+    "sphinx.ext.viewcode",
+    "sphinx.ext.napoleon",
+    "sphinx.ext.autosummary",
+    "hoverxref.extension",
+    "nbsphinx_link",
     "sphinxcontrib.jquery",
 ]
 
 autosummary_generate = True
 
 hoverxref_autoref = True
-hoverxref_roles = ['term']
-hoverxref_domains = ['std']
+hoverxref_roles = ["term"]
+hoverxref_domains = ["std"]
 
-hoverxref_api_host = 'local'
+hoverxref_api_host = "local"
 hoverxref_role_types = {
-    'term': 'tooltip',
+    "term": "tooltip",
 }
 
 hoverxref_intersphinx = [
-    'https://docs.python.org/3/',
+    "https://docs.python.org/3/",
 ]
 
-autoapi_dirs = ['celldetective']
+autoapi_dirs = ["celldetective"]
 
 intersphinx_mapping = {
-	'python': ('https://docs.python.org/3/', None),
-	'sphinx': ('https://www.sphinx-doc.org/en/master/', None),
+    "python": ("https://docs.python.org/3/", None),
+    "sphinx": ("https://www.sphinx-doc.org/en/master/", None),
 }
-#intersphinx_disabled_domains = ['std']
+# intersphinx_disabled_domains = ['std']
 
-templates_path = ['_templates']
+templates_path = ["_templates"]
 
 # -- Options for HTML output
 
-html_theme = 'sphinx_rtd_theme'
-html_static_path = ['_static']
+html_theme = "sphinx_rtd_theme"
+html_static_path = ["_static"]
 html_logo = "_static/logo.png"
 html_css_files = [
-	'https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css',
-	#'https://fonts.googleapis.com/icon?family=Material+Icons',
-	#'custom.css',
+    "https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css",
+    #'https://fonts.googleapis.com/icon?family=Material+Icons',
+    #'custom.css',
 ]
-html_favicon = '_static/favicon.png'
-html_theme_options = {'style_nav_header_background': '#b9c3cb'}
+html_favicon = "_static/favicon.png"
+html_theme_options = {"style_nav_header_background": "#b9c3cb"}
 
 # -- Options for EPUB output
-epub_show_urls = 'footnote'
+epub_show_urls = "footnote"
 
 from html import escape
 from docutils import nodes
@@ -108,11 +109,13 @@ from docutils.parsers.rst import roles
 #
 # roles.register_local_role('mdi', material_icon)
 
+
 def blue_role(name, rawtext, text, lineno, inliner, options={}, content=[]):
     html = f'<span style="color: #1565c0;">{text}</span>'
-    return [nodes.raw('', html, format='html')], []
+    return [nodes.raw("", html, format="html")], []
 
-roles.register_local_role('blue', blue_role)
+
+roles.register_local_role("blue", blue_role)
 
 
 def mdi_icon(name, rawtext, text, lineno, inliner, options={}, content=[]):
@@ -128,9 +131,10 @@ def mdi_icon(name, rawtext, text, lineno, inliner, options={}, content=[]):
     html = (
         f'<span class="mdi mdi-{icon_html}" '
         f'style="vertical-align: middle; color: {color}; font-size: {size};">'
-        f'</span>'
+        f"</span>"
     )
-    node = nodes.raw('', html, format='html')
+    node = nodes.raw("", html, format="html")
     return [node], []
 
-roles.register_local_role('icon', mdi_icon)
+
+roles.register_local_role("icon", mdi_icon)
