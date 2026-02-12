@@ -170,7 +170,7 @@ class SegModelParamsWidget(CelldetectiveWidget):
         if self.attr_parent.current_stack is not None:
             max_size = np.amax([self.attr_parent.shape_x, self.attr_parent.shape_y])
             self.viewer = CellSizeViewer(
-                initial_diameter=int(self.diameter_le.text().replace(",", ".")),
+                initial_diameter=float(self.diameter_le.text().replace(",", ".")),
                 parent_le=self.diameter_le,
                 stack_path=self.attr_parent.current_stack,
                 window_title=f"Position {self.attr_parent.position_list.currentText()}",
