@@ -481,7 +481,7 @@ class BackgroundModelFreeCorrectionLayout(QGridLayout, Styles):
         self.bg_worker.progress.connect(self.bg_progress.setValue)
         self.bg_worker.status_update.connect(self.bg_progress.setLabelText)
 
-        def on_finished(self, bg: list) -> None:
+        def on_finished(bg: list) -> None:
             """
             Handle background estimation completion.
 

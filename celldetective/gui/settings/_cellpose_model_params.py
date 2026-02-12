@@ -74,7 +74,7 @@ class CellposeParamsWidget(CelldetectiveWidget):
             Variable length argument list.
         """
 
-        super().__init__(*args)
+        super().__init__()
         self.setWindowTitle("Estimate diameter")
         self.parent_window = parent_window
         self.model_name = model_name
