@@ -39,4 +39,4 @@ matplotlib
 prettytable
 scikit-image
 natsort
-
+sphinx-hoverxref
