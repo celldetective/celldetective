@@ -15,10 +15,42 @@ This guide shows you how classify cells from their features using conditional ex
 
 4. Select two features that can clusterize the cells (e.g. area and adhesion channel intensity in a spreading classification).
 
-5. Use the slider to see the measurements for different frames. You can press the :icon:`math-integral,black` button to show all measurements on the same plane.
+6. **Explore Your Data:**
+    - Use the **Frame Slider** at the bottom to visualize the population feature distribution frame by frame.
+    - Click the **Project Times** button :icon:`math-integral,black` to superimpose all timepoints on the same plot (useful for checking overall population clusters).
+    - Use the **Log Scale** buttons :icon:`math-log,black` next to each feature selector to switch between linear and log scales.
+    - Adjust the **Transparency Slider** (bottom right) if points are too dense.
 
-6. Type a condition in the classify field. Examples include: ``area > 500``, ``adhesion_channel_mean_intensity < 1 and area > 500``, etc. The condition expressions follow this convention: https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.query.html . You may need to use backticks on complex feature names (e.g. ```d/dt.area` > 1``. Make sure to type properly the feature name (do a copy and paste from the fields above preferably).
+7. **Define the Class:**
+    Type a condition in the classify field. The syntax supports numeric comparisons, logic operators, and string matching.
 
-7. Press the **Preview** button to see the classification result in the feature space (red: condition is True, blue: condition is False). You can switch features to see for as many projections of the feature space as needed the validity of the classification.
+    *   **Numeric conditions:** ``area > 500``, ``intensity < 200``
+    *   **Combinations:** ``area > 500 and intensity < 200``, ``area > 500 or circularity > 0.8``
+    *   **String/Category matching:** ``well == "W1"``, ``label != "A"`` (use quotes for strings)
+    *   **Complex columns:** Use backticks for columns with special characters: ```d/dt.area` > 0``
 
-8. Press **Apply** to write the classification in the tables, creating a new column that labels the assigned :term:`phenotype`.
+8. **Preview:**
+    Press the **Preview** button.
+    
+    - **Red points:** Cells matching your condition (Positive).
+    - **Blue points:** Cells not matching (Negative).
+    
+    *Tip: Change the x/y features to verify that your classification makes sense in other dimensions.*
+
+9. **Apply (Static vs. Time-Correlated):**
+
+    - **Static Group (Default):**
+      If **Time correlated** is unchecked, clicking **Apply** creates a standard :term:`group` or status column. This is a frame-by-frame classification.
+
+    - **Time Correlated Event (For Tracked Data):**
+      If your data is tracked (contains ``TRACK_ID``), you can check **Time correlated**. This fits a sigmoid to the binary signal of each track to detect *when* an event happens (e.g., cell death, specific state entry).
+      
+      Select the event type:
+      
+      *   **Unique state:** The cell enters a state and stays there (or doesn't).
+      *   **Irreversible event:** A definitive transition (like death).
+      *   **Transient event:** A state that can be entered and exited (e.g., calcium pulse).
+      
+      *Note: The **R2 tolerance** slider defines how well the sigmoid must fit the data to accept the event time.*
+
+10. Press **Apply** to finalize. A new column (e.g., ``status_my_class``) and potentially event times (``t_my_class``) will be added to your data.

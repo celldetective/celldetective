@@ -3,7 +3,7 @@ How to annotate an event
 
 This guide shows you how to annotate a single-cell event, either for manual characterisation or to create a dataset to train a deep learning event detection model.
 
-Reference keys: *event*, *event class*, *event time*
+Reference keys: :term:`event`, :term:`event class`, :term:`event time`
 
 
 **Prerequisite:** You have accurately segmented, **tracked** and measured a cell population of interest. This guide only applies to dynamic data.
@@ -45,3 +45,32 @@ Annotate in the viewer
 #. Press the :icon:`export,black` button at the bottom of the left side to export a time-series dataset (in ``.npy`` format). Put the file in a folder containing all of your annotations specific to this event.
 
 #. Press the Save button to update the position table with the new event class and the values for each cell.
+
+Viewer Controls & Shortcuts
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The Event Annotator provides controls to play animation, jump between frames, and quickly annotate cells using keyboard shortcuts.
+
+For a complete list of shortcuts (e.g., ``Space`` to play, ``n`` for no-event), see the :ref:`Signal Annotator Shortcuts <ref_signal_annotator_shortcuts>`.
+
+
+Interactive Correction
+~~~~~~~~~~~~~~~~~~~~~~
+
+For efficiently refining annotations, you can use the **Interactive Plotter** to visualize and correct multiple events simultaneously based on their signal traces.
+
+#. **Open the Plotter**: While the Event Annotator is open, press ``Ctrl+P`` or select **View > Interactive Plotter** from the menu.
+
+#. **Visualize Signals**: The viewer displays the signal traces for all loaded tracks, centered on their annotated event time (t=0). You can change the displayed signal using the dropdown menu.
+
+#. **Select Tracks**: Click and drag to draw a box around traces of interest. Selected traces will be highlighted in **red**.
+
+#. **Shift Event Time**: Use the **Left** and **Right Arrow keys** to shift the event time (t0) for the selected tracks. The curves will move horizontally to reflect the new alignment.
+
+#. **Batch Reclassify**: Use the buttons at the top to assign a new class to all selected tracks:
+    - **Event**: Confirmed event (Class 0).
+    - **No Event**: Reject as noise or non-event (Class 1).
+    - **Left-censored/Else**: Ambiguous or other event type (Class 2).
+    - **Delete**: Mark for removal.
+
+#. **Save Changes**: Press **Save Changes** in the plotter to save your corrections to the disk. The main Event Annotator window will update to reflect these changes.

@@ -6,61 +6,58 @@ Celldetective, a bioimage analysis software
     :align: center
     :alt: logo
 
-Celldetective is a python package and software to perform single-cell analysis on multimodal time lapse microscopy images.
+Celldetective offers both a **Python API** and a **Graphical User Interface (GUI)** to perform single-cell analysis on multimodal time-lapse microscopy images.
+
 
 - `Check the source code <https://github.com/remyeltorro/celldetective>`_
 - `Report a bug or request a new feature <https://github.com/remyeltorro/celldetective/issues/new/choose>`_
 - `Explore the datasets models and demos <https://zenodo.org/records/10650279>`_
 
 
-Check the `overview <https://celldetective.readthedocs.io/en/latest/overview.html>`_ for more general information or `get started <https://celldetective.readthedocs.io/en/latest/get-started.html>`_ with a detailed tutorial !
+Check the :doc:`overview <overview>` for more general information or :doc:`get started <get-started>` with a detailed tutorial!
 
 
 Contents
 --------
 
 .. toctree::
-   :caption: Introduction:
-
-   overview
+   :maxdepth: 1
+   :caption: Tutorials:
+   
    get-started
    first-experiment
-   preprocessing
-   segment
-   track
-   measure
-   signals-and-events
-   interactions
-   analysis
+   adcc-example
+   example_notebook
+
 
 .. toctree::
    :maxdepth: 2
    :caption: How-to guides
-
-   how-to-guides/basics/index
-   how-to-guides/advanced/index
+   
+   how-to-guides/index
    troubleshooting
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Reference:
+
+   reference/settings
+   reference/project-structure
+   reference/file-formats
+   reference/menus
+   reference/installation
+   reference/system-requirements
+   reference/glossary
+   reference/measurements
+   align_macro
+   datasets
+   API
+   acknowledegments
+   cite
 
 .. toctree::
    :caption: Explanation:
 
-   concepts/data-organization
-   concepts/population-specific-segmentation
-   concepts/single-cell-event
-   concepts/survival
-   concepts/neighborhood
+   explanation_topics
+   concepts
 
-.. toctree::
-   :caption: Tutorials:
-   
-   example_notebook
-   adcc-example
-   spreading-assay-example
-   
-.. toctree::
-   :caption: Reference:
-
-   reference/glossary
-   API
-   acknowledegments
-   cite

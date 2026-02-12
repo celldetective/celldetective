@@ -1,70 +1,91 @@
 #!/usr/bin/env python3
 import sys
+import os
+
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+
 from PyQt5.QtWidgets import QApplication, QSplashScreen
 from PyQt5.QtGui import QPixmap
 from os import sep
 
-from celldetective.gui.gui_utils import center_window
-
-from celldetective.utils import get_software_location
-from time import time, sleep
-
-#os.environ['QT_DEBUG_PLUGINS'] = '1'
+# os.environ['QT_DEBUG_PLUGINS'] = '1'
 
 if __name__ == "__main__":
 
-	splash=True
-	print('Loading the libraries...')
+    splash = True
+    from celldetective import logger
+    from celldetective import get_software_location
 
-	App = QApplication(sys.argv)
-	App.setStyle("Fusion")
+    logger.info("Loading the libraries...")
 
-	software_location = get_software_location()
+    App = QApplication(sys.argv)
+    App.setStyle("Fusion")
 
-	if splash:
-		start = time()
-		splash_pix = QPixmap(sep.join([software_location,'celldetective','icons','splash.png']))
-		splash = QSplashScreen(splash_pix)
-		splash.setMask(splash_pix.mask())
-		splash.show()
-		#App.processEvents(QEventLoop.AllEvents, 300)
-		while time() - start < 1:
-			sleep(0.001)
-			App.processEvents()
+    software_location = get_software_location()
 
-	try:
-		
-		import requests
-		import re
-		from celldetective import __version__
+    if splash:
+        splash_pix = QPixmap(
+            sep.join([software_location, "celldetective", "icons", "splash.png"])
+        )
+        splash = QSplashScreen(splash_pix)
+        splash.setMask(splash_pix.mask())
+        splash.show()
+        App.processEvents()
 
-		package = 'celldetective'
-		response = requests.get(f'https://pypi.org/pypi/{package}/json')
-		latest_version = response.json()['info']['version']
+    # Update check in background
+    def check_update():
+        """
+        Check for software updates on PyPI.
 
-		latest_version_num = re.sub('[^0-9]','', latest_version)
-		current_version_num = re.sub('[^0-9]','',__version__)
+        Fetches the latest version from PyPI and compares it with the current version.
+        Logs a warning if a newer version is available.
+        """
+        try:
+            import requests
+            import re
+            from celldetective import __version__
 
-		if len(latest_version_num)!=len(current_version_num):
-			max_length = max([len(latest_version_num),len(current_version_num)])
-			latest_version_num = int(latest_version_num.zfill(max_length - len(latest_version_num)))
-			current_version_num = int(current_version_num.zfill(max_length - len(current_version_num)))
+            package = "celldetective"
+            response = requests.get(f"https://pypi.org/pypi/{package}/json", timeout=5)
+            latest_version = response.json()["info"]["version"]
 
-		if latest_version_num > current_version_num:
-			print('Update is available...\nPlease update using `pip install --upgrade celldetective`...')
-	
-	except Exception as e:
+            latest_version_num = re.sub("[^0-9]", "", latest_version)
+            current_version_num = re.sub("[^0-9]", "", __version__)
 
-		print(f"{e=}")
+            if len(latest_version_num) != len(current_version_num):
+                max_length = max([len(latest_version_num), len(current_version_num)])
+                latest_version_num = int(
+                    latest_version_num.zfill(max_length - len(latest_version_num))
+                )
+                current_version_num = int(
+                    current_version_num.zfill(max_length - len(current_version_num))
+                )
 
-	from celldetective.gui.InitWindow import AppInitWindow
+            if latest_version_num > current_version_num:
+                logger.warning(
+                    "Update is available...\nPlease update using `pip install --upgrade celldetective`..."
+                )
+        except Exception as e:
+            logger.error(
+                f"Update check failed... Please check your internet connection: {e}"
+            )
 
-	print('Libraries successfully loaded...')
+    import threading
 
-	window = AppInitWindow(App, software_location=software_location)
-	center_window(window)
+    update_thread = threading.Thread(target=check_update)
+    update_thread.daemon = True
+    update_thread.start()
 
-	if splash:
-		splash.finish(window)
+    from celldetective.gui.InitWindow import AppInitWindow
 
-	sys.exit(App.exec())
+    logger.info("Libraries successfully loaded...")
+
+    from celldetective.gui.base.utils import center_window
+
+    window = AppInitWindow(App, software_location=software_location)
+    center_window(window)
+
+    if splash:
+        splash.finish(window)
+
+    sys.exit(App.exec())

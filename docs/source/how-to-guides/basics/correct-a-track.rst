@@ -3,7 +3,7 @@ How to correct a single-cell track
 
 This guide shows you how to correct manually a single-cell track that missed detections or was truncated.
 
-Reference keys: *tracking*
+Reference keys: :term:`tracking`
 
 **Prerequisite:** You have accurately segmented, and **tracked** a cell population of interest. This guide only applies to dynamic data.
 

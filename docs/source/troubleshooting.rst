@@ -80,10 +80,10 @@ A potential fix is to install Tensorflow through `mamba <https://mamba.readthedo
     $ mamba remove tensorflow
     $ mamba install tensorflow
 
-StarDist
-~~~~~~~~
+:term:`StarDist`
+~~~~~~~~~~~~~~~~
 
-When training a StarDist model on an older CPU the following error can be triggered:
+When training a :term:`StarDist` model on an older CPU the following error can be triggered:
 
 .. code-block:: console
 

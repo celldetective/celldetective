@@ -1,109 +1,108 @@
-First project
-=============
+Your First Experiment
+=====================
 
 .. _first_experiment:
 
-Input
------
-
-Celldetective is designed to process multichannel time-lapse microscopy data saved as ``tif`` stacks. Lower-dimensional data is also compatible. Notably, Z-stacks are not supported at the moment, although such images can be passed to Celldetective with a trick (see the note below). The files may have the following formats:
-
-- XY   (2D) frame: single-timepoint & single-channel image.
-- CXY  (3D) stack: single-timepoint & multichannel image.
-- PXY  (3D) stack: multi-position, single-channel & single-timepoint images.
-- TXY  (3D) stack: time-lapse images.
-- PCXY (4D) stack: multi-position, multichannel-channel & single-timepoint images.
-- TCXY (4D) stack: multi-channel time-lapse images.
+In this tutorial, you will go through a complete workflow: loading a demo dataset, segmenting cells, tracking them, and visualizing the results.
 
 .. note::
-    A Z-axis can be passed to Celldetective as a substitute to the time-axis, in which case each slice can be segmented and measured independently. There is no compatibility with both Z-stacks and time-lapse data. 
+    **Prerequisites**: Ensure you have installed Celldetective following the :doc:`Get Started <get-started>` guide.
 
-
-Pre-Processing Recommendations
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Microscopy data acquired through :math:`\mu` Manager [#]_ often interlaces the channel dimension with the time dimension to preserve their separation. Before using these stacks in Celldetective, they must be disentangled to ensure proper functionality of the Celldetective viewers.
-
-Before loading your data into Celldetective, we recommend opening the raw stacks in **ImageJ** (or a similar tool) to verify that the stack dimensions (time, channels, spatial axes) are correctly set.
-
-For large stacks exceeding 5 GB, we recommend using the **Bio-Formats Exporter** plugin in ImageJ to save the stacks. This format optimizes the data for efficient processing and visualization in Celldetective.
-
-
-Creating a new experiment
+Step 1: Get the demo data
 -------------------------
+
+We have a built-in shortcut to download a demo dataset (Spreading Assay).
+
+1.  Open your terminal and run:
+
+    .. code-block:: console
+
+        $ python -m celldetective
+
+2.  In the startup window's menu bar, go to **File > Open Demo > Spreading Assay Demo**.
+3.  Select a folder where you want to save the data.
+4.  The software will download the ``demo_ricm`` dataset and automatically load it.
 
 .. figure:: _static/maingui.png
     :align: center
-    :alt: exp_folder_mimics_glass_slide
+    :alt: main_gui
+    :width: 600px
 
-    Startup window (top). Panels to create (left) or process (right) an experiment.
-
-To create a new experiment, follow this :ref:`how-to guide <new-experiment-guide>`.
-
-Configuration file example
-~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-.. code-block:: ini
-
-   # config.ini
-
-    [Populations]
-    populations = nk,rbc
-   
-    [MovieSettings]
-    pxtoum = 0.3112
-    frametomin = 2.75
-    len_movie = 44
-    shape_x = 2048
-    shape_y = 2048
-    movie_prefix = Aligned
-
-    [Channels]
-    brightfield_channel = 0
-    live_nuclei_channel = 3
-    dead_nuclei_channel = 1
-    effector_fluo_channel = 2
-    adhesion_channel = nan
-    fluo_channel_1 = nan
-    fluo_channel_2 = nan
-
-    [Labels]
-    cell_types = MCF7-HER2+primary NK,MCF7-HER2+primary NK
-    antibodies = None,Ab
-    concentrations = 0,100
-    pharmaceutical_agents = None,None
-
-    [Metadata]
-    concentration_units = pM
-    cell_donor = 01022022
+    The main window. Use the **File** menu to access demos.
 
 
-Configuration file tags
-~~~~~~~~~~~~~~~~~~~~~~~
+Step 2: Segment Cells
+---------------------
 
-- ``Populations``: defines the names and number of populations to study at single-cell resolution.
-- ``MovieSettings``: defines image-related parameters such as spatio-temporal calibration, stack length, and filename prefix.
-- ``Channels``: specifies the name and order of channels in the stack.
-- ``Labels``: provides additional descriptive information for each well in the experiment. You can add extra-fields with the same comma-separated format. The information will be propagated to the single-cell data in each respective each well. 
-- ``Metadata``: extra information related to the experiment. You can add extra fields which will be propagated to the single-cell data.
+Now we will detect the cells in the images. The demo dataset contains images of immune cells spreading on a surface.
 
-Quick access to the experiment folder
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+1.  Locate the **Process Effectors** block in the processing panel and expand it.
+2.  Check the **Segment** box.
+3.  In the **Model zoo** dropdown, select **lymphocytes_ricm**.
+4.  Click **Submit** to run segmentation.
 
-Once an experiment is opened in Celldetective, you can quickly access its folder by clicking the **folder icon** next to the experiment name in the top menu.
+    .. tip::
+        You can visualize and correct the segmentation results by clicking the :icon:`eye-outline,black` button next to the segmentation entry. This opens napari with the image and mask layers.
 
 
-Drag and drop the movies
+Step 3: Track Cells
+-------------------
+
+Once cells are segmented, we can link them over time.
+
+1.  Check the **Track** box.
+2.  Click the :icon:`cog-outline,black` button next to it.
+3.  Select **trackpy** in the tracking options.
+4.  Close the configuration window and click **Submit**.
+5.  The software will link detections frame-by-frame and generate trajectories.
+
+
+Step 4: Measure Features
 ------------------------
 
-To prepare your data for processing, you need to place each movie into its corresponding position folder, specifically in the ``movie/`` subfolder (e.g., ``W1/100/movie/``).
+To analyze cellular dynamics, we need to extract quantitative features.
 
-This step is **not automated**, as variations in acquisition protocols and naming conventions make it difficult to provide a universal solution. If manual placement is too time-consuming, we recommend creating a custom script tailored to your specific data organization.
+1.  Check the **Measure** box.
+2.  Click the :icon:`cog-outline,black` button next to it.
+3.  Ensure **area** and **intensity_mean** are listed in the features list.
+4.  Close the configuration window and click **Submit**.
+5.  Celldetective will measure these features for every cell at every time point.
 
-Once the movies are placed in their respective folders, you can proceed to image processing. Detailed instructions on processing are provided in the next sections.
+
+Step 5: Analyze Time-Series
+---------------------------
+
+This is the core of Celldetective: analyzing how single-cell features change over time.
+
+1.  Scroll to the **Signal Analysis** section.
+2.  Click the :icon:`eye,black` button (Event Annotator) to open the interactive viewer.
+3.  **Click on any cell** in the movie.
+4.  The panel on the left will display its feature time-series (e.g., Intensity vs Time).
+
+.. tip::
+    **Detect Spreading Events**: In this demo, cells become dark (low intensity) when they spread. Let's annotate this using the **Classifier Widget**:
+
+    1.  In the **Measure** section, click the :icon:`scatter-plot,black` button (Classifier Widget).
+    2.  Set **class name** to ``spreading``.
+    3.  In the **classify** field, type ``intensity_mean < 1``.
+    4.  Check **Time correlated** and select **irreversible event**.
+    5.  Click **apply** to detect this event for all tracks.
+    6.  Reopen the Event Annotator (Step 5) to see the vertical lines marking the spreading time.
 
 
-Bibliography
-------------
+Step 6: Explore Results
+-----------------------
 
-.. [#] Arthur D Edelstein, Mark A Tsuchida, Nenad Amodaj, Henry Pinkard, Ronald D Vale, and Nico Stuurman (2014), Advanced methods of microscope control using μManager software. Journal of Biological Methods 2014 1(2):e11.
+You can now use dedicated tools to analyze your data:
+
+1.  **Survival Analysis**: Predict the time between first detection and spreading using the :doc:`Survival Plot <how-to-guides/basics/plot-survival>` (Start Event: ``t_firstdetection``, End Event: ``t_spreading``).
+2.  **Table Exploration**: Inspect feature distributions and correlations with the :doc:`Table Explorer <table_exploration>`.
+
+Congratulations! You have successfully processed your first experiment.
+
+Next Steps
+----------
+
+*   Learn how to :doc:`create your own experiment <how-to-guides/basics/create-an-experiment>`.
+*   Try :doc:`conditional classification <how-to-guides/basics/perform-conditional-cell-classification>` to identify cell states.
+*   Explore :doc:`measurement options <measure>`.

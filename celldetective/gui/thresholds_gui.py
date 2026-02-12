@@ -1,47 +1,103 @@
 import json
 import os
 from glob import glob
+from typing import Optional
 
-import matplotlib.pyplot as plt
 import numpy as np
-import pandas as pd
-import scipy.ndimage as ndi
-from PyQt5.QtCore import Qt, QSize
-from PyQt5.QtGui import QDoubleValidator, QIntValidator
-from PyQt5.QtWidgets import QAction, QMenu, QMessageBox, QLabel, QFileDialog, QHBoxLayout, \
-    QGridLayout, QLineEdit, QScrollArea, QVBoxLayout, QComboBox, QPushButton, QApplication, QRadioButton, QButtonGroup
+from PyQt5.QtCore import Qt, QSize, QThread
+from PyQt5.QtGui import QDoubleValidator, QIntValidator, QCloseEvent
+from PyQt5.QtWidgets import (
+    QAction,
+    QMenu,
+    QMessageBox,
+    QLabel,
+    QFileDialog,
+    QHBoxLayout,
+    QGridLayout,
+    QLineEdit,
+    QScrollArea,
+    QVBoxLayout,
+    QComboBox,
+    QPushButton,
+    QApplication,
+    QRadioButton,
+    QButtonGroup,
+    QMainWindow,
+)
 from fonticon_mdi6 import MDI6
-from skimage.measure import regionprops_table
+
 from superqt import QLabeledSlider, QLabeledDoubleRangeSlider
 from superqt.fonticon import icon
 
-from celldetective.gui import CelldetectiveMainWindow, CelldetectiveWidget
-from celldetective.gui.gui_utils import PreprocessingLayout, generic_message
-from celldetective.gui.gui_utils import center_window, FigureCanvas, color_from_class, help_generic
-from celldetective.gui.viewers import ThresholdedStackVisualizer
-from celldetective.io import load_frames
-from celldetective.segmentation import identify_markers_from_binary, apply_watershed
-from celldetective.utils import get_software_location, extract_experiment_channels, rename_intensity_column
+from celldetective.gui.gui_utils import PreprocessingLayout
+from celldetective.gui.base.components import (
+    generic_message,
+    CelldetectiveMainWindow,
+    CelldetectiveWidget,
+)
+from celldetective.gui.gui_utils import color_from_class, help_generic
+from celldetective.gui.base.figure_canvas import FigureCanvas
+from celldetective.gui.viewers.threshold_viewer import ThresholdedStackVisualizer
+from celldetective.utils.image_loaders import load_frames
+
+from celldetective import (
+    get_software_location,
+)
+from celldetective.utils.data_cleaning import rename_intensity_column
+from celldetective.utils.experiment import extract_experiment_channels
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+class BackgroundLoader(QThread):
+    def run(self):
+        """Run the background loader."""
+        logger.info("Loading background packages...")
+        try:
+            from celldetective.segmentation import (
+                identify_markers_from_binary,
+                apply_watershed,
+            )
+            from scipy.ndimage._measurements import label
+            import pandas as pd
+            from celldetective.regionprops._regionprops import regionprops_table
+        except Exception:
+            logger.error("Background packages not loaded...")
+        logger.info("Background packages loaded...")
 
 
 class ThresholdConfigWizard(CelldetectiveMainWindow):
     """
-	UI to create a threshold pipeline for segmentation.
+    UI to create a threshold pipeline for segmentation.
 
-	"""
+    """
 
-    def __init__(self, parent_window=None):
+    def __init__(self, parent_window: Optional[QMainWindow] = None) -> None:
+        """
+        Initialize the ThresholdConfigWizard.
+
+        Parameters
+        ----------
+        parent_window : QMainWindow, optional
+            The parent window.
+        """
 
         super().__init__()
         self.parent_window = parent_window
-        self.screen_height = self.parent_window.parent_window.parent_window.parent_window.screen_height
-        self.screen_width = self.parent_window.parent_window.parent_window.parent_window.screen_width
+        # Navigate explicit parent chain: SegModelLoader -> ControlPanel -> ProcessPanel -> MainWindow
+        self.screen_height = (
+            self.parent_window.parent_window.parent_window.parent_window.screen_height
+        )
+        self.screen_width = (
+            self.parent_window.parent_window.parent_window.parent_window.screen_width
+        )
         self.setMinimumWidth(int(0.8 * self.screen_width))
         self.setMinimumHeight(int(0.8 * self.screen_height))
         self.setWindowTitle("Threshold configuration wizard")
 
         self._createActions()
-        self._createMenuBar()
+        self._create_menu_bar()
 
         self.mode = self.parent_window.mode
         self.pos = self.parent_window.parent_window.parent_window.pos
@@ -51,9 +107,17 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
         self.min_dist = 30
         self.onlyFloat = QDoubleValidator()
         self.onlyInt = QIntValidator()
-        self.cell_properties = ['centroid', 'area', 'perimeter', 'eccentricity', 'intensity_mean', 'solidity']
+        self.cell_properties = [
+            "centroid",
+            "area",
+            "perimeter",
+            "eccentricity",
+            "intensity_mean",
+            "solidity",
+        ]
         self.edge = None
         self.filters = []
+        self.fill_holes = True
 
         self.locate_stack()
         self.generate_viewer()
@@ -69,18 +133,41 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
             self.populate_widget()
             self.setAttribute(Qt.WA_DeleteOnClose)
 
-    def _createMenuBar(self):
-        menuBar = self.menuBar()
+        self.bg_loader = BackgroundLoader()
+        self.bg_loader.start()
+
+    def closeEvent(self, event: QCloseEvent) -> None:
+        """
+        Clean up resources on close.
+
+        Parameters
+        ----------
+        event : QCloseEvent
+            The close event.
+        """
+        if hasattr(self, "bg_loader") and self.bg_loader.isRunning():
+            self.bg_loader.quit()
+            self.bg_loader.wait()
+        # Clear large arrays
+        for attr in ["img", "labels", "edt_map", "props", "coords"]:
+            if hasattr(self, attr):
+                delattr(self, attr)
+        super().closeEvent(event)
+
+    def _create_menu_bar(self):
+        """Create the menu bar."""
+        menu_bar = self.menuBar()
         # Creating menus using a QMenu object
-        fileMenu = QMenu("&File", self)
-        fileMenu.addAction(self.openAction)
-        menuBar.addMenu(fileMenu)
+        file_menu = QMenu("&File", self)
+        file_menu.addAction(self.openAction)
+        menu_bar.addMenu(file_menu)
 
     # Creating menus using a title
     # editMenu = menuBar.addMenu("&Edit")
     # helpMenu = menuBar.addMenu("&Help")
 
     def _createActions(self):
+        """Create actions."""
         # Creating action using the first constructor
         # self.newAction = QAction(self)
         # self.newAction.setText("&New")
@@ -89,11 +176,10 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
         self.openAction.triggered.connect(self.load_previous_config)
 
     def populate_widget(self):
+        """
+        Create the multibox design.
 
         """
-		Create the multibox design.
-
-		"""
         self.button_widget = CelldetectiveWidget()
         main_layout = QHBoxLayout()
         self.button_widget.setLayout(main_layout)
@@ -124,6 +210,7 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
         QApplication.processEvents()
 
     def populate_left_panel(self):
+        """Populate the left panel."""
 
         self.preprocessing = PreprocessingLayout(self)
         self.left_panel.addLayout(self.preprocessing)
@@ -139,11 +226,22 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
         threshold_title_grid = QHBoxLayout()
         section_threshold = QLabel("Threshold")
         section_threshold.setStyleSheet("font-weight: bold;")
-        threshold_title_grid.addWidget(section_threshold, 90, alignment=Qt.AlignCenter)
+        threshold_title_grid.addWidget(section_threshold, 80, alignment=Qt.AlignCenter)
+
+        self.fill_holes_btn = QPushButton("")
+        self.fill_holes_btn.setIcon(icon(MDI6.format_color_fill, color="white"))
+        self.fill_holes_btn.setIconSize(QSize(20, 20))
+        self.fill_holes_btn.setStyleSheet(self.button_select_all)
+        self.fill_holes_btn.setToolTip("Fill holes in binary mask")
+        self.fill_holes_btn.setCheckable(True)
+        self.fill_holes_btn.setChecked(True)
+        self.fill_holes_btn.clicked.connect(self.toggle_fill_holes)
+        threshold_title_grid.addWidget(self.fill_holes_btn, 5)
 
         self.ylog_check = QPushButton("")
         self.ylog_check.setIcon(icon(MDI6.math_log, color="black"))
         self.ylog_check.setStyleSheet(self.button_select_all)
+        self.ylog_check.setCheckable(True)
         self.ylog_check.clicked.connect(self.switch_to_log)
         threshold_title_grid.addWidget(self.ylog_check, 5)
 
@@ -165,8 +263,13 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
         self.threshold_slider.setTickInterval(0.00001)
         self.threshold_slider.setOrientation(Qt.Horizontal)
         self.threshold_slider.setDecimals(5)
-        self.threshold_slider.setRange(np.amin(self.img[self.img == self.img]), np.amax(self.img[self.img == self.img]))
-        self.threshold_slider.setValue([np.percentile(self.img.flatten(), 90), np.amax(self.img)])
+        self.threshold_slider.setRange(
+            np.amin(self.img[self.img == self.img]),
+            np.amax(self.img[self.img == self.img]),
+        )
+        self.threshold_slider.setValue(
+            [np.percentile(self.img.ravel(), 90), np.amax(self.img)]
+        )
         self.threshold_slider.valueChanged.connect(self.threshold_changed)
 
         # self.initialize_histogram()
@@ -185,24 +288,38 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
         # FINAL SAVE BTN#
         #################
 
-        self.save_btn = QPushButton('Save')
+        self.save_btn = QPushButton("Save")
         self.save_btn.setStyleSheet(self.button_style_sheet)
         self.save_btn.clicked.connect(self.write_instructions)
         self.left_panel.addWidget(self.save_btn)
 
-        self.properties_box_widgets = [self.propscanvas, *self.features_cb,
-                                       self.property_query_le, self.submit_query_btn, self.save_btn]
+        self.properties_box_widgets = [
+            self.propscanvas,
+            *self.features_cb,
+            self.property_query_le,
+            self.submit_query_btn,
+            self.save_btn,
+        ]
         for p in self.properties_box_widgets:
             p.setEnabled(False)
 
-    def help_prefilter(self):
+        # Force initial update after all UI elements are created
+        self.threshold_changed(self.threshold_slider.value())
 
+    def help_prefilter(self):
         """
-		Helper for prefiltering strategy
-		"""
+        Helper for prefiltering strategy
+        """
 
         dict_path = os.sep.join(
-            [get_software_location(), 'celldetective', 'gui', 'help', 'prefilter-for-segmentation.json'])
+            [
+                get_software_location(),
+                "celldetective",
+                "gui",
+                "help",
+                "prefilter-for-segmentation.json",
+            ]
+        )
 
         with open(dict_path) as f:
             d = json.load(f)
@@ -213,8 +330,10 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
             message_box = QMessageBox()
             message_box.setIcon(QMessageBox.Information)
             message_box.setTextFormat(Qt.RichText)
-            message_box.setText(f"The suggested technique is to {suggestion}.\nSee a tutorial <a "
-                                f"href='https://celldetective.readthedocs.io/en/latest/segment.html'>here</a>.")
+            message_box.setText(
+                f"The suggested technique is to {suggestion}.\nSee a tutorial <a "
+                f"href='https://celldetective.readthedocs.io/en/latest/segment.html'>here</a>."
+            )
             message_box.setWindowTitle("Info")
             message_box.setStandardButtons(QMessageBox.Ok)
             return_value = message_box.exec()
@@ -222,26 +341,29 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
                 return None
 
     def generate_marker_contents(self):
+        """Generate marker contents."""
 
         marker_box = QVBoxLayout()
         marker_box.setContentsMargins(30, 30, 30, 30)
 
-        marker_lbl = QLabel('Objects')
+        marker_lbl = QLabel("Objects")
         marker_lbl.setStyleSheet("font-weight: bold;")
         marker_box.addWidget(marker_lbl, alignment=Qt.AlignCenter)
 
         object_option_hbox = QHBoxLayout()
-        self.marker_option = QRadioButton('markers')
-        self.all_objects_option = QRadioButton('all non-contiguous objects')
+        self.marker_option = QRadioButton("markers")
+        self.all_objects_option = QRadioButton("all non-contiguous objects")
         self.marker_option_group = QButtonGroup()
         self.marker_option_group.addButton(self.marker_option)
         self.marker_option_group.addButton(self.all_objects_option)
         object_option_hbox.addWidget(self.marker_option, 50, alignment=Qt.AlignCenter)
-        object_option_hbox.addWidget(self.all_objects_option, 50, alignment=Qt.AlignCenter)
+        object_option_hbox.addWidget(
+            self.all_objects_option, 50, alignment=Qt.AlignCenter
+        )
         marker_box.addLayout(object_option_hbox)
 
         hbox_footprint = QHBoxLayout()
-        hbox_footprint.addWidget(QLabel('Footprint: '), 20)
+        hbox_footprint.addWidget(QLabel("Footprint: "), 20)
         self.footprint_slider = QLabeledSlider()
         self.footprint_slider.setSingleStep(1)
         self.footprint_slider.setOrientation(Qt.Horizontal)
@@ -249,11 +371,11 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
         self.footprint_slider.setValue(self.footprint)
         self.footprint_slider.valueChanged.connect(self.set_footprint)
         hbox_footprint.addWidget(self.footprint_slider, 30)
-        hbox_footprint.addWidget(QLabel(''), 50)
+        hbox_footprint.addWidget(QLabel(""), 50)
         marker_box.addLayout(hbox_footprint)
 
         hbox_distance = QHBoxLayout()
-        hbox_distance.addWidget(QLabel('Min distance: '), 20)
+        hbox_distance.addWidget(QLabel("Min distance: "), 20)
         self.min_dist_slider = QLabeledSlider()
         self.min_dist_slider.setSingleStep(1)
         self.min_dist_slider.setOrientation(Qt.Horizontal)
@@ -261,7 +383,7 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
         self.min_dist_slider.setValue(self.min_dist)
         self.min_dist_slider.valueChanged.connect(self.set_min_dist)
         hbox_distance.addWidget(self.min_dist_slider, 30)
-        hbox_distance.addWidget(QLabel(''), 50)
+        hbox_distance.addWidget(QLabel(""), 50)
         marker_box.addLayout(hbox_distance)
 
         hbox_marker_btns = QHBoxLayout()
@@ -287,6 +409,7 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
         self.left_panel.addLayout(marker_box)
 
     def enable_marker_options(self):
+        """Enable marker options."""
         if self.marker_option.isChecked():
             self.footprint_slider.setEnabled(True)
             self.min_dist_slider.setEnabled(True)
@@ -298,30 +421,32 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
             self.watershed_btn.setEnabled(True)
 
     def generate_props_contents(self):
+        """Generate properties contents."""
 
         properties_box = QVBoxLayout()
         properties_box.setContentsMargins(30, 30, 30, 30)
 
-        properties_lbl = QLabel('Filter on properties')
-        properties_lbl.setStyleSheet('font-weight: bold;')
+        properties_lbl = QLabel("Filter on properties")
+        properties_lbl.setStyleSheet("font-weight: bold;")
         properties_box.addWidget(properties_lbl, alignment=Qt.AlignCenter)
 
         properties_box.addWidget(self.propscanvas)
 
-        self.features_cb = [QComboBox() for i in range(2)]
+        self.features_cb = [QComboBox() for _ in range(2)]
         for i in range(2):
             hbox_feat = QHBoxLayout()
-            hbox_feat.addWidget(QLabel(f'feature {i}: '), 20)
+            hbox_feat.addWidget(QLabel(f"feature {i}: "), 20)
             hbox_feat.addWidget(self.features_cb[i], 80)
             properties_box.addLayout(hbox_feat)
 
         hbox_classify = QHBoxLayout()
-        hbox_classify.addWidget(QLabel('remove: '), 10)
+        hbox_classify.addWidget(QLabel("remove: "), 10)
         self.property_query_le = QLineEdit()
         self.property_query_le.setPlaceholderText(
-            'eliminate points using a query such as: area > 100 or eccentricity > 0.95')
+            "eliminate points using a query such as: area > 100 or eccentricity > 0.95"
+        )
         hbox_classify.addWidget(self.property_query_le, 70)
-        self.submit_query_btn = QPushButton('Submit...')
+        self.submit_query_btn = QPushButton("Submit...")
         self.submit_query_btn.setStyleSheet(self.button_style_sheet)
         self.submit_query_btn.clicked.connect(self.apply_property_query)
         hbox_classify.addWidget(self.submit_query_btn, 20)
@@ -330,33 +455,51 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
         self.left_panel.addLayout(properties_box)
 
     def generate_viewer(self):
-        self.viewer = ThresholdedStackVisualizer(preprocessing=self.filters, show_opacity_slider=False,
-                                                 show_threshold_slider=False, stack_path=self.stack_path,
-                                                 frame_slider=True, contrast_slider=True, channel_cb=True,
-                                                 channel_names=self.channel_names, n_channels=self.nbr_channels,
-                                                 target_channel=0, PxToUm=None, initial_threshold=None)
+        """Generate the viewer."""
+        self.viewer = ThresholdedStackVisualizer(
+            preprocessing=self.filters,
+            show_opacity_slider=False,
+            show_threshold_slider=False,
+            stack_path=self.stack_path,
+            frame_slider=True,
+            contrast_slider=True,
+            channel_cb=True,
+            channel_names=self.channel_names,
+            n_channels=self.nbr_channels,
+            target_channel=0,
+            PxToUm=None,
+            initial_threshold=None,
+            fill_holes=self.fill_holes,
+        )
 
     def populate_right_panel(self):
+        """Populate the right panel."""
         self.right_panel.addWidget(self.viewer.canvas)
 
     def locate_stack(self):
+        """
+        Locate the target movie.
 
         """
-		Locate the target movie.
-
-		"""
 
         if isinstance(self.pos, str):
-            movies = glob(self.pos + f"movie/{self.parent_window.parent_window.parent_window.movie_prefix}*.tif")
+            movies = glob(
+                self.pos
+                + f"movie/{self.parent_window.parent_window.parent_window.movie_prefix}*.tif"
+            )
 
         else:
-            generic_message('Please select a unique position before launching the wizard...')
+            generic_message(
+                "Please select a unique position before launching the wizard..."
+            )
             self.img = None
             self.close()
             return None
 
         if len(movies) == 0:
-            generic_message('No movies are detected in the experiment folder. Cannot load an image to test Haralick.')
+            generic_message(
+                "No movies are detected in the experiment folder. Cannot load an image to test Haralick."
+            )
             self.img = None
             self.close()
         else:
@@ -366,83 +509,114 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
             self.nbr_channels = len(self.channel_names)
 
     def initalize_props_scatter(self):
-
         """
-		Define properties scatter.
-		"""
+        Define properties scatter.
+        """
 
-        self.fig_props, self.ax_props = plt.subplots(tight_layout=True)
+        from matplotlib.figure import Figure
+
+        self.fig_props = Figure(tight_layout=True)
+        self.ax_props = self.fig_props.add_subplot(111)
         self.propscanvas = FigureCanvas(self.fig_props, interactive=True)
-        self.fig_props.set_facecolor('none')
+        self.fig_props.set_facecolor("none")
         self.fig_props.canvas.setStyleSheet("background-color: transparent;")
-        self.scat_props = self.ax_props.scatter([], [], color='k', alpha=0.75)
+        self.scat_props = self.ax_props.scatter([], [], color="k", alpha=0.75)
         self.propscanvas.canvas.draw_idle()
         self.propscanvas.canvas.setMinimumHeight(self.screen_height // 5)
 
     def initialize_histogram(self):
+        """Initialize the histogram."""
 
         self.img = self.viewer.init_frame
 
-        self.fig_hist, self.ax_hist = plt.subplots(tight_layout=True)
+        from matplotlib.figure import Figure
+
+        self.fig_hist = Figure(tight_layout=True)
+        self.ax_hist = self.fig_hist.add_subplot(111)
         self.canvas_hist = FigureCanvas(self.fig_hist, interactive=False)
-        self.fig_hist.set_facecolor('none')
+        self.fig_hist.set_facecolor("none")
         self.fig_hist.canvas.setStyleSheet("background-color: transparent;")
 
         # self.ax_hist.clear()
         # self.ax_hist.cla()
-        self.ax_hist.patch.set_facecolor('none')
-        self.hist_y, x, _ = self.ax_hist.hist(self.img.flatten(), density=True, bins=300, color="k")
+        self.ax_hist.patch.set_facecolor("none")
+        self.hist_y, x, _ = self.ax_hist.hist(
+            self.img.ravel(), density=True, bins=300, color="k"
+        )
         # self.ax_hist.set_xlim(np.amin(self.img),np.amax(self.img))
-        self.ax_hist.set_xlabel('intensity [a.u.]')
-        self.ax_hist.spines['top'].set_visible(False)
-        self.ax_hist.spines['right'].set_visible(False)
+        self.ax_hist.set_xlabel("intensity [a.u.]")
+        self.ax_hist.spines["top"].set_visible(False)
+        self.ax_hist.spines["right"].set_visible(False)
         # self.ax_hist.set_yticks([])
-        self.ax_hist.set_xlim(np.amin(self.img[self.img == self.img]), np.amax(self.img[self.img == self.img]))
+        self.ax_hist.set_xlim(
+            np.amin(self.img[self.img == self.img]),
+            np.amax(self.img[self.img == self.img]),
+        )
         self.ax_hist.set_ylim(0, self.hist_y.max())
 
-        self.threshold_slider.setRange(np.amin(self.img[self.img == self.img]), np.amax(self.img[self.img == self.img]))
-        self.threshold_slider.setValue([np.nanpercentile(self.img.flatten(), 90), np.amax(self.img)])
+        self.threshold_slider.setRange(
+            np.amin(self.img[self.img == self.img]),
+            np.amax(self.img[self.img == self.img]),
+        )
+        self.threshold_slider.setValue(
+            [np.nanpercentile(self.img.ravel(), 90), np.amax(self.img)]
+        )
         self.add_hist_threshold()
 
         self.canvas_hist.canvas.draw_idle()
         self.canvas_hist.canvas.setMinimumHeight(self.screen_height // 8)
 
     def update_histogram(self):
+        """
+        Redraw the histogram after an update on the image.
+        Move the threshold slider accordingly.
 
         """
-		Redraw the histogram after an update on the image.
-		Move the threshold slider accordingly.
-
-		"""
 
         self.ax_hist.clear()
-        self.ax_hist.patch.set_facecolor('none')
-        self.hist_y, x, _ = self.ax_hist.hist(self.img.flatten(), density=True, bins=300, color="k")
-        self.ax_hist.set_xlabel('intensity [a.u.]')
-        self.ax_hist.spines['top'].set_visible(False)
-        self.ax_hist.spines['right'].set_visible(False)
+        self.ax_hist.patch.set_facecolor("none")
+        self.hist_y, x, _ = self.ax_hist.hist(
+            self.img.ravel(), density=True, bins=300, color="k"
+        )
+        self.ax_hist.set_xlabel("intensity [a.u.]")
+        self.ax_hist.spines["top"].set_visible(False)
+        self.ax_hist.spines["right"].set_visible(False)
         # self.ax_hist.set_yticks([])
-        self.ax_hist.set_xlim(np.amin(self.img[self.img == self.img]), np.amax(self.img[self.img == self.img]))
+        self.ax_hist.set_xlim(
+            np.amin(self.img[self.img == self.img]),
+            np.amax(self.img[self.img == self.img]),
+        )
         self.ax_hist.set_ylim(0, self.hist_y.max())
         self.add_hist_threshold()
         self.canvas_hist.canvas.draw()
 
-        self.threshold_slider.setRange(np.amin(self.img[self.img == self.img]), np.amax(self.img[self.img == self.img]))
-        self.threshold_slider.setValue([np.nanpercentile(self.img.flatten(), 90), np.amax(self.img)])
+        self.threshold_slider.setRange(
+            np.amin(self.img[self.img == self.img]),
+            np.amax(self.img[self.img == self.img]),
+        )
+        self.threshold_slider.setValue(
+            [np.nanpercentile(self.img.ravel(), 90), np.amax(self.img)]
+        )
         self.threshold_changed(self.threshold_slider.value())
 
     def add_hist_threshold(self):
+        """Add threshold lines to the histogram."""
 
         ymin, ymax = self.ax_hist.get_ylim()
-        self.min_intensity_line, = self.ax_hist.plot(
-            [self.threshold_slider.value()[0], self.threshold_slider.value()[0]], [0, ymax], c="tab:purple")
-        self.max_intensity_line, = self.ax_hist.plot(
-            [self.threshold_slider.value()[1], self.threshold_slider.value()[1]], [0, ymax], c="tab:purple")
+        (self.min_intensity_line,) = self.ax_hist.plot(
+            [self.threshold_slider.value()[0], self.threshold_slider.value()[0]],
+            [0, ymax],
+            c="tab:purple",
+        )
+        (self.max_intensity_line,) = self.ax_hist.plot(
+            [self.threshold_slider.value()[1], self.threshold_slider.value()[1]],
+            [0, ymax],
+            c="tab:purple",
+        )
 
     # self.canvas_hist.canvas.draw_idle()
 
     def reload_frame(self):
-
         """
         Load the frame from the current channel and time choice. Show imshow, update histogram.
         """
@@ -453,65 +627,86 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
         self.update_histogram()
 
     def preprocess_image(self):
+        """
+        Reload the frame, apply the filters, update imshow and histogram.
 
         """
-		Reload the frame, apply the filters, update imshow and histogram.
-
-		"""
 
         self.filters = self.preprocessing.list.items
         self.reload_frame()
         self.update_histogram()
 
-    def threshold_changed(self, value):
-
+    def threshold_changed(self, value: list) -> None:
         """
-		Move the threshold values on histogram, when slider is moved.
-		"""
+        Move the threshold values on histogram, when slider is moved.
 
+        Parameters
+        ----------
+        value : list
+            The new threshold values [min, max].
+        """
         self.clear_post_threshold_options()
         self.viewer.change_threshold(value)
 
         ymin, ymax = self.ax_hist.get_ylim()
-        self.min_intensity_line.set_data([value[0],value[0]], [0, ymax])
-        self.max_intensity_line.set_data([value[1],value[1]], [0, ymax])
+        self.min_intensity_line.set_data([value[0], value[0]], [0, ymax])
+        self.max_intensity_line.set_data([value[1], value[1]], [0, ymax])
         self.canvas_hist.canvas.draw_idle()
 
     def switch_to_log(self):
-
         """
-		Switch threshold histogram to log scale. Auto adjust.
-		"""
+        Switch threshold histogram to log scale. Auto adjust.
+        """
 
-        if self.ax_hist.get_yscale() == 'linear':
-            self.ax_hist.set_yscale('log')
+        if self.ax_hist.get_yscale() == "linear":
+            self.ax_hist.set_yscale("log")
+            self.ylog_check.setIcon(icon(MDI6.math_log, color="white"))
         else:
-            self.ax_hist.set_yscale('linear')
+            self.ax_hist.set_yscale("linear")
+            self.ylog_check.setIcon(icon(MDI6.math_log, color="black"))
 
         # self.ax_hist.autoscale()
-        self.ax_hist.set_ylim(0, self.hist_y.max())
+        ymin = 0 if self.ax_hist.get_yscale() == "linear" else 1e-1
+        self.ax_hist.set_ylim(ymin, self.hist_y.max())
         self.canvas_hist.canvas.draw_idle()
 
+    def toggle_fill_holes(self):
+        """Toggle fill holes option."""
+        self.fill_holes = self.fill_holes_btn.isChecked()
+        self.viewer.fill_holes = self.fill_holes
+        self.viewer.change_threshold(self.threshold_slider.value())
+        color = "white" if self.fill_holes else "black"
+        self.fill_holes_btn.setIcon(icon(MDI6.format_color_fill, color=color))
+
     def set_footprint(self):
+        """Set the footprint size."""
         self.footprint = self.footprint_slider.value()
 
     # print(f"Setting footprint to {self.footprint}")
 
     def set_min_dist(self):
+        """Set the minimum distance."""
         self.min_dist = self.min_dist_slider.value()
 
     # print(f"Setting min distance to {self.min_dist}")
 
     def detect_markers(self):
+        """Detect markers in the image."""
 
         self.clear_post_threshold_options()
 
         if self.viewer.mask.ndim == 3:
             self.viewer.mask = np.squeeze(self.viewer.mask)
 
-        self.coords, self.edt_map = identify_markers_from_binary(self.viewer.mask, self.min_dist,
-                                                                 footprint_size=self.footprint, footprint=None,
-                                                                 return_edt=True)
+        from celldetective.segmentation import identify_markers_from_binary
+
+        self.coords, self.edt_map = identify_markers_from_binary(
+            self.viewer.mask,
+            self.min_dist,
+            footprint_size=self.footprint,
+            footprint=None,
+            return_edt=True,
+        )
         if len(self.coords) > 0:
             self.viewer.scat_markers.set_offsets(self.coords[:, [1, 0]])
             self.viewer.scat_markers.set_visible(True)
@@ -522,15 +717,25 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
             self.watershed_btn.setEnabled(False)
 
     def apply_watershed_to_selection(self):
+        """Apply watershed algorithm to the selection."""
+
+        from celldetective.segmentation import apply_watershed
 
         if self.marker_option.isChecked():
-            self.labels = apply_watershed(self.viewer.mask, self.coords, self.edt_map)
+            self.labels = apply_watershed(
+                self.viewer.mask, self.coords, self.edt_map, fill_holes=self.fill_holes
+            )
         else:
-            self.labels, _ = ndi.label(self.viewer.mask.astype(int))
+            from scipy.ndimage._measurements import label
 
-        self.viewer.change_frame(self.viewer.frame_slider.value())
-        self.viewer.im_mask.set_cmap('tab20c')
-        self.viewer.im_mask.set_data(np.ma.masked_where(self.labels == 0., self.labels))
+            self.labels, _ = label(self.viewer.mask.astype(int))
+
+        self.viewer.channel_trigger = True
+        self.viewer.change_frame_from_channel_switch(self.viewer.frame_slider.value())
+        self.viewer.im_mask.set_cmap("tab20c")
+        self.viewer.im_mask.set_data(
+            np.ma.masked_where(self.labels == 0.0, self.labels)
+        )
         self.viewer.im_mask.autoscale()
         self.viewer.canvas.canvas.draw_idle()
 
@@ -542,6 +747,10 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
             self.features_cb[i].currentTextChanged.connect(self.update_props_scatter)
 
     def compute_features(self):
+        """Compute features for the segmented objects."""
+
+        import pandas as pd
+        from skimage.measure import regionprops_table
 
         # Run regionprops to have properties for filtering
         intensity_image_idx = [self.nbr_channels * self.viewer.frame_slider.value()]
@@ -549,66 +758,104 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
             intensity_image_idx += [intensity_image_idx[-1] + 1]
 
         # Load channels at time t
-        multichannel = load_frames(intensity_image_idx, self.stack_path, normalize_input=False)
+        multichannel = load_frames(
+            intensity_image_idx, self.stack_path, normalize_input=False
+        )
         self.props = pd.DataFrame(
-            regionprops_table(self.labels, intensity_image=multichannel, properties=self.cell_properties))
+            regionprops_table(
+                self.labels,
+                intensity_image=multichannel,
+                properties=self.cell_properties,
+            )
+        )
         self.props = rename_intensity_column(self.props, self.channel_names)
-        self.props['radial_distance'] = np.sqrt((self.props['centroid-1'] - self.img.shape[0] / 2) ** 2 + (
-                self.props['centroid-0'] - self.img.shape[1] / 2) ** 2)
+        self.props["radial_distance"] = np.sqrt(
+            (self.props["centroid-1"] - self.img.shape[0] / 2) ** 2
+            + (self.props["centroid-0"] - self.img.shape[1] / 2) ** 2
+        )
+
+        self.props["class"] = 1
 
         for i in range(2):
             self.features_cb[i].clear()
             self.features_cb[i].addItems(list(self.props.columns))
             self.features_cb[i].setCurrentIndex(i)
-        self.props["class"] = 1
 
         self.update_props_scatter()
 
     def update_props_scatter(self):
+        """Update the properties scatter plot."""
 
-        self.scat_props.set_offsets(
-            self.props[[self.features_cb[1].currentText(), self.features_cb[0].currentText()]].to_numpy())
-        self.scat_props.set_facecolor([color_from_class(c) for c in self.props['class'].to_numpy()])
-        self.ax_props.set_xlabel(self.features_cb[1].currentText())
-        self.ax_props.set_ylabel(self.features_cb[0].currentText())
+        feat1 = self.features_cb[1].currentText()
+        feat0 = self.features_cb[0].currentText()
 
-        self.viewer.scat_markers.set_offsets(self.props[['centroid-1', 'centroid-0']].to_numpy())
-        self.viewer.scat_markers.set_color(['k'] * len(self.props))
-        self.viewer.scat_markers.set_facecolor([color_from_class(c) for c in self.props['class'].to_numpy()])
+        if feat1 == "" or feat0 == "":
+            return
 
-        self.ax_props.set_xlim(0.75 * self.props[self.features_cb[1].currentText()].min(),
-                               1.05 * self.props[self.features_cb[1].currentText()].max())
-        self.ax_props.set_ylim(0.75 * self.props[self.features_cb[0].currentText()].min(),
-                               1.05 * self.props[self.features_cb[0].currentText()].max())
+        self.scat_props.set_offsets(self.props[[feat1, feat0]].to_numpy())
+        self.scat_props.set_facecolor(
+            [color_from_class(c) for c in self.props["class"].to_numpy()]
+        )
+        self.ax_props.set_xlabel(feat1)
+        self.ax_props.set_ylabel(feat0)
+
+        self.viewer.scat_markers.set_offsets(
+            self.props[["centroid-1", "centroid-0"]].to_numpy()
+        )
+        self.viewer.scat_markers.set_color(["k"] * len(self.props))
+        self.viewer.scat_markers.set_facecolor(
+            [color_from_class(c) for c in self.props["class"].to_numpy()]
+        )
+        self.viewer.scat_markers.set_visible(True)
+
+        if not self.props.empty:
+            min_f1, max_f1 = self.props[feat1].min(), self.props[feat1].max()
+            min_f0, max_f0 = self.props[feat0].min(), self.props[feat0].max()
+
+            if np.isfinite([min_f1, max_f1, min_f0, max_f0]).all():
+                self.ax_props.set_xlim(
+                    0.75 * min_f1,
+                    1.05 * max_f1,
+                )
+                self.ax_props.set_ylim(
+                    0.75 * min_f0,
+                    1.05 * max_f0,
+                )
         self.propscanvas.canvas.draw_idle()
-        self.viewer.canvas.canvas.draw_idle()
+        self.viewer.canvas.canvas.draw()
+        logger.info(f"Update markers for {len(self.props)} objects.")
 
     def prep_cell_properties(self):
+        """Prepare cell properties list."""
 
         self.cell_properties_options = list(np.copy(self.cell_properties))
         self.cell_properties_options.remove("centroid")
         for k in range(self.nbr_channels):
-            self.cell_properties_options.append(f'intensity_mean-{k}')
-        self.cell_properties_options.remove('intensity_mean')
+            self.cell_properties_options.append(f"intensity_mean-{k}")
+        self.cell_properties_options.remove("intensity_mean")
 
     def apply_property_query(self):
+        """Apply property query to filter objects."""
         query = self.property_query_le.text()
-        self.props['class'] = 1
+        self.props["class"] = 1
 
-        if query == '':
-            print('empty query')
+        if query == "":
+            logger.warning("empty query")
         else:
             try:
                 self.selection = self.props.query(query).index
-                print(self.selection)
-                self.props.loc[self.selection, 'class'] = 0
+                logger.info(f"{self.selection}")
+                self.props.loc[self.selection, "class"] = 0
             except Exception as e:
-                generic_message(f"The query could not be understood. No filtering was applied. {e}")
+                generic_message(
+                    f"The query could not be understood. No filtering was applied. {e}"
+                )
                 return None
 
         self.update_props_scatter()
 
     def clear_post_threshold_options(self):
+        """Clear options available after thresholding."""
 
         self.watershed_btn.setEnabled(False)
         for p in self.properties_box_widgets:
@@ -617,49 +864,61 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
         for i in range(2):
             try:
                 self.features_cb[i].disconnect()
-            except Exception as e:
+            except TypeError:
+                # No connections to disconnect
                 pass
             self.features_cb[i].clear()
 
-        self.property_query_le.setText('')
+        self.property_query_le.setText("")
 
         self.viewer.change_threshold(self.threshold_slider.value())
-        self.viewer.scat_markers.set_color('tab:red')
+        self.viewer.scat_markers.set_color("tab:red")
         self.viewer.scat_markers.set_visible(False)
 
     def write_instructions(self):
+        """Write the threshold configuration to a JSON file."""
 
         instructions = {
-            "target_channel": self.viewer.channels_cb.currentText(),
+            "target_channel": self.viewer.channel_cb.currentText(),
             # for now index but would be more universal to use name
             "thresholds": self.threshold_slider.value(),
             "filters": self.preprocessing.list.items,
             "marker_min_distance": self.min_dist,
             "marker_footprint_size": self.footprint,
             "feature_queries": [self.property_query_le.text()],
-            "equalize_reference": [self.equalize_option, self.viewer.frame_slider.value()],
+            "equalize_reference": [
+                self.equalize_option,
+                self.viewer.frame_slider.value(),
+            ],
             "do_watershed": self.marker_option.isChecked(),
+            "fill_holes": self.fill_holes,
         }
 
-        print('The following instructions will be written: ', instructions)
-        self.instruction_file = \
-            QFileDialog.getSaveFileName(self, "Save File", self.exp_dir + f'configs/threshold_config_{self.mode}.json',
-                                        '.json')[0]
-        if self.instruction_file != '':
+        logger.info(f"The following instructions will be written: {instructions}")
+        self.instruction_file = QFileDialog.getSaveFileName(
+            self,
+            "Save File",
+            self.exp_dir + f"configs/threshold_config_{self.mode}.json",
+            ".json",
+        )[0]
+        if self.instruction_file != "":
             json_object = json.dumps(instructions, indent=4)
             with open(self.instruction_file, "w") as outfile:
                 outfile.write(json_object)
-            print("Configuration successfully written in ", self.instruction_file)
+            logger.info(
+                f"Configuration successfully written in {self.instruction_file}"
+            )
 
             self.parent_window.filename = self.instruction_file
-            self.parent_window.file_label.setText(self.instruction_file[:16] + '...')
+            self.parent_window.file_label.setText(self.instruction_file[:16] + "...")
             self.parent_window.file_label.setToolTip(self.instruction_file)
 
             self.close()
         else:
-            print('The instruction file could not be written...')
+            logger.error("The instruction file could not be written...")
 
     def activate_histogram_equalizer(self):
+        """Toggle histogram equalization."""
 
         if not self.equalize_option:
             self.equalize_option = True
@@ -671,42 +930,72 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
             self.equalize_option_btn.setIconSize(QSize(20, 20))
 
     def load_previous_config(self):
-        self.previous_instruction_file = \
-            QFileDialog.getOpenFileName(self, "Load config",
-                                        self.exp_dir + f'configs/threshold_config_{self.mode}.json',
-                                        "JSON (*.json)")[0]
-        with open(self.previous_instruction_file, 'r') as f:
-            threshold_instructions = json.load(f)
+        """Load a previous threshold configuration from a JSON file."""
+        self.previous_instruction_file = QFileDialog.getOpenFileName(
+            self,
+            "Load config",
+            self.exp_dir + f"configs/threshold_config_{self.mode}.json",
+            "JSON (*.json)",
+        )[0]
 
-        target_channel = threshold_instructions['target_channel']
-        index = self.viewer.channels_cb.findText(target_channel)
-        self.viewer.channels_cb.setCurrentIndex(index)
+        if not self.previous_instruction_file:
+            return  # User cancelled
 
-        filters = threshold_instructions['filters']
-        items_to_add = [f[0] + '_filter' for f in filters]
+        try:
+            with open(self.previous_instruction_file, "r") as f:
+                threshold_instructions = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError) as e:
+            generic_message(f"Could not load config: {e}")
+            return
+
+        # Validate required keys
+        required_keys = [
+            "target_channel",
+            "filters",
+            "thresholds",
+            "marker_footprint_size",
+            "marker_min_distance",
+            "feature_queries",
+        ]
+        missing_keys = [k for k in required_keys if k not in threshold_instructions]
+        if missing_keys:
+            generic_message(f"Config file is missing required keys: {missing_keys}")
+            return
+
+        target_channel = threshold_instructions["target_channel"]
+        index = self.viewer.channel_cb.findText(target_channel)
+        if index >= 0:
+            self.viewer.channel_cb.setCurrentIndex(index)
+        else:
+            logger.warning(
+                f"Channel '{target_channel}' not found in available channels"
+            )
+
+        filters = threshold_instructions["filters"]
+        items_to_add = [f[0] + "_filter" for f in filters]
         self.preprocessing.list.list_widget.clear()
         self.preprocessing.list.list_widget.addItems(items_to_add)
         self.preprocessing.list.items = filters
         self.preprocessing.apply_btn.click()
 
-        thresholds = threshold_instructions['thresholds']
+        thresholds = threshold_instructions["thresholds"]
         self.threshold_slider.setValue(thresholds)
 
-        marker_footprint_size = threshold_instructions['marker_footprint_size']
+        marker_footprint_size = threshold_instructions["marker_footprint_size"]
         self.footprint_slider.setValue(marker_footprint_size)
 
-        marker_min_dist = threshold_instructions['marker_min_distance']
+        marker_min_dist = threshold_instructions["marker_min_distance"]
         self.min_dist_slider.setValue(marker_min_dist)
 
         self.markers_btn.click()
         self.watershed_btn.click()
 
-        feature_queries = threshold_instructions['feature_queries']
+        feature_queries = threshold_instructions["feature_queries"]
         self.property_query_le.setText(feature_queries[0])
         self.submit_query_btn.click()
 
-        if 'do_watershed' in threshold_instructions:
-            do_watershed = threshold_instructions['do_watershed']
+        if "do_watershed" in threshold_instructions:
+            do_watershed = threshold_instructions["do_watershed"]
             if do_watershed:
                 self.marker_option.click()
             else:

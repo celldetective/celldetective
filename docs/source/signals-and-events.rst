@@ -6,91 +6,53 @@ Signals and events
 Prerequisites
 -------------
 
-Perform segmentation, tracking and measurements for either target or effector cells. Select a single position.
+Perform segmentation, tracking, and measurements for either target or effector cells. Select a single position.
+
+
+Overview
+--------
+
+After measuring single-cell features over time, the next step is to characterize dynamic behaviors — detecting when and whether specific events occur for each cell. Celldetective offers two complementary strategies for this: deep learning signal analysis and threshold-based event detection.
 
 
 Deep-learning signal analysis
 -----------------------------
 
-We provide several Deep-learning models that take select single-cell signals as their input and determine the event class and time of event (if any) for all cells. Exactly as for the segmentation models, we provide a zoo of such models that can be applied to positions or wells, in the signal analysis section. The result can be corrected and monitored in the signal annotator UI. 
+Celldetective provides a zoo of deep-learning models that take single-cell signal traces as input and predict an event class and time of event for each cell. These models work similarly to segmentation models — select one, map your measurement columns to the model's expected inputs, and submit.
+
+For a detailed list of signal mapping parameters, see the :ref:`Signal Analysis Reference <ref_signal_settings>`.
 
 
-Threshold-based event characterization
---------------------------------------
+Threshold-based event detection
+-------------------------------
 
-We also provide a binary classification module, allowing you to classify cells to any number of classes or groups of interest in a "static" way, one frame at a time, based on feature values. This classification process yields a binary signal, which can be interpreted:
+As an alternative to deep learning, you can define feature-based classification rules (e.g., ``PI_intensity_mean > 500``) that produce a binary signal per cell. For tracked cells with time-correlated events, a sigmoid is fitted to extract the event time. The quality of the fit is assessed by an :math:`R^2` score.
 
-#. a perfectly null signal is associated to the absence of event
-#. a completely positive signal is associated to an event that already happened
-#. a sigmoid-like switch is a transition from an absence of event to an event. The time of event is extracted by fitting a sigmoid on the binary classification signal. A :math:`R^2` score is computed. If the score is higher than 0.7, the time is kept, otherwise the cell is classified as "else", to be corrected.
-
-Click on the ``Classify data`` button of the measurements section. Define a name for the class/event/group. Project as many features of interest and write down the classification conditions for the event of interest. Apply to write in the tables the new class/group. If the ``TRACK_ID`` column is in the table (tracked data) and the ``Time correlated event`` option is checked, the sigmoid-fitting process will be triggered to extract the event times and create a class. When ``Time correlated event`` option is not checked, instead of a class/event, a characteristic group will be created and the phenotypes will be assigned accordingly.
-
-.. figure:: _static/classify.gif
-    :width: 400px
-    :align: center
-    :alt: static_class
-
-    The window to perform a feature-based classification on either static detections or trajectories.
+.. seealso::
+    :doc:`how-to-guides/basics/detect-an-event-with-conditions` for a step-by-step guide.
 
 
+Single-cell signal viewer
+--------------------------
 
-Single-cell signal visualization
---------------------------------
+Celldetective ships a powerful viewer for exploring single-cell signals and manually annotating events. This tool allows you to:
 
-Single annotator configuration
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Celldetective ships a powerful viewer for single-cell signals. If a single position is set and tracking has been performed for a cell population, the eye icon in the signal analysis section becomes active. 
-
-Click on the configuration button next to the eye to configure the image displayed and the animation parameters in the signal annotator. 
-
-The available options are:
-
-* a grayscale or a RGB composite representation of the microscopy images, with per-channel normalization to define in case of RGB composite
-* a fraction to control the rescaling applied to the images as they are loaded in memory. The smaller the fraction, the easier it will be to run the animation on a less powerful computer. 
-* a time interval to set the gap in milliseconds between each frame in the animation. 
-
-Upon saving, a small configuration file is saved in the experiment folder in such a way that the settings can be reloaded in later sessions. Click on the eye to proceed.
-
-
-Single annotator UI
-~~~~~~~~~~~~~~~~~~~
+*   Visualize single-cell signal traces (intensity, morphology) synchronized with the movie.
+*   Manually annotate event times and classes.
+*   Curate datasets to train deep-learning event detection models.
 
 .. figure:: _static/signal-annotator.gif
     :width: 800px
     :align: center
     :alt: signal_annotator
 
-    Application on an ADCC system of MCF-7 breast cancer cells co-cultured with human primary NK cells where the Hoechst nuclear stain is blue, PI nuclear stain in red and CFSE marks the NK cells in green. Upon killing by the NK cells, the nuclei of MCF-7 cells turn red. 
+    Application on an ADCC system of MCF-7 breast cancer cells co-cultured with human primary NK cells.
 
-In this application, blue cell nuclei turn red when a target cell is killed by a cell from the green population. You can zoom in the animation, move around, and click on any single cell of interest. The center of mass of cells is coded by a dynamic double scatter plot. The cross symbol encodes the cell class. The circle around the cross shows the current cell status (whether the event happened before the current frame or not). Upon clicking, the signals are updated in the left side panel, to show the measurements of the selected cell. You can view simultaneously up to three signals. Since quantities can be wildly different, normalization and log-rescaling buttons can be triggered to rescale the signals.
+The viewer displays the movie with cell centroids marked by their current event status. Clicking a cell reveals its full temporal signal trace.
 
-In the top part of the left side panel, you select the event of interest. Changing the event updates the colors attributed to each cell marker in the animation. You can decide to create a brand new event and annotate cells (almost) from scratch: you set an initial class for all cells to be modified. The class of a single-cell with respect to an event can be modified. Similarly, the time estimated in the case of an event can be changed to a different value. Don't forget to click on "Save" to save all modifications.
-
-.. note::
-
-   Cells marked for deletion (key Del), are temporarily colored in black. Upon saving, they are removed completely and cannot be recovered again.
+.. seealso::
+    :doc:`how-to-guides/basics/annotate-an-event` for a step-by-step annotation guide. |
+    :ref:`Event Annotation Settings <ref_event_annotation_settings>` for viewer configuration.
 
 
-If all cells have been annotated for an event of interest, you can decide to export a training set for signal analysis with a Deep Learning model, by clicking on the export button on the right side of the "Save" button. 
 
-
-Keyboard shortcuts 
-~~~~~~~~~~~~~~~~~~
-
-Here are some keyboard shortcuts to facilitate single-cell annotations with the signal annotator UI.
-
-+---------------------+-----------------------------------------------+
-| Keyboard shortcuts  | Description                                   |
-+=====================+===============================================+
-| l                   | show the last frame                           |
-+---------------------+-----------------------------------------------+            
-| f                   | show the first frame                          |
-+---------------------+-----------------------------------------------+
-| Esc                 | cancel cell selection                         |
-+---------------------+-----------------------------------------------+
-| Del                 | mark cell for deletion                        |
-+---------------------+-----------------------------------------------+
-| n                   | set cell class to no event                    |
-+---------------------+-----------------------------------------------+

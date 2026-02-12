@@ -21,7 +21,7 @@ Click on the ``TRAIN`` button in the signal analysis module. Set a name for the 
 For the training data, locate the folder where you stored the ``npy`` annotations for the event of interest. You can include datasets among the ones we developed in Zenodo to detect lysis events characterised by a sigmoidal-like increase of the dead nuclei intensity signal ``db-si-NucPI``, or nucleus shrinking characterized by a decreasing nuclear area signal ``db-si-NucCondensation``. 
 
 
-.. _train-seg-models:
+.. _train-event-models:
 
 .. figure:: ../../_static/train-signal-model.png
     :align: center

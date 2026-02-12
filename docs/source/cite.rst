@@ -21,4 +21,4 @@ If you use this software in your research, please cite the `Celldetective <https
     }
 
 
-Make sure you to cite the papers of any segmentation model (StarDist, Cellpose) or tracker (bTrack) you used through Celldetective.
+Make sure you to cite the papers of any segmentation model (:term:`StarDist`, :term:`Cellpose`) or tracker (:term:`bTrack`) you used through Celldetective.

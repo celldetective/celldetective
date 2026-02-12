@@ -5,7 +5,7 @@ How to create a new experiment
 
 This guide shows you how to create an experiment project and import your data. Learn more about the structure of an experiment project :doc:`here <data-organization>`.
 
-Reference keys: :term:`experiment project`, :term:`well`, :term:`position`, :term:`cell population`, *cell type*, *antibody*, *concentration*, *pharmaceutical agents*
+Reference keys: :term:`experiment project`, :term:`well`, :term:`position`, :term:`cell population`, :term:`cell type`, :term:`antibody`, :term:`concentration`, :term:`pharmaceutical agents`
 
 New project
 ~~~~~~~~~~~

@@ -5,19 +5,16 @@ sphinx_rtd_theme
 sphinx #==5.0.2
 jinja2 #<3.1
 ipykernel
-stardist
-cellpose<3
+
 scikit-learn
 btrack
-tensorflow~=2.15.0
-#tensorflow #<=2.12.1
-#keras==2.15.0
+
 napari<0.6.0
 tqdm
 mahotas
 fonticon-materialdesignicons6
 art
-lifelines
+lifelines<0.30.0  # Pin for Python 3.9 compat (datetime.UTC added in 3.11)
 setuptools
 scipy
 seaborn
@@ -40,4 +37,6 @@ prettyprint
 pandas
 matplotlib
 prettytable
+scikit-image
+natsort
 

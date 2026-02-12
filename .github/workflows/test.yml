@@ -4,56 +4,96 @@ on:
   push:
 
 jobs:
-  Linux:
-    name: Test Linux
-    runs-on: ${{ matrix.os }}
-
+  Linux-Full:
+    name: Linux Full
+    runs-on: ubuntu-latest
     strategy:
       matrix:
-        os: [ubuntu-latest]
         python-version: ["3.9", "3.10", "3.11"]
     env:
       DISPLAY: ':99.0'
-
     environment:
       name: tests
-    permissions:
-      id-token: write
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Display Python version
-        run: python -c "import sys; print(sys.version)"
-      - name: build "display"
+      - name: Install system dependencies
         run: |
-          sudo apt install libxkbcommon-x11-0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-xinerama0 libxcb-xfixes0 x11-utils
-          /sbin/start-stop-daemon --start --quiet --pidfile /tmp/custom_xvfb_99.pid --make-pidfile --background --exec /usr/bin/Xvfb -- :99 -screen 0 1920x1200x24 -ac +extension GLX
+          sudo apt-get update
+          sudo apt-get install -y libxkbcommon-x11-0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-xinerama0 libxcb-xfixes0 x11-utils xvfb
+      - name: Start Xvfb
+        run: |
+           /sbin/start-stop-daemon --start --quiet --pidfile /tmp/custom_xvfb_99.pid --make-pidfile --background --exec /usr/bin/Xvfb -- :99 -screen 0 1920x1200x24 -ac +extension GLX
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip cache purge
           pip install setuptools wheel PyQt5
-      - name: Install package
+      - name: Install package [Full]
         run: |
-          pip install "."
+          pip install ".[all]"
       - name: Test package
         run: |
           python -m unittest
       - name: Test GUI
         run: |
           python -m pytest tests/gui/
-  Windows:
-    name: Test Windows
-    runs-on: ${{ matrix.os }}
 
+  Linux-Minimal:
+    name: Linux Minimal
+    runs-on: ubuntu-latest
     strategy:
       matrix:
-        os: [windows-latest]
         python-version: ["3.9", "3.10", "3.11"]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install setuptools wheel PyQt5
+      - name: Install package [Minimal]
+        run: |
+          pip install "."
+      - name: Test Partial Installation
+        run: |
+          python -m unittest tests/test_partial_install.py
 
+  Linux-Preinstalled:
+    name: Linux Pre-installed
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.9", "3.10", "3.11"]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Pre-install TensorFlow
+        run: |
+          python -m pip install --upgrade pip
+          pip install tensorflow==2.14.0
+      - name: Install package [Base]
+        run: |
+          pip install "."
+      - name: Verify Dependencies
+        run: |
+          python -c "import tensorflow; assert tensorflow.__version__ == '2.14.0', f'Tensorflow version mismatch: {tensorflow.__version__}'"
+          python -c "import celldetective; print('Celldetective installed successfully on top of custom TF')"
+
+  Windows-Full:
+    name: Test Windows Full
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        python-version: ["3.9", "3.10", "3.11"]
     environment:
       name: tests
     permissions:
@@ -71,12 +111,73 @@ jobs:
           python -m pip install --upgrade pip
           pip cache purge
           pip install setuptools wheel PyQt5
-      - name: Install package
+      - name: Install package [Full]
         run: |
-          pip install -e "."
+          pip install -e ".[all]"
       - name: Test package
         run: |
           python -m unittest
       - name: Test GUI
         run: |
           python -m pytest tests/gui/
+
+  Windows-Minimal:
+    name: Test Windows Minimal
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        python-version: ["3.9", "3.10", "3.11"]
+    environment:
+      name: tests
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Display Python version
+        run: python -c "import sys; print(sys.version)"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip cache purge
+          pip install setuptools wheel PyQt5
+      - name: Install package [Minimal]
+        run: |
+          pip install "."
+      - name: Test Partial Installation
+        run: |
+          python -m unittest tests/test_partial_install.py
+
+  Windows-Preinstalled:
+    name: Test Windows Pre-installed
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        python-version: ["3.10"]
+    environment:
+      name: tests
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Display Python version
+        run: python -c "import sys; print(sys.version)"
+      - name: Pre-install TensorFlow
+        run: |
+          python -m pip install --upgrade pip
+          pip cache purge
+          pip install tensorflow==2.14.0
+      - name: Install package [Base]
+        run: |
+          pip install "."
+      - name: Verify Dependencies
+        run: |
+          python -c "import tensorflow; assert tensorflow.__version__ == '2.14.0', f'Tensorflow version mismatch: {tensorflow.__version__}'"
+          python -c "import celldetective; print('Celldetective installed successfully on top of custom TF')"
