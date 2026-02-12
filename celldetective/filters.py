@@ -50,6 +50,7 @@ def gauss_filter(
     img: np.ndarray,
     sigma: Union[float, Sequence[float]],
     interpolate: bool = True,
+    *args: Any,
     **kwargs: Any,
 ) -> np.ndarray:
     """
@@ -80,7 +81,7 @@ def gauss_filter(
 
 
 def median_filter(
-    img: np.ndarray, size: int, interpolate: bool = True, **kwargs: Any
+    img: np.ndarray, size: int, interpolate: bool = True, *args: Any, **kwargs: Any
 ) -> np.ndarray:
     """
     Applies a median filter to an image.
@@ -113,7 +114,7 @@ def median_filter(
 
 
 def maximum_filter(
-    img: np.ndarray, size: int, interpolate: bool = True, **kwargs: Any
+    img: np.ndarray, size: int, interpolate: bool = True, *args: Any, **kwargs: Any
 ) -> np.ndarray:
     """
     Applies a maximum filter to an image.
@@ -143,7 +144,7 @@ def maximum_filter(
 
 
 def minimum_filter(
-    img: np.ndarray, size: int, interpolate: bool = True, **kwargs: Any
+    img: np.ndarray, size: int, interpolate: bool = True, *args: Any, **kwargs: Any
 ) -> np.ndarray:
     """
     Applies a minimum filter to an image.
@@ -177,6 +178,7 @@ def percentile_filter(
     percentile: float,
     size: int,
     interpolate: bool = True,
+    *args: Any,
     **kwargs: Any,
 ) -> np.ndarray:
     """
@@ -208,7 +210,9 @@ def percentile_filter(
     return snd.percentile_filter(img.astype(float), percentile, size, *kwargs)
 
 
-def subtract_filter(img: np.ndarray, value: float, **kwargs: Any) -> np.ndarray:
+def subtract_filter(
+    img: np.ndarray, value: float, *args: Any, **kwargs: Any
+) -> np.ndarray:
     """
     Subtracts a scalar value from the image.
 
@@ -229,7 +233,7 @@ def subtract_filter(img: np.ndarray, value: float, **kwargs: Any) -> np.ndarray:
     return img.astype(float) - value
 
 
-def abs_filter(img: np.ndarray, **kwargs: Any) -> np.ndarray:
+def abs_filter(img: np.ndarray, *args: Any, **kwargs: Any) -> np.ndarray:
     """
     Computes the absolute value of the image.
 
@@ -248,7 +252,9 @@ def abs_filter(img: np.ndarray, **kwargs: Any) -> np.ndarray:
     return np.abs(img)
 
 
-def ln_filter(img: np.ndarray, interpolate: bool = True, **kwargs: Any) -> np.ndarray:
+def ln_filter(
+    img: np.ndarray, interpolate: bool = True, *args: Any, **kwargs: Any
+) -> np.ndarray:
     """
     Computes the natural logarithm of the image.
 
@@ -275,7 +281,9 @@ def ln_filter(img: np.ndarray, interpolate: bool = True, **kwargs: Any) -> np.nd
     return img
 
 
-def variance_filter(img: np.ndarray, size: int, interpolate: bool = True) -> np.ndarray:
+def variance_filter(
+    img: np.ndarray, size: int, interpolate: bool = True, *args: Any
+) -> np.ndarray:
     """
     Computes the local variance of the image.
 
@@ -308,7 +316,9 @@ def variance_filter(img: np.ndarray, size: int, interpolate: bool = True) -> np.
     return img
 
 
-def std_filter(img: np.ndarray, size: int, interpolate: bool = True) -> np.ndarray:
+def std_filter(
+    img: np.ndarray, size: int, interpolate: bool = True, *args: Any
+) -> np.ndarray:
     """
     Computes the local standard deviation of the image.
 
@@ -347,7 +357,11 @@ def std_filter(img: np.ndarray, size: int, interpolate: bool = True) -> np.ndarr
 
 
 def laplace_filter(
-    img: np.ndarray, output: Any = float, interpolate: bool = True, **kwargs: Any
+    img: np.ndarray,
+    output: Any = float,
+    interpolate: bool = True,
+    *args: Any,
+    **kwargs: Any,
 ) -> np.ndarray:
     """
     Applies a Laplace filter to the image.
@@ -381,6 +395,7 @@ def dog_filter(
     sigma_low: float = 1,
     sigma_high: float = 2,
     interpolate: bool = True,
+    *args: Any,
     **kwargs: Any,
 ) -> np.ndarray:
     """
@@ -417,7 +432,7 @@ def dog_filter(
     return difference_of_gaussians(img.astype(float), sigma_low, sigma_high, *kwargs)
 
 
-def otsu_filter(img: np.ndarray, **kwargs: Any) -> np.ndarray:
+def otsu_filter(img: np.ndarray, *args: Any, **kwargs: Any) -> np.ndarray:
     """
     Applies Otsu's thresholding to the image.
 
@@ -440,7 +455,9 @@ def otsu_filter(img: np.ndarray, **kwargs: Any) -> np.ndarray:
     return binary.astype(float)
 
 
-def multiotsu_filter(img: np.ndarray, classes: int = 3, **kwargs: Any) -> np.ndarray:
+def multiotsu_filter(
+    img: np.ndarray, classes: int = 3, *args: Any, **kwargs: Any
+) -> np.ndarray:
     """
     Applies Multi-Otsu thresholding to the image.
 
@@ -465,7 +482,7 @@ def multiotsu_filter(img: np.ndarray, classes: int = 3, **kwargs: Any) -> np.nda
     return regions.astype(float)
 
 
-def local_filter(img: np.ndarray, **kwargs: Any) -> np.ndarray:
+def local_filter(img: np.ndarray, *args: Any, **kwargs: Any) -> np.ndarray:
     """
     Applies local thresholding to the image.
 
@@ -488,7 +505,7 @@ def local_filter(img: np.ndarray, **kwargs: Any) -> np.ndarray:
     return binary.astype(float)
 
 
-def niblack_filter(img: np.ndarray, **kwargs: Any) -> np.ndarray:
+def niblack_filter(img: np.ndarray, *args: Any, **kwargs: Any) -> np.ndarray:
     """
     Applies Niblack thresholding to the image.
 
@@ -512,7 +529,7 @@ def niblack_filter(img: np.ndarray, **kwargs: Any) -> np.ndarray:
     return binary.astype(float)
 
 
-def sauvola_filter(img: np.ndarray, **kwargs: Any) -> np.ndarray:
+def sauvola_filter(img: np.ndarray, *args: Any, **kwargs: Any) -> np.ndarray:
     """
     Applies Sauvola thresholding to the image.
 
@@ -541,6 +558,7 @@ def log_filter(
     blob_size: Optional[float] = None,
     sigma: float = 1,
     interpolate: bool = True,
+    *args: Any,
     **kwargs: Any,
 ) -> np.ndarray:
     """
@@ -581,6 +599,7 @@ def tophat_filter(
     size: int,
     connectivity: int = 4,
     interpolate: bool = True,
+    *args: Any,
     **kwargs: Any,
 ) -> np.ndarray:
     """
@@ -614,7 +633,9 @@ def tophat_filter(
     return img
 
 
-def invert_filter(img: np.ndarray, value: float = 65535, **kwargs: Any) -> np.ndarray:
+def invert_filter(
+    img: np.ndarray, value: float = 65535, *args: Any, **kwargs: Any
+) -> np.ndarray:
     """
     Inverts the image by subtracting it from a maximum value.
 

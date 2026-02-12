@@ -187,12 +187,18 @@ These are often computed between two populations (e.g., Targets vs Effectors) or
 Where:
 
 *   ``{metric}`` is one of:
+
     *   ``inclusive``: Total number of neighbors.
-    *   ``exclusive``: Number of neighbors where the current cell is their *closest* neighbor.
-    *   ``intermediate``: A weighted count (sum of weights, where weight = 1/N_neighbors).
+    *   ``exclusive``: Number of neighbors for which the current reference cell is the absolute *closest*.
+    *   ``intermediate``: A weighted count sum of weights, where $w = 1/N_{neighborhoods}$. A neighbor belonging to 2 references contributes 0.5 to each.
+
 *   ``{pop1}-{pop2}``: The pair of populations interacting (e.g., ``targets-effectors``).
-*   ``{method}``: The neighborhood definition method, typically ``circle`` (distance-based).
-*   ``{radius}``: The search radius in pixels.
+*   ``{method}``: The neighborhood definition method:
+
+    *   ``circle``: Neighbors within a fixed Euclidean distance.
+    *   ``contact``: Neighbors touching or within a small dilation distance (mask-based).
+
+*   ``{radius}``: The search radius or duality distance in pixels.
 
 **Example:**
 ``inclusive_count_neighborhood_(targets-effectors)_circle_30_px``
@@ -202,15 +208,27 @@ Where:
 If the analysis distinguishes between neighbor states (e.g., "live" vs "dead"):
 
 *   ``_s1_``: Positive status (e.g., live neighbors).
+
     *   Example: ``inclusive_count_s1_neighborhood_(targets-effectors)_circle_30_px``
+
 *   ``_s0_``: Negative status (e.g., dead/no-event neighbors).
+
     *   Example: ``inclusive_count_s0_neighborhood_(targets-effectors)_circle_30_px``
 
 **Mean Neighborhood Relative to Events:**
 
-If analyzing tracks with events, you may see:
+When analyzing tracks with detected events (e.g., cell division, death, or a specific signal change), neighborhood metrics can be aggregated relative to the event time ($t_{event}$) **of the reference cell**.
 
-*   ``mean_count_{metric}_..._before_event``: Average neighbor count from track start to event time.
-*   ``mean_count_{metric}_..._after_event``: Average neighbor count from event time to track end.
+*   ``mean_count_{metric}_{neigh_col}_before_event``
+
+    *   **Description**: The average of the ``{metric}`` (e.g., ``inclusive``, ``intermediate``) calculated over all frames **up to and including** the event frame of the reference cell ($t \le t_{event}$).
+    *   **Note**: If no event is detected for the reference cell (or no event column is specified), this metric is calculated over the **entire duration** of the track ($t \le t_{max}$).
+    *   **Implicit Status**: This metric specifically averages the counts of neighbors with **positive status** (``_s1_``), e.g., live cells.
+
+*   ``mean_count_{metric}_{neigh_col}_after_event``
+
+    *   **Description**: The average of the ``{metric}`` calculated over all frames **strictly after** the event frame of the reference cell ($t > t_{event}$).
+    *   **Note**: If no event is detected for the reference cell, or if the event occurs at the last frame, this value will not be computed (NaN).
+    *   **Implicit Status**: This metric specifically averages the counts of neighbors with **positive status** (``_s1_``).
 
 For details on neighborhood analysis, see :doc:`../how-to-guides/basics/measure-cell-interactions`.

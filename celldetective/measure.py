@@ -1542,17 +1542,24 @@ def estimate_time(
         try:
             from scipy.optimize import curve_fit
             from sklearn.metrics import r2_score
+            from celldetective.utils.maths import step_function
+
+            if model == "step_function":
+                func = step_function
+            else:
+                func = eval(model)
 
             popt, pcov = curve_fit(
-                eval(model),
+                func,
                 timeline.astype(int),
                 status_signal,
                 p0=[max(timeline) // 2, 0.8],
                 maxfev=100000,
             )
-            values = [eval(model)(t, *popt) for t in timeline]
+            values = [func(t, *popt) for t in timeline]
             r2 = r2_score(status_signal, values)
-        except Exception:
+        except Exception as e:
+            logger.warning(e)
             df.loc[indices, class_attr] = 2.0
             df.loc[indices, class_attr.replace("class", "t")] = -1
             continue

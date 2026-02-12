@@ -37,7 +37,7 @@ class SignalAnalysisProcess(Process):
         process_args : dict
             Arguments for the process.
         """
-        super().__init__(*args, **kwargs)
+        super().__init__()
         self.queue = queue
         if process_args is not None:
             for key, value in process_args.items():
