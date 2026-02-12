@@ -1283,6 +1283,17 @@ class PairEventAnnotator(CelldetectiveMainWindow):
                 else:
                     df_population = pd.read_csv(population_trajectories_path)
 
+                if "TRACK_ID" not in df_population.columns:
+                    msgBox = QMessageBox()
+                    msgBox.setIcon(QMessageBox.Warning)
+                    msgBox.setText(
+                        f"The '{population}' population has not been tracked (no TRACK_ID found).\nPlease track this population before analyzing interactions."
+                    )
+                    msgBox.setWindowTitle("Tracking Missing")
+                    msgBox.setStandardButtons(QMessageBox.Ok)
+                    msgBox.exec()
+                    return
+
                 df_population = df_population.sort_values(by=["TRACK_ID", "FRAME"])
 
                 cols = np.array(df_population.columns)
