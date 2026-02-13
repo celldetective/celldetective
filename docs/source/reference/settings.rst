@@ -59,8 +59,6 @@ Accessible via the :icon:`cog-outline,black` button in the Tracking module.
     *   :term:`Memory` [frames]: Max frames a particle can disappear.
 
 **Feature Extraction**
-
-**Feature Extraction**
  
 *   :term:`Morphological features <Morphological features>` & Intensity:
 
@@ -81,12 +79,24 @@ Accessible via the :icon:`cog-outline,black` button in the Tracking module.
  
 **Post-Processing**
 
-*   :term:`Min. tracklength <Track length>`: Filter out tracks shorter than this number of frames.
-*   **Remove tracks... (Start)**: Remove tracks that do not start at the first frame.
-*   **Remove tracks... (End)**: Remove tracks that do not end at the last frame.
-*   :term:`Interpolate gaps`: Fill missing detections (gaps) within a track using linear interpolation.
-*   :term:`Extrapolate` (Pre): Sustain the first detection's position backwards to the start of the movie.
-*   :term:`Extrapolate` (Post): Sustain the last detection's position forwards to the end of the movie.
+.. list-table::
+   :widths: 30 70
+   :header-rows: 1
+
+   * - Setting
+     - Description
+   * - :term:`Min. tracklength <Track length>`
+     - Filter out tracks shorter than this number of frames.
+   * - **Remove tracks... (Start)**
+     - Remove tracks that do not start at the first frame.
+   * - **Remove tracks... (End)**
+     - Remove tracks that do not end at the last frame.
+   * - :term:`Interpolate gaps`
+     - Fill missing detections (gaps) within a track using linear interpolation.
+   * - :term:`Extrapolate` (Pre)
+     - Sustain the first detection's position backwards to the start of the movie.
+   * - :term:`Extrapolate` (Post)
+     - Sustain the last detection's position forwards to the end of the movie.
 
 .. _ref_neighborhood_settings:
 
@@ -227,20 +237,49 @@ Preprocessing Protocols
 
 Accessible via the **Preprocessing** module.
 
+**General Correction Settings**
+
+*   :term:`Operation`:
+
+    *   **Subtract**: Subtract the estimated background from the image.
+    *   **Divide**: Divide the image by the background (flat-field correction).
+
+*   :term:`Clip`: (Subtract mode only) Clip negative values to zero after subtraction.
+*   :term:`Offset`: Camera black level/offset. Subtracted prior to background estimation.
+*   :term:`Interpolate NaNs`: Fill missing or NaN pixels using neighboring values.
+
 **Background Correction**
 
 *   **Model Fit**: Fits a 2D surface (plane/paraboloid) to the background.
 
-    *   **Threshold**: Standard deviation threshold to exclude cells from fit.
+    *   **Model type**: ``paraboloid`` (best for curved illumination) or ``plane`` (best for simple gradients).
+    *   **Threshold**: Standard deviation threshold to exclude cells/objects from the fit.
+    *   **Downsample**: Factor to downsample images for faster surface fitting (default: 10).
 
 *   **Model Free**: Computes a median background image from multiple positions or timeframes.
     
-    *   **Tiles**: Use all frames/tiles to estimate background (best for time-lapse).
+    *   **Stack mode**:
+
+        *   ``timeseries``: Estimates background from a range of frames in the current position.
+        *   ``tiles``: Estimates background across all positions/tiles (best for global background).
+    
+    *   **Time range**: Specific frames to use for estimation (only in ``timeseries`` mode).
+    *   **Threshold**: Standard deviation threshold to mask cells during estimation.
+    *   **Optimization**:
+
+        *   **Optimize for each frame**: If checked, performs a linear regression to adjust the background level per-frame.
+        *   **Coef. range**: Range of scaling factors allowed during optimization (e.g., 0.95 - 1.05).
+        *   **Nbr of coefs**: Number of values to test within the coefficient range.
+
+**Local Correction**
+
+*   **Distance**: The radial distance (in pixels) from the cell mask boundary used to estimate local background.
+*   **Model**: ``mean`` or ``median`` of intensity within the boundary band.
 
 **Channel Offset**
 
-*   **X/Y Offset**: Pixel shift to align channels.
-*   **Viewer**: Use the arrow keys to visually align the overlay channel (blue) with reference (gray).
+*   **Shift (h)/(v)**: Pixel shift (horizontal and vertical) to align the target channel with the reference.
+*   **Viewer**: Use the :icon:`image-check,black` button to open the *Offset Viewer*. Use arrow keys to visually align the channels.
 
 .. _ref_signal_settings:
 

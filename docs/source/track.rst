@@ -46,7 +46,7 @@ How-to guides
      - Guide
    * - Configure a tracker and run it on your data
      - :doc:`how-to <how-to-guides/basics/configure-and-run-tracking>`
-   * - Correct a tracking error (identity switch)
+   * - Correct a tracking error
      - :doc:`how-to <how-to-guides/basics/correct-a-track>`
 
 

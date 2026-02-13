@@ -36,10 +36,10 @@ The **Preprocessing** module lets you batch-correct stacks directly within Celld
      - Description
      - Guide
    * - Background correction (Model Fit)
-     - Fits a 2D surface to the background, excluding cells. Best for single images with clear background.
+     - Fits a 2D surface to the background, excluding cells. Best for fluorescence images.
      - :doc:`how-to <how-to-guides/basics/correct-a-fluo-background>`
    * - Background correction (Model Free)
-     - Computes a median background from multiple positions or timeframes. Best for batch processing well plates.
+     - Computes a median background from multiple positions or timeframes. Best for brightfield/reflection microscopy.
      - :doc:`how-to <how-to-guides/basics/perform-model-free-background-correction>`
    * - Channel offset correction
      - Aligns channels that have pixel shifts between modalities.

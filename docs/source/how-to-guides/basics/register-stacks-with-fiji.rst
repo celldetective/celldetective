@@ -41,15 +41,63 @@ Step 3: Batch registration (Macro)
 
 To facilitate batch processing, we provide an ImageJ macro that can be used to process multiple positions automatically.
 
-1.  Download the `alignment macro <../../_static/macros/align_stack.ijm>`_ (or copy the code below).
-2.  Open the macro in Fiji.
-3.  Update the input/output directories in the script.
-4.  Run the macro.
+1. Copy the code below (or download the `alignment macro <../../_static/macros/align_stack.ijm>`_) into Fiji's macro editor (**Plugins > New > Macro**).
+2. Update the variables in the code (lines 6-9) to match your data:
+    * ``target_channel``: the channel used for registration.
+    * ``prefix``: the prefix of the stacks to be aligned (e.g., "After" or "Raw").
+3. Run the macro.
+4. When prompted, select the **root folder** of your Celldetective experiment.
 
-.. code-block:: java
+.. code-block:: javascript
     :caption: align_stack.ijm
 
-    // TODO: Add macro content here or link to file
+    run("Collect Garbage");
+    experiment = getDirectory("Experiment folder containing movies to align...");
+    wells = getFileList(experiment);
+
+    octave_steps = "7";
+    target_channel = "4";
+    target_channel_int = 4;
+    prefix = "After"
+
+    for (i=0;i<wells.length;i++){
+        
+        well = wells[i];
+        
+        if(endsWith(well, File.separator)){
+            
+            positions = getFileList(experiment+well);
+            
+            for (j=0;j<positions.length;j++) {
+                
+                pos = positions[j];
+                movie = getFileList(experiment+well+pos+"movie"+File.separator);
+                
+                for (k=0;k<movie.length;k++) {
+                    if (startsWith(movie[k], prefix)) {
+                        
+                        // Open stack
+                        open(experiment+well+pos+"movie"+File.separator+movie[k]);
+                        Stack.setDisplayMode("grayscale");
+
+                        // Here write the preprocessing steps
+                        Stack.setChannel(target_channel_int);
+                        run("Enhance Contrast", "saturated=0.35");
+                        run("Linear Stack Alignment with SIFT MultiChannel", "registration_channel="+target_channel+" initial_gaussian_blur=1.60 steps_per_scale_octave="+octave_steps+" minimum_image_size=64 maximum_image_size=1024 feature_descriptor_size=4 feature_descriptor_orientation_bins=8 closest/next_closest_ratio=0.92 maximal_alignment_error=25 inlier_ratio=0.05 expected_transformation=Rigid interpolate");
+
+                        // Save output
+                        saveAs("Tiff", experiment+well+pos+"movie"+File.separator+"Aligned_"+movie[k]);
+                        close();
+                        close();
+                        run("Collect Garbage");
+                    }
+                }
+            }
+            
+        }
+    }
+
+    print("Done.");
 
 .. note::
     Ensure your registered files are saved in the correct `movie/` subfolder of each position if you are following the recommended folder structure.

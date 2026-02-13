@@ -35,6 +35,7 @@ The viewer displays the movie with both cell populations overlaid.
     *   The signal plot panel (left) updates to show traces for this specific pair.
 
 3.  **Inspect Signals**: The plot canvas displays:
+
     *   **Reference Signal**: The signal of the reference cell.
     *   **Neighbor Signal**: The signal of the neighbor cell.
     *   **Pair Signal**: Derived pair metrics (e.g., distance, angle) if selected.
