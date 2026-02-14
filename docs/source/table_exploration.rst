@@ -41,6 +41,37 @@ When viewing track data, you can visualize signals over time:
 
 - **Plot instantaneous...** (:kbd:`Ctrl+I`): Switches the plotting mode to show track signals when rows are selected, allowing you to see the temporal evolution of metrics for selected cells.
 
+
+Statistical Analysis
+--------------------
+
+The Table UI facilitates pairwise statistical comparisons between groups of data. These tests can be accessed through the **1D Plotting** interface by selecting the corresponding checkboxes.
+
+Hypothesis Testing (p-value)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+*   **Test Used**: Two-sample Kolmogorov-Smirnov test (``scipy.stats.ks_2samp``).
+*   **Alternative Hypothesis**: ``less``. This explicitly checks if the cumulative distribution function (CDF) of the first group (Row) is *less* than that of the second group (Column).
+*   **Interpretation**: In the context of the KS test, CDF(Row) < CDF(Col) implies that the values in the **Row** group are stochastically **larger** than the values in the **Column** group.
+*   **Result**: The resulting pivot table displays color-coded p-values:
+    *   **ns**: p > 0.05
+    *   **\***: p <= 0.05
+    *   **\*\***: p <= 0.01
+    *   **\*\*\***: p <= 0.001
+    *   **\*\*\*\***: p <= 0.0001
+    *   *Note*: A significant result (red) means the Row group is significantly larger than the Column group.
+
+Effect Size (Cliff's Delta)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+*   **Measure Used**: Cliff's Delta (non-parametric).
+*   **Interpretation**: Quantifies the amount of difference between two groups. It ranges from -1 to 1, where 1 means all values in Group 1 are larger than Group 2, and -1 means the opposite.
+*   **Color Coding**: The pivot table colors cells based on the **absolute magnitude** of the effect size (`|d|`), using standard thresholds (Romano et al., 2006):
+    *   **Negligible**: |d| < 0.147
+    *   **Small**: 0.147 <= |d| < 0.33
+    *   **Medium**: 0.33 <= |d| < 0.474
+    *   **Large**: |d| >= 0.474
+
 Track Collapsing
 ----------------
 

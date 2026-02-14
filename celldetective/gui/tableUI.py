@@ -220,13 +220,14 @@ class PivotTableUI(CelldetectiveWidget):
         for i in range(self.data.shape[0]):
             for j in range(self.data.shape[1]):
                 value = self.data.iloc[i, j]
-                if value < 0.147:
+                abs_value = abs(value)
+                if abs_value < 0.147:
                     self.set_cell_color(i, j, color_codes["negligible"])
-                elif value < 0.33:
+                elif abs_value < 0.33:
                     self.set_cell_color(i, j, color_codes["small"])
-                elif value < 0.474:
+                elif abs_value < 0.474:
                     self.set_cell_color(i, j, color_codes["medium"])
-                elif value >= 0.474:
+                elif abs_value >= 0.474:
                     self.set_cell_color(i, j, color_codes["large"])
 
         # Create the HTML text for the label
