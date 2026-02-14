@@ -12,6 +12,7 @@ from PyQt5.QtWidgets import (
     QLabel,
     QCheckBox,
     QMessageBox,
+    QApplication,
 )
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QBrush, QColor
@@ -89,8 +90,14 @@ class PivotTableUI(CelldetectiveWidget):
 
         self.v_layout = QVBoxLayout()
         self.information_label = QLabel("Information about color code...")
+
+        # Export button
+        self.export_btn = QPushButton("Export")
+        self.export_btn.clicked.connect(self.export_data)
+
         self.v_layout.addWidget(self.information_label)
         self.v_layout.addWidget(self.table)
+        self.v_layout.addWidget(self.export_btn)
         self.setLayout(self.v_layout)
 
         self.showdata()
@@ -101,6 +108,7 @@ class PivotTableUI(CelldetectiveWidget):
             self.color_cells_pvalue()
 
         self.table.resizeColumnsToContents()
+        self.adjust_window_size()
         self.setAttribute(Qt.WA_DeleteOnClose)
         center_window(self)
 
@@ -110,6 +118,75 @@ class PivotTableUI(CelldetectiveWidget):
         """
         self.model = PandasModel(self.data)
         self.table.setModel(self.model)
+
+    def export_data(self) -> None:
+        """
+        Export the pivot table data to a CSV file.
+        """
+        options = QFileDialog.Options()
+        # options |= QFileDialog.DontUseNativeDialog
+
+        file_name, _ = QFileDialog.getSaveFileName(
+            self,
+            "Save Pivot Table",
+            "",
+            "CSV Files (*.csv);;All Files (*)",
+            options=options,
+        )
+
+        if file_name:
+            if not file_name.endswith(".csv"):
+                file_name += ".csv"
+
+            try:
+                # Save with index because pivot tables usually have meaningful indices
+                self.data.to_csv(file_name, index=True)
+                logger.info(f"Pivot table exported to {file_name}")
+            except Exception as e:
+                logger.error(f"Failed to export pivot table: {e}")
+                QMessageBox.critical(
+                    self, "Export Error", f"Failed to export data: {str(e)}"
+                )
+
+    def adjust_window_size(self) -> None:
+        """
+        Auto-adjust the window size to fit the content, capped at 80% of screen size.
+        """
+        self.table.resizeColumnsToContents()
+        self.table.resizeRowsToContents()
+
+        # Calculate content size
+        # Width: vertical header width + sum of column widths + padding
+        v_header_width = self.table.verticalHeader().width()
+        h_header_length = self.table.horizontalHeader().length()
+        content_width = (
+            v_header_width + h_header_length + 40
+        )  # +40 for scrollbar/padding
+
+        # Height: horizontal header height + sum of row heights + padding + extra widgets
+        h_header_height = self.table.horizontalHeader().height()
+        v_header_length = self.table.verticalHeader().length()
+
+        # Estimate height of other widgets in layout (label + export button + margins)
+        # This is an approximation
+        extra_widgets_height = 100
+
+        content_height = h_header_height + v_header_length + extra_widgets_height
+
+        # Get screen geometry
+        screen = QApplication.primaryScreen().availableGeometry()
+        max_width = int(screen.width() * 0.8)
+        max_height = int(screen.height() * 0.8)
+
+        # Cap the size
+        new_width = min(content_width, max_width)
+        new_height = min(content_height, max_height)
+
+        # Ensure minimum size
+        new_width = max(new_width, 300)
+        new_height = max(new_height, 200)
+
+        self.resize(new_width, new_height)
 
     def set_cell_color(self, row: int, column: int, color: str = "red") -> None:
         """
@@ -1098,7 +1175,7 @@ class TableUI(CelldetectiveMainWindow):
         import matplotlib.cm as mcm
 
         self.fig, self.ax = plt.subplots(1, 1, figsize=(4, 3))
-        self.plot1dWindow = FigureCanvas(self.fig, title="scatter")
+        self.plot1dWindow = FigureCanvas(self.fig, title="scatter", interactive=True)
         self.ax.clear()
 
         cmap = getattr(mcm, self.cmap_cb.currentText())
@@ -1660,7 +1737,9 @@ class TableUI(CelldetectiveMainWindow):
                 x2 = test_bool_array(self.data.iloc[row_idx, unique_cols[1]])
 
                 self.fig, self.ax = plt.subplots(1, 1, figsize=(4, 3))
-                self.scatter_wdw = FigureCanvas(self.fig, title="scatter")
+                self.scatter_wdw = FigureCanvas(
+                    self.fig, title="scatter", interactive=True
+                )
                 self.ax.clear()
                 self.ax.scatter(x1, x2)
                 self.ax.set_xlabel(column_names[unique_cols[0]])
@@ -1683,7 +1762,7 @@ class TableUI(CelldetectiveMainWindow):
             unique_cols = np.unique(col_idx)
 
             self.fig, self.ax = plt.subplots(1, 1, figsize=(4, 3))
-            self.plot_wdw = FigureCanvas(self.fig, title="scatter")
+            self.plot_wdw = FigureCanvas(self.fig, title="scatter", interactive=True)
             self.ax.clear()
             for k in range(len(unique_cols)):
                 row_idx_i = row_idx[np.where(col_idx == unique_cols[k])[0]]
@@ -1741,7 +1820,9 @@ class TableUI(CelldetectiveMainWindow):
             if len(unique_cols) == 2:
 
                 self.fig, self.ax = plt.subplots(1, 1, figsize=(4, 3))
-                self.scatter_wdw = FigureCanvas(self.fig, title="scatter")
+                self.scatter_wdw = FigureCanvas(
+                    self.fig, title="scatter", interactive=True
+                )
                 self.ax.clear()
                 for tid, group in self.data.groupby(self.groupby_cols[1:]):
                     self.ax.plot(
@@ -1760,7 +1841,9 @@ class TableUI(CelldetectiveMainWindow):
             if len(unique_cols) == 1:
 
                 self.fig, self.ax = plt.subplots(1, 1, figsize=(4, 3))
-                self.plot_wdw = FigureCanvas(self.fig, title="scatter")
+                self.plot_wdw = FigureCanvas(
+                    self.fig, title="scatter", interactive=True
+                )
                 self.ax.clear()
 
                 # if 't0' in list(self.data.columns):
