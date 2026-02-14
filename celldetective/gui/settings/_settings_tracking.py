@@ -88,7 +88,7 @@ class SettingsTracking(CelldetectiveSettingsPanel):
 
         self._widget.setMinimumWidth(500)
         self._adjust_size()
-        self.resize(int(self.width() * 1.1), int(self._screen_height * 0.8))
+        self.resize(600, int(self._screen_height * 0.8))
 
     def _add_to_layout(self):
         """Add widgets to the layout."""
