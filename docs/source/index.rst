@@ -49,8 +49,6 @@ Contents
    reference/system-requirements
    reference/glossary
    reference/measurements
-   align_macro
-   datasets
    API
    acknowledegments
    cite
