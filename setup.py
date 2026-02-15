@@ -43,6 +43,8 @@ setup(
             "*",
             os.sep.join(["scripts", "*"]),
             os.sep.join(["gui", "*"]),
+            os.sep.join(["gui", "icons", "plots", "*"]),
+            os.sep.join(["gui", "icons", "stats", "*"]),
             os.sep.join(["regionprops", "*"]),
             os.sep.join(["gui", "processes", "*"]),
             os.sep.join(["gui", "help", "*"]),
