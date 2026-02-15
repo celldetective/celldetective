@@ -44,6 +44,7 @@ from celldetective.gui.base.components import (
     CelldetectiveMainWindow,
     QHSeperationLine,
 )
+from celldetective.gui.base.plot_selector import PlotSelectorWidget, StatsSelectorWidget
 from superqt import QColormapComboBox, QSearchableComboBox
 from math import floor
 from celldetective import get_logger
@@ -1062,37 +1063,20 @@ class TableUI(CelldetectiveMainWindow):
         layout = QVBoxLayout()
         self.plot1Dparams.setLayout(layout)
 
+        # self.plot1Dparams.resize(400, 600)  # Let it size itself
+
         layout.addWidget(QLabel("Representations: "))
-        self.hist_check = QCheckBox("histogram")
-        self.kde_check = QCheckBox("KDE plot")
-        self.count_check = QCheckBox("countplot")
-        self.ecdf_check = QCheckBox("ECDF plot")
-        self.line_check = QCheckBox("line plot")
-        self.scat_check = QCheckBox("scatter plot")
-        self.swarm_check = QCheckBox("swarm")
-        self.violin_check = QCheckBox("violin")
-        self.strip_check = QCheckBox("strip")
-        self.box_check = QCheckBox("boxplot")
-        self.boxenplot_check = QCheckBox("boxenplot")
+
+        # New visual selector
+        self.plot_selector = PlotSelectorWidget()
+        layout.addWidget(self.plot_selector)
 
         self.sep_line = QHSeperationLine()
-        self.pvalue_check = QCheckBox("Compute KS test p-value?")
-        self.effect_size_check = QCheckBox("Compute effect size?\n(Cliff's Delta)")
 
-        layout.addWidget(self.hist_check)
-        layout.addWidget(self.kde_check)
-        layout.addWidget(self.count_check)
-        layout.addWidget(self.ecdf_check)
-        layout.addWidget(self.line_check)
-        layout.addWidget(self.scat_check)
-        layout.addWidget(self.swarm_check)
-        layout.addWidget(self.violin_check)
-        layout.addWidget(self.strip_check)
-        layout.addWidget(self.box_check)
-        layout.addWidget(self.boxenplot_check)
         layout.addWidget(self.sep_line)
-        layout.addWidget(self.pvalue_check)
-        layout.addWidget(self.effect_size_check)
+        layout.addWidget(QLabel("Statistical Tests:"))
+        self.stats_selector = StatsSelectorWidget()
+        layout.addWidget(self.stats_selector)
 
         self.x_cb = QSearchableComboBox()
         self.x_cb.addItems(["--"] + list(self.data.columns))
@@ -1139,14 +1123,18 @@ class TableUI(CelldetectiveMainWindow):
         import matplotlib.cm
 
         self.cmap_cb = QColormapComboBox()
-        all_cms = list(colormaps)
-        for cm in all_cms:
-            if hasattr(matplotlib.cm, str(cm).lower()):
-                try:
-                    self.cmap_cb.addColormap(cm.lower())
-                except Exception:
-                    # Some colormaps may fail to add
-                    pass
+        # Use modern registry
+        import warnings
+
+        for name in matplotlib.colormaps.keys():
+            # Option: Filter out reverse maps if desired, or keep all
+            try:
+                # Pass name string but suppress alias warnings (e.g. from cmasher/superqt)
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    self.cmap_cb.addColormap(name)
+            except Exception:
+                pass
 
         hbox = QHBoxLayout()
         hbox.addWidget(QLabel("colormap: "), 33)
@@ -1173,21 +1161,70 @@ class TableUI(CelldetectiveMainWindow):
 
         import matplotlib.pyplot as plt
         import seaborn as sns
-        import matplotlib.cm as mcm
+        import matplotlib
 
         self.fig, self.ax = plt.subplots(1, 1, figsize=(4, 3))
         self.plot1dWindow = FigureCanvas(self.fig, title="scatter", interactive=True)
         self.ax.clear()
 
-        cmap = getattr(mcm, self.cmap_cb.currentText())
+        # Use modern colormap registry
+        try:
+            cmap = matplotlib.colormaps[self.cmap_cb.currentText()]
+        except KeyError:
+            # Fallback or default
+            cmap = matplotlib.colormaps["viridis"]
 
         try:
             self.hue_variable = self.hue_cb.currentText()
-            colors = [
-                cmap(i / len(self.data[self.hue_variable].unique()))
-                for i in range(len(self.data[self.hue_variable].unique()))
-            ]
-        except (KeyError, ZeroDivisionError):
+            # Drop NaNs to match seaborn's plotting behavior and avoid palette mismatch warnings
+            unique_hues = self.data[self.hue_variable].dropna().unique()
+            n_hues = len(unique_hues)
+            if n_hues > 0:
+                # Use seaborn to generate the palette. It handles sequential colormaps
+                # much better (avoiding the very light/white start).
+                try:
+                    # Get the colormap name from the combobox
+                    cmap_name = self.cmap_cb.currentText()
+
+                    # Try direct lookup first
+                    try:
+                        colors = sns.color_palette(cmap_name, n_colors=n_hues)
+                    except ValueError:
+                        # If failed (likely due to case mismatch e.g., 'blues' vs 'Blues'),
+                        # try to find the correct case-sensitive key from matplotlib.colormaps
+                        import matplotlib
+
+                        found_key = None
+                        for key in matplotlib.colormaps.keys():
+                            if key.lower() == cmap_name.lower():
+                                found_key = key
+                                break
+
+                        if found_key:
+                            colors = sns.color_palette(found_key, n_colors=n_hues)
+                        else:
+                            raise ValueError(f"Colormap '{cmap_name}' not found.")
+
+                except (ValueError, Exception) as e:
+                    print(f"Seaborn palette failed for '{cmap_name}': {e}")
+                    # Fallback to manual sampling if seaborn doesn't recognize the name
+                    try:
+                        # Case-insensitive fallback for manual sampling too
+                        found_key = cmap_name
+                        for key in matplotlib.colormaps.keys():
+                            if key.lower() == cmap_name.lower():
+                                found_key = key
+                                break
+
+                        cmap = matplotlib.colormaps[found_key]
+                        denom = n_hues - 1 if n_hues > 1 else 1
+                        colors = [cmap(i / denom) for i in range(n_hues)]
+                    except Exception as e2:
+                        print(f"Manual sampling failed for '{cmap_name}': {e2}")
+                        colors = sns.color_palette("viridis", n_colors=n_hues)
+            else:
+                colors = None
+        except (KeyError, ZeroDivisionError, AttributeError):
             colors = None
 
         if self.hue_cb.currentText() == "--":
@@ -1205,7 +1242,9 @@ class TableUI(CelldetectiveMainWindow):
 
         legend = True
 
-        if self.hist_check.isChecked():
+        selected_plots = self.plot_selector.get_selection()
+
+        if "histogram" in selected_plots:
             if self.x is not None:
                 sns.histplot(
                     data=self.data,
@@ -1235,7 +1274,7 @@ class TableUI(CelldetectiveMainWindow):
             else:
                 pass
 
-        if self.kde_check.isChecked():
+        if "KDE plot" in selected_plots:
             if self.x is not None:
                 sns.kdeplot(
                     data=self.data,
@@ -1261,7 +1300,7 @@ class TableUI(CelldetectiveMainWindow):
             else:
                 pass
 
-        if self.count_check.isChecked():
+        if "countplot" in selected_plots:
             sns.countplot(
                 data=self.data,
                 x=self.x,
@@ -1272,7 +1311,7 @@ class TableUI(CelldetectiveMainWindow):
             )
             legend = False
 
-        if self.ecdf_check.isChecked():
+        if "ECDF plot" in selected_plots:
             if self.x is not None:
                 sns.ecdfplot(
                     data=self.data,
@@ -1296,7 +1335,7 @@ class TableUI(CelldetectiveMainWindow):
             else:
                 pass
 
-        if self.line_check.isChecked():
+        if "line plot" in selected_plots:
             if self.x_option:
                 sns.lineplot(
                     data=self.data,
@@ -1312,7 +1351,7 @@ class TableUI(CelldetectiveMainWindow):
                 print("please provide a -x variable...")
                 pass
 
-        if self.scat_check.isChecked():
+        if "scatter plot" in selected_plots:
             if self.x_option:
                 sns.scatterplot(
                     data=self.data,
@@ -1328,7 +1367,7 @@ class TableUI(CelldetectiveMainWindow):
                 print("please provide a -x variable...")
                 pass
 
-        if self.swarm_check.isChecked():
+        if "swarm" in selected_plots:
             if self.x_option:
                 sns.swarmplot(
                     data=self.data,
@@ -1353,7 +1392,7 @@ class TableUI(CelldetectiveMainWindow):
                 )
                 legend = False
 
-        if self.violin_check.isChecked():
+        if "violin" in selected_plots:
             if self.x_option:
                 sns.violinplot(
                     data=self.data,
@@ -1379,7 +1418,7 @@ class TableUI(CelldetectiveMainWindow):
                 )
                 legend = False
 
-        if self.box_check.isChecked():
+        if "boxplot" in selected_plots:
             if self.x_option:
                 sns.boxplot(
                     data=self.data,
@@ -1408,7 +1447,7 @@ class TableUI(CelldetectiveMainWindow):
                 )
                 legend = False
 
-        if self.boxenplot_check.isChecked():
+        if "boxenplot" in selected_plots:
             if self.x_option:
                 sns.boxenplot(
                     data=self.data,
@@ -1437,7 +1476,7 @@ class TableUI(CelldetectiveMainWindow):
                 )
                 legend = False
 
-        if self.strip_check.isChecked():
+        if "strip" in selected_plots:
             if self.x_option:
                 sns.stripplot(
                     data=self.data,
@@ -1468,9 +1507,10 @@ class TableUI(CelldetectiveMainWindow):
         self.plot1dWindow.canvas.draw()
         self.plot1dWindow.show()
 
-        if self.effect_size_check.isChecked():
+        selected_stats = self.stats_selector.get_selection()
+        if "Compute effect size?\n(Cliff's Delta)" in selected_stats:
             self.compute_effect_size()
-        if self.pvalue_check.isChecked():
+        if "Compute KS test\np-value?" in selected_stats:
             self.compute_pvalue()
 
     def extract_groupby_cols(self) -> Tuple[List[str], str]:
@@ -1489,10 +1529,17 @@ class TableUI(CelldetectiveMainWindow):
         y = self.y
         hue_variable = self.hue_variable
 
+        selected_plots = self.plot_selector.get_selection()
+
+        # Check if any plot that uses 'x' as the main feature (when vertical) is selected
+        # In current logic: hist, ecdf, kde swap x/y logic based on what was passed to seaborn?
+        # Actually, let's look at how x/y logic was determined in original code.
+        # Original code checked if specific checkboxes were checked to decide if y = self.x
+
         if (
-            self.hist_check.isChecked()
-            or self.ecdf_check.isChecked()
-            or self.kde_check.isChecked()
+            "histogram" in selected_plots
+            or "ECDF plot" in selected_plots
+            or "KDE plot" in selected_plots
         ):
             y = self.x
             x = None
@@ -1509,8 +1556,9 @@ class TableUI(CelldetectiveMainWindow):
         """
         Compute Cliff's Delta effect size for the current selection.
         """
+        selected_plots = self.plot_selector.get_selection()
 
-        if self.count_check.isChecked() or self.scat_check.isChecked():
+        if "countplot" in selected_plots or "scatter plot" in selected_plots:
             print(
                 "Please select a valid plot representation to compute effect size (histogram, boxplot, etc.)..."
             )
@@ -1529,8 +1577,9 @@ class TableUI(CelldetectiveMainWindow):
         """
         Compute the p-value using the KS test for the current selection.
         """
+        selected_plots = self.plot_selector.get_selection()
 
-        if self.count_check.isChecked() or self.scat_check.isChecked():
+        if "countplot" in selected_plots or "scatter plot" in selected_plots:
             print(
                 "Please select a valid plot representation to compute effect size (histogram, boxplot, etc.)..."
             )
@@ -1752,7 +1801,7 @@ class TableUI(CelldetectiveMainWindow):
                 self.scatter_wdw.show()
 
             else:
-                print("please select less columns")
+                print("Please select exactly 2 columns for a scatter plot.")
 
         elif self.plot_mode == "plot_timeseries":
             print("mode plot frames")
