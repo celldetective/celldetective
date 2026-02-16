@@ -137,7 +137,17 @@ class AppInitWindow(CelldetectiveMainWindow):
             The close event.
         """
 
+        # Stop background loader thread
+        if hasattr(self, "bg_loader") and self.bg_loader.isRunning():
+            self.bg_loader.quit()
+            self.bg_loader.wait(3000)
+
+        # Wait for GPU check thread
+        if hasattr(self, "gpu_thread") and self.gpu_thread.is_alive():
+            self.gpu_thread.join(timeout=2.0)
+
         QApplication.closeAllWindows()
+        QApplication.processEvents()
         event.accept()
         gc.collect()
 

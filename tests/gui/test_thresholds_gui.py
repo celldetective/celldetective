@@ -116,8 +116,11 @@ def app_with_project(qtbot, ensure_experiment_test):
 
     yield test_app
 
-    # Cleanup
+    # Cleanup - close the app first (triggers thread cleanup in closeEvent)
+    test_app.close()
+    QApplication.processEvents()
     QApplication.closeAllWindows()
+    QApplication.processEvents()
 
 
 @pytest.fixture
