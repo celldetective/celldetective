@@ -217,18 +217,156 @@ Accessible via **Train > Segmentation Model**.
 Experiment Configuration (config.ini)
 -------------------------------------
 
-These tags define the structure of your experiment in the ``config.ini`` file.
+The ``config.ini`` file is created automatically when you set up a new experiment
+(see :ref:`new-experiment-guide`).
+It uses the standard INI format and is located at the root of the experiment folder.
+Below is a complete reference of every section and key.
 
-*   ``[Populations]``: Comma-separated list of cell populations (e.g., ``nk,rbc``).
-*   ``[MovieSettings]``: Image acquisition parameters.
+``[Populations]``
+~~~~~~~~~~~~~~~~~
 
-    *   :term:`pxtoum <Pixel size>`: Pixel size in microns.
-    *   :term:`frametomin <Frame interval>`: Frame interval in minutes.
-    *   ``movie_prefix``: Filename prefix for raw images.
-    
-*   ``[Channels]``: Names and order of channels (e.g., ``brightfield_channel = 0``).
-*   ``[Labels]``: Experimental conditions per well (e.g., ``concentrations = 0,100``).
-*   ``[Metadata]``: Additional experiment metadata.
+Declares which cell populations are included in the experiment.
+
+.. list-table::
+   :widths: 25 15 60
+   :header-rows: 1
+
+   * - Key
+     - Type
+     - Description
+   * - ``populations``
+     - string
+     - Comma-separated list of population names (e.g. ``targets,effectors``).
+       These names match the population folders created inside each position directory.
+
+``[MovieSettings]``
+~~~~~~~~~~~~~~~~~~~
+
+Image-acquisition and stack geometry parameters.
+
+.. list-table::
+   :widths: 25 15 60
+   :header-rows: 1
+
+   * - Key
+     - Type
+     - Description
+   * - ``pxtoum``
+     - float
+     - Spatial calibration: how many micrometres one pixel represents (default ``1.0``).
+   * - ``frametomin``
+     - float
+     - Temporal calibration: the interval in minutes between two consecutive frames
+       (default ``1.0``). For single-time-point data, leave at ``1.0``.
+   * - ``len_movie``
+     - int
+     - Number of frames in the movie. Used as a fallback when automatic frame-count
+       extraction fails. For variable-length stacks, set a conservative (lower) estimate.
+   * - ``movie_prefix``
+     - string
+     - Filename prefix that stack files must start with to be loaded (e.g. ``Experiment``).
+       Leave blank if filenames have no common prefix.
+   * - ``shape_x``
+     - int
+     - Image width in pixels (default ``2048``).
+   * - ``shape_y``
+     - int
+     - Image height in pixels (default ``2048``).
+
+``[Channels]``
+~~~~~~~~~~~~~~
+
+Maps channel names to their stack index (0-based).
+Each key is a channel name and each value is the integer index of that channel in
+the multi-channel stack, or ``nan`` if the channel is not present.
+
+**Example**
+
+.. code-block:: ini
+
+   [Channels]
+   brightfield_channel = 0
+   adhesion_channel = 1
+   fitc_channel = 2
+   cy5_channel = nan
+
+Built-in channel names include ``brightfield_channel``, ``live_nuclei_channel``,
+``dead_nuclei_channel``, ``effector_fluo_channel``, ``adhesion_channel``,
+``fluo_channel_1``, ``fluo_channel_2``.
+Custom channel names can be added during experiment creation.
+
+``[Labels]``
+~~~~~~~~~~~~
+
+Per-well biological condition labels. Each value is a comma-separated list whose
+length equals the number of wells in the experiment.
+
+.. list-table::
+   :widths: 25 15 60
+   :header-rows: 1
+
+   * - Key
+     - Type
+     - Description
+   * - ``cell_types``
+     - string
+     - Cell type for each well (e.g. ``NK,NK,T-cell,T-cell``).
+   * - ``antibodies``
+     - string
+     - Antibody used in each well (e.g. ``anti-CD4,anti-CD4,none,none``).
+   * - ``concentrations``
+     - string
+     - Antibody or drug concentration for each well (e.g. ``0,100,0,100``).
+   * - ``pharmaceutical_agents``
+     - string
+     - Pharmaceutical agent applied in each well (e.g. ``none,dextran,none,dextran``).
+       Fields can be left blank (defaults to well index).
+
+``[Metadata]``
+~~~~~~~~~~~~~~
+
+Additional experiment-level metadata.
+
+.. list-table::
+   :widths: 25 15 60
+   :header-rows: 1
+
+   * - Key
+     - Type
+     - Description
+   * - ``concentration_units``
+     - string
+     - Unit for concentration values in ``[Labels]`` (default ``pM``).
+
+**Full example**
+
+.. code-block:: ini
+
+   [Populations]
+   populations = targets,effectors
+
+   [MovieSettings]
+   pxtoum = 0.325
+   frametomin = 3.0
+   len_movie = 120
+   movie_prefix = Experiment
+   shape_x = 2048
+   shape_y = 2048
+
+   [Channels]
+   brightfield_channel = 0
+   adhesion_channel = 1
+   fitc_channel = 2
+
+   [Labels]
+   cell_types = NK,NK,T-cell,T-cell
+   antibodies = anti-CD16,anti-CD16,none,none
+   concentrations = 0,100,0,100
+   pharmaceutical_agents = none,dextran,none,dextran
+
+   [Metadata]
+   concentration_units = pM
+
 
 .. _ref_preprocessing_settings:
 

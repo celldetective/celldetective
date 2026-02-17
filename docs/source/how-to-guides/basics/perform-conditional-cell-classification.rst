@@ -3,9 +3,9 @@ How to perform conditional cell classification
 
 This guide shows you how classify cells from their features using conditional expressions.
 
-**Reference keys:** :term:`characteristic group`, :term:`phenotype`
-
 **Prerequisite:** You have accurately segmented and measured a :term:`cell population`.
+
+**Reference keys:** :term:`characteristic group`, :term:`phenotype`
 
 1. Open an :term:`experiment project`. In the header part, select the :term:`wells <well>` and :term:`positions <position>` you want to classify.
 
