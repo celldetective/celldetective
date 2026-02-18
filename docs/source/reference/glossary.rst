@@ -3,6 +3,8 @@ Glossary
 
 This glossary defines the key concepts used in the documentation.
 
+General Terms
+-------------
 
 .. glossary::
     :sorted:
@@ -15,6 +17,9 @@ This glossary defines the key concepts used in the documentation.
 
     event class
         The classification of a cell relative to an :term:`event`, categorized as "event," "no event," or "else".
+
+    first detection event
+        An automatically detected event marking the first time a cell is observed in the field of view, provided it appears after the first frame and away from the image edges. This effectively identifies cells that "land" or appear during the experiment, excluding those already present or entering from the boundaries.
 
     cell population
         A group of cells for which a single-cell description is computed. Typically refers to a cell type (e.g., T cells, cancer cells) but can be based on any shared characteristic.
@@ -105,6 +110,9 @@ This glossary defines the key concepts used in the documentation.
     signal
         A quantitative measurement derived from an image channel (e.g., "Mean Intensity", "GFP Fluorescence") associated with a segmented object.
 
+    spreading event
+        A cellular event where a lymphocyte (e.g., T-cell) flattens and increases its contact area upon interaction with a stimulating surface acting as a proxy for an antigen-presenting cell.
+    
     cell type
         A classification of cells based on their morphology, function, or molecular markers (e.g., HeLa, T-cells).
 
@@ -116,3 +124,22 @@ This glossary defines the key concepts used in the documentation.
 
     pharmaceutical agents
         Drugs or chemical compounds applied to the cells to perturb their behavior or state.
+
+
+Graphical Tools
+---------------
+
+.. glossary::
+    :sorted:
+
+    Event Annotator
+        An interactive tool for manually annotating cell :term:`events <event>` and their occurrence times (:term:`event time`) in single-cell trajectories, used for characterization and building training sets for event detection models. See :ref:`ref_signal_annotator_shortcuts`.
+
+    Classifier Widget
+        An interactive tool for creating custom cell classifications or characteristic groups based on quantitative features. It allows users to filter cells using logical queries (e.g., ``area > 100``), visualize populations in 2D scatter plots, and propagate labels over time to define events or states. See :ref:`ref_classifier_widget`.
+
+    Table Explorer
+        A spreadsheet-like interface for viewing and interacting with single-cell measurement data. It supports 1D and 2D plotting, statistical analysis, data aggregation (track collapsing), and file export. See :ref:`ref_table_explorer_menus`.
+
+    Static Measurements Annotator
+        An interactive tool for manually assigning **Phenotypes** (integer labels) to cells within a specific **Characteristic Group** (attribute column). Unlike the :term:`Event Annotator`, this tool does not require time-lapse movies and can be used on static snapshots or unconnected timepoints. See :ref:`ref_static_measurements_annotator`.

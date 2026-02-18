@@ -50,7 +50,6 @@ hoverxref_autoref = True
 hoverxref_roles = ["term"]
 hoverxref_domains = ["std"]
 
-hoverxref_api_host = "local"
 hoverxref_role_types = {
     "term": "tooltip",
 }

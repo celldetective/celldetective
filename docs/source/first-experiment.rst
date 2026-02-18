@@ -85,7 +85,7 @@ To analyze cellular dynamics, we need to extract quantitative features.
 
 1.  Check the **MEASURE** option.
 2.  Click the :icon:`cog-outline,black` button next to it.
-3.  Ensure **area** and **intensity_mean** are listed in the features list.
+3.  Ensure ``area`` and ``intensity_mean`` are listed in the features list.
 4.  Press **Save** to close the configuration window and click **Submit**.
 5.  Celldetective will measure these features for every cell at every time point.
 
@@ -96,9 +96,9 @@ Step 5: Analyze Time-Series
 This is the core of Celldetective: analyzing how single-cell features change over time.
 
 1.  Scroll to the **DETECT EVENTS** section.
-2.  Click the :icon:`eye,black` button (Event Annotator) to open the interactive viewer.
-3.  **Click on any cell** in the movie.
-4.  The panel on the left will display its feature time-series (e.g., Intensity vs Time).
+2.  Click the :icon:`eye,black` button (:term:`Event Annotator`) to open the interactive viewer.
+3.  **Click on any cell** in the movie (the circle marker will turn green).
+4.  The panel on the left displays its feature time-series (e.g., ``area`` vs ``FRAME``).
 
 .. figure:: _static/tuto_ricm/first_detection_event.png
     :align: center
@@ -108,9 +108,9 @@ This is the core of Celldetective: analyzing how single-cell features change ove
     Exploring the first detection single-cell event
 
 
-**Detect Spreading Events**: In this demo, cells become dark (low intensity) when they spread. Let's annotate this using the **Classifier Widget**:
+**Detect Spreading Events**: In this demo, cells become dark (low intensity) when they :term:`spread <spreading event>`. Let's annotate this using the **Classifier Widget**:
 
-1.  In the **MEASURE** section, click the :icon:`scatter-plot,black` button (Classifier Widget).
+1.  In the **MEASURE** section, click the :icon:`scatter-plot,black` button (:term:`Classifier Widget`).
 
 .. figure:: _static/tuto_ricm/classify_spreading.gif
     :align: center
@@ -138,7 +138,7 @@ Step 6: Explore Results
 
 You can now use dedicated tools to analyze your data:
 
-1.  **Survival Analysis**: Represent the probability of a cell to stay in a hovering state after it appears, over time, using the :doc:`Survival Plot <how-to-guides/basics/plot-survival>` (Start Event: ``t_firstdetection``, End Event: ``t_spreading``).
+1.  **Survival Analysis**: Represent the probability of a cell to stay in a hovering state after it appears, over time, using the :doc:`Survival Plot <how-to-guides/basics/plot-survival>` (start event: :term:`first detection <first detection event>`, end event: :term:`spreading <spreading event>`).
 
 .. figure:: _static/tuto_ricm/survival_workflow.png
     :align: center
@@ -147,7 +147,7 @@ You can now use dedicated tools to analyze your data:
 
     Survival analysis on the spreading assay data
 
-2.  **Table Exploration**: Inspect feature distributions with the :doc:`Table Explorer <table_exploration>`.
+2.  **Table Exploration**: Inspect feature distributions with the :term:`Table Explorer`.
 
 .. figure:: _static/tuto_ricm/table_interactions.gif
     :align: center

@@ -5,8 +5,8 @@ This reference lists the available menu actions and keyboard shortcuts for vario
 
 .. _ref_table_explorer_menus:
 
-Table Explorer (TableUI)
-------------------------
+Table Explorer
+--------------
 
 **File Menu**
 
@@ -38,8 +38,8 @@ Table Explorer (TableUI)
 
 .. _ref_signal_annotator_shortcuts:
 
-Signal Annotator / Viewer
--------------------------
+Event Annotator
+---------------
 
 **Keyboard Shortcuts**
 
@@ -71,7 +71,7 @@ Signal Annotator / Viewer
 Interactive Plotter
 -------------------
 
-Accessed via :kbd:`Ctrl+P` from the Signal Annotator or Table Explorer.
+Accessed via :kbd:`Ctrl+P` from the Event Annotator.
 
 **Keyboard Shortcuts**
 
@@ -86,3 +86,53 @@ Accessed via :kbd:`Ctrl+P` from the Signal Annotator or Table Explorer.
 **Mouse Interactions**
 
 *   **Click + Drag**: Draw a box to select multiple traces (highlighted in red).
+
+.. _ref_classifier_widget:
+
+Classifier Widget
+-----------------
+
+**Controls**
+
+*   **Class Name**: Name of the output column (e.g., ``status_alive``) or event (e.g., ``death``).
+*   **Feature X/Y**: Select features for the 2D scatter plot.
+*   **Log Scale** (:icon:`math-log,black`): Toggle log scale for the corresponding axis.
+*   **Project Times** (:icon:`math-integral,black`): Toggle between single-frame view and projecting all timepoints.
+*   **Frame Slider**: Browse through timepoints (when projection is off).
+*   **Transparency**: Adjust point opacity.
+
+**Classification**
+
+*   **Query**: Pandas-style query string (e.g., ``area > 500 and intensity_mean < 100``).
+*   **Preview**: Highlight matching cells in red on the scatter plot.
+*   **Apply**: Create the classification column.
+
+**Time Correlation**
+
+*   **Unique state**: Cell enters a state and remains in it.
+*   **Irreversible event**: A definitive transition (sigmoid fit).
+*   **Transient event**: State can be entered and exited.
+
+    .. figure:: /_static/classifier_models.png
+        :align: center
+        :alt: classifier_models
+
+        Schematic representation of the different time correlation models.
+
+*   **Prerequisite event**: Condition must occur after another specified event.
+
+.. _ref_static_measurements_annotator:
+
+Static Measurements Annotator
+-----------------------------
+
+**Controls**
+
+*   **Phenotype**: The integer label ID (e.g., `0`, `1`, `2`) to assign to the selected cell for the active **Characteristic Group**. This allows you to categorize cells within a specific attribute (e.g., `0` for uninfected, `1` for infected).
+*   **Delete cell** (:icon:`delete,black`): Mark the selected cell for deletion.
+*   **Add/Delete Characteristic Group**: Create or remove custom grouping columns (e.g., ``group``, ``group_custom``). A **Characteristic Group** represents a specific attribute or classification scheme, and the **Phenotype** is the value assigned to a cell for that attribute. Select the active group from the dropdown menu (default is ``group``).
+
+**Mouse Interactions**
+
+*   **Left Click**: Select a cell to view/edit its group.
+
