@@ -136,3 +136,23 @@ Phenotype Annotator
 
 *   **Left Click**: Select a cell to view/edit its group.
 
+.. _ref_interaction_annotator:
+
+Interaction Annotator
+---------------------
+
+**Controls**
+
+*   **Neighborhood**: Select the neighborhood definition to visualize (e.g., ``prox_15_px``).
+*   **Interaction Event**: Select the event class to annotate (e.g., ``contact``).
+*   **Annotation Buttons**:
+    *   **Event**: Mark the current timepoint (or time of interest) as the start of the event.
+    *   **No event**: Mark the pair as having no event.
+    *   **Else**: Mark as "else" (ambiguous or other).
+    *   **Mark for suppression**: Flag the pair for removal.
+*   **Time of interest**: Manually specify the frame number for the event.
+
+**Signal Visualization**
+
+*   **Reference / Neighbor / Pair**: Select signals to plot for the reference cell, neighbor cell, and the pair itself (e.g., distance).
+

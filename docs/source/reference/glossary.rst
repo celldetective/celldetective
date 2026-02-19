@@ -125,6 +125,12 @@ General Terms
     pharmaceutical agents
         Drugs or chemical compounds applied to the cells to perturb their behavior or state.
 
+    reference cell
+        A single cell belonging to a :term:`reference population`. It acts as the focal point for neighborhood calculations.
+
+    neighbor cell
+        A single cell belonging to a :term:`neighbor population`. It is identified based on its proximity or relation to a :term:`reference cell`.
+
 
 Graphical Tools
 ---------------
@@ -143,3 +149,6 @@ Graphical Tools
 
     Phenotype Annotator
         An interactive tool for manually assigning :term:`phenotypes <phenotype>` (integer labels) to cells within a specific :term:`characteristic group` (attribute column). Unlike the :term:`Event Annotator`, this tool does not require time-lapse movies and can be used on static snapshots or unconnected timepoints. See :ref:`ref_phenotype_annotator`.
+
+    Interaction Annotator
+        An interactive tool for annotating interactions between a specific :term:`reference cell` and a :term:`neighbor cell`. Unlike single-cell annotators, it stores event data (e.g., contact timing) in the **pair table**, linking the event to the unique relationship between the two cells rather than their individual tracks. See :ref:`ref_interaction_annotator`.
