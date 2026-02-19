@@ -41,14 +41,12 @@ Contents
    :maxdepth: 2
    :caption: Reference:
 
+   reference/installation
    reference/settings
-   reference/project-structure
    reference/file-formats
    reference/menus
-   reference/installation
-   reference/system-requirements
-   reference/glossary
    reference/measurements
+   reference/glossary
    API
    acknowledegments
    cite

@@ -9,6 +9,8 @@ The output table (e.g., `trajectories.csv` or `tracked_data.csv`) contains one r
 .. note::
    **Channel Naming**: For multi-channel images, intensity-based measurements are prefixed with the channel name (e.g., ``GFP_mean``, ``RFP_max``).
 
+.. _ref_morphological_measurements:
+
 Morphological Measurements
 --------------------------
 
@@ -46,6 +48,8 @@ Standard shape descriptors computed from the cell's segmentation mask using ``sc
      - Number of pixels of convex hull image, which is the smallest convex polygon that encloses the region.
    * - ``centroid-0``, ``centroid-1``
      - Coordinate of the centroid (row, col). **Note**: In tracked data, these are replaced by ``POSITION_Y`` and ``POSITION_X``.
+
+.. _ref_intensity_measurements:
 
 Intensity Measurements
 ----------------------
@@ -104,6 +108,8 @@ Analysis of intensity distribution from center to periphery.
      - Intercept at center.
    * - ``{channel}_radial_intensity_r2``
      - $R^2$ goodness-of-fit to linear gradient model.
+
+.. _ref_texture_measurements:
 
 Texture Measurements (Haralick)
 -------------------------------
@@ -173,6 +179,8 @@ Celldetective includes several built-in "extra properties" that provide more adv
 
 *   ``intensity_nanmean``: Mean intensity ignoring NaNs (useful for masked arrays).
 *   ``feret_diameter_max``: Maximum Feret diameter.
+
+.. _ref_neighborhood_measurements:
 
 Neighborhood Measurements
 -------------------------

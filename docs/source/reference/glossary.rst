@@ -28,7 +28,7 @@ General Terms
         A computer vision task that takes a multidimensional image as input and outputs a labeled image, where each individual object is assigned a unique pixel mask and label.
 
     neighborhood
-        A spatial proximity relationship matching a reference cell and surrounding neighbor cells, determined by a specific method (isotropic or mask-contact) and distance parameter.
+        A spatial proximity relationship matching a reference cell and surrounding neighbor cells, determined by a specific method (isotropic or mask-contact) and distance parameter. See :ref:`ref_neighborhood_measurements`.
 
     neighbor counts
         Metrics quantifying the number of neighboring cells within a defined :term:`neighborhood`, calculated using one of three methods: inclusive, exclusive, or intermediate (weighted).
@@ -37,19 +37,49 @@ General Terms
         A method for detecting events by applying conditions on cell features. The conditions are evaluated at each time point, producing a binary signal per cell. The time of event is extracted by fitting a model to the binary signal.
 
     experiment project
-        A **Celldetective experiment** consists of a folder and a configuration file in ``.ini`` format. The folder is organized hierarchically to support data from multiple wells and positions:
+        A **Celldetective experiment** is a directory containing all configuration and data for a single experiment.
 
-        #. **Experiment folder**: Contains individual well folders (one per well) and the configuration file.
-        #. **Well folder**: Includes subfolders corresponding to position within that well.
-        #. **Position folder**: Contains a single ``movie/`` subfolder where the user drops the stack associated with that position.
+        .. code-block:: text
 
-        See :doc:`project-structure` for detailed directory layout and file naming conventions.
+            MyExperiment/
+            ├── config.ini             # Experiment configuration file
+            ├── W1/                    # Well folder 1
+            ├── W2/                    # Well folder 2
+            └── ...
 
     well
         A collection of positions sharing the same biological condition, often associated with a physical well from a multi-well plate.
 
+        **Naming Convention**
+
+        *   **Pattern**: ``W{number}`` (e.g., ``W1``, ``W12``).
+        *   **Regex**: ``^W\d+/?$``
+
+        **Structure**
+
+        A well folder contains subfolders for each imaging **Position** (Field of View).
+
+        .. code-block:: text
+
+            W1/
+            ├── 100/                   # Position folder (0)
+            ├── 101/                   # Position folder (1)
+            └── ...
+
     position
-        A field of view (microscopy image stack or "movie") taken within a well. Interchangeably the spatial position and the associated image data.
+        A field of view (microscopy image stack or "movie") taken within a well. Interchangeably the spatial position and the associated image data. The naming convention usually follows ``{WellNumber}0{PositionIndex}``.
+
+        **Contents**
+
+        .. code-block:: text
+
+            100/
+            ├── movie/                 # Input image stacks
+            │   └── images.tif
+            ├── labels_nuclei/         # Segmentation masks (generated)
+            ├── output/                # Analysis output
+            │   └── tables/            # CSV results
+            └── metadata.json          # Position metadata
 
     characteristic group
         A ensemble of instantaneous cell :term:`phenotypes <phenotype>`.
@@ -58,7 +88,7 @@ General Terms
         A ensemble of cells sharing similar features at time :math:`t`. An ensemble of phenotypes forms a characteristic group.
 
     single-cell measurement
-        A property measured from either an image or dynamical information associated with a unique cell at time :math:`t`.
+        A property measured from either an image or dynamical information associated with a unique cell at time :math:`t`. See :ref:`ref_measurements`.
 
     survival
         Probability that a cell exhibits an event as a function of time :math:`\Delta t_\textrm{event}`.
@@ -76,10 +106,10 @@ General Terms
         Pixel resolution of the training images (in microns). Used to rescale input images to match the model's expected scale.
 
     morphological features
-        Geometric properties of a segmented object, such as area, perimeter, eccentricity, and solidity.
+        Geometric properties of a segmented object, such as area, perimeter, eccentricity, and solidity. See :ref:`ref_morphological_measurements`.
 
     texture features
-        Texture descriptors calculated from the Gray Level Co-occurrence Matrix (:term:`GLCM`), quantifying properties like contrast, correlation, and homogeneity.
+        Texture descriptors calculated from the Gray Level Co-occurrence Matrix (:term:`GLCM`), quantifying properties like contrast, correlation, and homogeneity. See :ref:`ref_texture_measurements`.
 
     reference population
         The set of cells *for which* neighborhood metrics are computed (the "center" cells).
@@ -108,7 +138,7 @@ General Terms
         2. A metadata tag associated with an experiment condition (e.g., "Drug A").
 
     signal
-        A quantitative measurement derived from an image channel (e.g., "Mean Intensity", "GFP Fluorescence") associated with a segmented object.
+        A quantitative measurement derived from an image channel (e.g., "Mean Intensity", "GFP Fluorescence") associated with a segmented object. See :ref:`ref_intensity_measurements`.
 
     spreading event
         A cellular event where a lymphocyte (e.g., T-cell) flattens and increases its contact area upon interaction with a stimulating surface acting as a proxy for an antigen-presenting cell.
