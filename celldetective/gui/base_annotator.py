@@ -946,7 +946,7 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
 
     def save_trajectories(self):
         """Save trajectories (not implemented)."""
-        # specific to signal/static annotator
+        # specific to event annotator
         logger.info(
             "Save trajectory function not implemented for BaseAnnotator class..."
         )

@@ -141,5 +141,5 @@ Graphical Tools
     Table Explorer
         A spreadsheet-like interface for viewing and interacting with single-cell measurement data. It supports 1D and 2D plotting, statistical analysis, data aggregation (track collapsing), and file export. See :ref:`ref_table_explorer_menus`.
 
-    Static Measurements Annotator
-        An interactive tool for manually assigning **Phenotypes** (integer labels) to cells within a specific **Characteristic Group** (attribute column). Unlike the :term:`Event Annotator`, this tool does not require time-lapse movies and can be used on static snapshots or unconnected timepoints. See :ref:`ref_static_measurements_annotator`.
+    Phenotype Annotator
+        An interactive tool for manually assigning :term:`phenotypes <phenotype>` (integer labels) to cells within a specific :term:`characteristic group` (attribute column). Unlike the :term:`Event Annotator`, this tool does not require time-lapse movies and can be used on static snapshots or unconnected timepoints. See :ref:`ref_phenotype_annotator`.

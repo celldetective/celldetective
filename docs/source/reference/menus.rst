@@ -121,10 +121,10 @@ Classifier Widget
 
 *   **Prerequisite event**: Condition must occur after another specified event.
 
-.. _ref_static_measurements_annotator:
+.. _ref_phenotype_annotator:
 
-Static Measurements Annotator
------------------------------
+Phenotype Annotator
+-------------------
 
 **Controls**
 

@@ -105,8 +105,8 @@ Neighborhood measurements quantify the spatial relationships between cells — e
     :ref:`Neighborhood Measurement Settings Reference <ref_neighborhood_settings>` for parameter details.
 
 
-Static measurements annotator
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Phenotype Annotator
+~~~~~~~~~~~~~~~~~~~
 
 We provide an interactive viewer for inspecting single-cell measurements:
 
