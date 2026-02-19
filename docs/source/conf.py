@@ -42,6 +42,7 @@ extensions = [
     "hoverxref.extension",
     "nbsphinx_link",
     "sphinxcontrib.jquery",
+    "sphinx_design",
 ]
 
 autosummary_generate = True
@@ -76,7 +77,7 @@ html_logo = "_static/logo.png"
 html_css_files = [
     "https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css",
     #'https://fonts.googleapis.com/icon?family=Material+Icons',
-    #'custom.css',
+    "custom.css",
 ]
 html_favicon = "_static/favicon.png"
 html_theme_options = {"style_nav_header_background": "#b9c3cb"}

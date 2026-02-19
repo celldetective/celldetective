@@ -16,11 +16,36 @@ Celldetective offers both a **Python API** and a **Graphical User Interface (GUI
 
 Check the :doc:`overview <overview>` for more general information or :doc:`get started <get-started>` with a detailed tutorial!
 
+.. grid:: 2
+    :gutter: 3
 
-Contents
---------
+    .. grid-item-card:: :icon:`school` Tutorials
+        :link: get-started
+        :link-type: doc
+
+        Step-by-step instructions to get you started with your first experiment.
+
+    .. grid-item-card:: :icon:`text-box-check-outline` How-to Guides
+        :link: how-to-guides/index
+        :link-type: doc
+
+        Recipe-like guides for specific tasks and advanced usage.
+
+    .. grid-item-card:: :icon:`book-open-page-variant` Reference
+        :link: reference/installation
+        :link-type: doc
+
+        Technical descriptions of installation, settings, file formats, and measurements.
+
+    .. grid-item-card:: :icon:`lightbulb` Explanation
+        :link: explanation_topics
+        :link-type: doc
+
+        High-level concepts and background information.
+
 
 .. toctree::
+   :hidden:
    :maxdepth: 1
    :caption: Tutorials:
    
@@ -31,6 +56,7 @@ Contents
 
 
 .. toctree::
+   :hidden:
    :maxdepth: 2
    :caption: How-to guides
    
@@ -38,6 +64,7 @@ Contents
    troubleshooting
 
 .. toctree::
+   :hidden:
    :maxdepth: 2
    :caption: Reference:
 
@@ -48,12 +75,17 @@ Contents
    reference/measurements
    reference/glossary
    API
-   acknowledegments
-   cite
 
 .. toctree::
+   :hidden:
    :caption: Explanation:
 
    explanation_topics
    concepts
 
+.. toctree::
+   :hidden:
+   :caption: About:
+
+   acknowledegments
+   cite
