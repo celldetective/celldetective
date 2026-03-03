@@ -496,6 +496,12 @@ class ControlPanel(CelldetectiveMainWindow):
         except:
             pass
 
+        try:
+            if hasattr(self, "viewer") and self.viewer:
+                self.viewer.close()
+        except:
+            pass
+
         # Stop background loader thread
         if hasattr(self, "bg_loader") and self.bg_loader.isRunning():
             self.bg_loader.quit()

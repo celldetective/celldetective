@@ -145,8 +145,22 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
         event : QCloseEvent
             The close event.
         """
-        if hasattr(self, "viewer"):
-            self.viewer.close()
+        if hasattr(self, "viewer") and self.viewer is not None:
+            # First rigorously attempt to stop the loader thread if any
+            if hasattr(self.viewer, "loader_thread") and self.viewer.loader_thread:
+                try:
+                    self.viewer.loader_thread.stop()
+                    if not self.viewer.loader_thread.wait(2000):
+                        self.viewer.loader_thread.terminate()
+                        self.viewer.loader_thread.wait()
+                    self.viewer.loader_thread = None
+                except Exception:
+                    pass
+            # Explicitly call closeEvent on the viewer just in case
+            try:
+                self.viewer.close()
+            except RuntimeError:
+                pass
 
         if hasattr(self, "bg_loader") and self.bg_loader.isRunning():
             self.bg_loader.quit()
