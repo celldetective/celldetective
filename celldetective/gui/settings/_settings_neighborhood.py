@@ -489,9 +489,18 @@ class SettingsNeighborhood(CelldetectiveWidget):
         )
         self.all_columns = []
         for tab in tables:
-            cols = pd.read_csv(tab, nrows=1).columns.tolist()
-            self.all_columns.extend(cols)
-        self.all_columns = np.unique(self.all_columns)
+            try:
+                cols = pd.read_csv(tab, nrows=1).columns.tolist()
+                self.all_columns.extend(cols)
+            except pd.errors.EmptyDataError:
+                pass
+            except Exception:
+                pass
+
+        if len(self.all_columns) > 0:
+            self.all_columns = np.unique(self.all_columns)
+        else:
+            self.all_columns = np.array([])
 
         class_idx = np.array([s.startswith("class_") for s in self.all_columns])
         status_idx = np.array([s.startswith("status_") for s in self.all_columns])
