@@ -11,9 +11,18 @@ software_location = get_software_location()
 
 @pytest.fixture
 def app(qtbot):
+    from PyQt5.QtWidgets import QApplication
+
     test_app = AppInitWindow(software_location=software_location)
     qtbot.addWidget(test_app)
-    return test_app
+
+    yield test_app
+
+    # Teardown: close the app (triggers closeEvent + thread cleanup in all children)
+    test_app.close()
+    QApplication.processEvents()
+    QApplication.closeAllWindows()
+    QApplication.processEvents()
 
 
 def test_open_project(app, qtbot):

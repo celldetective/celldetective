@@ -84,12 +84,11 @@ class StackLoader(QThread):
         self.mutex.unlock()
 
     def stop(self):
-        """Stop the loader thread."""
+        """Request the loader thread to stop. Does NOT block; caller must call wait() explicitly."""
         self.mutex.lock()
         self.running = False
         self.condition.wakeAll()
         self.mutex.unlock()
-        self.wait()
 
     def run(self):
         """Run the loader thread."""
@@ -1058,31 +1057,33 @@ class StackVisualizer(CelldetectiveWidget):
         event : QEvent
             The close event.
         """
-        # Event handler for closing the widget
+        from PyQt5.QtWidgets import QApplication
+
         if self.loader_thread:
-            # Disconnect signals to prevent events during shutdown
+            # Step 1: Disconnect signals FIRST to prevent any in-flight
+            # queued signal from dispatching after the widget is destroyed.
             try:
                 self.loader_thread.frame_loaded.disconnect()
             except Exception:
                 pass
 
+            # Step 2: Signal the thread to stop (non-blocking).
             self.loader_thread.stop()
-            if not self.loader_thread.wait(2000):  # Wait up to 2 seconds
+
+            # Step 3: Flush the Qt event queue to drain any already-queued
+            # frame_loaded signals before the C++ objects are torn down.
+            QApplication.processEvents()
+
+            # Step 4: Wait for the thread to finish (up to 2 s, then force-terminate).
+            if not self.loader_thread.wait(2000):
                 self.loader_thread.terminate()
                 self.loader_thread.wait()
 
             self.loader_thread = None
+
         if hasattr(self, "frame_cache") and isinstance(self.frame_cache, OrderedDict):
             self.frame_cache.clear()
         try:
             self.canvas.close()
         except RuntimeError:
-            pass
-
-    def __del__(self):
-        """Destructor to clean up threads."""
-        try:
-            if hasattr(self, "loader_thread") and self.loader_thread:
-                self.loader_thread.stop()
-        except Exception:
             pass
