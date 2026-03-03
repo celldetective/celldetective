@@ -16,23 +16,20 @@ from celldetective.gui.settings._settings_measurements import SettingsMeasuremen
 from celldetective import get_software_location
 from unittest.mock import patch
 from PyQt5.QtWidgets import QApplication
-import time
+from PyQt5.QtTest import QTest
 
 
 software_location = get_software_location()
 
 
 def safe_wait(ms):
-    """Safe wait that uses processEvents to avoid Windows access violations.
+    """Safe wait using QTest.qWait which processes events without access violations.
 
-    On Windows CI, qtbot.wait() can cause access violations due to race
-    conditions with the tqdm monitor thread. This helper processes events
-    without blocking in the Qt event loop.
+    QTest.qWait is Qt's built-in test utility that safely processes events
+    while waiting, respecting widget lifecycle and avoiding the access
+    violations caused by raw QApplication.processEvents() loops on Windows CI.
     """
-    end_time = time.time() + ms / 1000.0
-    while time.time() < end_time:
-        QApplication.processEvents()
-        time.sleep(0.01)  # Small sleep to avoid CPU spinning
+    QTest.qWait(ms)
 
 
 @pytest.fixture(autouse=True)

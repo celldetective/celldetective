@@ -85,7 +85,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         """
         super().__init__()
         self.parent_window = parent
-        self.setWindowTitle("Signal annotator")
+        self.setWindowTitle("Interaction Annotator")
 
         # These attributes should be set after super().__init__() if they depend on parent_window
         # which might be initialized by the super call.

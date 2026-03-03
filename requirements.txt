@@ -40,3 +40,4 @@ prettytable
 scikit-image
 natsort
 sphinx-hoverxref
+sphinx-design

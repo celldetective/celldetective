@@ -135,7 +135,7 @@ class MeasureAnnotator(BaseAnnotator):
         self.status_name = "group"
         super().__init__(read_config=False, *args, **kwargs)
 
-        self.setWindowTitle("Static annotator")
+        self.setWindowTitle("Phenotype Annotator")
 
         self.int_validator = QIntValidator()
         self.current_alpha = 0.5

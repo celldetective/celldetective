@@ -11,4 +11,15 @@
   border: 1px solid #ccc;
   font-size: 0.9em;
   font-family: sans-serif;
+  font-family: sans-serif;
+}
+
+.sd-card:hover {
+    border-color: #1565c0 !important;
+    box-shadow: 0 4px 8px 0 rgba(21, 101, 192, 0.2) !important;
+}
+
+.sd-card-header {
+    background-color: transparent !important;
+    border-bottom: none !important;
 }

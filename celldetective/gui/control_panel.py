@@ -496,6 +496,11 @@ class ControlPanel(CelldetectiveMainWindow):
         except:
             pass
 
+        # Stop background loader thread
+        if hasattr(self, "bg_loader") and self.bg_loader.isRunning():
+            self.bg_loader.quit()
+            self.bg_loader.wait(3000)
+
         gc.collect()
 
     def display_positions(self):

@@ -14,16 +14,11 @@ New project
 
 #. Set a folder where the project will be stored.
 
-#. Fill the information requested. Refer to the reference guide for more precision.
+#. Fill in the requested fields (see :ref:`ref_experiment_config` for a full description of every parameter):
 
-   - Name for the experiment. Avoid spaces in the name.
-   - Number of wells.
-   - Number of positions per well. If variable, put the highest number in a well.
-   - Conversion factor from pixel to :math:`\mu m` on the images.
-   - Time interval between two frames in minutes if time-series data. Else, leave at default value. If time-series but variable, put an average estimate.
-   - Number of frames. If variable, put a lower estimate. Value read directly from the stacks in most cases.
-   - Prefix to find the image stack file. Leave blank if filenames have variable prefixes.
-   - Image width/height in pixels.
+   Set the experiment name (no spaces), number of wells, positions per well,
+   spatial and temporal calibrations, number of frames, movie prefix, and image
+   dimensions.
 
     .. figure:: ../../_static/new_exp1.png
         :width: 60%
@@ -34,7 +29,13 @@ New project
 
 #. Select your channels and specify their index in the stack with the slider on the right side (0 is first, 1 is the second channel, etc). Use existing channels if appropriate. Else, create your own channel. Avoid spaces in the name.
 
-#. Select your cell population(s). If you have an immune cell population, select ``effectors``. If you have cancer cells, select ``targets``. Else create appropriate populations.
+#. Select your cell population(s). If you have an immune cell population, select ``effectors``. If you have cancer cells, select ``targets``. Else create appropriate populations:
+
+    * Press the :icon:`plus,black` **Add a cell population** button.
+    * Pick a name for the population: one word or camel case, no spaces, no special characters (e.g. `redBloodCells`, `macrophages`, `bacteria`).
+    * Add. The population is added to the list of selectable populations. Check it to include it in the experiment.
+
+
 
     .. figure:: ../../_static/new_exp2.png
         :width: 60%

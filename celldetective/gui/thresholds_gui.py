@@ -145,6 +145,9 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
         event : QCloseEvent
             The close event.
         """
+        if hasattr(self, "viewer"):
+            self.viewer.close()
+
         if hasattr(self, "bg_loader") and self.bg_loader.isRunning():
             self.bg_loader.quit()
             self.bg_loader.wait()
