@@ -100,4 +100,13 @@ In some cases, a single thresholding pipeline may not be sufficient to capture a
 
 .. note::
 
+    The **OR** union is not just a simple pixel-wise mathematical OR. The merging is performed at the object instance level:
+    
+    * It compares the segmented objects from the first pipeline against objects from the second pipeline.
+    * Matches between conflicting cell instances are established using the Intersection over Union (IoU) metric. If the IoU between two objects is above a threshold (currently fixed via the Stardist `matching` function at 0.5, with an internal matching verification at 0.05), the objects are considered to be the same cell mask.
+    * The pixels belonging to matched objects are then combined together via a logical OR union.
+    * If an object from the second pipeline has no match in the first pipeline (IoU < 0.5), it is added as a completely new individual cell instance in the final merged output.
+
+.. note::
+
     You must reload the threshold config file if you reopen the experiment later.
