@@ -88,6 +88,16 @@ Save and apply the pipeline
 
 #. To process the entire position or experiment, select **Threshold** in the segmentation zoo and click **Submit**.
 
+Merging Multiple Configurations
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+In some cases, a single thresholding pipeline may not be sufficient to capture all variations of a cell population. You can merge multiple configurations together to create a more robust union mask:
+
+#. In the **Upload Model** window, click **Choose File** for the Threshold option.
+#. Select **multiple** ``.json`` threshold configuration files (using ``Ctrl+Click`` or ``Shift+Click``).
+#. A **Merging option** dropdown will appear. Currently, the supported method is **OR**, which computes the logical union of the objects detected by all the selected pipelines.
+#. Click **Upload**. When you run the segmentation task, Celldetective will process the images through each pipeline and merge the resulting masks.
+
 .. note::
 
     You must reload the threshold config file if you reopen the experiment later.
