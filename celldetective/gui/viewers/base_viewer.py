@@ -158,23 +158,23 @@ class StackLoader(QThread):
 
                 except Exception as e:
                     # logger.debug(f"Error loading frame {frame_to_load}: {e}")
-                    # Prepare to wait to avoid spin loop on error
+                    # Prepare to wait to avoid spin loop on error;
+                    # use condition.wait so stop() can wake us immediately.
+                    self.mutex.lock()
                     if self.running:
-                        self.msleep(100)
+                        self.condition.wait(self.mutex, 100)
+                    self.mutex.unlock()
 
             else:
-                # If nothing to load, wait
+                # If nothing to load, wait using the condition variable so that
+                # stop() can wake us immediately instead of waiting out a sleep.
                 self.mutex.lock()
                 if not self.running:
                     self.mutex.unlock()
                     break
+                # Wait up to 500 ms; woken early by condition.wakeAll() in stop()
+                self.condition.wait(self.mutex, 500)
                 self.mutex.unlock()
-
-                # Wait loop with periodic checks
-                for _ in range(5):  # Wait up to 500ms
-                    if not self.running:
-                        break
-                    self.msleep(100)
 
 
 class StackVisualizer(CelldetectiveWidget):
