@@ -487,20 +487,9 @@ class SettingsNeighborhood(CelldetectiveWidget):
                 ["W*", "*", "output", "tables", f"trajectories_{population}.csv"]
             )
         )
-        self.all_columns = []
-        for tab in tables:
-            try:
-                cols = pd.read_csv(tab, nrows=1).columns.tolist()
-                self.all_columns.extend(cols)
-            except pd.errors.EmptyDataError:
-                pass
-            except Exception:
-                pass
+        from celldetective.utils.data_cleaning import extract_cols_from_table_list
 
-        if len(self.all_columns) > 0:
-            self.all_columns = np.unique(self.all_columns)
-        else:
-            self.all_columns = np.array([])
+        self.all_columns = extract_cols_from_table_list(tables)
 
         class_idx = np.array([s.startswith("class_") for s in self.all_columns])
         status_idx = np.array([s.startswith("status_") for s in self.all_columns])

@@ -245,11 +245,9 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
             self.exp_dir
             + os.sep.join(["W*", "*", "output", "tables", f"trajectories_*{ext}"])
         )
-        self.all_columns = []
-        for tab in tables:
-            cols = pd.read_csv(tab, nrows=1).columns.tolist()
-            self.all_columns.extend(cols)
-        self.all_columns = np.unique(self.all_columns)
+        from celldetective.utils.data_cleaning import extract_cols_from_table_list
+
+        self.all_columns = extract_cols_from_table_list(tables)
         class_idx = np.array([s.startswith("class_") for s in self.all_columns])
         group_idx = np.array([s.startswith("group_") for s in self.all_columns])
 

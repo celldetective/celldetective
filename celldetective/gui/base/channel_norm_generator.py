@@ -151,13 +151,9 @@ class ChannelNormGenerator(QVBoxLayout, Styles):
                     ]
                 )
             )
-            all_measurements = []
-            for tab in tables:
-                import pandas as pd
+            from celldetective.utils.data_cleaning import extract_cols_from_table_list
 
-                cols = pd.read_csv(tab, nrows=1).columns.tolist()
-                all_measurements.extend(cols)
-            all_measurements = np.unique(all_measurements)
+            all_measurements = extract_cols_from_table_list(tables)
 
         if self.mode == "signals":
             generic_measurements = [

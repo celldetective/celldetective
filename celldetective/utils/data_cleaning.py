@@ -156,9 +156,20 @@ def extract_cols_from_table_list(tables: List[str], nrows: int = 1) -> np.ndarra
 
     all_columns = []
     for tab in tables:
-        cols = pd.read_csv(tab, nrows=1).columns.tolist()
-        all_columns.extend(cols)
-    all_columns = np.unique(all_columns)
+        try:
+            cols = pd.read_csv(tab, nrows=nrows).columns.tolist()
+            all_columns.extend(cols)
+        except pd.errors.EmptyDataError:
+            pass
+        except Exception as e:
+            print(f"Error reading {tab}: {e}")
+            pass
+
+    if len(all_columns) > 0:
+        all_columns = np.unique(all_columns)
+    else:
+        all_columns = np.array([])
+
     return all_columns
 
 
