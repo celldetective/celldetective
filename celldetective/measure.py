@@ -722,6 +722,11 @@ def measure_features(
     if channels is not None:
         df_props = rename_intensity_column(df_props, channels)
 
+    # Drop columns that are entirely NaN — these are produced by target_channel-aware
+    # extra properties (e.g. area_dark_intensity with target_channel='adhesion_channel'),
+    # which fill non-target channel slots with NaN in CustomRegionProps.__getattr__.
+    df_props = _remove_invalid_cols(df_props)
+
     df_props.rename(columns={"label": "class_id"}, inplace=True)
     df_props["class_id"] = df_props["class_id"].astype(float)
 
