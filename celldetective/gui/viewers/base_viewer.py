@@ -162,7 +162,7 @@ class StackLoader(QThread):
                     # use condition.wait so stop() can wake us immediately.
                     self.mutex.lock()
                     if self.running:
-                        self.condition.wait(self.mutex, 100)
+                        self.condition.wait(self.mutex, 50)
                     self.mutex.unlock()
 
             else:
@@ -172,8 +172,8 @@ class StackLoader(QThread):
                 if not self.running:
                     self.mutex.unlock()
                     break
-                # Wait up to 500 ms; woken early by condition.wakeAll() in stop()
-                self.condition.wait(self.mutex, 500)
+                # Wait up to 100 ms; woken early by condition.wakeAll() in stop()
+                self.condition.wait(self.mutex, 100)
                 self.mutex.unlock()
 
 
@@ -1074,10 +1074,11 @@ class StackVisualizer(CelldetectiveWidget):
             # frame_loaded signals before the C++ objects are torn down.
             QApplication.processEvents()
 
-            # Step 4: Wait for the thread to finish (up to 2 s, then force-terminate).
-            if not self.loader_thread.wait(2000):
-                self.loader_thread.terminate()
-                self.loader_thread.wait()
+            # Step 4: Wait for the thread to finish (up to 5 s).
+            # NOTE: Do NOT call terminate() on Windows — it triggers an SEH
+            # access violation. The thread's condition.wait() uses 100 ms
+            # intervals so it will exit within one cycle after stop() wakes it.
+            self.loader_thread.wait(5000)
 
             self.loader_thread = None
 

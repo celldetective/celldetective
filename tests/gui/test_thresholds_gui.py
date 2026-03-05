@@ -117,6 +117,23 @@ def app_with_project(qtbot, ensure_experiment_test):
     yield test_app
 
     # Cleanup - close the app first (triggers thread cleanup in closeEvent)
+    # Explicitly close the threshold wizard if still open (it holds a StackLoader thread).
+    try:
+        wizard = test_app.control_panel.ProcessPopulations[
+            0
+        ].seg_model_loader.thresh_wizard
+        if wizard is not None:
+            try:
+                from PyQt5 import sip
+
+                if not sip.isdeleted(wizard):
+                    wizard.close()
+                    QApplication.processEvents()
+            except (ImportError, RuntimeError, AttributeError):
+                pass
+    except (AttributeError, RuntimeError, IndexError):
+        pass
+
     test_app.close()
     QApplication.processEvents()
     QApplication.closeAllWindows()
