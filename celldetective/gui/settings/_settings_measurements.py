@@ -530,6 +530,53 @@ class SettingsMeasurements(CelldetectiveSettingsPanel):
         ):
             self.resize(self.width(), self.height() + step)
 
+    @staticmethod
+    def _parse_contour_entry(entry):
+        """
+        Convert a contour list entry to a JSON-serialisable value.
+
+        Accepts both native types already parsed by ``ListWidget.getItems()``
+        (``int`` or ``[int, int]``) and legacy string formats that may appear
+        when loading older JSON files.
+
+        Accepted string formats
+        -----------------------
+        ``"10"``        -> ``10``  (single distance)
+        ``"(30,50)"``   -> ``[30, 50]``  (range, from CellEdgeVisualizer)
+        ``"30-50"``     -> ``[30, 50]``  (range, legacy GeometryChoice format)
+        """
+        # Already a native list [min, max] from ListWidget.getItems()
+        if isinstance(entry, list):
+            return [int(entry[0]), int(entry[1])]
+        # Already a native int/float
+        if isinstance(entry, (int, float)):
+            return int(entry)
+        # String-based parsing (legacy JSON round-trip)
+        s = str(entry).strip()
+        # Parenthesised tuple format: (min,max)
+        if s.startswith("(") and s.endswith(")"):
+            parts = s[1:-1].split(",")
+            if len(parts) == 2:
+                try:
+                    return [int(parts[0].strip()), int(parts[1].strip())]
+                except ValueError:
+                    pass
+        # Hyphen-separated range format: min-max
+        # (guard against a leading minus on a negative number)
+        if "-" in s.lstrip("-"):
+            idx = s.find("-", 1)  # skip position 0 to allow negative first value
+            if idx != -1:
+                left, right = s[:idx], s[idx + 1 :]
+                try:
+                    return [int(left.strip()), int(right.strip())]
+                except ValueError:
+                    pass
+        # Plain integer string
+        try:
+            return int(s)
+        except ValueError:
+            return s  # fallback: keep as-is
+
     def _write_instructions(self):
         """
         Write the selected options in a json file for later reading by the software.
@@ -548,9 +595,11 @@ class SettingsMeasurements(CelldetectiveSettingsPanel):
             features = None
         measurement_options.update({"features": features})
 
-        border_distances = self.contours_list.getItems()
-        if not border_distances:
+        raw_distances = self.contours_list.getItems()
+        if not raw_distances:
             border_distances = None
+        else:
+            border_distances = [self._parse_contour_entry(d) for d in raw_distances]
         measurement_options.update({"border_distances": border_distances})
 
         self.extract_haralick_options()
@@ -698,8 +747,17 @@ class SettingsMeasurements(CelldetectiveSettingsPanel):
                                 if isinstance(d, (int, float)):
                                     distances.append(str(int(d)))
                                 elif isinstance(d, list):
-                                    # Use (min,max) tuple format to match CellEdgeVisualizer output
+                                    # Canonical (min,max) format
                                     distances.append(f"({int(d[0])},{int(d[1])})")
+                                elif isinstance(d, str):
+                                    # Legacy string entries: normalise to canonical form
+                                    parsed = self._parse_contour_entry(d)
+                                    if isinstance(parsed, list):
+                                        distances.append(
+                                            f"({int(parsed[0])},{int(parsed[1])})"
+                                        )
+                                    else:
+                                        distances.append(str(int(parsed)))
                         self.contours_list.list_widget.clear()
                         self.contours_list.list_widget.addItems(distances)
 
@@ -908,6 +966,7 @@ class SettingsMeasurements(CelldetectiveSettingsPanel):
 
             self.viewer = CellEdgeVisualizer(
                 cell_type=self.mode,
+                edge_range=(0, 200),
                 stack_path=self.current_stack,
                 parent_list_widget=self.contours_list.list_widget,
                 n_channels=len(self.channel_names),

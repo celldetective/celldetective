@@ -842,7 +842,7 @@ class GeometryChoice(CelldetectiveWidget, Styles):
         value = self.dist_le.text()
         if self.outer_btn.isChecked():
             value2 = self.dist_outer_le.text()
-            values = [value + "-" + value2]
+            values = [f"({value},{value2})"]
         else:
             values = [value]
         self.parent_window.list_widget.addItems(values)
