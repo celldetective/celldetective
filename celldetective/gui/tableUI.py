@@ -30,6 +30,7 @@ from celldetective.gui.table_ops._maths import (
     CalibrateColWidget,
     AbsColWidget,
     LogColWidget,
+    BinColWidget,
 )
 from celldetective.gui.table_ops._merge_one_hot import MergeOneHotWidget
 from celldetective.gui.table_ops._query_table import QueryWidget
@@ -119,6 +120,9 @@ class PivotTableUI(CelldetectiveWidget):
         """
         self.model = PandasModel(self.data)
         self.table.setModel(self.model)
+        self.table.horizontalHeader().setSectionsMovable(True)
+        self.table.horizontalHeader().setDragEnabled(True)
+        self.table.horizontalHeader().setDragDropMode(self.table.InternalMove)
 
     def export_data(self) -> None:
         """
@@ -140,8 +144,16 @@ class PivotTableUI(CelldetectiveWidget):
                 file_name += ".csv"
 
             try:
+                # Get visual column order from header mapped to the original GUI model
+                header = self.table.horizontalHeader()
+                visual_cols = [
+                    self.model._data.columns[header.logicalIndex(i)]
+                    for i in range(header.count())
+                ]
+                data_sorted = self.data[visual_cols]
+
                 # Save with index because pivot tables usually have meaningful indices
-                self.data.to_csv(file_name, index=True)
+                data_sorted.to_csv(file_name, index=True)
                 logger.info(f"Pivot table exported to {file_name}")
             except Exception as e:
                 logger.error(f"Failed to export pivot table: {e}")
@@ -360,6 +372,9 @@ class TableUI(CelldetectiveMainWindow):
         self.model = PandasModel(data)
         self.table_view.setModel(self.model)
         self.table_view.resizeColumnsToContents()
+        self.table_view.horizontalHeader().setSectionsMovable(True)
+        self.table_view.horizontalHeader().setDragEnabled(True)
+        self.table_view.horizontalHeader().setDragDropMode(self.table_view.InternalMove)
 
     def resizeEvent(self, event: Any) -> None:
         """
@@ -477,6 +492,10 @@ class TableUI(CelldetectiveMainWindow):
         self.calibrate_action.triggered.connect(self.calibrate_selected_feature)
         self.calibrate_action.setShortcut("Ctrl+C")
         self.mathMenu.addAction(self.calibrate_action)
+
+        self.bin_action = QAction("&Bin...", self)
+        self.bin_action.triggered.connect(self.bin_selected_feature)
+        self.mathMenu.addAction(self.bin_action)
 
         self.merge_classification_action = QAction("&Merge states...", self)
         self.merge_classification_action.triggered.connect(
@@ -750,12 +769,25 @@ class TableUI(CelldetectiveMainWindow):
         to the corresponding 'output/tables' directory.
         """
         logger.info("Saving each table in its respective position folder...")
+
+        # Get visual column order from header mapped to the original GUI model
+        header = self.table_view.horizontalHeader()
+        visual_cols = [
+            self.model._data.columns[header.logicalIndex(i)]
+            for i in range(header.count())
+        ]
+
         for pos, pos_group in self.data.groupby(["position"]):
             invalid_cols = [
                 c for c in list(pos_group.columns) if c.startswith("Unnamed")
             ]
             if len(invalid_cols) > 0:
                 pos_group = pos_group.drop(invalid_cols, axis=1)
+
+            # Filter and reorder by available columns (invalid ones dropped)
+            valid_visual_cols = [c for c in visual_cols if c in pos_group.columns]
+            pos_group = pos_group[valid_visual_cols]
+
             pos_group.to_csv(
                 pos[0]
                 + os.sep.join(
@@ -790,6 +822,13 @@ class TableUI(CelldetectiveMainWindow):
             self, column1=selected_col1, column2=selected_col2, operation="multiply"
         )
         self.mulWidget.show()
+
+    def bin_selected_feature(self) -> None:
+        """Open widget to bin the selected column."""
+        selected = self._get_selected_columns(max_cols=1)
+        selected_col = selected[0] if selected else None
+        self.binWidget = BinColWidget(self, selected_col)
+        self.binWidget.show()
 
     def add_signals(self) -> None:
         """
@@ -1244,6 +1283,24 @@ class TableUI(CelldetectiveMainWindow):
 
         selected_plots = self.plot_selector.get_selection()
 
+        import re
+
+        def _get_binwidth(col_name):
+            if col_name and isinstance(col_name, str):
+                match = re.search(r"_binned_([0-9.]+)_", col_name)
+                if match:
+                    return float(match.group(1))
+            return None
+
+        bw_x = _get_binwidth(self.x)
+        bw_y = _get_binwidth(self.y)
+
+        kwargs_1d_x = {"binwidth": bw_x, "shrink": 0.9} if bw_x is not None else {}
+        kwargs_1d_y = {"binwidth": bw_y, "shrink": 0.9} if bw_y is not None else {}
+        kwargs_2d = (
+            {"binwidth": (bw_x, bw_y)} if bw_x is not None and bw_y is not None else {}
+        )
+
         if "histogram" in selected_plots:
             if self.x is not None:
                 sns.histplot(
@@ -1256,6 +1313,7 @@ class TableUI(CelldetectiveMainWindow):
                     kde=True,
                     common_norm=False,
                     stat="density",
+                    **kwargs_1d_x,
                 )
                 legend = False
             elif self.x is None and self.y is not None:
@@ -1269,9 +1327,28 @@ class TableUI(CelldetectiveMainWindow):
                     kde=True,
                     common_norm=False,
                     stat="density",
+                    **kwargs_1d_y,
                 )
                 legend = False
             else:
+                pass
+
+        if "2D histogram" in selected_plots:
+            if self.x is not None and self.y is not None:
+                # Use continuous colormap explicitly for 2D histogram density mapping
+                sns.histplot(
+                    data=self.data,
+                    x=self.x,
+                    y=self.y,
+                    hue=self.hue_variable,
+                    cbar=True,
+                    cmap=cmap,
+                    ax=self.ax,
+                    **kwargs_2d,
+                )
+                legend = False
+            else:
+                print("Please provide both x and y variables for a 2D histogram...")
                 pass
 
         if "KDE plot" in selected_plots:
@@ -1749,7 +1826,19 @@ class TableUI(CelldetectiveMainWindow):
             ]
             if len(invalid_cols) > 0:
                 self.data = self.data.drop(invalid_cols, axis=1)
-            self.data.to_csv(file_name, index=False)
+
+            # Get visual column order from header mapped to the original GUI model
+            header = self.table_view.horizontalHeader()
+            visual_cols = [
+                self.model._data.columns[header.logicalIndex(i)]
+                for i in range(header.count())
+            ]
+
+            # Export with preserved visual order and dropped unnamed cols
+            valid_visual_cols = [c for c in visual_cols if c in self.data.columns]
+            data_sorted = self.data[valid_visual_cols]
+
+            data_sorted.to_csv(file_name, index=False)
 
     def plot_instantaneous(self) -> None:
         """

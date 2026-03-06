@@ -238,6 +238,7 @@ class PlotSelectorWidget(VisualSelectorWidget):
 
         plot_types = [
             ("histogram", os.path.join(icons_dir, "histogram.png")),
+            ("2D histogram", os.path.join(icons_dir, "2d_histogram.png")),
             ("KDE plot", os.path.join(icons_dir, "KDE plot.png")),
             ("countplot", os.path.join(icons_dir, "countplot.png")),
             ("ECDF plot", os.path.join(icons_dir, "ECDF plot.png")),

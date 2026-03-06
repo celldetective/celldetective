@@ -1,5 +1,6 @@
 from typing import Optional
 
+import pandas as pd
 import numpy as np
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QDoubleValidator
@@ -372,3 +373,177 @@ class LogColWidget(GenericOpColWidget):
         self.parent_window.data["log10(" + self.measurements_cb.currentText() + ")"] = (
             safe_log(self.parent_window.data[self.measurements_cb.currentText()].values)
         )
+
+
+class BinColWidget(GenericOpColWidget):
+
+    def __init__(self, *args, **kwargs):
+        """
+        Initialize the BinColWidget.
+
+        Parameters
+        ----------
+        *args
+            Variable length argument list.
+        **kwargs
+            Arbitrary keyword arguments.
+        """
+
+        super().__init__(title="Bin data", *args, **kwargs)
+
+        self.floatValidator = QDoubleValidator()
+        self.floatValidator.setBottom(0)  # Width should be positive
+
+        self.width_le = QLineEdit("1.0")
+        self.width_le.setPlaceholderText("bin width...")
+        self.width_le.setValidator(self.floatValidator)
+        self.width_le.textChanged.connect(self.check_valid_params)
+
+        self.scale_linear_btn = QRadioButton("linear")
+        self.scale_linear_btn.setChecked(True)
+        self.scale_log_btn = QRadioButton("log")
+
+        self.scale_group = QButtonGroup()
+        self.scale_group.addButton(self.scale_linear_btn)
+        self.scale_group.addButton(self.scale_log_btn)
+
+        self.min_le = QLineEdit("")
+        self.min_le.setPlaceholderText("auto min...")
+        self.min_le.setValidator(QDoubleValidator())
+        self.min_le.textChanged.connect(self.check_valid_params)
+
+        self.max_le = QLineEdit("")
+        self.max_le.setPlaceholderText("auto max...")
+        self.max_le.setValidator(QDoubleValidator())
+        self.max_le.textChanged.connect(self.check_valid_params)
+
+        width_layout = QHBoxLayout()
+        width_layout.addWidget(QLabel("bin width: "), 33)
+        width_layout.addWidget(self.width_le, 66)
+        self.sublayout.addLayout(width_layout)
+
+        scale_layout = QHBoxLayout()
+        scale_layout.addWidget(QLabel("scale: "), 33)
+        scale_sublayout = QHBoxLayout()
+        scale_sublayout.addWidget(self.scale_linear_btn, 50, alignment=Qt.AlignCenter)
+        scale_sublayout.addWidget(self.scale_log_btn, 50, alignment=Qt.AlignCenter)
+        scale_layout.addLayout(scale_sublayout, 66)
+        self.sublayout.addLayout(scale_layout)
+
+        min_layout = QHBoxLayout()
+        min_layout.addWidget(QLabel("min loop edge: "), 33)
+        min_layout.addWidget(self.min_le, 66)
+        self.sublayout.addLayout(min_layout)
+
+        max_layout = QHBoxLayout()
+        max_layout.addWidget(QLabel("max loop edge: "), 33)
+        max_layout.addWidget(self.max_le, 66)
+        self.sublayout.addLayout(max_layout)
+
+        # Additional validation on measurements cb change
+        self.measurements_cb.currentIndexChanged.connect(self.update_limits)
+        self.measurements_cb.currentIndexChanged.connect(self.check_valid_params)
+
+        # Fire initial sync if an item is already selected
+        if self.measurements_cb.count() > 0:
+            self.update_limits()
+            self.check_valid_params()
+
+    def update_limits(self):
+        """Pre-fill min and max limits based on the selected column."""
+        if not hasattr(self, "min_le") or not hasattr(self, "max_le"):
+            return
+
+        try:
+            col = self.measurements_cb.currentText()
+            if pd.api.types.is_numeric_dtype(self.parent_window.data[col]):
+                data = self.parent_window.data[col].values
+                min_val = np.nanmin(data)
+                max_val = np.nanmax(data)
+                self.min_le.setText(str(min_val))
+                self.max_le.setText(str(max_val))
+            else:
+                self.min_le.setText("")
+                self.max_le.setText("")
+        except Exception as _:
+            pass
+
+    def check_valid_params(self):
+        """Check if binning parameters are valid."""
+
+        try:
+            width = float(self.width_le.text().replace(",", "."))
+            width_valid = width > 0
+        except Exception as _:
+            width_valid = False
+
+        min_valid = True
+        try:
+            if self.min_le.text() != "":
+                float(self.min_le.text().replace(",", "."))
+        except Exception as _:
+            min_valid = False
+
+        max_valid = True
+        try:
+            if self.max_le.text() != "":
+                float(self.max_le.text().replace(",", "."))
+        except Exception as _:
+            max_valid = False
+
+        data_valid = False
+        try:
+            col = self.measurements_cb.currentText()
+            if col != "":
+                # check the col is numeric to allow binning
+                if pd.api.types.is_numeric_dtype(self.parent_window.data[col]):
+                    data_valid = True
+        except Exception as _:
+            pass
+
+        if not hasattr(self, "submit_btn"):
+            return
+
+        if width_valid and min_valid and max_valid and data_valid:
+            self.submit_btn.setEnabled(True)
+        else:
+            self.submit_btn.setEnabled(False)
+
+    def compute(self):
+        """Apply binning to the selected column."""
+
+        col = self.measurements_cb.currentText()
+        data = self.parent_window.data[col].values
+
+        width = float(self.width_le.text().replace(",", "."))
+        scale = "linear" if self.scale_linear_btn.isChecked() else "log"
+
+        min_val = None
+        if self.min_le.text() != "":
+            min_val = float(self.min_le.text().replace(",", "."))
+        else:
+            min_val = np.nanmin(data)
+
+        max_val = None
+        if self.max_le.text() != "":
+            max_val = float(self.max_le.text().replace(",", "."))
+        else:
+            max_val = np.nanmax(data)
+
+        # Clip data
+        clipped = np.clip(data, min_val, max_val)
+
+        if scale == "linear":
+            binned = np.round(clipped / width) * width
+        elif scale == "log":
+            # Create a mask for positive values
+            mask = clipped > 0
+            binned = np.zeros_like(clipped, dtype=float)
+
+            binned[mask] = 10 ** (np.round(np.log10(clipped[mask]) / width) * width)
+
+            # Handle non-positive values (e.g., 0 stays 0)
+            binned[~mask] = clipped[~mask]
+
+        name = f"{col}_binned_{width}_{scale}"
+        self.parent_window.data[name] = binned
