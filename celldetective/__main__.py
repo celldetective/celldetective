@@ -18,6 +18,9 @@ if __name__ == "__main__":
 
     logger.info("Loading the libraries...")
 
+    from PyQt5.QtCore import Qt
+
+    QApplication.setAttribute(Qt.AA_ShareOpenGLContexts)
     App = QApplication(sys.argv)
     App.setStyle("Fusion")
 

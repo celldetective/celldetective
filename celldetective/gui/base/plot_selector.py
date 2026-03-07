@@ -246,6 +246,10 @@ class PlotSelectorWidget(VisualSelectorWidget):
             ("strip", os.path.join(icons_dir, "strip.png")),
             ("boxplot", os.path.join(icons_dir, "boxplot.png")),
             ("boxenplot", os.path.join(icons_dir, "boxenplot.png")),
+            (
+                "parallel coordinates",
+                os.path.join(icons_dir, "parallel coordinates.png"),
+            ),
         ]
         super().__init__(plot_types, parent)
 

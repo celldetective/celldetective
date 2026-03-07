@@ -14,9 +14,10 @@ def test_plot_selector_widget(qtbot):
         qtbot.addWidget(widget)
 
     # Check if cards are created
-    assert len(widget.cards) == 11
+    assert len(widget.cards) == 12
     assert "histogram" in widget.cards
     assert "boxenplot" in widget.cards
+    assert "parallel coordinates" in widget.cards
 
     # Test selection
     card_hist = widget.cards["histogram"]

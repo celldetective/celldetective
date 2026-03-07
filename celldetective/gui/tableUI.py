@@ -22,22 +22,8 @@ import pandas as pd
 from celldetective.gui.gui_utils import (
     PandasModel,
 )
-from celldetective.gui.base.figure_canvas import FigureCanvas
 from celldetective.gui.base.utils import center_window
-from celldetective.gui.table_ops._maths import (
-    DifferentiateColWidget,
-    OperationOnColsWidget,
-    CalibrateColWidget,
-    AbsColWidget,
-    LogColWidget,
-    BinColWidget,
-)
-from celldetective.gui.table_ops._merge_one_hot import MergeOneHotWidget
-from celldetective.gui.table_ops._query_table import QueryWidget
-from celldetective.gui.table_ops._rename_col import RenameColWidget
 from celldetective.relative_measurements import expand_pair_table
-from celldetective.utils.data_cleaning import collapse_trajectories_by_status
-from celldetective.utils.stats import test_2samp_generic
 import numpy as np
 import os
 from celldetective.gui.base.components import (
@@ -45,13 +31,8 @@ from celldetective.gui.base.components import (
     CelldetectiveMainWindow,
     QHSeperationLine,
 )
-from celldetective.gui.base.plot_selector import PlotSelectorWidget, StatsSelectorWidget
-from superqt import QColormapComboBox, QSearchableComboBox
 from math import floor
 import re
-import matplotlib
-import matplotlib.pyplot as plt
-import seaborn as sns
 from celldetective import get_logger
 from celldetective.utils.types import test_bool_array
 
@@ -762,6 +743,8 @@ class TableUI(CelldetectiveMainWindow):
         cols = np.array(list(self.data.columns))
         selected_col = str(cols[col_idx][0])
 
+        from celldetective.gui.table_ops._rename_col import RenameColWidget
+
         self.renameWidget = RenameColWidget(self, selected_col)
         self.renameWidget.show()
 
@@ -809,6 +792,8 @@ class TableUI(CelldetectiveMainWindow):
         selected_col1 = selected[0] if len(selected) > 0 else None
         selected_col2 = selected[1] if len(selected) > 1 else None
 
+        from celldetective.gui.table_ops._maths import OperationOnColsWidget
+
         self.divWidget = OperationOnColsWidget(
             self, column1=selected_col1, column2=selected_col2, operation="divide"
         )
@@ -822,6 +807,8 @@ class TableUI(CelldetectiveMainWindow):
         selected_col1 = selected[0] if len(selected) > 0 else None
         selected_col2 = selected[1] if len(selected) > 1 else None
 
+        from celldetective.gui.table_ops._maths import OperationOnColsWidget
+
         self.mulWidget = OperationOnColsWidget(
             self, column1=selected_col1, column2=selected_col2, operation="multiply"
         )
@@ -831,6 +818,9 @@ class TableUI(CelldetectiveMainWindow):
         """Open widget to bin the selected column."""
         selected = self._get_selected_columns(max_cols=1)
         selected_col = selected[0] if selected else None
+
+        from celldetective.gui.table_ops._maths import BinColWidget
+
         self.binWidget = BinColWidget(self, selected_col)
         self.binWidget.show()
 
@@ -841,6 +831,8 @@ class TableUI(CelldetectiveMainWindow):
         selected = self._get_selected_columns(max_cols=2)
         selected_col1 = selected[0] if len(selected) > 0 else None
         selected_col2 = selected[1] if len(selected) > 1 else None
+
+        from celldetective.gui.table_ops._maths import OperationOnColsWidget
 
         self.addiWidget = OperationOnColsWidget(
             self, column1=selected_col1, column2=selected_col2, operation="add"
@@ -855,6 +847,8 @@ class TableUI(CelldetectiveMainWindow):
         selected_col1 = selected[0] if len(selected) > 0 else None
         selected_col2 = selected[1] if len(selected) > 1 else None
 
+        from celldetective.gui.table_ops._maths import OperationOnColsWidget
+
         self.subWidget = OperationOnColsWidget(
             self, column1=selected_col1, column2=selected_col2, operation="subtract"
         )
@@ -864,6 +858,9 @@ class TableUI(CelldetectiveMainWindow):
         """Open widget to differentiate the selected column."""
         selected = self._get_selected_columns(max_cols=1)
         selected_col = selected[0] if selected else None
+
+        from celldetective.gui.table_ops._maths import DifferentiateColWidget
+
         self.diffWidget = DifferentiateColWidget(self, selected_col)
         self.diffWidget.show()
 
@@ -871,6 +868,9 @@ class TableUI(CelldetectiveMainWindow):
         """Open widget to take log of the selected column."""
         selected = self._get_selected_columns(max_cols=1)
         selected_col = selected[0] if selected else None
+
+        from celldetective.gui.table_ops._maths import LogColWidget
+
         self.LogWidget = LogColWidget(self, selected_col)
         self.LogWidget.show()
 
@@ -888,6 +888,9 @@ class TableUI(CelldetectiveMainWindow):
         """Open widget to calibrate the selected column."""
         selected = self._get_selected_columns(max_cols=1)
         selected_col = selected[0] if selected else None
+
+        from celldetective.gui.table_ops._maths import CalibrateColWidget
+
         self.calWidget = CalibrateColWidget(self, selected_col)
         self.calWidget.show()
 
@@ -895,6 +898,9 @@ class TableUI(CelldetectiveMainWindow):
         """Open widget to take absolute value of the selected column."""
         selected = self._get_selected_columns(max_cols=1)
         selected_col = selected[0] if selected else None
+
+        from celldetective.gui.table_ops._maths import AbsColWidget
+
         self.absWidget = AbsColWidget(self, selected_col)
         self.absWidget.show()
 
@@ -910,6 +916,8 @@ class TableUI(CelldetectiveMainWindow):
             cols = np.array(list(self.data.columns))
             if len(col_idx) > 0:
                 selected_col = str(cols[col_idx[0]])
+
+        from celldetective.gui.table_ops._merge_one_hot import MergeOneHotWidget
 
         self.mergewidget = MergeOneHotWidget(self, selected_columns=selected_cols)
         self.mergewidget.show()
@@ -936,6 +944,8 @@ class TableUI(CelldetectiveMainWindow):
         Perform a time average across each track for all features
 
         """
+        from celldetective.gui.table_ops._query_table import QueryWidget
+
         self.query_widget = QueryWidget(self)
         self.query_widget.show()
 
@@ -1099,6 +1109,12 @@ class TableUI(CelldetectiveMainWindow):
         """
         Open the 1D plot parameter configuration window.
         """
+        from celldetective.gui.base.plot_selector import (
+            PlotSelectorWidget,
+            StatsSelectorWidget,
+        )
+        from superqt import QColormapComboBox, QSearchableComboBox
+        import matplotlib
 
         self.plot1Dparams = CelldetectiveWidget()
         self.plot1Dparams.setWindowTitle("Set 1D plot parameters")
@@ -1132,17 +1148,27 @@ class TableUI(CelldetectiveMainWindow):
         idx = self.hue_cb.findText("--")
         self.hue_cb.setCurrentIndex(idx)
 
-        # Set selected column
-
+        # Set selected columns
         try:
             x = self.table_view.selectedIndexes()
             col_idx = np.array([item.column() for item in x])
-            row_idx = np.array([item.row() for item in x])
             column_names = self.data.columns
-            unique_cols = np.unique(col_idx)[0]
-            y = column_names[unique_cols]
-            idx = self.y_cb.findText(y)
-            self.y_cb.setCurrentIndex(idx)
+            unique_cols = np.unique(col_idx)
+
+            if len(unique_cols) == 1:
+                y_col = column_names[unique_cols[0]]
+                idx = self.y_cb.findText(y_col)
+                self.y_cb.setCurrentIndex(idx)
+
+            if len(unique_cols) >= 2:
+                x_col = column_names[unique_cols[0]]
+                idx = self.x_cb.findText(x_col)
+                self.x_cb.setCurrentIndex(idx)
+
+                y_col = column_names[unique_cols[1]]
+                idx = self.y_cb.findText(y_col)
+                self.y_cb.setCurrentIndex(idx)
+
         except (IndexError, KeyError):
             # No column selected or invalid selection
             pass
@@ -1190,6 +1216,17 @@ class TableUI(CelldetectiveMainWindow):
         """
         Generate the 1D plot based on selected parameters.
         """
+        import matplotlib.pyplot as plt
+        import matplotlib
+        import seaborn as sns
+        from celldetective.gui.base.figure_canvas import FigureCanvas
+
+        # Parallel coordinates requires its own dialog — x/y/hue don't apply.
+        selected_plots = self.plot_selector.get_selection()
+        if "parallel coordinates" in selected_plots:
+            self.plot1Dparams.close()
+            self.set_parallel_coords_params()
+            return
 
         self.fig, self.ax = plt.subplots(1, 1, figsize=(4, 3))
         self.plot1dWindow = FigureCanvas(self.fig, title="scatter", interactive=True)
@@ -1803,17 +1840,10 @@ class TableUI(CelldetectiveMainWindow):
 
     def plot_instantaneous(self) -> None:
         """
-        Refresh the plot for instantaneous values.
+        Open the 1D/2D plotting menu (Plot Instantaneous).
+        Always reachable regardless of selection.
         """
-
-        if self.plot_mode == "plot_track_signals":
-            self.plot_mode = "static"
-            try:
-                self.plot()
-            finally:
-                self.plot_mode = "plot_track_signals"
-        elif self.plot_mode == "static":
-            self.plot()
+        self.set_1D_plot_params()
 
     def plot(self) -> None:
         """
@@ -1835,6 +1865,8 @@ class TableUI(CelldetectiveMainWindow):
                 self.set_1D_plot_params()
 
             if len(unique_cols) == 2:
+                import matplotlib.pyplot as plt
+                from celldetective.gui.base.figure_canvas import FigureCanvas
 
                 x1 = test_bool_array(self.data.iloc[row_idx, unique_cols[0]])
                 x2 = test_bool_array(self.data.iloc[row_idx, unique_cols[1]])
@@ -1853,9 +1885,13 @@ class TableUI(CelldetectiveMainWindow):
                 self.scatter_wdw.show()
 
             if len(unique_cols) > 2:
-                logger.warning("Please select 1 or 2 columns to plot.")
+                selected_col_names = [str(column_names[i]) for i in unique_cols]
+                self.set_parallel_coords_params(selected_col_names)
 
         elif self.plot_mode == "plot_timeseries":
+            import matplotlib.pyplot as plt
+            from celldetective.gui.base.figure_canvas import FigureCanvas
+
             x = self.table_view.selectedIndexes()
             col_idx = np.array([item.column() for item in x])
             row_idx = np.array([item.row() for item in x])
@@ -1884,6 +1920,8 @@ class TableUI(CelldetectiveMainWindow):
             self.plot_wdw.show()
 
         elif self.plot_mode == "plot_track_signals":
+            import matplotlib.pyplot as plt
+            from celldetective.gui.base.figure_canvas import FigureCanvas
 
             x = self.table_view.selectedIndexes()
             col_idx = np.array([item.column() for item in x])
@@ -1963,3 +2001,320 @@ class TableUI(CelldetectiveMainWindow):
                 self.fig.canvas.setStyleSheet("background-color: transparent;")
                 self.plot_wdw.canvas.draw()
                 self.plot_wdw.show()
+
+    def set_parallel_coords_params(
+        self, preselected_cols: Optional[List[str]] = None
+    ) -> None:
+        """
+        Open the parallel coordinates plot parameter configuration window.
+
+        Parameters
+        ----------
+        preselected_cols : list of str, optional
+            Column names to pre-select as axes. Defaults to all numeric columns.
+        """
+        from PyQt5.QtWidgets import (
+            QListWidget,
+            QListWidgetItem,
+            QDoubleSpinBox,
+            QSpinBox,
+        )
+
+        self.parallelCoordsParams = CelldetectiveWidget()
+        self.parallelCoordsParams.setWindowTitle("Parallel Coordinates Parameters")
+        self.parallelCoordsParams.setMinimumWidth(420)
+
+        layout = QVBoxLayout()
+        self.parallelCoordsParams.setLayout(layout)
+
+        # --- Axis columns (multi-select list) ---
+        layout.addWidget(QLabel("Axes (select columns):"))
+        self._pc_col_list = QListWidget()
+        self._pc_col_list.setSelectionMode(QListWidget.MultiSelection)
+        self._pc_col_list.setMaximumHeight(160)
+
+        numeric_cols = list(
+            self.data.select_dtypes(
+                include=["int16", "int32", "int64", "float16", "float32", "float64"]
+            ).columns
+        )
+        for col in numeric_cols:
+            item = QListWidgetItem(col)
+            self._pc_col_list.addItem(item)
+            if preselected_cols and col in preselected_cols:
+                item.setSelected(True)
+
+        layout.addWidget(self._pc_col_list)
+
+        from superqt import QSearchableComboBox
+
+        # --- ID column ---
+        hbox_id = QHBoxLayout()
+        hbox_id.addWidget(QLabel("ID column: "), 33)
+        self._pc_id_cb = QSearchableComboBox()
+        self._pc_id_cb.addItems(["--"] + list(self.data.columns))
+        if "TRACK_ID" in self.data.columns:
+            self._pc_id_cb.setCurrentText("TRACK_ID")
+        elif "ID" in self.data.columns:
+            self._pc_id_cb.setCurrentText("ID")
+        hbox_id.addWidget(self._pc_id_cb, 66)
+        layout.addLayout(hbox_id)
+
+        # --- Color by ---
+        hbox_hue = QHBoxLayout()
+        hbox_hue.addWidget(QLabel("Color by: "), 33)
+        self._pc_hue_cb = QSearchableComboBox()
+        self._pc_hue_cb.addItems(["--"] + list(self.data.columns))
+        hbox_hue.addWidget(self._pc_hue_cb, 66)
+        layout.addLayout(hbox_hue)
+
+        # --- Colormap (Plotly-native names only) ---
+        hbox_cmap = QHBoxLayout()
+        hbox_cmap.addWidget(QLabel("Colormap: "), 33)
+        self._pc_cmap_cb = QComboBox()
+        try:
+            import plotly.colors as pc_colors
+
+            plotly_scales = sorted(pc_colors.named_colorscales())
+        except Exception:
+            plotly_scales = ["Viridis", "Plasma", "Inferno", "Cividis", "Jet"]
+        self._pc_cmap_cb.addItems(plotly_scales)
+        # Default to viridis (plotly names are lowercase)
+        idx = self._pc_cmap_cb.findText("viridis")
+        if idx >= 0:
+            self._pc_cmap_cb.setCurrentIndex(idx)
+        hbox_cmap.addWidget(self._pc_cmap_cb, 66)
+        layout.addLayout(hbox_cmap)
+
+        # --- Alpha ---
+        hbox_alpha = QHBoxLayout()
+        hbox_alpha.addWidget(QLabel("Alpha: "), 33)
+        self._pc_alpha_sb = QDoubleSpinBox()
+        self._pc_alpha_sb.setRange(0.01, 1.0)
+        self._pc_alpha_sb.setSingleStep(0.05)
+        self._pc_alpha_sb.setValue(0.3)
+        hbox_alpha.addWidget(self._pc_alpha_sb, 66)
+        layout.addLayout(hbox_alpha)
+
+        # --- Normalization ---
+        hbox_norm = QHBoxLayout()
+        hbox_norm.addWidget(QLabel("Normalize axes: "), 33)
+        self._pc_norm_cb = QComboBox()
+        self._pc_norm_cb.addItems(["min-max", "z-score", "none"])
+        hbox_norm.addWidget(self._pc_norm_cb, 66)
+        layout.addLayout(hbox_norm)
+
+        # --- Plot button ---
+        plot_btn = QPushButton("Plot")
+        plot_btn.setStyleSheet(self.button_style_sheet)
+        plot_btn.clicked.connect(self.plot_parallel_coords)
+        layout.addWidget(plot_btn)
+
+        self.parallelCoordsParams.show()
+        center_window(self.parallelCoordsParams)
+
+    def plot_parallel_coords(self) -> None:
+        """
+        Render an interactive parallel coordinates plot using Plotly.
+
+        Opens the chart as a self-contained HTML file in the system's default
+        browser, giving the user interactive axis reordering and per-axis
+        brushing/filtering out of the box.
+        """
+        try:
+            import plotly.graph_objects as go
+        except ImportError:
+            logger.error(
+                "plotly is required for parallel coordinates plots. "
+                "Install it with: pip install plotly"
+            )
+            QMessageBox.critical(
+                self,
+                "Missing dependency",
+                "plotly is required for parallel coordinates plots.\n"
+                "Install it with: pip install plotly",
+            )
+            return
+
+        import tempfile
+        import webbrowser
+
+        # --- Collect parameters from dialog ---
+        selected_items = self._pc_col_list.selectedItems()
+        cols = [item.text() for item in selected_items]
+        if len(cols) < 2:
+            logger.warning(
+                "parallel coordinates: please select at least 2 axis columns."
+            )
+            return
+
+        id_col = self._pc_id_cb.currentText()
+        if id_col == "--":
+            id_col = None
+
+        hue_col = self._pc_hue_cb.currentText()
+        if hue_col == "--":
+            hue_col = None
+
+        cmap_name = self._pc_cmap_cb.currentText()
+        alpha = self._pc_alpha_sb.value()
+        norm_mode = self._pc_norm_cb.currentText()  # "min-max", "z-score", "none"
+
+        # --- Prepare data ---
+        df = self.data[cols].copy().dropna()
+        if hue_col is not None and hue_col in self.data.columns:
+            hue_series = self.data.loc[df.index, hue_col]
+        else:
+            hue_series = None
+
+        if id_col is not None and id_col in self.data.columns:
+            id_series = self.data.loc[df.index, id_col]
+        else:
+            id_series = None
+
+        # --- Build per-axis dimension specs ---
+        dimensions = []
+
+        # Insert ID dimension first natively mapped as categorical
+        if id_series is not None:
+            unique_ids = id_series.unique()
+            id_map = {val: i for i, val in enumerate(unique_ids)}
+            numeric_ids = id_series.map(id_map)
+
+            # Max 50 ticks to avoid overcrowding the axis view
+            tick_step = max(1, len(unique_ids) // 50)
+            valid_keys = list(id_map.keys())[::tick_step]
+
+            dimensions.append(
+                dict(
+                    label=id_col,
+                    values=numeric_ids.tolist(),
+                    tickvals=[id_map[k] for k in valid_keys],
+                    ticktext=[str(k) for k in valid_keys],
+                )
+            )
+
+        for col in cols:
+            values = df[col]
+            vmin, vmax = float(values.min()), float(values.max())
+            span = vmax - vmin
+
+            if norm_mode == "min-max":
+                scaled = (values - vmin) / span if span != 0 else values * 0
+                range_ = [0.0, 1.0]
+            elif norm_mode == "z-score":
+                std = values.std()
+                mean = values.mean()
+                scaled = (values - mean) / std if std != 0 else values * 0
+                r = max(abs(float(scaled.min())), abs(float(scaled.max())))
+                range_ = [-r, r]
+            else:
+                scaled = values
+                range_ = [vmin, vmax]
+
+            dimensions.append(
+                dict(
+                    label=col,
+                    values=scaled.tolist(),
+                    range=range_,
+                    # Show the original tick values even when normalized
+                    tickvals=(
+                        [0.0, 0.25, 0.5, 0.75, 1.0] if norm_mode == "min-max" else None
+                    ),
+                    ticktext=(
+                        [f"{vmin + i * span / 4:.3g}" for i in range(5)]
+                        if norm_mode == "min-max" and span != 0
+                        else None
+                    ),
+                )
+            )
+
+        # Silence Plotly alias warnings by mapping common aliases to fully namespaced names
+        alias_map = {
+            "rainbow": "gnuplot:rainbow",
+            "prgn": "colorbrewer:PRGn",
+            "rdbu": "colorbrewer:RdBu",
+            "ylorbr": "colorbrewer:YlOrBr",
+            "copper": "matlab:copper",
+            "ocean": "gnuplot:ocean",
+        }
+        colorscale = alias_map.get(cmap_name, cmap_name)
+
+        # --- Color line array ---
+        if hue_series is not None:
+            try:
+                color_values = pd.to_numeric(
+                    hue_series.reindex(df.index), errors="raise"
+                ).tolist()
+                colorbar_title = hue_col
+            except (ValueError, TypeError):
+                # Categorical: encode as integers
+                cats = hue_series.reindex(df.index)
+                unique_vals = list(cats.unique())
+                color_values = [unique_vals.index(v) for v in cats]
+                colorbar_title = hue_col
+        else:
+            color_values = list(range(len(df)))
+            colorbar_title = None
+
+        line_dict = dict(
+            color=color_values,
+            colorscale=colorscale,
+            showscale=True,
+            colorbar=(
+                dict(title=colorbar_title, thickness=15, len=0.75)
+                if colorbar_title
+                else dict(showticklabels=False, thickness=0)
+            ),
+        )
+
+        # --- Build figure ---
+        fig = go.Figure(
+            data=go.Parcoords(
+                line=line_dict,
+                dimensions=dimensions,
+            )
+        )
+        fig.update_layout(
+            title="Parallel Coordinates",
+            paper_bgcolor="white",
+            plot_bgcolor="white",
+            font=dict(size=11),
+            margin=dict(l=60, r=30, t=60, b=30),
+        )
+
+        # --- Open in window via QWebEngineView ---
+        tmp = tempfile.NamedTemporaryFile(
+            suffix=".html", delete=False, prefix="parallel_coords_"
+        )
+        tmp_path = tmp.name
+        tmp.close()
+        fig.write_html(tmp_path, include_plotlyjs="cdn")
+
+        try:
+            from PyQt5.QtWebEngineWidgets import QWebEngineView
+            from PyQt5.QtWidgets import QMainWindow
+            from PyQt5.QtCore import QUrl
+
+            self.pc_window = QMainWindow()
+            self.pc_window.setWindowTitle(
+                "Parallel Coordinates (Plotly) - CellDetective"
+            )
+            self.pc_window.resize(900, 600)
+
+            browser = QWebEngineView()
+            browser.load(QUrl.fromLocalFile(tmp_path))
+            self.pc_window.setCentralWidget(browser)
+            self.pc_window.show()
+            center_window(self.pc_window)
+
+            logger.info(
+                f"Parallel coordinates plot opened in native window from {tmp_path}"
+            )
+
+        except ImportError:
+            logger.warning(
+                "PyQtWebEngine not found. Falling back to system web browser."
+            )
+            webbrowser.open(f"file:///{tmp_path}")
+            logger.info(f"Parallel coordinates plot saved to {tmp_path}")

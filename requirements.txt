@@ -41,3 +41,4 @@ scikit-image
 natsort
 sphinx-hoverxref
 sphinx-design
+PyQtWebEngine
