@@ -8,47 +8,30 @@ Tests cover:
 - NaN propagation: if any source column is NaN, the merged column is NaN
 - Single column selected → no merge performed
 - No columns selected → no merge performed
-
-NOTE: This test uses mocks for GUI components to avoid PyQt5 DLL load errors
-in environments with broken Qt, while still verifying the logic.
 """
 
 import pytest
 import numpy as np
 import pandas as pd
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
+from PyQt5.QtWidgets import QMainWindow, QTableView
 
-# Mock the Qt imports to avoid DLL errors during test collection/execution
-with patch.dict(
-    "sys.modules",
-    **{
-        "PyQt5": MagicMock(),
-        "PyQt5.QtWidgets": MagicMock(),
-        "PyQt5.QtCore": MagicMock(),
-        "superqt.fonticon": MagicMock(),
-        "fonticon_mdi6": MagicMock(),
-        "celldetective.gui.base.components": MagicMock(),
-        "celldetective.gui.gui_utils": MagicMock(),
-        "celldetective.gui.base.utils": MagicMock(),
-    }
-):
-    # Import the widget class under test (now using mocked Qt dependencies)
-    from celldetective.gui.table_ops._merge_groups import MergeGroupWidget
+from celldetective.gui.table_ops._merge_groups import MergeGroupWidget
 
 
 @pytest.fixture
 def mock_parent_window():
-    """Create a mock parent window with a dataframe."""
-    parent = MagicMock()
+    """Create a mock parent window with a dataframe-backed data attribute."""
+    parent = MagicMock(spec=QMainWindow)
     parent.data = pd.DataFrame()
     parent.model = MagicMock()
-    parent.table_view = MagicMock()
+    parent.table_view = MagicMock(spec=QTableView)
     return parent
 
 
 @pytest.fixture
 def binary_classification_data():
-    """Create sample data with two binary classification columns."""
+    """Sample data with two binary classification columns."""
     return pd.DataFrame(
         {
             "position": ["pos1"] * 6,
@@ -61,7 +44,7 @@ def binary_classification_data():
 
 @pytest.fixture
 def three_binary_classification_data():
-    """Create sample data with three binary classification columns."""
+    """Sample data with three binary classification columns."""
     return pd.DataFrame(
         {
             "position": ["pos1"] * 8,
@@ -74,7 +57,7 @@ def three_binary_classification_data():
 
 @pytest.fixture
 def multilabel_classification_data():
-    """Create sample data with multi-label (non-binary) classification columns."""
+    """Sample data with multi-label (non-binary) classification columns."""
     return pd.DataFrame(
         {
             "position": ["pos1"] * 6,
@@ -86,7 +69,7 @@ def multilabel_classification_data():
 
 @pytest.fixture
 def nan_classification_data():
-    """Create sample data with NaN values in classification columns."""
+    """Sample data with NaN values in classification columns."""
     return pd.DataFrame(
         {
             "position": ["pos1"] * 5,
@@ -97,29 +80,27 @@ def nan_classification_data():
 
 
 def _setup_widget_and_compute(
-    parent_window, data, cols_to_merge, group_name="group_merged"
+    qtbot, parent_window, data, cols_to_merge, group_name="group_merged"
 ):
     """
-    Setup a MergeGroupWidget (mocked) and trigger compute.
+    Create a real MergeGroupWidget, override its UI state, and trigger compute.
     """
     parent_window.data = data.copy()
 
-    # Instantiate the widget
-    # checking __init__ logic: it accesses parent_window.data.columns
-    widget = MergeGroupWidget(parent_window, columns=cols_to_merge)
+    widget = MergeGroupWidget(
+        parent_window, columns=cols_to_merge, n_cols_init=len(cols_to_merge)
+    )
+    qtbot.addWidget(widget)
 
-    # Mock the internal UI components that store state
-    widget.name_le = MagicMock()
-    widget.name_le.text.return_value = group_name
+    # Override name field
+    widget.name_le.setText(group_name)
 
-    # Mock the combo boxes
-    widget.cbs = []
-    for col in cols_to_merge:
-        cb = MagicMock()
-        cb.currentText.return_value = col
-        widget.cbs.append(cb)
+    # Override combo boxes to reflect the desired columns
+    for i, col in enumerate(cols_to_merge):
+        idx = widget.cbs[i].findText(col)
+        if idx >= 0:
+            widget.cbs[i].setCurrentIndex(idx)
 
-    # Call the logic directly
     widget.compute()
 
     return parent_window
@@ -131,13 +112,14 @@ def _setup_widget_and_compute(
 
 
 class TestMergeClassification:
-    """Test the merge classification logic using mocked GUI components."""
+    """Test the merge classification logic using real Qt widgets."""
 
     def test_merge_two_binary_columns(
-        self, mock_parent_window, binary_classification_data
+        self, qtbot, mock_parent_window, binary_classification_data
     ):
         """Merge two binary columns."""
         parent = _setup_widget_and_compute(
+            qtbot,
             mock_parent_window,
             binary_classification_data,
             ["group_spread", "group_dead"],
@@ -151,10 +133,11 @@ class TestMergeClassification:
         assert merged == expected
 
     def test_merge_three_binary_columns(
-        self, mock_parent_window, three_binary_classification_data
+        self, qtbot, mock_parent_window, three_binary_classification_data
     ):
         """Merge three binary columns."""
         parent = _setup_widget_and_compute(
+            qtbot,
             mock_parent_window,
             three_binary_classification_data,
             ["group_a", "group_b", "group_c"],
@@ -167,10 +150,11 @@ class TestMergeClassification:
         assert merged == expected
 
     def test_merge_multilabel_columns(
-        self, mock_parent_window, multilabel_classification_data
+        self, qtbot, mock_parent_window, multilabel_classification_data
     ):
         """Merge multi-label columns."""
         parent = _setup_widget_and_compute(
+            qtbot,
             mock_parent_window,
             multilabel_classification_data,
             ["group_type", "group_size"],
@@ -184,9 +168,10 @@ class TestMergeClassification:
         expected = [0, 1, 5, 3, 1, 5]
         assert merged == expected
 
-    def test_nan_propagation(self, mock_parent_window, nan_classification_data):
+    def test_nan_propagation(self, qtbot, mock_parent_window, nan_classification_data):
         """Verify NaN propagation."""
         parent = _setup_widget_and_compute(
+            qtbot,
             mock_parent_window,
             nan_classification_data,
             ["group_x", "group_y"],
@@ -201,10 +186,11 @@ class TestMergeClassification:
         assert merged.iloc[4] == 2
 
     def test_single_column_no_merge(
-        self, mock_parent_window, binary_classification_data
+        self, qtbot, mock_parent_window, binary_classification_data
     ):
         """Single column selection should not trigger merge."""
         parent = _setup_widget_and_compute(
+            qtbot,
             mock_parent_window,
             binary_classification_data,
             ["group_spread"],
@@ -214,10 +200,11 @@ class TestMergeClassification:
         assert "group_should_not_exist" not in parent.data.columns
 
     def test_group_prefix_auto_added(
-        self, mock_parent_window, binary_classification_data
+        self, qtbot, mock_parent_window, binary_classification_data
     ):
         """Verify 'group_' prefix addition."""
         parent = _setup_widget_and_compute(
+            qtbot,
             mock_parent_window,
             binary_classification_data,
             ["group_spread", "group_dead"],
