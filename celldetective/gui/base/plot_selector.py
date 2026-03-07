@@ -123,9 +123,7 @@ class SelectableCard(QFrame):
             self.image_label.setPixmap(
                 pixmap.scaled(100, 60, Qt.KeepAspectRatio, Qt.SmoothTransformation)
             )
-            # Ensure path is forward slash for HTML
-            html_path = icon_path.replace("\\", "/")
-            self.setToolTip(f"<b>{name}</b><br><img src='{html_path}' width='400'>")
+            self.setToolTip(name)
         else:
             self.image_label.setText("No Image")
             self.setToolTip(name)
@@ -238,7 +236,6 @@ class PlotSelectorWidget(VisualSelectorWidget):
 
         plot_types = [
             ("histogram", os.path.join(icons_dir, "histogram.png")),
-            ("2D histogram", os.path.join(icons_dir, "2d_histogram.png")),
             ("KDE plot", os.path.join(icons_dir, "KDE plot.png")),
             ("countplot", os.path.join(icons_dir, "countplot.png")),
             ("ECDF plot", os.path.join(icons_dir, "ECDF plot.png")),

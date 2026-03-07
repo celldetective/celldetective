@@ -27,13 +27,14 @@ The Table UI offers versatile plotting capabilities. Select columns in the table
 If one column is selected (or no specific column), the 1D plot interface opens. It supports:
 
 - **Distributions**: Histogram, KDE plot, ECDF plot.
+  *Note:* When selecting a Histogram for a binned property (generated via **Math > Bin...**), the bar width is automatically synchronized to match the exact mathematical bin interval with a clear edge separation.
 - **Categorical**: Countplot, Swarm plot, Violin plot, Strip plot, Box plot, Boxenplot.
 - **Stats**: Option to compute KS test p-values and Cliff's Delta effect size.
 - **Grouping**: Select X, Y, and Hue variables to group data.
 
 2D Plotting
 ~~~~~~~~~~~
-If two columns are selected, a scatter plot is automatically generated comparing the two variables.
+If two columns are selected, a scatter plot is automatically generated comparing the two variables. Select **Histogram** to switch to a co-binning heatmap displaying density distributions, or **KDE plot** to display a smooth 2D density contour map. If the X and Y metrics represent binned properties (via **Math > Bin...**), the generated 2D **Histogram** grid will perfectly align with both interval widths to form true spatial bounding boxes.
 
 Time Series / Track Signals
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~

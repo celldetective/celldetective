@@ -48,6 +48,10 @@ from celldetective.gui.base.components import (
 from celldetective.gui.base.plot_selector import PlotSelectorWidget, StatsSelectorWidget
 from superqt import QColormapComboBox, QSearchableComboBox
 from math import floor
+import re
+import matplotlib
+import matplotlib.pyplot as plt
+import seaborn as sns
 from celldetective import get_logger
 from celldetective.utils.types import test_bool_array
 
@@ -1132,8 +1136,8 @@ class TableUI(CelldetectiveMainWindow):
 
         try:
             x = self.table_view.selectedIndexes()
-            col_idx = np.array([l.column() for l in x])
-            row_idx = np.array([l.row() for l in x])
+            col_idx = np.array([item.column() for item in x])
+            row_idx = np.array([item.row() for item in x])
             column_names = self.data.columns
             unique_cols = np.unique(col_idx)[0]
             y = column_names[unique_cols]
@@ -1158,17 +1162,11 @@ class TableUI(CelldetectiveMainWindow):
         hbox.addWidget(self.hue_cb, 66)
         layout.addLayout(hbox)
 
-        from matplotlib import colormaps
-        import matplotlib.cm
-
-        self.cmap_cb = QColormapComboBox()
-        # Use modern registry
         import warnings
 
+        self.cmap_cb = QColormapComboBox()
         for name in matplotlib.colormaps.keys():
-            # Option: Filter out reverse maps if desired, or keep all
             try:
-                # Pass name string but suppress alias warnings (e.g. from cmasher/superqt)
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore")
                     self.cmap_cb.addColormap(name)
@@ -1193,77 +1191,28 @@ class TableUI(CelldetectiveMainWindow):
         Generate the 1D plot based on selected parameters.
         """
 
-        self.x_option = False
-        if self.x_cb.currentText() != "--":
-            self.x_option = True
-            self.x = self.x_cb.currentText()
-
-        import matplotlib.pyplot as plt
-        import seaborn as sns
-        import matplotlib
-
         self.fig, self.ax = plt.subplots(1, 1, figsize=(4, 3))
         self.plot1dWindow = FigureCanvas(self.fig, title="scatter", interactive=True)
-        self.ax.clear()
 
-        # Use modern colormap registry
-        try:
-            cmap = matplotlib.colormaps[self.cmap_cb.currentText()]
-        except KeyError:
-            # Fallback or default
-            cmap = matplotlib.colormaps["viridis"]
+        # Resolve colormap with a single case-insensitive lookup
+        cmap_name = self.cmap_cb.currentText()
+        canonical_cmap = next(
+            (k for k in matplotlib.colormaps if k.lower() == cmap_name.lower()),
+            "viridis",
+        )
+        cmap = matplotlib.colormaps[canonical_cmap]
 
+        # Build hue palette
         try:
             self.hue_variable = self.hue_cb.currentText()
-            # Drop NaNs to match seaborn's plotting behavior and avoid palette mismatch warnings
             unique_hues = self.data[self.hue_variable].dropna().unique()
             n_hues = len(unique_hues)
-            if n_hues > 0:
-                # Use seaborn to generate the palette. It handles sequential colormaps
-                # much better (avoiding the very light/white start).
-                try:
-                    # Get the colormap name from the combobox
-                    cmap_name = self.cmap_cb.currentText()
-
-                    # Try direct lookup first
-                    try:
-                        colors = sns.color_palette(cmap_name, n_colors=n_hues)
-                    except ValueError:
-                        # If failed (likely due to case mismatch e.g., 'blues' vs 'Blues'),
-                        # try to find the correct case-sensitive key from matplotlib.colormaps
-                        import matplotlib
-
-                        found_key = None
-                        for key in matplotlib.colormaps.keys():
-                            if key.lower() == cmap_name.lower():
-                                found_key = key
-                                break
-
-                        if found_key:
-                            colors = sns.color_palette(found_key, n_colors=n_hues)
-                        else:
-                            raise ValueError(f"Colormap '{cmap_name}' not found.")
-
-                except (ValueError, Exception) as e:
-                    print(f"Seaborn palette failed for '{cmap_name}': {e}")
-                    # Fallback to manual sampling if seaborn doesn't recognize the name
-                    try:
-                        # Case-insensitive fallback for manual sampling too
-                        found_key = cmap_name
-                        for key in matplotlib.colormaps.keys():
-                            if key.lower() == cmap_name.lower():
-                                found_key = key
-                                break
-
-                        cmap = matplotlib.colormaps[found_key]
-                        denom = n_hues - 1 if n_hues > 1 else 1
-                        colors = [cmap(i / denom) for i in range(n_hues)]
-                    except Exception as e2:
-                        print(f"Manual sampling failed for '{cmap_name}': {e2}")
-                        colors = sns.color_palette("viridis", n_colors=n_hues)
-            else:
-                colors = None
-        except (KeyError, ZeroDivisionError, AttributeError):
+            colors = (
+                sns.color_palette(canonical_cmap, n_colors=n_hues)
+                if n_hues > 0
+                else None
+            )
+        except Exception:
             colors = None
 
         if self.hue_cb.currentText() == "--":
@@ -1279,30 +1228,45 @@ class TableUI(CelldetectiveMainWindow):
         else:
             self.x = self.x_cb.currentText()
 
+        self.x_option = self.x is not None
+
         legend = True
 
         selected_plots = self.plot_selector.get_selection()
 
-        import re
-
-        def _get_binwidth(col_name):
-            if col_name and isinstance(col_name, str):
-                match = re.search(r"_binned_([0-9.]+)_", col_name)
-                if match:
-                    return float(match.group(1))
-            return None
-
-        bw_x = _get_binwidth(self.x)
-        bw_y = _get_binwidth(self.y)
-
-        kwargs_1d_x = {"binwidth": bw_x, "shrink": 0.9} if bw_x is not None else {}
-        kwargs_1d_y = {"binwidth": bw_y, "shrink": 0.9} if bw_y is not None else {}
-        kwargs_2d = (
-            {"binwidth": (bw_x, bw_y)} if bw_x is not None and bw_y is not None else {}
-        )
-
         if "histogram" in selected_plots:
-            if self.x is not None:
+
+            def _get_binwidth(col_name):
+                if col_name and isinstance(col_name, str):
+                    match = re.search(r"_binned_([0-9.]+)_", col_name)
+                    if match:
+                        return float(match.group(1))
+                return None
+
+            bw_x = _get_binwidth(self.x)
+            bw_y = _get_binwidth(self.y)
+            kwargs_1d_x = {"binwidth": bw_x, "shrink": 0.9} if bw_x is not None else {}
+            kwargs_1d_y = {"binwidth": bw_y, "shrink": 0.9} if bw_y is not None else {}
+            kwargs_2d = (
+                {"binwidth": (bw_x, bw_y)}
+                if bw_x is not None and bw_y is not None
+                else {}
+            )
+
+            if self.x is not None and self.y is not None:
+                # Use continuous colormap explicitly for 2D histogram density mapping
+                sns.histplot(
+                    data=self.data,
+                    x=self.x,
+                    y=self.y,
+                    hue=self.hue_variable,
+                    cbar=True,
+                    cmap=cmap,
+                    ax=self.ax,
+                    **kwargs_2d,
+                )
+                legend = False
+            elif self.x is not None:
                 sns.histplot(
                     data=self.data,
                     x=self.x,
@@ -1331,28 +1295,21 @@ class TableUI(CelldetectiveMainWindow):
                 )
                 legend = False
             else:
-                pass
+                logger.warning("histogram: no variable selected")
 
-        if "2D histogram" in selected_plots:
+        if "KDE plot" in selected_plots:
             if self.x is not None and self.y is not None:
-                # Use continuous colormap explicitly for 2D histogram density mapping
-                sns.histplot(
+                sns.kdeplot(
                     data=self.data,
                     x=self.x,
                     y=self.y,
                     hue=self.hue_variable,
-                    cbar=True,
-                    cmap=cmap,
+                    palette=colors,
                     ax=self.ax,
-                    **kwargs_2d,
+                    cut=0,
                 )
                 legend = False
-            else:
-                print("Please provide both x and y variables for a 2D histogram...")
-                pass
-
-        if "KDE plot" in selected_plots:
-            if self.x is not None:
+            elif self.x is not None:
                 sns.kdeplot(
                     data=self.data,
                     x=self.x,
@@ -1375,18 +1332,22 @@ class TableUI(CelldetectiveMainWindow):
                 )
                 legend = False
             else:
-                pass
+                logger.warning("KDE plot: no variable selected")
 
         if "countplot" in selected_plots:
-            sns.countplot(
-                data=self.data,
-                x=self.x,
-                hue=self.hue_variable,
-                legend=legend,
-                ax=self.ax,
-                palette=colors,
-            )
-            legend = False
+            x_val = self.x if self.x is not None else self.y
+            if x_val is not None:
+                sns.countplot(
+                    data=self.data,
+                    x=x_val,
+                    hue=self.hue_variable,
+                    legend=legend,
+                    ax=self.ax,
+                    palette=colors,
+                )
+                legend = False
+            else:
+                logger.warning("countplot: no variable selected")
 
         if "ECDF plot" in selected_plots:
             if self.x is not None:
@@ -1410,7 +1371,7 @@ class TableUI(CelldetectiveMainWindow):
                 )
                 legend = False
             else:
-                pass
+                logger.warning("ECDF plot: no variable selected")
 
         if "line plot" in selected_plots:
             if self.x_option:
@@ -1425,8 +1386,7 @@ class TableUI(CelldetectiveMainWindow):
                 )
                 legend = False
             else:
-                print("please provide a -x variable...")
-                pass
+                logger.warning("line plot: please provide an x variable")
 
         if "scatter plot" in selected_plots:
             if self.x_option:
@@ -1441,8 +1401,7 @@ class TableUI(CelldetectiveMainWindow):
                 )
                 legend = False
             else:
-                print("please provide a -x variable...")
-                pass
+                logger.warning("scatter plot: please provide an x variable")
 
         if "swarm" in selected_plots:
             if self.x_option:
@@ -1618,7 +1577,9 @@ class TableUI(CelldetectiveMainWindow):
             or "ECDF plot" in selected_plots
             or "KDE plot" in selected_plots
         ):
-            y = self.x
+            # For these distributions, the feature being analysed is self.x when x is
+            # set, otherwise it falls back to self.y (the y combo-box variable).
+            y = self.x if self.x is not None else self.y
             x = None
 
         groupby_cols = []
@@ -1847,8 +1808,10 @@ class TableUI(CelldetectiveMainWindow):
 
         if self.plot_mode == "plot_track_signals":
             self.plot_mode = "static"
-            self.plot()
-            self.plot_mode = "plot_track_signals"
+            try:
+                self.plot()
+            finally:
+                self.plot_mode = "plot_track_signals"
         elif self.plot_mode == "static":
             self.plot()
 
@@ -1856,22 +1819,23 @@ class TableUI(CelldetectiveMainWindow):
         """
         Plot the data based on the current mode.
         """
-        import matplotlib.pyplot as plt
 
         if self.plot_mode == "static":
 
             x = self.table_view.selectedIndexes()
-            col_idx = [l.column() for l in x]
-            row_idx = [l.row() for l in x]
+            col_idx = [item.column() for item in x]
+            row_idx = [item.row() for item in x]
             column_names = self.data.columns
             unique_cols = np.unique(col_idx)
 
-            if len(unique_cols) == 1 or len(unique_cols) == 0:
+            if len(unique_cols) == 0:
+                return
+
+            if len(unique_cols) == 1:
                 self.set_1D_plot_params()
 
             if len(unique_cols) == 2:
 
-                print("two columns, plot mode")
                 x1 = test_bool_array(self.data.iloc[row_idx, unique_cols[0]])
                 x2 = test_bool_array(self.data.iloc[row_idx, unique_cols[1]])
 
@@ -1879,24 +1843,22 @@ class TableUI(CelldetectiveMainWindow):
                 self.scatter_wdw = FigureCanvas(
                     self.fig, title="scatter", interactive=True
                 )
-                self.ax.clear()
                 self.ax.scatter(x1, x2)
                 self.ax.set_xlabel(column_names[unique_cols[0]])
                 self.ax.set_ylabel(column_names[unique_cols[1]])
                 plt.tight_layout()
-                self.fig.set_facecolor("none")  # or 'None'
+                self.fig.set_facecolor("none")
                 self.fig.canvas.setStyleSheet("background-color: transparent;")
                 self.scatter_wdw.canvas.draw()
                 self.scatter_wdw.show()
 
-            else:
-                print("Please select exactly 2 columns for a scatter plot.")
+            if len(unique_cols) > 2:
+                logger.warning("Please select 1 or 2 columns to plot.")
 
         elif self.plot_mode == "plot_timeseries":
-            print("mode plot frames")
             x = self.table_view.selectedIndexes()
-            col_idx = np.array([l.column() for l in x])
-            row_idx = np.array([l.row() for l in x])
+            col_idx = np.array([item.column() for item in x])
+            row_idx = np.array([item.row() for item in x])
             column_names = self.data.columns
             unique_cols = np.unique(col_idx)
 
@@ -1919,42 +1881,42 @@ class TableUI(CelldetectiveMainWindow):
             self.fig.set_facecolor("none")  # or 'None'
             self.fig.canvas.setStyleSheet("background-color: transparent;")
             self.plot_wdw.canvas.draw()
-            plt.show()
+            self.plot_wdw.show()
 
         elif self.plot_mode == "plot_track_signals":
 
-            print("mode plot track signals")
-            print("we plot here")
-
             x = self.table_view.selectedIndexes()
-            col_idx = np.array([l.column() for l in x])
-            row_idx = np.array([l.row() for l in x])
+            col_idx = np.array([item.column() for item in x])
+            row_idx = np.array([item.row() for item in x])
             column_names = self.data.columns
             unique_cols = np.unique(col_idx)
 
             if len(unique_cols) > 2:
-                fig, ax = plt.subplots(1, 1, figsize=(7, 5.5))
+                self.fig, self.ax = plt.subplots(1, 1, figsize=(7, 5.5))
+                self.plot_wdw = FigureCanvas(
+                    self.fig, title="track signals", interactive=True
+                )
                 for k in range(len(unique_cols)):
 
                     row_idx_i = row_idx[np.where(col_idx == unique_cols[k])[0]]
-                    y = self.data.iloc[row_idx_i, unique_cols[k]]
-                    print(unique_cols[k])
                     for w, well_group in self.data.groupby(["well_name"]):
                         for pos, pos_group in well_group.groupby(["pos_name"]):
                             for tid, group_track in pos_group.groupby(
                                 self.groupby_cols[1:]
                             ):
-                                ax.plot(
+                                self.ax.plot(
                                     group_track["FRAME"],
                                     group_track[column_names[unique_cols[k]]],
                                     label=column_names[unique_cols[k]],
                                 )
-                    # ax.plot(self.data["FRAME"][row_idx_i], y, label=column_names[unique_cols[k]])
-                ax.legend()
-                ax.set_xlabel("time [frame]")
-                ax.set_ylabel(self.title)
+                self.ax.legend()
+                self.ax.set_xlabel("time [frame]")
+                self.ax.set_ylabel(self.title)
                 plt.tight_layout()
-                plt.show(block=False)
+                self.fig.set_facecolor("none")
+                self.fig.canvas.setStyleSheet("background-color: transparent;")
+                self.plot_wdw.canvas.draw()
+                self.plot_wdw.show()
 
             if len(unique_cols) == 2:
 
@@ -1962,7 +1924,6 @@ class TableUI(CelldetectiveMainWindow):
                 self.scatter_wdw = FigureCanvas(
                     self.fig, title="scatter", interactive=True
                 )
-                self.ax.clear()
                 for tid, group in self.data.groupby(self.groupby_cols[1:]):
                     self.ax.plot(
                         group[column_names[unique_cols[0]]],
@@ -1983,12 +1944,6 @@ class TableUI(CelldetectiveMainWindow):
                 self.plot_wdw = FigureCanvas(
                     self.fig, title="scatter", interactive=True
                 )
-                self.ax.clear()
-
-                # if 't0' in list(self.data.columns):
-                # 	ref_time_col = 't0'
-                # else:
-                # 	ref_time_col = 'FRAME'
 
                 for w, well_group in self.data.groupby(["well_name"]):
                     for pos, pos_group in well_group.groupby(["pos_name"]):

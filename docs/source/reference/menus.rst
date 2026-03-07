@@ -34,6 +34,7 @@ Table Explorer
     
 *   **Absolute value...**: Compute ``abs(x)``.
 *   **Log (decimal)...**: Compute ``log10(x)``.
+*   **Bin...**: Create a discretely binned column from a continuous measurement. This property natively scales 1D and 2D Histograms matching defined intervals.
 *   **Arithmetic**: Add, Subtract, Multiply, or Divide two columns.
 
 .. _ref_signal_annotator_shortcuts:
