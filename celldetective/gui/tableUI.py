@@ -1228,6 +1228,11 @@ class TableUI(CelldetectiveMainWindow):
             self.set_parallel_coords_params()
             return
 
+        if "correlation matrix" in selected_plots:
+            self.plot1Dparams.close()
+            self.set_correlation_matrix_params()
+            return
+
         self.fig, self.ax = plt.subplots(1, 1, figsize=(4, 3))
         self.plot1dWindow = FigureCanvas(self.fig, title="scatter", interactive=True)
 
@@ -2298,7 +2303,7 @@ class TableUI(CelldetectiveMainWindow):
 
             self.pc_window = QMainWindow()
             self.pc_window.setWindowTitle(
-                "Parallel Coordinates (Plotly) - CellDetective"
+                "Parallel Coordinates (Plotly) - Celldetective"
             )
             self.pc_window.resize(900, 600)
 
@@ -2318,3 +2323,180 @@ class TableUI(CelldetectiveMainWindow):
             )
             webbrowser.open(f"file:///{tmp_path}")
             logger.info(f"Parallel coordinates plot saved to {tmp_path}")
+
+    def set_correlation_matrix_params(
+        self, preselected_cols: Optional[List[str]] = None
+    ) -> None:
+        """
+        Open the parameters configuration window for a Correlation Matrix plot.
+        """
+        from PyQt5.QtWidgets import (
+            QVBoxLayout,
+            QHBoxLayout,
+            QLabel,
+            QPushButton,
+            QListWidget,
+            QListWidgetItem,
+            QComboBox,
+        )
+
+        self.corrMatrixParams = CelldetectiveWidget()
+        self.corrMatrixParams.setWindowTitle("Correlation Matrix Parameters")
+        self.corrMatrixParams.setMinimumWidth(350)
+
+        layout = QVBoxLayout()
+        self.corrMatrixParams.setLayout(layout)
+
+        # --- Axis columns (multi-select list) ---
+        layout.addWidget(QLabel("Features (select columns):"))
+        self._cm_col_list = QListWidget()
+        self._cm_col_list.setSelectionMode(QListWidget.MultiSelection)
+        self._cm_col_list.setMaximumHeight(200)
+
+        numeric_cols = list(
+            self.data.select_dtypes(
+                include=["int16", "int32", "int64", "float16", "float32", "float64"]
+            ).columns
+        )
+        for col in numeric_cols:
+            item = QListWidgetItem(col)
+            self._cm_col_list.addItem(item)
+            if preselected_cols and col in preselected_cols:
+                item.setSelected(True)
+
+        layout.addWidget(self._cm_col_list)
+
+        # --- Colormap (Plotly-native names only) ---
+        hbox_cmap = QHBoxLayout()
+        hbox_cmap.addWidget(QLabel("Colormap: "), 50)
+        self._cm_cmap_cb = QComboBox()
+        try:
+            import plotly.colors as pc_colors
+
+            plotly_scales = sorted(pc_colors.named_colorscales())
+        except Exception:
+            plotly_scales = ["rdbu", "viridis", "plasma", "inferno", "cividis", "jet"]
+        self._cm_cmap_cb.addItems(plotly_scales)
+        # Default to continuous diverging colormap for correlations (rdbu)
+        idx = self._cm_cmap_cb.findText("rdbu")
+        if idx >= 0:
+            self._cm_cmap_cb.setCurrentIndex(idx)
+        hbox_cmap.addWidget(self._cm_cmap_cb, 50)
+        layout.addLayout(hbox_cmap)
+
+        # --- Correlation Method ---
+        hbox_method = QHBoxLayout()
+        hbox_method.addWidget(QLabel("Method: "), 50)
+        self._cm_method_cb = QComboBox()
+        self._cm_method_cb.addItems(["pearson", "spearman", "kendall"])
+        hbox_method.addWidget(self._cm_method_cb, 50)
+        layout.addLayout(hbox_method)
+
+        # --- Plot button ---
+        plot_btn = QPushButton("Plot")
+        plot_btn.setStyleSheet(self.button_style_sheet)
+        plot_btn.clicked.connect(self.plot_correlation_matrix)
+        layout.addWidget(plot_btn)
+
+        self.corrMatrixParams.show()
+        center_window(self.corrMatrixParams)
+
+    def plot_correlation_matrix(self) -> None:
+        """
+        Render an interactive correlation matrix plot using Plotly heatmap.
+        """
+        try:
+            import plotly.express as px
+        except ImportError:
+            logger.error("plotly is required. Install it with: pip install plotly")
+            QMessageBox.critical(
+                self,
+                "Missing dependency",
+                "plotly is required. Install it with: pip install plotly",
+            )
+            return
+
+        import tempfile
+        import webbrowser
+
+        # --- Collect parameters from dialog ---
+        selected_items = self._cm_col_list.selectedItems()
+        cols = [item.text() for item in selected_items]
+        if len(cols) < 2:
+            logger.warning("correlation matrix: please select at least 2 features.")
+            from PyQt5.QtWidgets import QMessageBox
+
+            QMessageBox.warning(
+                self,
+                "Invalid Selection",
+                "Please select at least 2 features to compute correlation.",
+            )
+            return
+
+        cmap_name = self._cm_cmap_cb.currentText()
+        method = self._cm_method_cb.currentText()
+
+        # --- Calculate Correlation ---
+        df = self.data[cols].copy().dropna()
+        corr_matrix = df.corr(method=method)
+
+        # --- Build figure ---
+        import warnings
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            fig = px.imshow(
+                corr_matrix,
+                text_auto=".2f",
+                aspect="auto",
+                color_continuous_scale=cmap_name,
+                color_continuous_midpoint=(
+                    0
+                    if "rdbu" in cmap_name.lower() or "prgn" in cmap_name.lower()
+                    else None
+                ),
+                title=f"Correlation Matrix ({method.capitalize()})",
+                labels=dict(color="Correlation"),
+            )
+
+        fig.update_layout(
+            paper_bgcolor="white",
+            plot_bgcolor="white",
+            font=dict(size=12),
+            margin=dict(l=60, r=40, t=60, b=80),
+        )
+        # fig.update_xaxes(tickangle=-45)
+
+        # --- Open in window via QWebEngineView ---
+        tmp = tempfile.NamedTemporaryFile(
+            suffix=".html", delete=False, prefix="corr_matrix_"
+        )
+        tmp_path = tmp.name
+        tmp.close()
+        fig.write_html(tmp_path, include_plotlyjs="cdn")
+
+        try:
+            from PyQt5.QtWebEngineWidgets import QWebEngineView
+            from PyQt5.QtWidgets import QMainWindow
+            from PyQt5.QtCore import QUrl
+
+            self.cm_window = QMainWindow()
+            self.cm_window.setWindowTitle("Correlation Matrix (Plotly) - Celldetective")
+            self.cm_window.resize(700, 700)
+
+            browser = QWebEngineView()
+            browser.load(QUrl.fromLocalFile(tmp_path))
+            self.cm_window.setCentralWidget(browser)
+            self.cm_window.show()
+            center_window(self.cm_window)
+
+            logger.info(
+                f"Correlation matrix plot opened in native window from {tmp_path}"
+            )
+
+        except ImportError:
+            logger.warning(
+                "PyQtWebEngine not found. Falling back to system web browser."
+            )
+            webbrowser.open(f"file:///{tmp_path}")
+            logger.info(f"Correlation matrix plot saved to {tmp_path}")

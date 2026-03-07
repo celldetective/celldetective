@@ -250,6 +250,10 @@ class PlotSelectorWidget(VisualSelectorWidget):
                 "parallel coordinates",
                 os.path.join(icons_dir, "parallel coordinates.png"),
             ),
+            (
+                "correlation matrix",
+                os.path.join(icons_dir, "correlation matrix.png"),
+            ),
         ]
         super().__init__(plot_types, parent)
 
