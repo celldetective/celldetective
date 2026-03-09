@@ -4,6 +4,7 @@ from PyQt5.QtWidgets import (
     QTableView,
     QAction,
     QMenu,
+    QMessageBox,
     QFileDialog,
     QHBoxLayout,
     QPushButton,
@@ -18,6 +19,7 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QBrush, QColor
 from typing import Optional, Any, List, Tuple
 import pandas as pd
+from superqt import QSearchableComboBox
 
 from celldetective.gui.gui_utils import (
     PandasModel,
@@ -34,7 +36,9 @@ from celldetective.gui.base.components import (
 from math import floor
 import re
 from celldetective import get_logger
+from celldetective.utils.stats import test_2samp_generic
 from celldetective.utils.types import test_bool_array
+from celldetective.utils.data_cleaning import collapse_trajectories_by_status
 
 logger = get_logger(__name__)
 
@@ -2053,18 +2057,6 @@ class TableUI(CelldetectiveMainWindow):
 
         from superqt import QSearchableComboBox
 
-        # --- ID column ---
-        hbox_id = QHBoxLayout()
-        hbox_id.addWidget(QLabel("ID column: "), 33)
-        self._pc_id_cb = QSearchableComboBox()
-        self._pc_id_cb.addItems(["--"] + list(self.data.columns))
-        if "TRACK_ID" in self.data.columns:
-            self._pc_id_cb.setCurrentText("TRACK_ID")
-        elif "ID" in self.data.columns:
-            self._pc_id_cb.setCurrentText("ID")
-        hbox_id.addWidget(self._pc_id_cb, 66)
-        layout.addLayout(hbox_id)
-
         # --- Color by ---
         hbox_hue = QHBoxLayout()
         hbox_hue.addWidget(QLabel("Color by: "), 33)
@@ -2153,10 +2145,6 @@ class TableUI(CelldetectiveMainWindow):
             )
             return
 
-        id_col = self._pc_id_cb.currentText()
-        if id_col == "--":
-            id_col = None
-
         hue_col = self._pc_hue_cb.currentText()
         if hue_col == "--":
             hue_col = None
@@ -2172,32 +2160,8 @@ class TableUI(CelldetectiveMainWindow):
         else:
             hue_series = None
 
-        if id_col is not None and id_col in self.data.columns:
-            id_series = self.data.loc[df.index, id_col]
-        else:
-            id_series = None
-
         # --- Build per-axis dimension specs ---
         dimensions = []
-
-        # Insert ID dimension first natively mapped as categorical
-        if id_series is not None:
-            unique_ids = id_series.unique()
-            id_map = {val: i for i, val in enumerate(unique_ids)}
-            numeric_ids = id_series.map(id_map)
-
-            # Max 50 ticks to avoid overcrowding the axis view
-            tick_step = max(1, len(unique_ids) // 50)
-            valid_keys = list(id_map.keys())[::tick_step]
-
-            dimensions.append(
-                dict(
-                    label=id_col,
-                    values=numeric_ids.tolist(),
-                    tickvals=[id_map[k] for k in valid_keys],
-                    ticktext=[str(k) for k in valid_keys],
-                )
-            )
 
         for col in cols:
             values = df[col]
@@ -2281,10 +2245,10 @@ class TableUI(CelldetectiveMainWindow):
             )
         )
         fig.update_layout(
-            title="Parallel Coordinates",
+            # title="Parallel Coordinates",
             paper_bgcolor="white",
             plot_bgcolor="white",
-            font=dict(size=11),
+            font=dict(size=16),
             margin=dict(l=60, r=30, t=60, b=30),
         )
 
@@ -2301,10 +2265,8 @@ class TableUI(CelldetectiveMainWindow):
             from PyQt5.QtWidgets import QMainWindow
             from PyQt5.QtCore import QUrl
 
-            self.pc_window = QMainWindow()
-            self.pc_window.setWindowTitle(
-                "Parallel Coordinates (Plotly) - Celldetective"
-            )
+            self.pc_window = CelldetectiveMainWindow()
+            self.pc_window.setWindowTitle("Parallel Coordinates")
             self.pc_window.resize(900, 600)
 
             browser = QWebEngineView()
@@ -2424,7 +2386,6 @@ class TableUI(CelldetectiveMainWindow):
         cols = [item.text() for item in selected_items]
         if len(cols) < 2:
             logger.warning("correlation matrix: please select at least 2 features.")
-            from PyQt5.QtWidgets import QMessageBox
 
             QMessageBox.warning(
                 self,
@@ -2462,7 +2423,7 @@ class TableUI(CelldetectiveMainWindow):
         fig.update_layout(
             paper_bgcolor="white",
             plot_bgcolor="white",
-            font=dict(size=12),
+            font=dict(size=16),
             margin=dict(l=60, r=40, t=60, b=80),
         )
         # fig.update_xaxes(tickangle=-45)
@@ -2481,7 +2442,7 @@ class TableUI(CelldetectiveMainWindow):
             from PyQt5.QtCore import QUrl
 
             self.cm_window = QMainWindow()
-            self.cm_window.setWindowTitle("Correlation Matrix (Plotly) - Celldetective")
+            self.cm_window.setWindowTitle("Correlation Matrix")
             self.cm_window.resize(700, 700)
 
             browser = QWebEngineView()
