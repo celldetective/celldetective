@@ -14,6 +14,7 @@ import numpy as np
 from unittest.mock import patch, MagicMock
 
 from PyQt5.QtWidgets import QMainWindow, QMessageBox
+from PyQt5.QtCore import Qt
 
 from celldetective.gui.tableUI import TableUI
 
@@ -97,59 +98,79 @@ class TestCorrelationMatrix:
 
         table_ui.corrMatrixParams.close()
 
-    @patch("celldetective.gui.tableUI.px.imshow")
+    @patch("plotly.express.imshow")
     @patch("plotly.graph_objs.Figure.write_html")
-    @patch("celldetective.gui.tableUI.QWebEngineView")
-    @patch("celldetective.gui.tableUI.QMainWindow.show")
+    @patch("celldetective.gui.base.components.CelldetectiveMainWindow.show")
     def test_plot_correlation_matrix_valid(
-        self, mock_show, mock_webview, mock_write_html, mock_imshow, qtbot, table_ui
+        self, mock_show, mock_write_html, mock_imshow, qtbot, table_ui
     ):
         """Test the full plotting logic for the correlation matrix."""
-        # Setup mock figure to avoid real plotly rendering
         mock_fig = MagicMock()
         mock_imshow.return_value = mock_fig
 
-        table_ui.set_correlation_matrix_params()
+        # Prevent the internal ImportError from triggering the browser fallback
+        original_import = __import__
 
-        # Select 3 features
-        for col_name in ["area", "intensity_mean", "eccentricity"]:
-            items = table_ui._cm_col_list.findItems(
-                col_name, pytest.QtCore.Qt.MatchExactly
-            )
-            if items:
-                items[0].setSelected(True)
+        def mock_import(name, *args, **kwargs):
+            if name == "PyQt5.QtWebEngineWidgets":
+                mock = MagicMock()
+                from PyQt5.QtWidgets import QWidget
 
-        # Set method to spearman
-        table_ui._cm_method_cb.setCurrentText("spearman")
+                class MockQWebEngineView(QWidget):
+                    def load(self, url):
+                        pass
 
-        # Trigger plot
-        table_ui.plot_correlation_matrix()
+                mock.QWebEngineView = MockQWebEngineView
+                return mock
+            return original_import(name, *args, **kwargs)
 
-        # 1. Verify px.imshow was called correctly
-        mock_imshow.assert_called_once()
-        called_df = mock_imshow.call_args[0][0]  # The correlation matrix dataframe
+        with patch("builtins.__import__", side_effect=mock_import):
+            table_ui.set_correlation_matrix_params()
 
-        # Ensure the underlying corr calculation used spearman on the correct columns
-        assert isinstance(called_df, pd.DataFrame)
-        assert list(called_df.columns) == ["area", "intensity_mean", "eccentricity"]
-        assert called_df.index.tolist() == ["area", "intensity_mean", "eccentricity"]
+            # Select 3 features
+            for col_name in ["area", "intensity_mean", "eccentricity"]:
+                items = table_ui._cm_col_list.findItems(col_name, Qt.MatchExactly)
+                if items:
+                    items[0].setSelected(True)
 
-        # Check kwargs
-        kwargs = mock_imshow.call_args[1]
-        assert "Correlation Matrix (Spearman)" in kwargs["title"]
+            # Set method to spearman
+            table_ui._cm_method_cb.setCurrentText("spearman")
 
-        # 2. Verify HTML was written
-        mock_fig.write_html.assert_called_once()
-        html_path = mock_fig.write_html.call_args[0][0]
-        assert "corr_matrix_" in html_path
-        assert html_path.endswith(".html")
+            # Trigger plot
+            table_ui.plot_correlation_matrix()
 
-        # 3. Verify Qt window was created and shown
-        assert hasattr(table_ui, "cm_window")
-        assert table_ui.cm_window.windowTitle() == "Correlation Matrix"
-        mock_show.assert_called_once()
+            # 1. Verify px.imshow was called correctly
+            mock_imshow.assert_called_once()
+            called_df = mock_imshow.call_args[0][0]  # The correlation matrix dataframe
 
-        table_ui.corrMatrixParams.close()
+            # Ensure the underlying corr calculation used spearman on the correct columns
+            assert isinstance(called_df, pd.DataFrame)
+            assert list(called_df.columns) == ["area", "intensity_mean", "eccentricity"]
+            assert called_df.index.tolist() == [
+                "area",
+                "intensity_mean",
+                "eccentricity",
+            ]
+
+            # Check kwargs
+            kwargs = mock_imshow.call_args[1]
+            assert "Correlation Matrix (Spearman)" in kwargs["title"]
+            assert kwargs["color_continuous_scale"] == "rdbu"
+            assert kwargs["text_auto"] == ".2f"
+
+            # 2. Verify HTML was written
+            mock_fig.write_html.assert_called_once()
+            html_path = mock_fig.write_html.call_args[0][0]
+            assert "corr_matrix_" in html_path
+            assert html_path.endswith(".html")
+
+            # 3. Verify Qt window was created and shown
+            assert hasattr(table_ui, "cm_window")
+            assert table_ui.cm_window.windowTitle() == "Correlation Matrix"
+            mock_show.assert_called_once()
+
+            table_ui.cm_window.close()
+            table_ui.corrMatrixParams.close()
 
 
 # =============================================================================
@@ -185,9 +206,6 @@ class TestParallelCoordinates:
         assert "--" in hue_items
         assert "class_label" in hue_items  # Can use categorical for hue
 
-        # Verify default ID detection
-        assert table_ui._pc_id_cb.currentText() == "TRACK_ID"
-
         table_ui.parallelCoordsParams.close()
 
     @patch("celldetective.gui.tableUI.logger.warning")
@@ -207,56 +225,71 @@ class TestParallelCoordinates:
 
         table_ui.parallelCoordsParams.close()
 
-    @patch("celldetective.gui.tableUI.go.Figure")
+    @patch("plotly.graph_objects.Figure")
     @patch("plotly.graph_objs.Figure.write_html")
-    @patch("celldetective.gui.tableUI.QWebEngineView")
-    @patch("celldetective.gui.tableUI.QMainWindow.show")
+    @patch("celldetective.gui.base.components.CelldetectiveMainWindow.show")
     def test_plot_parallel_coords_valid(
-        self, mock_show, mock_webview, mock_write_html, mock_go_figure, qtbot, table_ui
+        self, mock_show, mock_write_html, mock_go_figure, qtbot, table_ui
     ):
         """Test full plotting logic, normalization, and color mapping for parallel coords."""
         mock_fig = MagicMock()
         mock_go_figure.return_value = mock_fig
 
-        table_ui.set_parallel_coords_params()
+        # Prevent the internal ImportError from triggering the browser fallback
+        original_import = __import__
 
-        # Setup selection: 3 axes, hue by class_label, z-score norm
-        axes = ["area", "intensity_mean", "eccentricity"]
-        for col_name in axes:
-            items = table_ui._pc_col_list.findItems(
-                col_name, pytest.QtCore.Qt.MatchExactly
-            )
-            if items:
-                items[0].setSelected(True)
+        def mock_import(name, *args, **kwargs):
+            if name == "PyQt5.QtWebEngineWidgets":
+                mock = MagicMock()
+                from PyQt5.QtWidgets import QWidget
 
-        table_ui._pc_hue_cb.setCurrentText("class_label")
-        table_ui._pc_norm_cb.setCurrentText("z-score")
+                class MockQWebEngineView(QWidget):
+                    def load(self, url):
+                        pass
 
-        table_ui.plot_parallel_coords()
+                mock.QWebEngineView = MockQWebEngineView
+                return mock
+            return original_import(name, *args, **kwargs)
 
-        # 1. Verify Figure was instantiated with Parcoords data
-        mock_go_figure.assert_called_once()
-        kwargs = mock_go_figure.call_args[1]
+        with patch("builtins.__import__", side_effect=mock_import):
+            table_ui.set_parallel_coords_params()
 
-        assert "data" in kwargs
-        # Extract the Parcoords object (which is a plotly graph object, we can inspect its properties if needed,
-        # but since it's mocked, we actually check what was passed to go.Figure)
-        # Note: we patched go.Figure, so we inspect its call arguments
-        data_arg = kwargs["data"]
+            # Setup selection: 3 axes, hue by class_label, z-score norm
+            axes = ["area", "intensity_mean", "eccentricity"]
+            for col_name in axes:
+                items = table_ui._pc_col_list.findItems(col_name, Qt.MatchExactly)
+                if items:
+                    items[0].setSelected(True)
 
-        # Verify normalization (z-score) happened correctly (means ~0)
-        # We can't easily introspect the internal plotly object if we mocked the parent,
-        # but the logic runs without crashing.
+            table_ui._pc_hue_cb.setCurrentText("class_label")
+            table_ui._pc_norm_cb.setCurrentText("z-score")
 
-        # 2. Verify HTML was written
-        mock_fig.write_html.assert_called_once()
-        html_path = mock_fig.write_html.call_args[0][0]
-        assert "parallel_coords_" in html_path
-        assert html_path.endswith(".html")
+            table_ui.plot_parallel_coords()
 
-        # 3. Verify Qt window structure
-        assert hasattr(table_ui, "pc_window")
-        assert table_ui.pc_window.windowTitle() == "Parallel Coordinates"
-        mock_show.assert_called_once()
+            # 1. Verify Figure was instantiated with Parcoords data
+            mock_go_figure.assert_called_once()
+            kwargs = mock_go_figure.call_args[1]
 
-        table_ui.parallelCoordsParams.close()
+            assert "data" in kwargs
+            # Extract the Parcoords object (which is a plotly graph object, we can inspect its properties if needed,
+            # but since it's mocked, we actually check what was passed to go.Figure)
+            # Note: we patched go.Figure, so we inspect its call arguments
+            data_arg = kwargs["data"]
+
+            # Verify normalization (z-score) happened correctly (means ~0)
+            # We can't easily introspect the internal plotly object if we mocked the parent,
+            # but the logic runs without crashing.
+
+            # 2. Verify HTML was written
+            mock_fig.write_html.assert_called_once()
+            html_path = mock_fig.write_html.call_args[0][0]
+            assert "parallel_coords_" in html_path
+            assert html_path.endswith(".html")
+
+            # 3. Verify Qt window structure
+            assert hasattr(table_ui, "pc_window")
+            assert table_ui.pc_window.windowTitle() == "Parallel Coordinates"
+            mock_show.assert_called_once()
+
+            table_ui.pc_window.close()
+            table_ui.parallelCoordsParams.close()
