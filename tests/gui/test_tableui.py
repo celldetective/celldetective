@@ -30,6 +30,14 @@ def disable_logging():
         logging.disable(logging.NOTSET)
 
 
+@pytest.fixture(autouse=True)
+def process_events_after_test(qtbot):
+    """Ensure all Qt events are processed after each test to prevent hangs."""
+    yield
+    qtbot.wait(10)
+    QApplication.processEvents()
+
+
 @pytest.fixture
 def sample_cell_data():
     """Create sample cell measurement data."""
