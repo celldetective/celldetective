@@ -4,7 +4,6 @@ from PyQt5.QtWidgets import (
     QTableView,
     QAction,
     QMenu,
-    QMessageBox,
     QFileDialog,
     QHBoxLayout,
     QPushButton,
@@ -19,7 +18,6 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QBrush, QColor
 from typing import Optional, Any, List, Tuple
 import pandas as pd
-from superqt import QSearchableComboBox
 
 from celldetective.gui.gui_utils import (
     PandasModel,
@@ -2441,7 +2439,7 @@ class TableUI(CelldetectiveMainWindow):
             from PyQt5.QtWidgets import QMainWindow
             from PyQt5.QtCore import QUrl
 
-            self.cm_window = QMainWindow()
+            self.cm_window = CelldetectiveMainWindow()
             self.cm_window.setWindowTitle("Correlation Matrix")
             self.cm_window.resize(700, 700)
 
