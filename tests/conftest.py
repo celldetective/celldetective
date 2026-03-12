@@ -1,6 +1,7 @@
+import gc
+
 import pytest
 from tqdm import tqdm
-import weakref
 
 
 @pytest.fixture(autouse=True)
@@ -16,44 +17,33 @@ def disable_tqdm_monitor():
 
 
 @pytest.fixture(autouse=True)
-def safe_close_stack_visualizers(request):
+def stop_leaked_stack_loaders():
     """
-    Automatically track and safely close all StackVisualizer instances created during a test
-    to prevent threaded background loader crashes on teardown.
+    Stop any StackLoader QThreads that survive test teardown.
+
+    test_project.py creates AppInitWindow instances with StackVisualizer widgets
+    that spawn StackLoader background threads.  If those threads are still alive
+    when a later test (e.g. test_settings_tracking) runs, they may try to access
+    destroyed C++ Qt objects and trigger a fatal access-violation on Windows.
+
+    This fixture runs *after* every test and defensively stops any leaked loaders.
     """
-    from celldetective.gui.viewers.base_viewer import StackVisualizer
-
-    # Track instances created in this test
-    instances = set()
-
-    # Store original init
-    orig_init = StackVisualizer.__init__
-
-    def tracked_init(self, *args, **kwargs):
-        orig_init(self, *args, **kwargs)
-        # Store a weak reference to not prevent GC if it's naturally collected
-        instances.add(weakref.ref(self))
-
-    StackVisualizer.__init__ = tracked_init
-
     yield
+    # Import here so non-GUI tests don't pay the import cost at collection time.
+    try:
+        from celldetective.gui.viewers.base_viewer import StackLoader
+    except Exception:
+        return
 
-    # Restore original init
-    StackVisualizer.__init__ = orig_init
-
-    # Safely close any remaining instances
-    for ref in instances:
-        instance = ref()
-        if instance is not None:
-            try:
-                if hasattr(instance, "loader_thread") and instance.loader_thread:
-                    instance.loader_thread.stop()
-                    instance.loader_thread.wait(1000)
-                    instance.loader_thread = None
-                if hasattr(instance, "frame_cache"):
-                    instance.frame_cache.clear()
-
-                instance.close()
-                instance.deleteLater()
-            except RuntimeError:
-                pass  # C++ object deleted
+    for obj in gc.get_objects():
+        try:
+            if isinstance(obj, StackLoader) and obj.isRunning():
+                try:
+                    obj.frame_loaded.disconnect()
+                except Exception:
+                    pass
+                obj.stop()
+                obj.wait(2000)
+        except (ReferenceError, TypeError):
+            # Object may have been collected between iteration and access
+            pass
