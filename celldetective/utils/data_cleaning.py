@@ -27,7 +27,8 @@ def _remove_invalid_cols(df: pd.DataFrame) -> pd.DataFrame:
     invalid_cols = [c for c in list(df.columns) if c.startswith("Unnamed")]
     if len(invalid_cols) > 0:
         df = df.drop(invalid_cols, axis=1)
-    df = df.dropna(axis=1, how="all")
+    if not df.empty:
+        df = df.dropna(axis=1, how="all")
     return df
 
 
