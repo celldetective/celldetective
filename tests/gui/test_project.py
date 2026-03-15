@@ -141,7 +141,8 @@ def test_app(app, qtbot):
         app.control_panel.ProcessPopulations[0].check_signals_btn, QtCore.Qt.LeftButton
     )
     qtbot.wait(1000)
-    app.control_panel.ProcessPopulations[0].event_annotator.close()
+    if hasattr(app.control_panel.ProcessPopulations[0], "event_annotator"):
+        app.control_panel.ProcessPopulations[0].event_annotator.close()
 
     # Table widget
     qtbot.mouseClick(

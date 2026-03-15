@@ -17,33 +17,54 @@ def disable_tqdm_monitor():
 
 
 @pytest.fixture(autouse=True)
-def stop_leaked_stack_loaders():
+def stop_leaked_threads():
     """
-    Stop any StackLoader QThreads that survive test teardown.
+    Stop any celldetective QThreads that survive test teardown.
 
-    test_project.py creates AppInitWindow instances with StackVisualizer widgets
-    that spawn StackLoader background threads.  If those threads are still alive
-    when a later test (e.g. test_settings_tracking) runs, they may try to access
-    destroyed C++ Qt objects and trigger a fatal access-violation on Windows.
+    Leaked background threads (e.g. StackLoader, BackgroundLoader) may try to access
+    destroyed C++ Qt objects and trigger a fatal access-violation on Windows, or
+    fail to exit and hang the CI pipeline.
 
-    This fixture runs *after* every test and defensively stops any leaked loaders.
+    This fixture runs *after* every test and defensively stops any leaked threads.
     """
     yield
     # Import here so non-GUI tests don't pay the import cost at collection time.
     try:
-        from celldetective.gui.viewers.base_viewer import StackLoader
+        from PyQt5.QtCore import QThread
     except Exception:
         return
 
     for obj in gc.get_objects():
         try:
-            if isinstance(obj, StackLoader) and obj.isRunning():
-                try:
-                    obj.frame_loaded.disconnect()
-                except Exception:
-                    pass
-                obj.stop()
-                obj.wait(2000)
+            if isinstance(obj, QThread) and obj.isRunning():
+                # Only mess with threads from our own codebase
+                mod_name = getattr(type(obj), '__module__', '')
+                if mod_name.startswith('celldetective.'):
+                    try:
+                        if hasattr(obj, 'frame_loaded'):
+                            obj.frame_loaded.disconnect()
+                    except Exception:
+                        pass
+                    
+                    try:
+                        if hasattr(obj, 'stop'):
+                            obj.stop()
+                    except Exception:
+                        pass
+                    
+                    try:
+                        obj.quit()
+                    except Exception:
+                        pass
+                    
+                    obj.wait(1000)
+                    
+                    if obj.isRunning():
+                        try:
+                            obj.terminate()
+                            obj.wait(500)
+                        except Exception:
+                            pass
         except (ReferenceError, TypeError):
             # Object may have been collected between iteration and access
             pass
