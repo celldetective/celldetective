@@ -191,7 +191,7 @@ class EventAnnotator(BaseAnnotator):
         """Handle cancel button click."""
         if self._loader_thread:
             self._loader_thread.stop()
-            self._loader_thread.wait()
+            self._loader_thread.wait(3000)
         self.close()
 
     def _on_load_finished(self):

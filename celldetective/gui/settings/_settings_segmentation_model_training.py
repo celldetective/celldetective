@@ -109,7 +109,7 @@ class SettingsSegmentationModelTraining(CelldetectiveSettingsPanel):
         """
         if self.bg_loader.isRunning():
             logger.info("Waiting for background loader to finish...")
-            self.bg_loader.wait()
+            self.bg_loader.wait(3000)
         super().closeEvent(event)
 
     def _add_to_layout(self):

@@ -158,7 +158,7 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
 
         if hasattr(self, "bg_loader") and self.bg_loader.isRunning():
             self.bg_loader.quit()
-            self.bg_loader.wait()
+            self.bg_loader.wait(3000)
         # Clear large arrays
         for attr in ["img", "labels", "edt_map", "props", "coords"]:
             if hasattr(self, attr):
