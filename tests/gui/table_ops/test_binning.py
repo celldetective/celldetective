@@ -2,8 +2,6 @@ import pytest
 import numpy as np
 import pandas as pd
 from unittest.mock import MagicMock
-from PyQt5.QtWidgets import QApplication
-import sys
 
 # Import the widget directly
 from celldetective.gui.table_ops._maths import BinColWidget
@@ -14,15 +12,7 @@ class MockTableUI:
         self.data = pd.DataFrame(data)
 
 
-@pytest.fixture(scope="module")
-def qapp():
-    app = QApplication.instance()
-    if app is None:
-        app = QApplication(sys.argv)
-    yield app
-
-
-def test_linear_binning(qapp):
+def test_linear_binning(qtbot):
     data = {"test_col": [0, 0.9, 1.1, 2, 3]}
     parent = MockTableUI(data)
 
@@ -43,7 +33,7 @@ def test_linear_binning(qapp):
     np.testing.assert_array_almost_equal(result_col.values, expected)
 
 
-def test_logarithmic_binning(qapp):
+def test_logarithmic_binning(qtbot):
     data = {"test_col": [0, 1, 2, 11, 99, 100]}
     parent = MockTableUI(data)
 
@@ -64,7 +54,7 @@ def test_logarithmic_binning(qapp):
     np.testing.assert_array_almost_equal(result_col.values, expected)
 
 
-def test_auto_saturation_bounds(qapp):
+def test_auto_saturation_bounds(qtbot):
     data = {"test_col": [-5, 0, 5, 10, 15]}
     parent = MockTableUI(data)
 

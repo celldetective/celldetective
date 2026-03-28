@@ -131,14 +131,14 @@ def test_intensity_radial_gradient_integration():
 
     # Check if the columns exist
     # observed renaming:
-    # intensity_radial_gradient-0 -> ch0_radial_gradient (slope)
-    # intensity_radial_gradient-1 -> ch0_radial_intercept_1 (intercept)
-    # intensity_radial_gradient-2 -> ch0_radial_gradient_r2_score_2 (r2)
+    # intensity_radial_gradient-0 -> ch0_radial_intensity_slope (slope)
+    # intensity_radial_gradient-1 -> ch0_radial_intensity_intercept (intercept)
+    # intensity_radial_gradient-2 -> ch0_radial_intensity_r2 (r2)
 
-    slope_col = "ch0_radial_gradient"
-    r2_col = "ch0_radial_gradient_r2_score_2"
+    slope_col = "ch0_radial_intensity_slope"
+    r2_col = "ch0_radial_intensity_r2"
 
-    expected_cols = [slope_col, "ch0_radial_intercept_1", r2_col]
+    expected_cols = [slope_col, "ch0_radial_intensity_intercept", r2_col]
 
     for col in expected_cols:
         assert (
