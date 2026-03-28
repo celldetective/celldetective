@@ -24,6 +24,15 @@ def disable_logging():
         logging.disable(logging.NOTSET)
 
 
+@pytest.fixture(autouse=True)
+def process_events_after_test(qtbot):
+    """Ensure all Qt events are processed after each test to prevent hangs."""
+    from PyQt5.QtWidgets import QApplication
+    yield
+    qtbot.wait(10)
+    QApplication.processEvents()
+
+
 @pytest.fixture
 def sample_track_data():
     """Create sample DataFrame with track data for testing."""
