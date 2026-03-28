@@ -28,6 +28,32 @@ def stop_leaked_threads():
     This fixture runs *after* every test and defensively stops any leaked threads.
     """
     yield
+
+    # Drain the Qt event queue before scanning for threads.
+    #
+    # All CelldetectiveWidget / CelldetectiveMainWindow instances carry
+    # WA_DeleteOnClose, so widget.close() only *schedules* deletion via
+    # deleteLater() — the DeferredDelete event stays in the queue until the
+    # event loop runs.  Child-widget events (paint, resize, QLabeledSlider
+    # internal-label timers, …) remain queued *behind* the DeferredDelete.
+    # If processEvents() is called later (e.g. in _build_layouts() of the
+    # next test's widget __init__), Qt fires the DeferredDelete, frees the
+    # C++ object, then dispatches those trailing child events to freed
+    # memory → "Windows fatal exception: access violation".
+    #
+    # Processing events here, while the previous test's fixtures have already
+    # run their teardown (LIFO order means test fixtures tear down before
+    # conftest fixtures), lets deleteLater() complete and Qt remove all
+    # remaining events for the deleted objects — leaving a clean queue for
+    # the next test.
+    try:
+        from PyQt5.QtWidgets import QApplication
+
+        app = QApplication.instance()
+        if app is not None:
+            app.processEvents()
+    except Exception:
+        pass
     # Import here so non-GUI tests don't pay the import cost at collection time.
     try:
         from PyQt5.QtCore import QThread

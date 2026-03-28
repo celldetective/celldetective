@@ -6,7 +6,21 @@ import pandas as pd
 import numpy as np
 from unittest.mock import MagicMock, patch
 from PyQt5 import QtWidgets, QtCore
+from PyQt5.QtWidgets import QApplication
 from celldetective.gui.settings._settings_neighborhood import SettingsNeighborhood
+
+
+@pytest.fixture(autouse=True)
+def process_events_after_test(qtbot):
+    """Drain Qt events after every test to prevent cross-test contamination.
+
+    Without this, WA_DeleteOnClose deferred deletions from the previous test
+    can still be in the event queue when the next test's widget __init__
+    calls QApplication.processEvents(), causing an access violation on Windows.
+    """
+    yield
+    qtbot.wait(10)
+    QApplication.processEvents()
 from celldetective.neighborhood import (
     compute_neighborhood_at_position,
     compute_contact_neighborhood_at_position,

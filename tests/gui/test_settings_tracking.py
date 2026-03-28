@@ -17,6 +17,19 @@ from PyQt5 import QtCore, QtWidgets
 from PyQt5.QtWidgets import QApplication
 
 from celldetective.gui.settings._settings_tracking import SettingsTracking
+
+
+@pytest.fixture(autouse=True)
+def process_events_after_test(qtbot):
+    """Drain Qt events after every test to prevent cross-test contamination.
+
+    Without this, WA_DeleteOnClose deferred deletions from the previous test
+    can still be in the event queue when the next test's widget __init__
+    calls QApplication.processEvents(), causing an access violation on Windows.
+    """
+    yield
+    qtbot.wait(10)
+    QApplication.processEvents()
 from celldetective import get_software_location
 
 # Test configuration
