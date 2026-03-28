@@ -11,12 +11,32 @@ and parameter passing without opening actual windows.
 import pytest
 import pandas as pd
 import numpy as np
+import logging
 from unittest.mock import patch, MagicMock
 
-from PyQt5.QtWidgets import QMainWindow, QMessageBox
+from PyQt5.QtWidgets import QMainWindow, QMessageBox, QApplication
 from PyQt5.QtCore import Qt
 
 from celldetective.gui.tableUI import TableUI
+
+
+@pytest.fixture(autouse=True)
+def disable_logging():
+    """Disable all logging to avoid Windows OSError with pytest capture."""
+    logger = logging.getLogger()
+    try:
+        logging.disable(logging.CRITICAL)
+        yield
+    finally:
+        logging.disable(logging.NOTSET)
+
+
+@pytest.fixture(autouse=True)
+def process_events_after_test(qtbot):
+    """Ensure all Qt events are processed after each test to prevent hangs."""
+    yield
+    qtbot.wait(10)
+    QApplication.processEvents()
 
 
 @pytest.fixture
@@ -40,7 +60,8 @@ def table_ui(qtbot, sample_numeric_data):
     """Fixture to provide an initialized TableUI instance."""
     table = TableUI(data=sample_numeric_data, title="Advanced Plots Test")
     qtbot.addWidget(table)
-    return table
+    yield table
+    table.close()
 
 
 # =============================================================================
