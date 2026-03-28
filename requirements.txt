@@ -41,4 +41,5 @@ scikit-image
 natsort
 sphinx-hoverxref
 sphinx-design
+plotly
 PyQtWebEngine
