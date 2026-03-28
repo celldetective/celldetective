@@ -1,4 +1,5 @@
 from PyQt5.QtWidgets import (
+    QAction,
     QHBoxLayout,
     QVBoxLayout,
     QLabel,
@@ -6,6 +7,8 @@ from PyQt5.QtWidgets import (
     QPushButton,
     QMessageBox,
     QFileDialog,
+    QTabWidget,
+    QWidget,
 )
 from PyQt5.QtCore import Qt, QSize
 from PyQt5.QtGui import QIntValidator
@@ -19,10 +22,12 @@ from superqt import QLabeledDoubleSlider
 from superqt.fonticon import icon
 from fonticon_mdi6 import MDI6
 
+import matplotlib.pyplot as plt
 from celldetective.gui.base_annotator import BaseAnnotator
 from celldetective.gui.viewers.contour_viewer import CellEdgeVisualizer
 from celldetective.gui.base.components import CelldetectiveWidget
-from celldetective.gui.gui_utils import color_from_state
+from celldetective.gui.base.figure_canvas import FigureCanvas
+from celldetective.gui.gui_utils import color_from_state, ExportPlotBtn
 from celldetective.utils.image_loaders import locate_labels
 from celldetective.gui.base.utils import center_window
 from celldetective import get_logger
@@ -460,11 +465,30 @@ class MeasureAnnotator(BaseAnnotator):
         self.class_choice_cb.currentIndexChanged.connect(self.changed_class)
 
     def populate_window(self) -> None:
-        """Populate the window."""
-        super().populate_window()
-        # Left panel updates
+        """Build the full window layout with a tabbed left panel."""
+        # --- Main scaffold (same as base) ---
+        self.button_widget = CelldetectiveWidget()
+        self.main_layout = QHBoxLayout()
+        self.button_widget.setLayout(self.main_layout)
+        self.main_layout.setContentsMargins(30, 30, 30, 30)
+
+        # --- Left panel ---
+        self.left_panel = QVBoxLayout()
+        self.left_panel.setContentsMargins(10, 10, 10, 10)
+        self.left_panel.setSpacing(6)
+
+        # Class selection
+        self.init_class_selection_block()
+        self.left_panel.addLayout(self.class_hbox, 5)
+        self.left_panel.addWidget(self.cell_info, 5)
+
+        # Options & correction buttons
+        self.init_options_block()
         self.populate_options_layout()
         self.update_widgets()
+        self.init_correction_block()
+        self.left_panel.addLayout(self.options_hbox, 5)
+        self.left_panel.addLayout(self.action_hbox, 5)
 
         self.annotation_btns_to_hide = [
             self.time_of_interest_label,
@@ -472,8 +496,21 @@ class MeasureAnnotator(BaseAnnotator):
             self.suppr_btn,
         ]
         self.hide_annotation_buttons()
+        self.left_panel.addSpacing(10)
 
-        # Right panel - Initialize StackVisualizer
+        # --- Tabbed area ---
+        self.init_plot_buttons_block()
+        self.create_cell_histogram()
+        self._build_left_panel_tabs()
+        self.left_panel.addWidget(self.left_tabs, 65)
+
+        # Save / Export at the very bottom
+        self.init_save_btn_block()
+        self.left_panel.addLayout(self.btn_hbox, 5)
+
+        # --- Right panel ---
+        self.right_panel = QVBoxLayout()
+
         self.viewer = AnnotatorStackVisualizer(
             stack_path=self.stack_path,
             labels=self.labels,
@@ -484,29 +521,272 @@ class MeasureAnnotator(BaseAnnotator):
             target_channel=0,
             window_title="Stack Viewer",
         )
-
-        # Connect viewer signals
         self.viewer.frame_slider.valueChanged.connect(self.sync_frame)
         self.viewer.channel_cb.currentIndexChanged.connect(self.plot_signals)
-
-        # Connect mpl event
+        self.viewer.channel_cb.currentIndexChanged.connect(self._on_channel_changed)
         self.cid_pick = self.viewer.fig.canvas.mpl_connect(
             "pick_event", self.on_scatter_pick
         )
-
         self.right_panel.addWidget(self.viewer.canvas)
+
+        # --- Assemble ---
+        self.main_layout.addLayout(self.left_panel, 35)
+        self.main_layout.addLayout(self.right_panel, 65)
+        self.button_widget.adjustSize()
+        self.setCentralWidget(self.button_widget)
+
+        from PyQt5.QtWidgets import QShortcut
+        from PyQt5.QtGui import QKeySequence
+        self.del_shortcut = QShortcut(Qt.Key_Delete, self)
+        self.del_shortcut.activated.connect(self.shortcut_suppr)
+        self.del_shortcut.setEnabled(False)
 
         # Force start at frame 0
         self.viewer.frame_slider.setValue(0)
-
         self.plot_signals()
         self.compact_layout_main()
 
     def compact_layout_main(self) -> None:
         """Compact the main layout."""
-        # Attempt to compact the viewer layout one more time from the main window side
         if hasattr(self, "viewer"):
             self.viewer.compact_layout()
+
+    def _build_left_panel_tabs(self) -> None:
+        """Build the QTabWidget with signals and histogram tabs."""
+        # --- Tab 1: Signals (dropdowns + boxplot + toolbar) ---
+        signals_tab = QWidget()
+        sig_layout = QVBoxLayout(signals_tab)
+        sig_layout.setContentsMargins(10, 10, 10, 5)
+        sig_layout.setSpacing(6)
+
+        for i in range(len(self.signal_choice_cb)):
+            row = QHBoxLayout()
+            row.setContentsMargins(0, 0, 0, 0)
+            row.addWidget(self.signal_choice_label[i], 20)
+            row.addWidget(self.signal_choice_cb[i], 80)
+            sig_layout.addLayout(row)
+
+        sig_layout.addWidget(self.cell_fcanvas, 1)
+
+        # Customise the signals matplotlib toolbar
+        if hasattr(self.cell_fcanvas, "toolbar"):
+            tb = self.cell_fcanvas.toolbar
+            self._strip_toolbar(tb)
+            tb.addSeparator()
+            tb.addWidget(self.outliers_check)
+            self._sig_norm_action = tb.addAction(
+                icon(MDI6.arrow_collapse_vertical, color="black"),
+                "Normalize", self.normalize_features,
+            )
+            self._sig_log_action = tb.addAction(
+                icon(MDI6.math_log, color="black"),
+                "Log scale", self.switch_to_log,
+            )
+            tb.addAction(
+                icon(MDI6.content_save, color="black"),
+                "Save figure", lambda: self.export_plot_btn.save_plot(),
+            )
+
+        # --- Tab 2: Cell Histogram ---
+        hist_tab = QWidget()
+        hist_layout = QVBoxLayout(hist_tab)
+        hist_layout.setContentsMargins(10, 10, 10, 5)
+        hist_layout.setSpacing(6)
+        hist_layout.addWidget(self.hist_canvas, 1)
+
+        # Customise the histogram matplotlib toolbar
+        if hasattr(self.hist_canvas, "toolbar"):
+            tb = self.hist_canvas.toolbar
+            self._strip_toolbar(tb)
+            tb.addSeparator()
+            self._hist_density_action = tb.addAction(
+                icon(MDI6.chart_bell_curve_cumulative, color="black"),
+                "Density", self._toggle_hist_density,
+            )
+            self._hist_log_action = tb.addAction(
+                icon(MDI6.math_log, color="black"),
+                "Log scale", self._toggle_hist_log,
+            )
+            tb.addAction(
+                icon(MDI6.content_save, color="black"),
+                "Save figure", lambda: self.hist_export_btn.save_plot(),
+            )
+
+        # --- Assemble ---
+        self.left_tabs = QTabWidget()
+        self.left_tabs.setDocumentMode(True)
+        self.left_tabs.addTab(signals_tab, "Signals")
+        self.left_tabs.addTab(hist_tab, "Cell Histogram")
+
+    @staticmethod
+    def _strip_toolbar(toolbar) -> None:
+        """Remove Subplots, Customize, and Save from a matplotlib toolbar."""
+        for action in toolbar.actions():
+            if action.text() in ("Subplots", "Customize", "Save"):
+                toolbar.removeAction(action)
+
+    def switch_to_log(self):
+        """Override to also update the toolbar action icon."""
+        super().switch_to_log()
+        if hasattr(self, "_sig_log_action"):
+            color = "#1565c0" if self.log_scale else "black"
+            self._sig_log_action.setIcon(icon(MDI6.math_log, color=color))
+
+    def normalize_features(self):
+        """Override to also update the toolbar action icon."""
+        super().normalize_features()
+        if hasattr(self, "_sig_norm_action"):
+            color = "#1565c0" if self.normalized_signals else "black"
+            self._sig_norm_action.setIcon(icon(MDI6.arrow_collapse_vertical, color=color))
+
+    # ------------------------------------------------------------------
+    # Cell intensity histogram
+    # ------------------------------------------------------------------
+
+    def create_cell_histogram(self) -> None:
+        """Create an empty histogram canvas for single-cell intensity."""
+        self.hist_fig, self.hist_ax = plt.subplots(tight_layout=True)
+        self.hist_canvas = FigureCanvas(self.hist_fig, interactive=True)
+        self.hist_log_scale = False
+        self.hist_density = False
+        self._hist_ymax = 0  # remembered y-limit for density mode
+
+        # Hidden ExportPlotBtn used for its save_plot() method
+        self.hist_export_btn = ExportPlotBtn(self.hist_fig, export_dir=self.exp_dir)
+        self.hist_export_btn.hide()
+
+        self._style_hist_ax()
+        self.hist_fig.set_facecolor("none")
+        self.hist_fig.canvas.setStyleSheet("background-color: transparent;")
+        self.hist_fig.canvas.draw()
+
+    def _style_hist_ax(self) -> None:
+        """Apply consistent styling to the histogram axes."""
+        self.hist_ax.spines["top"].set_visible(False)
+        self.hist_ax.spines["right"].set_visible(False)
+        self.hist_ax.set_xlabel("intensity [a.u.]")
+        ylabel = "density" if self.hist_density else "count"
+        self.hist_ax.set_ylabel(ylabel)
+
+    def _toggle_hist_log(self) -> None:
+        """Toggle log scale on the histogram y-axis (like ThresholdConfigurationWizard)."""
+        if self.hist_ax.get_yscale() == "linear":
+            self.hist_ax.set_yscale("log")
+            self.hist_log_scale = True
+        else:
+            self.hist_ax.set_yscale("linear")
+            self.hist_log_scale = False
+
+        # Update icon on the toolbar action
+        color = "#1565c0" if self.hist_log_scale else "black"
+        if hasattr(self, "_hist_log_action"):
+            self._hist_log_action.setIcon(icon(MDI6.math_log, color=color))
+
+        # Adjust y-limits
+        ymin = 1e-1 if self.hist_log_scale else 0
+        patches = self.hist_ax.patches
+        if patches:
+            ymax = max(p.get_height() for p in patches if p.get_height() > 0)
+            self.hist_ax.set_ylim(ymin, ymax)
+        self.hist_fig.tight_layout()
+        self.hist_fig.canvas.draw_idle()
+
+    def _toggle_hist_density(self) -> None:
+        """Toggle density normalization on the histogram."""
+        self._hist_ymax = 0
+        self.hist_density = not self.hist_density
+        color = "#1565c0" if self.hist_density else "black"
+        if hasattr(self, "_hist_density_action"):
+            self._hist_density_action.setIcon(icon(MDI6.chart_bell_curve_cumulative, color=color))
+        if self.selection:
+            self.update_cell_histogram()
+
+    def update_cell_histogram(self) -> None:
+        """Redraw the histogram for the currently selected cell."""
+        if not hasattr(self, "hist_ax"):
+            return
+        if not hasattr(self, "track_of_interest"):
+            return
+
+        frame = self.current_frame
+        image = self.viewer.init_frame  # raw pixels of the displayed channel
+
+        # Find the label id for the selected track in this frame
+        label_id = self._label_id_for_track(self.track_of_interest, frame)
+
+        self.hist_ax.clear()
+
+        if label_id is not None and label_id != 0 and frame < len(self.labels):
+            mask = self.labels[frame] == label_id
+            pixels = image[mask].ravel()
+
+            if pixels.size > 0:
+                counts, bin_edges, _ = self.hist_ax.hist(
+                    pixels, bins=60, color="tab:blue", alpha=0.7,
+                    density=self.hist_density,
+                )
+
+                mean_val = np.nanmean(pixels)
+                median_val = np.nanmedian(pixels)
+                mode_idx = np.argmax(counts)
+                mode_val = (bin_edges[mode_idx] + bin_edges[mode_idx + 1]) / 2
+
+                self.hist_ax.axvline(mean_val, color="tab:blue", lw=1.2, label="mean")
+                self.hist_ax.axvline(median_val, color="tab:red", lw=1.2, label="median")
+                self.hist_ax.axvline(mode_val, color="purple", lw=1.2, label="mode")
+                self.hist_ax.legend(loc="upper right")
+
+                # In density mode, remember the max y across frames
+                current_ymax = counts.max()
+                if self.hist_density and current_ymax > self._hist_ymax:
+                    self._hist_ymax = current_ymax
+                if self.hist_density and self._hist_ymax > 0:
+                    self.hist_ax.set_ylim(0, self._hist_ymax * 1.05)
+
+        # Sync x-limits with the contrast slider's discovered range
+        if hasattr(self.viewer, "contrast_slider"):
+            lo, hi = self.viewer.contrast_slider.minimum(), self.viewer.contrast_slider.maximum()
+            if lo < hi:
+                self.hist_ax.set_xlim(lo, hi)
+
+        self._style_hist_ax()
+
+        # Re-apply log scale if toggled (clear() resets to linear)
+        if self.hist_log_scale:
+            self.hist_ax.set_yscale("log")
+            patches = self.hist_ax.patches
+            if patches:
+                ymax = max(p.get_height() for p in patches if p.get_height() > 0)
+                self.hist_ax.set_ylim(1e-1, ymax)
+
+        self.hist_fig.tight_layout()
+        self.hist_fig.canvas.draw()
+
+    def _label_id_for_track(self, track_id, frame: int) -> Optional[int]:
+        """Return the segmentation label id for *track_id* at *frame*."""
+        if "TRACK_ID" in self.df_tracks.columns:
+            rows = self.df_tracks.loc[
+                (self.df_tracks["TRACK_ID"] == track_id)
+                & (self.df_tracks["FRAME"] == frame)
+            ]
+        else:
+            rows = self.df_tracks.loc[
+                (self.df_tracks["ID"] == track_id)
+                & (self.df_tracks["FRAME"] == frame)
+            ]
+        if rows.empty:
+            return None
+        if "class_id" in rows.columns:
+            val = rows.iloc[0]["class_id"]
+            if pd.notna(val):
+                return int(val)
+        return None
+
+    def _on_channel_changed(self, index: int) -> None:
+        """Update the cell histogram when the viewer channel changes."""
+        self._hist_ymax = 0  # reset remembered y-limit for new channel
+        if self.selection:
+            self.update_cell_histogram()
 
     def sync_frame(self, value: int) -> None:
         """
@@ -520,6 +800,8 @@ class MeasureAnnotator(BaseAnnotator):
 
         self.current_frame = value
         self.update_frame_logic()
+        if self.selection:
+            self.update_cell_histogram()
 
     def plot_signals(self) -> None:
         """Delegate signal plotting but check for viewer availability"""
@@ -718,6 +1000,12 @@ class MeasureAnnotator(BaseAnnotator):
         super().cancel_selection()
         self.event = None
         self.draw_frame(self.current_frame)
+        # Clear the histogram
+        if hasattr(self, "hist_ax"):
+            self.hist_ax.clear()
+            self._style_hist_ax()
+            self.hist_fig.tight_layout()
+            self.hist_fig.canvas.draw()
 
     def export_measurements(self) -> None:
         """Export measurements to file."""
@@ -982,7 +1270,9 @@ class MeasureAnnotator(BaseAnnotator):
                 self.cancel_selection()
 
             self.selection = [[idx, self.current_frame]]
+            self._hist_ymax = 0  # reset y-limit memory for new cell
             self.select_single_cell(idx, self.current_frame)
+            self.update_cell_histogram()
 
     def draw_frame(self, framedata: int) -> None:
         """

@@ -108,12 +108,21 @@ Neighborhood measurements quantify the spatial relationships between cells — e
 Phenotype Annotator
 ~~~~~~~~~~~~~~~~~~~
 
-We provide an interactive viewer for inspecting single-cell measurements:
+We provide an interactive viewer for inspecting single-cell measurements. The left panel is organized into two tabs:
+
+**Signals tab**
 
 *   Clicking on cells highlights them and displays their specific measurements.
 *   Timeseries trajectories are visualized for tracked cells.
-
 *   Compare single-cell values against population distributions (strip plots, box plots).
+*   Toggle log scale, normalize features, or flag outliers directly from the toolbar.
+
+**Cell Histogram tab**
+
+*   Displays the pixel intensity histogram of the selected cell's segmentation mask on the current channel.
+*   Vertical lines indicate the mean, median, and mode of the intensity distribution.
+*   Toggle between count and density mode; in density mode, y-axis limits are remembered across frames for stable visualization.
+*   Log scale toggle and save-image button are integrated into the matplotlib toolbar.
 
 .. figure:: _static/measurements_annotator.gif
     :width: 800px
