@@ -590,7 +590,7 @@ class SegmentCellDLProcess(BaseSegmentProcess):
 
         try:
             del model
-        except:
+        except NameError:
             pass
 
         gc.collect()

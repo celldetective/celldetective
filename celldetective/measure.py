@@ -1010,7 +1010,7 @@ def measure_isotropic_intensity(
             channels = [channels]
         else:
             if verbose:
-                print("Channel name unrecognized...")
+                logger.warning("Channel name unrecognized.")
             channels = ["intensity"]
     elif img.ndim == 3:
         assert (
@@ -1267,7 +1267,7 @@ def normalise_by_cell(
 
         extraprops = True
     except Exception as e:
-        print(f"The module extra_properties seems corrupted: {e}... Skip...")
+        logger.warning(f"The module extra_properties seems corrupted: {e}. Skip.")
         extraprops = False
 
     border = contour_of_instance_segmentation(label=labels, distance=distance * (-1))
@@ -1795,7 +1795,7 @@ def classify_transient_events(
         df = df.drop(columns=["inst_" + stat_col])
     df = df.rename(columns={stat_col: "inst_" + stat_col})
     df = df.rename(columns={continuous_stat_col: stat_col})
-    print("Classes: ", df.loc[df["FRAME"] == 0, class_attr].value_counts())
+    logger.info("Classes:\n%s", df.loc[df["FRAME"] == 0, class_attr].value_counts())
 
     return df
 
@@ -1908,8 +1908,8 @@ def classify_irreversible_events(
             # ambiguity, possible transition, use `unique_state` technique after
             df.loc[indices, class_attr] = 2
 
-    print("Number of cells per class after the initial pass: ")
-    pretty_table(df.loc[df["FRAME"] == 0, class_attr].value_counts().to_dict())
+    logger.info("Number of cells per class after the initial pass: %s",
+                df.loc[df["FRAME"] == 0, class_attr].value_counts().to_dict())
 
     df.loc[df[class_attr] != 2, class_attr.replace("class", "t")] = -1
     # Try to fit time on class 2 cells (ambiguous)
@@ -1921,15 +1921,15 @@ def classify_irreversible_events(
         r2_threshold=r2_threshold,
     )
 
-    print("Number of cells per class after conditional signal fit: ")
-    pretty_table(df.loc[df["FRAME"] == 0, class_attr].value_counts().to_dict())
+    logger.info("Number of cells per class after conditional signal fit: %s",
+                df.loc[df["FRAME"] == 0, class_attr].value_counts().to_dict())
 
     # Revisit class 2 cells to classify as neg/pos with percentile tolerance
     df.loc[df[class_attr] == 2, :] = classify_unique_states(
         df.loc[df[class_attr] == 2, :].copy(), class_attr, percentile_recovery
     )
-    print("Number of cells per class after recovery pass (median state): ")
-    pretty_table(df.loc[df["FRAME"] == 0, class_attr].value_counts().to_dict())
+    logger.info("Number of cells per class after recovery pass (median state): %s",
+                df.loc[df["FRAME"] == 0, class_attr].value_counts().to_dict())
 
     return df
 
@@ -2092,9 +2092,7 @@ def classify_cells_from_query(
     df[status_attr] = df[status_attr].astype(float)
 
     cols = extract_cols_from_query(query)
-    print(
-        f"The following DataFrame measurements were identified in the query: {cols=}..."
-    )
+    logger.debug("The following DataFrame measurements were identified in the query: %s", cols)
 
     if query.strip() == "":
         raise EmptyQueryError("The provided query is empty.")
@@ -2211,7 +2209,7 @@ def measure_radial_distance_to_center(
             + (df[column_labels["y"]] - volume[1] / 2) ** 2
         )
     except Exception as e:
-        print(f"{e=}")
+        logger.warning(f"Could not compute radial distance: {e}")
 
     return df
 

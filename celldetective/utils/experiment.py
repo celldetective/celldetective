@@ -1155,7 +1155,7 @@ def auto_load_number_of_frames(stack_path: str) -> Optional[int]:
                 len_movie = nslices
             else:
                 raise ValueError("Single slice detected")
-        except:
+        except (ValueError, IndexError, TypeError):
             try:
                 frames = int(
                     attr[np.argmax([s.startswith("slices") for s in attr])].split("=")[
@@ -1163,14 +1163,14 @@ def auto_load_number_of_frames(stack_path: str) -> Optional[int]:
                     ]
                 )
                 len_movie = frames
-            except:
+            except (ValueError, IndexError, TypeError):
                 pass
 
     try:
         del tif
         del tif_tags
         del img_desc
-    except:
+    except NameError:
         pass
 
     if "len_movie" not in locals():
@@ -1329,7 +1329,7 @@ def locate_labels(
         tzfill = str(int(frames)).zfill(4)
         try:
             idx = label_names.index(f"{tzfill}.tif")
-        except:
+        except ValueError:
             idx = -1
 
         if idx == -1:

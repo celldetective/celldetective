@@ -829,7 +829,7 @@ def update_effector_table(
             df_effector.loc[
                 df_effector["TRACK_ID"] == effector, "group_neighborhood"
             ] = 0
-        except:
+        except KeyError:
             df_effector.loc[df_effector["ID"] == effector, "group_neighborhood"] = 0
     return df_effector
 

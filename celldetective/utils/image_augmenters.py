@@ -168,7 +168,7 @@ def noise(
                     x_noise[:, :, k] = random_noise(
                         x_noise[:, :, k], mode=m, clip=clip_option
                     )
-                except:
+                except Exception:
                     pass
 
     x_noise[loc_i, loc_j, loc_c] = 0.0

@@ -192,18 +192,18 @@ class SignalDetectionModel(object):
         self.show_plots = True
 
         if self.pretrained is not None:
-            print(f"Load pretrained models from {pretrained}...")
+            logger.info(f"Load pretrained models from {pretrained}...")
             test = self.load_pretrained_model()
             if test is None:
                 self.pretrained = None
-                print(
+                logger.error(
                     "Pretrained model could not be loaded. Check the log for error. Abort..."
                 )
                 return None
         else:
-            print("Create models from scratch...")
+            logger.info("Create models from scratch...")
             self.create_models_from_scratch()
-            print("Models successfully created.")
+            logger.info("Models successfully created.")
 
     def load_pretrained_model(self) -> Optional[bool]:
         """
@@ -238,9 +238,9 @@ class SignalDetectionModel(object):
                 os.sep.join([self.pretrained, "classifier.h5"])
             )
             self.model_class = self.freeze_encoder(self.model_class, 5)
-            print("Classifier successfully loaded...")
+            logger.info("Classifier successfully loaded...")
         except Exception as e:
-            print(f"Error {e}...")
+            logger.error(f"Error loading classifier: {e}")
             self.model_class = None
         try:
             self.model_reg = load_model(
@@ -250,9 +250,9 @@ class SignalDetectionModel(object):
             )
             self.model_reg.load_weights(os.sep.join([self.pretrained, "regressor.h5"]))
             self.model_reg = self.freeze_encoder(self.model_reg, 5)
-            print("Regressor successfully loaded...")
+            logger.info("Regressor successfully loaded...")
         except Exception as e:
-            print(f"Error {e}...")
+            logger.error(f"Error loading regressor: {e}")
             self.model_reg = None
 
         if self.model_class is None and self.model_reg is None:
@@ -264,7 +264,7 @@ class SignalDetectionModel(object):
         self.config = model_config
 
         req_channels = model_config["channels"]
-        print(f"Required channels read from pretrained model: {req_channels}")
+        logger.debug(f"Required channels read from pretrained model: {req_channels}")
         self.channel_option = req_channels
         if "normalize" in model_config:
             self.normalize = model_config["normalize"]
@@ -296,7 +296,7 @@ class SignalDetectionModel(object):
             model_class_input_shape = self.model_class.input_shape
             model_reg_input_shape = self.model_reg.input_shape
         except Exception as e:
-            print(e)
+            logger.error(f"Error reading model input shapes: {e}")
 
         assert (
             model_class_input_shape == model_reg_input_shape
@@ -517,7 +517,7 @@ class SignalDetectionModel(object):
             else:
                 self.list_of_sets.append(ds)
 
-        print(f"Found {len(self.list_of_sets)} datasets...")
+        logger.info(f"Found {len(self.list_of_sets)} datasets...")
 
         self.prepare_sets()
         self.train_generic()
@@ -688,7 +688,7 @@ class SignalDetectionModel(object):
                     )
 
             except Exception as e:
-                print(f"Could not load validation data, error {e}...")
+                logger.warning(f"Could not load validation data: {e}")
         else:
             self.validation_split = validation_split
 
@@ -715,7 +715,7 @@ class SignalDetectionModel(object):
                         normalization_clip=self.normalization_clip,
                     )
             except Exception as e:
-                print(f"Could not load test data, error {e}...")
+                logger.warning(f"Could not load test data: {e}")
 
         self.batch_size = batch_size
         self.epochs = epochs
@@ -1008,7 +1008,7 @@ class SignalDetectionModel(object):
         if self.pretrained is not None:
             # if recompile
             if self.recompile_pretrained:
-                print(
+                logger.warning(
                     "Recompiling the pretrained classifier model... Warning, this action reinitializes all the weights; are you sure that this is what you intended?"
                 )
                 self.model_class.set_weights(
@@ -1050,7 +1050,7 @@ class SignalDetectionModel(object):
                 )
 
         else:
-            print("Compiling the classifier...")
+            logger.info("Compiling the classifier...")
             self.model_class.compile(
                 optimizer=Adam(learning_rate=self.learning_rate),
                 loss=self.loss_class,
@@ -1131,10 +1131,10 @@ class SignalDetectionModel(object):
             precision = precision_score(ground_truth, predictions, average=None)
             recall = recall_score(ground_truth, predictions, average=None)
 
-            print(f"Test IoU score: {IoU_score}")
-            print(f"Test Balanced accuracy score: {balanced_accuracy}")
-            print(f"Test Precision: {precision}")
-            print(f"Test Recall: {recall}")
+            logger.info(f"Test IoU score: {IoU_score}")
+            logger.info(f"Test Balanced accuracy score: {balanced_accuracy}")
+            logger.info(f"Test Precision: {precision}")
+            logger.info(f"Test Recall: {recall}")
 
             # Confusion matrix on test set
             results = confusion_matrix(ground_truth, predictions)
@@ -1165,9 +1165,8 @@ class SignalDetectionModel(object):
                     # plt.pause(3)
                     plt.close()
                 except Exception as e:
-                    print(e)
-                    pass
-            print("Test set: ", classification_report(ground_truth, predictions))
+                    logger.warning(f"Could not save test confusion matrix: {e}")
+            logger.info("Test set:\n%s", classification_report(ground_truth, predictions))
 
         if hasattr(self, "x_val"):
             predictions = self.model_class.predict(self.x_val).argmax(axis=1)
@@ -1183,10 +1182,10 @@ class SignalDetectionModel(object):
             precision = precision_score(ground_truth, predictions, average=None)
             recall = recall_score(ground_truth, predictions, average=None)
 
-            print(f"Validation IoU score: {IoU_score}")
-            print(f"Validation Balanced accuracy score: {balanced_accuracy}")
-            print(f"Validation Precision: {precision}")
-            print(f"Validation Recall: {recall}")
+            logger.info(f"Validation IoU score: {IoU_score}")
+            logger.info(f"Validation Balanced accuracy score: {balanced_accuracy}")
+            logger.info(f"Validation Precision: {precision}")
+            logger.info(f"Validation Recall: {recall}")
 
             # Confusion matrix on validation set
             results = confusion_matrix(ground_truth, predictions)
@@ -1219,9 +1218,8 @@ class SignalDetectionModel(object):
                     # plt.pause(3)
                     plt.close()
                 except Exception as e:
-                    print(e)
-                    pass
-            print("Validation set: ", classification_report(ground_truth, predictions))
+                    logger.warning(f"Could not save validation confusion matrix: {e}")
+            logger.info("Validation set:\n%s", classification_report(ground_truth, predictions))
 
             # Send result to GUI and wait
             for cb in self.cb:
@@ -1250,7 +1248,7 @@ class SignalDetectionModel(object):
         if self.pretrained is not None:
             # if recompile
             if self.recompile_pretrained:
-                print(
+                logger.warning(
                     "Recompiling the pretrained regressor model... Warning, this action reinitializes all the weights; are you sure that this is what you intended?"
                 )
                 self.model_reg.set_weights(clone_model(self.model_reg).get_weights())
@@ -1267,7 +1265,7 @@ class SignalDetectionModel(object):
                 )
 
         else:
-            print("Compiling the regressor...")
+            logger.info("Compiling the regressor...")
             self.model_reg.compile(
                 optimizer=Adam(learning_rate=self.learning_rate),
                 loss=self.loss_reg,
@@ -1333,7 +1331,7 @@ class SignalDetectionModel(object):
         try:
             np.save(os.sep.join([self.model_folder, "scores.npy"]), self.dico)
         except Exception as e:
-            print(e)
+            logger.error(f"Could not save scores: {e}")
 
     def plot_model_history(
         self, mode: Literal["regressor", "classifier"] = "regressor"
@@ -1370,7 +1368,7 @@ class SignalDetectionModel(object):
                 )
                 plt.close()
             except Exception as e:
-                print(f"Error {e}; could not generate plot...")
+                logger.warning(f"Could not generate plot: {e}")
         elif mode == "classifier":
             try:
                 plt.plot(self.history_classifier.history["precision"])
@@ -1387,7 +1385,7 @@ class SignalDetectionModel(object):
                 )
                 plt.close()
             except Exception as e:
-                print(f"Error {e}; could not generate plot...")
+                logger.warning(f"Could not generate plot: {e}")
         else:
             return None
 
@@ -1409,7 +1407,7 @@ class SignalDetectionModel(object):
 
         if hasattr(self, "x_test"):
 
-            print("Evaluate on test set...")
+            logger.info("Evaluate on test set...")
             predictions = self.model_reg.predict(
                 self.x_test[np.argmax(self.y_class_test, axis=1) == 0],
                 batch_size=self.batch_size,
@@ -1421,8 +1419,8 @@ class SignalDetectionModel(object):
 
             test_mse = mse(ground_truth, predictions).numpy()
             test_mae = mae(ground_truth, predictions).numpy()
-            print(f"MSE on test set: {test_mse}...")
-            print(f"MAE on test set: {test_mae}...")
+            logger.info(f"MSE on test set: {test_mse}")
+            logger.info(f"MAE on test set: {test_mae}")
             if self.show_plots:
                 regression_plot(
                     predictions,
@@ -1453,8 +1451,8 @@ class SignalDetectionModel(object):
                         [self.model_folder, "validation_regression.png"]
                     ),
                 )
-            print(f"MSE on validation set: {val_mse}...")
-            print(f"MAE on validation set: {val_mae}...")
+            logger.info(f"MSE on validation set: {val_mse}")
+            logger.info(f"MAE on validation set: {val_mae}")
 
             self.dico.update(
                 {
@@ -1725,7 +1723,7 @@ class SignalDetectionModel(object):
         self.y_class_train = np.array(y_class_train_aug)
 
         self.class_weights = compute_weights(self.y_class_train.argmax(axis=1))
-        print(f"New class weights: {self.class_weights}...")
+        logger.info(f"New class weights: {self.class_weights}")
 
     def load_set(self, signal_dataset: str) -> np.ndarray:
         """
@@ -1772,7 +1770,7 @@ class SignalDetectionModel(object):
                 if len(valid_columns) == 1:
                     selected_signals.append(valid_columns[0])
                 else:
-                    print(f"Found several candidate signals: {valid_columns}")
+                    logger.debug(f"Found several candidate signals: {valid_columns}")
                     for vc in natsorted(valid_columns):
                         if "circle" in vc:
                             selected_signals.append(vc)

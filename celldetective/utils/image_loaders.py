@@ -258,7 +258,7 @@ def locate_labels(
         tzfill = str(int(frames)).zfill(4)
         try:
             idx = label_names.index(f"{tzfill}.tif")
-        except:
+        except ValueError:
             idx = -1
 
         if idx == -1:
@@ -280,7 +280,7 @@ def locate_labels(
             else:
                 labels.append(np.array(imread(label_path[idx].replace("\\", "/"))))
     else:
-        print("Frames argument must be None, int or list...")
+        logger.warning("Frames argument must be None, int or list.")
 
     return labels
 

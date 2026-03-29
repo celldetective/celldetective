@@ -136,7 +136,7 @@ def analyze_signals(
         label = config["label"]
         if label == "":
             label = None
-    except:
+    except KeyError:
         label = None
 
     if selected_signals is None:
@@ -525,7 +525,7 @@ def analyze_pair_signals(
         label = config["label"]
         if label == "":
             label = None
-    except:
+    except KeyError:
         label = None
 
     if selected_signals is None:
@@ -1261,7 +1261,7 @@ def mean_signal(
             if not abs_time:
                 try:
                     ref_time = floor(track_group[time_col].to_numpy()[0])
-                except:
+                except (KeyError, IndexError, ValueError):
                     continue
             else:
                 ref_time = time_col

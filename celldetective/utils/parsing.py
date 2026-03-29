@@ -84,15 +84,12 @@ def config_section_to_dict(
     dict1 = {}
     try:
         options = Config.options(section)
-    except:
+    except configparser.NoSectionError:
         return None
     for option in options:
         try:
             dict1[option] = Config.get(section, option)
-            if dict1[option] == -1:
-                print("skip: %s" % option)
-        except:
-            print("exception on %s!" % option)
+        except configparser.NoOptionError:
             dict1[option] = None
     return dict1
 
@@ -194,9 +191,9 @@ def _extract_nbr_channels_from_config(
                 channel = int(config_section_to_dict(config, "Channels")[c])
                 nbr_channels += 1
                 channels.append(c)
-            except:
+            except (TypeError, ValueError):
                 pass
-    except:
+    except Exception:
         pass
 
     if nbr_channels == 0:
@@ -210,7 +207,7 @@ def _extract_nbr_channels_from_config(
             )
             nbr_channels += 1
             channels.append("brightfield_channel")
-        except:
+        except (TypeError, ValueError, KeyError):
             brightfield_channel = None
 
         try:
@@ -219,7 +216,7 @@ def _extract_nbr_channels_from_config(
             )
             nbr_channels += 1
             channels.append("live_nuclei_channel")
-        except:
+        except (TypeError, ValueError, KeyError):
             live_nuclei_channel = None
 
         try:
@@ -228,7 +225,7 @@ def _extract_nbr_channels_from_config(
             )
             nbr_channels += 1
             channels.append("dead_nuclei_channel")
-        except:
+        except (TypeError, ValueError, KeyError):
             dead_nuclei_channel = None
 
         try:
@@ -237,7 +234,7 @@ def _extract_nbr_channels_from_config(
             )
             nbr_channels += 1
             channels.append("effector_fluo_channel")
-        except:
+        except (TypeError, ValueError, KeyError):
             effector_fluo_channel = None
 
         try:
@@ -246,7 +243,7 @@ def _extract_nbr_channels_from_config(
             )
             nbr_channels += 1
             channels.append("adhesion_channel")
-        except:
+        except (TypeError, ValueError, KeyError):
             adhesion_channel = None
 
         try:
@@ -255,7 +252,7 @@ def _extract_nbr_channels_from_config(
             )
             nbr_channels += 1
             channels.append("fluo_channel_1")
-        except:
+        except (TypeError, ValueError, KeyError):
             fluo_channel_1 = None
 
         try:
@@ -264,7 +261,7 @@ def _extract_nbr_channels_from_config(
             )
             nbr_channels += 1
             channels.append("fluo_channel_2")
-        except:
+        except (TypeError, ValueError, KeyError):
             fluo_channel_2 = None
 
     if return_names:
@@ -364,9 +361,9 @@ def _extract_channels_from_config(config: str) -> Tuple[np.ndarray, np.ndarray]:
                 idx = int(config_section_to_dict(config, "Channels")[c])
                 channel_names.append(c)
                 channel_indices.append(idx)
-            except:
+            except (TypeError, ValueError, KeyError):
                 pass
-    except:
+    except Exception:
         pass
 
     channel_indices = np.array(channel_indices)

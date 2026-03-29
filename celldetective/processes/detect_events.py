@@ -186,7 +186,7 @@ class SignalAnalysisProcess(Process):
                 label = config.get("label", "")
                 if label == "":
                     label = None
-            except:
+            except (KeyError, AttributeError):
                 label = None
 
             if label is None:

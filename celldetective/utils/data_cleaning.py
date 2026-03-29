@@ -436,7 +436,7 @@ def remove_redundant_features(
                 if p in reference_features:
                     try:
                         new_features.remove(f)
-                    except:
+                    except ValueError:
                         pass
     return new_features
 
