@@ -504,6 +504,7 @@ class ControlPanel(CelldetectiveMainWindow):
 
         # Stop background loader thread
         if hasattr(self, "bg_loader") and self.bg_loader.isRunning():
+            self.bg_loader.requestInterruption()
             self.bg_loader.quit()
             self.bg_loader.wait(3000)
 
