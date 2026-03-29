@@ -208,7 +208,7 @@ def segment(
     labels = []
 
     # Compute once before the loop: find missing channels and replace None with 0
-    none_channel_indices = np.array([i for i, v in enumerate(channel_indices) if v is None])
+    none_channel_indices = np.array([i for i, v in enumerate(channel_indices) if v is None], dtype=int)
     channel_indices = np.array([v if v is not None else 0 for v in channel_indices])
 
     for t in tqdm(range(len(stack)), desc="frame"):
