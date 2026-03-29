@@ -163,13 +163,11 @@ def measure(
     do_features = True
 
     # Check that conditions are satisfied to perform measurements
-    assert (labels is not None) or (
-        stack is not None
-    ), "Please pass a stack and/or labels... Abort."
+    if (labels is None) and (stack is None):
+        raise ValueError("Please pass a stack and/or labels... Abort.")
     if (labels is not None) and (stack is not None):
-        assert (
-            labels.shape == stack.shape[:-1]
-        ), f"Shape mismatch between the stack of shape {stack.shape} and the segmentation {labels.shape}..."
+        if labels.shape != stack.shape[:-1]:
+            raise ValueError(f"Shape mismatch between the stack of shape {stack.shape} and the segmentation {labels.shape}...")
 
     # Condition to compute features
     if labels is None:
@@ -488,9 +486,8 @@ def measure_features(
             channels = [f"intensity-{k}" for k in range(img.shape[-1])]
 
         if img.ndim == 3 and channels is not None:
-            assert (
-                len(channels) == img.shape[-1]
-            ), "Mismatch between the provided channel names and the shape of the image"
+            if len(channels) != img.shape[-1]:
+                raise ValueError("Mismatch between the provided channel names and the shape of the image")
 
         if spot_detection is not None:
             detection_channel = spot_detection.get("channel")
@@ -809,12 +806,10 @@ def compute_haralick_features(
 
     """
 
-    assert (img.ndim == 2) | (
-        img.ndim == 3
-    ), f"Invalid image shape to compute the Haralick features. Expected YXC, got {img.shape}..."
-    assert (
-        img.shape[:2] == labels.shape
-    ), f"Mismatch between image shape {img.shape} and labels shape {labels.shape}"
+    if img.ndim not in (2, 3):
+        raise ValueError(f"Invalid image shape to compute the Haralick features. Expected YXC, got {img.shape}...")
+    if img.shape[:2] != labels.shape:
+        raise ValueError(f"Mismatch between image shape {img.shape} and labels shape {labels.shape}")
 
     if img.ndim == 2:
         img = img[:, :, np.newaxis]
@@ -827,9 +822,8 @@ def compute_haralick_features(
             logger.error("Channel name unrecognized...")
             modality = ""
     elif img.ndim == 3:
-        assert (
-            target_channel is not None
-        ), "The image is multichannel. Please provide a target channel to compute the Haralick features. Abort."
+        if target_channel is None:
+            raise ValueError("The image is multichannel. Please provide a target channel to compute the Haralick features. Abort.")
         modality = channels[target_channel]
 
     haralick_labels = [
@@ -915,9 +909,8 @@ def compute_haralick_features(
             dictionary.update({haralick_labels[k]: features[k]})
         haralick_properties.append(dictionary)
 
-    assert len(haralick_properties) == (
-        len(np.unique(labels)) - 1
-    ), "Some cells have not been measured..."
+    if len(haralick_properties) != (len(np.unique(labels)) - 1):
+        raise RuntimeError("Some cells have not been measured...")
 
     return pd.DataFrame(haralick_properties)
 
@@ -1000,9 +993,8 @@ def measure_isotropic_intensity(
     """
 
     epsilon = -10000
-    assert (img.ndim == 2) | (
-        img.ndim == 3
-    ), f"Invalid image shape to compute the Haralick features. Expected YXC, got {img.shape}..."
+    if img.ndim not in (2, 3):
+        raise ValueError(f"Invalid image shape to compute the Haralick features. Expected YXC, got {img.shape}...")
 
     if img.ndim == 2:
         img = img[:, :, np.newaxis]
@@ -1013,9 +1005,8 @@ def measure_isotropic_intensity(
                 logger.warning("Channel name unrecognized.")
             channels = ["intensity"]
     elif img.ndim == 3:
-        assert (
-            channels is not None
-        ), "The image is multichannel. Please provide the list of channel names. Abort."
+        if channels is None:
+            raise ValueError("The image is multichannel. Please provide the list of channel names. Abort.")
 
     if isinstance(intensity_measurement_radii, int) or isinstance(
         intensity_measurement_radii, float
@@ -1057,9 +1048,8 @@ def measure_isotropic_intensity(
                 ymin = int(y)
                 ymax = int(y) + 2 * pad_value_x - 1
 
-                assert (
-                    frame_padded[ymin:ymax, xmin:xmax, 0].shape == mask.shape
-                ), "Shape mismatch between the measurement kernel and the image..."
+                if frame_padded[ymin:ymax, xmin:xmax, 0].shape != mask.shape:
+                    raise ValueError("Shape mismatch between the measurement kernel and the image...")
 
                 expanded_mask = np.expand_dims(mask, axis=-1)  # shape: (X, Y, 1)
                 crop = frame_padded[ymin:ymax, xmin:xmax]
@@ -1106,9 +1096,8 @@ def measure_isotropic_intensity(
             ymin = int(y)
             ymax = int(y) + 2 * pad_value_x - 1
 
-            assert (
-                frame_padded[ymin:ymax, xmin:xmax, 0].shape == mask.shape
-            ), "Shape mismatch between the measurement kernel and the image..."
+            if frame_padded[ymin:ymax, xmin:xmax, 0].shape != mask.shape:
+                raise ValueError("Shape mismatch between the measurement kernel and the image...")
 
             expanded_mask = np.expand_dims(mask, axis=-1)  # shape: (X, Y, 1)
             crop = frame_padded[ymin:ymax, xmin:xmax]
@@ -1163,7 +1152,8 @@ def measure_at_position(
 
     pos = pos.replace("\\", "/")
     pos = rf"{pos}"
-    assert os.path.exists(pos), f"Position {pos} is not a valid path."
+    if not os.path.exists(pos):
+        raise FileNotFoundError(f"Position {pos} is not a valid path.")
     if not pos.endswith("/"):
         pos += "/"
     script_path = os.sep.join([abs_path, "scripts", "measure_cells.py"])
@@ -1522,7 +1512,8 @@ def estimate_time(
     """
 
     cols = list(df.columns)
-    assert "TRACK_ID" in cols, "Please provide tracked data..."
+    if "TRACK_ID" not in cols:
+        raise KeyError("Please provide tracked data...")
     if "position" in cols:
         sort_cols = ["position", "TRACK_ID"]
     else:
@@ -1648,7 +1639,8 @@ def interpret_track_classification(
 
     cols = list(df.columns)
 
-    assert "TRACK_ID" in cols, "Please provide tracked data..."
+    if "TRACK_ID" not in cols:
+        raise KeyError("Please provide tracked data...")
     if "position" in cols:
         sort_cols = ["position", "TRACK_ID"]
     else:
@@ -1705,7 +1697,8 @@ def classify_transient_events(
     cols = list(df.columns)
 
     # Control input
-    assert "TRACK_ID" in cols, "Please provide tracked data..."
+    if "TRACK_ID" not in cols:
+        raise KeyError("Please provide tracked data...")
     if "position" in cols:
         sort_cols = ["position", "TRACK_ID"]
         df = df.sort_values(by=sort_cols + ["FRAME"])
@@ -1713,12 +1706,10 @@ def classify_transient_events(
         sort_cols = ["TRACK_ID"]
         df = df.sort_values(by=sort_cols + ["FRAME"])
     if pre_event is not None:
-        assert (
-            "t_" + pre_event in cols
-        ), "Pre-event time does not seem to be a valid column in the DataFrame..."
-        assert (
-            "class_" + pre_event in cols
-        ), "Pre-event class does not seem to be a valid column in the DataFrame..."
+        if "t_" + pre_event not in cols:
+            raise KeyError("Pre-event time does not seem to be a valid column in the DataFrame...")
+        if "class_" + pre_event not in cols:
+            raise KeyError("Pre-event class does not seem to be a valid column in the DataFrame...")
 
     stat_col = class_attr.replace("class", "status")
     continuous_stat_col = stat_col.replace("status_", "smooth_status_")
@@ -1853,18 +1844,17 @@ def classify_irreversible_events(
     cols = list(df.columns)
 
     # Control input
-    assert "TRACK_ID" in cols, "Please provide tracked data..."
+    if "TRACK_ID" not in cols:
+        raise KeyError("Please provide tracked data...")
     if "position" in cols:
         sort_cols = ["position", "TRACK_ID"]
     else:
         sort_cols = ["TRACK_ID"]
     if pre_event is not None:
-        assert (
-            "t_" + pre_event in cols
-        ), "Pre-event time does not seem to be a valid column in the DataFrame..."
-        assert (
-            "class_" + pre_event in cols
-        ), "Pre-event class does not seem to be a valid column in the DataFrame..."
+        if "t_" + pre_event not in cols:
+            raise KeyError("Pre-event time does not seem to be a valid column in the DataFrame...")
+        if "class_" + pre_event not in cols:
+            raise KeyError("Pre-event class does not seem to be a valid column in the DataFrame...")
 
     stat_col = class_attr.replace("class", "status")
 
@@ -1979,19 +1969,18 @@ def classify_unique_states(
     """
 
     cols = list(df.columns)
-    assert "TRACK_ID" in cols, "Please provide tracked data..."
+    if "TRACK_ID" not in cols:
+        raise KeyError("Please provide tracked data...")
     if "position" in cols:
         sort_cols = ["position", "TRACK_ID"]
     else:
         sort_cols = ["TRACK_ID"]
 
     if pre_event is not None:
-        assert (
-            "t_" + pre_event in cols
-        ), "Pre-event time does not seem to be a valid column in the DataFrame..."
-        assert (
-            "class_" + pre_event in cols
-        ), "Pre-event class does not seem to be a valid column in the DataFrame..."
+        if "t_" + pre_event not in cols:
+            raise KeyError("Pre-event time does not seem to be a valid column in the DataFrame...")
+        if "class_" + pre_event not in cols:
+            raise KeyError("Pre-event class does not seem to be a valid column in the DataFrame...")
 
     stat_col = class_attr.replace("class", "status")
 

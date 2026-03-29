@@ -185,9 +185,8 @@ def _fill_distance_neighborhood_at_t(
 
             if compute_cum_sum:
                 # Compute the integrated presence of the neighboring cell B
-                assert (
-                    column_labelsB["track"] == "TRACK_ID"
-                ), "The set B does not seem to contain tracked data. The cumulative time will be meaningless."
+                if column_labelsB["track"] != "TRACK_ID":
+                    raise ValueError("The set B does not seem to contain tracked data. The cumulative time will be meaningless.")
                 past_neighs = [
                     [ll["id"] for ll in l] if len(l) > 0 else [None]
                     for l in setA.loc[
@@ -408,9 +407,8 @@ def _fill_contact_neighborhood_at_t(
 
             if compute_cum_sum:
                 # Compute the integrated presence of the neighboring cell B
-                assert (
-                    column_labelsB["track"] == "TRACK_ID"
-                ), "The set B does not seem to contain tracked data. The cumulative time will be meaningless."
+                if column_labelsB["track"] != "TRACK_ID":
+                    raise ValueError("The set B does not seem to contain tracked data. The cumulative time will be meaningless.")
                 past_neighs = [
                     [ll["id"] for ll in l] if len(l) > 0 else [None]
                     for l in setA.loc[
@@ -613,9 +611,8 @@ def set_live_status(
         setB.loc[:, "live_status"] = 1
         status = ["live_status", "live_status"]
     elif isinstance(status, list):
-        assert (
-            len(status) == 2
-        ), "Please provide only two columns to classify cells as alive or dead."
+        if len(status) != 2:
+            raise ValueError("Please provide only two columns to classify cells as alive or dead.")
         if status[0] is None or status[0] == "live_status":
             setA.loc[:, "live_status"] = 1
             status[0] = "live_status"
@@ -643,8 +640,10 @@ def set_live_status(
                 ]
                 status[1] = "not_" + status[1]
 
-        assert status[0] in list(setA.columns)
-        assert status[1] in list(setB.columns)
+        if status[0] not in setA.columns:
+            raise KeyError(f"Status column '{status[0]}' not found in set A.")
+        if status[1] not in setB.columns:
+            raise KeyError(f"Status column '{status[1]}' not found in set B.")
 
     setA = setA.reset_index(drop=True)
     setB = setB.reset_index(drop=True)
@@ -921,7 +920,8 @@ def compute_neighborhood_at_position(
 
     pos = pos.replace("\\", "/")
     pos = rf"{pos}"
-    assert os.path.exists(pos), f"Position {pos} is not a valid path."
+    if not os.path.exists(pos):
+        raise FileNotFoundError(f"Position {pos} is not a valid path.")
 
     if isinstance(population, str):
         population = [population, population]
@@ -933,9 +933,8 @@ def compute_neighborhood_at_position(
 
     if theta_dist is None:
         theta_dist = [0.9 * d for d in distance]
-    assert len(theta_dist) == len(
-        distance
-    ), "Incompatible number of distances and number of edge thresholds."
+    if len(theta_dist) != len(distance):
+        raise ValueError("Incompatible number of distances and number of edge thresholds.")
 
     if population[0] == population[1]:
         neighborhood_kwargs.update({"mode": "self"})
@@ -1632,7 +1631,8 @@ def find_contact_neighbors(labels: np.ndarray, connectivity: int = 2) -> np.ndar
         Array of adjacent label pairs (touching masks).
     """
 
-    assert labels.ndim == 2, "Wrong dimension for labels..."
+    if labels.ndim != 2:
+        raise ValueError("Wrong dimension for labels...")
     g, nodes = pixel_graph(labels, mask=labels.astype(bool), connectivity=connectivity)
     g.eliminate_zeros()
 
@@ -1871,7 +1871,8 @@ def compute_contact_neighborhood_at_position(
 
     pos = pos.replace("\\", "/")
     pos = rf"{pos}"
-    assert os.path.exists(pos), f"Position {pos} is not a valid path."
+    if not os.path.exists(pos):
+        raise FileNotFoundError(f"Position {pos} is not a valid path.")
 
     if isinstance(population, str):
         population = [population, population]
@@ -1883,9 +1884,8 @@ def compute_contact_neighborhood_at_position(
 
     if theta_dist is None:
         theta_dist = [0 for d in distance]  # 0.9*d
-    assert len(theta_dist) == len(
-        distance
-    ), "Incompatible number of distances and number of edge thresholds."
+    if len(theta_dist) != len(distance):
+        raise ValueError("Incompatible number of distances and number of edge thresholds.")
 
     if population[0] == population[1]:
         neighborhood_kwargs.update({"mode": "self"})
@@ -2106,10 +2106,8 @@ def extract_neighborhood_in_pair_table(
     # assert reference_population in ["targets", "effectors"], "Please set a valid reference population ('targets' or 'effectors')"
     if neighborhood_key is None:
         # assert neighbor_population in ["targets", "effectors"], "Please set a valid neighbor population ('targets' or 'effectors')"
-        assert mode in [
-            "circle",
-            "contact",
-        ], "Please set a valid neighborhood computation mode ('circle' or 'contact')"
+        if mode not in ["circle", "contact"]:
+            raise ValueError("Please set a valid neighborhood computation mode ('circle' or 'contact')")
         type = "(" + "-".join([reference_population, neighbor_population]) + ")"
         neigh_col = f"neighborhood_{type}_{mode}_{distance}_px"
     else:
@@ -2127,9 +2125,8 @@ def extract_neighborhood_in_pair_table(
                 else:
                     neighbor_population = "effectors"
 
-    assert "status_" + neigh_col in list(
-        df.columns
-    ), "The selected neighborhood does not appear in the data..."
+    if "status_" + neigh_col not in df.columns:
+        raise KeyError("The selected neighborhood does not appear in the data...")
 
     logger.debug(f"Neighborhood table preview:\n{df[['reference_population', 'neighbor_population', 'status_' + neigh_col]]}")
 

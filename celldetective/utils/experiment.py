@@ -684,9 +684,8 @@ def get_config(experiment: Union[str, Path]) -> str:
     config = experiment + "config.ini"
     config = rf"{config}"
 
-    assert os.path.exists(
-        config
-    ), "The experiment configuration could not be located..."
+    if not os.path.exists(config):
+        raise FileNotFoundError("The experiment configuration could not be located...")
     return config
 
 
@@ -1439,9 +1438,8 @@ def locate_stack_and_labels(
     if len(labels) < len(stack):
         fix_missing_labels(position, population=population, prefix=prefix)
         labels = locate_labels(position, population=population)
-    assert len(stack) == len(
-        labels
-    ), f"The shape of the stack {stack.shape} does not match with the shape of the labels {labels.shape}"
+    if len(stack) != len(labels):
+        raise ValueError(f"The shape of the stack {stack.shape} does not match with the shape of the labels {labels.shape}")
 
     return stack, labels
 

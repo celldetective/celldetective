@@ -99,9 +99,8 @@ def augmenter(
             x, y = random_shift(x, y)
 
         if channel_extinction:
-            assert (
-                extinction_probability <= 1.0
-            ), "The extinction probability must be a number between 0 and 1."
+            if extinction_probability > 1.0:
+                raise ValueError("The extinction probability must be a number between 0 and 1.")
             channel_off = [
                 np.random.random() < extinction_probability for i in range(x.shape[-1])
             ]
@@ -204,7 +203,8 @@ def random_fliprot(img: np.ndarray, mask: np.ndarray) -> Tuple[np.ndarray, np.nd
 
     """
 
-    assert img.ndim >= mask.ndim
+    if img.ndim < mask.ndim:
+        raise ValueError(f"Image ndim ({img.ndim}) must be >= mask ndim ({mask.ndim}).")
     axes = tuple(range(mask.ndim))
     perm = tuple(np.random.permutation(axes))
     img = img.transpose(perm + tuple(range(mask.ndim, img.ndim)))

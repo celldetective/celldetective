@@ -332,9 +332,8 @@ def locate_stack_and_labels(
     if len(labels) < len(stack):
         fix_missing_labels(position, population=population, prefix=prefix)
         labels = locate_labels(position, population=population)
-    assert len(stack) == len(
-        labels
-    ), f"The shape of the stack {stack.shape} does not match with the shape of the labels {labels.shape}"
+    if len(stack) != len(labels):
+        raise ValueError(f"The shape of the stack {stack.shape} does not match with the shape of the labels {labels.shape}")
 
     return stack, labels
 
@@ -992,7 +991,8 @@ def load_image_dataset(
     if isinstance(channels, str):
         channels = [channels]
 
-    assert isinstance(channels, list), "Please provide a list of channels. Abort."
+    if not isinstance(channels, list):
+        raise TypeError("Please provide a list of channels. Abort.")
 
     X = []
     Y = []
@@ -1058,9 +1058,8 @@ def load_image_dataset(
                 image[np.where(ch_idx != ch_idx)[0], :, :] = 0
 
                 image = np.moveaxis(image, 0, -1)
-                assert (
-                    image.ndim == 3
-                ), "The image has a wrong number of dimensions. Abort."
+                if image.ndim != 3:
+                    raise ValueError("The image has a wrong number of dimensions. Abort.")
 
                 if im_calib != train_spatial_calibration:
                     factor = im_calib / train_spatial_calibration
@@ -1091,7 +1090,6 @@ def load_image_dataset(
 
             files.append(im)
 
-    assert len(X) == len(
-        Y
-    ), "The number of images does not match with the number of masks... Abort."
+    if len(X) != len(Y):
+        raise ValueError("The number of images does not match with the number of masks... Abort.")
     return X, Y, files

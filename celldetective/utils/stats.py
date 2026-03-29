@@ -51,8 +51,10 @@ def test_2samp_generic(
 
     """
 
-    assert groupby_cols is not None, "Please set a valid groupby_cols..."
-    assert feature is not None, "Please set a feature to test..."
+    if groupby_cols is None:
+        raise ValueError("Please set a valid groupby_cols...")
+    if feature is None:
+        raise ValueError("Please set a feature to test...")
 
     results = []
 

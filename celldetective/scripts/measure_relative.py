@@ -35,9 +35,8 @@ instruction_file = os.sep.join(["configs", "neighborhood_instructions.json"])
 parent1 = Path(pos).parent
 expfolder = parent1.parent
 config = PurePath(expfolder, Path("config.ini"))
-assert os.path.exists(
-    config
-), "The configuration file for the experiment could not be located. Abort."
+if not os.path.exists(config):
+    raise FileNotFoundError("The configuration file for the experiment could not be located. Abort.")
 print("Configuration file: ", config)
 
 # from exp config fetch spatial calib, channel names

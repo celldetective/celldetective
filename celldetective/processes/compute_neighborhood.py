@@ -477,7 +477,8 @@ class NeighborhoodProcess(Process):
 
         pos = pos.replace("\\", "/")
         pos = rf"{pos}"
-        assert os.path.exists(pos), f"Position {pos} is not a valid path."
+        if not os.path.exists(pos):
+            raise FileNotFoundError(f"Position {pos} is not a valid path.")
 
         if isinstance(population, str):
             population = [population, population]
@@ -489,9 +490,8 @@ class NeighborhoodProcess(Process):
 
         if theta_dist is None:
             theta_dist = [0.9 * d for d in distance]
-        assert len(theta_dist) == len(
-            distance
-        ), "Incompatible number of distances and number of edge thresholds."
+        if len(theta_dist) != len(distance):
+            raise ValueError("Incompatible number of distances and number of edge thresholds.")
 
         if population[0] == population[1]:
             neighborhood_kwargs.update({"mode": "self"})
@@ -704,7 +704,8 @@ class NeighborhoodProcess(Process):
 
         pos = pos.replace("\\", "/")
         pos = rf"{pos}"
-        assert os.path.exists(pos), f"Position {pos} is not a valid path."
+        if not os.path.exists(pos):
+            raise FileNotFoundError(f"Position {pos} is not a valid path.")
 
         if isinstance(population, str):
             population = [population, population]
@@ -716,9 +717,8 @@ class NeighborhoodProcess(Process):
 
         if theta_dist is None:
             theta_dist = [0 for d in distance]  # 0.9*d
-        assert len(theta_dist) == len(
-            distance
-        ), "Incompatible number of distances and number of edge thresholds."
+        if len(theta_dist) != len(distance):
+            raise ValueError("Incompatible number of distances and number of edge thresholds.")
 
         if population[0] == population[1]:
             neighborhood_kwargs.update({"mode": "self"})

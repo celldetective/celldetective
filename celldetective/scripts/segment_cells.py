@@ -88,9 +88,8 @@ elif mode.lower() == "effector" or mode.lower() == "effectors":
 parent1 = Path(pos).parent
 expfolder = parent1.parent
 config = PurePath(expfolder, Path("config.ini"))
-assert os.path.exists(
-    config
-), "The configuration file for the experiment could not be located. Abort."
+if not os.path.exists(config):
+    raise FileNotFoundError("The configuration file for the experiment could not be located. Abort.")
 
 print(f"Position: {extract_position_name(pos)}...")
 print("Configuration file: ", config)
@@ -111,9 +110,8 @@ else:
     print(f"Model path: {model_complete_path}...")
 
 # load config
-assert os.path.exists(
-    model_complete_path + "config_input.json"
-), "The configuration for the inputs to the model could not be located. Abort."
+if not os.path.exists(model_complete_path + "config_input.json"):
+    raise FileNotFoundError("The configuration for the inputs to the model could not be located. Abort.")
 with open(model_complete_path + "config_input.json") as config_file:
     input_config = json.load(config_file)
 

@@ -298,9 +298,8 @@ class SignalDetectionModel(object):
         except Exception as e:
             logger.error(f"Error reading model input shapes: {e}")
 
-        assert (
-            model_class_input_shape == model_reg_input_shape
-        ), f"mismatch between input shape of classification: {self.model_class.layers[0].input_shape[0]} and regression {self.model_reg.layers[0].input_shape[0]} models... Error."
+        if model_class_input_shape != model_reg_input_shape:
+            raise ValueError(f"mismatch between input shape of classification: {self.model_class.layers[0].input_shape[0]} and regression {self.model_reg.layers[0].input_shape[0]} models... Error.")
 
         return True
 
@@ -503,9 +502,8 @@ class SignalDetectionModel(object):
         self.show_plots = show_plots
         self.channel_option = channel_option
 
-        assert self.n_channels == len(
-            self.channel_option
-        ), f"Mismatch between the channel option and the number of channels of the model..."
+        if self.n_channels != len(self.channel_option):
+            raise ValueError(f"Mismatch between the channel option and the number of channels of the model...")
 
         if isinstance(self.datasets[0], dict):
             self.datasets = [self.datasets]
@@ -631,17 +629,14 @@ class SignalDetectionModel(object):
         self.y_time_train = y_time_train
         self.channel_option = channel_option
 
-        assert self.n_channels == len(
-            self.channel_option
-        ), f"Mismatch between the channel option and the number of channels of the model..."
+        if self.n_channels != len(self.channel_option):
+            raise ValueError(f"Mismatch between the channel option and the number of channels of the model...")
 
         if pad:
             self.x_train = pad_to_model_length(self.x_train, self.model_signal_length)
 
-        assert self.x_train.shape[1:] == (
-            self.model_signal_length,
-            self.n_channels,
-        ), f"Shape mismatch between the provided training fluorescence signals and the model..."
+        if self.x_train.shape[1:] != (self.model_signal_length, self.n_channels):
+            raise ValueError(f"Shape mismatch between the provided training fluorescence signals and the model...")
 
         # If y-class is not one-hot encoded, encode it
         if self.y_class_train.shape[-1] != self.n_classes:
@@ -853,12 +848,10 @@ class SignalDetectionModel(object):
             n_channels = self.model_class.input_shape[-1]
             model_signal_length = self.model_class.input_shape[-2]
 
-        assert (
-            self.x.shape[-1] == n_channels
-        ), f"Shape mismatch between the input shape and the model input shape..."
-        assert (
-            self.x.shape[-2] == model_signal_length
-        ), f"Shape mismatch between the input shape and the model input shape..."
+        if self.x.shape[-1] != n_channels:
+            raise ValueError(f"Shape mismatch between the input shape and the model input shape...")
+        if self.x.shape[-2] != model_signal_length:
+            raise ValueError(f"Shape mismatch between the input shape and the model input shape...")
 
         self.class_predictions_one_hot = self.model_class.predict(self.x)
         self.class_predictions = self.class_predictions_one_hot.argmax(axis=1)
@@ -930,12 +923,10 @@ class SignalDetectionModel(object):
             n_channels = self.model_reg.input_shape[-1]
             model_signal_length = self.model_reg.input_shape[-2]
 
-        assert (
-            self.x.shape[-1] == n_channels
-        ), f"Shape mismatch between the input shape and the model input shape..."
-        assert (
-            self.x.shape[-2] == model_signal_length
-        ), f"Shape mismatch between the input shape and the model input shape..."
+        if self.x.shape[-1] != n_channels:
+            raise ValueError(f"Shape mismatch between the input shape and the model input shape...")
+        if self.x.shape[-2] != model_signal_length:
+            raise ValueError(f"Shape mismatch between the input shape and the model input shape...")
 
         if np.any(self.class_predictions == 0):
             self.time_predictions = (
@@ -1121,9 +1112,8 @@ class SignalDetectionModel(object):
 
             predictions = self.model_class.predict(self.x_test).argmax(axis=1)
             ground_truth = self.y_class_test.argmax(axis=1)
-            assert (
-                predictions.shape == ground_truth.shape
-            ), "Mismatch in shape between the predictions and the ground truth..."
+            if predictions.shape != ground_truth.shape:
+                raise ValueError("Mismatch in shape between the predictions and the ground truth...")
 
             title = "Test data"
             IoU_score = jaccard_score(ground_truth, predictions, average=None)
@@ -1171,9 +1161,8 @@ class SignalDetectionModel(object):
         if hasattr(self, "x_val"):
             predictions = self.model_class.predict(self.x_val).argmax(axis=1)
             ground_truth = self.y_class_val.argmax(axis=1)
-            assert (
-                ground_truth.shape == predictions.shape
-            ), "Mismatch in shape between the predictions and the ground truth..."
+            if ground_truth.shape != predictions.shape:
+                raise ValueError("Mismatch in shape between the predictions and the ground truth...")
             title = "Validation data"
 
             # Validation scores
@@ -1413,9 +1402,8 @@ class SignalDetectionModel(object):
                 batch_size=self.batch_size,
             )[:, 0]
             ground_truth = self.y_time_test[np.argmax(self.y_class_test, axis=1) == 0]
-            assert (
-                predictions.shape == ground_truth.shape
-            ), "Shape mismatch between predictions and ground truths..."
+            if predictions.shape != ground_truth.shape:
+                raise ValueError("Shape mismatch between predictions and ground truths...")
 
             test_mse = mse(ground_truth, predictions).numpy()
             test_mae = mae(ground_truth, predictions).numpy()
@@ -1436,9 +1424,8 @@ class SignalDetectionModel(object):
                 batch_size=self.batch_size,
             )[:, 0]
             ground_truth = self.y_time_val[np.argmax(self.y_class_val, axis=1) == 0]
-            assert (
-                predictions.shape == ground_truth.shape
-            ), "Shape mismatch between predictions and ground truths..."
+            if predictions.shape != ground_truth.shape:
+                raise ValueError("Shape mismatch between predictions and ground truths...")
 
             val_mse = mse(ground_truth, predictions).numpy()
             val_mae = mae(ground_truth, predictions).numpy()
@@ -2316,9 +2303,12 @@ def _interpret_normalization_parameters(
     if len(normalization_values) == 2 and not isinstance(normalization_values[0], list):
         normalization_values = [normalization_values] * n_channels
 
-    assert len(normalization_values) == n_channels
-    assert len(normalization_clip) == n_channels
-    assert len(normalization_percentile) == n_channels
+    if len(normalization_values) != n_channels:
+        raise ValueError(f"normalization_values length {len(normalization_values)} does not match n_channels {n_channels}")
+    if len(normalization_clip) != n_channels:
+        raise ValueError(f"normalization_clip length {len(normalization_clip)} does not match n_channels {n_channels}")
+    if len(normalization_percentile) != n_channels:
+        raise ValueError(f"normalization_percentile length {len(normalization_percentile)} does not match n_channels {n_channels}")
 
     return normalization_percentile, normalization_values, normalization_clip
 
@@ -2520,7 +2510,8 @@ def augmenter(
 
         if time_shift:
             # do not time shift miscellaneous cells
-            assert time_of_interest is not None, f"Please provide valid lysis times"
+            if time_of_interest is None:
+                raise ValueError("Please provide valid lysis times")
             signal, time_of_interest, cclass = random_time_shift(
                 signal, time_of_interest, cclass, model_signal_length
             )

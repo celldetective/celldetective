@@ -172,7 +172,8 @@ def auto_correct_masks(
                [0, 2, 0, 0]])
     """
 
-    assert masks.ndim == 2, "`masks` should be a 2D numpy array..."
+    if masks.ndim != 2:
+        raise ValueError("`masks` should be a 2D numpy array...")
 
     # Avoid negative mask values
     masks[masks < 0] = np.abs(masks[masks < 0])

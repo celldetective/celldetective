@@ -128,9 +128,8 @@ class CustomRegionProps(RegionProperties):
         """
 
         if self.channel_names is not None and self._multichannel:
-            assert (
-                len(self.channel_names) == self._intensity_image.shape[-1]
-            ), "Mismatch between provided channel names and the number of channels in the image..."
+            if len(self.channel_names) != self._intensity_image.shape[-1]:
+                raise ValueError("Mismatch between provided channel names and the number of channels in the image...")
 
         if attr == "__setstate__":
             return self.__getattribute__(attr)

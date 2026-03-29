@@ -713,8 +713,10 @@ class StackVisualizer(CelldetectiveWidget):
             self.last_frame = self.stack[-1, :, :, self.target_channel]
         else:
             self.mode = "virtual"
-            assert isinstance(self.stack_path, str)
-            assert self.stack_path.endswith(".tif")
+            if not isinstance(self.stack_path, str):
+                raise TypeError("stack_path must be a string.")
+            if not self.stack_path.endswith(".tif"):
+                raise ValueError("stack_path must point to a .tif file.")
             self.locate_image_virtual()
 
     def locate_image_virtual(self):

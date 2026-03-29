@@ -116,7 +116,8 @@ for k in range(len(X)):
 
 Y = [fill_label_holes(y) for y in tqdm(Y)]
 
-assert len(X) > 1, "not enough training data"
+if len(X) <= 1:
+    raise ValueError("not enough training data")
 rng = np.random.RandomState()
 ind = rng.permutation(len(X))
 n_val = max(1, int(round(validation_split * len(ind))))

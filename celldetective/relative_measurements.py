@@ -95,7 +95,8 @@ def measure_pairs(pos: str, neighborhood_protocol: dict) -> Optional[pd.DataFram
     if df_reference is None:
         return None
 
-    assert str(neighborhood_description) in list(df_reference.columns)
+    if str(neighborhood_description) not in df_reference.columns:
+        raise KeyError(f"Neighborhood description '{neighborhood_description}' not found in reference columns.")
     neighborhood = df_reference.loc[:, f"{neighborhood_description}"].to_numpy()
 
     ref_id_col = extract_identity_col(df_reference)
@@ -296,7 +297,8 @@ def measure_pair_signals_at_position(
     if df_reference is None:
         return None
 
-    assert str(neighborhood_description) in list(df_reference.columns)
+    if str(neighborhood_description) not in df_reference.columns:
+        raise KeyError(f"Neighborhood description '{neighborhood_description}' not found in reference columns.")
     neighborhood = df_reference.loc[:, f"{neighborhood_description}"].to_numpy()
 
     ref_id_col = extract_identity_col(df_reference)
@@ -740,7 +742,8 @@ def rel_measure_at_position(pos: str) -> None:
 
     pos = pos.replace("\\", "/")
     pos = rf"{pos}"
-    assert os.path.exists(pos), f"Position {pos} is not a valid path."
+    if not os.path.exists(pos):
+        raise FileNotFoundError(f"Position {pos} is not a valid path.")
     if not pos.endswith("/"):
         pos += "/"
     script_path = os.sep.join([abs_path, "scripts", "measure_relative.py"])
@@ -969,7 +972,8 @@ def extract_neighborhood_settings(
 
     """
 
-    assert neigh_string.startswith("neighborhood")
+    if not neigh_string.startswith("neighborhood"):
+        raise ValueError(f"Expected a neighborhood string starting with 'neighborhood', got: '{neigh_string}'")
     logger.debug(f"neigh_string={neigh_string}")
 
     if "_(" in neigh_string and ")_" in neigh_string:
@@ -1068,12 +1072,10 @@ def expand_pair_table(data: pd.DataFrame) -> pd.DataFrame:
 
     """
 
-    assert "reference_population" in list(
-        data.columns
-    ), "Please provide a valid pair table..."
-    assert "neighbor_population" in list(
-        data.columns
-    ), "Please provide a valid pair table..."
+    if "reference_population" not in data.columns:
+        raise KeyError("Please provide a valid pair table...")
+    if "neighbor_population" not in data.columns:
+        raise KeyError("Please provide a valid pair table...")
 
     data.__dict__.update(
         data.astype({"reference_population": str, "neighbor_population": str}).__dict__

@@ -342,7 +342,8 @@ class ThresholdedStackVisualizer(StackVisualizer):
 
         # Compute
         if self.preprocessing is not None:
-            assert isinstance(self.preprocessing, list)
+            if not isinstance(self.preprocessing, list):
+                raise TypeError("preprocessing must be a list.")
             from celldetective.filters import filter_image
 
             self.processed_image = filter_image(

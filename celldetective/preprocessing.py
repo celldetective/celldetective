@@ -1668,9 +1668,8 @@ def correct_channel_offset_single_stack(
             The corrected stack if `return_stacks` is True, otherwise None.
     """
 
-    assert os.path.exists(
-        stack_path
-    ), f"The stack {stack_path} does not exist... Abort."
+    if not os.path.exists(stack_path):
+        raise FileNotFoundError(f"The stack {stack_path} does not exist... Abort.")
 
     from tqdm import tqdm
     import tifffile.tifffile as tiff

@@ -1062,7 +1062,8 @@ def correct_annotation(filename: str) -> None:
         filename = filename.replace("_labelled.tif", ".tif")
     if filename.endswith(".json"):
         filename = filename.replace(".json", ".tif")
-    assert os.path.exists(filename), f"Image {filename} does not seem to exist..."
+    if not os.path.exists(filename):
+        raise FileNotFoundError(f"Image {filename} does not seem to exist...")
 
     img = imread(filename.replace("\\", "/"))
     if img.ndim == 3:

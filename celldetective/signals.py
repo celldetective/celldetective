@@ -116,12 +116,10 @@ def analyze_signals(
     complete_path = rf"{complete_path}"
     model_config_path = os.sep.join([complete_path, "config_input.json"])
     model_config_path = rf"{model_config_path}"
-    assert os.path.exists(
-        complete_path
-    ), f"Model {model} could not be located in folder {model_path}... Abort."
-    assert os.path.exists(
-        model_config_path
-    ), f"Model configuration could not be located in folder {model_path}... Abort."
+    if not os.path.exists(complete_path):
+        raise FileNotFoundError(f"Model {model} could not be located in folder {model_path}... Abort.")
+    if not os.path.exists(model_config_path):
+        raise FileNotFoundError(f"Model configuration could not be located in folder {model_path}... Abort.")
 
     available_signals = list(trajectories.columns)
     # print('The available_signals are : ',available_signals)
@@ -153,17 +151,15 @@ def analyze_signals(
                 a for a in available_signals if s in a and not a.startswith(s)
             ]
             candidates = priority_cols + second_priority_cols + third_priority_cols
-            assert (
-                len(candidates) > 0
-            ), f"No signal matches with the requirements of the model {required_signals}. Please pass the signals manually with the argument selected_signals or add measurements. Abort."
+            if len(candidates) == 0:
+                raise ValueError(f"No signal matches with the requirements of the model {required_signals}. Please pass the signals manually with the argument selected_signals or add measurements. Abort.")
             logger.info(
                 f"Selecting the first time series among: {candidates} for input requirement {s}..."
             )
             selected_signals.append(candidates[0])
     else:
-        assert len(selected_signals) == len(
-            required_signals
-        ), f"Mismatch between the number of required signals {required_signals} and the provided signals {selected_signals}... Abort."
+        if len(selected_signals) != len(required_signals):
+            raise ValueError(f"Mismatch between the number of required signals {required_signals} and the provided signals {selected_signals}... Abort.")
 
     logger.info(f"The following channels will be passed to the model: {selected_signals}")
     trajectories_clean = clean_trajectories(
@@ -174,9 +170,8 @@ def analyze_signals(
     )
 
     max_signal_size = int(trajectories_clean[column_labels["time"]].max()) + 2
-    assert (
-        max_signal_size <= model_signal_length
-    ), f"The current signals are longer ({max_signal_size}) than the maximum expected input ({model_signal_length}) for this signal analysis model. Abort..."
+    if max_signal_size > model_signal_length:
+        raise ValueError(f"The current signals are longer ({max_signal_size}) than the maximum expected input ({model_signal_length}) for this signal analysis model. Abort...")
 
     tracks = trajectories_clean[column_labels["track"]].unique()
     signals = np.zeros((len(tracks), max_signal_size, len(selected_signals)))
@@ -327,7 +322,8 @@ def analyze_signals_at_position(
 
     pos = pos.replace("\\", "/")
     pos = rf"{pos}"
-    assert os.path.exists(pos), f"Position {pos} is not a valid path."
+    if not os.path.exists(pos):
+        raise FileNotFoundError(f"Position {pos} is not a valid path.")
     if not pos.endswith("/"):
         pos += "/"
 
@@ -373,7 +369,8 @@ def analyze_pair_signals_at_position(
 
     pos = pos.replace("\\", "/")
     pos = rf"{pos}"
-    assert os.path.exists(pos), f"Position {pos} is not a valid path."
+    if not os.path.exists(pos):
+        raise FileNotFoundError(f"Position {pos} is not a valid path.")
     if not pos.endswith("/"):
         pos += "/"
 
@@ -475,12 +472,10 @@ def analyze_pair_signals(
     complete_path = rf"{complete_path}"
     model_config_path = os.sep.join([complete_path, "config_input.json"])
     model_config_path = rf"{model_config_path}"
-    assert os.path.exists(
-        complete_path
-    ), f"Model {model} could not be located in folder {model_path}... Abort."
-    assert os.path.exists(
-        model_config_path
-    ), f"Model configuration could not be located in folder {model_path}... Abort."
+    if not os.path.exists(complete_path):
+        raise FileNotFoundError(f"Model {model} could not be located in folder {model_path}... Abort.")
+    if not os.path.exists(model_config_path):
+        raise FileNotFoundError(f"Model configuration could not be located in folder {model_path}... Abort.")
 
     trajectories_pairs = trajectories_pairs.rename(columns=lambda x: "pair_" + x)
     trajectories_reference = trajectories_reference.rename(
@@ -536,9 +531,8 @@ def analyze_pair_signals(
         for s in required_signals:
             pattern_test = [s in a or s == a for a in available_signals]
             logger.debug(f"Pattern test for signal {s}: {pattern_test}")
-            assert np.any(
-                pattern_test
-            ), f"No signal matches with the requirements of the model {required_signals}. Please pass the signals manually with the argument selected_signals or add measurements. Abort."
+            if not np.any(pattern_test):
+                raise ValueError(f"No signal matches with the requirements of the model {required_signals}. Please pass the signals manually with the argument selected_signals or add measurements. Abort.")
             valid_columns = np.array(available_signals)[np.array(pattern_test)]
             if len(valid_columns) == 1:
                 selected_signals.append(valid_columns[0])
@@ -554,9 +548,8 @@ def analyze_pair_signals(
                 # do something more complicated in case of one to many columns
                 # pass
     else:
-        assert len(selected_signals) == len(
-            required_signals
-        ), f"Mismatch between the number of required signals {required_signals} and the provided signals {selected_signals}... Abort."
+        if len(selected_signals) != len(required_signals):
+            raise ValueError(f"Mismatch between the number of required signals {required_signals} and the provided signals {selected_signals}... Abort.")
 
     logger.info(f"The following channels will be passed to the model: {selected_signals}")
     trajectories_reference_clean = interpolate_nan_properties(
@@ -711,7 +704,8 @@ def train_signal_model(config: str) -> None:
 
     config = config.replace("\\", "/")
     config = rf"{config}"
-    assert os.path.exists(config), f"Config {config} is not a valid path."
+    if not os.path.exists(config):
+        raise FileNotFoundError(f"Config {config} is not a valid path.")
 
     script_path = os.sep.join([abs_path, "scripts", "train_signal_model.py"])
     subprocess.run(
@@ -897,9 +891,8 @@ def sliding_msd(
 
     """
 
-    assert (
-        window > n_points_migration
-    ), "Please set a window larger than the number of fit points..."
+    if window <= n_points_migration:
+        raise ValueError("Please set a window larger than the number of fit points...")
 
     # modes = bi, forward, backward
     s_msd = np.zeros(len(x))
@@ -909,7 +902,8 @@ def sliding_msd(
     dt = timeline[1] - timeline[0]
 
     if mode == "bi":
-        assert window % 2 == 1, "Please set an odd window for the bidirectional mode"
+        if window % 2 != 1:
+            raise ValueError("Please set an odd window for the bidirectional mode")
         lower_bound = window // 2
         upper_bound = len(x) - window // 2 - 1
     elif mode == "forward":
@@ -1051,9 +1045,8 @@ def sliding_msd_drift(
 
     """
 
-    assert (
-        window > n_points_migration
-    ), "Please set a window larger than the number of fit points..."
+    if window <= n_points_migration:
+        raise ValueError("Please set a window larger than the number of fit points...")
 
     # modes = bi, forward, backward
     s_diffusion = np.zeros(len(x))
@@ -1063,7 +1056,8 @@ def sliding_msd_drift(
     dt = timeline[1] - timeline[0]
 
     if mode == "bi":
-        assert window % 2 == 1, "Please set an odd window for the bidirectional mode"
+        if window % 2 != 1:
+            raise ValueError("Please set an odd window for the bidirectional mode")
         lower_bound = window // 2
         upper_bound = len(x) - window // 2 - 1
     elif mode == "forward":
@@ -1219,9 +1213,8 @@ def mean_signal(
 
     """
 
-    assert signal_name in list(
-        df.columns
-    ), "The signal you want to plot is not one of the measured features."
+    if signal_name not in df.columns:
+        raise KeyError("The signal you want to plot is not one of the measured features.")
     if isinstance(class_value, int):
         class_value = [class_value]
     elif class_value is None or class_col is None:

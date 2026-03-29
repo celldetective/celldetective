@@ -41,7 +41,8 @@ def axes_check_and_normalize(
         Whether to return the allowed axes string. Default is False.
     """
     allowed = "STCZYX"
-    assert axes is not None, ValueError("axis cannot be None.")
+    if axes is None:
+        raise ValueError("axis cannot be None.")
     axes = str(axes).upper()
     consume(a in allowed for a in axes)
     disallowed is None or consume(a not in disallowed for a in axes)

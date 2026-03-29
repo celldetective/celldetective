@@ -155,15 +155,13 @@ def segment(
         stack = np.moveaxis(stack, channel_axis, -1)
 
     if channels is not None:
-        assert (
-            len(channels) == stack.shape[-1]
-        ), f"The channel names provided do not match with the expected number of channels in the stack: {stack.shape[-1]}."
+        if len(channels) != stack.shape[-1]:
+            raise ValueError(f"The channel names provided do not match with the expected number of channels in the stack: {stack.shape[-1]}.")
 
     required_channels = input_config["channels"]
     channel_intersection = [ch for ch in channels if ch in required_channels]
-    assert (
-        len(channel_intersection) > 0
-    ), "None of the channels required by the model can be found in the images to segment... Abort."
+    if len(channel_intersection) == 0:
+        raise ValueError("None of the channels required by the model can be found in the images to segment... Abort.")
 
     channel_indices = _extract_channel_indices(channels, required_channels)
 
@@ -729,7 +727,8 @@ def segment_at_position(
 
     pos = pos.replace("\\", "/")
     pos = rf"{pos}"
-    assert os.path.exists(pos), f"Position {pos} is not a valid path."
+    if not os.path.exists(pos):
+        raise FileNotFoundError(f"Position {pos} is not a valid path.")
 
     name_path = locate_segmentation_model(model_name)
 
@@ -803,11 +802,13 @@ def segment_from_threshold_at_position(
 
     pos = pos.replace("\\", "/")
     pos = rf"{pos}"
-    assert os.path.exists(pos), f"Position {pos} is not a valid path."
+    if not os.path.exists(pos):
+        raise FileNotFoundError(f"Position {pos} is not a valid path.")
 
     config = config.replace("\\", "/")
     config = rf"{config}"
-    assert os.path.exists(config), f"Config {config} is not a valid path."
+    if not os.path.exists(config):
+        raise FileNotFoundError(f"Config {config} is not a valid path.")
 
     script_path = os.sep.join([abs_path, "scripts", "segment_cells_thresholds.py"])
     subprocess.run(
@@ -856,7 +857,8 @@ def train_segmentation_model(config: str, use_gpu: bool = True) -> None:
 
     config = config.replace("\\", "/")
     config = rf"{config}"
-    assert os.path.exists(config), f"Config {config} is not a valid path."
+    if not os.path.exists(config):
+        raise FileNotFoundError(f"Config {config} is not a valid path.")
 
     script_path = os.sep.join([abs_path, "scripts", "train_segmentation_model.py"])
     subprocess.run(

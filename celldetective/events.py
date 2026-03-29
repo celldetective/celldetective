@@ -228,10 +228,10 @@ def compute_survival(
     """
 
     cols = list(df.columns)
-    assert (
-        class_of_interest in cols
-    ), "The requested class cannot be found in the dataframe..."
-    assert t_event in cols, "The event time cannot be found in the dataframe..."
+    if class_of_interest not in cols:
+        raise KeyError("The requested class cannot be found in the dataframe...")
+    if t_event not in cols:
+        raise KeyError("The event time cannot be found in the dataframe...")
     left_censored = False
     first_detections = None
 
@@ -251,9 +251,8 @@ def compute_survival(
 
     if t_reference is not None:
         left_censored = True
-        assert (
-            t_reference in cols
-        ), "The reference time cannot be found in the dataframe..."
+        if t_reference not in cols:
+            raise KeyError("The reference time cannot be found in the dataframe...")
         first_detections = df.groupby(groupby_cols)[t_reference].max().values
 
     events, survival_times = switch_to_events(
