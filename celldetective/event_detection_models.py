@@ -83,6 +83,9 @@ from tensorflow.keras.losses import MeanSquaredError
 
 from celldetective.utils.dataset_helpers import compute_weights, train_test_split
 from celldetective.utils.plots.regression import regression_plot
+from celldetective.log_manager import get_logger
+
+logger = get_logger(__name__)
 
 
 def TimeHistory():
@@ -1833,9 +1836,9 @@ class SignalDetectionModel(object):
                     signals_recast[k, timeline, i] = signal_dataset[k][
                         selected_signals[i]
                     ]
-                except:
-                    print(
-                        f"Attribute {selected_signals[i]} matched to {self.channel_option[i]} not found in annotation..."
+                except KeyError:
+                    logger.warning(
+                        f"Attribute {selected_signals[i]!r} matched to {self.channel_option[i]!r} not found in annotation."
                     )
                     pass
 

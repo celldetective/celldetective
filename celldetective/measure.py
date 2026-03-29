@@ -31,6 +31,7 @@ import math
 import numpy as np
 import os
 import subprocess
+import sys
 from math import ceil
 from functools import reduce
 from inspect import getmembers, isfunction
@@ -165,7 +166,7 @@ def measure(
     assert (labels is not None) or (
         stack is not None
     ), "Please pass a stack and/or labels... Abort."
-    if (labels is not None) * (stack is not None):
+    if (labels is not None) and (stack is not None):
         assert (
             labels.shape == stack.shape[:-1]
         ), f"Shape mismatch between the stack of shape {stack.shape} and the segmentation {labels.shape}..."
@@ -300,17 +301,17 @@ def measure(
                 verbose=False,
             )
 
-        if do_iso_intensities * do_features:
+        if do_iso_intensities and do_features:
             measurements_at_t = iso_table.merge(
                 feature_table, how="outer", on="class_id"
             )
-        elif do_iso_intensities * (not do_features):
+        elif do_iso_intensities and not do_features:
             measurements_at_t = iso_table
-        elif do_features * (trajectories is not None):
+        elif do_features and trajectories is not None:
             measurements_at_t = positions_at_t.merge(
                 feature_table, how="outer", on="class_id"
             )
-        elif do_features * (trajectories is None):
+        elif do_features and trajectories is None:
             measurements_at_t = positions_at_t
 
         try:
@@ -370,8 +371,8 @@ def write_first_detection_class(
             indices = track_group.index
             area = track_group["area"].values
             timeline = track_group[column_labels["time"]].values
-            if np.any(area == area):
-                t_first = timeline[area == area][0]
+            if np.any(~np.isnan(area)):
+                t_first = timeline[~np.isnan(area)][0]
                 cclass = 1
                 if t_first == 0:
                     t_first = 0
@@ -1166,8 +1167,10 @@ def measure_at_position(
     if not pos.endswith("/"):
         pos += "/"
     script_path = os.sep.join([abs_path, "scripts", "measure_cells.py"])
-    cmd = f'python "{script_path}" --pos "{pos}" --mode "{mode}" --threads "{threads}"'
-    subprocess.call(cmd, shell=True)
+    subprocess.run(
+        [sys.executable, script_path, "--pos", pos, "--mode", mode, "--threads", str(threads)],
+        check=False,
+    )
 
     table = pos + os.sep.join(["output", "tables", f"trajectories_{mode}.csv"])
     if return_measurements:

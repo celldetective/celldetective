@@ -30,6 +30,7 @@ from celldetective.utils.maths import derivative
 from celldetective.utils.data_cleaning import extract_identity_col
 import os
 import subprocess
+import sys
 
 abs_path = os.sep.join(
     [os.path.split(os.path.dirname(os.path.realpath(__file__)))[0], "celldetective"]
@@ -740,8 +741,10 @@ def rel_measure_at_position(pos: str) -> None:
     if not pos.endswith("/"):
         pos += "/"
     script_path = os.sep.join([abs_path, "scripts", "measure_relative.py"])
-    cmd = f'python "{script_path}" --pos "{pos}"'
-    subprocess.call(cmd, shell=True)
+    subprocess.run(
+        [sys.executable, script_path, "--pos", pos],
+        check=False,
+    )
 
 
 # def mcf7_size_model(x,x0,x2):

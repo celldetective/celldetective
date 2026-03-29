@@ -402,10 +402,10 @@ class ControlPanel(CelldetectiveMainWindow):
 
         try:
             subprocess.Popen(f"explorer {os.path.realpath(self.exp_dir)}")
-        except:
+        except Exception:
             try:
                 os.system('xdg-open "%s"' % self.exp_dir)
-            except:
+            except Exception:
                 return None
 
     def load_configuration(self):
@@ -462,44 +462,44 @@ class ControlPanel(CelldetectiveMainWindow):
             try:
                 if process_block.SegModelLoader:
                     process_block.SegModelLoader.close()
-            except:
+            except Exception:
                 pass
             try:
                 if process_block.ConfigTracking:
                     process_block.ConfigTracking.close()
-            except:
+            except Exception:
                 pass
             try:
                 if process_block.ConfigSignalTrain:
                     process_block.ConfigSignalTrain.close()
-            except:
+            except Exception:
                 pass
             try:
                 if process_block.ConfigMeasurements:
                     process_block.ConfigMeasurements.close()
-            except:
+            except Exception:
                 pass
             try:
                 if process_block.ConfigSignalAnnotator:
                     process_block.ConfigSignalAnnotator.close()
-            except:
+            except Exception:
                 pass
             try:
                 if process_block.tab_ui:
                     process_block.tab_ui.close()
-            except:
+            except Exception:
                 pass
 
         try:
             if self.cfg_editor:
                 self.cfg_editor.close()
-        except:
+        except Exception:
             pass
 
         try:
             if hasattr(self, "viewer") and self.viewer:
                 self.viewer.close()
-        except:
+        except Exception:
             pass
 
         # Stop background loader thread

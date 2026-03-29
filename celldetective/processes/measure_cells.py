@@ -36,6 +36,7 @@ import pandas as pd
 from celldetective.utils.image_loaders import locate_labels
 
 from celldetective.log_manager import get_logger
+from celldetective.utils import COLUMN_LABELS
 
 logger = get_logger(__name__)
 
@@ -72,12 +73,7 @@ class MeasurementProcess(Process):
             for key, value in process_args.items():
                 setattr(self, key, value)
 
-        self.column_labels = {
-            "track": "TRACK_ID",
-            "time": "FRAME",
-            "x": "POSITION_X",
-            "y": "POSITION_Y",
-        }
+        self.column_labels = COLUMN_LABELS.copy()
 
         self.sum_done = 0
         self.t0 = time.time()

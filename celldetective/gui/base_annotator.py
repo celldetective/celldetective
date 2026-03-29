@@ -565,7 +565,7 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
         super().resizeEvent(event)
         try:
             self.cell_fig.tight_layout()
-        except:
+        except Exception:
             pass
 
     def locate_tracks(self):
@@ -595,11 +595,11 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
             self.class_cols = list(cols[self.class_cols])
             try:
                 self.class_cols.remove("class_id")
-            except:
+            except ValueError:
                 pass
             try:
                 self.class_cols.remove("class_color")
-            except:
+            except ValueError:
                 pass
             if len(self.class_cols) > 0:
                 self.class_name = self.class_cols[0]
@@ -726,7 +726,7 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
             for tr in cols_to_remove:
                 try:
                     self.columns_to_rescale.remove(tr)
-                except:
+                except ValueError:
                     pass
 
             x = self.df_tracks[self.columns_to_rescale].values

@@ -22,6 +22,7 @@ from celldetective.neighborhood import (
     _fill_contact_neighborhood_at_t,
 )
 from celldetective.utils.data_cleaning import extract_identity_col
+from celldetective.utils import COLUMN_LABELS
 from scipy.spatial.distance import cdist
 from celldetective.relative_measurements import measure_pair_signals_at_position
 
@@ -52,12 +53,7 @@ class NeighborhoodProcess(Process):
             for key, value in process_args.items():
                 setattr(self, key, value)
 
-        self.column_labels = {
-            "track": "TRACK_ID",
-            "time": "FRAME",
-            "x": "POSITION_X",
-            "y": "POSITION_Y",
-        }
+        self.column_labels = COLUMN_LABELS.copy()
 
         tprint("Neighborhood")
 

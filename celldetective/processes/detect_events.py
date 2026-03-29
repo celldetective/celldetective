@@ -11,6 +11,7 @@ from celldetective.utils.color_mappings import (
     color_from_class,
 )
 from celldetective.utils.event_detection import _prep_event_detection_model
+from celldetective.utils import COLUMN_LABELS
 
 logger = get_logger(__name__)
 
@@ -43,12 +44,7 @@ class SignalAnalysisProcess(Process):
             for key, value in process_args.items():
                 setattr(self, key, value)
 
-        self.column_labels = {
-            "track": "TRACK_ID",
-            "time": "FRAME",
-            "x": "POSITION_X",
-            "y": "POSITION_Y",
-        }
+        self.column_labels = COLUMN_LABELS.copy()
 
     def setup_for_position(self, pos: str) -> None:
         """

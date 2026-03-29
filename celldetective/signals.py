@@ -25,6 +25,7 @@ Dependencies
 
 import os
 import subprocess
+import sys
 import json
 import numpy as np
 from celldetective.utils.model_loaders import locate_signal_model
@@ -328,8 +329,10 @@ def analyze_signals_at_position(
         pos += "/"
 
     script_path = os.sep.join([abs_path, "scripts", "analyze_signals.py"])
-    cmd = f'python "{script_path}" --pos "{pos}" --model "{model}" --mode "{mode}" --use_gpu "{use_gpu}"'
-    subprocess.call(cmd, shell=True)
+    subprocess.run(
+        [sys.executable, script_path, "--pos", pos, "--model", model, "--mode", mode, "--use_gpu", str(use_gpu)],
+        check=False,
+    )
 
     table = pos + os.sep.join(["output", "tables", f"trajectories_{mode}.csv"])
     if return_table:
@@ -708,8 +711,10 @@ def train_signal_model(config: str) -> None:
     assert os.path.exists(config), f"Config {config} is not a valid path."
 
     script_path = os.sep.join([abs_path, "scripts", "train_signal_model.py"])
-    cmd = f'python "{script_path}" --config "{config}"'
-    subprocess.call(cmd, shell=True)
+    subprocess.run(
+        [sys.executable, script_path, "--config", config],
+        check=False,
+    )
 
 
 def T_MSD(

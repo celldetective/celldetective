@@ -30,6 +30,7 @@ from celldetective.measure import (
     center_of_mass_to_abs_coordinates,
     measure_radial_distance_to_center,
 )
+from celldetective.utils import COLUMN_LABELS
 from pathlib import Path, PurePath
 from glob import glob
 from tqdm import tqdm
@@ -60,12 +61,7 @@ pos = str(process_arguments["position"])
 mode = str(process_arguments["mode"])
 n_threads = int(process_arguments["threads"])
 
-column_labels = {
-    "track": "TRACK_ID",
-    "time": "FRAME",
-    "x": "POSITION_X",
-    "y": "POSITION_Y",
-}
+column_labels = COLUMN_LABELS.copy()
 
 if mode.lower() == "target" or mode.lower() == "targets":
     label_folder = "labels_targets"

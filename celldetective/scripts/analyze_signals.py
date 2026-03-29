@@ -7,6 +7,7 @@ import datetime
 import os
 from art import tprint
 from celldetective.signals import analyze_signals
+from celldetective.utils import COLUMN_LABELS
 import pandas as pd
 
 tprint("Signals")
@@ -29,7 +30,7 @@ if use_gpu=='True' or use_gpu=='true' or use_gpu=='1':
 else:
 	use_gpu = False
 
-column_labels = {'track': "TRACK_ID", 'time': 'FRAME', 'x': 'POSITION_X', 'y': 'POSITION_Y'}
+column_labels = COLUMN_LABELS.copy()
 
 if mode.lower()=="target" or mode.lower()=="targets":
 	table_name = "trajectories_targets.csv"

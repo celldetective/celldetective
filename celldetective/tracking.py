@@ -34,11 +34,15 @@ from btrack import BayesianTracker
 
 from celldetective.measure import measure_features
 from celldetective.utils.maths import velocity_per_track
+from celldetective.log_manager import get_logger
+
+logger = get_logger(__name__)
 from celldetective.utils.data_cleaning import rename_intensity_column
 from celldetective.utils.data_loaders import interpret_tracking_configuration
 
 import os
 import subprocess
+import sys
 import trackpy as tp
 
 abs_path = os.sep.join(
@@ -178,8 +182,8 @@ def track(
         for tr in to_remove:
             try:
                 columns.remove(tr)
-            except:
-                print(f"column {tr} could not be found...")
+            except ValueError:
+                logger.debug(f"Column {tr!r} not found in objects, skipping.")
 
         scaler = StandardScaler()
         if columns:
@@ -188,7 +192,7 @@ def track(
             df_temp = pd.DataFrame(x_scaled, columns=columns, index=objects.index)
             objects[columns] = df_temp
         else:
-            print("Warning: no features were passed to bTrack...")
+            logger.warning("No features were passed to bTrack.")
 
         # 2) track the objects
         new_btrack_objects = localizations_to_objects(objects)
@@ -215,10 +219,8 @@ def track(
             tracker.optimize(options=optimizer_options)
 
             data, properties, graph = tracker.to_napari()  # ndim=2
-            print(f"DEBUG: tracker.to_napari() returned data shape: {data.shape}")
-            print(
-                f"DEBUG: tracker.to_napari() returned properties keys: {list(properties.keys()) if properties else 'None'}"
-            )
+            logger.debug(f"tracker.to_napari() returned data shape: {data.shape}")
+            logger.debug(f"tracker.to_napari() returned properties keys: {list(properties.keys()) if properties else 'None'}")
         # do the table post processing and napari options
         if data.shape[1] == 4:
             df = pd.DataFrame(
@@ -248,12 +250,12 @@ def track(
     else:
         properties = None
         graph = {}
-        print(f"{objects=} {objects.columns=}")
+        logger.debug(f"trackpy objects: {objects.shape}, columns: {list(objects.columns)}")
         objects = objects.rename(columns={"t": "frame"})
         if search_range is not None and memory is not None:
             data = tp.link(objects, search_range, memory=memory, link_strategy="auto")
         else:
-            print("Please provide a valid search range and memory value...")
+            logger.error("Please provide a valid search range and memory value for trackpy.")
             return None
         data["particle"] = data["particle"] + 1  # force track id to start at 1
         df = data.rename(
@@ -279,7 +281,7 @@ def track(
                 column_labels["x"],
             ]
         ].to_numpy()
-        print(f"{df=}")
+        logger.debug(f"trackpy result shape: {df.shape}")
 
     if btrack_option:
         df = df.merge(pd.DataFrame(properties), left_index=True, right_index=True)
@@ -301,12 +303,9 @@ def track(
     df = write_first_detection_class(df, img_shape=volume, column_labels=column_labels)
 
     if clean_trajectories_kwargs is not None:
-        print(
-            f"DEBUG: Calling clean_trajectories with kwargs: {clean_trajectories_kwargs}"
-        )
-        print(f"DEBUG: df shape before clean: {df.shape}")
+        logger.debug(f"Calling clean_trajectories with kwargs: {clean_trajectories_kwargs}, df shape before: {df.shape}")
         df = clean_trajectories(df.copy(), **clean_trajectories_kwargs)
-        print(f"DEBUG: df shape after clean: {df.shape}")
+        logger.debug(f"df shape after clean_trajectories: {df.shape}")
 
     df.loc[df["status_firstdetection"].isna(), "status_firstdetection"] = 0
     df["ID"] = np.arange(len(df)).astype(int)
@@ -1322,8 +1321,10 @@ def track_at_position(
         pos += "/"
 
     script_path = os.sep.join([abs_path, "scripts", "track_cells.py"])
-    cmd = f'python "{script_path}" --pos "{pos}" --mode "{mode}" --threads "{threads}"'
-    subprocess.call(cmd, shell=True)
+    subprocess.run(
+        [sys.executable, script_path, "--pos", pos, "--mode", mode, "--threads", str(threads)],
+        check=False,
+    )
 
     track_table = pos + os.sep.join(["output", "tables", f"trajectories_{mode}.csv"])
     if return_tracks:

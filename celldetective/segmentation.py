@@ -25,7 +25,8 @@ Segmentation parameters are typically passed via a dictionary or configuration o
 
 import json
 import os
-from typing import Dict
+import numpy as np
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from celldetective.utils.model_loaders import locate_segmentation_model
 from celldetective.utils.normalization import normalize_multichannel
@@ -44,7 +45,7 @@ from celldetective.utils.image_cleaning import (
     interpolate_nan_multichannel,
 )
 
-from celldetective.filters import *
+from celldetective.filters import filter_image
 from celldetective.utils.stardist_utils import (
     _prep_stardist_model,
     _segment_image_with_stardist_model,
@@ -69,6 +70,7 @@ from skimage.measure import regionprops_table
 from skimage.exposure import match_histograms
 
 import subprocess
+import sys
 from celldetective.log_manager import get_logger
 
 logger = get_logger(__name__)
@@ -205,12 +207,11 @@ def segment(
 
     labels = []
 
-    for t in tqdm(range(len(stack)), desc="frame"):
+    # Compute once before the loop: find missing channels and replace None with 0
+    none_channel_indices = np.array([i for i, v in enumerate(channel_indices) if v is None])
+    channel_indices = np.array([v if v is not None else 0 for v in channel_indices])
 
-        # normalize
-        channel_indices = np.array(channel_indices)
-        none_channel_indices = np.where(channel_indices == None)[0]
-        channel_indices[channel_indices == None] = 0
+    for t in tqdm(range(len(stack)), desc="frame"):
 
         frame = stack[t]
         frame = _rearrange_multichannel_frame(frame).astype(float)
@@ -733,8 +734,10 @@ def segment_at_position(
     name_path = locate_segmentation_model(model_name)
 
     script_path = os.sep.join([abs_path, "scripts", "segment_cells.py"])
-    cmd = f'python "{script_path}" --pos "{pos}" --model "{model_name}" --mode "{mode}" --use_gpu "{use_gpu}" --threads "{threads}"'
-    subprocess.call(cmd, shell=True)
+    subprocess.run(
+        [sys.executable, script_path, "--pos", pos, "--model", model_name, "--mode", mode, "--use_gpu", str(use_gpu), "--threads", str(threads)],
+        check=False,
+    )
 
     if return_labels or view_on_napari:
         labels = locate_labels(pos, population=mode)
@@ -807,8 +810,10 @@ def segment_from_threshold_at_position(
     assert os.path.exists(config), f"Config {config} is not a valid path."
 
     script_path = os.sep.join([abs_path, "scripts", "segment_cells_thresholds.py"])
-    cmd = f'python "{script_path}" --pos "{pos}" --config "{config}" --mode "{mode}" --threads "{threads}"'
-    subprocess.call(cmd, shell=True)
+    subprocess.run(
+        [sys.executable, script_path, "--pos", pos, "--config", config, "--mode", mode, "--threads", str(threads)],
+        check=False,
+    )
 
 
 def train_segmentation_model(config: str, use_gpu: bool = True) -> None:
@@ -854,8 +859,10 @@ def train_segmentation_model(config: str, use_gpu: bool = True) -> None:
     assert os.path.exists(config), f"Config {config} is not a valid path."
 
     script_path = os.sep.join([abs_path, "scripts", "train_segmentation_model.py"])
-    cmd = f'python "{script_path}" --config "{config}" --use_gpu "{use_gpu}"'
-    subprocess.call(cmd, shell=True)
+    subprocess.run(
+        [sys.executable, script_path, "--config", config, "--use_gpu", str(use_gpu)],
+        check=False,
+    )
 
 
 def merge_instance_segmentation(
