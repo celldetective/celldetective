@@ -563,7 +563,7 @@ class SettingsEventDetectionModelTraining(CelldetectiveSettingsPanel):
         try:
             label = data["label"]
             self.class_name_le.setText(label)
-        except:
+        except KeyError:
             pass
         self.model_length_slider.setValue(int(signal_length))
         self.model_length_slider.setEnabled(False)
@@ -668,7 +668,7 @@ class SettingsEventDetectionModelTraining(CelldetectiveSettingsPanel):
 
         try:
             lr = float(self.lr_le.text().replace(",", "."))
-        except:
+        except ValueError:
             msg_box = QMessageBox()
             msg_box.setIcon(QMessageBox.Warning)
             msg_box.setText("Invalid value encountered for the learning rate.")

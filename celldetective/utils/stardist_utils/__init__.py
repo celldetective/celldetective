@@ -1,6 +1,9 @@
 from pathlib import Path
 from typing import Union, Optional, Any, Tuple, Dict
+import logging
 import os
+
+logger = logging.getLogger("celldetective")
 
 os.environ["TF_CPP_MIN_VLOG_LEVEL"] = "3"
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
@@ -57,7 +60,7 @@ def _prep_stardist_model(
 
     scale_model = scale
 
-    print(f"StarDist model {model_name} successfully loaded...")
+    logger.info(f"StarDist model {model_name} successfully loaded...")
     return model, scale_model
 
 

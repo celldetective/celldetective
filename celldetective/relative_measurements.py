@@ -31,6 +31,9 @@ from celldetective.utils.data_cleaning import extract_identity_col
 import os
 import subprocess
 import sys
+import logging
+
+logger = logging.getLogger("celldetective")
 
 abs_path = os.sep.join(
     [os.path.split(os.path.dirname(os.path.realpath(__file__)))[0], "celldetective"]
@@ -139,7 +142,7 @@ def measure_pairs(pos: str, neighborhood_protocol: dict) -> Optional[pd.DataFram
                     neighbors.append(neigh["id"])
 
             unique_neigh = list(np.unique(neighbors))
-            print(f"{unique_neigh=}")
+            logger.debug(f"unique_neigh={unique_neigh}")
 
             neighbor_properties = group_neighbors.loc[
                 group_neighbors[neigh_id_col].isin(unique_neigh)
@@ -308,10 +311,10 @@ def measure_pair_signals_at_position(
         df_pairs = measure_pairs(pos, neighborhood_protocol)
         return df_pairs
     else:
-        print("ID or TRACK ID column could not be found in neighbor table. Abort.")
+        logger.error("ID or TRACK ID column could not be found in neighbor table. Abort.")
         return None
 
-    print(f"Measuring pair signals...")
+    logger.info("Measuring pair signals...")
 
     neigh_id_col = extract_identity_col(df_neighbor)
     neigh_tracked = False
@@ -322,7 +325,7 @@ def measure_pair_signals_at_position(
         df_pairs = measure_pairs(pos, neighborhood_protocol)
         return df_pairs
     else:
-        print("ID or TRACK ID column could not be found in neighbor table. Abort.")
+        logger.error("ID or TRACK ID column could not be found in neighbor table. Abort.")
         return None
 
     try:
@@ -380,7 +383,7 @@ def measure_pair_signals_at_position(
 
             # print(neighbor_ids_per_t)
             unique_neigh = list(np.unique(neighbor_ids))
-            print(
+            logger.debug(
                 f"Reference cell {tid}: found {len(unique_neigh)} neighbour cells: {unique_neigh}..."
             )
 
@@ -484,8 +487,8 @@ def measure_pair_signals_at_position(
                                 * np.linalg.norm(-neighbor_vector[t])
                             )
                             if tid == 44.0 and nc == 173.0:
-                                print(
-                                    f"{centre_of_mass_columns[z]=} {mass_displacement_vector[z,t]=} {-neighbor_vector[t]=} {dot_product_vector[z,t]=} {cosine_dot_vector[z,t]=}"
+                                logger.debug(
+                                    f"centre_of_mass={centre_of_mass_columns[z]}, mass_displacement={mass_displacement_vector[z,t]}, neighbor_vector={-neighbor_vector[t]}, dot_product={dot_product_vector[z,t]}, cosine_dot={cosine_dot_vector[z,t]}"
                                 )
 
                 angle = np.zeros(len(full_timeline))
@@ -665,8 +668,8 @@ def measure_pair_signals_at_position(
         return df_pairs
 
     except KeyError:
-        print(
-            f"Neighborhood not found in data frame. Measurements for this neighborhood will not be calculated"
+        logger.warning(
+            "Neighborhood not found in data frame. Measurements for this neighborhood will not be calculated."
         )
 
 
@@ -967,12 +970,12 @@ def extract_neighborhood_settings(
     """
 
     assert neigh_string.startswith("neighborhood")
-    print(f"{neigh_string=}")
+    logger.debug(f"neigh_string={neigh_string}")
 
     if "_(" in neigh_string and ")_" in neigh_string:
         # determine neigh pop from string
         neighbor_population = neigh_string.split("_(")[-1].split(")_")[0].split("-")[-1]
-        print(f"{neighbor_population=}")
+        logger.debug(f"neighbor_population={neighbor_population}")
     else:
         # old method
         if population == "targets":

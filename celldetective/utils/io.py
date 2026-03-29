@@ -1,7 +1,10 @@
 import os
+import logging
 from pathlib import Path
 from typing import Union, Any
 import numpy as np
+
+logger = logging.getLogger("celldetective")
 
 from celldetective.utils.image_transforms import (
     axes_check_and_normalize,
@@ -28,7 +31,7 @@ def remove_file_if_exists(file: Union[str, Path]):
         try:
             os.remove(file)
         except Exception as e:
-            print(e)
+            logger.warning(f"Failed to remove file {file}: {e}")
 
 
 def save_tiff_imagej_compatible(

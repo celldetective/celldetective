@@ -170,7 +170,7 @@ def download_url_to_file(url: str, dst: str, progress: bool = True) -> None:
 
                 QApplication.processEvents()
                 if pd.wasCanceled():
-                    print("Download cancelled by user.")
+                    logger.info("Download cancelled by user.")
                     break
             pd.close()
 

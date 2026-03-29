@@ -40,6 +40,9 @@ import pandas as pd
 from pandas.api.types import is_numeric_dtype
 from scipy.stats import median_abs_deviation
 from typing import List, Optional, Union, Dict, Tuple, Literal
+import logging
+
+logger = logging.getLogger("celldetective")
 
 abs_path = os.sep.join(
     [os.path.split(os.path.dirname(os.path.realpath(__file__)))[0], "celldetective"]
@@ -153,7 +156,7 @@ def analyze_signals(
             assert (
                 len(candidates) > 0
             ), f"No signal matches with the requirements of the model {required_signals}. Please pass the signals manually with the argument selected_signals or add measurements. Abort."
-            print(
+            logger.info(
                 f"Selecting the first time series among: {candidates} for input requirement {s}..."
             )
             selected_signals.append(candidates[0])
@@ -162,7 +165,7 @@ def analyze_signals(
             required_signals
         ), f"Mismatch between the number of required signals {required_signals} and the provided signals {selected_signals}... Abort."
 
-    print(f"The following channels will be passed to the model: {selected_signals}")
+    logger.info(f"The following channels will be passed to the model: {selected_signals}")
     trajectories_clean = clean_trajectories(
         trajectories,
         interpolate_na=interpolate_na,
@@ -206,7 +209,7 @@ def analyze_signals(
             indices = group.index
             trajectories.loc[indices, class_col] = classes[i]
             trajectories.loc[indices, time_col] = times_recast[i]
-        print("Done.")
+        logger.info("Signal analysis done.")
 
         for tid, group in trajectories.groupby(column_labels["track"]):
 
@@ -381,7 +384,7 @@ def analyze_pair_signals_at_position(
 
     # Need to identify expected reference / neighbor tables
     model_path = locate_signal_model(model, pairs=True)
-    print(f"Looking for model in {model_path}...")
+    logger.info(f"Looking for model in {model_path}...")
     complete_path = model_path
     complete_path = rf"{complete_path}"
     model_config_path = os.sep.join([complete_path, "config_input.json"])
@@ -393,13 +396,13 @@ def analyze_pair_signals_at_position(
     neighbor_population = model_config_path["neighbor_population"]
 
     if dataframes[reference_population] is None:
-        print(
+        logger.error(
             f"No tabulated data can be found for the reference population ({reference_population})... Abort..."
         )
         return None
 
     if dataframes[neighbor_population] is None:
-        print(
+        logger.error(
             f"No tabulated data can be found for the neighbor population ({neighbor_population})... Abort..."
         )
         return None
@@ -467,7 +470,7 @@ def analyze_pair_signals(
     from celldetective.event_detection_models import SignalDetectionModel
 
     model_path = locate_signal_model(model, path=model_path, pairs=True)
-    print(f"Looking for model in {model_path}...")
+    logger.info(f"Looking for model in {model_path}...")
     complete_path = model_path
     complete_path = rf"{complete_path}"
     model_config_path = os.sep.join([complete_path, "config_input.json"])
@@ -515,7 +518,7 @@ def analyze_pair_signals(
         if is_numeric_dtype(trajectories_neighbors[col]):
             available_signals.append(col)
 
-    print("The available signals are : ", available_signals)
+    logger.debug(f"The available signals are: {available_signals}")
 
     f = open(model_config_path)
     config = json.load(f)
@@ -532,7 +535,7 @@ def analyze_pair_signals(
         selected_signals = []
         for s in required_signals:
             pattern_test = [s in a or s == a for a in available_signals]
-            print(f"Pattern test for signal {s}: ", pattern_test)
+            logger.debug(f"Pattern test for signal {s}: {pattern_test}")
             assert np.any(
                 pattern_test
             ), f"No signal matches with the requirements of the model {required_signals}. Please pass the signals manually with the argument selected_signals or add measurements. Abort."
@@ -541,7 +544,7 @@ def analyze_pair_signals(
                 selected_signals.append(valid_columns[0])
             else:
                 # print(test_number_of_nan(trajectories, valid_columns))
-                print(f"Found several candidate signals: {valid_columns}")
+                logger.debug(f"Found several candidate signals: {valid_columns}")
                 for vc in natsorted(valid_columns):
                     if "circle" in vc:
                         selected_signals.append(vc)
@@ -555,7 +558,7 @@ def analyze_pair_signals(
             required_signals
         ), f"Mismatch between the number of required signals {required_signals} and the provided signals {selected_signals}... Abort."
 
-    print(f"The following channels will be passed to the model: {selected_signals}")
+    logger.info(f"The following channels will be passed to the model: {selected_signals}")
     trajectories_reference_clean = interpolate_nan_properties(
         trajectories_reference, track_label=reference_groupby_cols
     )
@@ -565,12 +568,12 @@ def analyze_pair_signals(
     trajectories_pairs_clean = interpolate_nan_properties(
         trajectories_pairs, track_label=pair_groupby_cols
     )
-    print(f"{trajectories_pairs_clean.columns=}")
+    logger.debug(f"Pair table columns: {list(trajectories_pairs_clean.columns)}")
 
     max_signal_size = int(trajectories_pairs_clean["pair_FRAME"].max()) + 2
     pair_tracks = trajectories_pairs_clean.groupby(pair_groupby_cols).size()
     signals = np.zeros((len(pair_tracks), max_signal_size, len(selected_signals)))
-    print(f"{max_signal_size=} {len(pair_tracks)=} {signals.shape=}")
+    logger.debug(f"max_signal_size={max_signal_size}, n_pair_tracks={len(pair_tracks)}, signals_shape={signals.shape}")
 
     for i, (pair, group) in enumerate(
         trajectories_pairs_clean.groupby(pair_groupby_cols)
@@ -632,7 +635,7 @@ def analyze_pair_signals(
                 signals[i, max(timeline) :, j] = signal[-1]
 
     model = SignalDetectionModel(pretrained=complete_path)
-    print("signal shape: ", signals.shape)
+    logger.debug(f"Signal shape: {signals.shape}")
 
     classes = model.predict_class(signals)
     times_recast = model.predict_time_of_interest(signals)
@@ -650,7 +653,7 @@ def analyze_pair_signals(
         indices = group.index
         trajectories_pairs.loc[indices, class_col] = classes[i]
         trajectories_pairs.loc[indices, time_col] = times_recast[i]
-    print("Done.")
+    logger.info("Pair signal analysis done.")
 
     # At the end rename cols again
     trajectories_pairs = trajectories_pairs.rename(

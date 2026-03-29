@@ -252,7 +252,7 @@ class ProcessPanel(QFrame, Styles):
             )
             try:
                 QTimer.singleShot(10, lambda: center_window(self.window()))
-            except:
+            except Exception:
                 pass
 
     def populate_contents(self) -> None:
@@ -969,7 +969,7 @@ class ProcessPanel(QFrame, Styles):
                                         self.event_annotator.height() + 1,
                                     ),
                                 )
-                            except:
+                            except Exception:
                                 pass
                         except Exception as e:
                             print(f"Error finalizing annotator: {e}")
@@ -1301,7 +1301,7 @@ class ProcessPanel(QFrame, Styles):
                     remove_file_if_exists(t.replace(".csv", ".pkl"))
                     try:
                         os.remove(t)
-                    except:
+                    except OSError:
                         pass
 
         if self.seg_model_list.currentIndex() > self.n_specific_seg_models:

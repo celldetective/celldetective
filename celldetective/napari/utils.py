@@ -187,15 +187,15 @@ def view_tracks_in_napari(
         The Napari viewer instance, data dictionary, or None.
     """
 
-    print(f"DEBUG: view_tracks_in_napari called with pos={position}, pop={population}")
+    logger.debug(f"view_tracks_in_napari called with pos={position}, pop={population}")
     df, df_path = get_position_table(position, population=population, return_path=True)
-    print(f"DEBUG: get_position_table returned df={df is not None}")
+    logger.debug(f"get_position_table returned df={df is not None}")
 
     if progress_callback:
         progress_callback(50)
 
     if df is None:
-        print("Please compute trajectories first... Abort...")
+        logger.warning("Please compute trajectories first... Abort...")
         return None
     shared_data = {
         "df": df,
@@ -206,7 +206,7 @@ def view_tracks_in_napari(
     }
 
     if (labels is not None) * relabel:
-        print("Replacing the cell mask labels with the track ID...")
+        logger.info("Replacing the cell mask labels with the track ID...")
 
         def wrapped_callback(p: int) -> bool:
             """
@@ -331,7 +331,7 @@ def launch_napari_viewer(
         for wdg in widgets:
             try:
                 getattr(qctrl, wdg).setEnabled(not locked)
-            except:
+            except Exception:
                 pass
 
     label_widget_list = [
@@ -377,22 +377,22 @@ def launch_napari_viewer(
         instruction_file = "/".join(
             [experiment, "configs", f"tracking_instructions_{population}.json"]
         )
-        print(f"{instruction_file=}")
+        logger.debug(f"instruction_file={instruction_file}")
         if os.path.exists(instruction_file):
-            print("Tracking configuration file found...")
+            logger.info("Tracking configuration file found...")
             with open(instruction_file, "r") as f:
                 instructions = json.load(f)
                 if "post_processing_options" in instructions:
                     post_processing_options = instructions["post_processing_options"]
-                    print(
+                    logger.info(
                         f"Applying the following track postprocessing: {post_processing_options}..."
                     )
                     df = clean_trajectories(df.copy(), **post_processing_options)
         unnamed_cols = [c for c in list(df.columns) if c.startswith("Unnamed")]
         df = df.drop(unnamed_cols, axis=1)
-        print(f"{list(df.columns)=}")
+        logger.debug(f"Columns after export: {list(df.columns)}")
         df.to_csv(shared_data["path"], index=False)
-        print("Done...")
+        logger.info("Track export done.")
 
     @magicgui(call_button="Export the modified\ntracks...")
     def export_table_widget():
@@ -446,8 +446,8 @@ def launch_napari_viewer(
             ]  # labels[0,int(y),int(x)]
             if value_under == 0:
                 return None
-        except:
-            print("Invalid mask value...")
+        except Exception:
+            logger.warning("Invalid mask value...")
             return None
 
         target_track_id = viewer.layers["segmentation"].selected_label
@@ -577,7 +577,7 @@ def launch_napari_viewer(
         for i in range(10000):
             try:
                 viewer.layers.pop()
-            except:
+            except Exception:
                 pass
 
         del viewer
@@ -729,12 +729,12 @@ def control_segmentation_napari(
             try:
                 im = auto_correct_masks(im)
             except Exception as e:
-                print(e)
+                logger.warning(f"auto_correct_masks failed: {e}")
 
             save_tiff_imagej_compatible(
                 output_folder + f"{str(t).zfill(4)}.tif", im.astype(np.int16), axes="YX"
             )
-        print("The labels have been successfully rewritten.")
+        logger.info("The labels have been successfully rewritten.")
 
     def export_annotation():
         """Export annotation data."""
@@ -758,7 +758,7 @@ def control_segmentation_napari(
             try:
                 info.update({k: values[well_idx]})
             except Exception as e:
-                print(f"{e=}")
+                logger.warning(f"Failed to retrieve label info for key '{k}': {e}")
 
         if metadata_info is not None:
             keys = list(metadata_info.keys())
@@ -774,14 +774,14 @@ def control_segmentation_napari(
         if not os.path.exists(annotation_folder):
             os.mkdir(annotation_folder)
 
-        print("Exporting!")
+        logger.info("Exporting annotation...")
         t = viewer.dims.current_step[0]
         labels_layer = viewer.layers["segmentation"].data[t]  # at current time
 
         try:
             labels_layer = auto_correct_masks(labels_layer)
         except Exception as e:
-            print(e)
+            logger.warning(f"auto_correct_masks failed: {e}")
 
         fov_export = True
 
@@ -796,13 +796,13 @@ def control_segmentation_napari(
             squares = np.array(squares)
             squares = squares[test_in_frame]
             nbr_squares = len(squares)
-            print(f"Found {nbr_squares} ROIs...")
+            logger.info(f"Found {nbr_squares} ROIs...")
             if nbr_squares > 0:
                 # deactivate field of view mode
                 fov_export = False
 
             for k, sq in enumerate(squares):
-                print(f"ROI: {sq}")
+                logger.debug(f"ROI: {sq}")
                 pad_to_256 = False
 
                 xmin = int(sq[0, 1])
@@ -813,11 +813,11 @@ def control_segmentation_napari(
                 ymax = int(sq[1, 2])
                 if ymax < ymin:
                     ymax, ymin = ymin, ymax
-                print(f"{xmin=};{xmax=};{ymin=};{ymax=}")
+                logger.debug(f"xmin={xmin};xmax={xmax};ymin={ymin};ymax={ymax}")
                 frame = viewer.layers["Image"].data[t][xmin:xmax, ymin:ymax]
                 if frame.shape[1] < 256 or frame.shape[0] < 256:
                     pad_to_256 = True
-                    print(
+                    logger.warning(
                         "Crop too small! Padding with zeros to reach 256*256 pixels..."
                     )
                     # continue
@@ -828,7 +828,7 @@ def control_segmentation_napari(
                             xmin:xmax, ymin:ymax
                         ]
                         multichannel.append(frame)
-                    except:
+                    except Exception:
                         pass
                 multichannel = np.array(multichannel)
                 lab = labels_layer[xmin:xmax, ymin:ymax].astype(np.int16)
@@ -899,7 +899,7 @@ def control_segmentation_napari(
                 try:
                     frame = viewer.layers[f"Image [{i + 1}]"].data[t]
                     multichannel.append(frame)
-                except:
+                except Exception:
                     pass
             multichannel = np.array(multichannel)
             save_tiff_imagej_compatible(
@@ -930,7 +930,7 @@ def control_segmentation_napari(
             with open(info_name, "w") as f:
                 json.dump(info, f, indent=4)
 
-        print("Done.")
+        logger.info("Annotation export done.")
 
     @magicgui(call_button="Save the modified labels")
     def save_widget():
@@ -999,7 +999,7 @@ def control_segmentation_napari(
         for wdg in widgets:
             try:
                 getattr(qctrl, wdg).setEnabled(not locked)
-            except:
+            except Exception:
                 pass
 
     label_widget_list = ["polygon_button", "transform_button"]
@@ -1012,7 +1012,7 @@ def control_segmentation_napari(
         for i in range(10000):
             try:
                 viewer.layers.pop()
-            except:
+            except Exception:
                 pass
 
         del viewer
@@ -1041,10 +1041,10 @@ def correct_annotation(filename: str) -> None:
             try:
                 im = auto_correct_masks(im)
             except Exception as e:
-                print(e)
+                logger.warning(f"auto_correct_masks failed: {e}")
 
             save_tiff_imagej_compatible(existing_lbl, im.astype(np.int16), axes="YX")
-        print("The labels have been successfully rewritten.")
+        logger.info("The labels have been successfully rewritten.")
 
     @magicgui(call_button="Save the modified labels")
     def save_widget():

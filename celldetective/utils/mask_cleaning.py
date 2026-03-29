@@ -1,8 +1,11 @@
 import threading
+import logging
 from pathlib import Path
 from typing import Union, Optional, Any, List, Dict, Tuple, Callable
 
 import numpy as np
+
+logger = logging.getLogger("celldetective")
 import pandas as pd
 from skimage.measure import regionprops_table, label
 from skimage.transform import resize
@@ -406,12 +409,12 @@ def relabel_segmentation(
                 # print(f"Thread {i} output check: ", return_value)
                 pass
         except Exception as e:
-            print("Exception: ", e)
+            logger.error(f"Thread exception in relabeling: {e}")
 
     if shared_progress.get("cancelled", False):
-        print("Relabeling cancelled.")
+        logger.info("Relabeling cancelled.")
         return None
 
-    print("\nDone.")
+    logger.info("Relabeling done.")
 
     return new_labels

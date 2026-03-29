@@ -609,5 +609,5 @@ class SegmentationModelLoader(CelldetectiveWidget):
             try:
                 QTimer.singleShot(100, safe_resize)
                 center_window(self.thresh_wizard)
-            except:
+            except Exception:
                 pass

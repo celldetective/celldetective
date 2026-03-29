@@ -1,7 +1,10 @@
 from pathlib import Path
 from typing import Union, Optional, Any
+import logging
 
 import numpy as np
+
+logger = logging.getLogger("celldetective")
 
 
 def _segment_image_with_cellpose_model(
@@ -136,8 +139,8 @@ def _prep_cellpose_model(
         )  # diam_mean=30.0,
     except AssertionError as e:
         if use_gpu:
-            print(
-                f"[WARNING] Could not load Cellpose model with GPU ({e}). Retrying with CPU..."
+            logger.warning(
+                f"Could not load Cellpose model with GPU ({e}). Retrying with CPU..."
             )
             device = torch.device("cpu")
             model = CellposeModel(
@@ -154,9 +157,8 @@ def _prep_cellpose_model(
     else:
         scale_model = scale * model.diam_mean / model.diam_labels
 
-    print(f"Cell size in model: {model.diam_mean} pixels...")
-    print(f"Cell size in training set: {model.diam_labels} pixels...")
-    print(f"Rescaling factor to apply: {scale_model}...")
-
-    print(f"Cellpose model {model_name} successfully loaded...")
+    logger.info(f"Cell size in model: {model.diam_mean} pixels...")
+    logger.info(f"Cell size in training set: {model.diam_labels} pixels...")
+    logger.info(f"Rescaling factor to apply: {scale_model}...")
+    logger.info(f"Cellpose model {model_name} successfully loaded...")
     return model, scale_model

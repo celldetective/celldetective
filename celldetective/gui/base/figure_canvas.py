@@ -78,7 +78,7 @@ class FigureCanvas(CelldetectiveWidget):
 
             if not manual_layout:
                 self.fig.tight_layout()
-        except:
+        except Exception:
             pass
 
     def draw(self):

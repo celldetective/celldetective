@@ -4,8 +4,11 @@ from skimage.measure._regionprops import (
     _infer_number_of_required_args,
 )
 from typing import Optional, List, Dict, Any, Tuple
+import logging
 import numpy as np
 import inspect
+
+logger = logging.getLogger("celldetective")
 import json
 import os
 from scipy.ndimage import find_objects
@@ -177,8 +180,8 @@ class CustomRegionProps(RegionProperties):
                                     multichannel_list[idx] = res
 
                             else:
-                                print(
-                                    f"Warning... Channel required by custom measurement ({default_channel}) could not be found in your data..."
+                                logger.warning(
+                                    f"Channel required by custom measurement ({default_channel}) could not be found in your data..."
                                 )
 
                             return np.stack(multichannel_list, axis=-1)

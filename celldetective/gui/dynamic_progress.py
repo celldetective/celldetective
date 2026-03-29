@@ -284,7 +284,7 @@ class DynamicProgressDialog(QDialog, Styles):
                 QTimer.singleShot(
                     100, lambda: self.resize(self.width() - 1, self.height() - 1)
                 )
-            except:
+            except Exception:
                 pass
         else:
             self.btn_log.setIcon(icon(MDI6.math_log, color="white"))
@@ -292,7 +292,7 @@ class DynamicProgressDialog(QDialog, Styles):
                 QTimer.singleShot(
                     100, lambda: self.resize(self.width() + 1, self.height() + 1)
                 )
-            except:
+            except Exception:
                 pass
 
     def auto_scale(self):
@@ -491,14 +491,14 @@ class DynamicProgressDialog(QDialog, Styles):
                 QTimer.singleShot(
                     100, lambda: self.resize(self.width() + 1, self.height() + 1)
                 )
-            except:
+            except Exception:
                 pass
         else:
             try:
                 QTimer.singleShot(
                     100, lambda: self.resize(self.width() - 1, self.height() - 1)
                 )
-            except:
+            except Exception:
                 pass
 
     def update_status(self, text: str) -> None:
@@ -516,5 +516,5 @@ class DynamicProgressDialog(QDialog, Styles):
                 QTimer.singleShot(
                     100, lambda: self.status_label.setText("Training model...")
                 )
-            except:
+            except Exception:
                 pass

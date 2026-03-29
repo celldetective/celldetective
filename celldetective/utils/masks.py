@@ -193,7 +193,7 @@ def create_patch_mask(
     elif isinstance(radius, list):
         mask = (dist_from_center <= radius[1]) * (dist_from_center >= radius[0])
     else:
-        print("Please provide a proper format for the radius")
+        logger.error("Please provide a proper format for the radius")
         return None
 
     return mask

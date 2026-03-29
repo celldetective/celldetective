@@ -1,8 +1,11 @@
 import re
+import logging
 from typing import Optional, List, Union, Dict, Any, Tuple
 
 import numpy as np
 import pandas as pd
+
+logger = logging.getLogger("celldetective")
 
 
 def _remove_invalid_cols(df: pd.DataFrame) -> pd.DataFrame:
@@ -163,8 +166,7 @@ def extract_cols_from_table_list(tables: List[str], nrows: int = 1) -> np.ndarra
         except pd.errors.EmptyDataError:
             pass
         except Exception as e:
-            print(f"Error reading {tab}: {e}")
-            pass
+            logger.warning(f"Error reading {tab}: {e}")
 
     if len(all_columns) > 0:
         all_columns = np.unique(all_columns)
@@ -202,7 +204,7 @@ def extract_identity_col(trajectories: pd.DataFrame) -> Optional[str]:
         if col in trajectories.columns and not trajectories[col].isnull().all():
             return col
 
-    print("ID or TRACK_ID column could not be found in the table...")
+    logger.warning("ID or TRACK_ID column could not be found in the table...")
     return None
 
 
@@ -574,7 +576,7 @@ def collapse_trajectories_by_status(
     ]
 
     if status is None or status not in list(df.columns):
-        print("invalid status selection...")
+        logger.warning("Invalid status selection...")
         return None
 
     df = df.dropna(subset=status, ignore_index=True)
@@ -592,8 +594,7 @@ def collapse_trajectories_by_status(
                     lambda x: x.unique()[0]
                 )
             except Exception as e:
-                print(e)
-                pass
+                logger.warning(f"Column projection failed: {e}")
         subtab_projected["duration_in_state"] = frame_duration
         df_sections.append(subtab_projected)
 

@@ -1,7 +1,10 @@
 import collections
+import logging
 from typing import Optional, Union, Tuple, List, Any, Iterable, Dict
 
 import numpy as np
+
+logger = logging.getLogger("celldetective")
 
 
 def consume(iterator: Iterable[Any]) -> None:
@@ -312,7 +315,7 @@ def _estimate_scale_factor(
     epsilon = 0.05
     if scale is not None:
         if not np.all([scale >= (1 - epsilon), scale <= (1 + epsilon)]):
-            print(
+            logger.info(
                 f"Each frame will be rescaled by a factor {scale} to match with the model training data..."
             )
         else:

@@ -142,7 +142,7 @@ class PreprocessingPanel(QFrame, Styles):
 
             try:
                 QTimer.singleShot(10, safe_center)
-            except:
+            except Exception:
                 pass
 
     def populate_contents(self):

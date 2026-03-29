@@ -122,7 +122,7 @@ class NeighPanel(QFrame, Styles):
             )
             try:
                 QTimer.singleShot(10, lambda: center_window(self.window()))
-            except:
+            except Exception:
                 pass
 
     def populate_contents(self):

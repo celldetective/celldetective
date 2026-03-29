@@ -1,7 +1,10 @@
+import logging
 import os
 import ssl
 from tqdm import tqdm
 from multiprocessing import Process, Queue
+
+logger = logging.getLogger("celldetective")
 from typing import Optional, Dict, Any
 from glob import glob
 import shutil
@@ -121,7 +124,7 @@ class DownloadProcess(Process):
                 if os.path.exists(f.name):
                     os.remove(f.name)
         except Exception as e:
-            print("No internet connection: ", e)
+            logger.error(f"No internet connection: {e}")
             return None
 
     def run(self):

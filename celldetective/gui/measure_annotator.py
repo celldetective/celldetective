@@ -234,7 +234,7 @@ class MeasureAnnotator(BaseAnnotator):
             for col in to_remove:
                 try:
                     self.class_cols.remove(col)
-                except:
+                except Exception:
                     pass
 
             # Generate missing status columns from class columns
@@ -274,7 +274,7 @@ class MeasureAnnotator(BaseAnnotator):
             for col in to_remove:
                 try:
                     self.class_cols.remove(col)
-                except:
+                except Exception:
                     pass
 
             if len(self.class_cols) > 0:
@@ -377,7 +377,7 @@ class MeasureAnnotator(BaseAnnotator):
             for tr in cols_to_remove:
                 try:
                     self.columns_to_rescale.remove(tr)
-                except:
+                except Exception:
                     pass
 
             x = self.df_tracks[self.columns_to_rescale].values
@@ -1405,19 +1405,19 @@ class MeasureAnnotator(BaseAnnotator):
 
         try:
             self.df_tracks.drop(columns="", inplace=True)
-        except:
+        except Exception:
             pass
         try:
             self.df_tracks.drop(columns="group_color", inplace=True)
-        except:
+        except Exception:
             pass
         try:
             self.df_tracks.drop(columns="x_anim", inplace=True)
-        except:
+        except Exception:
             pass
         try:
             self.df_tracks.drop(columns="y_anim", inplace=True)
-        except:
+        except Exception:
             pass
 
         self.df_tracks.to_csv(self.trajectories_path, index=False)

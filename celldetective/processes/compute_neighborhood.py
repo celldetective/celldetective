@@ -1,7 +1,10 @@
 from multiprocessing import Process, Queue
 from typing import Optional, Dict, Any, List, Union, Tuple
+import logging
 import time
 import os
+
+logger = logging.getLogger("celldetective")
 
 from celldetective.utils.image_loaders import locate_labels
 from celldetective.utils.data_loaders import get_position_table, get_position_pickle
@@ -164,7 +167,7 @@ class NeighborhoodProcess(Process):
             elif mode == "self":
                 neigh_col = f"neighborhood_self_contact_{d}_px"
             else:
-                print("Please provide a valid mode between `two-pop` and `self`...")
+                logger.error("Please provide a valid mode between `two-pop` and `self`...")
                 return None
 
             setA[neigh_col] = np.nan
@@ -529,12 +532,12 @@ class NeighborhoodProcess(Process):
             cols.append(id_col)
             on_cols = [id_col, "FRAME"]
 
-            print(f"Recover {cols} from the pickle file...")
+            logger.debug(f"Recover {cols} from the pickle file...")
             try:
                 df_A = pd.merge(df_A, df_A_pkl.loc[:, cols], how="outer", on=on_cols)
-                print(df_A.columns)
+                logger.debug(f"Merged columns: {list(df_A.columns)}")
             except Exception as e:
-                print(f"Failure to merge pickle and csv files: {e}")
+                logger.warning(f"Failure to merge pickle and csv files: {e}")
 
         if df_B_pkl is not None and df_B is not None:
             pkl_columns = np.array(df_B_pkl.columns)
@@ -547,11 +550,11 @@ class NeighborhoodProcess(Process):
             cols.append(id_col)
             on_cols = [id_col, "FRAME"]
 
-            print(f"Recover {cols} from the pickle file...")
+            logger.debug(f"Recover {cols} from the pickle file...")
             try:
                 df_B = pd.merge(df_B, df_B_pkl.loc[:, cols], how="outer", on=on_cols)
             except Exception as e:
-                print(f"Failure to merge pickle and csv files: {e}")
+                logger.warning(f"Failure to merge pickle and csv files: {e}")
 
         if clear_neigh:
             unwanted = df_A.columns[df_A.columns.str.contains("neighborhood")]
@@ -579,7 +582,7 @@ class NeighborhoodProcess(Process):
             # df_A.loc[~edge_filter_A, neigh_col] = np.nan
             # df_B.loc[~edge_filter_B, neigh_col] = np.nan
 
-            print("Count neighborhood...")
+            logger.info("Count neighborhood...")
             df_A = compute_neighborhood_metrics(
                 df_A,
                 neigh_col,
@@ -588,11 +591,11 @@ class NeighborhoodProcess(Process):
             )
             # if neighborhood_kwargs['symmetrize']:
             # 	df_B = compute_neighborhood_metrics(df_B, neigh_col, metrics=['inclusive','exclusive','intermediate'], decompose_by_status=True)
-            print("Done...")
+            logger.info("Done.")
 
             if "TRACK_ID" in list(df_A.columns):
                 if not np.all(df_A["TRACK_ID"].isnull()):
-                    print("Estimate average neighborhood before/after event...")
+                    logger.info("Estimate average neighborhood before/after event...")
                     df_A = mean_neighborhood_before_event(
                         df_A, neigh_col, event_time_col
                     )
@@ -600,7 +603,7 @@ class NeighborhoodProcess(Process):
                         df_A = mean_neighborhood_after_event(
                             df_A, neigh_col, event_time_col
                         )
-                    print("Done...")
+                    logger.info("Done.")
 
         if not population[0] == population[1]:
             # Remove neighborhood column from neighbor table, rename with actual population name
@@ -756,12 +759,12 @@ class NeighborhoodProcess(Process):
             cols.append(id_col)
             on_cols = [id_col, "FRAME"]
 
-            print(f"Recover {cols} from the pickle file...")
+            logger.debug(f"Recover {cols} from the pickle file...")
             try:
                 df_A = pd.merge(df_A, df_A_pkl.loc[:, cols], how="outer", on=on_cols)
-                print(df_A.columns)
+                logger.debug(f"Merged columns: {list(df_A.columns)}")
             except Exception as e:
-                print(f"Failure to merge pickle and csv files: {e}")
+                logger.warning(f"Failure to merge pickle and csv files: {e}")
 
         if df_B_pkl is not None and df_B is not None:
             pkl_columns = np.array(df_B_pkl.columns)
@@ -774,11 +777,11 @@ class NeighborhoodProcess(Process):
             cols.append(id_col)
             on_cols = [id_col, "FRAME"]
 
-            print(f"Recover {cols} from the pickle file...")
+            logger.debug(f"Recover {cols} from the pickle file...")
             try:
                 df_B = pd.merge(df_B, df_B_pkl.loc[:, cols], how="outer", on=on_cols)
             except Exception as e:
-                print(f"Failure to merge pickle and csv files: {e}")
+                logger.warning(f"Failure to merge pickle and csv files: {e}")
 
         labelsA = locate_labels(pos, population=population[0])
         if population[1] == population[0]:
@@ -792,7 +795,7 @@ class NeighborhoodProcess(Process):
             unwanted = df_B.columns[df_B.columns.str.contains("neighborhood")]
             df_B = df_B.drop(columns=unwanted)
 
-        print(f"Distance: {distance} for mask contact")
+        logger.debug(f"Distance: {distance} for mask contact")
         df_A, df_B = self.mask_contact_neighborhood(
             df_A, df_B, labelsA, labelsB, distance, **neighborhood_kwargs
         )
@@ -806,7 +809,7 @@ class NeighborhoodProcess(Process):
             elif neighborhood_kwargs["mode"] == "self":
                 neigh_col = f"neighborhood_self_contact_{d}_px"
             else:
-                print("Invalid mode...")
+                logger.error("Invalid mode...")
                 return None
 
             df_A.loc[df_A["class_id"].isnull(), neigh_col] = np.nan
@@ -837,7 +840,7 @@ class NeighborhoodProcess(Process):
                             event_time_col,
                             metrics=["inclusive", "intermediate"],
                         )
-                    print("Done...")
+                    logger.info("Done.")
 
         if not population[0] == population[1]:
             # Remove neighborhood column from neighbor table, rename with actual population name
@@ -851,7 +854,7 @@ class NeighborhoodProcess(Process):
                 elif neighborhood_kwargs["mode"] == "self":
                     neigh_col = f"neighborhood_self_contact_{d}_px"
                 else:
-                    print("Invalid mode...")
+                    logger.error("Invalid mode...")
                     return None
                 df_B = df_B.drop(columns=[neigh_col])
             df_B.to_pickle(path_B.replace(".csv", ".pkl"))
@@ -873,7 +876,7 @@ class NeighborhoodProcess(Process):
             new_name_map.update({c: new_col_names[k]})
         df_A = df_A.rename(columns=new_name_map)
 
-        print(f"{df_A.columns=}")
+        logger.debug(f"Final df_A columns: {list(df_A.columns)}")
         df_A.to_pickle(path_A.replace(".csv", ".pkl"))
 
         unwanted = df_A.columns[df_A.columns.str.startswith("neighborhood_")]
@@ -891,7 +894,7 @@ class NeighborhoodProcess(Process):
     def run(self):
         """Run the neighborhood computation process."""
         self.queue.put({"status": "Computing neighborhood..."})
-        print(f"Launching the neighborhood computation...")
+        logger.info("Launching the neighborhood computation...")
         if self.protocol["neighborhood_type"] == "distance_threshold":
             self.compute_neighborhood_at_position(
                 self.pos,
@@ -904,9 +907,9 @@ class NeighborhoodProcess(Process):
                 event_time_col=self.protocol["event_time_col"],
                 neighborhood_kwargs=self.protocol["neighborhood_kwargs"],
             )
-            print(f"Computation done!")
+            logger.info("Computation done.")
         elif self.protocol["neighborhood_type"] == "mask_contact":
-            print(f"Compute contact neigh!!")
+            logger.info("Computing contact neighborhood...")
             self.compute_contact_neighborhood_at_position(
                 self.pos,
                 self.protocol["distance"],
@@ -918,11 +921,11 @@ class NeighborhoodProcess(Process):
                 event_time_col=self.protocol["event_time_col"],
                 neighborhood_kwargs=self.protocol["neighborhood_kwargs"],
             )
-            print(f"Computation done!")
+            logger.info("Computation done.")
 
         if self.measure_pairs:
             self.queue.put({"status": "Measuring pairs..."})
-            print(f"Measuring pairs...")
+            logger.info("Measuring pairs...")
 
             distances = self.protocol["distance"]
             if not isinstance(distances, list):
@@ -956,7 +959,7 @@ class NeighborhoodProcess(Process):
                     "description": neigh_col,
                 }
 
-                print(f"Processing pairs for {neigh_col}...")
+                logger.info(f"Processing pairs for {neigh_col}...")
                 df_pairs = measure_pair_signals_at_position(self.pos, pair_protocol)
 
                 if df_pairs is not None:
@@ -988,7 +991,7 @@ class NeighborhoodProcess(Process):
                             pass
 
                         df_pairs.to_csv(previous_pair_table_path, index=False)
-                        print(f"Pair measurements saved to {previous_pair_table_path}")
+                        logger.info(f"Pair measurements saved to {previous_pair_table_path}")
 
         # self.indices = list(range(self.img_num_channels.shape[1]))
         # chunks = np.array_split(self.indices, self.n_threads)

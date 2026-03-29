@@ -788,7 +788,7 @@ def collect_experiment_metadata(
             well_path += os.sep
         experiment = extract_experiment_from_well(well_path)
     else:
-        print("Please provide a position or well path...")
+        logger.error("Please provide a position or well path...")
         return None
 
     wells = list(get_experiment_wells(experiment))
@@ -821,7 +821,7 @@ def collect_experiment_metadata(
         try:
             dico.update({k: values[idx]})
         except Exception as e:
-            print(f"{e=}")
+            logger.warning(f"Failed to retrieve label for key '{k}': {e}")
 
     return dico
 
@@ -884,7 +884,7 @@ def interpret_wells_and_positions(
     elif isinstance(well_option, list):
         well_indices = well_option
     else:
-        print("Well indices could not be interpreted...")
+        logger.error("Well indices could not be interpreted...")
         return None
 
     if position_option == "*":
@@ -894,7 +894,7 @@ def interpret_wells_and_positions(
     elif isinstance(position_option, list):
         position_indices = position_option
     else:
-        print("Position indices could not be interpreted...")
+        logger.error("Position indices could not be interpreted...")
         return None
 
     return well_indices, position_indices
@@ -1343,7 +1343,7 @@ def locate_labels(
             tzfill = str(int(f)).zfill(4)
             try:
                 idx = label_names.index(f"{tzfill}.tif")
-            except:
+            except ValueError:
                 idx = -1
 
             if idx == -1:

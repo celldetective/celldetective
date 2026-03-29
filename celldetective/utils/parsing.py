@@ -1,11 +1,14 @@
 import configparser
 import json
+import logging
 import os
 import re
 from pathlib import PurePath, Path
 from typing import Union, Dict, List, Tuple, Optional, Any
 
 import numpy as np
+
+logger = logging.getLogger("celldetective")
 
 
 def _get_normalize_kwargs_from_config(config: Union[Dict, str]) -> Dict[str, Any]:
@@ -28,7 +31,7 @@ def _get_normalize_kwargs_from_config(config: Union[Dict, str]) -> Dict[str, Any
             with open(config) as cfg:
                 config = json.load(cfg)
         else:
-            print("Configuration could not be loaded...")
+            logger.error("Configuration could not be loaded...")
             os.abort()
 
     normalization_percentile = config["normalization_percentile"]
@@ -145,8 +148,8 @@ def _extract_channel_indices_from_config(
             c1 = int(config_section_to_dict(config, "Channels")[c])
             channels.append(c1)
         except Exception as e:
-            print(
-                f"Warning: The channel {c} required by the model is not available in your data..."
+            logger.warning(
+                f"The channel {c} required by the model is not available in your data..."
             )
             channels.append(None)
     if np.all([c is None for c in channels]):
@@ -317,7 +320,7 @@ def _extract_labels_from_config(config: str, number_of_wells: int) -> np.ndarray
             ]
 
     except Exception as e:
-        print(
+        logger.warning(
             f"{e}: the well labels cannot be read from the concentration and cell_type fields"
         )
         labels = np.linspace(0, number_of_wells - 1, number_of_wells, dtype=str)

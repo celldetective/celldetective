@@ -818,10 +818,9 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
                     matrix[cid, loc_t] = feature
                     if second_feature:
                         matrix[cid, loc_t + 1] = second_feature
-                    print(timeline, loc_t)
 
                     cid += 1
-                except:
+                except Exception:
                     pass
         return matrix
 
@@ -1365,10 +1364,10 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
             pos_label = positions[k]["Label"]
             try:
                 coords = positions[k]["DeviceCoordinatesUm"]["XYStage"]
-            except:
+            except KeyError:
                 try:
                     coords = positions[k]["DeviceCoordinatesUm"]["PIXYStage"]
-                except:
+                except KeyError:
                     self.no_meta = True
 
             if not self.no_meta:

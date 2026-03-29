@@ -241,7 +241,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         super().resizeEvent(event)
         try:
             self.cell_fig.tight_layout()
-        except:
+        except Exception:
             pass
 
     def populate_widget(self):
@@ -625,7 +625,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
 
         try:
             self.reference_event_choice_cb.disconnect()
-        except:
+        except Exception:
             pass
         self.reference_event_choice_cb.clear()
         df_reference = self.dataframes[self.reference_population]
@@ -635,7 +635,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         for c in cols_to_remove:
             try:
                 reference_class_cols.remove(c)
-            except:
+            except Exception:
                 pass
         self.reference_event_choice_cb.addItems(reference_class_cols)
         self.reference_event_choice_cb.currentIndexChanged.connect(
@@ -644,7 +644,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
 
         try:
             self.neighbor_event_choice_cb.disconnect()
-        except:
+        except Exception:
             pass
         self.neighbor_event_choice_cb.clear()
         df_neighbors = self.dataframes[self.neighbor_population]
@@ -654,7 +654,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         for c in cols_to_remove:
             try:
                 neighbor_class_cols.remove(c)
-            except:
+            except Exception:
                 pass
         self.neighbor_event_choice_cb.addItems(neighbor_class_cols)
         self.neighbor_event_choice_cb.currentIndexChanged.connect(
@@ -693,7 +693,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         try:
             self.neighbor_event_choice_cb.show()
             self.neigh_lab.show()
-        except:
+        except Exception:
             pass
 
         self.reference_event_choice_cb.disconnect()
@@ -1303,11 +1303,11 @@ class PairEventAnnotator(CelldetectiveMainWindow):
 
                 try:
                     class_cols.remove("class_id")
-                except:
+                except Exception:
                     pass
                 try:
                     class_cols.remove("class_color")
-                except:
+                except Exception:
                     pass
 
                 if len(class_cols) > 0:
@@ -1390,7 +1390,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
                 for col in cols_to_remove:
                     try:
                         pop_cols.remove(col)
-                    except:
+                    except Exception:
                         pass
 
                 x = df_population[pop_cols].values
@@ -1480,7 +1480,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         for col in cols_to_remove:
             try:
                 self.pair_columns.remove(col)
-            except:
+            except Exception:
                 pass
 
         x = self.df_relative[self.pair_columns].values
@@ -2035,7 +2035,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
                 try:
                     tracks.append(df.loc[df["FRAME"] == t, "TRACK_ID"].to_numpy())
                     timeline.append(t)
-                except:
+                except KeyError:
                     tracks.append(df.loc[df["FRAME"] == t, "ID"].to_numpy())
                     timeline.append(t)
 
@@ -2180,7 +2180,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
 
         try:
             self.relative_class_choice_cb.disconnect()
-        except:
+        except Exception:
             pass
 
         self.relative_class_choice_cb.clear()

@@ -242,7 +242,7 @@ def estimate_background_per_condition(
 
                     frame = np.nanmedian(new_frames, axis=0)
             else:
-                print(f"Stack not found for position {pos_path}...")
+                logger.warning(f"Stack not found for position {pos_path}...")
                 frame = []
 
             # store
@@ -1569,7 +1569,7 @@ def correct_channel_offset(
         if progress_callback:
             progress_callback(level="well", iter=k, total=total_wells)
         elif show_progress_per_well:
-            print(f"Processing well {k+1}/{total_wells}...")
+            logger.info(f"Processing well {k+1}/{total_wells}...")
 
         well_name, _ = extract_well_name_and_number(well_path)
         positions = get_positions_in_well(well_path)
@@ -1587,7 +1587,7 @@ def correct_channel_offset(
                     stage=f"Pos {extract_position_name(pos_path)}",
                 )
             elif show_progress_per_pos:
-                print(f"  Processing position {pidx+1}/{total_pos}...")
+                logger.info(f"  Processing position {pidx+1}/{total_pos}...")
 
             stack_path = get_position_movie_path(pos_path, prefix=movie_prefix)
             logger.info(

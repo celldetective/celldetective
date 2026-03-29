@@ -272,7 +272,7 @@ def locate_labels(
             tzfill = str(int(f)).zfill(4)
             try:
                 idx = label_names.index(f"{tzfill}.tif")
-            except:
+            except ValueError:
                 idx = -1
 
             if idx == -1:
@@ -600,8 +600,8 @@ def load_frames(
             )
             frames = imageio.imread(stack_path, key=img_nums)
     except Exception as e:
-        print(
-            f"Error in loading the frame {img_nums} {e}. Please check that the experiment channel information is consistent with the movie being read."
+        logger.error(
+            f"Error in loading the frame {img_nums}: {e}. Please check that the experiment channel information is consistent with the movie being read."
         )
         return None
     try:
@@ -609,7 +609,7 @@ def load_frames(
             frames = frames.astype(float)
             frames[np.isinf(frames)] = np.nan
     except Exception as e:
-        print(e)
+        logger.warning(f"inf check failed: {e}")
 
     frames = _rearrange_multichannel_frame(frames)
 
@@ -999,14 +999,14 @@ def load_image_dataset(
     files = []
 
     for ds in datasets:
-        print(f"Loading data from dataset {ds}...")
+        logger.info(f"Loading data from dataset {ds}...")
         if not ds.endswith(os.sep):
             ds += os.sep
         img_paths = list(
             set(glob(ds + "*.tif")) - set(glob(ds + f"*_{mask_suffix}.tif"))
         )
         for im in img_paths:
-            print(f"{im=}")
+            logger.debug(f"Processing image: {im}")
             mask_path = os.sep.join(
                 [
                     os.path.split(im)[0],
@@ -1019,7 +1019,7 @@ def load_image_dataset(
                 if image.ndim == 2:
                     image = image[np.newaxis]
                 if image.ndim > 3:
-                    print("Invalid image shape, skipping")
+                    logger.warning("Invalid image shape, skipping")
                     continue
                 mask = imread(mask_path)
                 config_path = im.replace(".tif", ".json")
@@ -1032,9 +1032,9 @@ def load_image_dataset(
                     intersection = list(
                         set(list(channels)) & set(list(existing_channels))
                     )
-                    print(f"{existing_channels=} {intersection=}")
+                    logger.debug(f"existing_channels={existing_channels}, intersection={intersection}")
                     if len(intersection) == 0:
-                        print(
+                        logger.warning(
                             "Channels could not be found in the config... Skipping image."
                         )
                         continue

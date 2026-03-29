@@ -468,11 +468,10 @@ class SettingsMeasurements(CelldetectiveSettingsPanel):
         )
         try:
             Popen(f"explorer {os.path.realpath(path)}")
-        except:
-
+        except Exception:
             try:
                 os.system('xdg-open "%s"' % path)
-            except:
+            except Exception:
                 return None
 
     def switch_to_absolute_normalization_mode(self):

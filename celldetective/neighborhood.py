@@ -27,7 +27,10 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 from skimage.graph import pixel_graph
+import logging
 import os
+
+logger = logging.getLogger("celldetective")
 from celldetective.utils.masks import contour_of_instance_segmentation
 from celldetective.utils.data_cleaning import extract_identity_col
 from scipy.spatial.distance import cdist
@@ -543,10 +546,10 @@ def _compute_mask_contact_dist_map(
                 )
 
             indices_to_keep.append([idx_A, idx_B, intersection])
-            print(
+            logger.debug(
                 f"Ref cell #{ids_A[idx_A]} matched with neigh. cell #{ids_B[idx_B]}..."
             )
-            print(f"Computed intersection: {intersection} px...")
+            logger.debug(f"Computed intersection: {intersection} px...")
 
         if len(indices_to_keep) > 0:
             indices_to_keep = np.array(indices_to_keep)
@@ -600,7 +603,7 @@ def set_live_status(
 
     """
 
-    print(f"Provided statuses: {status}...")
+    logger.debug(f"Provided statuses: {status}...")
     if (
         status is None
         or status == ["live_status", "live_status"]
@@ -967,12 +970,12 @@ def compute_neighborhood_at_position(
         cols.append(id_col)
         on_cols = [id_col, "FRAME"]
 
-        print(f"Recover {cols} from the pickle file...")
+        logger.debug(f"Recover {cols} from the pickle file...")
         try:
             df_A = pd.merge(df_A, df_A_pkl.loc[:, cols], how="outer", on=on_cols)
-            print(df_A.columns)
+            logger.debug(f"Merged columns: {list(df_A.columns)}")
         except Exception as e:
-            print(f"Failure to merge pickle and csv files: {e}")
+            logger.warning(f"Failure to merge pickle and csv files: {e}")
 
     if df_B_pkl is not None and df_B is not None:
         pkl_columns = np.array(df_B_pkl.columns)
@@ -983,11 +986,11 @@ def compute_neighborhood_at_position(
         cols.append(id_col)
         on_cols = [id_col, "FRAME"]
 
-        print(f"Recover {cols} from the pickle file...")
+        logger.debug(f"Recover {cols} from the pickle file...")
         try:
             df_B = pd.merge(df_B, df_B_pkl.loc[:, cols], how="outer", on=on_cols)
         except Exception as e:
-            print(f"Failure to merge pickle and csv files: {e}")
+            logger.warning(f"Failure to merge pickle and csv files: {e}")
 
     if clear_neigh:
         unwanted = df_A.columns[df_A.columns.str.contains("neighborhood")]
@@ -1013,7 +1016,7 @@ def compute_neighborhood_at_position(
         # df_A.loc[~edge_filter_A, neigh_col] = np.nan
         # df_B.loc[~edge_filter_B, neigh_col] = np.nan
 
-        print("Count neighborhood...")
+        logger.info("Count neighborhood...")
         df_A = compute_neighborhood_metrics(
             df_A,
             neigh_col,
@@ -1022,17 +1025,17 @@ def compute_neighborhood_at_position(
         )
         # if neighborhood_kwargs['symmetrize']:
         # 	df_B = compute_neighborhood_metrics(df_B, neigh_col, metrics=['inclusive','exclusive','intermediate'], decompose_by_status=True)
-        print("Done...")
+        logger.info("Neighborhood metrics computed.")
 
         if "TRACK_ID" in list(df_A.columns):
             if not np.all(df_A["TRACK_ID"].isnull()):
-                print("Estimate average neighborhood before/after event...")
+                logger.info("Estimate average neighborhood before/after event...")
                 df_A = mean_neighborhood_before_event(df_A, neigh_col, event_time_col)
                 if event_time_col is not None:
                     df_A = mean_neighborhood_after_event(
                         df_A, neigh_col, event_time_col
                     )
-                print("Done...")
+                logger.info("Average neighborhood estimation done.")
 
     if not population[0] == population[1]:
         # Remove neighborhood column from neighbor table, rename with actual population name
@@ -1303,7 +1306,7 @@ def mean_neighborhood_before_event(
     suffix = "_before_event"
 
     if event_time_col is None:
-        print(
+        logger.info(
             "No event time was provided... Estimating the mean neighborhood over the whole observation time..."
         )
         neigh_table.loc[:, "event_time_temp"] = neigh_table["FRAME"].max()
@@ -1736,7 +1739,7 @@ def mask_contact_neighborhood(
         elif mode == "self":
             neigh_col = f"neighborhood_self_contact_{d}_px"
         else:
-            print("Please provide a valid mode between `two-pop` and `self`...")
+            logger.error("Please provide a valid mode between `two-pop` and `self`...")
             return None
 
         setA[neigh_col] = np.nan
@@ -1917,12 +1920,12 @@ def compute_contact_neighborhood_at_position(
         cols.append(id_col)
         on_cols = [id_col, "FRAME"]
 
-        print(f"Recover {cols} from the pickle file...")
+        logger.debug(f"Recover {cols} from the pickle file...")
         try:
             df_A = pd.merge(df_A, df_A_pkl.loc[:, cols], how="outer", on=on_cols)
-            print(df_A.columns)
+            logger.debug(f"Merged columns: {list(df_A.columns)}")
         except Exception as e:
-            print(f"Failure to merge pickle and csv files: {e}")
+            logger.warning(f"Failure to merge pickle and csv files: {e}")
 
     if df_B_pkl is not None and df_B is not None:
         pkl_columns = np.array(df_B_pkl.columns)
@@ -1933,11 +1936,11 @@ def compute_contact_neighborhood_at_position(
         cols.append(id_col)
         on_cols = [id_col, "FRAME"]
 
-        print(f"Recover {cols} from the pickle file...")
+        logger.debug(f"Recover {cols} from the pickle file...")
         try:
             df_B = pd.merge(df_B, df_B_pkl.loc[:, cols], how="outer", on=on_cols)
         except Exception as e:
-            print(f"Failure to merge pickle and csv files: {e}")
+            logger.warning(f"Failure to merge pickle and csv files: {e}")
 
     labelsA = locate_labels(pos, population=population[0])
     if population[1] == population[0]:
@@ -1951,7 +1954,7 @@ def compute_contact_neighborhood_at_position(
         unwanted = df_B.columns[df_B.columns.str.contains("neighborhood")]
         df_B = df_B.drop(columns=unwanted)
 
-    print(f"Distance: {distance} for mask contact")
+    logger.debug(f"Distance: {distance} for mask contact")
     df_A, df_B = mask_contact_neighborhood(
         df_A, df_B, labelsA, labelsB, distance, **neighborhood_kwargs
     )
@@ -1993,7 +1996,7 @@ def compute_contact_neighborhood_at_position(
                         event_time_col,
                         metrics=["inclusive", "intermediate"],
                     )
-                print("Done...")
+                logger.info("Average neighborhood estimation done.")
 
     if not population[0] == population[1]:
         # Remove neighborhood column from neighbor table, rename with actual population name
@@ -2025,7 +2028,7 @@ def compute_contact_neighborhood_at_position(
         new_name_map.update({c: new_col_names[k]})
     df_A = df_A.rename(columns=new_name_map)
 
-    print(f"{df_A.columns=}")
+    logger.debug(f"Final df_A columns: {list(df_A.columns)}")
     df_A.to_pickle(path_A.replace(".csv", ".pkl"))
 
     unwanted = df_A.columns[df_A.columns.str.startswith("neighborhood_")]
@@ -2128,7 +2131,7 @@ def extract_neighborhood_in_pair_table(
         df.columns
     ), "The selected neighborhood does not appear in the data..."
 
-    print(df[["reference_population", "neighbor_population", "status_" + neigh_col]])
+    logger.debug(f"Neighborhood table preview:\n{df[['reference_population', 'neighbor_population', 'status_' + neigh_col]]}")
 
     if contact_only:
         s_keep = [1]
@@ -2150,7 +2153,6 @@ def extract_neighborhood_in_pair_table(
 
 if __name__ == "__main__":
 
-    print("None")
     pos = "/home/torro/Documents/Experiments/NKratio_Exp/W5/500"
 
     test, _ = compute_neighborhood_at_position(
@@ -2173,5 +2175,5 @@ if __name__ == "__main__":
     )
 
     # test = compute_neighborhood_metrics(test, 'neighborhood_self_circle_150_px', metrics=['inclusive','exclusive','intermediate'], decompose_by_status=True)
-    print(test.columns)
+    print(list(test.columns))
     # print(segment(None,'test'))

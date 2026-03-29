@@ -1008,8 +1008,8 @@ class ThresholdLineEdit(QLineEdit):
 
         try:
             self.setText(str(value).replace(".", ","))
-        except:
-            print("Please provide a valid threshold value...")
+        except Exception:
+            pass  # value is not representable as string
 
     def get_threshold(self, show_warning: bool = True) -> Optional[Union[float, int]]:
         """

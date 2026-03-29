@@ -690,7 +690,7 @@ class SettingsSegmentationModelTraining(CelldetectiveSettingsPanel):
 
         try:
             lr = float(self.lr_le.text().replace(",", "."))
-        except:
+        except ValueError:
             generic_message("Invalid value encountered for the learning rate.")
             return None
 
