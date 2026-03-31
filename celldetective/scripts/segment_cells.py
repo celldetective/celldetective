@@ -5,6 +5,7 @@ Copright © 2022 Laboratoire Adhesion et Inflammation, Authored by Remy Torro.
 import argparse
 import datetime
 import os
+import sys
 from typing import List
 import json
 from celldetective.utils.model_loaders import locate_segmentation_model
@@ -108,7 +109,7 @@ modelpath = os.sep.join(
 model_complete_path = locate_segmentation_model(modelname)
 if model_complete_path is None:
     logger.error("Model could not be found. Abort.")
-    os.abort()
+    sys.exit(1)
 else:
     logger.info(f"Model path: {model_complete_path}...")
 
@@ -139,7 +140,7 @@ try:
     file = glob(pos + f"movie/{movie_prefix}*.tif")[0]
 except IndexError:
     logger.error("Movie could not be found. Check the prefix.")
-    os.abort()
+    sys.exit(1)
 
 len_movie_auto = auto_load_number_of_frames(file)
 if len_movie_auto is not None:

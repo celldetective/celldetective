@@ -5,6 +5,7 @@ Copyright © 2022 Laboratoire Adhesion et Inflammation, Authored by Remy Torro.
 import argparse
 import datetime
 import os
+import sys
 from art import tprint
 from celldetective.signals import analyze_signals
 from celldetective.utils import COLUMN_LABELS
@@ -50,7 +51,7 @@ if os.path.exists(trajectories):
 	trajectories = pd.read_csv(trajectories)
 else:
 	logger.error("The trajectories table could not be found. Abort.")
-	os.abort()
+	sys.exit(1)
 
 log=f'segmentation model: {model} \n'
 

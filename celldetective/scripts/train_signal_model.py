@@ -4,6 +4,7 @@ Copright © 2023 Laboratoire Adhesion et Inflammation, Authored by Remy Torro.
 
 import argparse
 import os
+import sys
 import json
 from glob import glob
 import numpy as np
@@ -39,7 +40,7 @@ if os.path.exists(instructions):
         threshold_instructions.update({"test_split": 0.0})
 else:
     logger.error("The configuration path is not valid. Abort.")
-    os.abort()
+    sys.exit(1)
 
 all_classes = []
 for d in threshold_instructions["ds"]:

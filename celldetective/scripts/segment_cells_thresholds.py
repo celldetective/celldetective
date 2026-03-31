@@ -4,6 +4,7 @@ Copright © 2022 Laboratoire Adhesion et Inflammation, Authored by Remy Torro.
 
 import argparse
 import os
+import sys
 from typing import List
 import json
 from celldetective.utils.image_loaders import (
@@ -70,7 +71,7 @@ if os.path.exists(threshold_instructions):
 
 else:
     logger.error("The configuration path is not valid. Abort.")
-    os.abort()
+    sys.exit(1)
 
 if mode.lower() == "target" or mode.lower() == "targets":
     label_folder = "labels_targets"
@@ -104,7 +105,7 @@ try:
     file = glob(pos + f"movie/{movie_prefix}*.tif")[0]
 except IndexError:
     logger.error("Movie could not be found. Check the prefix.")
-    os.abort()
+    sys.exit(1)
 
 len_movie_auto = auto_load_number_of_frames(file)
 if len_movie_auto is not None:

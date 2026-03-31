@@ -4,6 +4,7 @@ Copright © 2022 Laboratoire Adhesion et Inflammation, Authored by Remy Torro.
 
 import argparse
 import datetime
+import sys
 from typing import List
 import json
 from celldetective.utils.data_loaders import interpret_tracking_configuration
@@ -154,7 +155,7 @@ if len(label_path) > 0:
     logger.info(f"Found {len(label_path)} segmented frames...")
 else:
     logger.error("No segmented frames have been found. Please run segmentation first. Abort...")
-    os.abort()
+    sys.exit(1)
 
 # Do this if features or Haralick is not None, else don't need stack
 try:

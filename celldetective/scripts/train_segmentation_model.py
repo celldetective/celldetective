@@ -4,6 +4,7 @@ Copright © 2023 Laboratoire Adhesion et Inflammation, Authored by Remy Torro.
 
 import argparse
 import os
+import sys
 import shutil
 from typing import Dict, Any
 from glob import glob
@@ -60,7 +61,7 @@ if os.path.exists(instructions):
         training_instructions = json.load(f)
 else:
     logger.error("Training instructions could not be found. Abort.")
-    os.abort()
+    sys.exit(1)
 
 model_name = training_instructions["model_name"]
 target_directory = training_instructions["target_directory"]

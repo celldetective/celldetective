@@ -31,8 +31,7 @@ def _get_normalize_kwargs_from_config(config: Union[Dict, str]) -> Dict[str, Any
             with open(config) as cfg:
                 config = json.load(cfg)
         else:
-            logger.error("Configuration could not be loaded...")
-            os.abort()
+            raise FileNotFoundError(f"Configuration path does not exist: {config}")
 
     normalization_percentile = config["normalization_percentile"]
     normalization_clip = config["normalization_clip"]
