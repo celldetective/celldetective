@@ -465,8 +465,8 @@ class BinColWidget(GenericOpColWidget):
             else:
                 self.min_le.setText("")
                 self.max_le.setText("")
-        except Exception as _:
-            pass
+        except Exception as e:
+            logger.debug(f"Could not update min/max limits for column '{self.measurements_cb.currentText()}': {e}")
 
     def check_valid_params(self):
         """Check if binning parameters are valid."""
@@ -498,8 +498,8 @@ class BinColWidget(GenericOpColWidget):
                 # check the col is numeric to allow binning
                 if pd.api.types.is_numeric_dtype(self.parent_window.data[col]):
                     data_valid = True
-        except Exception as _:
-            pass
+        except Exception as e:
+            logger.debug(f"Could not validate column data type: {e}")
 
         if not hasattr(self, "submit_btn"):
             return

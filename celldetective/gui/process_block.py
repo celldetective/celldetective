@@ -126,10 +126,6 @@ from celldetective.gui.base.styles import Styles
 from celldetective import get_software_location
 import pandas as pd
 
-import logging
-
-logger = logging.getLogger("celldetective")
-
 
 class ProcessPanel(QFrame, Styles):
 
@@ -254,8 +250,8 @@ class ProcessPanel(QFrame, Styles):
             )
             try:
                 QTimer.singleShot(10, lambda: center_window(self.window()))
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Window centering trigger failed: {e}")
 
     def populate_contents(self) -> None:
         """
@@ -562,8 +558,8 @@ class ProcessPanel(QFrame, Styles):
                 QTimer.singleShot(
                     100, lambda: self.parent_window.update_position_options()
                 )
-            except Exception as _:
-                pass
+            except Exception as e:
+                logger.debug(f"Position options update trigger failed: {e}")
         else:
             return None
 
@@ -971,8 +967,8 @@ class ProcessPanel(QFrame, Styles):
                                         self.event_annotator.height() + 1,
                                     ),
                                 )
-                            except Exception:
-                                pass
+                            except Exception as e:
+                                logger.debug(f"Annotator resize trigger failed: {e}")
                         except Exception as e:
                             logger.error(f"Error finalizing annotator: {e}")
                     else:
@@ -1197,12 +1193,12 @@ class ProcessPanel(QFrame, Styles):
                     try:
                         wdg.resize(wdg.width() + 1, wdg.height() + 1)
                         center_window(wdg)
-                    except Exception as _:
-                        pass
+                    except Exception as e:
+                        logger.debug(f"Widget resize/centering failed: {e}")
 
                 QTimer.singleShot(100, lambda: post_widget(self.classifier_widget))
-            except Exception as _:
-                pass
+            except Exception as e:
+                logger.debug(f"Classifier widget post-show trigger failed: {e}")
 
     def open_signal_annotator_configuration_ui(self) -> None:
         """
@@ -1218,8 +1214,8 @@ class ProcessPanel(QFrame, Styles):
             QTimer.singleShot(
                 100, lambda: center_window(self.settings_signal_annotator)
             )
-        except Exception as _:
-            pass
+        except Exception as e:
+            logger.debug(f"Signal annotator centering trigger failed: {e}")
 
     def reset_generalist_setup(self, index: int) -> None:
         """
@@ -1303,8 +1299,8 @@ class ProcessPanel(QFrame, Styles):
                     remove_file_if_exists(t.replace(".csv", ".pkl"))
                     try:
                         os.remove(t)
-                    except OSError:
-                        pass
+                    except OSError as e:
+                        logger.debug(f"Could not remove table file {t}: {e}")
 
         if self.seg_model_list.currentIndex() > self.n_specific_seg_models:
             self.model_name = self.seg_models[self.seg_model_list.currentIndex() - 1]

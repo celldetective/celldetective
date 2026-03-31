@@ -846,7 +846,7 @@ class MeasureAnnotator(BaseAnnotator):
             try:
                 self.cell_ax.boxplot(all_yvalues, showfliers=self.show_fliers)
             except Exception as e:
-                logger.error(f"{e=}")
+                logger.error(f"{e}")
 
             x_pos = np.arange(len(all_yvalues)) + 1
             for index, feature in enumerate(current_yvalues):

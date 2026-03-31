@@ -122,8 +122,8 @@ class NeighPanel(QFrame, Styles):
             )
             try:
                 QTimer.singleShot(10, lambda: center_window(self.window()))
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Window centering trigger failed: {e}")
 
     def populate_contents(self):
         """

@@ -987,8 +987,8 @@ class NeighborhoodProcess(Process):
                                     "FRAME",
                                 ]
                             )
-                        except KeyError:
-                            pass
+                        except KeyError as e:
+                            logger.debug(f"Could not sort pair table (missing column): {e}")
 
                         df_pairs.to_csv(previous_pair_table_path, index=False)
                         logger.info(f"Pair measurements saved to {previous_pair_table_path}")

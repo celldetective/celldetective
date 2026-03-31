@@ -145,7 +145,7 @@ class PivotTableUI(CelldetectiveWidget):
             except Exception as e:
                 logger.error(f"Failed to export pivot table: {e}")
                 QMessageBox.critical(
-                    self, "Export Error", f"Failed to export data: {str(e)}"
+                    self, "Export Error", f"Failed to export data: {e}"
                 )
 
     def adjust_window_size(self) -> None:
@@ -1198,8 +1198,8 @@ class TableUI(CelldetectiveMainWindow):
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore")
                     self.cmap_cb.addColormap(name)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Could not add colormap '{name}' to selector: {e}")
 
         hbox = QHBoxLayout()
         hbox.addWidget(QLabel("colormap: "), 33)
@@ -1716,8 +1716,7 @@ class TableUI(CelldetectiveMainWindow):
                         c
                     ].apply(lambda x: x.unique()[0])
                 except Exception as e:
-                    logger.error(str(e))
-                    pass
+                    logger.error(f"{e}")
 
             if self.population == "pairs":
                 for col in reversed(

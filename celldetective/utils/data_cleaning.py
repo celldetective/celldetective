@@ -164,7 +164,7 @@ def extract_cols_from_table_list(tables: List[str], nrows: int = 1) -> np.ndarra
             cols = pd.read_csv(tab, nrows=nrows).columns.tolist()
             all_columns.extend(cols)
         except pd.errors.EmptyDataError:
-            pass
+            logger.debug(f"Skipping empty table file: {tab}")
         except Exception as e:
             logger.warning(f"Error reading {tab}: {e}")
 
@@ -422,12 +422,12 @@ def remove_redundant_features(
 
     """
 
-    new_features = features[:]
+    to_remove = set()
 
     for f in features:
 
         if f in reference_features:
-            new_features.remove(f)
+            to_remove.add(f)
 
         if ("intensity" in f) and (channel_names is not None):
 
@@ -436,11 +436,9 @@ def remove_redundant_features(
 
             for p in pattern:
                 if p in reference_features:
-                    try:
-                        new_features.remove(f)
-                    except ValueError:
-                        pass
-    return new_features
+                    to_remove.add(f)
+
+    return [f for f in features if f not in to_remove]
 
 
 def remove_trajectory_measurements(

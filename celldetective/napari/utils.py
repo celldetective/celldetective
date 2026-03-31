@@ -899,8 +899,8 @@ def control_segmentation_napari(
                 try:
                     frame = viewer.layers[f"Image [{i + 1}]"].data[t]
                     multichannel.append(frame)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Could not extract frame from layer Image [{i + 1}] at t={t}: {e}")
             multichannel = np.array(multichannel)
             save_tiff_imagej_compatible(
                 annotation_folder
@@ -961,7 +961,7 @@ def control_segmentation_napari(
     try:
         viewer.window._qt_window.setWindowIcon(Styles().celldetective_icon)
     except Exception as e:
-        pass
+        logger.debug(f"Could not set napari window icon: {e}")
     viewer.add_image(
         stack,
         channel_axis=-1,
@@ -1008,12 +1008,12 @@ def control_segmentation_napari(
     viewer.show(block=True)
 
     if flush_memory:
-        # temporary fix for slight napari memory leak
+        # temporary fix for slight napari memory leak — pop until IndexError (empty)
         for i in range(10000):
             try:
                 viewer.layers.pop()
             except Exception:
-                pass
+                break
 
         del viewer
         del stack

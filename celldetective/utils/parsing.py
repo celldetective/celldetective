@@ -195,8 +195,8 @@ def _extract_nbr_channels_from_config(
                 channels.append(c)
             except (TypeError, ValueError):
                 pass
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"Could not read [Channels] section from config: {e}")
 
     if nbr_channels == 0:
 
@@ -365,8 +365,8 @@ def _extract_channels_from_config(config: str) -> Tuple[np.ndarray, np.ndarray]:
                 channel_indices.append(idx)
             except (TypeError, ValueError, KeyError):
                 pass
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"Could not read [Channels] section from config: {e}")
 
     channel_indices = np.array(channel_indices)
     channel_names = np.array(channel_names)

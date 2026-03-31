@@ -132,9 +132,9 @@ X_trn, Y_trn = [X[i] for i in ind_train], [Y[i] for i in ind_train]
 files_train = [filenames[i] for i in ind_train]
 files_val = [filenames[i] for i in ind_val]
 
-logger.info("number of images: %3d" % len(X))
-logger.info("- training:       %3d" % len(X_trn))
-logger.info("- validation:     %3d" % len(X_val))
+logger.info(f"number of images: {len(X):3d}")
+logger.info(f"- training:       {len(X_trn):3d}")
+logger.info(f"- validation:     {len(X_val):3d}")
 
 if model_type == "cellpose":
 
@@ -152,7 +152,7 @@ if model_type == "cellpose":
     # Channel axis in front for cellpose_utils
     X_aug = [np.moveaxis(x, -1, 0) for x in X_aug]
     X_val = [np.moveaxis(x, -1, 0) for x in X_val]
-    logger.info("number of augmented images: %3d" % len(X_aug))
+    logger.info(f"number of augmented images: {len(X_aug):3d}")
 
     from cellpose.models import CellposeModel
     from cellpose.io import logger_setup

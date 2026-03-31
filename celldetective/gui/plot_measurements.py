@@ -823,8 +823,8 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
                         matrix[cid, loc_t + 1] = second_feature
 
                     cid += 1
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Could not build matrix row for cell {cid}: {e}")
         return matrix
 
     def col_mean(self, matrix: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
@@ -1545,7 +1545,7 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
             self.fig_scatter.canvas.mpl_connect("motion_notify_event", self.hover)
             self.fig_scatter.canvas.mpl_connect("pick_event", self.unselect_position)
         except Exception as e:
-            pass
+            logger.debug(f"Could not set up scatter plot interactivity: {e}")
 
     def switch_ref_time_mode(self) -> None:
         """

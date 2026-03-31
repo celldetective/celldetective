@@ -1145,7 +1145,7 @@ def auto_load_number_of_frames(stack_path: str) -> Optional[int]:
                 attr[np.argmax([s.startswith("channels") for s in attr])].split("=")[-1]
             )
         except Exception as e:
-            pass
+            logger.debug(f"Could not parse channel count from TIFF tags, defaulting to 1: {e}")
         try:
             nslices = int(
                 attr[np.argmax([s.startswith("frames") for s in attr])].split("=")[-1]
@@ -1223,7 +1223,8 @@ def locate_stack(
                 memmap(stack_path[0].replace("\\", "/")), chunks=(1, None, None)
             )
         except ValueError:
-            pass
+            logger.debug("Lazy memmap failed, falling back to eager load.")
+            stack = imread(stack_path[0].replace("\\", "/"))
     else:
         stack = imread(stack_path[0].replace("\\", "/"))
 
@@ -1521,7 +1522,7 @@ def get_position_table(
         try:
             df_pos = pd.read_csv(table, low_memory=False)
         except Exception as e:
-            logger.error(e)
+            logger.error(f"{e}")
             df_pos = None
     else:
         df_pos = None

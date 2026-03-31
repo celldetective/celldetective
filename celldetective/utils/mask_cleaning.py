@@ -35,7 +35,6 @@ def fill_label_holes(lbl_img: np.ndarray, **kwargs: Any) -> np.ndarray:
         Label image with filled holes.
     """
 
-    # TODO: refactor 'fill_label_holes' and 'edt_prob' to share code
     def grow(
         sl: Tuple[slice, ...], interior: List[Tuple[bool, bool]]
     ) -> Tuple[slice, ...]:

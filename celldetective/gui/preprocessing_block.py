@@ -137,13 +137,13 @@ class PreprocessingPanel(QFrame, Styles):
                 """
                 try:
                     center_window(self.window())
-                except RuntimeError:
-                    pass
+                except RuntimeError as e:
+                    logger.debug(f"Window centering failed: {e}")
 
             try:
                 QTimer.singleShot(10, safe_center)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Window centering trigger failed: {e}")
 
     def populate_contents(self):
         """

@@ -133,15 +133,7 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
             [c.startswith("class") for c in list(self.df_tracks.columns)]
         )
 
-        self.class_cols = list(cols[self.class_cols])
-        try:
-            self.class_cols.remove("class_id")
-        except Exception:
-            pass
-        try:
-            self.class_cols.remove("class_color")
-        except Exception:
-            pass
+        self.class_cols = [c for c in list(cols[self.class_cols]) if c not in ("class_id", "class_color")]
 
         self.class_choice_cb.addItems(self.class_cols)
         self.class_choice_cb.currentIndexChanged.connect(self.compute_status_and_colors)
@@ -565,8 +557,8 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
         super().resizeEvent(event)
         try:
             self.cell_fig.tight_layout()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"tight_layout failed on resize: {e}")
 
     def locate_tracks(self):
         """Locate the trajectories file."""
@@ -592,15 +584,7 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
             self.class_cols = np.array(
                 [c.startswith("class") for c in list(self.df_tracks.columns)]
             )
-            self.class_cols = list(cols[self.class_cols])
-            try:
-                self.class_cols.remove("class_id")
-            except ValueError:
-                pass
-            try:
-                self.class_cols.remove("class_color")
-            except ValueError:
-                pass
+            self.class_cols = [c for c in list(cols[self.class_cols]) if c not in ("class_id", "class_color")]
             if len(self.class_cols) > 0:
                 self.class_name = self.class_cols[0]
                 self.expected_status = "status"
@@ -723,11 +707,7 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
             status_cols = list(cols[status_cols])
             cols_to_remove += status_cols
 
-            for tr in cols_to_remove:
-                try:
-                    self.columns_to_rescale.remove(tr)
-                except ValueError:
-                    pass
+            self.columns_to_rescale = [c for c in self.columns_to_rescale if c not in cols_to_remove]
 
             x = self.df_tracks[self.columns_to_rescale].values
             self.MinMaxScaler.fit(x)
@@ -754,7 +734,7 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
                 try:
                     self.df_tracks = self.df_tracks.drop([c], axis=1)
                 except Exception as e:
-                    logger.error(e)
+                    logger.error(f"{e}")
             item_idx = self.class_choice_cb.findText(class_to_delete)
             self.class_choice_cb.removeItem(item_idx)
 
@@ -797,7 +777,7 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
                 self.log_btn.setIcon(icon(MDI6.math_log, color="black"))
                 self.log_scale = False
         except Exception as e:
-            logger.error(e)
+            logger.error(f"{e}")
 
         # self.cell_ax.autoscale()
         self.cell_fcanvas.canvas.draw_idle()
@@ -971,11 +951,11 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
         try:
             self.selection.pop(0)
         except Exception as e:
-            pass
+            logger.debug(f"Could not pop selection: {e}")
 
         try:
             for k, (t, idx) in enumerate(zip(self.loc_t, self.loc_idx)):
                 self.colors[t][idx, 0] = self.previous_color[k][0]
                 # self.colors[t][idx, 1] = self.previous_color[k][1]
         except Exception as e:
-            pass
+            logger.debug(f"Could not revert colors on cancel: {e}")

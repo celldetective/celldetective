@@ -77,8 +77,8 @@ class BackgroundLoader(QThread):
             import scipy.ndimage
             import tifffile
             import numpy
-        except Exception:
-            logger.error("Background packages not loaded...")
+        except Exception as e:
+            logger.error(f"Background packages not loaded: {e}")
         logger.info("Background packages loaded...")
 
 
@@ -660,7 +660,7 @@ class AppInitWindow(CelldetectiveMainWindow):
                 QMessageBox.critical(
                     self,
                     "Error Loading Experiment",
-                    f"Could not load experiment configuration.\n\nError: {str(e)}\n\nPlease ensure 'config.ini' exists in the selected folder.",
+                    f"Could not load experiment configuration.\n\nError: {e}\n\nPlease ensure 'config.ini' exists in the selected folder.",
                 )
                 return
 

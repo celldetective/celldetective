@@ -413,8 +413,8 @@ def auto_load_number_of_frames(stack_path: str) -> Optional[int]:
                         len_movie = shape[axes.index("C")]
                     else:
                         len_movie = 1
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Strategy 1 (series metadata) failed, falling back: {e}")
 
         # --- Strategy 2: ImageJ tag parsing (existing logic) ---
         if len_movie is None:
@@ -430,8 +430,8 @@ def auto_load_number_of_frames(stack_path: str) -> Optional[int]:
                         "="
                     )[-1]
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Could not parse channel count from ImageJ tags: {e}")
             try:
                 nslices = int(
                     attr[np.argmax([s.startswith("frames") for s in attr])].split("=")[
@@ -450,8 +450,8 @@ def auto_load_number_of_frames(stack_path: str) -> Optional[int]:
                         )[-1]
                     )
                     len_movie = frames
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Strategy 2 (ImageJ tag parsing) failed, falling back: {e}")
 
     # --- Strategy 3: shape inference fallback ---
     if len_movie is None:

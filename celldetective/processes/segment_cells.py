@@ -586,7 +586,7 @@ class SegmentCellDLProcess(BaseSegmentProcess):
                 )
 
         except Exception as e:
-            logger.error(e)
+            logger.error(f"{e}")
 
         try:
             del model
@@ -779,7 +779,7 @@ class SegmentCellThresholdProcess(BaseSegmentProcess):
                 gc.collect()
 
         except Exception as e:
-            logger.error(e)
+            logger.error(f"{e}")
 
         return
 

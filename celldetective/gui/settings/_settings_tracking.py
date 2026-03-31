@@ -857,7 +857,7 @@ class SettingsTracking(CelldetectiveSettingsPanel):
                 copyfile(self.filename, self.config_path)
             self.load_cell_config()
         except Exception as e:
-            logger.error(e)
+            logger.error(f"{e}")
             return None
 
     def reset_btrack_config(self):

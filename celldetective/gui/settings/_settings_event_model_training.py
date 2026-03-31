@@ -564,7 +564,7 @@ class SettingsEventDetectionModelTraining(CelldetectiveSettingsPanel):
             label = data["label"]
             self.class_name_le.setText(label)
         except KeyError:
-            pass
+            logger.debug("Model config has no 'label' field; class name not pre-filled.")
         self.model_length_slider.setValue(int(signal_length))
         self.model_length_slider.setEnabled(False)
 

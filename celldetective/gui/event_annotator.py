@@ -535,7 +535,7 @@ class EventAnnotator(BaseAnnotator):
             for k, (t, idx) in enumerate(zip(self.loc_t, self.loc_idx)):
                 self.colors[t][idx, 1] = self.previous_color[k][1]
         except Exception as e:
-            pass
+            logger.debug(f"Could not revert colors on cancel: {e}")
 
     def hide_annotation_buttons(self):
         """Hide annotation buttons."""
@@ -1211,8 +1211,8 @@ class EventAnnotator(BaseAnnotator):
             if hasattr(self, "_pick_cid"):
                 try:
                     self.fig.canvas.mpl_disconnect(self._pick_cid)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Could not disconnect pick event: {e}")
 
             self.anim = FuncAnimation(
                 self.fig,

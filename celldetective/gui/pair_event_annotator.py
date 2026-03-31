@@ -1451,11 +1451,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         neigh_cols = [c for c in self.pair_columns if c.startswith("neighborhood_")]
         cols_to_remove += neigh_cols
 
-        for col in cols_to_remove:
-            try:
-                self.pair_columns.remove(col)
-            except Exception:
-                pass
+        self.pair_columns = [c for c in self.pair_columns if c not in cols_to_remove]
 
         x = self.df_relative[self.pair_columns].values
         self.MinMaxScaler_pairs.fit(x)
@@ -2152,8 +2148,8 @@ class PairEventAnnotator(CelldetectiveMainWindow):
 
         try:
             self.relative_class_choice_cb.disconnect()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Could not disconnect relative_class_choice_cb: {e}")
 
         self.relative_class_choice_cb.clear()
 
@@ -2245,29 +2241,29 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         """
         try:
             self.stop()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Could not stop annotator cleanly: {e}")
 
         # Stop and delete animation to break reference cycles
         if hasattr(self, "anim") and self.anim:
             try:
                 self.anim.event_source.stop()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Could not stop animation event source: {e}")
             del self.anim
 
         # Close matplotlib figures
         if hasattr(self, "fig"):
             try:
                 plt.close(self.fig)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Could not close figure: {e}")
 
         if hasattr(self, "cell_fig"):
             try:
                 plt.close(self.cell_fig)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Could not close cell figure: {e}")
 
         # Delete large objects
         if hasattr(self, "stack"):

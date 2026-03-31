@@ -433,7 +433,7 @@ class SegmentationModelLoader(CelldetectiveWidget):
                     del model
                     gc.collect()
                 except Exception as e:
-                    logger.error(str(e))
+                    logger.error(f"{e}")
                     msgBox = QMessageBox()
                     msgBox.setIcon(QMessageBox.Critical)
                     msgBox.setText(f"Cellpose model could not be loaded...")
@@ -603,11 +603,11 @@ class SegmentationModelLoader(CelldetectiveWidget):
                         self.thresh_wizard.width() + 1,
                         self.thresh_wizard.height() + 1,
                     )
-                except RuntimeError:
-                    pass
+                except RuntimeError as e:
+                    logger.debug(f"Wizard resize failed during layout: {e}")
 
             try:
                 QTimer.singleShot(100, safe_resize)
                 center_window(self.thresh_wizard)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Window resize/centering trigger failed: {e}")

@@ -1,7 +1,10 @@
+import logging
 import random
 from typing import Tuple
 
 import numpy as np
+
+logger = logging.getLogger("celldetective")
 from scipy.ndimage import shift
 from skimage.filters import gaussian
 from skimage.util import random_noise
@@ -167,8 +170,8 @@ def noise(
                     x_noise[:, :, k] = random_noise(
                         x_noise[:, :, k], mode=m, clip=clip_option
                     )
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"random_noise augmentation failed (mode={m}): {e}")
 
     x_noise[loc_i, loc_j, loc_c] = 0.0
 

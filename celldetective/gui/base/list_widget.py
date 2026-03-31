@@ -105,7 +105,7 @@ class ListWidget(CelldetectiveWidget):
         try:
             QTimer.singleShot(10, lambda: center_window(self.addItemWindow))
         except Exception as e:
-            pass
+            logger.debug(f"Window centering trigger failed: {e}")
 
     def addItemToList(self, item: str) -> None:
         """
@@ -175,6 +175,6 @@ class ListWidget(CelldetectiveWidget):
             return
         for item in listItems:
             idx = self.list_widget.row(item)
-            if self.items:
+            if idx < len(self.items):
                 del self.items[idx]
             self.list_widget.takeItem(idx)

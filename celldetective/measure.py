@@ -318,7 +318,7 @@ def measure(
                 + (measurements_at_t[column_labels["y"]] - img.shape[1] / 2) ** 2
             )
         except Exception as e:
-            logger.error(f"{e=}")
+            logger.error(f"{e}")
 
         timestep_dataframes.append(measurements_at_t)
 

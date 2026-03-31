@@ -347,7 +347,7 @@ def track(
         try:
             df, data = _run_trackpy_tracking(objects, search_range, memory, column_labels)
         except ValueError as e:
-            logger.error(str(e))
+            logger.error(f"{e}")
             return None
 
     if btrack_option:

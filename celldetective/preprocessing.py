@@ -266,7 +266,7 @@ def estimate_background_per_condition(
             backgrounds.append({"bg": background, "well": well_path})
             logger.info(f"Background successfully computed for well {well_name}...")
         except Exception as e:
-            logger.error(e)
+            logger.error(f"{e}")
             backgrounds.append(None)
 
     return backgrounds

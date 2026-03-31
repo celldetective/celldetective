@@ -52,5 +52,5 @@ class QueryWidget(CelldetectiveWidget):
             self.subtable.show()
             self.close()
         except Exception as e:
-            logger.error(str(e))
+            logger.error(f"{e}")
             return None

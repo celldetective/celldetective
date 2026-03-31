@@ -1,11 +1,15 @@
 from typing import Optional
 
+import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QCloseEvent, QResizeEvent
 from PyQt5.QtWidgets import QVBoxLayout
 
 from celldetective.gui.base.components import CelldetectiveWidget
+from celldetective import get_logger
+
+logger = get_logger(__name__)
 
 
 class FigureCanvas(CelldetectiveWidget):
@@ -78,8 +82,8 @@ class FigureCanvas(CelldetectiveWidget):
 
             if not manual_layout:
                 self.fig.tight_layout()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"tight_layout failed on resize: {e}")
 
     def draw(self):
         """Draw the canvas."""
@@ -94,10 +98,6 @@ class FigureCanvas(CelldetectiveWidget):
         event : QCloseEvent
             The close event.
         """
-        # self.canvas.ax.cla() # ****
-        # self.canvas.ax.cla() # ****
-        self.fig.clf()  # ****
-        import matplotlib.pyplot as plt
-
+        self.fig.clf()
         plt.close(self.fig)
         super(FigureCanvas, self).closeEvent(event)

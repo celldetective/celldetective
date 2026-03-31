@@ -338,7 +338,7 @@ class TrackingProcess(Process):
                 self.queue.put(data)
 
         except Exception as e:
-            logger.error(e)
+            logger.error(f"{e}")
             traceback.print_exc()
 
         return props

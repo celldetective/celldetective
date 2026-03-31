@@ -949,7 +949,7 @@ class SettingsMeasurements(CelldetectiveSettingsPanel):
             try:
                 QTimer.singleShot(100, lambda: center_window(self.hist_window))
             except Exception as e:
-                pass
+                logger.debug(f"Window centering trigger failed: {e}")
 
     def view_selected_contour(self):
         """
