@@ -1,6 +1,9 @@
+import logging
 from PyQt5.QtCore import QTimer
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QListWidget
 from typing import Optional
+
+logger = logging.getLogger("celldetective")
 
 from celldetective.gui.base.components import CelldetectiveWidget
 from celldetective.gui.base.utils import center_window
@@ -151,9 +154,7 @@ class ListWidget(CelldetectiveWidget):
             try:
                 items.append(self.dtype(text))
             except ValueError:
-                print(
-                    f"Warning: Could not convert '{text}' to {self.dtype.__name__}, skipping..."
-                )
+                logger.warning(f"Could not convert '{text}' to {self.dtype.__name__}, skipping...")
         return items
 
     def clear(self):

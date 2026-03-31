@@ -1,7 +1,11 @@
+import logging
+
 from PyQt5.QtWidgets import QHBoxLayout, QLineEdit, QPushButton, QMainWindow
 
 from celldetective.gui.base.components import CelldetectiveWidget
 from celldetective.gui.base.utils import center_window
+
+logger = logging.getLogger("celldetective")
 
 
 class QueryWidget(CelldetectiveWidget):
@@ -48,5 +52,5 @@ class QueryWidget(CelldetectiveWidget):
             self.subtable.show()
             self.close()
         except Exception as e:
-            print(e)
+            logger.error(str(e))
             return None

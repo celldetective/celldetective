@@ -266,7 +266,7 @@ class PreprocessingPanel(QFrame, Styles):
                 export_prefix = None
 
             if correction_protocol["correction_type"] == "model-free":
-                print(f"Model-free correction; {movie_prefix=} {export_prefix=}")
+                logger.info(f"Model-free correction; movie_prefix={movie_prefix} export_prefix={export_prefix}")
                 from celldetective.gui.workers import ProgressWindow
                 from celldetective.processes.background_correction import (
                     BackgroundCorrectionProcess,
@@ -298,8 +298,8 @@ class PreprocessingPanel(QFrame, Styles):
                     return None
 
             elif correction_protocol["correction_type"] == "fit":
-                print(
-                    f"Fit correction; {movie_prefix=} {export_prefix=} {correction_protocol=}"
+                logger.info(
+                    f"Fit correction; movie_prefix={movie_prefix} export_prefix={export_prefix} correction_protocol={correction_protocol}"
                 )
                 from celldetective.gui.workers import ProgressWindow
                 from celldetective.processes.background_correction import (

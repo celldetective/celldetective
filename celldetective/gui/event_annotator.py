@@ -42,6 +42,9 @@ from matplotlib.animation import FuncAnimation
 from matplotlib.cm import tab10
 from typing import Optional, Tuple, Any
 from celldetective.gui.base_annotator import BaseAnnotator
+import logging
+
+logger = logging.getLogger("celldetective")
 
 
 class StackLoaderThread(QThread):
@@ -97,7 +100,7 @@ class StackLoaderThread(QThread):
             if not self._is_cancelled:
                 self.finished.emit()
         except Exception as e:
-            print(f"Error in loader thread: {e}")
+            logger.error(f"Error in loader thread: {e}")
             self.finished.emit()
 
 
@@ -663,9 +666,7 @@ class EventAnnotator(BaseAnnotator):
     def make_status_column(self):
         """Create the status column based on class and time."""
 
-        print(
-            f"Generating status information for class `{self.class_name}` and time `{self.time_name}`..."
-        )
+        logger.info(f"Generating status information for class `{self.class_name}` and time `{self.time_name}`...")
         for tid, group in self.df_tracks.groupby("TRACK_ID"):
 
             indices = group.index
@@ -795,8 +796,7 @@ class EventAnnotator(BaseAnnotator):
             self.cell_ax.legend(fontsize=8)
             self.cell_fcanvas.canvas.draw()
         except Exception as e:
-            print(e)
-            pass
+            logger.warning(f"Failed to update cell plot: {e}")
 
         if len(range_values) > 0:
             range_values = np.array(range_values)
@@ -1045,7 +1045,7 @@ class EventAnnotator(BaseAnnotator):
         self.no_event_shortcut.setEnabled(True)
 
         self.track_of_interest = self.tracks[timepoint][index]
-        print(f"You selected cell #{self.track_of_interest}...")
+        logger.info(f"You selected cell #{self.track_of_interest}...")
         self.give_cell_information()
         self.plot_signals()
 
@@ -1111,8 +1111,7 @@ class EventAnnotator(BaseAnnotator):
                     smallest_value - pad_small, largest_value + pad_large
                 )
         except Exception as e:
-            print(f"L1170 {e=}")
-            pass
+            logger.warning(f"Failed to update cell plot y-limits: {e}")
 
     def draw_frame(self, framedata: int) -> Tuple[Any, ...]:
         """
@@ -1195,9 +1194,7 @@ class EventAnnotator(BaseAnnotator):
         # FPS = 1000 / interval_ms => interval_ms = 1000 / FPS
         val = int(1000 / max(1, fps))
         self.anim_interval = val
-        print(
-            f"DEBUG: Speed slider moved. FPS: {fps} -> Interval: {val} ms. Recreating animation object."
-        )
+        logger.debug(f"Speed slider moved. FPS: {fps} -> Interval: {val} ms. Recreating animation object.")
 
         # Check if animation is allowed to run (Pause button is visible means we are Playing)
         should_play = self.stop_btn.isVisible()
@@ -1206,7 +1203,7 @@ class EventAnnotator(BaseAnnotator):
             try:
                 self.anim.event_source.stop()
             except Exception as e:
-                print(f"DEBUG: Error stopping animation: {e}")
+                logger.debug(f"Error stopping animation: {e}")
 
         # Recreate animation with new interval
         try:
@@ -1236,7 +1233,7 @@ class EventAnnotator(BaseAnnotator):
                 self.anim.event_source.stop()
 
         except Exception as e:
-            print(f"DEBUG: Error recreating animation: {e}")
+            logger.debug(f"Error recreating animation: {e}")
 
     def give_cell_information(self):
         """Display cell information."""
@@ -1258,7 +1255,7 @@ class EventAnnotator(BaseAnnotator):
             self.df_tracks[self.df_tracks[self.class_name] > 2].index
         )
         self.df_tracks.to_csv(self.trajectories_path, index=False)
-        print("Table successfully exported...")
+        logger.info("Table successfully exported...")
         if self.class_choice_cb.currentText() != "":
             self.compute_status_and_colors(0)
         self.extract_scatter_from_trajectories()

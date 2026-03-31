@@ -640,15 +640,15 @@ class TableUI(CelldetectiveMainWindow):
         self.current_data = data
         skip_projection = False
         if "reference_tracked" in list(self.current_data.columns):
-            print(
-                f"{self.current_data['reference_tracked']=} {(self.current_data['reference_tracked']==False)=} {np.all(self.current_data['reference_tracked']==False)=}"
+            logger.debug(
+                f"reference_tracked={self.current_data['reference_tracked']} (reference_tracked==False)={(self.current_data['reference_tracked']==False)} np.all(reference_tracked==False)={np.all(self.current_data['reference_tracked']==False)}"
             )
             if np.all(self.current_data["reference_tracked"].astype(bool) == False):
                 # reference not tracked
                 if self.groupby_reference_rb.isChecked():
                     self.groupby_cols = ["position", "FRAME", "REFERENCE_ID"]
                 elif self.groupby_pair_rb.isChecked():
-                    print(
+                    logger.warning(
                         "The reference cells seem to not be tracked. No collapse can be performed."
                     )
                     skip_projection = True
@@ -656,7 +656,7 @@ class TableUI(CelldetectiveMainWindow):
                 if np.all(self.current_data["neighbors_tracked"].astype(bool) == False):
                     # neighbors not tracked
                     if self.groupby_pair_rb.isChecked():
-                        print(
+                        logger.warning(
                             "The neighbor cells seem to not be tracked. No collapse can be performed."
                         )
                         skip_projection = True
@@ -1641,7 +1641,7 @@ class TableUI(CelldetectiveMainWindow):
         selected_plots = self.plot_selector.get_selection()
 
         if "countplot" in selected_plots or "scatter plot" in selected_plots:
-            print(
+            logger.warning(
                 "Please select a valid plot representation to compute effect size (histogram, boxplot, etc.)..."
             )
             return None
@@ -1662,7 +1662,7 @@ class TableUI(CelldetectiveMainWindow):
         selected_plots = self.plot_selector.get_selection()
 
         if "countplot" in selected_plots or "scatter plot" in selected_plots:
-            print(
+            logger.warning(
                 "Please select a valid plot representation to compute effect size (histogram, boxplot, etc.)..."
             )
             return None
@@ -1716,7 +1716,7 @@ class TableUI(CelldetectiveMainWindow):
                         c
                     ].apply(lambda x: x.unique()[0])
                 except Exception as e:
-                    print(e)
+                    logger.error(str(e))
                     pass
 
             if self.population == "pairs":

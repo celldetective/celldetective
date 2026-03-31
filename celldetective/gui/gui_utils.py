@@ -28,9 +28,12 @@ from celldetective import get_software_location
 from celldetective.filters import *
 from os import sep
 import json
+import logging
 from typing import Optional, List, Tuple, Dict, Any, Union
 import pandas as pd
 import numpy as np
+
+logger = logging.getLogger("celldetective")
 
 
 class PreprocessingLayout(QVBoxLayout, Styles):
@@ -147,7 +150,7 @@ class PreprocessingLayout(QVBoxLayout, Styles):
 
         suggestion = help_generic(d)
         if isinstance(suggestion, str):
-            print(f"{suggestion=}")
+            logger.debug(f"suggestion={suggestion}")
             msgBox = QMessageBox()
             msgBox.setIcon(QMessageBox.Information)
             msgBox.setTextFormat(Qt.RichText)
@@ -682,7 +685,7 @@ class FilterChoice(CelldetectiveWidget):
             elif arg != "":
                 filter_instructions.append(arg)
 
-        print(f"You added filter {filter_instructions}.")
+        logger.info(f"You added filter {filter_instructions}.")
 
         # Update items BEFORE adding to widget to ensure signals pick up the new state
         self.parent_window.items.append(filter_instructions)

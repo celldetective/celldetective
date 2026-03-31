@@ -289,8 +289,8 @@ class TrainSignalModelProcess(Process):
                 model_config_path = os.sep.join([complete_path, "config_input.json"])
                 model_config_path = rf"{model_config_path}"
 
-                f = open(model_config_path)
-                config = json.load(f)
+                with open(model_config_path) as f:
+                    config = json.load(f)
                 config.update(
                     {
                         "neighborhood_of_interest": self.training_instructions[

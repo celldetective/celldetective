@@ -15,6 +15,9 @@ from pathlib import Path, PurePath
 import pandas as pd
 
 from art import tprint
+import logging
+
+logger = logging.getLogger("celldetective")
 
 
 tprint("Measure pairs")
@@ -37,7 +40,7 @@ expfolder = parent1.parent
 config = PurePath(expfolder, Path("config.ini"))
 if not os.path.exists(config):
     raise FileNotFoundError("The configuration file for the experiment could not be located. Abort.")
-print("Configuration file: ", config)
+logger.info(f"Configuration file: {config}")
 
 # from exp config fetch spatial calib, channel names
 movie_prefix = config_section_to_dict(config, "MovieSettings")["movie_prefix"]
@@ -75,12 +78,12 @@ if os.path.exists(previous_pair_table_path):
         associated_reference_population.append(
             df_0.loc[~df_0["status_" + n].isnull(), "reference_population"].values[0]
         )
-    print(f"{previous_neighborhoods=} {associated_reference_population=}")
+    logger.debug(f"previous_neighborhoods={previous_neighborhoods} associated_reference_population={associated_reference_population}")
     all_df_pairs.append(df_0)
 for k, neigh_protocol in enumerate(neighborhoods_to_measure):
     if neigh_protocol["description"] not in previous_neighborhoods:
         df_pairs = measure_pair_signals_at_position(pos, neigh_protocol)
-        print(f"{df_pairs=}")
+        logger.debug(f"df_pairs={df_pairs}")
         if "REFERENCE_ID" in list(df_pairs.columns):
             all_df_pairs.append(df_pairs)
     elif (
@@ -94,10 +97,10 @@ for k, neigh_protocol in enumerate(neighborhoods_to_measure):
         if "REFERENCE_ID" in list(df_pairs.columns):
             all_df_pairs.append(df_pairs)
 
-print(f"{len(all_df_pairs)} neighborhood measurements sets were computed...")
+logger.info(f"{len(all_df_pairs)} neighborhood measurements sets were computed...")
 
 if len(all_df_pairs) > 1:
-    print("Merging...")
+    logger.info("Merging...")
     df_pairs = all_df_pairs[0]
     for i in range(1, len(all_df_pairs)):
         cols = [
@@ -115,10 +118,10 @@ elif len(all_df_pairs) == 1:
     df_pairs = all_df_pairs[0]
 else:
     df_pairs = None
-    print("No dataframe could be computed for the pairs...")
+    logger.warning("No dataframe could be computed for the pairs...")
 
 if df_pairs is not None:
-    print("Writing table...")
+    logger.info("Writing table...")
     if "reference_population" in list(
         df_pairs.columns
     ) and "neighbor_population" in list(df_pairs.columns):
@@ -132,4 +135,4 @@ if df_pairs is not None:
             ]
         )
     df_pairs.to_csv(previous_pair_table_path, index=False)
-    print("Done.")
+    logger.info("Done.")

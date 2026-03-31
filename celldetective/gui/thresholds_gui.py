@@ -337,7 +337,7 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
 
         suggestion = help_generic(d)
         if isinstance(suggestion, str):
-            print(f"{suggestion=}")
+            logger.debug(f"suggestion={suggestion}")
             message_box = QMessageBox()
             message_box.setIcon(QMessageBox.Information)
             message_box.setTextFormat(Qt.RichText)

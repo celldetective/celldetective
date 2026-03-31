@@ -9,6 +9,9 @@ from art import tprint
 from celldetective.signals import analyze_signals
 from celldetective.utils import COLUMN_LABELS
 import pandas as pd
+import logging
+
+logger = logging.getLogger("celldetective")
 
 tprint("Signals")
 
@@ -46,7 +49,7 @@ trajectories = pos+os.sep.join(['output','tables', table_name])
 if os.path.exists(trajectories):
 	trajectories = pd.read_csv(trajectories)
 else:
-	print('The trajectories table could not be found. Abort.')
+	logger.error("The trajectories table could not be found. Abort.")
 	os.abort()
 
 log=f'segmentation model: {model} \n'

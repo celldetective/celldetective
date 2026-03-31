@@ -31,10 +31,13 @@ from celldetective.utils.experiment import (
     get_experiment_antibodies,
     get_positions_in_well,
 )
+import logging
 import numpy as np
 import json
 import os
 import matplotlib.pyplot as plt
+
+logger = logging.getLogger("celldetective")
 
 plt.rcParams["svg.fonttype"] = "none"
 from glob import glob
@@ -79,7 +82,7 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
         # sns.color_palette("cubehelix", as_cmap=True)
         # sns.color_palette("ch:s=-.2,r=.6", as_cmap=True)
 
-        print("Parent wells: ", self.wells)
+        logger.debug(f"Parent wells: {self.wells}")
 
         self.well_option = (
             self.parent_window.parent_window.well_list.getSelectedIndices()
@@ -251,7 +254,7 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
         class_idx = np.array([s.startswith("class_") for s in self.all_columns])
         group_idx = np.array([s.startswith("group_") for s in self.all_columns])
 
-        print(f"{class_idx=} {group_idx=} {self.all_columns=}")
+        logger.debug(f"class_idx={class_idx} group_idx={group_idx} all_columns={self.all_columns}")
         # time_idx = np.array([s.startswith('t_') for s in self.all_columns])
         try:
             if len(class_idx) > 0:
@@ -264,7 +267,7 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
                 group_columns = []
         # time_columns = list(self.all_columns[time_idx])
         except Exception as e:
-            print(f"L210 columns not found {e}")
+            logger.error(f"Columns not found: {e}")
             self.auto_close = True
             return None
 
@@ -551,9 +554,9 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
         Process the signal plotting request.
         """
 
-        print("you clicked!!")
+        logger.debug("you clicked!!")
         # self.FrameToMin = float(self.time_calibration_le.text().replace(',','.'))
-        print(self.FrameToMin, "set")
+        logger.debug(f"{self.FrameToMin} set")
 
         # read instructions from combobox options
         self.load_available_tables()
@@ -571,7 +574,7 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
         self.pos_names = self.df_pos_info[
             "pos_name"
         ].unique()  # pd.DataFrame(self.ks_estimators_per_position)['position_name'].unique()
-        print(f"POSITION NAMES: ", self.pos_names)
+        logger.debug(f"POSITION NAMES: {self.pos_names}")
         self.usable_well_labels = []
         for name in self.well_names:
             for lbl in self.well_labels:
@@ -628,7 +631,7 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
 
         if self.df is None:
 
-            print("No table could be found...")
+            logger.warning("No table could be found...")
             msgBox = QMessageBox()
             msgBox.setIcon(QMessageBox.Warning)
             msgBox.setText("No table could be found to compute survival...")
@@ -661,7 +664,7 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
 
         data = []
         full_data = []
-        print(self.well_option)
+        logger.debug(f"well_option={self.well_option}")
         if self.well_option > 1:
             self.plot_mode = "wells"
             for z, well in enumerate(wells):  # loop over wells
@@ -673,7 +676,7 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
                     for ind, pos in enumerate(positions):  # loop over positions
                         if self.position_indices is not None:
                             if ind + 1 in self.position_indices:
-                                print(f"Processing position {pos}...")
+                                logger.info(f"Processing position {pos}...")
                                 tab_tc = pos + os.sep.join(
                                     [
                                         "output",
@@ -689,7 +692,7 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
                                 full_data.append(data)
 
                         else:
-                            print(f"Processing position {pos}...")
+                            logger.info(f"Processing position {pos}...")
                             tab_tc = pos + os.sep.join(
                                 [
                                     "output",
@@ -710,7 +713,7 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
                 pos_name = pos.split(os.sep)[-2]
                 if self.position_indices is not None:
                     if ind + 1 in self.position_indices:
-                        print(f"Processing position {pos}...")
+                        logger.info(f"Processing position {pos}...")
                         tab_tc = pos + os.sep.join(
                             [
                                 "output",
@@ -725,7 +728,7 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
                             data["position"] = pos_name
                         full_data.append(data)
                 else:
-                    print(f"Processing position {pos}...")
+                    logger.info(f"Processing position {pos}...")
                     tab_tc = pos + os.sep.join(
                         [
                             "output",
@@ -802,14 +805,14 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
                     ):
 
                         if "area" in list(track_group.columns):
-                            print("area in list")
+                            logger.debug("area in list")
                             feat = track_group["area"].values
                         else:
                             feat = feature
 
                         first_detection = timeline[feat == feat][0]
                         timeline -= first_detection
-                        print(first_detection, timeline)
+                        logger.debug(f"{first_detection} {timeline}")
 
                     elif self.abs_time_checkbox.isChecked():
                         timeline -= int(self.frame_slider.value())
@@ -1256,7 +1259,7 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
                         alpha=alpha_ci,
                     )
             if cell_lines_option and matrix is not None:
-                print(mean_signal)
+                logger.debug(f"mean_signal={mean_signal}")
                 mat = line[matrix]
                 if "second" in str(mean_signal):
                     for i in range(mat.shape[0]):
@@ -1276,7 +1279,7 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
                         )
 
         except Exception as e:
-            print(f"Exception {e}")
+            logger.error(f"Exception {e}")
 
     def switch_to_log(self) -> None:
         """
@@ -1320,7 +1323,7 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
             + glob(self.exp_dir + os.sep.join([f"W*", "*metadata.txt"]))
             + glob(self.exp_dir + "*metadata.txt")
         )
-        print(f"Found {len(self.metafiles)} metadata files...")
+        logger.info(f"Found {len(self.metafiles)} metadata files...")
         if len(self.metafiles) > 0:
             self.metadata_found = True
 
@@ -1333,7 +1336,7 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
         id : int
             The ID of the clicked button.
         """
-        print(f"button {id} was clicked")
+        logger.debug(f"button {id} was clicked")
         for i in range(2):
             if self.select_option[i].isChecked():
                 self.selection_mode = self.select_label[i]
@@ -1357,7 +1360,7 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
                 data = json.load(f)
                 positions = data["Summary"]["InitialPositionList"]
         except Exception as e:
-            print(f"Trouble loading metadata: error {e}...")
+            logger.error(f"Trouble loading metadata: error {e}...")
             return None
 
         for k in range(len(positions)):
@@ -1424,7 +1427,7 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
         event : matplotlib.backend_bases.PickEvent
             The pick event.
         """
-        print("unselecting position")
+        logger.info("unselecting position")
         self.survival_window.canvas.clear()
         ind = event.ind  # index of selected position
         well_idx = self.df_pos_info.iloc[ind]["well_index"].values[0]
@@ -1469,7 +1472,7 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
                     self.well_display_options[i].isChecked()
                 )
             if len(selected_wells) == 0:
-                print("No wells selected")
+                logger.info("No wells selected")
                 self.ax.clear()
             else:
                 self.ax.clear()

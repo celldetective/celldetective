@@ -29,6 +29,9 @@ from celldetective.gui.viewers.contour_viewer import CellEdgeVisualizer
 from celldetective.gui.viewers.size_viewer import CellSizeViewer
 
 from celldetective.gui.base.components import CelldetectiveWidget
+import logging
+
+logger = logging.getLogger("celldetective")
 
 
 class SettingsNeighborhood(CelldetectiveWidget):
@@ -526,7 +529,7 @@ class SettingsNeighborhood(CelldetectiveWidget):
         Write the selected options in a json file for later reading by the software.
         """
 
-        print("Writing instructions...")
+        logger.debug("Writing instructions...")
 
         neighborhood_options = {}
         pop = [
@@ -571,7 +574,7 @@ class SettingsNeighborhood(CelldetectiveWidget):
 
         neighborhood_options.update({"neighborhood_kwargs": neighborhood_kwargs})
 
-        print("Neighborhood instructions: ", neighborhood_options)
+        logger.debug(f"Neighborhood instructions: {neighborhood_options}")
         file_name = self.neigh_instructions
         with open(file_name, "w") as f:
             json.dump(neighborhood_options, f, indent=4)
@@ -584,7 +587,7 @@ class SettingsNeighborhood(CelldetectiveWidget):
             correction_description += str(key) + " : " + str(value)
         self.parent_window.protocol_list.addItem(correction_description)
 
-        print("Done.")
+        logger.debug("Done.")
         self.close()
 
     def load_previous_neighborhood_instructions(self):
@@ -592,12 +595,12 @@ class SettingsNeighborhood(CelldetectiveWidget):
         Read the measurmeent options from a previously written json file and format properly for the UI.
         """
 
-        print("Reading instructions..")
+        logger.debug("Reading instructions..")
         if os.path.exists(self.neigh_instructions):
             with open(self.neigh_instructions, "r") as f:
 
                 neigh_instructions = json.load(f)
-                print(f"Loading the instructions: {neigh_instructions}...")
+                logger.debug(f"Loading the instructions: {neigh_instructions}...")
 
                 if "neighborhood_type" not in neigh_instructions:
                     neigh_instructions.update(

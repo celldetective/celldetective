@@ -124,8 +124,8 @@ def analyze_signals(
     available_signals = list(trajectories.columns)
     # print('The available_signals are : ',available_signals)
 
-    f = open(model_config_path)
-    config = json.load(f)
+    with open(model_config_path) as f:
+        config = json.load(f)
     required_signals = config["channels"]
     if "selected_channels" in config:
         selected_signals = config["selected_channels"]
@@ -386,8 +386,8 @@ def analyze_pair_signals_at_position(
     complete_path = rf"{complete_path}"
     model_config_path = os.sep.join([complete_path, "config_input.json"])
     model_config_path = rf"{model_config_path}"
-    f = open(model_config_path)
-    model_config_path = json.load(f)
+    with open(model_config_path) as f:
+        model_config_path = json.load(f)
 
     reference_population = model_config_path["reference_population"]
     neighbor_population = model_config_path["neighbor_population"]
@@ -515,8 +515,8 @@ def analyze_pair_signals(
 
     logger.debug(f"The available signals are: {available_signals}")
 
-    f = open(model_config_path)
-    config = json.load(f)
+    with open(model_config_path) as f:
+        config = json.load(f)
     required_signals = config["channels"]
 
     try:

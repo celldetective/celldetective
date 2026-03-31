@@ -30,6 +30,9 @@ from celldetective.utils.io import save_tiff_imagej_compatible
 import gc
 from art import tprint
 import concurrent.futures
+import logging
+
+logger = logging.getLogger("celldetective")
 
 tprint("Segment")
 
@@ -66,7 +69,7 @@ if os.path.exists(threshold_instructions):
             equalize_time = equalize_info[1]
 
 else:
-    print("The configuration path is not valid. Abort.")
+    logger.error("The configuration path is not valid. Abort.")
     os.abort()
 
 if mode.lower() == "target" or mode.lower() == "targets":
@@ -81,15 +84,13 @@ config = PurePath(expfolder, Path("config.ini"))
 if not os.path.exists(config):
     raise FileNotFoundError("The configuration file for the experiment could not be located. Abort.")
 
-print(f"Position: {extract_position_name(pos)}...")
-print("Configuration file: ", config)
-print(f"Population: {mode}...")
+logger.info(f"Position: {extract_position_name(pos)}...")
+logger.info(f"Configuration file: {config}")
+logger.info(f"Population: {mode}...")
 
 channel_indices = _extract_channel_indices_from_config(config, required_channels)
 # need to abort if channel not found
-print(
-    f"Required channels: {required_channels} located at channel indices {channel_indices}..."
-)
+logger.info(f"Required channels: {required_channels} located at channel indices {channel_indices}...")
 
 threshold_instructions.update({"target_channel": channel_indices[0]})
 
@@ -102,7 +103,7 @@ threshold_instructions.update({"channel_names": channel_names})
 try:
     file = glob(pos + f"movie/{movie_prefix}*.tif")[0]
 except IndexError:
-    print("Movie could not be found. Check the prefix.")
+    logger.error("Movie could not be found. Check the prefix.")
     os.abort()
 
 len_movie_auto = auto_load_number_of_frames(file)
@@ -117,10 +118,10 @@ img_num_channels = _get_img_num_per_channel(
 
 # If everything OK, prepare output, load models
 if os.path.exists(os.sep.join([pos, label_folder])):
-    print("Erasing the previous labels folder...")
+    logger.info("Erasing the previous labels folder...")
     rmtree(os.sep.join([pos, label_folder]))
 os.mkdir(os.sep.join([pos, label_folder]))
-print(f"Labels folder successfully generated...")
+logger.info("Labels folder successfully generated...")
 
 if equalize:
     f_reference = load_frames(
@@ -131,7 +132,7 @@ else:
     f_reference = None
 
 threshold_instructions.update({"equalize_reference": f_reference})
-print(f"Instructions: {threshold_instructions}...")
+logger.debug(f"Instructions: {threshold_instructions}...")
 
 
 # Loop over all frames and segment
@@ -167,7 +168,7 @@ def segment_index(indices: List[int]) -> None:
     return
 
 
-print(f"Starting the segmentation with {n_threads} thread(s)...")
+logger.info(f"Starting the segmentation with {n_threads} thread(s)...")
 
 # Multithreading
 indices = list(range(img_num_channels.shape[1]))
@@ -177,10 +178,10 @@ with concurrent.futures.ThreadPoolExecutor() as executor:
     results = executor.map(segment_index, chunks)
     try:
         for i, return_value in enumerate(results):
-            print(f"Thread {i} output check: ", return_value)
+            logger.debug(f"Thread {i} output check: {return_value}")
     except Exception as e:
-        print("Exception: ", e)
+        logger.error(f"Exception: {e}")
 
-print("Done.")
+logger.info("Done.")
 
 gc.collect()

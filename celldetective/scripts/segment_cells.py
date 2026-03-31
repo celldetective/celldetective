@@ -40,6 +40,9 @@ from celldetective.utils.io import save_tiff_imagej_compatible
 import gc
 from art import tprint
 import concurrent.futures
+import logging
+
+logger = logging.getLogger("celldetective")
 
 tprint("Segment")
 
@@ -91,9 +94,9 @@ config = PurePath(expfolder, Path("config.ini"))
 if not os.path.exists(config):
     raise FileNotFoundError("The configuration file for the experiment could not be located. Abort.")
 
-print(f"Position: {extract_position_name(pos)}...")
-print("Configuration file: ", config)
-print(f"Population: {mode}...")
+logger.info(f"Position: {extract_position_name(pos)}...")
+logger.info(f"Configuration file: {config}")
+logger.info(f"Population: {mode}...")
 
 ####################################
 # Check model requirements #########
@@ -104,10 +107,10 @@ modelpath = os.sep.join(
 )
 model_complete_path = locate_segmentation_model(modelname)
 if model_complete_path is None:
-    print("Model could not be found. Abort.")
+    logger.error("Model could not be found. Abort.")
     os.abort()
 else:
-    print(f"Model path: {model_complete_path}...")
+    logger.info(f"Model path: {model_complete_path}...")
 
 # load config
 if not os.path.exists(model_complete_path + "config_input.json"):
@@ -119,11 +122,9 @@ with open(model_complete_path + "config_input.json") as config_file:
 required_channels = input_config["channels"]
 
 channel_indices = _extract_channel_indices_from_config(config, required_channels)
-print(
-    f"Required channels: {required_channels} located at channel indices {channel_indices}."
-)
+logger.info(f"Required channels: {required_channels} located at channel indices {channel_indices}.")
 required_spatial_calibration = input_config["spatial_calibration"]
-print(f"Spatial calibration expected by the model: {required_spatial_calibration}...")
+logger.info(f"Spatial calibration expected by the model: {required_spatial_calibration}...")
 
 normalize_kwargs = _get_normalize_kwargs_from_config(input_config)
 
@@ -137,7 +138,7 @@ len_movie = float(config_section_to_dict(config, "MovieSettings")["len_movie"])
 try:
     file = glob(pos + f"movie/{movie_prefix}*.tif")[0]
 except IndexError:
-    print("Movie could not be found. Check the prefix.")
+    logger.error("Movie could not be found. Check the prefix.")
     os.abort()
 
 len_movie_auto = auto_load_number_of_frames(file)
@@ -152,7 +153,7 @@ if model_type == "cellpose":
     flow_threshold = input_config["flow_threshold"]
 
 scale = _estimate_scale_factor(spatial_calibration, required_spatial_calibration)
-print(f"Scale: {scale}...")
+logger.info(f"Scale: {scale}...")
 
 nbr_channels = _extract_nbr_channels_from_config(config)
 # print(f'Number of channels in the input movie: {nbr_channels}')
@@ -162,10 +163,10 @@ img_num_channels = _get_img_num_per_channel(
 
 # If everything OK, prepare output, load models
 if os.path.exists(pos + label_folder):
-    print("Erasing the previous labels folder...")
+    logger.info("Erasing the previous labels folder...")
     rmtree(pos + label_folder)
 os.mkdir(pos + label_folder)
-print(f"Labels folder successfully generated...")
+logger.info("Labels folder successfully generated...")
 
 log = f"segmentation model: {modelname}\n"
 with open(pos + f"log_{mode}.json", "a") as f:
@@ -245,7 +246,7 @@ def segment_index(indices: List[int]) -> None:
     return
 
 
-print(f"Starting the segmentation with {n_threads} thread(s) and GPU={use_gpu}...")
+logger.info(f"Starting the segmentation with {n_threads} thread(s) and GPU={use_gpu}...")
 
 # Multithreading
 indices = list(range(img_num_channels.shape[1]))
@@ -255,9 +256,9 @@ with concurrent.futures.ThreadPoolExecutor() as executor:
     results = executor.map(segment_index, chunks)
     try:
         for i, return_value in enumerate(results):
-            print(f"Thread {i} output check: ", return_value)
+            logger.debug(f"Thread {i} output check: {return_value}")
     except Exception as e:
-        print("Exception: ", e)
+        logger.error(f"Exception: {e}")
 
-print("Done.")
+logger.info("Done.")
 gc.collect()

@@ -1,3 +1,4 @@
+import logging
 import numpy as np
 from PyQt5.QtGui import QStandardItemModel, QPalette, QFontMetrics
 from PyQt5.QtWidgets import (
@@ -21,6 +22,8 @@ from PyQt5.QtGui import QPaintEvent
 from superqt.fonticon import icon
 from celldetective.gui.base.styles import Styles
 from typing import Optional
+
+logger = logging.getLogger("celldetective")
 
 
 class CelldetectiveWidget(QWidget, Styles):
@@ -105,7 +108,7 @@ def generic_message(message: str, msg_type: Optional[str] = "info") -> None:
         The message type ('warning', 'info', 'critical').
     """
 
-    print(message)
+    logger.info(message)
     message_box = QMessageBox()
     if msg_type == "warning":
         message_box.setIcon(QMessageBox.Warning)

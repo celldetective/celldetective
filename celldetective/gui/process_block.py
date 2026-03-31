@@ -972,7 +972,7 @@ class ProcessPanel(QFrame, Styles):
                             except Exception:
                                 pass
                         except Exception as e:
-                            print(f"Error finalizing annotator: {e}")
+                            logger.error(f"Error finalizing annotator: {e}")
                     else:
                         self.event_annotator.close()
 

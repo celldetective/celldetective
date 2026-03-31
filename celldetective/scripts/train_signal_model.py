@@ -10,6 +10,9 @@ import numpy as np
 from art import tprint
 from celldetective.event_detection_models import SignalDetectionModel
 from celldetective.utils.model_loaders import locate_signal_model
+import logging
+
+logger = logging.getLogger("celldetective")
 
 tprint("Train")
 
@@ -35,7 +38,7 @@ if os.path.exists(instructions):
             threshold_instructions.update({"augment": False})
         threshold_instructions.update({"test_split": 0.0})
 else:
-    print("The configuration path is not valid. Abort.")
+    logger.error("The configuration path is not valid. Abort.")
     os.abort()
 
 all_classes = []
@@ -46,7 +49,7 @@ for d in threshold_instructions["ds"]:
         classes = np.unique([ddd["class"] for ddd in data])
         all_classes.extend(classes)
 all_classes = np.unique(all_classes)
-print(all_classes, len(all_classes))
+logger.debug(f"all_classes={all_classes} n_classes={len(all_classes)}")
 
 n_classes = len(all_classes)
 
@@ -83,11 +86,11 @@ train_params = {
     if k in threshold_instructions
 }
 
-print(f"model params {model_params}")
-print(f"train params {train_params}")
+logger.debug(f"model params {model_params}")
+logger.debug(f"train params {train_params}")
 
 model = SignalDetectionModel(**model_params)
-print(threshold_instructions["ds"])
+logger.debug(f"ds={threshold_instructions['ds']}")
 model.fit_from_directory(threshold_instructions["ds"], **train_params)
 
 
@@ -103,8 +106,8 @@ if "neighborhood_of_interest" in threshold_instructions:
         model_config_path = os.sep.join([complete_path, "config_input.json"])
         model_config_path = rf"{model_config_path}"
 
-        f = open(model_config_path)
-        config = json.load(f)
+        with open(model_config_path) as f:
+            config = json.load(f)
         config.update(
             {
                 "neighborhood_of_interest": threshold_instructions[
@@ -118,4 +121,4 @@ if "neighborhood_of_interest" in threshold_instructions:
         with open(model_config_path, "w") as outfile:
             outfile.write(json_string)
 
-print("Done.")
+logger.info("Done.")

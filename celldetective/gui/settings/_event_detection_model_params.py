@@ -1,6 +1,9 @@
 import json
+import logging
 import os
 from typing import Optional
+
+logger = logging.getLogger("celldetective")
 
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QDoubleValidator
@@ -72,7 +75,7 @@ class SignalModelParamsWidget(CelldetectiveWidget):
         if self.model_complete_path is None:
             raise ValueError(f"Model {self.model_name} could not be found.")
         else:
-            print(f"Model path: {self.model_complete_path}...")
+            logger.info(f"Model path: {self.model_complete_path}...")
 
         config_path = os.path.join(self.model_complete_path, "config_input.json")
         if not os.path.exists(config_path):

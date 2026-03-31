@@ -556,8 +556,8 @@ class SettingsEventDetectionModelTraining(CelldetectiveSettingsPanel):
     def load_pretrained_config(self):
         """Load configuration from the pretrained model."""
 
-        f = open(os.sep.join([self.pretrained_model, "config_input.json"]))
-        data = json.load(f)
+        with open(os.sep.join([self.pretrained_model, "config_input.json"])) as f:
+            data = json.load(f)
         channels = data["channels"]
         signal_length = data["model_signal_length"]
         try:
