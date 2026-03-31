@@ -242,8 +242,8 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         super().resizeEvent(event)
         try:
             self.cell_fig.tight_layout()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"tight_layout failed on resize: {e}")
 
     def populate_widget(self):
         """
@@ -620,18 +620,13 @@ class PairEventAnnotator(CelldetectiveMainWindow):
 
         try:
             self.reference_event_choice_cb.disconnect()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Could not disconnect reference_event_choice_cb: {e}")
         self.reference_event_choice_cb.clear()
         df_reference = self.dataframes[self.reference_population]
         reference_class_cols = [
-            c for c in list(df_reference.columns) if c.startswith("class")
+            c for c in list(df_reference.columns) if c.startswith("class") and c not in cols_to_remove
         ]
-        for c in cols_to_remove:
-            try:
-                reference_class_cols.remove(c)
-            except Exception:
-                pass
         self.reference_event_choice_cb.addItems(reference_class_cols)
         self.reference_event_choice_cb.currentIndexChanged.connect(
             self.compute_status_and_colors_reference
@@ -639,18 +634,13 @@ class PairEventAnnotator(CelldetectiveMainWindow):
 
         try:
             self.neighbor_event_choice_cb.disconnect()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Could not disconnect neighbor_event_choice_cb: {e}")
         self.neighbor_event_choice_cb.clear()
         df_neighbors = self.dataframes[self.neighbor_population]
         neighbor_class_cols = [
-            c for c in list(df_neighbors.columns) if c.startswith("class")
+            c for c in list(df_neighbors.columns) if c.startswith("class") and c not in cols_to_remove
         ]
-        for c in cols_to_remove:
-            try:
-                neighbor_class_cols.remove(c)
-            except Exception:
-                pass
         self.neighbor_event_choice_cb.addItems(neighbor_class_cols)
         self.neighbor_event_choice_cb.currentIndexChanged.connect(
             self.compute_status_and_colors_neighbor
@@ -688,8 +678,8 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         try:
             self.neighbor_event_choice_cb.show()
             self.neigh_lab.show()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Could not show neighbor event widgets: {e}")
 
         self.reference_event_choice_cb.disconnect()
         self.reference_event_choice_cb.clear()
@@ -1296,14 +1286,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
                     c for c in list(df_population.columns) if c.startswith("class")
                 ]
 
-                try:
-                    class_cols.remove("class_id")
-                except Exception:
-                    pass
-                try:
-                    class_cols.remove("class_color")
-                except Exception:
-                    pass
+                class_cols = [c for c in class_cols if c not in ("class_id", "class_color")]
 
                 if len(class_cols) > 0:
 
@@ -1382,11 +1365,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
                 neigh_cols = [c for c in pop_cols if c.startswith("neighborhood_")]
                 cols_to_remove += neigh_cols
 
-                for col in cols_to_remove:
-                    try:
-                        pop_cols.remove(col)
-                    except Exception:
-                        pass
+                pop_cols = [c for c in pop_cols if c not in cols_to_remove]
 
                 x = df_population[pop_cols].values
                 minmax.fit(x)

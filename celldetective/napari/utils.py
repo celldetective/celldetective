@@ -331,8 +331,8 @@ def launch_napari_viewer(
         for wdg in widgets:
             try:
                 getattr(qctrl, wdg).setEnabled(not locked)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Could not set {wdg} enabled state: {e}")
 
     label_widget_list = [
         "paint_button",
@@ -573,12 +573,12 @@ def launch_napari_viewer(
 
     if flush_memory and block:
 
-        # temporary fix for slight napari memory leak
+        # temporary fix for slight napari memory leak — pop until empty (IndexError)
         for i in range(10000):
             try:
                 viewer.layers.pop()
             except Exception:
-                pass
+                break
 
         del viewer
         del stack
@@ -828,8 +828,8 @@ def control_segmentation_napari(
                             xmin:xmax, ymin:ymax
                         ]
                         multichannel.append(frame)
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.debug(f"Could not extract frame from layer Image [{i + 1}]: {e}")
                 multichannel = np.array(multichannel)
                 lab = labels_layer[xmin:xmax, ymin:ymax].astype(np.int16)
                 if pad_to_256:
@@ -999,8 +999,8 @@ def control_segmentation_napari(
         for wdg in widgets:
             try:
                 getattr(qctrl, wdg).setEnabled(not locked)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Could not set {wdg} enabled state: {e}")
 
     label_widget_list = ["polygon_button", "transform_button"]
     lock_controls(viewer.layers["segmentation"], label_widget_list)

@@ -231,11 +231,7 @@ class MeasureAnnotator(BaseAnnotator):
                 "status_color",
                 "status_id",
             ]
-            for col in to_remove:
-                try:
-                    self.class_cols.remove(col)
-                except Exception:
-                    pass
+            self.class_cols = [c for c in self.class_cols if c not in to_remove]
 
             # Generate missing status columns from class columns
             for c in self.class_cols:
@@ -270,12 +266,7 @@ class MeasureAnnotator(BaseAnnotator):
                     for c in list(self.df_tracks.columns)
                 ]
             )
-            self.class_cols = list(cols[self.class_cols])
-            for col in to_remove:
-                try:
-                    self.class_cols.remove(col)
-                except Exception:
-                    pass
+            self.class_cols = [c for c in list(cols[self.class_cols]) if c not in to_remove]
 
             if len(self.class_cols) > 0:
                 if self.status_name not in self.class_cols:
@@ -374,11 +365,7 @@ class MeasureAnnotator(BaseAnnotator):
                 keys = list(labels.keys())
                 cols_to_remove.extend(labels)
 
-            for tr in cols_to_remove:
-                try:
-                    self.columns_to_rescale.remove(tr)
-                except Exception:
-                    pass
+            self.columns_to_rescale = [c for c in self.columns_to_rescale if c not in cols_to_remove]
 
             x = self.df_tracks[self.columns_to_rescale].values
             self.MinMaxScaler.fit(x)
@@ -1403,22 +1390,7 @@ class MeasureAnnotator(BaseAnnotator):
         #     self.df_tracks[self.df_tracks[self.status_name] == 99].index
         # )
 
-        try:
-            self.df_tracks.drop(columns="", inplace=True)
-        except Exception:
-            pass
-        try:
-            self.df_tracks.drop(columns="group_color", inplace=True)
-        except Exception:
-            pass
-        try:
-            self.df_tracks.drop(columns="x_anim", inplace=True)
-        except Exception:
-            pass
-        try:
-            self.df_tracks.drop(columns="y_anim", inplace=True)
-        except Exception:
-            pass
+        self.df_tracks.drop(columns=["", "group_color", "x_anim", "y_anim"], errors="ignore", inplace=True)
 
         self.df_tracks.to_csv(self.trajectories_path, index=False)
         logger.info("Table successfully exported...")

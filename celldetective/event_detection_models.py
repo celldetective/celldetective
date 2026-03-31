@@ -376,12 +376,11 @@ class SignalDetectionModel(object):
         """
 
         try:
-
             physical_devices = list_physical_devices("GPU")
             for gpu in physical_devices:
                 set_memory_growth(gpu, True)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"GPU memory growth configuration failed: {e}")
 
     def fit_from_directory(
         self,

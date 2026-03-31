@@ -462,45 +462,45 @@ class ControlPanel(CelldetectiveMainWindow):
             try:
                 if process_block.SegModelLoader:
                     process_block.SegModelLoader.close()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Could not close SegModelLoader: {e}")
             try:
                 if process_block.ConfigTracking:
                     process_block.ConfigTracking.close()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Could not close ConfigTracking: {e}")
             try:
                 if process_block.ConfigSignalTrain:
                     process_block.ConfigSignalTrain.close()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Could not close ConfigSignalTrain: {e}")
             try:
                 if process_block.ConfigMeasurements:
                     process_block.ConfigMeasurements.close()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Could not close ConfigMeasurements: {e}")
             try:
                 if process_block.ConfigSignalAnnotator:
                     process_block.ConfigSignalAnnotator.close()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Could not close ConfigSignalAnnotator: {e}")
             try:
                 if process_block.tab_ui:
                     process_block.tab_ui.close()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Could not close tab_ui: {e}")
 
         try:
             if self.cfg_editor:
                 self.cfg_editor.close()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Could not close cfg_editor: {e}")
 
         try:
             if hasattr(self, "viewer") and self.viewer:
                 self.viewer.close()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Could not close viewer: {e}")
 
         # Stop background loader thread
         if hasattr(self, "bg_loader") and self.bg_loader.isRunning():

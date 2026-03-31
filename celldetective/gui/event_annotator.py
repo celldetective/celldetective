@@ -931,29 +931,29 @@ class EventAnnotator(BaseAnnotator):
         """
         try:
             self.stop()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Could not stop annotator cleanly: {e}")
 
         # Stop and delete animation to break reference cycles
         if hasattr(self, "anim") and self.anim:
             try:
                 self.anim.event_source.stop()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Could not stop animation event source: {e}")
             del self.anim
 
         # Close matplotlib figures
         if hasattr(self, "fig"):
             try:
                 plt.close(self.fig)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Could not close fig: {e}")
 
         if hasattr(self, "cell_fig"):
             try:
                 plt.close(self.cell_fig)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Could not close cell_fig: {e}")
 
         # Delete large objects
         if hasattr(self, "stack"):
