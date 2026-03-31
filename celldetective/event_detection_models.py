@@ -977,6 +977,178 @@ class SignalDetectionModel(object):
                 x_set[i, :, k] = interp(indices)
         return x_set
 
+    def _compile_classifier(self) -> None:
+        """Compile the classifier model with the current learning rate and standard metrics."""
+        self.model_class.compile(
+            optimizer=Adam(learning_rate=self.learning_rate),
+            loss=self.loss_class,
+            metrics=[
+                "accuracy",
+                Precision(),
+                Recall(),
+                MeanIoU(
+                    num_classes=self.n_classes,
+                    name="iou",
+                    dtype=float,
+                    sparse_y_true=False,
+                    sparse_y_pred=False,
+                ),
+            ],
+        )
+
+    def _compile_regressor(self) -> None:
+        """Compile the regressor model with the current learning rate and standard metrics."""
+        self.model_reg.compile(
+            optimizer=Adam(learning_rate=self.learning_rate),
+            loss=self.loss_reg,
+            metrics=["mse", "mae"],
+        )
+
+    def _evaluate_and_log_regressor(
+        self,
+        x: np.ndarray,
+        y_class: np.ndarray,
+        y_time: np.ndarray,
+        display_name: str,
+        key_prefix: str,
+        plot_filename: str,
+        store_predictions: bool = False,
+    ) -> dict:
+        """Evaluate the regressor on a dataset split and return a metrics dict.
+
+        Filters samples to those predicted as the event class (argmax == 0), computes
+        MSE and MAE, optionally saves a regression plot, and returns a dict ready for
+        ``self.dico.update()``.
+
+        Parameters
+        ----------
+        x : np.ndarray
+            Input feature array for this split.
+        y_class : np.ndarray
+            One-hot class labels for this split (used to filter event-class samples).
+        y_time : np.ndarray
+            Regression target (time of interest) for this split.
+        display_name : str
+            Human-readable label used in log messages (e.g. ``"test set"``).
+        key_prefix : str
+            Prefix for dict keys in the returned metrics (e.g. ``"test"`` → ``"test_mse"``).
+        plot_filename : str
+            Filename for the optional regression scatter plot.
+        store_predictions : bool, optional
+            If True, also stores raw predictions and ground truth in the returned dict.
+            Default False.
+
+        Returns
+        -------
+        dict
+            Metrics dict with ``{key_prefix}_mse``, ``{key_prefix}_mae``, and
+            optionally ``{key_prefix}_predictions`` / ``{key_prefix}_ground_truth``.
+        """
+        mse_fn = MeanSquaredError()
+        mae_fn = MeanAbsoluteError()
+
+        mask = np.argmax(y_class, axis=1) == 0
+        predictions = self.model_reg.predict(x[mask], batch_size=self.batch_size)[:, 0]
+        ground_truth = y_time[mask]
+
+        if predictions.shape != ground_truth.shape:
+            raise ValueError("Shape mismatch between predictions and ground truths...")
+
+        mse_val = mse_fn(ground_truth, predictions).numpy()
+        mae_val = mae_fn(ground_truth, predictions).numpy()
+        logger.info(f"MSE on {display_name}: {mse_val}")
+        logger.info(f"MAE on {display_name}: {mae_val}")
+
+        if self.show_plots:
+            regression_plot(
+                predictions,
+                ground_truth,
+                savepath=os.sep.join([self.model_folder, plot_filename]),
+            )
+
+        result = {f"{key_prefix}_mse": mse_val, f"{key_prefix}_mae": mae_val}
+        if store_predictions:
+            result[f"{key_prefix}_predictions"] = predictions
+            result[f"{key_prefix}_ground_truth"] = ground_truth
+        return result
+
+    def _evaluate_and_log_classifier(
+        self,
+        x: np.ndarray,
+        y_class: np.ndarray,
+        display_name: str,
+        key_prefix: str,
+        file_label: str,
+    ) -> dict:
+        """Evaluate the classifier on one data split, log scores, and optionally save confusion matrix.
+
+        Parameters
+        ----------
+        x : ndarray
+            Input signals for this split.
+        y_class : ndarray
+            One-hot encoded ground-truth class labels.
+        display_name : str
+            Human-readable split name used in log messages (e.g. ``"Test"``).
+        key_prefix : str
+            Short prefix used as dict key prefix (e.g. ``"test"`` or ``"val"``).
+        file_label : str
+            Label used in the saved filename (e.g. ``"test"`` or ``"validation"``).
+
+        Returns
+        -------
+        dict
+            Scores dictionary suitable for merging into ``self.dico``.
+        """
+        predictions = self.model_class.predict(x).argmax(axis=1)
+        ground_truth = y_class.argmax(axis=1)
+        if predictions.shape != ground_truth.shape:
+            raise ValueError(
+                "Mismatch in shape between the predictions and the ground truth..."
+            )
+
+        IoU_score = jaccard_score(ground_truth, predictions, average=None)
+        balanced_accuracy = balanced_accuracy_score(ground_truth, predictions)
+        precision = precision_score(ground_truth, predictions, average=None)
+        recall = recall_score(ground_truth, predictions, average=None)
+
+        logger.info(f"{display_name} IoU score: {IoU_score}")
+        logger.info(f"{display_name} Balanced accuracy score: {balanced_accuracy}")
+        logger.info(f"{display_name} Precision: {precision}")
+        logger.info(f"{display_name} Recall: {recall}")
+
+        results = confusion_matrix(ground_truth, predictions)
+
+        if self.show_plots:
+            try:
+                ConfusionMatrixDisplay.from_predictions(
+                    ground_truth,
+                    predictions,
+                    cmap="Blues",
+                    normalize="pred",
+                    display_labels=["event", "no event", "left censored"],
+                )
+                plt.savefig(
+                    os.sep.join(
+                        [self.model_folder, f"{file_label}_confusion_matrix.png"]
+                    ),
+                    bbox_inches="tight",
+                    dpi=300,
+                )
+                plt.close()
+            except Exception as e:
+                logger.warning(f"Could not save {display_name.lower()} confusion matrix: {e}")
+
+        logger.info("%s set:\n%s", display_name, classification_report(ground_truth, predictions))
+
+        return {
+            f"{key_prefix}_IoU": IoU_score,
+            f"{key_prefix}_balanced_accuracy": balanced_accuracy,
+            f"{key_prefix}_confusion": results,
+            f"{key_prefix}_precision": precision,
+            f"{key_prefix}_recall": recall,
+        }
+
     def train_classifier(self):
         """
         Trains the classifier component of the model to predict event classes in signals.
@@ -993,71 +1165,16 @@ class SignalDetectionModel(object):
 
         """
 
-        # if pretrained model
         self.n_classes = 3
 
-        if self.pretrained is not None:
-            # if recompile
-            if self.recompile_pretrained:
-                logger.warning(
-                    "Recompiling the pretrained classifier model... Warning, this action reinitializes all the weights; are you sure that this is what you intended?"
-                )
-                self.model_class.set_weights(
-                    clone_model(self.model_class).get_weights()
-                )
-                self.model_class.compile(
-                    optimizer=Adam(learning_rate=self.learning_rate),
-                    loss=self.loss_class,
-                    metrics=[
-                        "accuracy",
-                        Precision(),
-                        Recall(),
-                        MeanIoU(
-                            num_classes=self.n_classes,
-                            name="iou",
-                            dtype=float,
-                            sparse_y_true=False,
-                            sparse_y_pred=False,
-                        ),
-                    ],
-                )
-            else:
-                # Recompile to avoid crash
-                self.model_class.compile(
-                    optimizer=Adam(learning_rate=self.learning_rate),
-                    loss=self.loss_class,
-                    metrics=[
-                        "accuracy",
-                        Precision(),
-                        Recall(),
-                        MeanIoU(
-                            num_classes=self.n_classes,
-                            name="iou",
-                            dtype=float,
-                            sparse_y_true=False,
-                            sparse_y_pred=False,
-                        ),
-                    ],
-                )
-
-        else:
-            logger.info("Compiling the classifier...")
-            self.model_class.compile(
-                optimizer=Adam(learning_rate=self.learning_rate),
-                loss=self.loss_class,
-                metrics=[
-                    "accuracy",
-                    Precision(),
-                    Recall(),
-                    MeanIoU(
-                        num_classes=self.n_classes,
-                        name="iou",
-                        dtype=float,
-                        sparse_y_true=False,
-                        sparse_y_pred=False,
-                    ),
-                ],
+        if self.pretrained is not None and self.recompile_pretrained:
+            logger.warning(
+                "Recompiling the pretrained classifier model... Warning, this action reinitializes all the weights; are you sure that this is what you intended?"
             )
+            self.model_class.set_weights(clone_model(self.model_class).get_weights())
+        elif self.pretrained is None:
+            logger.info("Compiling the classifier...")
+        self._compile_classifier()
 
         self.gather_callbacks("classifier")
 
@@ -1109,108 +1226,18 @@ class SignalDetectionModel(object):
         }
 
         if hasattr(self, "x_test"):
-
-            predictions = self.model_class.predict(self.x_test).argmax(axis=1)
-            ground_truth = self.y_class_test.argmax(axis=1)
-            if predictions.shape != ground_truth.shape:
-                raise ValueError("Mismatch in shape between the predictions and the ground truth...")
-
-            title = "Test data"
-            IoU_score = jaccard_score(ground_truth, predictions, average=None)
-            balanced_accuracy = balanced_accuracy_score(ground_truth, predictions)
-            precision = precision_score(ground_truth, predictions, average=None)
-            recall = recall_score(ground_truth, predictions, average=None)
-
-            logger.info(f"Test IoU score: {IoU_score}")
-            logger.info(f"Test Balanced accuracy score: {balanced_accuracy}")
-            logger.info(f"Test Precision: {precision}")
-            logger.info(f"Test Recall: {recall}")
-
-            # Confusion matrix on test set
-            results = confusion_matrix(ground_truth, predictions)
             self.dico.update(
-                {
-                    "test_IoU": IoU_score,
-                    "test_balanced_accuracy": balanced_accuracy,
-                    "test_confusion": results,
-                    "test_precision": precision,
-                    "test_recall": recall,
-                }
+                self._evaluate_and_log_classifier(
+                    self.x_test, self.y_class_test, "Test", "test", "test"
+                )
             )
-
-            if self.show_plots:
-                try:
-                    ConfusionMatrixDisplay.from_predictions(
-                        ground_truth,
-                        predictions,
-                        cmap="Blues",
-                        normalize="pred",
-                        display_labels=["event", "no event", "left censored"],
-                    )
-                    plt.savefig(
-                        os.sep.join([self.model_folder, "test_confusion_matrix.png"]),
-                        bbox_inches="tight",
-                        dpi=300,
-                    )
-                    # plt.pause(3)
-                    plt.close()
-                except Exception as e:
-                    logger.warning(f"Could not save test confusion matrix: {e}")
-            logger.info("Test set:\n%s", classification_report(ground_truth, predictions))
 
         if hasattr(self, "x_val"):
-            predictions = self.model_class.predict(self.x_val).argmax(axis=1)
-            ground_truth = self.y_class_val.argmax(axis=1)
-            if ground_truth.shape != predictions.shape:
-                raise ValueError("Mismatch in shape between the predictions and the ground truth...")
-            title = "Validation data"
-
-            # Validation scores
-            IoU_score = jaccard_score(ground_truth, predictions, average=None)
-            balanced_accuracy = balanced_accuracy_score(ground_truth, predictions)
-            precision = precision_score(ground_truth, predictions, average=None)
-            recall = recall_score(ground_truth, predictions, average=None)
-
-            logger.info(f"Validation IoU score: {IoU_score}")
-            logger.info(f"Validation Balanced accuracy score: {balanced_accuracy}")
-            logger.info(f"Validation Precision: {precision}")
-            logger.info(f"Validation Recall: {recall}")
-
-            # Confusion matrix on validation set
-            results = confusion_matrix(ground_truth, predictions)
             self.dico.update(
-                {
-                    "val_IoU": IoU_score,
-                    "val_balanced_accuracy": balanced_accuracy,
-                    "val_confusion": results,
-                    "val_precision": precision,
-                    "val_recall": recall,
-                }
+                self._evaluate_and_log_classifier(
+                    self.x_val, self.y_class_val, "Validation", "val", "validation"
+                )
             )
-
-            if self.show_plots:
-                try:
-                    ConfusionMatrixDisplay.from_predictions(
-                        ground_truth,
-                        predictions,
-                        cmap="Blues",
-                        normalize="pred",
-                        display_labels=["event", "no event", "left censored"],
-                    )
-                    plt.savefig(
-                        os.sep.join(
-                            [self.model_folder, "validation_confusion_matrix.png"]
-                        ),
-                        bbox_inches="tight",
-                        dpi=300,
-                    )
-                    # plt.pause(3)
-                    plt.close()
-                except Exception as e:
-                    logger.warning(f"Could not save validation confusion matrix: {e}")
-            logger.info("Validation set:\n%s", classification_report(ground_truth, predictions))
-
-            # Send result to GUI and wait
             for cb in self.cb:
                 if hasattr(cb, "on_training_result"):
                     cb.on_training_result(self.dico)
@@ -1232,34 +1259,14 @@ class SignalDetectionModel(object):
 
         """
 
-        # Compile model
-        # if pretrained model
-        if self.pretrained is not None:
-            # if recompile
-            if self.recompile_pretrained:
-                logger.warning(
-                    "Recompiling the pretrained regressor model... Warning, this action reinitializes all the weights; are you sure that this is what you intended?"
-                )
-                self.model_reg.set_weights(clone_model(self.model_reg).get_weights())
-                self.model_reg.compile(
-                    optimizer=Adam(learning_rate=self.learning_rate),
-                    loss=self.loss_reg,
-                    metrics=["mse", "mae"],
-                )
-            else:
-                self.model_reg.compile(
-                    optimizer=Adam(learning_rate=self.learning_rate),
-                    loss=self.loss_reg,
-                    metrics=["mse", "mae"],
-                )
-
-        else:
-            logger.info("Compiling the regressor...")
-            self.model_reg.compile(
-                optimizer=Adam(learning_rate=self.learning_rate),
-                loss=self.loss_reg,
-                metrics=["mse", "mae"],
+        if self.pretrained is not None and self.recompile_pretrained:
+            logger.warning(
+                "Recompiling the pretrained regressor model... Warning, this action reinitializes all the weights; are you sure that this is what you intended?"
             )
+            self.model_reg.set_weights(clone_model(self.model_reg).get_weights())
+        elif self.pretrained is None:
+            logger.info("Compiling the regressor...")
+        self._compile_regressor()
 
         self.gather_callbacks("regressor")
 
@@ -1391,63 +1398,25 @@ class SignalDetectionModel(object):
         - Regression plots and performance metrics are saved in the model's output directory.
 
         """
-        mse = MeanSquaredError()
-        mae = MeanAbsoluteError()
-
         if hasattr(self, "x_test"):
-
             logger.info("Evaluate on test set...")
-            predictions = self.model_reg.predict(
-                self.x_test[np.argmax(self.y_class_test, axis=1) == 0],
-                batch_size=self.batch_size,
-            )[:, 0]
-            ground_truth = self.y_time_test[np.argmax(self.y_class_test, axis=1) == 0]
-            if predictions.shape != ground_truth.shape:
-                raise ValueError("Shape mismatch between predictions and ground truths...")
-
-            test_mse = mse(ground_truth, predictions).numpy()
-            test_mae = mae(ground_truth, predictions).numpy()
-            logger.info(f"MSE on test set: {test_mse}")
-            logger.info(f"MAE on test set: {test_mae}")
-            if self.show_plots:
-                regression_plot(
-                    predictions,
-                    ground_truth,
-                    savepath=os.sep.join([self.model_folder, "test_regression.png"]),
+            self.dico.update(
+                self._evaluate_and_log_regressor(
+                    self.x_test, self.y_class_test, self.y_time_test,
+                    display_name="test set", key_prefix="test",
+                    plot_filename="test_regression.png",
                 )
-            self.dico.update({"test_mse": test_mse, "test_mae": test_mae})
+            )
 
         if hasattr(self, "x_val"):
             # Validation set
-            predictions = self.model_reg.predict(
-                self.x_val[np.argmax(self.y_class_val, axis=1) == 0],
-                batch_size=self.batch_size,
-            )[:, 0]
-            ground_truth = self.y_time_val[np.argmax(self.y_class_val, axis=1) == 0]
-            if predictions.shape != ground_truth.shape:
-                raise ValueError("Shape mismatch between predictions and ground truths...")
-
-            val_mse = mse(ground_truth, predictions).numpy()
-            val_mae = mae(ground_truth, predictions).numpy()
-
-            if self.show_plots:
-                regression_plot(
-                    predictions,
-                    ground_truth,
-                    savepath=os.sep.join(
-                        [self.model_folder, "validation_regression.png"]
-                    ),
-                )
-            logger.info(f"MSE on validation set: {val_mse}")
-            logger.info(f"MAE on validation set: {val_mae}")
-
             self.dico.update(
-                {
-                    "val_mse": val_mse,
-                    "val_mae": val_mae,
-                    "val_predictions": predictions,
-                    "val_ground_truth": ground_truth,
-                }
+                self._evaluate_and_log_regressor(
+                    self.x_val, self.y_class_val, self.y_time_val,
+                    display_name="validation set", key_prefix="val",
+                    plot_filename="validation_regression.png",
+                    store_predictions=True,
+                )
             )
 
             # Send result to GUI and wait

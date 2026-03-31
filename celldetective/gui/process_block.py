@@ -25,6 +25,7 @@ from celldetective.utils.data_loaders import load_experiment_tables
 from celldetective.utils.model_loaders import (
     locate_signal_model,
     locate_segmentation_model,
+    _resolve_signal_model_paths,
 )
 from celldetective.utils.image_loaders import fix_missing_labels
 
@@ -38,6 +39,7 @@ from celldetective.gui.base.components import (
 import numpy as np
 from glob import glob
 from celldetective import get_logger
+from celldetective.measure import _get_border_suffix
 
 logger = get_logger("celldetective")
 
@@ -1556,10 +1558,7 @@ class ProcessPanel(QFrame, Styles):
                     self.signal_models_list.currentIndex()
                 ]
 
-                model_complete_path = locate_signal_model(self.signal_model_name)
-                input_config_path = os.path.join(
-                    model_complete_path, "config_input.json"
-                )
+                model_complete_path, input_config_path = _resolve_signal_model_paths(self.signal_model_name)
                 with open(input_config_path) as config_file:
                     input_config = json.load(config_file)
 
@@ -1630,19 +1629,13 @@ class ProcessPanel(QFrame, Styles):
                         signal_name = None
                         try:
                             if hasattr(self, "signal_model_name"):
-                                model_complete_path = locate_signal_model(
-                                    self.signal_model_name
-                                )
-                                input_config_path = os.path.join(
-                                    model_complete_path, "config_input.json"
-                                )
-                                if os.path.exists(input_config_path):
-                                    with open(input_config_path) as f:
-                                        conf = json.load(f)
-                                    event_label = conf.get("label", None)
-                                    channels = conf.get("channels", [])
-                                    if channels:
-                                        signal_name = channels[0]
+                                _, input_config_path = _resolve_signal_model_paths(self.signal_model_name)
+                                with open(input_config_path) as f:
+                                    conf = json.load(f)
+                                event_label = conf.get("label", None)
+                                channels = conf.get("channels", [])
+                                if channels:
+                                    signal_name = channels[0]
                         except Exception as e:
                             logger.warning(f"Could not determine event label: {e}")
 
@@ -1975,19 +1968,7 @@ class ProcessPanel(QFrame, Styles):
                     borders = instr.get("border_distances", [])
                     if borders:
                         for b in borders if isinstance(borders, list) else [borders]:
-                            # Logic from measure.py for suffix
-                            b_str = (
-                                str(b)
-                                .replace("(", "")
-                                .replace(")", "")
-                                .replace(", ", "_")
-                                .replace(",", "_")
-                            )
-                            suffix = (
-                                f"_slice_{b_str.replace('-', 'm')}px"
-                                if ("-" in str(b) or "," in str(b))
-                                else f"_edge_{b_str}px"
-                            )
+                            suffix = _get_border_suffix(b)
                             for ch in channel_names:
                                 # In measure_features, it's {ch}_mean{suffix}
                                 self.signals.append(f"{ch}_mean{suffix}")
@@ -2106,8 +2087,7 @@ class ProcessPanel(QFrame, Styles):
         self.signal_model_name = self.signal_models[
             self.signal_models_list.currentIndex()
         ]
-        model_complete_path = locate_signal_model(self.signal_model_name)
-        input_config_path = model_complete_path + "config_input.json"
+        _, input_config_path = _resolve_signal_model_paths(self.signal_model_name)
         new_channels = [
             self.signalChannelWidget.channel_cbs[i].currentText()
             for i in range(len(self.signalChannelWidget.channel_cbs))

@@ -411,6 +411,124 @@ def drop_tonal_features(features: List[str]) -> List[str]:
     return feat2
 
 
+def _run_spot_detection(
+    img: np.ndarray,
+    label: np.ndarray,
+    spot_detection: dict,
+    channels,
+) -> Optional[pd.DataFrame]:
+    """Run blob detection for a single spot-detection configuration.
+
+    Parameters
+    ----------
+    img : ndarray
+        Multichannel image (H, W, C).
+    label : ndarray
+        Segmentation label image.
+    spot_detection : dict
+        Spot detection settings including 'channel', 'diameter', 'threshold',
+        and optionally 'image_preprocessing'.
+    channels : list or array-like
+        Channel names matching the last axis of *img*.
+
+    Returns
+    -------
+    DataFrame or None
+        Spot properties per labelled cell, or None when the target channel is
+        not found in *channels*.
+    """
+    detection_channel = spot_detection.get("channel")
+    channels_list = list(channels) if not isinstance(channels, list) else channels
+    if detection_channel not in channels_list:
+        logger.warning(
+            f"Spot detection channel '{detection_channel}' not found in channels."
+        )
+        return None
+    ind = channels_list.index(detection_channel)
+    if "image_preprocessing" not in spot_detection:
+        spot_detection.update({"image_preprocessing": None})
+    return blob_detection(
+        img,
+        label,
+        diameter=spot_detection["diameter"],
+        threshold=spot_detection["threshold"],
+        channel_name=detection_channel,
+        target_channel=ind,
+        image_preprocessing=spot_detection["image_preprocessing"],
+    )
+
+
+def _apply_image_normalization(
+    img: np.ndarray,
+    label: np.ndarray,
+    normalisation_list: list,
+    channels,
+) -> None:
+    """Apply per-channel background correction in-place.
+
+    Parameters
+    ----------
+    img : ndarray
+        Multichannel image (H, W, C) modified in-place.
+    label : ndarray
+        Segmentation label image (used for local normalization).
+    normalisation_list : list of dict
+        Each entry describes a normalization operation with keys
+        'target_channel', 'correction_type', and model/distance/clip params.
+    channels : list or array-like
+        Channel names matching the last axis of *img*.
+    """
+    channels_list = list(channels) if not isinstance(channels, list) else channels
+    for norm in normalisation_list:
+        target = norm.get("target_channel")
+        if target not in channels_list:
+            logger.warning(f"Normalization target '{target}' not found in channels.")
+            continue
+        ind = channels_list.index(target)
+        if norm["correction_type"] == "local":
+            img[:, :, ind] = normalise_by_cell(
+                img[:, :, ind].copy(),
+                label,
+                distance=int(norm["distance"]),
+                model=norm["model"],
+                operation=norm["operation"],
+                clip=norm["clip"],
+            )
+        else:
+            img[:, :, ind] = field_correction(
+                img[:, :, ind].copy(),
+                threshold=norm["threshold_on_std"],
+                operation=norm["operation"],
+                model=norm["model"],
+                clip=norm["clip"],
+            )
+
+
+def _get_border_suffix(d) -> str:
+    """Return the column-name suffix for a border-distance measurement.
+
+    Parameters
+    ----------
+    d : int, float, or str
+        Distance specification (scalar or range string such as '10-20').
+
+    Returns
+    -------
+    str
+        Suffix of the form ``_edge_<d>px`` or ``_slice_<d>px``.
+    """
+    d_str = str(d)
+    d_clean = (
+        d_str.replace("(", "")
+        .replace(")", "")
+        .replace(", ", "_")
+        .replace(",", "_")
+    )
+    if "-" in d_str or "," in d_str:
+        return f"_slice_{d_clean.replace('-', 'm')}px"
+    return f"_edge_{d_clean}px"
+
+
 def measure_features(
     img: Optional[np.ndarray],
     label: np.ndarray,
@@ -490,62 +608,10 @@ def measure_features(
                 raise ValueError("Mismatch between the provided channel names and the shape of the image")
 
         if spot_detection is not None:
-            detection_channel = spot_detection.get("channel")
-            channels_list = (
-                list(channels) if not isinstance(channels, list) else channels
-            )
-            if detection_channel in channels_list:
-                ind = channels_list.index(detection_channel)
-                if "image_preprocessing" not in spot_detection:
-                    spot_detection.update({"image_preprocessing": None})
-
-                df_spots = blob_detection(
-                    img,
-                    label,
-                    diameter=spot_detection["diameter"],
-                    threshold=spot_detection["threshold"],
-                    channel_name=detection_channel,
-                    target_channel=ind,
-                    image_preprocessing=spot_detection["image_preprocessing"],
-                )
-            else:
-                logger.warning(
-                    f"Spot detection channel '{detection_channel}' not found in channels."
-                )
-                df_spots = None
+            df_spots = _run_spot_detection(img, label, spot_detection, channels)
 
         if normalisation_list:
-            for norm in normalisation_list:
-                target = norm.get("target_channel")
-                channels_list = (
-                    list(channels) if not isinstance(channels, list) else channels
-                )
-                if target in channels_list:
-                    ind = channels_list.index(target)
-
-                    if norm["correction_type"] == "local":
-                        normalised_image = normalise_by_cell(
-                            img[:, :, ind].copy(),
-                            label,
-                            distance=int(norm["distance"]),
-                            model=norm["model"],
-                            operation=norm["operation"],
-                            clip=norm["clip"],
-                        )
-                        img[:, :, ind] = normalised_image
-                    else:
-                        corrected_image = field_correction(
-                            img[:, :, ind].copy(),
-                            threshold=norm["threshold_on_std"],
-                            operation=norm["operation"],
-                            model=norm["model"],
-                            clip=norm["clip"],
-                        )
-                        img[:, :, ind] = corrected_image
-                else:
-                    logger.warning(
-                        f"Normalization target '{target}' not found in channels."
-                    )
+            _apply_image_normalization(img, label, normalisation_list, channels)
 
     # Initialize extra properties list and name check list
     extra = []  # Ensure 'extra' is defined regardless of import success
@@ -639,33 +705,6 @@ def measure_features(
         # Always include label for merging
         clean_intensity_features.append("label")
 
-        # Helper to format suffix
-        def get_suffix(d: Union[int, float, str]) -> str:
-            """
-            Formats the suffix for column names based on distance.
-
-            Parameters
-            ----------
-            d : int or float or str
-                The distance value.
-
-            Returns
-            -------
-            str
-                The formatted suffix string.
-            """
-            d_str = str(d)
-            d_clean = (
-                d_str.replace("(", "")
-                .replace(")", "")
-                .replace(", ", "_")
-                .replace(",", "_")
-            )
-            if "-" in d_str or "," in d_str:
-                return f"_slice_{d_clean.replace('-', 'm')}px"
-            else:
-                return f"_edge_{d_clean}px"
-
         # Ensure border_dist is a list for uniform processing
         dist_list = (
             [border_dist] if isinstance(border_dist, (int, float, str)) else border_dist
@@ -688,7 +727,7 @@ def measure_features(
             rename_dict = {}
             for c in df_props_border_d.columns:
                 if "intensity" in c:
-                    rename_dict[c] = c + get_suffix(d)
+                    rename_dict[c] = c + _get_border_suffix(d)
 
             df_props_border_d = df_props_border_d.rename(columns=rename_dict)
             df_props_border_list.append(df_props_border_d)

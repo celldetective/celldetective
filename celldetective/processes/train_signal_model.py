@@ -10,7 +10,7 @@ from tensorflow.python.keras.callbacks import Callback
 
 from celldetective.event_detection_models import SignalDetectionModel
 from celldetective.log_manager import get_logger
-from celldetective.utils.model_loaders import locate_signal_model
+from celldetective.utils.model_loaders import locate_signal_model, _resolve_signal_model_paths
 
 logger = get_logger(__name__)
 
@@ -281,13 +281,9 @@ class TrainSignalModelProcess(Process):
         if "neighborhood_of_interest" in self.training_instructions:
             if self.training_instructions["neighborhood_of_interest"] is not None:
 
-                model_path = locate_signal_model(
+                _, model_config_path = _resolve_signal_model_paths(
                     self.training_instructions["model_name"], path=None, pairs=True
                 )
-                complete_path = model_path  # +model
-                complete_path = rf"{complete_path}"
-                model_config_path = os.sep.join([complete_path, "config_input.json"])
-                model_config_path = rf"{model_config_path}"
 
                 with open(model_config_path) as f:
                     config = json.load(f)

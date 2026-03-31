@@ -28,7 +28,7 @@ import subprocess
 import sys
 import json
 import numpy as np
-from celldetective.utils.model_loaders import locate_signal_model
+from celldetective.utils.model_loaders import locate_signal_model, _resolve_signal_model_paths
 from celldetective.utils.data_loaders import get_position_table, get_position_pickle
 from celldetective.tracking import clean_trajectories, interpolate_nan_properties
 import matplotlib.pyplot as plt
@@ -47,6 +47,26 @@ logger = logging.getLogger("celldetective")
 abs_path = os.sep.join(
     [os.path.split(os.path.dirname(os.path.realpath(__file__)))[0], "celldetective"]
 )
+
+
+
+def _extract_config_label(config: dict) -> Optional[str]:
+    """Return the ``label`` field from a signal model config, or None if absent or empty.
+
+    Parameters
+    ----------
+    config : dict
+        Loaded ``config_input.json`` dictionary.
+
+    Returns
+    -------
+    str or None
+    """
+    try:
+        label = config["label"]
+        return None if label == "" else label
+    except KeyError:
+        return None
 
 
 def analyze_signals(
@@ -111,18 +131,9 @@ def analyze_signals(
     """
     from celldetective.event_detection_models import SignalDetectionModel
 
-    model_path = locate_signal_model(model, path=model_path)
-    complete_path = model_path  # +model
-    complete_path = rf"{complete_path}"
-    model_config_path = os.sep.join([complete_path, "config_input.json"])
-    model_config_path = rf"{model_config_path}"
-    if not os.path.exists(complete_path):
-        raise FileNotFoundError(f"Model {model} could not be located in folder {model_path}... Abort.")
-    if not os.path.exists(model_config_path):
-        raise FileNotFoundError(f"Model configuration could not be located in folder {model_path}... Abort.")
+    complete_path, model_config_path = _resolve_signal_model_paths(model, path=model_path)
 
     available_signals = list(trajectories.columns)
-    # print('The available_signals are : ',available_signals)
 
     with open(model_config_path) as f:
         config = json.load(f)
@@ -132,13 +143,7 @@ def analyze_signals(
         if np.any([s == "None" for s in selected_signals]):
             trajectories["None"] = 0.0
     model_signal_length = config["model_signal_length"]
-
-    try:
-        label = config["label"]
-        if label == "":
-            label = None
-    except KeyError:
-        label = None
+    label = _extract_config_label(config)
 
     if selected_signals is None:
         selected_signals = []
@@ -380,17 +385,12 @@ def analyze_pair_signals_at_position(
     df_pairs = get_position_table(pos, population="pairs")
 
     # Need to identify expected reference / neighbor tables
-    model_path = locate_signal_model(model, pairs=True)
-    logger.info(f"Looking for model in {model_path}...")
-    complete_path = model_path
-    complete_path = rf"{complete_path}"
-    model_config_path = os.sep.join([complete_path, "config_input.json"])
-    model_config_path = rf"{model_config_path}"
+    complete_path, model_config_path = _resolve_signal_model_paths(model, pairs=True)
     with open(model_config_path) as f:
-        model_config_path = json.load(f)
+        model_config = json.load(f)
 
-    reference_population = model_config_path["reference_population"]
-    neighbor_population = model_config_path["neighbor_population"]
+    reference_population = model_config["reference_population"]
+    neighbor_population = model_config["neighbor_population"]
 
     if dataframes[reference_population] is None:
         logger.error(
@@ -466,16 +466,9 @@ def analyze_pair_signals(
     """
     from celldetective.event_detection_models import SignalDetectionModel
 
-    model_path = locate_signal_model(model, path=model_path, pairs=True)
-    logger.info(f"Looking for model in {model_path}...")
-    complete_path = model_path
-    complete_path = rf"{complete_path}"
-    model_config_path = os.sep.join([complete_path, "config_input.json"])
-    model_config_path = rf"{model_config_path}"
-    if not os.path.exists(complete_path):
-        raise FileNotFoundError(f"Model {model} could not be located in folder {model_path}... Abort.")
-    if not os.path.exists(model_config_path):
-        raise FileNotFoundError(f"Model configuration could not be located in folder {model_path}... Abort.")
+    complete_path, model_config_path = _resolve_signal_model_paths(
+        model, path=model_path, pairs=True
+    )
 
     trajectories_pairs = trajectories_pairs.rename(columns=lambda x: "pair_" + x)
     trajectories_reference = trajectories_reference.rename(
@@ -518,13 +511,7 @@ def analyze_pair_signals(
     with open(model_config_path) as f:
         config = json.load(f)
     required_signals = config["channels"]
-
-    try:
-        label = config["label"]
-        if label == "":
-            label = None
-    except KeyError:
-        label = None
+    label = _extract_config_label(config)
 
     if selected_signals is None:
         selected_signals = []

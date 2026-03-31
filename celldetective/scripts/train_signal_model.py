@@ -9,7 +9,7 @@ from glob import glob
 import numpy as np
 from art import tprint
 from celldetective.event_detection_models import SignalDetectionModel
-from celldetective.utils.model_loaders import locate_signal_model
+from celldetective.utils.model_loaders import locate_signal_model, _resolve_signal_model_paths
 import logging
 
 logger = logging.getLogger("celldetective")
@@ -98,13 +98,9 @@ model.fit_from_directory(threshold_instructions["ds"], **train_params)
 if "neighborhood_of_interest" in threshold_instructions:
     if threshold_instructions["neighborhood_of_interest"] is not None:
 
-        model_path = locate_signal_model(
+        _, model_config_path = _resolve_signal_model_paths(
             threshold_instructions["model_name"], path=None, pairs=True
         )
-        complete_path = model_path  # +model
-        complete_path = rf"{complete_path}"
-        model_config_path = os.sep.join([complete_path, "config_input.json"])
-        model_config_path = rf"{model_config_path}"
 
         with open(model_config_path) as f:
             config = json.load(f)

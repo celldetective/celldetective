@@ -50,6 +50,121 @@ abs_path = os.sep.join(
 )
 
 
+def _run_btrack_core(
+    new_btrack_objects: list,
+    configuration,
+    columns: list,
+    volume: Tuple[int, int],
+    track_kwargs: dict,
+    optimizer_options: dict,
+) -> Tuple[np.ndarray, dict, dict]:
+    """Run BayesianTracker and return (data, properties, graph).
+
+    Parameters
+    ----------
+    new_btrack_objects : list
+        Localizations converted to bTrack objects.
+    configuration : btrack Configuration
+        Tracker configuration.
+    columns : list of str
+        Feature column names used for visual updates (empty list → motion only).
+    volume : tuple of int
+        (height, width) frame dimensions in pixels.
+    track_kwargs : dict
+        Extra keyword arguments forwarded to ``tracker.track()``.
+    optimizer_options : dict
+        Options forwarded to ``tracker.optimize()``.
+
+    Returns
+    -------
+    data : ndarray
+    properties : dict
+    graph : dict
+    """
+    with BayesianTracker() as tracker:
+        tracker.configure(configuration)
+        if columns:
+            tracking_updates = ["motion", "visual"]
+            tracker.features = columns
+        else:
+            tracking_updates = ["motion"]
+        tracker.append(new_btrack_objects)
+        tracker.volume = ((0, volume[0]), (0, volume[1]), (-1e5, 1e5))
+        tracker.track(tracking_updates=tracking_updates, **track_kwargs)
+        tracker.optimize(options=optimizer_options)
+        data, properties, graph = tracker.to_napari()
+        logger.debug(f"tracker.to_napari() returned data shape: {data.shape}")
+        logger.debug(
+            f"tracker.to_napari() returned properties keys: "
+            f"{list(properties.keys()) if properties else 'None'}"
+        )
+    return data, properties, graph
+
+
+def _run_trackpy_tracking(
+    objects: pd.DataFrame,
+    search_range,
+    memory: int,
+    column_labels: dict,
+) -> Tuple[pd.DataFrame, np.ndarray]:
+    """Link objects with trackpy and return (df, data_array).
+
+    Parameters
+    ----------
+    objects : DataFrame
+        Per-frame object measurements with columns 't', 'x', 'y'.
+    search_range : float or tuple
+        Maximum displacement between frames.
+    memory : int
+        Number of frames an object may disappear and still be linked.
+    column_labels : dict
+        Mapping from logical names to column names in the output DataFrame.
+
+    Returns
+    -------
+    df : DataFrame
+        Trajectory table with bTrack-compatible dummy columns added.
+    data_array : ndarray
+        Array of shape (N, 5) with track/time/z/y/x columns.
+
+    Raises
+    ------
+    ValueError
+        If *search_range* or *memory* is None.
+    """
+    if search_range is None or memory is None:
+        raise ValueError("Please provide a valid search range and memory value for trackpy.")
+    objects = objects.rename(columns={"t": "frame"})
+    logger.debug(f"trackpy objects: {objects.shape}, columns: {list(objects.columns)}")
+    data = tp.link(objects, search_range, memory=memory, link_strategy="auto")
+    data["particle"] = data["particle"] + 1  # force track id to start at 1
+    df = data.rename(
+        columns={
+            "frame": column_labels["time"],
+            "x": column_labels["x"],
+            "y": column_labels["y"],
+            "particle": column_labels["track"],
+        }
+    )
+    df["state"] = 5.0
+    df["generation"] = 0.0
+    df["root"] = 1.0
+    df["parent"] = 1.0
+    df["dummy"] = False
+    df["z"] = 0.0
+    data_array = df[
+        [
+            column_labels["track"],
+            column_labels["time"],
+            "z",
+            column_labels["y"],
+            column_labels["x"],
+        ]
+    ].to_numpy()
+    logger.debug(f"trackpy result shape: {df.shape}")
+    return df, data_array
+
+
 def track(
     labels: np.ndarray,
     configuration: Optional[Any] = None,
@@ -196,32 +311,11 @@ def track(
 
         # 2) track the objects
         new_btrack_objects = localizations_to_objects(objects)
+        data, properties, graph = _run_btrack_core(
+            new_btrack_objects, configuration, columns, volume, track_kwargs, optimizer_options
+        )
 
-        with BayesianTracker() as tracker:
-
-            tracker.configure(configuration)
-
-            if columns:
-                tracking_updates = ["motion", "visual"]
-                # tracker.tracking_updates = ["motion","visual"]
-                tracker.features = columns
-            else:
-                tracking_updates = ["motion"]
-
-            tracker.append(new_btrack_objects)
-            tracker.volume = (
-                (0, volume[0]),
-                (0, volume[1]),
-                (-1e5, 1e5),
-            )  # (-1e5, 1e5)
-            # print(tracker.volume)
-            tracker.track(tracking_updates=tracking_updates, **track_kwargs)
-            tracker.optimize(options=optimizer_options)
-
-            data, properties, graph = tracker.to_napari()  # ndim=2
-            logger.debug(f"tracker.to_napari() returned data shape: {data.shape}")
-            logger.debug(f"tracker.to_napari() returned properties keys: {list(properties.keys()) if properties else 'None'}")
-        # do the table post processing and napari options
+        # Convert tracker output array to DataFrame
         if data.shape[1] == 4:
             df = pd.DataFrame(
                 data,
@@ -250,38 +344,11 @@ def track(
     else:
         properties = None
         graph = {}
-        logger.debug(f"trackpy objects: {objects.shape}, columns: {list(objects.columns)}")
-        objects = objects.rename(columns={"t": "frame"})
-        if search_range is not None and memory is not None:
-            data = tp.link(objects, search_range, memory=memory, link_strategy="auto")
-        else:
-            logger.error("Please provide a valid search range and memory value for trackpy.")
+        try:
+            df, data = _run_trackpy_tracking(objects, search_range, memory, column_labels)
+        except ValueError as e:
+            logger.error(str(e))
             return None
-        data["particle"] = data["particle"] + 1  # force track id to start at 1
-        df = data.rename(
-            columns={
-                "frame": column_labels["time"],
-                "x": column_labels["x"],
-                "y": column_labels["y"],
-                "particle": column_labels["track"],
-            }
-        )
-        df["state"] = 5.0
-        df["generation"] = 0.0
-        df["root"] = 1.0
-        df["parent"] = 1.0
-        df["dummy"] = False
-        df["z"] = 0.0
-        data = df[
-            [
-                column_labels["track"],
-                column_labels["time"],
-                "z",
-                column_labels["y"],
-                column_labels["x"],
-            ]
-        ].to_numpy()
-        logger.debug(f"trackpy result shape: {df.shape}")
 
     if btrack_option:
         df = df.merge(pd.DataFrame(properties), left_index=True, right_index=True)
