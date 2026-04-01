@@ -1793,7 +1793,6 @@ class SignalDetectionModel(object):
                     logger.warning(
                         f"Attribute {selected_signals[i]!r} matched to {self.channel_option[i]!r} not found in annotation."
                     )
-                    pass
 
             classes[k] = signal_dataset[k]["class"]
             times_of_interest[k] = signal_dataset[k]["time_of_interest"]

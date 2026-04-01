@@ -522,9 +522,6 @@ def filter_on_property(
     if intensity_image is not None:
         props.extend(intensity_props)
 
-    if intensity_image is not None:
-        props.extend(intensity_props)
-
     import pandas as pd
 
     properties = pd.DataFrame(
@@ -546,8 +543,6 @@ def filter_on_property(
                 logger.error(
                     f"Query {query} could not be applied. Ensure that the feature exists. {e}"
                 )
-        else:
-            pass
 
     cell_ids = list(np.unique(labels)[1:])
     leftover_cells = list(properties["label"].unique())

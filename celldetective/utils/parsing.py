@@ -538,6 +538,4 @@ def parse_isotropic_radii(string: str) -> List[Union[int, List[int]]]:
         if "[" in s:
             ring = [int(s.replace("[", "")), int(sections[k + 1].replace("]", ""))]
             radii.append(ring)
-        else:
-            pass
     return radii
