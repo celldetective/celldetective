@@ -41,6 +41,13 @@ def setup_global_logging(
     console_handler.setFormatter(logging.Formatter(CONSOLE_FORMAT))
     root_logger.addHandler(console_handler)
 
+    # Always forward library logs to the console
+    for lib in ["trackpy", "btrack", "cellpose", "stardist"]:
+        lib_logger = logging.getLogger(lib)
+        lib_logger.setLevel(logging.INFO)
+        if console_handler not in lib_logger.handlers:
+            lib_logger.addHandler(console_handler)
+
     # Optional Global File Handler
     if log_file:
         os.makedirs(os.path.dirname(log_file), exist_ok=True)
@@ -50,7 +57,6 @@ def setup_global_logging(
 
         for lib in ["trackpy", "btrack", "cellpose", "stardist"]:
             lib_logger = logging.getLogger(lib)
-            lib_logger.setLevel(logging.INFO)
             if file_handler not in lib_logger.handlers:
                 lib_logger.addHandler(file_handler)
 

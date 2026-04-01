@@ -212,7 +212,7 @@ def track(
             )  # (-1e5, 1e5)
             # print(tracker.volume)
             tracker.track(tracking_updates=tracking_updates, **track_kwargs)
-            tracker.optimize(options=optimizer_options)
+            tracker.optimise(options=optimizer_options)
 
             data, properties, graph = tracker.to_napari()  # ndim=2
             print(f"DEBUG: tracker.to_napari() returned data shape: {data.shape}")

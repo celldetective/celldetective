@@ -447,6 +447,8 @@ def interpret_tracking_configuration(config: Optional[str]) -> Union[str, Any]:
 
     """
 
+    logger = get_logger()
+
     if isinstance(config, str):
         if os.path.exists(config):
             return config
@@ -463,6 +465,10 @@ def interpret_tracking_configuration(config: Optional[str]) -> Union[str, Any]:
             if os.path.exists(modelpath + config + ".json"):
                 return modelpath + config + ".json"
             else:
+                logger.warning(
+                    f"Tracking config not found at '{config}' or in the bundled configs. "
+                    "Falling back to the btrack default (cell_config)."
+                )
                 from btrack.datasets import cell_config
 
                 config = cell_config()
