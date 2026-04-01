@@ -70,13 +70,14 @@ if mode.lower() == "target" or mode.lower() == "targets":
     label_folder = "labels_targets"
     table_name = "trajectories_targets.csv"
     instruction_file = os.sep.join(["configs", "measurement_instructions_targets.json"])
-
 elif mode.lower() == "effector" or mode.lower() == "effectors":
     label_folder = "labels_effectors"
     table_name = "trajectories_effectors.csv"
     instruction_file = os.sep.join(
         ["configs", "measurement_instructions_effectors.json"]
     )
+else:
+    raise ValueError(f"Unknown mode {mode!r}. Expected 'target' or 'effector'.")
 
 # Locate experiment config
 parent1 = Path(pos).parent

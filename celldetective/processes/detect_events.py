@@ -260,7 +260,7 @@ class SignalAnalysisProcess(Process):
 
         except Exception as e:
             logger.error(f"Error in SignalAnalysisProcess: {e}", exc_info=True)
-            raise e
+            raise
 
     def run(self):
         """Run the signal analysis process."""

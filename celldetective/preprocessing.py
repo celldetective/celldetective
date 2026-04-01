@@ -259,7 +259,6 @@ def estimate_background_per_condition(
                 progress_callback(image_preview=background)
 
             if offset is not None:
-                # print("The offset is applied to background...")
                 background -= offset
             if fix_nan:
                 background = interpolate_nan(background.copy().astype(float))
@@ -608,7 +607,6 @@ def apply_background_to_stack(
         ).astype(float)
         target_img = frames[:, :, target_channel_index].copy()
         if offset is not None:
-            # print(f"The offset is applied to image...")
             target_img -= offset
 
         if optimize_option:

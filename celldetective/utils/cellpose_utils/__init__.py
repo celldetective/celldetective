@@ -151,7 +151,7 @@ def _prep_cellpose_model(
                 nchan=n_channels,
             )
         else:
-            raise e
+            raise
     if scale is None:
         scale_model = model.diam_mean / model.diam_labels
     else:

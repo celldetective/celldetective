@@ -807,15 +807,15 @@ class SegmentCellThresholdProcess(BaseSegmentProcess):
         with concurrent.futures.ThreadPoolExecutor(
             max_workers=self.n_threads
         ) as executor:
-            results = results = executor.map(
+            results = executor.map(
                 self.parallel_job, chunks
             )  # list(map(lambda x: executor.submit(self.parallel_job, x), chunks))
             try:
                 for i, return_value in enumerate(results):
                     pass
             except Exception as e:
-                logger.error("Exception: ", e)
-                raise e
+                logger.error(f"Exception: {e}")
+                raise
 
     def run(self):
         """Run the segmentation process."""

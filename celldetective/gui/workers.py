@@ -365,7 +365,6 @@ class Runner(QRunnable):
 
             except Exception as e:
                 logger.error(f"{e}")
-                pass
 
     def close(self) -> None:
         """Close the process."""

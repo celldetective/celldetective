@@ -210,6 +210,6 @@ def train_test_split(
         else:
             continue
 
-    raise Exception(
+    raise ValueError(
         "Some classes are missing from the train or validation set... Abort."
     )

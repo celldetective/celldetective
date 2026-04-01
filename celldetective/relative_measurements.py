@@ -295,9 +295,7 @@ def measure_pairs(pos: str, neighborhood_protocol: dict) -> Optional[pd.DataFram
             coords_reference = group[["POSITION_X", "POSITION_Y"]].to_numpy()[0]
 
             neighbors = []
-            if isinstance(neighborhood, float) or neighborhood != neighborhood:
-                pass
-            else:
+            if not (isinstance(neighborhood, float) or neighborhood != neighborhood):
                 for neigh in neighborhood:
                     neighbors.append(neigh["id"])
 

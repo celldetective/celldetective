@@ -217,10 +217,6 @@ class SettingsTracking(CelldetectiveSettingsPanel):
         if self.ContentsPostProc.isHidden():
             self.collapse_post_proc_btn.setIcon(icon(MDI6.chevron_down, color="black"))
             self.collapse_post_proc_btn.setIconSize(QSize(20, 20))
-            if len(is_open[is_open]) == 0:
-                pass
-                # self._scroll_area.setMinimumHeight(int(self.minimum_height))
-                # self._adjustSize()
         else:
             self.collapse_post_proc_btn.setIcon(icon(MDI6.chevron_up, color="black"))
             self.collapse_post_proc_btn.setIconSize(QSize(20, 20))
@@ -350,10 +346,6 @@ class SettingsTracking(CelldetectiveSettingsPanel):
         if self.ContentsFeatures.isHidden():
             self.collapse_features_btn.setIcon(icon(MDI6.chevron_down, color="black"))
             self.collapse_features_btn.setIconSize(QSize(20, 20))
-            if len(is_open[is_open]) == 0:
-                pass
-                # self._scroll_area.setMinimumHeight(int(self.minimum_height))
-                # self._adjustSize()
         else:
             self.collapse_features_btn.setIcon(icon(MDI6.chevron_up, color="black"))
             self.collapse_features_btn.setIconSize(QSize(20, 20))
@@ -722,10 +714,6 @@ class SettingsTracking(CelldetectiveSettingsPanel):
         if self.ContentsConfig.isHidden():
             self.collapse_config_btn.setIcon(icon(MDI6.chevron_down, color="black"))
             self.collapse_config_btn.setIconSize(QSize(20, 20))
-            if len(is_open[is_open]) == 0:
-                pass
-                # self._scroll_area.setMinimumHeight(int(self.minimum_height))
-                # self._adjustSize()
         else:
             self.collapse_config_btn.setIcon(icon(MDI6.chevron_up, color="black"))
             self.collapse_config_btn.setIconSize(QSize(20, 20))
@@ -743,10 +731,6 @@ class SettingsTracking(CelldetectiveSettingsPanel):
                 icon(MDI6.chevron_down, color="black")
             )
             self.collapse_config_trackpy_btn.setIconSize(QSize(20, 20))
-            if len(is_open[is_open]) == 0:
-                pass
-                # self._scroll_area.setMinimumHeight(int(self.minimum_height))
-                # self._adjustSize()
         else:
             self.collapse_config_trackpy_btn.setIcon(
                 icon(MDI6.chevron_up, color="black")

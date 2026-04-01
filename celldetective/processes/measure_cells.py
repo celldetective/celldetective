@@ -568,8 +568,8 @@ class MeasurementProcess(Process):
                         logger.info(f"Thread {i} completed...")
                         self.timestep_dataframes.extend(return_value)
                 except Exception as e:
-                    logger.error("Exception: ", e)
-                    raise e
+                    logger.error(f"Exception: {e}")
+                    raise
         else:
             try:
                 # Avoid thread pool overhead for single thread
@@ -578,8 +578,8 @@ class MeasurementProcess(Process):
                     logger.info(f"Job {i} completed...")
                     self.timestep_dataframes.extend(return_value)
             except Exception as e:
-                logger.error("Exception: ", e)
-                raise e
+                logger.error(f"Exception: {e}")
+                raise
 
         logger.info("Measurements successfully performed...")
 

@@ -129,7 +129,6 @@ class PairEventAnnotator(CelldetectiveMainWindow):
             "y_anim",
             "t",
             "dummy",
-            "group_color",
             "state",
             "generation",
             "root",
@@ -158,13 +157,11 @@ class PairEventAnnotator(CelldetectiveMainWindow):
 
         meta = get_experiment_metadata(self.exp_dir)
         if meta is not None:
-            keys = list(meta.keys())
-            self.cols_to_remove.extend(keys)
+            self.cols_to_remove.extend(meta.keys())
 
         labels = get_experiment_labels(self.exp_dir)
         if labels is not None:
-            keys = list(labels.keys())
-            self.cols_to_remove.extend(labels)
+            self.cols_to_remove.extend(labels.keys())
 
         # Read instructions from target block for now...
         self.mode = "neighborhood"
@@ -1161,9 +1158,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
             status[:] = 42
 
         status_color = [color_from_status(s, recently_modified=True) for s in status]
-        class_color = [
-            color_from_class(cclass, recently_modified=True) for i in range(len(status))
-        ]
+        class_color = [color_from_class(cclass, recently_modified=True)] * len(status)
 
         self.df_relative.loc[pair_filter, self.pair_status_name] = status
         self.df_relative.loc[pair_filter, "status_color"] = status_color
@@ -1213,9 +1208,8 @@ class PairEventAnnotator(CelldetectiveMainWindow):
             )
             msgBox.setWindowTitle("Warning")
             msgBox.setStandardButtons(QMessageBox.Ok)
-            returnValue = msgBox.exec()
-            if returnValue == QMessageBox.Yes:
-                self.close()
+            msgBox.exec()
+            self.close()
         else:
             self.stack_path = movies[0]
             self.len_movie = self.parent_window.parent_window.len_movie
@@ -1508,7 +1502,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
             if cclass > 2:
                 status[:] = 42
             status_color = [color_from_status(s) for s in status]
-            class_color = [color_from_class(cclass) for i in range(len(status))]
+            class_color = [color_from_class(cclass)] * len(status)
 
             df_reference.loc[indices, self.reference_status_name] = status
             df_reference.loc[indices, "status_color"] = status_color
@@ -1544,7 +1538,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
             if cclass > 2:
                 status[:] = 42
             status_color = [color_from_status(s) for s in status]
-            class_color = [color_from_class(cclass) for i in range(len(status))]
+            class_color = [color_from_class(cclass)] * len(status)
 
             self.df_relative.loc[indices, self.pair_status_name] = status
             self.df_relative.loc[indices, "status_color"] = status_color
@@ -1570,7 +1564,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
             if cclass > 2:
                 status[:] = 42
             status_color = [color_from_status(s) for s in status]
-            class_color = [color_from_class(cclass) for i in range(len(status))]
+            class_color = [color_from_class(cclass)] * len(status)
 
             df_neighbors.loc[indices, self.neighbor_status_name] = status
             df_neighbors.loc[indices, "status_color"] = status_color
@@ -2021,46 +2015,23 @@ class PairEventAnnotator(CelldetectiveMainWindow):
     def load_annotator_config(self):
         """Load settings from config or set default values."""
 
+        self.rgb_mode = False
+        self.log_option = False
+        self.percentile_mode = True
+        self.target_channels = [[self.channel_names[0], 0.01, 99.99]]
+        self.fraction = 0.25
+        self.anim_interval = 33
+
         logger.debug("Reading instructions...")
         if os.path.exists(self.instructions_path):
             with open(self.instructions_path, "r") as f:
-
                 instructions = json.load(f)
-                logger.debug(f"Reading instructions: {instructions}")
-
-                if "rgb_mode" in instructions:
-                    self.rgb_mode = instructions["rgb_mode"]
-                else:
-                    self.rgb_mode = False
-
-                if "percentile_mode" in instructions:
-                    self.percentile_mode = instructions["percentile_mode"]
-                else:
-                    self.percentile_mode = True
-
-                if "channels" in instructions:
-                    self.target_channels = instructions["channels"]
-                else:
-                    self.target_channels = [[self.channel_names[0], 0.01, 99.99]]
-
-                if "fraction" in instructions:
-                    self.fraction = float(instructions["fraction"])
-                else:
-                    self.fraction = 0.25
-
-                self.anim_interval = 33
-
-                if "log" in instructions:
-                    self.log_option = instructions["log"]
-                else:
-                    self.log_option = False
-        else:
-            self.rgb_mode = False
-            self.log_option = False
-            self.percentile_mode = True
-            self.target_channels = [[self.channel_names[0], 0.01, 99.99]]
-            self.fraction = 0.25
-            self.anim_interval = 33
+            logger.debug(f"Reading instructions: {instructions}")
+            self.rgb_mode = instructions.get("rgb_mode", self.rgb_mode)
+            self.percentile_mode = instructions.get("percentile_mode", self.percentile_mode)
+            self.target_channels = instructions.get("channels", self.target_channels)
+            self.fraction = float(instructions.get("fraction", self.fraction))
+            self.log_option = instructions.get("log", self.log_option)
 
     def prepare_stack(self, progress_callback: Optional[callable] = None) -> None:
         """
@@ -2480,7 +2451,6 @@ class PairEventAnnotator(CelldetectiveMainWindow):
                     self.cancel_pair_selection()
             else:
                 logger.debug("One cell already selected, skip.")
-                pass
         elif len(self.reference_selection) > 0 and not self.pair_selected:
 
             logger.debug("Picking a cell from the neighbor population...")
@@ -2531,7 +2501,6 @@ class PairEventAnnotator(CelldetectiveMainWindow):
                 self.cancel_pair_selection()
         else:
             logger.debug("Pair-pick else #2: no pair selected and no reference.")
-            pass
 
         logger.debug(f"pair_selection={self.pair_selection}")
 

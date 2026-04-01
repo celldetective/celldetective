@@ -498,7 +498,7 @@ class TrainSegModelProcess(Process):
                 )
         except Exception as e:
             logger.error(f"Error in StarDist training: {e}")
-            raise e
+            raise
         finally:
             sys.stdout = original_stdout
             sys.stderr = original_stderr
@@ -653,7 +653,7 @@ class TrainSegModelProcess(Process):
             logger.info("Training interrupted.")
         except Exception as e:
             logger.error(f"Error during training: {e}")
-            raise e
+            raise
         finally:
             logger_cellpose.removeHandler(handler)
 

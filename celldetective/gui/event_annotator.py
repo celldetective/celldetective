@@ -485,24 +485,12 @@ class EventAnnotator(BaseAnnotator):
 
         cols = list(self.df_tracks.columns)
 
-        if (
-            self.time_name in cols
-            and self.class_name in cols
-            and not self.status_name in cols
-        ):
-            # only create the status column if it does not exist to not erase static classification results
-            self.make_status_column()
-        elif (
-            self.time_name in cols
-            and self.class_name in cols
-            and self.df_tracks[self.status_name].isnull().all()
-        ):
-            self.make_status_column()
-        elif self.time_name in cols and self.class_name in cols:
-            # all good, do nothing
-            pass
+        if self.time_name in cols and self.class_name in cols:
+            # Create/refill status column when missing or entirely null
+            if self.status_name not in cols or self.df_tracks[self.status_name].isnull().all():
+                self.make_status_column()
         else:
-            if not self.status_name in self.df_tracks.columns:
+            if self.status_name not in self.df_tracks.columns:
                 self.df_tracks[self.status_name] = 0
                 self.df_tracks["status_color"] = color_from_status(0)
                 self.df_tracks["class_color"] = color_from_class(1)
@@ -633,12 +621,7 @@ class EventAnnotator(BaseAnnotator):
             status[:] = 42
 
         status_color = [color_from_status(s, recently_modified=True) for s in status]
-        class_color = [
-            color_from_class(cclass, recently_modified=True) for i in range(len(status))
-        ]
-
-        # self.df_tracks['status_color'] = [color_from_status(i) for i in self.df_tracks[self.status_name].to_numpy()]
-        # self.df_tracks['class_color'] = [color_from_class(i) for i in self.df_tracks[self.class_name].to_numpy()]
+        class_color = [color_from_class(cclass, recently_modified=True)] * len(status)
 
         self.df_tracks.loc[indices, self.status_name] = status
         self.df_tracks.loc[indices, "status_color"] = status_color
@@ -683,7 +666,7 @@ class EventAnnotator(BaseAnnotator):
                 status[:] = 42
 
             status_color = [color_from_status(s) for s in status]
-            class_color = [color_from_class(cclass) for i in range(len(status))]
+            class_color = [color_from_class(cclass)] * len(status)
 
             self.df_tracks.loc[indices, self.status_name] = status
             self.df_tracks.loc[indices, "status_color"] = status_color
@@ -692,11 +675,10 @@ class EventAnnotator(BaseAnnotator):
     def generate_signal_choices(self):
         """Generate signal choice combos."""
 
-        self.signal_choice_cb = [QSearchableComboBox() for i in range(self.n_signals)]
+        self.signal_choice_cb = [QSearchableComboBox() for _ in range(self.n_signals)]
         self.signal_choice_label = [
             QLabel(f"signal {i + 1}: ") for i in range(self.n_signals)
         ]
-        # self.log_btns = [QPushButton() for i in range(self.n_signals)]
 
         signals = list(self.df_tracks.columns)
 
@@ -729,22 +711,20 @@ class EventAnnotator(BaseAnnotator):
 
         meta = get_experiment_metadata(self.exp_dir)
         if meta is not None:
-            keys = list(meta.keys())
-            to_remove.extend(keys)
+            to_remove.extend(meta.keys())
 
         labels = get_experiment_labels(self.exp_dir)
         if labels is not None:
-            keys = list(labels.keys())
-            to_remove.extend(labels)
+            to_remove.extend(labels.keys())
 
         for c in to_remove:
             if c in signals:
                 signals.remove(c)
 
-        for i in range(len(self.signal_choice_cb)):
-            self.signal_choice_cb[i].addItems(["--"] + signals)
-            self.signal_choice_cb[i].setCurrentIndex(i + 1)
-            self.signal_choice_cb[i].currentIndexChanged.connect(self.plot_signals)
+        for i, cb in enumerate(self.signal_choice_cb):
+            cb.addItems(["--"] + signals)
+            cb.setCurrentIndex(i + 1)
+            cb.currentIndexChanged.connect(self.plot_signals)
 
     def plot_signals(self):
         """Plot the selected signals."""
@@ -753,18 +733,18 @@ class EventAnnotator(BaseAnnotator):
 
         try:
             yvalues = []
-            for i in range(len(self.signal_choice_cb)):
+            for i, (cb, line) in enumerate(zip(self.signal_choice_cb, self.lines)):
 
-                signal_choice = self.signal_choice_cb[i].currentText()
+                signal_choice = cb.currentText()
                 lbl = signal_choice
                 n_cut = 35
                 if len(lbl) > n_cut:
                     lbl = lbl[: (n_cut - 3)] + "..."
-                self.lines[i].set_label(lbl)
+                line.set_label(lbl)
 
                 if signal_choice == "--":
-                    self.lines[i].set_xdata([])
-                    self.lines[i].set_ydata([])
+                    line.set_xdata([])
+                    line.set_ydata([])
                 else:
                     xdata = self.df_tracks.loc[
                         self.df_tracks["TRACK_ID"] == self.track_of_interest, "FRAME"
@@ -780,9 +760,9 @@ class EventAnnotator(BaseAnnotator):
                     ydata = ydata[ydata == ydata]
 
                     yvalues.extend(ydata)
-                    self.lines[i].set_xdata(xdata)
-                    self.lines[i].set_ydata(ydata)
-                    self.lines[i].set_color(tab10(i / 3.0))
+                    line.set_xdata(xdata)
+                    line.set_ydata(ydata)
+                    line.set_color(tab10(i / 3.0))
 
             self.configure_ylims()
 
@@ -800,11 +780,9 @@ class EventAnnotator(BaseAnnotator):
 
         if len(range_values) > 0:
             range_values = np.array(range_values)
-            if len(range_values[range_values == range_values]) > 0:
-                if len(range_values[range_values > 0]) > 0:
-                    self.value_magnitude = np.nanpercentile(range_values, 1)
-                else:
-                    self.value_magnitude = 1
+            finite = range_values[~np.isnan(range_values)]
+            if len(finite) > 0:
+                self.value_magnitude = np.nanpercentile(range_values, 1) if np.any(range_values > 0) else 1
                 self.non_log_ymin = 0.98 * np.nanmin(range_values)
                 self.non_log_ymax = np.nanmax(range_values) * 1.02
                 if self.cell_ax.get_yscale() == "linear":
@@ -1075,38 +1053,28 @@ class EventAnnotator(BaseAnnotator):
             min_values = []
             max_values = []
             feats = []
-            for i in range(len(self.signal_choice_cb)):
-                signal = self.signal_choice_cb[i].currentText()
+            for cb in self.signal_choice_cb:
+                signal = cb.currentText()
                 if signal == "--":
                     continue
-                else:
-                    maxx = np.nanpercentile(
-                        self.df_tracks.loc[:, signal].to_numpy().flatten(), 99
-                    )
-                    minn = np.nanpercentile(
-                        self.df_tracks.loc[:, signal].to_numpy().flatten(), 1
-                    )
-                    min_values.append(minn)
-                    max_values.append(maxx)
-                    feats.append(signal)
-
-            smallest_value = np.amin(min_values)
-            feat_smallest_value = feats[np.argmin(min_values)]
-            min_feat = self.df_tracks[feat_smallest_value].min()
-            max_feat = self.df_tracks[feat_smallest_value].max()
-            pad_small = (max_feat - min_feat) * 0.05
-            if pad_small == 0:
-                pad_small = 0.05
-
-            largest_value = np.amax(max_values)
-            feat_largest_value = feats[np.argmax(max_values)]
-            min_feat = self.df_tracks[feat_largest_value].min()
-            max_feat = self.df_tracks[feat_largest_value].max()
-            pad_large = (max_feat - min_feat) * 0.05
-            if pad_large == 0:
-                pad_large = 0.05
+                vals = self.df_tracks[signal].to_numpy()
+                min_values.append(np.nanpercentile(vals, 1))
+                max_values.append(np.nanpercentile(vals, 99))
+                feats.append(signal)
 
             if len(min_values) > 0:
+                smallest_value = np.amin(min_values)
+                feat_smallest_value = feats[np.argmin(min_values)]
+                min_feat = self.df_tracks[feat_smallest_value].min()
+                max_feat = self.df_tracks[feat_smallest_value].max()
+                pad_small = (max_feat - min_feat) * 0.05 or 0.05
+
+                largest_value = np.amax(max_values)
+                feat_largest_value = feats[np.argmax(max_values)]
+                min_feat = self.df_tracks[feat_largest_value].min()
+                max_feat = self.df_tracks[feat_largest_value].max()
+                pad_large = (max_feat - min_feat) * 0.05 or 0.05
+
                 self.cell_ax.set_ylim(
                     smallest_value - pad_small, largest_value + pad_large
                 )
@@ -1238,10 +1206,13 @@ class EventAnnotator(BaseAnnotator):
     def give_cell_information(self):
         """Display cell information."""
 
-        cell_selected = f"cell: {self.track_of_interest}\n"
-        cell_class = f"class: {self.df_tracks.loc[self.df_tracks['TRACK_ID'] == self.track_of_interest, self.class_name].to_numpy()[0]}\n"
-        cell_time = f"time of interest: {self.df_tracks.loc[self.df_tracks['TRACK_ID'] == self.track_of_interest, self.time_name].to_numpy()[0]}\n"
-        self.cell_info.setText(cell_selected + cell_class + cell_time)
+        row = self.df_tracks.loc[self.df_tracks["TRACK_ID"] == self.track_of_interest].iloc[0]
+        cell_info = (
+            f"cell: {self.track_of_interest}\n"
+            f"class: {row[self.class_name]}\n"
+            f"time of interest: {row[self.time_name]}\n"
+        )
+        self.cell_info.setText(cell_info)
 
     def save_trajectories(self):
         """Save trajectories to file."""
@@ -1271,9 +1242,7 @@ class EventAnnotator(BaseAnnotator):
         """Set to the last frame."""
         self.stop()
         self.framedata = len(self.stack) - 1
-        while len(np.where(self.stack[self.framedata].flatten() == 0)[0]) > 0.99 * len(
-            self.stack[self.framedata].flatten()
-        ):
+        while np.count_nonzero(self.stack[self.framedata]) < 0.01 * self.stack[self.framedata].size:
             self.framedata -= 1
             if self.framedata < 0:
                 self.framedata = 0

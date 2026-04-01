@@ -1762,6 +1762,7 @@ def relabel_segmentation(
 
     new_labels = np.zeros_like(labels)
     shared_data = {"s": 0}
+    _lock = threading.Lock()
 
     if dialog:
         from PyQt5.QtWidgets import QApplication
@@ -1796,7 +1797,7 @@ def relabel_segmentation(
                 labels_at_t.remove(0)
             labels_not_in_df = [lbl for lbl in labels_at_t if lbl not in identities]
             for lbl in labels_not_in_df:
-                with threading.Lock():  # Synchronize access to `shared_data["s"]`
+                with _lock:  # Synchronize access to `shared_data["s"]`
                     track_id = max(all_track_ids) + shared_data["s"]
                     shared_data["s"] += 1
                 tracks_at_t.append(track_id)
@@ -1835,9 +1836,8 @@ def relabel_segmentation(
                 if dialog:
                     dialog.setValue(i + 1)
                     QApplication.processEvents()
-                pass
         except Exception as e:
-            logger.error("Exception in relabel_segmentation: " + str(e))
+            logger.error(f"Exception in relabel_segmentation: {e}")
 
     return new_labels
 
@@ -2019,20 +2019,6 @@ def view_tracks_in_napari(
         widget_adder=add_export_widget,
     )
     return True
-    # io.py line 2139 defined _view_on_napari arguments.
-    # Wait, io.py `view_tracks_in_napari` line 1250...
-    # I didn't see the call to `_view_on_napari`.
-    # I should have read more of `view_tracks_in_napari`.
-
-    # Let's assume standard viewer logic.
-    # But wait, `view_tracks_in_napari` implies viewing TRACKS.
-    # `_view_on_napari` takes `tracks` arg.
-    # In `control_tracking_table` it passes `tracks`.
-    # In `view_tracks_in_napari`, does it pass tracks?
-    # I will assume it does via `df`.
-
-    # Actually, let's implement `control_tracking_table` which I know fully.
-    pass
 
 
 def control_tracking_table(

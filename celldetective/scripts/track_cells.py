@@ -69,12 +69,13 @@ if mode.lower() == "target" or mode.lower() == "targets":
     instruction_file = os.sep.join(["configs", "tracking_instructions_targets.json"])
     napari_name = "napari_target_trajectories.npy"
     table_name = "trajectories_targets.csv"
-
 elif mode.lower() == "effector" or mode.lower() == "effectors":
     label_folder = "labels_effectors"
     instruction_file = os.sep.join(["configs", "tracking_instructions_effectors.json"])
     napari_name = "napari_effector_trajectories.npy"
     table_name = "trajectories_effectors.csv"
+else:
+    raise ValueError(f"Unknown mode {mode!r}. Expected 'target' or 'effector'.")
 
 # Locate experiment config
 parent1 = Path(pos).parent

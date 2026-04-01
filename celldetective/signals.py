@@ -524,7 +524,6 @@ def analyze_pair_signals(
             if len(valid_columns) == 1:
                 selected_signals.append(valid_columns[0])
             else:
-                # print(test_number_of_nan(trajectories, valid_columns))
                 logger.debug(f"Found several candidate signals: {valid_columns}")
                 for vc in natsorted(valid_columns):
                     if "circle" in vc:

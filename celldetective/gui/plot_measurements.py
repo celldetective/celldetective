@@ -668,10 +668,7 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
         if self.well_option > 1:
             self.plot_mode = "wells"
             for z, well in enumerate(wells):  # loop over wells
-                # print(well)
-                if z not in self.well_indices:
-                    pass
-                else:
+                if z in self.well_indices:
                     positions = get_positions_in_well(well)
                     for ind, pos in enumerate(positions):  # loop over positions
                         if self.position_indices is not None:

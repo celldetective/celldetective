@@ -281,6 +281,7 @@ def locate_labels(
                 labels.append(np.array(imread(label_path[idx].replace("\\", "/"))))
     else:
         logger.warning("Frames argument must be None, int or list.")
+        labels = None
 
     return labels
 
@@ -418,6 +419,7 @@ def auto_load_number_of_frames(stack_path: str) -> Optional[int]:
 
         # --- Strategy 2: ImageJ tag parsing (existing logic) ---
         if len_movie is None:
+            attr = []
             try:
                 tif_tags = {}
                 for tag in tif.pages[0].tags.values():
@@ -441,7 +443,7 @@ def auto_load_number_of_frames(stack_path: str) -> Optional[int]:
                 if nslices > 1:
                     len_movie = nslices
                 else:
-                    break_the_code()
+                    raise ValueError("nslices <= 1, falling back to next strategy")
             except Exception:
                 try:
                     frames = int(
@@ -1048,6 +1050,9 @@ def load_image_dataset(
                                 # For None or missing channel pass black frame
                                 ch_idx.append(np.nan)
                         im_calib = config["spatial_calibration"]
+                else:
+                    logger.warning(f"No config file found for {im}, skipping.")
+                    continue
 
                 ch_idx = np.array(ch_idx)
                 ch_idx_safe = np.copy(ch_idx)

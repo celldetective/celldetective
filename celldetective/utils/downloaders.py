@@ -128,7 +128,7 @@ def download_url_to_file(url: str, dst: str, progress: bool = True) -> None:
                 retry_delay *= 2  # Exponential backoff
             else:
                 logger.error(f"Download check failed after {max_retries} attempts: {e}")
-                raise e
+                raise
 
     # We deliberately save it in a temp file and move it after
     dst = os.path.expanduser(dst)
@@ -195,17 +195,16 @@ def download_url_to_file(url: str, dst: str, progress: bool = True) -> None:
                         # Simple retry of read is hard without Range headers on a stream.
                         # Best to just fail the whole download and rely on outer retry if we wrapped the whole thing.
                         # For now, let's just let it raise, but really we should wrap the whole download block.
-                        raise e
+                        raise
 
         f.close()
         shutil.move(f.name, dst)
     except Exception as e:
         f.close()
         remove_file_if_exists(f.name)
-        # If we failed during download reading (after open), we should probably retry the whole function from start
-        # but that requires significant refactoring. Given the error was 504 on open, the retry block above handles it.
-        raise e
+        raise
     finally:
+        u.close()
         f.close()
         remove_file_if_exists(f.name)
 

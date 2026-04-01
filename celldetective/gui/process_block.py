@@ -1929,20 +1929,8 @@ class ProcessPanel(QFrame, Styles):
                     with open(instr_path, "r") as f:
                         instr = json.load(f)
 
-                    # 1. Features
-                    features = instr.get("features", [])
-                    if features:
-                        for f_name in features:
-                            if f_name == "intensity_mean":
-                                continue  # handled by standard
-                            if f_name == "area":
-                                continue
-
-                            # For other features, skimage/celldetective might suffix them.
-                            # If it's a generic feature, skimage usually keeps the name.
-                            # If it's multichannel, it might need channel names.
-                            # For now, let's keep it simple as requested for intensity_mean and area.
-                            pass
+                    # 1. Features — intensity_mean and area are handled by the
+                    # standard pipeline; other features are not surfaced here.
 
                     # 2. Isotropic measurements
                     radii = instr.get("intensity_measurement_radii", [])

@@ -141,7 +141,7 @@ def normalize(
         frame[frame >= amplification] = amplification
         frame[frame <= 0.0] = 0.0
     if ignore_gray_value is not None:
-        frame[np.where(frame0) == ignore_gray_value] = ignore_gray_value
+        frame[frame0 == ignore_gray_value] = ignore_gray_value
 
     return frame.copy().astype(dtype)
 

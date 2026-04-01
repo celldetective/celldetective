@@ -754,7 +754,6 @@ def measure_features(
                 ]
         except Exception as e:
             logger.error(f"Haralick computation failed: {e}")
-            pass
 
     if channels is not None:
         df_props = rename_intensity_column(df_props, channels)
@@ -944,8 +943,8 @@ def compute_haralick_features(
         )
 
         dictionary = {"cell_id": cell}
-        for k in range(len(features)):
-            dictionary.update({haralick_labels[k]: features[k]})
+        for label, value in zip(haralick_labels, features):
+            dictionary.update({label: value})
         haralick_properties.append(dictionary)
 
     if len(haralick_properties) != (len(np.unique(labels)) - 1):

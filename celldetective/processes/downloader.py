@@ -52,8 +52,6 @@ class DownloadProcess(Process):
         current_dir = os.path.dirname(os.path.realpath(__file__))
         package_root = os.path.dirname(current_dir)
         zenodo_json = os.path.join(package_root, "links", "zenodo.json")
-        # print(f"{zenodo_json=}")
-
         with open(zenodo_json, "r") as f:
             zenodo_json = json.load(f)
         all_files = list(zenodo_json["files"]["entries"].keys())
@@ -109,17 +107,19 @@ class DownloadProcess(Process):
                             break
                         f.write(buffer)
                         pbar.update(len(buffer))
-                        self.sum_done += len(buffer) / file_size * 100
-                        mean_exec_per_step = (time.time() - self.t0) / (
-                            self.sum_done * file_size / 100 + 1
-                        )
-                        pred_time = (
-                            file_size - (self.sum_done * file_size / 100 + 1)
-                        ) * mean_exec_per_step
-                        self.queue.put([self.sum_done, pred_time])
+                        if file_size:
+                            self.sum_done += len(buffer) / file_size * 100
+                            mean_exec_per_step = (time.time() - self.t0) / (
+                                self.sum_done * file_size / 100 + 1
+                            )
+                            pred_time = (
+                                file_size - (self.sum_done * file_size / 100 + 1)
+                            ) * mean_exec_per_step
+                            self.queue.put([self.sum_done, pred_time])
                 f.close()
                 shutil.move(f.name, dst)
             finally:
+                u.close()
                 f.close()
                 if os.path.exists(f.name):
                     os.remove(f.name)

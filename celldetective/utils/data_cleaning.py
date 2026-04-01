@@ -356,11 +356,6 @@ def rename_intensity_column(
         if np.any(test_digit):
             index = int(sections[np.where(test_digit)[0]][-1])
         else:
-            # Check if the column already contains a channel name
-            already_named = any(ch in col_name for ch in channel_names)
-            if not already_named:
-                # Only warn if it looks like an intensity column that should have been renamed
-                pass
             continue
 
         channel_name = channel_names[np.where(channel_indices == index)[0]][0]

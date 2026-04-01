@@ -200,9 +200,8 @@ class MeasureAnnotator(BaseAnnotator):
             msgBox.setText("The trajectories cannot be detected.")
             msgBox.setWindowTitle("Warning")
             msgBox.setStandardButtons(QMessageBox.Ok)
-            returnValue = msgBox.exec()
-            if returnValue == QMessageBox.Yes:
-                self.close()
+            msgBox.exec()
+            self.close()
         else:
 
             # Load and prep tracks
@@ -357,13 +356,11 @@ class MeasureAnnotator(BaseAnnotator):
 
             meta = get_experiment_metadata(self.exp_dir)
             if meta is not None:
-                keys = list(meta.keys())
-                cols_to_remove.extend(keys)
+                cols_to_remove.extend(meta.keys())
 
             labels = get_experiment_labels(self.exp_dir)
             if labels is not None:
-                keys = list(labels.keys())
-                cols_to_remove.extend(labels)
+                cols_to_remove.extend(labels.keys())
 
             self.columns_to_rescale = [c for c in self.columns_to_rescale if c not in cols_to_remove]
 
@@ -1293,9 +1290,7 @@ class MeasureAnnotator(BaseAnnotator):
 
     def make_status_column(self) -> None:
         """Create the status column."""
-        if self.status_name == "state_firstdetection":
-            pass
-        else:
+        if self.status_name != "state_firstdetection":
             self.df_tracks.loc[:, self.status_name] = 0
             all_states = self.df_tracks.loc[:, self.status_name].tolist()
             all_states = np.array(all_states)
@@ -1357,10 +1352,7 @@ class MeasureAnnotator(BaseAnnotator):
         Logic to execute when frame changes.
         """
         # Auto-switch track of interest if ID mode
-        if "TRACK_ID" in list(self.df_tracks.columns):
-            pass
-        elif "ID" in list(self.df_tracks.columns):
-            # print("ID in cols... change class of interest... ")
+        if "TRACK_ID" not in list(self.df_tracks.columns) and "ID" in list(self.df_tracks.columns):
             candidates = self.df_tracks[self.df_tracks["FRAME"] == self.current_frame][
                 "ID"
             ]

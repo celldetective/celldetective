@@ -168,7 +168,7 @@ class NeighborhoodProcess(Process):
                 neigh_col = f"neighborhood_self_contact_{d}_px"
             else:
                 logger.error("Please provide a valid mode between `two-pop` and `self`...")
-                return None
+                return None, None
 
             setA[neigh_col] = np.nan
             setA[neigh_col] = setA[neigh_col].astype(object)
@@ -328,6 +328,9 @@ class NeighborhoodProcess(Process):
                 neigh_col = f"neighborhood_2_circle_{d}_px"
             elif mode == "self":
                 neigh_col = f"neighborhood_self_circle_{d}_px"
+            else:
+                logger.error("Please provide a valid mode between `two-pop` and `self`...")
+                return None, None
 
             cl = []
             for s in [setA, setB]:
@@ -357,6 +360,8 @@ class NeighborhoodProcess(Process):
 
             self.sum_done = 0
             self.t0 = time.time()
+            weights = None
+            closest_A = None
 
             for t in tqdm(timeline):
 
@@ -992,43 +997,6 @@ class NeighborhoodProcess(Process):
 
                         df_pairs.to_csv(previous_pair_table_path, index=False)
                         logger.info(f"Pair measurements saved to {previous_pair_table_path}")
-
-        # self.indices = list(range(self.img_num_channels.shape[1]))
-        # chunks = np.array_split(self.indices, self.n_threads)
-        #
-        # self.timestep_dataframes = []
-        # with concurrent.futures.ThreadPoolExecutor(max_workers=self.n_threads) as executor:
-        #     results = executor.map(self.parallel_job,
-        #                            chunks)  # list(map(lambda x: executor.submit(self.parallel_job, x), chunks))
-        #     try:
-        #         for i, return_value in enumerate(results):
-        #             print(f'Thread {i} completed...')
-        #             self.timestep_dataframes.extend(return_value)
-        #     except Exception as e:
-        #         print("Exception: ", e)
-        #
-        # print('Measurements successfully performed...')
-        #
-        # if len(self.timestep_dataframes) > 0:
-        #
-        #     df = pd.concat(self.timestep_dataframes)
-        #
-        #     if self.trajectories is not None:
-        #         df = df.sort_values(by=[self.column_labels['track'], self.column_labels['time']])
-        #         df = df.dropna(subset=[self.column_labels['track']])
-        #     else:
-        #         df['ID'] = np.arange(len(df))
-        #         df = df.sort_values(by=[self.column_labels['time'], 'ID'])
-        #
-        #     df = df.reset_index(drop=True)
-        #     df = _remove_invalid_cols(df)
-        #
-        #     df.to_csv(self.pos + os.sep.join(["output", "tables", self.table_name]), index=False)
-        #     print(f'Measurement table successfully exported in  {os.sep.join(["output", "tables"])}...')
-        #     print('Done.')
-        # else:
-        #     print('No measurement could be performed. Check your inputs.')
-        #     print('Done.')
 
         # Send end signal
         self.queue.put("finished")

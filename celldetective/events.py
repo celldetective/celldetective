@@ -171,7 +171,6 @@ def switch_to_events(
                 pass
 
     if FrameToMin is not None:
-        # print('convert to minutes!', FrameToMin)
         survival_times = [s * FrameToMin for s in survival_times]
     return events, survival_times
 
