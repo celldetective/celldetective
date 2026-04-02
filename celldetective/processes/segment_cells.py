@@ -264,11 +264,10 @@ class SegmentCellDLProcess(BaseSegmentProcess):
 
         super().__init__(*args, **kwargs)
 
-        self.check_gpu()
-
-        # Model
+        # Model (must come before check_gpu so model_type is known)
         self.locate_model_path()
         self.extract_model_input_parameters()
+        self.check_gpu()
         self.detect_rescaling()
 
         self.sum_done = 0
@@ -379,10 +378,25 @@ class SegmentCellDLProcess(BaseSegmentProcess):
             self.input_config = json.load(config_file)
 
     def check_gpu(self):
-        """Check if GPU is available and set the environment variable."""
+        """Check if GPU is available and compatible, falling back to CPU if not."""
 
         if not self.use_gpu:
             os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+            return
+
+        if getattr(self, "model_type", None) == "cellpose":
+            try:
+                import torch
+                if not torch.cuda.is_available():
+                    raise RuntimeError("CUDA is not available.")
+                # Verify the GPU is actually usable with this PyTorch build
+                torch.zeros(1, device="cuda")
+            except Exception as e:
+                logger.warning(
+                    f"GPU requested but could not be used ({e}). Falling back to CPU."
+                )
+                self.use_gpu = False
+                os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
     def process_position(
         self, model: Optional[Any] = None, scale_model: Optional[Any] = None
