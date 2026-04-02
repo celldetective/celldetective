@@ -599,7 +599,7 @@ def load_frames(
                 "ignore", message=".*MMStack series is missing files.*"
             )
             if isinstance(img_nums, np.ndarray):
-                img_nums = list(img_nums.astype(int))
+                img_nums = img_nums.tolist()
             frames = imageio.imread(stack_path, key=img_nums)
     except Exception as e:
         print(
