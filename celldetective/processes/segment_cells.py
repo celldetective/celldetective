@@ -332,6 +332,11 @@ class SegmentCellDLProcess(BaseSegmentProcess):
         logger.info(
             f"Required channels: {self.required_channels} located at channel indices {self.channel_indices}."
         )
+        if self.channel_indices is None:
+            raise ValueError(
+                f"Could not resolve channel indices for required channels {self.required_channels}. "
+                "Check that the model's required channels match the channels configured for this position."
+            )
         self.img_num_channels = _get_img_num_per_channel(
             self.channel_indices, int(self.len_movie), self.nbr_channels
         )
