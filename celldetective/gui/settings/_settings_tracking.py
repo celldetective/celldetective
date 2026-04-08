@@ -824,6 +824,15 @@ class SettingsTracking(CelldetectiveSettingsPanel):
         layout.addWidget(self.config_le)
         self.load_cell_config()
 
+        self.run_optimisation_checkbox = QCheckBox("Run bTrack global optimisation")
+        self.run_optimisation_checkbox.setIcon(icon(MDI6.chart_timeline_variant, color="k"))
+        self.run_optimisation_checkbox.setChecked(True)
+        self.run_optimisation_checkbox.setToolTip(
+            "Run the global hypothesis optimisation after tracking.\n"
+            "Disable to tune the motion model without the optimisation overhead."
+        )
+        layout.addWidget(self.run_optimisation_checkbox)
+
     def show_haralick_options(self):
         """
         Show the Haralick texture options.
@@ -988,6 +997,7 @@ class SettingsTracking(CelldetectiveSettingsPanel):
         tracking_options.update(
             {
                 "btrack_option": btrack_option,
+                "run_optimisation": self.run_optimisation_checkbox.isChecked(),
                 "search_range": search_range,
                 "memory": memory,
             }
@@ -1136,6 +1146,11 @@ class SettingsTracking(CelldetectiveSettingsPanel):
                     btrack_option = tracking_instructions["btrack_option"]
                 if btrack_option:
                     self.btrack_option.click()
+
+                if "run_optimisation" in tracking_instructions:
+                    self.run_optimisation_checkbox.setChecked(
+                        tracking_instructions["run_optimisation"]
+                    )
                 else:
                     self.trackpy_option.click()
 

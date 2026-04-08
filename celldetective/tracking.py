@@ -36,6 +36,9 @@ from celldetective.measure import measure_features
 from celldetective.utils.maths import velocity_per_track
 from celldetective.utils.data_cleaning import rename_intensity_column
 from celldetective.utils.data_loaders import interpret_tracking_configuration
+from celldetective import get_logger
+
+logger = get_logger()
 
 import os
 import subprocess
@@ -64,6 +67,7 @@ def track(
     objects: Optional[pd.DataFrame] = None,
     clean_trajectories_kwargs: Optional[Dict[str, Any]] = None,
     btrack_option: bool = True,
+    run_optimisation: bool = True,
     search_range: Optional[Union[float, Tuple[float, float]]] = None,
     memory: Optional[int] = None,
     column_labels: Dict[str, str] = {
@@ -209,10 +213,20 @@ def track(
                 (0, volume[0]),
                 (0, volume[1]),
                 (-1e5, 1e5),
-            )  # (-1e5, 1e5)
-            # print(tracker.volume)
+            )
+            logger.info(f"max_search_radius: {tracker.max_search_radius} px")
             tracker.track(tracking_updates=tracking_updates, **track_kwargs)
-            tracker.optimise(options=optimizer_options)
+            if run_optimisation:
+                logger.info(
+                    f"Tracking complete: {tracker.n_tracks} tracklets found. "
+                    "Running global optimisation (this may take several minutes for large datasets)..."
+                )
+                tracker.optimise(options=optimizer_options)
+            else:
+                logger.info(
+                    f"Tracking complete: {tracker.n_tracks} tracklets found. "
+                    "Skipping global optimisation."
+                )
 
             data, properties, graph = tracker.to_napari()  # ndim=2
             print(f"DEBUG: tracker.to_napari() returned data shape: {data.shape}")

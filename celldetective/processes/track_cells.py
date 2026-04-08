@@ -111,6 +111,9 @@ class TrackingProcess(Process):
             self.btrack_option = True
             if "btrack_option" in self.instructions:
                 self.btrack_option = self.instructions["btrack_option"]
+            self.run_optimisation = True
+            if "run_optimisation" in self.instructions:
+                self.run_optimisation = self.instructions["run_optimisation"]
             self.search_range = None
             if "search_range" in self.instructions:
                 self.search_range = self.instructions["search_range"]
@@ -127,6 +130,7 @@ class TrackingProcess(Process):
             self.haralick_options = None
             self.post_processing_options = None
             self.btrack_option = True
+            self.run_optimisation = True
             self.memory = None
             self.search_range = None
 
@@ -423,6 +427,7 @@ class TrackingProcess(Process):
                 clean_trajectories_kwargs=self.post_processing_options,
                 volume=(self.shape_x, self.shape_y),
                 btrack_option=self.btrack_option,
+                run_optimisation=self.run_optimisation,
                 search_range=self.search_range,
                 memory=self.memory,
             )
