@@ -498,7 +498,7 @@ class TrainSegModelProcess(Process):
                 )
         except Exception as e:
             logger.error(f"Error in StarDist training: {e}")
-            raise e
+            raise
         finally:
             sys.stdout = original_stdout
             sys.stderr = original_stderr
@@ -567,7 +567,7 @@ class TrainSegModelProcess(Process):
         # Channel axis in front for cellpose_utils
         X_aug = [np.moveaxis(x, -1, 0) for x in X_aug]
         self.X_val = [np.moveaxis(x, -1, 0) for x in self.X_val]
-        logger.info("number of augmented images: %3d" % len(X_aug))
+        logger.info(f"number of augmented images: {len(X_aug):3d}")
 
         from cellpose.models import CellposeModel
         from cellpose.io import logger_setup
@@ -653,7 +653,7 @@ class TrainSegModelProcess(Process):
             logger.info("Training interrupted.")
         except Exception as e:
             logger.error(f"Error during training: {e}")
-            raise e
+            raise
         finally:
             logger_cellpose.removeHandler(handler)
 
@@ -745,9 +745,9 @@ class TrainSegModelProcess(Process):
         self.files_train = [self.filenames[i] for i in ind_train]
         self.files_val = [self.filenames[i] for i in ind_val]
 
-        logger.info("number of images: %3d" % len(self.X))
-        logger.info("- training:       %3d" % len(self.X_trn))
-        logger.info("- validation:     %3d" % len(self.X_val))
+        logger.info(f"number of images: {len(self.X):3d}")
+        logger.info(f"- training:       {len(self.X_trn):3d}")
+        logger.info(f"- validation:     {len(self.X_val):3d}")
 
     def extract_training_params(self):
         """Extract the training parameters from the configuration file."""

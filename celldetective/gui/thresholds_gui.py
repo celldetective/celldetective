@@ -151,8 +151,8 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
             # viewer.closeEvent handles signal disconnect + thread stop + wait
             try:
                 self.viewer.close()
-            except RuntimeError:
-                pass
+            except RuntimeError as e:
+                logger.debug(f"Viewer already closed during cleanup: {e}")
             # Drain any queued signals that were already in the event loop
             QApplication.processEvents()
 
@@ -337,7 +337,7 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
 
         suggestion = help_generic(d)
         if isinstance(suggestion, str):
-            print(f"{suggestion=}")
+            logger.debug(f"suggestion={suggestion}")
             message_box = QMessageBox()
             message_box.setIcon(QMessageBox.Information)
             message_box.setTextFormat(Qt.RichText)

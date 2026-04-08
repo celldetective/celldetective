@@ -82,15 +82,15 @@ def stop_leaked_threads():
                         obj.quit()
                     except Exception:
                         pass
-                    
-                    obj.wait(1000)
-                    
-                    if obj.isRunning():
-                        try:
-                            obj.terminate()
-                            obj.wait(500)
-                        except Exception:
-                            pass
+
+                    obj.wait(2000)
+
+                    # NOTE: Do NOT call terminate() on Windows.
+                    # QThread::terminate() calls TerminateThread() which can
+                    # corrupt the process heap while the thread is mid-import
+                    # or inside a memory allocator, causing access violations
+                    # in ANY thread (including the main thread) during the
+                    # next test's event processing.
         except (ReferenceError, TypeError):
             # Object may have been collected between iteration and access
             pass

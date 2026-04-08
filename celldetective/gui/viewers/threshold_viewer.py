@@ -247,8 +247,8 @@ class ThresholdedStackVisualizer(StackVisualizer):
                     self.threshold_slider.blockSignals(True)
                     self.threshold_slider.setValue(float(display_val))
                     self.threshold_slider.blockSignals(False)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Could not update threshold slider: {e}")
 
         if self.thresh is not None:
             self.compute_mask(self.thresh)
@@ -342,7 +342,8 @@ class ThresholdedStackVisualizer(StackVisualizer):
 
         # Compute
         if self.preprocessing is not None:
-            assert isinstance(self.preprocessing, list)
+            if not isinstance(self.preprocessing, list):
+                raise TypeError("preprocessing must be a list.")
             from celldetective.filters import filter_image
 
             self.processed_image = filter_image(

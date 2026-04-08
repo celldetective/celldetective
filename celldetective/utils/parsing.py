@@ -1,11 +1,14 @@
 import configparser
 import json
+import logging
 import os
 import re
 from pathlib import PurePath, Path
 from typing import Union, Dict, List, Tuple, Optional, Any
 
 import numpy as np
+
+logger = logging.getLogger("celldetective")
 
 
 def _get_normalize_kwargs_from_config(config: Union[Dict, str]) -> Dict[str, Any]:
@@ -28,8 +31,7 @@ def _get_normalize_kwargs_from_config(config: Union[Dict, str]) -> Dict[str, Any
             with open(config) as cfg:
                 config = json.load(cfg)
         else:
-            print("Configuration could not be loaded...")
-            os.abort()
+            raise FileNotFoundError(f"Configuration path does not exist: {config}")
 
     normalization_percentile = config["normalization_percentile"]
     normalization_clip = config["normalization_clip"]
@@ -84,15 +86,12 @@ def config_section_to_dict(
     dict1 = {}
     try:
         options = Config.options(section)
-    except:
+    except configparser.NoSectionError:
         return None
     for option in options:
         try:
             dict1[option] = Config.get(section, option)
-            if dict1[option] == -1:
-                print("skip: %s" % option)
-        except:
-            print("exception on %s!" % option)
+        except configparser.NoOptionError:
             dict1[option] = None
     return dict1
 
@@ -148,8 +147,8 @@ def _extract_channel_indices_from_config(
             c1 = int(config_section_to_dict(config, "Channels")[c])
             channels.append(c1)
         except Exception as e:
-            print(
-                f"Warning: The channel {c} required by the model is not available in your data..."
+            logger.warning(
+                f"The channel {c} required by the model is not available in your data..."
             )
             channels.append(None)
     if np.all([c is None for c in channels]):
@@ -194,10 +193,10 @@ def _extract_nbr_channels_from_config(
                 channel = int(config_section_to_dict(config, "Channels")[c])
                 nbr_channels += 1
                 channels.append(c)
-            except:
+            except (TypeError, ValueError):
                 pass
-    except:
-        pass
+    except Exception as e:
+        logger.debug(f"Could not read [Channels] section from config: {e}")
 
     if nbr_channels == 0:
 
@@ -210,7 +209,7 @@ def _extract_nbr_channels_from_config(
             )
             nbr_channels += 1
             channels.append("brightfield_channel")
-        except:
+        except (TypeError, ValueError, KeyError):
             brightfield_channel = None
 
         try:
@@ -219,7 +218,7 @@ def _extract_nbr_channels_from_config(
             )
             nbr_channels += 1
             channels.append("live_nuclei_channel")
-        except:
+        except (TypeError, ValueError, KeyError):
             live_nuclei_channel = None
 
         try:
@@ -228,7 +227,7 @@ def _extract_nbr_channels_from_config(
             )
             nbr_channels += 1
             channels.append("dead_nuclei_channel")
-        except:
+        except (TypeError, ValueError, KeyError):
             dead_nuclei_channel = None
 
         try:
@@ -237,7 +236,7 @@ def _extract_nbr_channels_from_config(
             )
             nbr_channels += 1
             channels.append("effector_fluo_channel")
-        except:
+        except (TypeError, ValueError, KeyError):
             effector_fluo_channel = None
 
         try:
@@ -246,7 +245,7 @@ def _extract_nbr_channels_from_config(
             )
             nbr_channels += 1
             channels.append("adhesion_channel")
-        except:
+        except (TypeError, ValueError, KeyError):
             adhesion_channel = None
 
         try:
@@ -255,7 +254,7 @@ def _extract_nbr_channels_from_config(
             )
             nbr_channels += 1
             channels.append("fluo_channel_1")
-        except:
+        except (TypeError, ValueError, KeyError):
             fluo_channel_1 = None
 
         try:
@@ -264,7 +263,7 @@ def _extract_nbr_channels_from_config(
             )
             nbr_channels += 1
             channels.append("fluo_channel_2")
-        except:
+        except (TypeError, ValueError, KeyError):
             fluo_channel_2 = None
 
     if return_names:
@@ -320,7 +319,7 @@ def _extract_labels_from_config(config: str, number_of_wells: int) -> np.ndarray
             ]
 
     except Exception as e:
-        print(
+        logger.warning(
             f"{e}: the well labels cannot be read from the concentration and cell_type fields"
         )
         labels = np.linspace(0, number_of_wells - 1, number_of_wells, dtype=str)
@@ -364,10 +363,10 @@ def _extract_channels_from_config(config: str) -> Tuple[np.ndarray, np.ndarray]:
                 idx = int(config_section_to_dict(config, "Channels")[c])
                 channel_names.append(c)
                 channel_indices.append(idx)
-            except:
+            except (TypeError, ValueError, KeyError):
                 pass
-    except:
-        pass
+    except Exception as e:
+        logger.debug(f"Could not read [Channels] section from config: {e}")
 
     channel_indices = np.array(channel_indices)
     channel_names = np.array(channel_names)
@@ -539,6 +538,4 @@ def parse_isotropic_radii(string: str) -> List[Union[int, List[int]]]:
         if "[" in s:
             ring = [int(s.replace("[", "")), int(sections[k + 1].replace("]", ""))]
             radii.append(ring)
-        else:
-            pass
     return radii

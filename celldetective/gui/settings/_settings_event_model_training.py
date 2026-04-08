@@ -556,15 +556,15 @@ class SettingsEventDetectionModelTraining(CelldetectiveSettingsPanel):
     def load_pretrained_config(self):
         """Load configuration from the pretrained model."""
 
-        f = open(os.sep.join([self.pretrained_model, "config_input.json"]))
-        data = json.load(f)
+        with open(os.sep.join([self.pretrained_model, "config_input.json"])) as f:
+            data = json.load(f)
         channels = data["channels"]
         signal_length = data["model_signal_length"]
         try:
             label = data["label"]
             self.class_name_le.setText(label)
-        except:
-            pass
+        except KeyError:
+            logger.debug("Model config has no 'label' field; class name not pre-filled.")
         self.model_length_slider.setValue(int(signal_length))
         self.model_length_slider.setEnabled(False)
 
@@ -668,7 +668,7 @@ class SettingsEventDetectionModelTraining(CelldetectiveSettingsPanel):
 
         try:
             lr = float(self.lr_le.text().replace(",", "."))
-        except:
+        except ValueError:
             msg_box = QMessageBox()
             msg_box.setIcon(QMessageBox.Warning)
             msg_box.setText("Invalid value encountered for the learning rate.")

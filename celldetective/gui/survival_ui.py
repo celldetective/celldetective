@@ -179,8 +179,8 @@ class ConfigSurvival(CelldetectiveWidget):
             if hasattr(matplotlib.cm, str(cm).lower()):
                 try:
                     self.cbs[-1].addColormap(cm.lower())
-                except Exception as _:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Could not add colormap '{cm}' to selector: {e}")
 
         main_layout.addLayout(choice_layout)
 

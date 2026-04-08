@@ -26,11 +26,14 @@ from celldetective.exceptions import EmptyQueryError, MissingColumnsError, Query
 from celldetective.gui.gui_utils import color_from_status, help_generic
 from celldetective.gui.base.figure_canvas import FigureCanvas
 from celldetective.gui.base.components import CelldetectiveWidget
+import logging
 from celldetective import get_software_location
 from celldetective.measure import (
     classify_cells_from_query,
     interpret_track_classification,
 )
+
+logger = logging.getLogger("celldetective")
 
 
 class ClassifierWidget(CelldetectiveWidget):
@@ -374,7 +377,7 @@ class ClassifierWidget(CelldetectiveWidget):
             else:
                 self.log_btns[1].setEnabled(True)
         except Exception as e:
-            print(e)
+            logger.warning(f"Failed to update log scale button: {e}")
 
         class_name = self.class_name
 
@@ -446,7 +449,7 @@ class ClassifierWidget(CelldetectiveWidget):
             self.propscanvas.canvas.draw_idle()
 
         except Exception as e:
-            print("Exception L355 ", e)
+            logger.warning(f"Failed to update properties plot: {e}")
 
     def show_warning(self, message: str):
         """
@@ -561,7 +564,7 @@ class ClassifierWidget(CelldetectiveWidget):
 
         if self.time_corr.isChecked():
             self.class_name_user = "class_" + self.name_le.text()
-            print(f"User defined class name: {self.class_name_user}...")
+            logger.info(f"User defined class name: {self.class_name_user}...")
             if self.class_name_user in self.df.columns:
 
                 msgBox = QMessageBox()
@@ -603,7 +606,7 @@ class ClassifierWidget(CelldetectiveWidget):
 
         else:
             self.group_name_user = "group_" + self.name_le.text()
-            print(f"User defined characteristic group name: {self.group_name_user}.")
+            logger.info(f"User defined characteristic group name: {self.group_name_user}.")
             if self.group_name_user in self.df.columns:
 
                 msgBox = QMessageBox()
@@ -624,7 +627,7 @@ class ClassifierWidget(CelldetectiveWidget):
             self.df = self.df.drop(
                 list(set(name_map.values()) & set(self.df.columns)), axis=1
             ).rename(columns=name_map)
-            print(self.df.columns)
+            logger.debug(f"DataFrame columns after rename: {list(self.df.columns)}")
             # self.df[self.group_name_user] = self.df[self.group_name_user].replace({0: 1, 1: 0})
             self.df.reset_index(inplace=True, drop=True)
 
@@ -669,7 +672,7 @@ class ClassifierWidget(CelldetectiveWidget):
 
         suggestion = help_generic(d)
         if isinstance(suggestion, str):
-            print(f"{suggestion=}")
+            logger.debug(f"suggestion={suggestion}")
             msgBox = QMessageBox()
             msgBox.setIcon(QMessageBox.Information)
             msgBox.setTextFormat(Qt.RichText)
@@ -708,7 +711,7 @@ class ClassifierWidget(CelldetectiveWidget):
                     self.ax_props.set_xlim(min_x - x_padding, max_x + x_padding)
                     self.log_btns[i].setIcon(icon(MDI6.math_log, color="black"))
             except Exception as e:
-                print(e)
+                logger.warning(f"Failed to toggle log scale: {e}")
         elif i == 0:
             try:
                 feat_y = self.features_cb[0].currentText()
@@ -727,9 +730,9 @@ class ClassifierWidget(CelldetectiveWidget):
                     self.ax_props.set_ylim(min_y - y_padding, max_y + y_padding)
                     self.log_btns[i].setIcon(icon(MDI6.math_log, color="black"))
             except Exception as e:
-                print(e)
+                logger.warning(f"Failed to toggle log scale: {e}")
 
         self.ax_props.autoscale()
         self.propscanvas.canvas.draw_idle()
 
-        print("Done.")
+        logger.info("Log scale toggle done.")

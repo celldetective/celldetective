@@ -258,7 +258,7 @@ def locate_labels(
         tzfill = str(int(frames)).zfill(4)
         try:
             idx = label_names.index(f"{tzfill}.tif")
-        except:
+        except ValueError:
             idx = -1
 
         if idx == -1:
@@ -272,7 +272,7 @@ def locate_labels(
             tzfill = str(int(f)).zfill(4)
             try:
                 idx = label_names.index(f"{tzfill}.tif")
-            except:
+            except ValueError:
                 idx = -1
 
             if idx == -1:
@@ -280,7 +280,8 @@ def locate_labels(
             else:
                 labels.append(np.array(imread(label_path[idx].replace("\\", "/"))))
     else:
-        print("Frames argument must be None, int or list...")
+        logger.warning("Frames argument must be None, int or list.")
+        labels = None
 
     return labels
 
@@ -332,9 +333,8 @@ def locate_stack_and_labels(
     if len(labels) < len(stack):
         fix_missing_labels(position, population=population, prefix=prefix)
         labels = locate_labels(position, population=population)
-    assert len(stack) == len(
-        labels
-    ), f"The shape of the stack {stack.shape} does not match with the shape of the labels {labels.shape}"
+    if len(stack) != len(labels):
+        raise ValueError(f"The shape of the stack {stack.shape} does not match with the shape of the labels {labels.shape}")
 
     return stack, labels
 
@@ -414,11 +414,12 @@ def auto_load_number_of_frames(stack_path: str) -> Optional[int]:
                         len_movie = shape[axes.index("C")]
                     else:
                         len_movie = 1
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Strategy 1 (series metadata) failed, falling back: {e}")
 
         # --- Strategy 2: ImageJ tag parsing (existing logic) ---
         if len_movie is None:
+            attr = []
             try:
                 tif_tags = {}
                 for tag in tif.pages[0].tags.values():
@@ -431,8 +432,8 @@ def auto_load_number_of_frames(stack_path: str) -> Optional[int]:
                         "="
                     )[-1]
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Could not parse channel count from ImageJ tags: {e}")
             try:
                 nslices = int(
                     attr[np.argmax([s.startswith("frames") for s in attr])].split("=")[
@@ -442,7 +443,7 @@ def auto_load_number_of_frames(stack_path: str) -> Optional[int]:
                 if nslices > 1:
                     len_movie = nslices
                 else:
-                    break_the_code()
+                    raise ValueError("nslices <= 1, falling back to next strategy")
             except Exception:
                 try:
                     frames = int(
@@ -451,8 +452,8 @@ def auto_load_number_of_frames(stack_path: str) -> Optional[int]:
                         )[-1]
                     )
                     len_movie = frames
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Strategy 2 (ImageJ tag parsing) failed, falling back: {e}")
 
     # --- Strategy 3: shape inference fallback ---
     if len_movie is None:
@@ -602,8 +603,8 @@ def load_frames(
                 img_nums = img_nums.tolist()
             frames = imageio.imread(stack_path, key=img_nums)
     except Exception as e:
-        print(
-            f"Error in loading the frame {img_nums} {e}. Please check that the experiment channel information is consistent with the movie being read."
+        logger.error(
+            f"Error in loading the frame {img_nums}: {e}. Please check that the experiment channel information is consistent with the movie being read."
         )
         return None
     try:
@@ -611,7 +612,7 @@ def load_frames(
             frames = frames.astype(float)
             frames[np.isinf(frames)] = np.nan
     except Exception as e:
-        print(e)
+        logger.warning(f"inf check failed: {e}")
 
     frames = _rearrange_multichannel_frame(frames)
 
@@ -994,21 +995,22 @@ def load_image_dataset(
     if isinstance(channels, str):
         channels = [channels]
 
-    assert isinstance(channels, list), "Please provide a list of channels. Abort."
+    if not isinstance(channels, list):
+        raise TypeError("Please provide a list of channels. Abort.")
 
     X = []
     Y = []
     files = []
 
     for ds in datasets:
-        print(f"Loading data from dataset {ds}...")
+        logger.info(f"Loading data from dataset {ds}...")
         if not ds.endswith(os.sep):
             ds += os.sep
         img_paths = list(
             set(glob(ds + "*.tif")) - set(glob(ds + f"*_{mask_suffix}.tif"))
         )
         for im in img_paths:
-            print(f"{im=}")
+            logger.debug(f"Processing image: {im}")
             mask_path = os.sep.join(
                 [
                     os.path.split(im)[0],
@@ -1021,7 +1023,7 @@ def load_image_dataset(
                 if image.ndim == 2:
                     image = image[np.newaxis]
                 if image.ndim > 3:
-                    print("Invalid image shape, skipping")
+                    logger.warning("Invalid image shape, skipping")
                     continue
                 mask = imread(mask_path)
                 config_path = im.replace(".tif", ".json")
@@ -1034,9 +1036,9 @@ def load_image_dataset(
                     intersection = list(
                         set(list(channels)) & set(list(existing_channels))
                     )
-                    print(f"{existing_channels=} {intersection=}")
+                    logger.debug(f"existing_channels={existing_channels}, intersection={intersection}")
                     if len(intersection) == 0:
-                        print(
+                        logger.warning(
                             "Channels could not be found in the config... Skipping image."
                         )
                         continue
@@ -1050,6 +1052,9 @@ def load_image_dataset(
                                 # For None or missing channel pass black frame
                                 ch_idx.append(np.nan)
                         im_calib = config["spatial_calibration"]
+                else:
+                    logger.warning(f"No config file found for {im}, skipping.")
+                    continue
 
                 ch_idx = np.array(ch_idx)
                 ch_idx_safe = np.copy(ch_idx)
@@ -1060,9 +1065,8 @@ def load_image_dataset(
                 image[np.where(ch_idx != ch_idx)[0], :, :] = 0
 
                 image = np.moveaxis(image, 0, -1)
-                assert (
-                    image.ndim == 3
-                ), "The image has a wrong number of dimensions. Abort."
+                if image.ndim != 3:
+                    raise ValueError("The image has a wrong number of dimensions. Abort.")
 
                 if im_calib != train_spatial_calibration:
                     factor = im_calib / train_spatial_calibration
@@ -1093,7 +1097,6 @@ def load_image_dataset(
 
             files.append(im)
 
-    assert len(X) == len(
-        Y
-    ), "The number of images does not match with the number of masks... Abort."
+    if len(X) != len(Y):
+        raise ValueError("The number of images does not match with the number of masks... Abort.")
     return X, Y, files

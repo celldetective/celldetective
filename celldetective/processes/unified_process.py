@@ -31,6 +31,8 @@ class UnifiedBatchProcess(Process):
         """
         super(UnifiedBatchProcess, self).__init__()
         self.queue = queue
+        if process_args is None:
+            process_args = {}
         self.process_args = process_args
         self.batch_structure = process_args.get("batch_structure", {})
 

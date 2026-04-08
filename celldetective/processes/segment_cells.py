@@ -605,11 +605,11 @@ class SegmentCellDLProcess(BaseSegmentProcess):
                 )
 
         except Exception as e:
-            logger.error(e)
+            logger.error(f"{e}")
 
         try:
             del model
-        except:
+        except NameError:
             pass
 
         gc.collect()
@@ -798,7 +798,7 @@ class SegmentCellThresholdProcess(BaseSegmentProcess):
                 gc.collect()
 
         except Exception as e:
-            logger.error(e)
+            logger.error(f"{e}")
 
         return
 
@@ -826,15 +826,15 @@ class SegmentCellThresholdProcess(BaseSegmentProcess):
         with concurrent.futures.ThreadPoolExecutor(
             max_workers=self.n_threads
         ) as executor:
-            results = results = executor.map(
+            results = executor.map(
                 self.parallel_job, chunks
             )  # list(map(lambda x: executor.submit(self.parallel_job, x), chunks))
             try:
                 for i, return_value in enumerate(results):
                     pass
             except Exception as e:
-                logger.error("Exception: ", e)
-                raise e
+                logger.error(f"Exception: {e}")
+                raise
 
     def run(self):
         """Run the segmentation process."""

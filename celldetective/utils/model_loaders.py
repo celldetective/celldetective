@@ -1,8 +1,11 @@
 import os
+import logging
 from glob import glob
-from typing import Optional
+from typing import Optional, Tuple
 
 from celldetective.utils.downloaders import get_zenodo_files, download_zenodo_file
+
+logger = logging.getLogger("celldetective")
 
 
 def locate_signal_model(
@@ -70,7 +73,7 @@ def locate_signal_model(
     modelpath = os.sep.join([main_dir, "models", "signal_detection", os.sep])
     if pairs:
         modelpath = os.sep.join([main_dir, "models", "pair_signal_detection", os.sep])
-    print(f"Looking for {name} in {modelpath}")
+    logger.debug(f"Looking for {name} in {modelpath}")
     models = glob(modelpath + f"*{os.sep}")
     if path is not None:
         if not path.endswith(os.sep):
@@ -138,7 +141,7 @@ def locate_pair_signal_model(name: str, path: Optional[str] = None) -> Optional[
         [os.path.split(os.path.dirname(os.path.realpath(__file__)))[0]]
     )
     modelpath = os.sep.join([main_dir, "models", "pair_signal_detection", os.sep])
-    print(f"Looking for {name} in {modelpath}")
+    logger.debug(f"Looking for {name} in {modelpath}")
     models = glob(modelpath + f"*{os.sep}")
     match = None
     for m in models:
@@ -242,7 +245,7 @@ def locate_segmentation_dataset(name: str) -> Optional[str]:
         [os.path.split(os.path.dirname(os.path.realpath(__file__)))[0]]
     )
     modelpath = os.sep.join([main_dir, "datasets", "segmentation_annotations", os.sep])
-    print(f"Looking for {name} in {modelpath}")
+    logger.debug(f"Looking for {name} in {modelpath}")
     models = glob(modelpath + f"*{os.sep}")
 
     match = None
@@ -292,7 +295,7 @@ def locate_signal_dataset(name: str) -> Optional[str]:
         [os.path.split(os.path.dirname(os.path.realpath(__file__)))[0]]
     )
     modelpath = os.sep.join([main_dir, "datasets", "signal_annotations", os.sep])
-    print(f"Looking for {name} in {modelpath}")
+    logger.debug(f"Looking for {name} in {modelpath}")
     models = glob(modelpath + f"*{os.sep}")
 
     match = None
@@ -308,3 +311,41 @@ def locate_signal_dataset(name: str) -> Optional[str]:
         download_zenodo_file(name, os.sep.join([main_dir, cat]))
         match = os.sep.join([main_dir, cat, name]) + os.sep
     return match
+
+
+def _resolve_signal_model_paths(
+    model: str,
+    path: Optional[str] = None,
+    pairs: bool = False,
+) -> Tuple[str, str]:
+    """Locate a signal model directory and config file, raising FileNotFoundError if either is missing.
+
+    Parameters
+    ----------
+    model : str
+        Model name to locate.
+    path : str or None, optional
+        Override path for model search.
+    pairs : bool, optional
+        Whether to search for a pair-interaction model. Default False.
+
+    Returns
+    -------
+    complete_path : str
+        Absolute path to the model directory.
+    model_config_path : str
+        Absolute path to ``config_input.json`` inside the model directory.
+    """
+    model_dir = locate_signal_model(model, path=path, pairs=pairs)
+    logger.info(f"Looking for model in {model_dir}...")
+    complete_path = rf"{model_dir}"
+    model_config_path = rf"{os.sep.join([complete_path, 'config_input.json'])}"
+    if not os.path.exists(complete_path):
+        raise FileNotFoundError(
+            f"Model {model} could not be located in folder {model_dir}... Abort."
+        )
+    if not os.path.exists(model_config_path):
+        raise FileNotFoundError(
+            f"Model configuration could not be located in folder {model_dir}... Abort."
+        )
+    return complete_path, model_config_path

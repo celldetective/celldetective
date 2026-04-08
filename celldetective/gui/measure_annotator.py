@@ -200,9 +200,8 @@ class MeasureAnnotator(BaseAnnotator):
             msgBox.setText("The trajectories cannot be detected.")
             msgBox.setWindowTitle("Warning")
             msgBox.setStandardButtons(QMessageBox.Ok)
-            returnValue = msgBox.exec()
-            if returnValue == QMessageBox.Yes:
-                self.close()
+            msgBox.exec()
+            self.close()
         else:
 
             # Load and prep tracks
@@ -231,11 +230,7 @@ class MeasureAnnotator(BaseAnnotator):
                 "status_color",
                 "status_id",
             ]
-            for col in to_remove:
-                try:
-                    self.class_cols.remove(col)
-                except:
-                    pass
+            self.class_cols = [c for c in self.class_cols if c not in to_remove]
 
             # Generate missing status columns from class columns
             for c in self.class_cols:
@@ -270,12 +265,7 @@ class MeasureAnnotator(BaseAnnotator):
                     for c in list(self.df_tracks.columns)
                 ]
             )
-            self.class_cols = list(cols[self.class_cols])
-            for col in to_remove:
-                try:
-                    self.class_cols.remove(col)
-                except:
-                    pass
+            self.class_cols = [c for c in list(cols[self.class_cols]) if c not in to_remove]
 
             if len(self.class_cols) > 0:
                 if self.status_name not in self.class_cols:
@@ -366,19 +356,13 @@ class MeasureAnnotator(BaseAnnotator):
 
             meta = get_experiment_metadata(self.exp_dir)
             if meta is not None:
-                keys = list(meta.keys())
-                cols_to_remove.extend(keys)
+                cols_to_remove.extend(meta.keys())
 
             labels = get_experiment_labels(self.exp_dir)
             if labels is not None:
-                keys = list(labels.keys())
-                cols_to_remove.extend(labels)
+                cols_to_remove.extend(labels.keys())
 
-            for tr in cols_to_remove:
-                try:
-                    self.columns_to_rescale.remove(tr)
-                except:
-                    pass
+            self.columns_to_rescale = [c for c in self.columns_to_rescale if c not in cols_to_remove]
 
             x = self.df_tracks[self.columns_to_rescale].values
             self.MinMaxScaler.fit(x)
@@ -859,7 +843,7 @@ class MeasureAnnotator(BaseAnnotator):
             try:
                 self.cell_ax.boxplot(all_yvalues, showfliers=self.show_fliers)
             except Exception as e:
-                logger.error(f"{e=}")
+                logger.error(f"{e}")
 
             x_pos = np.arange(len(all_yvalues)) + 1
             for index, feature in enumerate(current_yvalues):
@@ -1306,9 +1290,7 @@ class MeasureAnnotator(BaseAnnotator):
 
     def make_status_column(self) -> None:
         """Create the status column."""
-        if self.status_name == "state_firstdetection":
-            pass
-        else:
+        if self.status_name != "state_firstdetection":
             self.df_tracks.loc[:, self.status_name] = 0
             all_states = self.df_tracks.loc[:, self.status_name].tolist()
             all_states = np.array(all_states)
@@ -1370,10 +1352,7 @@ class MeasureAnnotator(BaseAnnotator):
         Logic to execute when frame changes.
         """
         # Auto-switch track of interest if ID mode
-        if "TRACK_ID" in list(self.df_tracks.columns):
-            pass
-        elif "ID" in list(self.df_tracks.columns):
-            # print("ID in cols... change class of interest... ")
+        if "TRACK_ID" not in list(self.df_tracks.columns) and "ID" in list(self.df_tracks.columns):
             candidates = self.df_tracks[self.df_tracks["FRAME"] == self.current_frame][
                 "ID"
             ]
@@ -1403,22 +1382,7 @@ class MeasureAnnotator(BaseAnnotator):
         #     self.df_tracks[self.df_tracks[self.status_name] == 99].index
         # )
 
-        try:
-            self.df_tracks.drop(columns="", inplace=True)
-        except:
-            pass
-        try:
-            self.df_tracks.drop(columns="group_color", inplace=True)
-        except:
-            pass
-        try:
-            self.df_tracks.drop(columns="x_anim", inplace=True)
-        except:
-            pass
-        try:
-            self.df_tracks.drop(columns="y_anim", inplace=True)
-        except:
-            pass
+        self.df_tracks.drop(columns=["", "group_color", "x_anim", "y_anim"], errors="ignore", inplace=True)
 
         self.df_tracks.to_csv(self.trajectories_path, index=False)
         logger.info("Table successfully exported...")

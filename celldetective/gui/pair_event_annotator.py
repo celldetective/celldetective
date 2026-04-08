@@ -66,6 +66,9 @@ import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
 from functools import partial
 from pandas.api.types import is_numeric_dtype
+import logging
+
+logger = logging.getLogger("celldetective")
 
 
 class PairEventAnnotator(CelldetectiveMainWindow):
@@ -126,7 +129,6 @@ class PairEventAnnotator(CelldetectiveMainWindow):
             "y_anim",
             "t",
             "dummy",
-            "group_color",
             "state",
             "generation",
             "root",
@@ -155,13 +157,11 @@ class PairEventAnnotator(CelldetectiveMainWindow):
 
         meta = get_experiment_metadata(self.exp_dir)
         if meta is not None:
-            keys = list(meta.keys())
-            self.cols_to_remove.extend(keys)
+            self.cols_to_remove.extend(meta.keys())
 
         labels = get_experiment_labels(self.exp_dir)
         if labels is not None:
-            keys = list(labels.keys())
-            self.cols_to_remove.extend(labels)
+            self.cols_to_remove.extend(labels.keys())
 
         # Read instructions from target block for now...
         self.mode = "neighborhood"
@@ -189,9 +189,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
                         if c.startswith("neighborhood")
                     ]
                 )
-        print(
-            f"The following neighborhoods were detected: {self.neighborhood_cols=}..."
-        )
+        logger.debug(f"The following neighborhoods were detected: neighborhood_cols={self.neighborhood_cols}...")
         if len(self.neighborhood_cols) == 0:
             raise ValueError(
                 "No neighborhoods detected. Please compute neighborhoods first."
@@ -241,8 +239,8 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         super().resizeEvent(event)
         try:
             self.cell_fig.tight_layout()
-        except:
-            pass
+        except Exception as e:
+            logger.debug(f"tight_layout failed on resize: {e}")
 
     def populate_widget(self):
         """
@@ -584,13 +582,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
             # self.contrast_slider.setSingleStep(0.001)
             # self.contrast_slider.setTickInterval(0.001)
             self.contrast_slider.setOrientation(Qt.Horizontal)
-            print(
-                "range: ",
-                [
-                    np.nanpercentile(self.stack.flatten(), 0.001),
-                    np.nanpercentile(self.stack.flatten(), 99.999),
-                ],
-            )
+            logger.debug(f"Contrast range: {[np.nanpercentile(self.stack.flatten(), 0.001), np.nanpercentile(self.stack.flatten(), 99.999)]}")
             self.contrast_slider.setRange(
                 *[
                     np.nanpercentile(self.stack, 0.001),
@@ -625,18 +617,13 @@ class PairEventAnnotator(CelldetectiveMainWindow):
 
         try:
             self.reference_event_choice_cb.disconnect()
-        except:
-            pass
+        except Exception as e:
+            logger.debug(f"Could not disconnect reference_event_choice_cb: {e}")
         self.reference_event_choice_cb.clear()
         df_reference = self.dataframes[self.reference_population]
         reference_class_cols = [
-            c for c in list(df_reference.columns) if c.startswith("class")
+            c for c in list(df_reference.columns) if c.startswith("class") and c not in cols_to_remove
         ]
-        for c in cols_to_remove:
-            try:
-                reference_class_cols.remove(c)
-            except:
-                pass
         self.reference_event_choice_cb.addItems(reference_class_cols)
         self.reference_event_choice_cb.currentIndexChanged.connect(
             self.compute_status_and_colors_reference
@@ -644,18 +631,13 @@ class PairEventAnnotator(CelldetectiveMainWindow):
 
         try:
             self.neighbor_event_choice_cb.disconnect()
-        except:
-            pass
+        except Exception as e:
+            logger.debug(f"Could not disconnect neighbor_event_choice_cb: {e}")
         self.neighbor_event_choice_cb.clear()
         df_neighbors = self.dataframes[self.neighbor_population]
         neighbor_class_cols = [
-            c for c in list(df_neighbors.columns) if c.startswith("class")
+            c for c in list(df_neighbors.columns) if c.startswith("class") and c not in cols_to_remove
         ]
-        for c in cols_to_remove:
-            try:
-                neighbor_class_cols.remove(c)
-            except:
-                pass
         self.neighbor_event_choice_cb.addItems(neighbor_class_cols)
         self.neighbor_event_choice_cb.currentIndexChanged.connect(
             self.compute_status_and_colors_neighbor
@@ -683,7 +665,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
                 try:
                     self.df_relative = self.df_relative.drop([c], axis=1)
                 except Exception as e:
-                    print(e)
+                    logger.warning(f"Failed to drop column {c}: {e}")
             item_idx = self.relative_class_choice_cb.findText(class_to_delete)
             self.relative_class_choice_cb.removeItem(item_idx)
 
@@ -693,8 +675,8 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         try:
             self.neighbor_event_choice_cb.show()
             self.neigh_lab.show()
-        except:
-            pass
+        except Exception as e:
+            logger.debug(f"Could not show neighbor event widgets: {e}")
 
         self.reference_event_choice_cb.disconnect()
         self.reference_event_choice_cb.clear()
@@ -1006,7 +988,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
     def cancel_selection(self):
         """Cancel selection."""
 
-        print("Canceling selection...")
+        logger.debug("Canceling selection...")
 
         self.hide_annotation_buttons()
         self.correct_btn.setEnabled(False)
@@ -1176,9 +1158,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
             status[:] = 42
 
         status_color = [color_from_status(s, recently_modified=True) for s in status]
-        class_color = [
-            color_from_class(cclass, recently_modified=True) for i in range(len(status))
-        ]
+        class_color = [color_from_class(cclass, recently_modified=True)] * len(status)
 
         self.df_relative.loc[pair_filter, self.pair_status_name] = status
         self.df_relative.loc[pair_filter, "status_color"] = status_color
@@ -1228,9 +1208,8 @@ class PairEventAnnotator(CelldetectiveMainWindow):
             )
             msgBox.setWindowTitle("Warning")
             msgBox.setStandardButtons(QMessageBox.Ok)
-            returnValue = msgBox.exec()
-            if returnValue == QMessageBox.Yes:
-                self.close()
+            msgBox.exec()
+            self.close()
         else:
             self.stack_path = movies[0]
             self.len_movie = self.parent_window.parent_window.len_movie
@@ -1301,14 +1280,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
                     c for c in list(df_population.columns) if c.startswith("class")
                 ]
 
-                try:
-                    class_cols.remove("class_id")
-                except:
-                    pass
-                try:
-                    class_cols.remove("class_color")
-                except:
-                    pass
+                class_cols = [c for c in class_cols if c not in ("class_id", "class_color")]
 
                 if len(class_cols) > 0:
 
@@ -1387,11 +1359,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
                 neigh_cols = [c for c in pop_cols if c.startswith("neighborhood_")]
                 cols_to_remove += neigh_cols
 
-                for col in cols_to_remove:
-                    try:
-                        pop_cols.remove(col)
-                    except:
-                        pass
+                pop_cols = [c for c in pop_cols if c not in cols_to_remove]
 
                 x = df_population[pop_cols].values
                 minmax.fit(x)
@@ -1477,11 +1445,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         neigh_cols = [c for c in self.pair_columns if c.startswith("neighborhood_")]
         cols_to_remove += neigh_cols
 
-        for col in cols_to_remove:
-            try:
-                self.pair_columns.remove(col)
-            except:
-                pass
+        self.pair_columns = [c for c in self.pair_columns if c not in cols_to_remove]
 
         x = self.df_relative[self.pair_columns].values
         self.MinMaxScaler_pairs.fit(x)
@@ -1510,9 +1474,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
                 self.current_neighborhood.split("_(")[-1].split(")_")[0].split("-")[0]
             )
 
-        print(f"Current neighborhood: {self.current_neighborhood}")
-        print(f"New reference population: {self.reference_population}")
-        print(f"New neighbor population: {self.neighbor_population}")
+        logger.debug(f"Current neighborhood: {self.current_neighborhood}; reference={self.reference_population}; neighbor={self.neighbor_population}")
 
         idx = self.relative_class_choice_cb.findText(
             "class_" + self.current_neighborhood
@@ -1524,7 +1486,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         """Make reference status column."""
 
         df_reference = self.dataframes[self.reference_population]
-        print("remaking the status column")
+        logger.debug("Remaking the status column.")
 
         for tid, group in df_reference.groupby("TRACK_ID"):
 
@@ -1540,7 +1502,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
             if cclass > 2:
                 status[:] = 42
             status_color = [color_from_status(s) for s in status]
-            class_color = [color_from_class(cclass) for i in range(len(status))]
+            class_color = [color_from_class(cclass)] * len(status)
 
             df_reference.loc[indices, self.reference_status_name] = status
             df_reference.loc[indices, "status_color"] = status_color
@@ -1576,7 +1538,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
             if cclass > 2:
                 status[:] = 42
             status_color = [color_from_status(s) for s in status]
-            class_color = [color_from_class(cclass) for i in range(len(status))]
+            class_color = [color_from_class(cclass)] * len(status)
 
             self.df_relative.loc[indices, self.pair_status_name] = status
             self.df_relative.loc[indices, "status_color"] = status_color
@@ -1586,7 +1548,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         """Make neighbor status column."""
 
         df_neighbors = self.dataframes[self.neighbor_population]
-        print("remaking the status column")
+        logger.debug("Remaking the status column.")
 
         for tid, group in df_neighbors.groupby("TRACK_ID"):
 
@@ -1602,7 +1564,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
             if cclass > 2:
                 status[:] = 42
             status_color = [color_from_status(s) for s in status]
-            class_color = [color_from_class(cclass) for i in range(len(status))]
+            class_color = [color_from_class(cclass)] * len(status)
 
             df_neighbors.loc[indices, self.neighbor_status_name] = status
             df_neighbors.loc[indices, "status_color"] = status_color
@@ -2035,7 +1997,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
                 try:
                     tracks.append(df.loc[df["FRAME"] == t, "TRACK_ID"].to_numpy())
                     timeline.append(t)
-                except:
+                except KeyError:
                     tracks.append(df.loc[df["FRAME"] == t, "ID"].to_numpy())
                     timeline.append(t)
 
@@ -2053,46 +2015,23 @@ class PairEventAnnotator(CelldetectiveMainWindow):
     def load_annotator_config(self):
         """Load settings from config or set default values."""
 
-        print("Reading instructions..")
+        self.rgb_mode = False
+        self.log_option = False
+        self.percentile_mode = True
+        self.target_channels = [[self.channel_names[0], 0.01, 99.99]]
+        self.fraction = 0.25
+        self.anim_interval = 33
+
+        logger.debug("Reading instructions...")
         if os.path.exists(self.instructions_path):
             with open(self.instructions_path, "r") as f:
-
                 instructions = json.load(f)
-                print(f"Reading instructions: {instructions}")
-
-                if "rgb_mode" in instructions:
-                    self.rgb_mode = instructions["rgb_mode"]
-                else:
-                    self.rgb_mode = False
-
-                if "percentile_mode" in instructions:
-                    self.percentile_mode = instructions["percentile_mode"]
-                else:
-                    self.percentile_mode = True
-
-                if "channels" in instructions:
-                    self.target_channels = instructions["channels"]
-                else:
-                    self.target_channels = [[self.channel_names[0], 0.01, 99.99]]
-
-                if "fraction" in instructions:
-                    self.fraction = float(instructions["fraction"])
-                else:
-                    self.fraction = 0.25
-
-                self.anim_interval = 33
-
-                if "log" in instructions:
-                    self.log_option = instructions["log"]
-                else:
-                    self.log_option = False
-        else:
-            self.rgb_mode = False
-            self.log_option = False
-            self.percentile_mode = True
-            self.target_channels = [[self.channel_names[0], 0.01, 99.99]]
-            self.fraction = 0.25
-            self.anim_interval = 33
+            logger.debug(f"Reading instructions: {instructions}")
+            self.rgb_mode = instructions.get("rgb_mode", self.rgb_mode)
+            self.percentile_mode = instructions.get("percentile_mode", self.percentile_mode)
+            self.target_channels = instructions.get("channels", self.target_channels)
+            self.fraction = float(instructions.get("fraction", self.fraction))
+            self.log_option = instructions.get("log", self.log_option)
 
     def prepare_stack(self, progress_callback: Optional[callable] = None) -> None:
         """
@@ -2156,7 +2095,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
                     ]
                 )
 
-        print(f"Load stack of shape: {self.stack.shape}.")
+        logger.debug(f"Loaded stack of shape: {self.stack.shape}.")
 
     def neighborhood_changed(self):
         """Handle neighborhood change."""
@@ -2180,8 +2119,8 @@ class PairEventAnnotator(CelldetectiveMainWindow):
 
         try:
             self.relative_class_choice_cb.disconnect()
-        except:
-            pass
+        except Exception as e:
+            logger.debug(f"Could not disconnect relative_class_choice_cb: {e}")
 
         self.relative_class_choice_cb.clear()
 
@@ -2228,9 +2167,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         val = int(1000 / max(1, fps))
 
         self.anim_interval = val
-        print(
-            f"DEBUG: Speed slider moved. FPS: {fps} -> Interval: {val} ms. Recreating animation object."
-        )
+        logger.debug(f"Speed slider moved. FPS: {fps} -> Interval: {val} ms. Recreating animation object.")
 
         # Check if animation is allowed to run (Pause button is visible means we are Playing)
         should_play = self.stop_btn.isVisible()
@@ -2239,7 +2176,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
             try:
                 self.anim.event_source.stop()
             except Exception as e:
-                print(f"DEBUG: Error stopping animation: {e}")
+                logger.debug(f"Error stopping animation: {e}")
 
         # Recreate animation with new interval
         try:
@@ -2262,7 +2199,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
                 self.anim.event_source.stop()
 
         except Exception as e:
-            print(f"DEBUG: Error recreating animation: {e}")
+            logger.debug(f"Error recreating animation: {e}")
 
     def closeEvent(self, event: QCloseEvent) -> None:
         """
@@ -2275,29 +2212,29 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         """
         try:
             self.stop()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Could not stop annotator cleanly: {e}")
 
         # Stop and delete animation to break reference cycles
         if hasattr(self, "anim") and self.anim:
             try:
                 self.anim.event_source.stop()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Could not stop animation event source: {e}")
             del self.anim
 
         # Close matplotlib figures
         if hasattr(self, "fig"):
             try:
                 plt.close(self.fig)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Could not close figure: {e}")
 
         if hasattr(self, "cell_fig"):
             try:
                 plt.close(self.cell_fig)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Could not close cell figure: {e}")
 
         # Delete large objects
         if hasattr(self, "stack"):
@@ -2478,9 +2415,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
                 self.reference_selection.append(self.reference_track_of_interest)
 
                 self.get_neighbors_of_selected_cell(self.reference_track_of_interest)
-                print(
-                    f"You selected track {self.reference_track_of_interest} with {len(self.neighbors)} neighbors..."
-                )
+                logger.info(f"You selected track {self.reference_track_of_interest} with {len(self.neighbors)} neighbors...")
 
                 self.give_reference_cell_information()
                 self.give_neighbor_cell_information()
@@ -2515,11 +2450,10 @@ class PairEventAnnotator(CelldetectiveMainWindow):
                 else:
                     self.cancel_pair_selection()
             else:
-                print("one cell already selected... skip... ")
-                pass
+                logger.debug("One cell already selected, skip.")
         elif len(self.reference_selection) > 0 and not self.pair_selected:
 
-            print("You are picking a cell from the neighbor population...")
+            logger.debug("Picking a cell from the neighbor population...")
             _, tracks, _, _ = self.get_neighbor_sets()
             if self.index is not None:
                 toi = tracks[self.framedata][self.index]
@@ -2527,17 +2461,17 @@ class PairEventAnnotator(CelldetectiveMainWindow):
             if toi in self.neighbors and len(self.reference_selection) > 0:
                 if len(self.pair_selection) == 0:
                     self.neighbor_track_of_interest = toi
-                    print("highlight pair!")
+                    logger.debug("Highlighting pair.")
                     self.highlight_the_pair()
                 else:
-                    print("cancel pair!")
+                    logger.debug("Canceling pair selection.")
                     self.cancel_pair_selection()
             else:
                 self.cancel_pair_selection()
 
         if self.pair_selected and len(self.reference_selection) > 0:
 
-            print("You selected a pair...")
+            logger.debug("A pair has been selected.")
             artist = event.artist
 
             if self.index is not None and len(self.pair_selection) == 0:
@@ -2545,7 +2479,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
                 try:
                     selected_point = artist.get_offsets()[self.index]
                 except Exception as e:
-                    print(f"L1788 {e}")
+                    logger.warning(f"Failed to get selected point offsets: {e}")
                     return
 
                 if len(self.pair_selection) == 0 and (
@@ -2557,29 +2491,23 @@ class PairEventAnnotator(CelldetectiveMainWindow):
                     self.highlight_the_pair()
 
                 elif len(self.pair_selection) == 1:
-                    print(
-                        "Length of pair selection is larger than one, trying to cancel the pair selection..."
-                    )
+                    logger.debug("Pair selection larger than one, canceling pair selection...")
                     self.cancel_pair_selection()
                 else:
-                    print("something else")
+                    logger.debug("Unhandled pair selection state; canceling.")
                     self.cancel_pair_selection()
             else:
-                print("else #1")
-                print(f"{len(self.pair_selection)=} {self.index=}")
+                logger.debug(f"Pair-pick else #1: pair_selection={len(self.pair_selection)}, index={self.index}")
                 self.cancel_pair_selection()
         else:
-            print("else #2")
-            pass
+            logger.debug("Pair-pick else #2: no pair selected and no reference.")
 
-        print(f"{self.pair_selection=}")
+        logger.debug(f"pair_selection={self.pair_selection}")
 
     def highlight_the_pair(self):
         """Highlight the selected pair."""
         # 1) recolor the neighbor marker
-        print(
-            f"Reference cell: {self.reference_track_of_interest}, neighbor cell: {self.neighbor_track_of_interest}"
-        )
+        logger.debug(f"Reference cell: {self.reference_track_of_interest}, neighbor cell: {self.neighbor_track_of_interest}")
 
         _, tracks, colors, _ = self.get_neighbor_sets()
         self.neigh_cell_loc_idx = []
@@ -2827,7 +2755,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         number = int(label.split("_child")[1])
 
         if number > len(populations) * 2:
-            print("A pair is selected...")
+            logger.debug("A pair is selected...")
             self.pair_selected = True
             self.selected_population = None
         else:
@@ -2850,7 +2778,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
                     )
                     self.index = ind[np.argmin(dist)]
                 except Exception as e:
-                    print(f"Exception L2090 to find closest marker: {e=}")
+                    logger.warning(f"Failed to find closest marker: {e}")
             else:
                 self.index = None
 
@@ -3009,7 +2937,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
             if len(min_values) > 0:
                 self.cell_ax.set_ylim(np.amin(min_values), np.amax(max_values))
         except Exception as e:
-            print(e)
+            logger.warning(f"Failed to update signal plot y-limits: {e}")
 
     def draw_frame(self, framedata: int) -> None:
         """
@@ -3227,7 +3155,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
             self.df_relative[self.df_relative[self.relative_class_name] > 2].index
         )
         self.df_relative.to_csv(self.relative_trajectories_path, index=False)
-        print("relative table saved.")
+        logger.info("Relative table saved.")
 
     def set_last_frame(self):
         """Set the last frame of the animation."""
@@ -3239,7 +3167,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
             self.stack[self.last_key].flatten()
         ):
             self.last_key -= 1
-        print(f"Last frame is {len(self.stack) - 1}; last not black is {self.last_key}")
+        logger.debug(f"Last frame is {len(self.stack) - 1}; last not black is {self.last_key}")
         self.anim._drawn_artists = self.draw_frame(self.last_key)
         self.anim._drawn_artists = sorted(
             self.anim._drawn_artists, key=lambda x: x.get_zorder()
@@ -3262,7 +3190,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         self.first_frame_btn.disconnect()
 
         self.first_key = 0
-        print(f"First frame is {0}")
+        logger.debug("First frame is 0.")
         self.anim._drawn_artists = self.draw_frame(0)
         self.anim._drawn_artists = sorted(
             self.anim._drawn_artists, key=lambda x: x.get_zorder()
@@ -3359,9 +3287,9 @@ class PairEventAnnotator(CelldetectiveMainWindow):
                 pathsave += ".npy"
             try:
                 np.save(pathsave, training_set)
-                print(f"File successfully written in {pathsave}.")
+                logger.info(f"File successfully written in {pathsave}.")
             except Exception as e:
-                print(f"Error {e}...")
+                logger.error(f"Failed to write file {pathsave}: {e}")
 
     def normalize_features(self):
         """Normalize features."""
@@ -3423,7 +3351,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
                 self.cell_ax.set_yscale("linear")
                 self.log_btn.setIcon(icon(MDI6.math_log, color="black"))
         except Exception as e:
-            print(e)
+            logger.warning(f"Failed to toggle log scale: {e}")
 
         # self.cell_ax.autoscale()
         self.cell_fcanvas.canvas.draw_idle()

@@ -242,7 +242,7 @@ def estimate_background_per_condition(
 
                     frame = np.nanmedian(new_frames, axis=0)
             else:
-                print(f"Stack not found for position {pos_path}...")
+                logger.warning(f"Stack not found for position {pos_path}...")
                 frame = []
 
             # store
@@ -259,14 +259,13 @@ def estimate_background_per_condition(
                 progress_callback(image_preview=background)
 
             if offset is not None:
-                # print("The offset is applied to background...")
                 background -= offset
             if fix_nan:
                 background = interpolate_nan(background.copy().astype(float))
             backgrounds.append({"bg": background, "well": well_path})
             logger.info(f"Background successfully computed for well {well_name}...")
         except Exception as e:
-            logger.error(e)
+            logger.error(f"{e}")
             backgrounds.append(None)
 
     return backgrounds
@@ -608,7 +607,6 @@ def apply_background_to_stack(
         ).astype(float)
         target_img = frames[:, :, target_channel_index].copy()
         if offset is not None:
-            # print(f"The offset is applied to image...")
             target_img -= offset
 
         if optimize_option:
@@ -1569,7 +1567,7 @@ def correct_channel_offset(
         if progress_callback:
             progress_callback(level="well", iter=k, total=total_wells)
         elif show_progress_per_well:
-            print(f"Processing well {k+1}/{total_wells}...")
+            logger.info(f"Processing well {k+1}/{total_wells}...")
 
         well_name, _ = extract_well_name_and_number(well_path)
         positions = get_positions_in_well(well_path)
@@ -1587,7 +1585,7 @@ def correct_channel_offset(
                     stage=f"Pos {extract_position_name(pos_path)}",
                 )
             elif show_progress_per_pos:
-                print(f"  Processing position {pidx+1}/{total_pos}...")
+                logger.info(f"  Processing position {pidx+1}/{total_pos}...")
 
             stack_path = get_position_movie_path(pos_path, prefix=movie_prefix)
             logger.info(
@@ -1668,9 +1666,8 @@ def correct_channel_offset_single_stack(
             The corrected stack if `return_stacks` is True, otherwise None.
     """
 
-    assert os.path.exists(
-        stack_path
-    ), f"The stack {stack_path} does not exist... Abort."
+    if not os.path.exists(stack_path):
+        raise FileNotFoundError(f"The stack {stack_path} does not exist... Abort.")
 
     from tqdm import tqdm
     import tifffile.tifffile as tiff

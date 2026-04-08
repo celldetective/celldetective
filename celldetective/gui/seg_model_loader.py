@@ -19,12 +19,15 @@ from celldetective.gui.base.components import CelldetectiveWidget
 from PyQt5.QtGui import QDoubleValidator
 from superqt.fonticon import icon
 from fonticon_mdi6 import MDI6
+import logging
 import numpy as np
 from glob import glob
 import os
 import json
 import shutil
 import gc
+
+logger = logging.getLogger("celldetective")
 
 
 class SegmentationModelLoader(CelldetectiveWidget):
@@ -290,7 +293,7 @@ class SegmentationModelLoader(CelldetectiveWidget):
                 if self.seg_mode == "cellpose":
                     self.file_label.setText(self.filename.split("/")[-1])
                     self.modelname = self.filename.split("/")[-1]
-                    print(f"Transferring Cellpose model {self.filename}...")
+                    logger.info(f"Transferring Cellpose model {self.filename}...")
                     self.folder_dest = (
                         os.path.split(os.path.dirname(os.path.realpath(__file__)))[0]
                         + f"/models/{self.target_folder}/"
@@ -311,9 +314,9 @@ class SegmentationModelLoader(CelldetectiveWidget):
             )
             if self.filename:
                 n_files = len(self.filename)
-                print(f"You loaded {n_files} threshold configuration files...")
+                logger.info(f"You loaded {n_files} threshold configuration files...")
                 for i, filename in enumerate(self.filename):
-                    print(f"Config {i}: ", filename, "...")
+                    logger.info(f"Config {i}: {filename}...")
 
                 if n_files == 1:
                     self.merge_cb.hide()
@@ -426,11 +429,11 @@ class SegmentationModelLoader(CelldetectiveWidget):
                         nchan=len(channels),
                     )
                     self.scale_model = model.diam_mean
-                    print(f"{self.scale_model=}")
+                    logger.debug(f"scale_model={self.scale_model}")
                     del model
                     gc.collect()
                 except Exception as e:
-                    print(e)
+                    logger.error(f"{e}")
                     msgBox = QMessageBox()
                     msgBox.setIcon(QMessageBox.Critical)
                     msgBox.setText(f"Cellpose model could not be loaded...")
@@ -555,7 +558,7 @@ class SegmentationModelLoader(CelldetectiveWidget):
             )
 
         dico.update({"model_type": model_type})
-        print(f"{dico=}")
+        logger.debug(f"dico={dico}")
         json_object = json.dumps(dico, indent=4)
 
         # Writing to sample.json
@@ -573,10 +576,7 @@ class SegmentationModelLoader(CelldetectiveWidget):
         # 		shutil.rmtree(self.folder_dest)
         # os.mkdir(self.folder_dest)
 
-        print(
-            "Configuration successfully written in ",
-            self.folder_dest + os.sep + "config_input.json",
-        )
+        logger.info(f"Configuration successfully written in {self.folder_dest + os.sep + 'config_input.json'}")
         with open(self.folder_dest + os.sep + "config_input.json", "w") as outfile:
             outfile.write(json_object)
 
@@ -603,11 +603,11 @@ class SegmentationModelLoader(CelldetectiveWidget):
                         self.thresh_wizard.width() + 1,
                         self.thresh_wizard.height() + 1,
                     )
-                except RuntimeError:
-                    pass
+                except RuntimeError as e:
+                    logger.debug(f"Wizard resize failed during layout: {e}")
 
             try:
                 QTimer.singleShot(100, safe_resize)
                 center_window(self.thresh_wizard)
-            except:
-                pass
+            except Exception as e:
+                logger.debug(f"Window resize/centering trigger failed: {e}")

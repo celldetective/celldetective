@@ -25,9 +25,10 @@ Dependencies
 
 import os
 import subprocess
+import sys
 import json
 import numpy as np
-from celldetective.utils.model_loaders import locate_signal_model
+from celldetective.utils.model_loaders import locate_signal_model, _resolve_signal_model_paths
 from celldetective.utils.data_loaders import get_position_table, get_position_pickle
 from celldetective.tracking import clean_trajectories, interpolate_nan_properties
 import matplotlib.pyplot as plt
@@ -39,10 +40,33 @@ import pandas as pd
 from pandas.api.types import is_numeric_dtype
 from scipy.stats import median_abs_deviation
 from typing import List, Optional, Union, Dict, Tuple, Literal
+import logging
+
+logger = logging.getLogger("celldetective")
 
 abs_path = os.sep.join(
     [os.path.split(os.path.dirname(os.path.realpath(__file__)))[0], "celldetective"]
 )
+
+
+
+def _extract_config_label(config: dict) -> Optional[str]:
+    """Return the ``label`` field from a signal model config, or None if absent or empty.
+
+    Parameters
+    ----------
+    config : dict
+        Loaded ``config_input.json`` dictionary.
+
+    Returns
+    -------
+    str or None
+    """
+    try:
+        label = config["label"]
+        return None if label == "" else label
+    except KeyError:
+        return None
 
 
 def analyze_signals(
@@ -107,36 +131,19 @@ def analyze_signals(
     """
     from celldetective.event_detection_models import SignalDetectionModel
 
-    model_path = locate_signal_model(model, path=model_path)
-    complete_path = model_path  # +model
-    complete_path = rf"{complete_path}"
-    model_config_path = os.sep.join([complete_path, "config_input.json"])
-    model_config_path = rf"{model_config_path}"
-    assert os.path.exists(
-        complete_path
-    ), f"Model {model} could not be located in folder {model_path}... Abort."
-    assert os.path.exists(
-        model_config_path
-    ), f"Model configuration could not be located in folder {model_path}... Abort."
+    complete_path, model_config_path = _resolve_signal_model_paths(model, path=model_path)
 
     available_signals = list(trajectories.columns)
-    # print('The available_signals are : ',available_signals)
 
-    f = open(model_config_path)
-    config = json.load(f)
+    with open(model_config_path) as f:
+        config = json.load(f)
     required_signals = config["channels"]
     if "selected_channels" in config:
         selected_signals = config["selected_channels"]
         if np.any([s == "None" for s in selected_signals]):
             trajectories["None"] = 0.0
     model_signal_length = config["model_signal_length"]
-
-    try:
-        label = config["label"]
-        if label == "":
-            label = None
-    except:
-        label = None
+    label = _extract_config_label(config)
 
     if selected_signals is None:
         selected_signals = []
@@ -149,19 +156,17 @@ def analyze_signals(
                 a for a in available_signals if s in a and not a.startswith(s)
             ]
             candidates = priority_cols + second_priority_cols + third_priority_cols
-            assert (
-                len(candidates) > 0
-            ), f"No signal matches with the requirements of the model {required_signals}. Please pass the signals manually with the argument selected_signals or add measurements. Abort."
-            print(
+            if len(candidates) == 0:
+                raise ValueError(f"No signal matches with the requirements of the model {required_signals}. Please pass the signals manually with the argument selected_signals or add measurements. Abort.")
+            logger.info(
                 f"Selecting the first time series among: {candidates} for input requirement {s}..."
             )
             selected_signals.append(candidates[0])
     else:
-        assert len(selected_signals) == len(
-            required_signals
-        ), f"Mismatch between the number of required signals {required_signals} and the provided signals {selected_signals}... Abort."
+        if len(selected_signals) != len(required_signals):
+            raise ValueError(f"Mismatch between the number of required signals {required_signals} and the provided signals {selected_signals}... Abort.")
 
-    print(f"The following channels will be passed to the model: {selected_signals}")
+    logger.info(f"The following channels will be passed to the model: {selected_signals}")
     trajectories_clean = clean_trajectories(
         trajectories,
         interpolate_na=interpolate_na,
@@ -170,9 +175,8 @@ def analyze_signals(
     )
 
     max_signal_size = int(trajectories_clean[column_labels["time"]].max()) + 2
-    assert (
-        max_signal_size <= model_signal_length
-    ), f"The current signals are longer ({max_signal_size}) than the maximum expected input ({model_signal_length}) for this signal analysis model. Abort..."
+    if max_signal_size > model_signal_length:
+        raise ValueError(f"The current signals are longer ({max_signal_size}) than the maximum expected input ({model_signal_length}) for this signal analysis model. Abort...")
 
     tracks = trajectories_clean[column_labels["track"]].unique()
     signals = np.zeros((len(tracks), max_signal_size, len(selected_signals)))
@@ -205,7 +209,7 @@ def analyze_signals(
             indices = group.index
             trajectories.loc[indices, class_col] = classes[i]
             trajectories.loc[indices, time_col] = times_recast[i]
-        print("Done.")
+        logger.info("Signal analysis done.")
 
         for tid, group in trajectories.groupby(column_labels["track"]):
 
@@ -323,13 +327,16 @@ def analyze_signals_at_position(
 
     pos = pos.replace("\\", "/")
     pos = rf"{pos}"
-    assert os.path.exists(pos), f"Position {pos} is not a valid path."
+    if not os.path.exists(pos):
+        raise FileNotFoundError(f"Position {pos} is not a valid path.")
     if not pos.endswith("/"):
         pos += "/"
 
     script_path = os.sep.join([abs_path, "scripts", "analyze_signals.py"])
-    cmd = f'python "{script_path}" --pos "{pos}" --model "{model}" --mode "{mode}" --use_gpu "{use_gpu}"'
-    subprocess.call(cmd, shell=True)
+    subprocess.run(
+        [sys.executable, script_path, "--pos", pos, "--model", model, "--mode", mode, "--use_gpu", str(use_gpu)],
+        check=False,
+    )
 
     table = pos + os.sep.join(["output", "tables", f"trajectories_{mode}.csv"])
     if return_table:
@@ -367,7 +374,8 @@ def analyze_pair_signals_at_position(
 
     pos = pos.replace("\\", "/")
     pos = rf"{pos}"
-    assert os.path.exists(pos), f"Position {pos} is not a valid path."
+    if not os.path.exists(pos):
+        raise FileNotFoundError(f"Position {pos} is not a valid path.")
     if not pos.endswith("/"):
         pos += "/"
 
@@ -377,26 +385,21 @@ def analyze_pair_signals_at_position(
     df_pairs = get_position_table(pos, population="pairs")
 
     # Need to identify expected reference / neighbor tables
-    model_path = locate_signal_model(model, pairs=True)
-    print(f"Looking for model in {model_path}...")
-    complete_path = model_path
-    complete_path = rf"{complete_path}"
-    model_config_path = os.sep.join([complete_path, "config_input.json"])
-    model_config_path = rf"{model_config_path}"
-    f = open(model_config_path)
-    model_config_path = json.load(f)
+    complete_path, model_config_path = _resolve_signal_model_paths(model, pairs=True)
+    with open(model_config_path) as f:
+        model_config = json.load(f)
 
-    reference_population = model_config_path["reference_population"]
-    neighbor_population = model_config_path["neighbor_population"]
+    reference_population = model_config["reference_population"]
+    neighbor_population = model_config["neighbor_population"]
 
     if dataframes[reference_population] is None:
-        print(
+        logger.error(
             f"No tabulated data can be found for the reference population ({reference_population})... Abort..."
         )
         return None
 
     if dataframes[neighbor_population] is None:
-        print(
+        logger.error(
             f"No tabulated data can be found for the neighbor population ({neighbor_population})... Abort..."
         )
         return None
@@ -463,18 +466,9 @@ def analyze_pair_signals(
     """
     from celldetective.event_detection_models import SignalDetectionModel
 
-    model_path = locate_signal_model(model, path=model_path, pairs=True)
-    print(f"Looking for model in {model_path}...")
-    complete_path = model_path
-    complete_path = rf"{complete_path}"
-    model_config_path = os.sep.join([complete_path, "config_input.json"])
-    model_config_path = rf"{model_config_path}"
-    assert os.path.exists(
-        complete_path
-    ), f"Model {model} could not be located in folder {model_path}... Abort."
-    assert os.path.exists(
-        model_config_path
-    ), f"Model configuration could not be located in folder {model_path}... Abort."
+    complete_path, model_config_path = _resolve_signal_model_paths(
+        model, path=model_path, pairs=True
+    )
 
     trajectories_pairs = trajectories_pairs.rename(columns=lambda x: "pair_" + x)
     trajectories_reference = trajectories_reference.rename(
@@ -512,33 +506,25 @@ def analyze_pair_signals(
         if is_numeric_dtype(trajectories_neighbors[col]):
             available_signals.append(col)
 
-    print("The available signals are : ", available_signals)
+    logger.debug(f"The available signals are: {available_signals}")
 
-    f = open(model_config_path)
-    config = json.load(f)
+    with open(model_config_path) as f:
+        config = json.load(f)
     required_signals = config["channels"]
-
-    try:
-        label = config["label"]
-        if label == "":
-            label = None
-    except:
-        label = None
+    label = _extract_config_label(config)
 
     if selected_signals is None:
         selected_signals = []
         for s in required_signals:
             pattern_test = [s in a or s == a for a in available_signals]
-            print(f"Pattern test for signal {s}: ", pattern_test)
-            assert np.any(
-                pattern_test
-            ), f"No signal matches with the requirements of the model {required_signals}. Please pass the signals manually with the argument selected_signals or add measurements. Abort."
+            logger.debug(f"Pattern test for signal {s}: {pattern_test}")
+            if not np.any(pattern_test):
+                raise ValueError(f"No signal matches with the requirements of the model {required_signals}. Please pass the signals manually with the argument selected_signals or add measurements. Abort.")
             valid_columns = np.array(available_signals)[np.array(pattern_test)]
             if len(valid_columns) == 1:
                 selected_signals.append(valid_columns[0])
             else:
-                # print(test_number_of_nan(trajectories, valid_columns))
-                print(f"Found several candidate signals: {valid_columns}")
+                logger.debug(f"Found several candidate signals: {valid_columns}")
                 for vc in natsorted(valid_columns):
                     if "circle" in vc:
                         selected_signals.append(vc)
@@ -548,11 +534,10 @@ def analyze_pair_signals(
                 # do something more complicated in case of one to many columns
                 # pass
     else:
-        assert len(selected_signals) == len(
-            required_signals
-        ), f"Mismatch between the number of required signals {required_signals} and the provided signals {selected_signals}... Abort."
+        if len(selected_signals) != len(required_signals):
+            raise ValueError(f"Mismatch between the number of required signals {required_signals} and the provided signals {selected_signals}... Abort.")
 
-    print(f"The following channels will be passed to the model: {selected_signals}")
+    logger.info(f"The following channels will be passed to the model: {selected_signals}")
     trajectories_reference_clean = interpolate_nan_properties(
         trajectories_reference, track_label=reference_groupby_cols
     )
@@ -562,12 +547,12 @@ def analyze_pair_signals(
     trajectories_pairs_clean = interpolate_nan_properties(
         trajectories_pairs, track_label=pair_groupby_cols
     )
-    print(f"{trajectories_pairs_clean.columns=}")
+    logger.debug(f"Pair table columns: {list(trajectories_pairs_clean.columns)}")
 
     max_signal_size = int(trajectories_pairs_clean["pair_FRAME"].max()) + 2
     pair_tracks = trajectories_pairs_clean.groupby(pair_groupby_cols).size()
     signals = np.zeros((len(pair_tracks), max_signal_size, len(selected_signals)))
-    print(f"{max_signal_size=} {len(pair_tracks)=} {signals.shape=}")
+    logger.debug(f"max_signal_size={max_signal_size}, n_pair_tracks={len(pair_tracks)}, signals_shape={signals.shape}")
 
     for i, (pair, group) in enumerate(
         trajectories_pairs_clean.groupby(pair_groupby_cols)
@@ -629,7 +614,7 @@ def analyze_pair_signals(
                 signals[i, max(timeline) :, j] = signal[-1]
 
     model = SignalDetectionModel(pretrained=complete_path)
-    print("signal shape: ", signals.shape)
+    logger.debug(f"Signal shape: {signals.shape}")
 
     classes = model.predict_class(signals)
     times_recast = model.predict_time_of_interest(signals)
@@ -647,7 +632,7 @@ def analyze_pair_signals(
         indices = group.index
         trajectories_pairs.loc[indices, class_col] = classes[i]
         trajectories_pairs.loc[indices, time_col] = times_recast[i]
-    print("Done.")
+    logger.info("Pair signal analysis done.")
 
     # At the end rename cols again
     trajectories_pairs = trajectories_pairs.rename(
@@ -705,11 +690,14 @@ def train_signal_model(config: str) -> None:
 
     config = config.replace("\\", "/")
     config = rf"{config}"
-    assert os.path.exists(config), f"Config {config} is not a valid path."
+    if not os.path.exists(config):
+        raise FileNotFoundError(f"Config {config} is not a valid path.")
 
     script_path = os.sep.join([abs_path, "scripts", "train_signal_model.py"])
-    cmd = f'python "{script_path}" --config "{config}"'
-    subprocess.call(cmd, shell=True)
+    subprocess.run(
+        [sys.executable, script_path, "--config", config],
+        check=False,
+    )
 
 
 def T_MSD(
@@ -889,9 +877,8 @@ def sliding_msd(
 
     """
 
-    assert (
-        window > n_points_migration
-    ), "Please set a window larger than the number of fit points..."
+    if window <= n_points_migration:
+        raise ValueError("Please set a window larger than the number of fit points...")
 
     # modes = bi, forward, backward
     s_msd = np.zeros(len(x))
@@ -901,7 +888,8 @@ def sliding_msd(
     dt = timeline[1] - timeline[0]
 
     if mode == "bi":
-        assert window % 2 == 1, "Please set an odd window for the bidirectional mode"
+        if window % 2 != 1:
+            raise ValueError("Please set an odd window for the bidirectional mode")
         lower_bound = window // 2
         upper_bound = len(x) - window // 2 - 1
     elif mode == "forward":
@@ -1043,9 +1031,8 @@ def sliding_msd_drift(
 
     """
 
-    assert (
-        window > n_points_migration
-    ), "Please set a window larger than the number of fit points..."
+    if window <= n_points_migration:
+        raise ValueError("Please set a window larger than the number of fit points...")
 
     # modes = bi, forward, backward
     s_diffusion = np.zeros(len(x))
@@ -1055,7 +1042,8 @@ def sliding_msd_drift(
     dt = timeline[1] - timeline[0]
 
     if mode == "bi":
-        assert window % 2 == 1, "Please set an odd window for the bidirectional mode"
+        if window % 2 != 1:
+            raise ValueError("Please set an odd window for the bidirectional mode")
         lower_bound = window // 2
         upper_bound = len(x) - window // 2 - 1
     elif mode == "forward":
@@ -1211,9 +1199,8 @@ def mean_signal(
 
     """
 
-    assert signal_name in list(
-        df.columns
-    ), "The signal you want to plot is not one of the measured features."
+    if signal_name not in df.columns:
+        raise KeyError("The signal you want to plot is not one of the measured features.")
     if isinstance(class_value, int):
         class_value = [class_value]
     elif class_value is None or class_col is None:
@@ -1256,7 +1243,7 @@ def mean_signal(
             if not abs_time:
                 try:
                     ref_time = floor(track_group[time_col].to_numpy()[0])
-                except:
+                except (KeyError, IndexError, ValueError):
                     continue
             else:
                 ref_time = time_col

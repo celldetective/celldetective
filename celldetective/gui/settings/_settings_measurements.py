@@ -47,6 +47,9 @@ from celldetective.gui.layouts import (
 )
 from celldetective.gui.gui_utils import PreprocessingLayout2
 from celldetective.gui.settings._settings_base import CelldetectiveSettingsPanel
+import logging
+
+logger = logging.getLogger("celldetective")
 
 
 class SettingsMeasurements(CelldetectiveSettingsPanel):
@@ -468,11 +471,10 @@ class SettingsMeasurements(CelldetectiveSettingsPanel):
         )
         try:
             Popen(f"explorer {os.path.realpath(path)}")
-        except:
-
+        except Exception:
             try:
                 os.system('xdg-open "%s"' % path)
-            except:
+            except Exception:
                 return None
 
     def switch_to_absolute_normalization_mode(self):
@@ -582,9 +584,9 @@ class SettingsMeasurements(CelldetectiveSettingsPanel):
         Write the selected options in a json file for later reading by the software.
         """
 
-        print(f"{self.spot_preprocessing.list.items=}")
+        logger.debug(f"spot_preprocessing.list.items={self.spot_preprocessing.list.items}")
 
-        print("Writing instructions...")
+        logger.debug("Writing instructions...")
         measurement_options = {}
         background_correction = self.protocol_layout.protocols
         if not background_correction:
@@ -637,12 +639,12 @@ class SettingsMeasurements(CelldetectiveSettingsPanel):
             self.clear_previous = False
         measurement_options.update({"clear_previous": self.clear_previous})
 
-        print("Measurement instructions: ", measurement_options)
+        logger.debug(f"Measurement instructions: {measurement_options}")
         file_name = self.measure_instructions_path
         with open(file_name, "w") as f:
             json.dump(measurement_options, f, indent=4)
 
-        print("Done.")
+        logger.debug("Done.")
         self.close()
 
     def extract_haralick_options(self):
@@ -683,11 +685,11 @@ class SettingsMeasurements(CelldetectiveSettingsPanel):
         Read the measurmeent options from a previously written json file and format properly for the UI.
         """
 
-        print("Reading instructions..")
+        logger.debug("Reading instructions..")
         if os.path.exists(self.measure_instructions_path):
             with open(self.measure_instructions_path, "r") as f:
                 measurement_instructions = json.load(f)
-                print(measurement_instructions)
+                logger.debug(f"{measurement_instructions}")
                 if "background_correction" in measurement_instructions:
                     self.protocol_layout.protocols = measurement_instructions[
                         "background_correction"
@@ -947,7 +949,7 @@ class SettingsMeasurements(CelldetectiveSettingsPanel):
             try:
                 QTimer.singleShot(100, lambda: center_window(self.hist_window))
             except Exception as e:
-                pass
+                logger.debug(f"Window centering trigger failed: {e}")
 
     def view_selected_contour(self):
         """

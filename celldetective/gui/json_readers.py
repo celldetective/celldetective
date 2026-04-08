@@ -81,11 +81,10 @@ class ConfigEditor(CelldetectiveWidget):
         path = self.config_path
         try:
             Popen(f"explorer {os.path.realpath(path)}")
-        except:
-
+        except Exception:
             try:
                 os.system('xdg-open "%s"' % path)
-            except:
+            except Exception:
                 return None
 
     def load_config(self):

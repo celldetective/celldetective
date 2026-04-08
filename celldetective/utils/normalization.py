@@ -141,7 +141,7 @@ def normalize(
         frame[frame >= amplification] = amplification
         frame[frame <= 0.0] = 0.0
     if ignore_gray_value is not None:
-        frame[np.where(frame0) == ignore_gray_value] = ignore_gray_value
+        frame[frame0 == ignore_gray_value] = ignore_gray_value
 
     return frame.copy().astype(dtype)
 
@@ -208,7 +208,8 @@ def normalize_multichannel(
     """
 
     mf = multichannel_frame.copy().astype(float)
-    assert mf.ndim == 3, f"Wrong shape for the multichannel frame: {mf.shape}."
+    if mf.ndim != 3:
+        raise ValueError(f"Wrong shape for the multichannel frame: {mf.shape}.")
     if percentiles is None:
         percentiles = [(0.0, 99.99)] * mf.shape[-1]
     elif isinstance(percentiles, tuple):
@@ -216,9 +217,8 @@ def normalize_multichannel(
     if values is not None:
         if isinstance(values, tuple):
             values = [values] * mf.shape[-1]
-        assert (
-            len(values) == mf.shape[-1]
-        ), "Mismatch between the normalization values provided and the number of channels."
+        if len(values) != mf.shape[-1]:
+            raise ValueError("Mismatch between the normalization values provided and the number of channels.")
 
     mf_new = []
     for c in range(mf.shape[-1]):
@@ -296,17 +296,15 @@ def get_stack_normalization_values(
 
     """
 
-    assert (
-        stack.ndim == 4
-    ), f"Wrong number of dimensions for the stack, expect TYXC (4) got {stack.ndim}."
+    if stack.ndim != 4:
+        raise ValueError(f"Wrong number of dimensions for the stack, expect TYXC (4) got {stack.ndim}.")
     if percentiles is None:
         percentiles = [(0.0, 99.99)] * stack.shape[-1]
     elif isinstance(percentiles, tuple):
         percentiles = [percentiles] * stack.shape[-1]
     elif isinstance(percentiles, list):
-        assert (
-            len(percentiles) == stack.shape[-1]
-        ), f"Mismatch between the provided percentiles and the number of channels {stack.shape[-1]}. If you meant to apply the same percentiles to all channels, please provide a single tuple."
+        if len(percentiles) != stack.shape[-1]:
+            raise ValueError(f"Mismatch between the provided percentiles and the number of channels {stack.shape[-1]}. If you meant to apply the same percentiles to all channels, please provide a single tuple.")
 
     values = []
     for c in range(stack.shape[-1]):
@@ -372,7 +370,8 @@ def normalize_per_channel(
     # Normalizes each channel of each image based on the default percentile values [0.1, 99.99].
     """
 
-    assert X[0].ndim == 3, "Channel axis does not exist. Abort."
+    if X[0].ndim != 3:
+        raise ValueError("Channel axis does not exist. Abort.")
     n_channels = X[0].shape[-1]
     if isinstance(normalization_percentile_mode, bool):
         normalization_percentile_mode = [normalization_percentile_mode] * n_channels
@@ -381,9 +380,12 @@ def normalize_per_channel(
     if len(normalization_values) == 2 and not isinstance(normalization_values[0], list):
         normalization_values = [normalization_values] * n_channels
 
-    assert len(normalization_values) == n_channels
-    assert len(normalization_clipping) == n_channels
-    assert len(normalization_percentile_mode) == n_channels
+    if len(normalization_values) != n_channels:
+        raise ValueError(f"normalization_values length {len(normalization_values)} does not match n_channels {n_channels}")
+    if len(normalization_clipping) != n_channels:
+        raise ValueError(f"normalization_clipping length {len(normalization_clipping)} does not match n_channels {n_channels}")
+    if len(normalization_percentile_mode) != n_channels:
+        raise ValueError(f"normalization_percentile_mode length {len(normalization_percentile_mode)} does not match n_channels {n_channels}")
 
     X_normalized = []
     for i in range(len(X)):

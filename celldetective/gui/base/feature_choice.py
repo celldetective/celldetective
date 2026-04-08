@@ -1,6 +1,9 @@
 import ast
+import logging
 import os
 from celldetective import get_software_location
+
+logger = logging.getLogger("celldetective")
 from PyQt5.QtWidgets import QComboBox, QMainWindow, QPushButton, QVBoxLayout
 
 from celldetective.gui.base.components import CelldetectiveWidget
@@ -33,7 +36,7 @@ def get_extra_properties_functions():
 
         return functions
     except Exception as e:
-        print(f"Failed to parse extra_properties.py: {e}")
+        logger.warning(f"Failed to parse extra_properties.py: {e}")
         return []
 
 

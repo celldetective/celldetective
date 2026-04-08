@@ -428,9 +428,9 @@ class BackgroundModelFreeCorrectionLayout(QGridLayout, Styles):
                 )
                 self.viewer.show()
             else:
-                print("Corrected stack could not be generated... No stack available...")
+                logger.warning("Corrected stack could not be generated... No stack available...")
         else:
-            print("Background correction cancelled.")
+            logger.info("Background correction cancelled.")
 
     def activate_time_range(self):
         """Enable or disable time range options based on acquisition mode."""
@@ -604,5 +604,5 @@ class BackgroundEstimatorThread(QThread):
             else:
                 self.finished_with_result.emit(None)
         except Exception as e:
-            print(f"Error in background estimation thread: {e}")
+            logger.error(f"Error in background estimation thread: {e}")
             self.finished_with_result.emit(None)

@@ -25,6 +25,7 @@ from celldetective.utils.data_loaders import load_experiment_tables
 from celldetective.utils.model_loaders import (
     locate_signal_model,
     locate_segmentation_model,
+    _resolve_signal_model_paths,
 )
 from celldetective.utils.image_loaders import fix_missing_labels
 
@@ -38,6 +39,7 @@ from celldetective.gui.base.components import (
 import numpy as np
 from glob import glob
 from celldetective import get_logger
+from celldetective.measure import _get_border_suffix
 
 logger = get_logger("celldetective")
 
@@ -123,10 +125,6 @@ from celldetective.gui.gui_utils import help_generic
 from celldetective.gui.base.styles import Styles
 from celldetective import get_software_location
 import pandas as pd
-
-import logging
-
-logger = logging.getLogger("celldetective")
 
 
 class ProcessPanel(QFrame, Styles):
@@ -252,8 +250,8 @@ class ProcessPanel(QFrame, Styles):
             )
             try:
                 QTimer.singleShot(10, lambda: center_window(self.window()))
-            except:
-                pass
+            except Exception as e:
+                logger.debug(f"Window centering trigger failed: {e}")
 
     def populate_contents(self) -> None:
         """
@@ -560,8 +558,8 @@ class ProcessPanel(QFrame, Styles):
                 QTimer.singleShot(
                     100, lambda: self.parent_window.update_position_options()
                 )
-            except Exception as _:
-                pass
+            except Exception as e:
+                logger.debug(f"Position options update trigger failed: {e}")
         else:
             return None
 
@@ -969,10 +967,10 @@ class ProcessPanel(QFrame, Styles):
                                         self.event_annotator.height() + 1,
                                     ),
                                 )
-                            except:
-                                pass
+                            except Exception as e:
+                                logger.debug(f"Annotator resize trigger failed: {e}")
                         except Exception as e:
-                            print(f"Error finalizing annotator: {e}")
+                            logger.error(f"Error finalizing annotator: {e}")
                     else:
                         self.event_annotator.close()
 
@@ -1195,12 +1193,12 @@ class ProcessPanel(QFrame, Styles):
                     try:
                         wdg.resize(wdg.width() + 1, wdg.height() + 1)
                         center_window(wdg)
-                    except Exception as _:
-                        pass
+                    except Exception as e:
+                        logger.debug(f"Widget resize/centering failed: {e}")
 
                 QTimer.singleShot(100, lambda: post_widget(self.classifier_widget))
-            except Exception as _:
-                pass
+            except Exception as e:
+                logger.debug(f"Classifier widget post-show trigger failed: {e}")
 
     def open_signal_annotator_configuration_ui(self) -> None:
         """
@@ -1216,8 +1214,8 @@ class ProcessPanel(QFrame, Styles):
             QTimer.singleShot(
                 100, lambda: center_window(self.settings_signal_annotator)
             )
-        except Exception as _:
-            pass
+        except Exception as e:
+            logger.debug(f"Signal annotator centering trigger failed: {e}")
 
     def reset_generalist_setup(self, index: int) -> None:
         """
@@ -1301,8 +1299,8 @@ class ProcessPanel(QFrame, Styles):
                     remove_file_if_exists(t.replace(".csv", ".pkl"))
                     try:
                         os.remove(t)
-                    except:
-                        pass
+                    except OSError as e:
+                        logger.debug(f"Could not remove table file {t}: {e}")
 
         if self.seg_model_list.currentIndex() > self.n_specific_seg_models:
             self.model_name = self.seg_models[self.seg_model_list.currentIndex() - 1]
@@ -1556,10 +1554,7 @@ class ProcessPanel(QFrame, Styles):
                     self.signal_models_list.currentIndex()
                 ]
 
-                model_complete_path = locate_signal_model(self.signal_model_name)
-                input_config_path = os.path.join(
-                    model_complete_path, "config_input.json"
-                )
+                model_complete_path, input_config_path = _resolve_signal_model_paths(self.signal_model_name)
                 with open(input_config_path) as config_file:
                     input_config = json.load(config_file)
 
@@ -1630,19 +1625,13 @@ class ProcessPanel(QFrame, Styles):
                         signal_name = None
                         try:
                             if hasattr(self, "signal_model_name"):
-                                model_complete_path = locate_signal_model(
-                                    self.signal_model_name
-                                )
-                                input_config_path = os.path.join(
-                                    model_complete_path, "config_input.json"
-                                )
-                                if os.path.exists(input_config_path):
-                                    with open(input_config_path) as f:
-                                        conf = json.load(f)
-                                    event_label = conf.get("label", None)
-                                    channels = conf.get("channels", [])
-                                    if channels:
-                                        signal_name = channels[0]
+                                _, input_config_path = _resolve_signal_model_paths(self.signal_model_name)
+                                with open(input_config_path) as f:
+                                    conf = json.load(f)
+                                event_label = conf.get("label", None)
+                                channels = conf.get("channels", [])
+                                if channels:
+                                    signal_name = channels[0]
                         except Exception as e:
                             logger.warning(f"Could not determine event label: {e}")
 
@@ -1940,20 +1929,8 @@ class ProcessPanel(QFrame, Styles):
                     with open(instr_path, "r") as f:
                         instr = json.load(f)
 
-                    # 1. Features
-                    features = instr.get("features", [])
-                    if features:
-                        for f_name in features:
-                            if f_name == "intensity_mean":
-                                continue  # handled by standard
-                            if f_name == "area":
-                                continue
-
-                            # For other features, skimage/celldetective might suffix them.
-                            # If it's a generic feature, skimage usually keeps the name.
-                            # If it's multichannel, it might need channel names.
-                            # For now, let's keep it simple as requested for intensity_mean and area.
-                            pass
+                    # 1. Features — intensity_mean and area are handled by the
+                    # standard pipeline; other features are not surfaced here.
 
                     # 2. Isotropic measurements
                     radii = instr.get("intensity_measurement_radii", [])
@@ -1975,19 +1952,7 @@ class ProcessPanel(QFrame, Styles):
                     borders = instr.get("border_distances", [])
                     if borders:
                         for b in borders if isinstance(borders, list) else [borders]:
-                            # Logic from measure.py for suffix
-                            b_str = (
-                                str(b)
-                                .replace("(", "")
-                                .replace(")", "")
-                                .replace(", ", "_")
-                                .replace(",", "_")
-                            )
-                            suffix = (
-                                f"_slice_{b_str.replace('-', 'm')}px"
-                                if ("-" in str(b) or "," in str(b))
-                                else f"_edge_{b_str}px"
-                            )
+                            suffix = _get_border_suffix(b)
                             for ch in channel_names:
                                 # In measure_features, it's {ch}_mean{suffix}
                                 self.signals.append(f"{ch}_mean{suffix}")
@@ -2106,8 +2071,7 @@ class ProcessPanel(QFrame, Styles):
         self.signal_model_name = self.signal_models[
             self.signal_models_list.currentIndex()
         ]
-        model_complete_path = locate_signal_model(self.signal_model_name)
-        input_config_path = model_complete_path + "config_input.json"
+        _, input_config_path = _resolve_signal_model_paths(self.signal_model_name)
         new_channels = [
             self.signalChannelWidget.channel_cbs[i].currentText()
             for i in range(len(self.signalChannelWidget.channel_cbs))

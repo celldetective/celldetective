@@ -30,10 +30,198 @@ from celldetective.utils.maths import derivative
 from celldetective.utils.data_cleaning import extract_identity_col
 import os
 import subprocess
+import sys
+import logging
+
+logger = logging.getLogger("celldetective")
 
 abs_path = os.sep.join(
     [os.path.split(os.path.dirname(os.path.realpath(__file__)))[0], "celldetective"]
 )
+
+
+def _load_pair_tables(
+    pos: str, reference_population: str, neighbor_population: str
+) -> Tuple[Optional[pd.DataFrame], Optional[pd.DataFrame]]:
+    """Load reference and neighbor trajectory tables from pkl or csv files."""
+    tab_ref = pos + os.sep.join(
+        ["output", "tables", f"trajectories_{reference_population}.pkl"]
+    )
+    if os.path.exists(tab_ref):
+        df_reference = np.load(tab_ref, allow_pickle=True)
+    else:
+        df_reference = None
+
+    tab_neigh = tab_ref.replace(reference_population, neighbor_population)
+    if os.path.exists(tab_neigh):
+        df_neighbor = np.load(tab_neigh, allow_pickle=True)
+    elif os.path.exists(tab_neigh.replace(".pkl", ".csv")):
+        df_neighbor = pd.read_csv(tab_neigh.replace(".pkl", ".csv"))
+    else:
+        df_neighbor = None
+
+    return df_reference, df_neighbor
+
+
+def _build_neighbor_timeline(
+    group: pd.DataFrame, neighborhood_description: str
+) -> Tuple[list, list, pd.DataFrame, dict]:
+    """Build per-frame neighbor ID lists and intersection values for one reference cell."""
+    neighbor_dicts = group.loc[:, f"{neighborhood_description}"].values
+
+    neighbor_ids: list = []
+    neighbor_ids_per_t: list = []
+    intersection_rows: list = []
+    time_of_first_entrance: dict = {}
+
+    for t in range(len(group)):
+        neighbors_at_t = neighbor_dicts[t]
+        neighs_t: list = []
+        if not (isinstance(neighbors_at_t, float) or neighbors_at_t != neighbors_at_t):
+            for neigh in neighbors_at_t:
+                if neigh["id"] not in neighbor_ids:
+                    time_of_first_entrance[neigh["id"]] = t
+                intersection_rows.append(
+                    {
+                        "frame": t,
+                        "neigh_id": neigh["id"],
+                        "intersection": neigh.get("intersection", np.nan),
+                    }
+                )
+                neighbor_ids.append(neigh["id"])
+                neighs_t.append(neigh["id"])
+        neighbor_ids_per_t.append(neighs_t)
+
+    return neighbor_ids, neighbor_ids_per_t, pd.DataFrame(intersection_rows), time_of_first_entrance
+
+
+def _compute_pair_geometry(
+    coords_reference: np.ndarray,
+    coords_neighbor: np.ndarray,
+    coords_centre_of_mass: list,
+    centre_of_mass_columns: list,
+    timeline_reference: np.ndarray,
+    timeline_neighbor: np.ndarray,
+    full_timeline: np.ndarray,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Compute relative position vectors, angles, distances, and dot products over time."""
+    n = len(full_timeline)
+    n_com = len(centre_of_mass_columns)
+
+    neighbor_vector = np.full((n, 2), np.nan)
+    mass_displacement_vector = np.full((n_com, n, 2), np.nan)
+    dot_product_vector = np.full((n_com, n), np.nan)
+    cosine_dot_vector = np.full((n_com, n), np.nan)
+
+    for t in range(n):
+        if t in timeline_reference and t in timeline_neighbor:
+            idx_ref = list(timeline_reference).index(t)
+            idx_neigh = list(timeline_neighbor).index(t)
+
+            neighbor_vector[t, 0] = coords_neighbor[idx_neigh, 0] - coords_reference[idx_ref, 0]
+            neighbor_vector[t, 1] = coords_neighbor[idx_neigh, 1] - coords_reference[idx_ref, 1]
+
+            for z in range(n_com):
+                mass_displacement_vector[z, t, 0] = (
+                    coords_centre_of_mass[z][idx_neigh, 0] - coords_neighbor[idx_neigh, 0]
+                )
+                mass_displacement_vector[z, t, 1] = (
+                    coords_centre_of_mass[z][idx_neigh, 1] - coords_neighbor[idx_neigh, 1]
+                )
+                dot_product_vector[z, t] = np.dot(
+                    mass_displacement_vector[z, t], -neighbor_vector[t]
+                )
+                norm_prod = np.linalg.norm(mass_displacement_vector[z, t]) * np.linalg.norm(
+                    -neighbor_vector[t]
+                )
+                cosine_dot_vector[z, t] = dot_product_vector[z, t] / norm_prod
+
+    exclude = neighbor_vector[:, 1] != neighbor_vector[:, 1]
+    angle = np.full(n, np.nan)
+    angle[~exclude] = np.unwrap(
+        np.arctan2(neighbor_vector[:, 1][~exclude], neighbor_vector[:, 0][~exclude])
+    )
+    relative_distance = np.sqrt(neighbor_vector[:, 0] ** 2 + neighbor_vector[:, 1] ** 2)
+
+    return neighbor_vector, angle, relative_distance, dot_product_vector, cosine_dot_vector, exclude
+
+
+def _compute_pair_velocities(
+    relative_distance: np.ndarray,
+    angle: np.ndarray,
+    full_timeline: np.ndarray,
+    exclude: np.ndarray,
+    velocity_kwargs: dict,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Compute relative velocity and angular velocity at short and long timescales."""
+    n = len(full_timeline)
+    rel_velocity = derivative(relative_distance, full_timeline, **velocity_kwargs)
+    rel_velocity_smooth = derivative(relative_distance, full_timeline, window=7, mode="bi")
+
+    angular_velocity = np.full(n, np.nan)
+    angular_velocity_smooth = np.full(n, np.nan)
+    angular_velocity[~exclude] = derivative(
+        angle[~exclude], full_timeline[~exclude], **velocity_kwargs
+    )
+    angular_velocity_smooth[~exclude] = derivative(
+        angle[~exclude], full_timeline[~exclude], window=7, mode="bi"
+    )
+
+    return rel_velocity, rel_velocity_smooth, angular_velocity, angular_velocity_smooth
+
+
+def _build_pair_row(
+    tid: float,
+    nc: float,
+    reference_population: str,
+    neighbor_population: str,
+    t: int,
+    relative_distance: np.ndarray,
+    rel_velocity: np.ndarray,
+    rel_velocity_smooth: np.ndarray,
+    angle: np.ndarray,
+    angular_velocity: np.ndarray,
+    angular_velocity_smooth: np.ndarray,
+    inter: float,
+    ref_inter_fraction: float,
+    neigh_inter_fraction: float,
+    status: int,
+    cum_sum: int,
+    neighborhood_description: str,
+    time_of_first_entrance: dict,
+    ref_tracked: bool,
+    neigh_tracked: bool,
+    centre_of_mass_labels: list,
+    dot_product_vector: np.ndarray,
+    cosine_dot_vector: np.ndarray,
+) -> dict:
+    """Assemble a single measurement row dict for one pair at one timepoint."""
+    row: dict = {
+        "REFERENCE_ID": tid,
+        "NEIGHBOR_ID": nc,
+        "reference_population": reference_population,
+        "neighbor_population": neighbor_population,
+        "FRAME": t,
+        "distance": relative_distance[t],
+        "intersection": inter,
+        "reference_frac_area_intersection": ref_inter_fraction,
+        "neighbor_frac_area_intersection": neigh_inter_fraction,
+        "velocity": rel_velocity[t],
+        "velocity_smooth": rel_velocity_smooth[t],
+        "angle": angle[t] * 180 / np.pi,
+        "angular_velocity": angular_velocity[t],
+        "angular_velocity_smooth": angular_velocity_smooth[t],
+        f"status_{neighborhood_description}": status,
+        f"residence_time_in_{neighborhood_description}": cum_sum,
+        f"class_{neighborhood_description}": 0,
+        f"t0_{neighborhood_description}": time_of_first_entrance[nc],
+        "reference_tracked": ref_tracked,
+        "neighbors_tracked": neigh_tracked,
+    }
+    for z, lbl in enumerate(centre_of_mass_labels):
+        row[lbl + "_centre_of_mass_dot_product"] = dot_product_vector[z, t]
+        row[lbl + "_centre_of_mass_dot_cosine"] = cosine_dot_vector[z, t]
+    return row
 
 
 def measure_pairs(pos: str, neighborhood_protocol: dict) -> Optional[pd.DataFrame]:
@@ -61,37 +249,13 @@ def measure_pairs(pos: str, neighborhood_protocol: dict) -> Optional[pd.DataFram
 
     relative_measurements = []
 
-    tab_ref = pos + os.sep.join(
-        ["output", "tables", f"trajectories_{reference_population}.pkl"]
-    )
-    if os.path.exists(tab_ref):
-        df_reference = np.load(tab_ref, allow_pickle=True)
-    else:
-        df_reference = None
-
-    if os.path.exists(tab_ref.replace(reference_population, neighbor_population)):
-        df_neighbor = np.load(
-            tab_ref.replace(reference_population, neighbor_population),
-            allow_pickle=True,
-        )
-    else:
-        if os.path.exists(
-            tab_ref.replace(reference_population, neighbor_population).replace(
-                ".pkl", ".csv"
-            )
-        ):
-            df_neighbor = pd.read_csv(
-                tab_ref.replace(reference_population, neighbor_population).replace(
-                    ".pkl", ".csv"
-                )
-            )
-        else:
-            df_neighbor = None
+    df_reference, df_neighbor = _load_pair_tables(pos, reference_population, neighbor_population)
 
     if df_reference is None:
         return None
 
-    assert str(neighborhood_description) in list(df_reference.columns)
+    if str(neighborhood_description) not in df_reference.columns:
+        raise KeyError(f"Neighborhood description '{neighborhood_description}' not found in reference columns.")
     neighborhood = df_reference.loc[:, f"{neighborhood_description}"].to_numpy()
 
     ref_id_col = extract_identity_col(df_reference)
@@ -131,14 +295,12 @@ def measure_pairs(pos: str, neighborhood_protocol: dict) -> Optional[pd.DataFram
             coords_reference = group[["POSITION_X", "POSITION_Y"]].to_numpy()[0]
 
             neighbors = []
-            if isinstance(neighborhood, float) or neighborhood != neighborhood:
-                pass
-            else:
+            if not (isinstance(neighborhood, float) or neighborhood != neighborhood):
                 for neigh in neighborhood:
                     neighbors.append(neigh["id"])
 
             unique_neigh = list(np.unique(neighbors))
-            print(f"{unique_neigh=}")
+            logger.debug(f"unique_neigh={unique_neigh}")
 
             neighbor_properties = group_neighbors.loc[
                 group_neighbors[neigh_id_col].isin(unique_neigh)
@@ -256,44 +418,15 @@ def measure_pair_signals_at_position(
 
     reference_population = neighborhood_protocol["reference"]
     neighbor_population = neighborhood_protocol["neighbor"]
-    neighborhood_type = neighborhood_protocol["type"]
-    neighborhood_distance = neighborhood_protocol["distance"]
     neighborhood_description = neighborhood_protocol["description"]
 
-    relative_measurements = []
-
-    tab_ref = pos + os.sep.join(
-        ["output", "tables", f"trajectories_{reference_population}.pkl"]
-    )
-    if os.path.exists(tab_ref):
-        df_reference = np.load(tab_ref, allow_pickle=True)
-    else:
-        df_reference = None
-
-    if os.path.exists(tab_ref.replace(reference_population, neighbor_population)):
-        df_neighbor = np.load(
-            tab_ref.replace(reference_population, neighbor_population),
-            allow_pickle=True,
-        )
-    else:
-        if os.path.exists(
-            tab_ref.replace(reference_population, neighbor_population).replace(
-                ".pkl", ".csv"
-            )
-        ):
-            df_neighbor = pd.read_csv(
-                tab_ref.replace(reference_population, neighbor_population).replace(
-                    ".pkl", ".csv"
-                )
-            )
-        else:
-            df_neighbor = None
+    df_reference, df_neighbor = _load_pair_tables(pos, reference_population, neighbor_population)
 
     if df_reference is None:
         return None
 
-    assert str(neighborhood_description) in list(df_reference.columns)
-    neighborhood = df_reference.loc[:, f"{neighborhood_description}"].to_numpy()
+    if str(neighborhood_description) not in df_reference.columns:
+        raise KeyError(f"Neighborhood description '{neighborhood_description}' not found in reference columns.")
 
     ref_id_col = extract_identity_col(df_reference)
     if ref_id_col is not None:
@@ -301,371 +434,154 @@ def measure_pair_signals_at_position(
 
     ref_tracked = False
     if ref_id_col == "TRACK_ID":
-        compute_velocity = True
         ref_tracked = True
     elif ref_id_col == "ID":
-        df_pairs = measure_pairs(pos, neighborhood_protocol)
-        return df_pairs
+        return measure_pairs(pos, neighborhood_protocol)
     else:
-        print("ID or TRACK ID column could not be found in neighbor table. Abort.")
+        logger.error("ID or TRACK ID column could not be found in reference table. Abort.")
         return None
 
-    print(f"Measuring pair signals...")
+    logger.info("Measuring pair signals...")
 
     neigh_id_col = extract_identity_col(df_neighbor)
     neigh_tracked = False
     if neigh_id_col == "TRACK_ID":
-        compute_velocity = True
         neigh_tracked = True
     elif neigh_id_col == "ID":
-        df_pairs = measure_pairs(pos, neighborhood_protocol)
-        return df_pairs
+        return measure_pairs(pos, neighborhood_protocol)
     else:
-        print("ID or TRACK ID column could not be found in neighbor table. Abort.")
+        logger.error("ID or TRACK ID column could not be found in neighbor table. Abort.")
         return None
+
+    relative_measurements: list = []
 
     try:
         for tid, group in df_reference.groupby(ref_id_col):
 
-            neighbor_dicts = group.loc[:, f"{neighborhood_description}"].values
             timeline_reference = group["FRAME"].to_numpy()
             coords_reference = group[["POSITION_X", "POSITION_Y"]].to_numpy()
-            if "area" in list(group.columns):
-                ref_area = group["area"].to_numpy()
-            else:
-                ref_area = [np.nan] * len(coords_reference)
+            ref_area = (
+                group["area"].to_numpy() if "area" in group.columns else [np.nan] * len(coords_reference)
+            )
 
-            neighbor_ids = []
-            neighbor_ids_per_t = []
-            intersection_values = []
+            neighbor_ids, neighbor_ids_per_t, intersection_values, time_of_first_entrance = (
+                _build_neighbor_timeline(group, neighborhood_description)
+            )
 
-            time_of_first_entrance_in_neighborhood = {}
-            t_departure = {}
-
-            for t in range(len(timeline_reference)):
-
-                neighbors_at_t = neighbor_dicts[t]
-                neighs_t = []
-                if (
-                    isinstance(neighbors_at_t, float)
-                    or neighbors_at_t != neighbors_at_t
-                ):
-                    pass
-                else:
-                    for neigh in neighbors_at_t:
-                        if neigh["id"] not in neighbor_ids:
-                            time_of_first_entrance_in_neighborhood[neigh["id"]] = t
-                        if "intersection" in neigh:
-                            intersection_values.append(
-                                {
-                                    "frame": t,
-                                    "neigh_id": neigh["id"],
-                                    "intersection": neigh["intersection"],
-                                }
-                            )
-                        else:
-                            intersection_values.append(
-                                {
-                                    "frame": t,
-                                    "neigh_id": neigh["id"],
-                                    "intersection": np.nan,
-                                }
-                            )
-                        neighbor_ids.append(neigh["id"])
-                        neighs_t.append(neigh["id"])
-                neighbor_ids_per_t.append(neighs_t)
-
-            intersection_values = pd.DataFrame(intersection_values)
-
-            # print(neighbor_ids_per_t)
             unique_neigh = list(np.unique(neighbor_ids))
-            print(
+            logger.debug(
                 f"Reference cell {tid}: found {len(unique_neigh)} neighbour cells: {unique_neigh}..."
             )
 
-            neighbor_properties = df_neighbor.loc[
-                df_neighbor[neigh_id_col].isin(unique_neigh)
+            neighbor_properties = df_neighbor.loc[df_neighbor[neigh_id_col].isin(unique_neigh)]
+
+            centre_of_mass_columns = [
+                (c, c.replace("POSITION_X", "POSITION_Y"))
+                for c in neighbor_properties.columns
+                if c.endswith("centre_of_mass_POSITION_X")
+            ]
+            centre_of_mass_labels = [
+                c.replace("_centre_of_mass_POSITION_X", "")
+                for c in neighbor_properties.columns
+                if c.endswith("centre_of_mass_POSITION_X")
             ]
 
             for nc, group_neigh in neighbor_properties.groupby(neigh_id_col):
 
-                coords_neighbor = group_neigh[["POSITION_X", "POSITION_Y"]].to_numpy()
                 timeline_neighbor = group_neigh["FRAME"].to_numpy()
-                if "area" in list(group_neigh.columns):
-                    neigh_area = group_neigh["area"].to_numpy()
-                else:
-                    neigh_area = [np.nan] * len(timeline_neighbor)
-
-                # # Perform timeline matching to have same start-end points and no gaps
-                full_timeline, _, _ = timeline_matching(
-                    timeline_reference, timeline_neighbor
+                coords_neighbor = group_neigh[["POSITION_X", "POSITION_Y"]].to_numpy()
+                neigh_area = (
+                    group_neigh["area"].to_numpy()
+                    if "area" in group_neigh.columns
+                    else [np.nan] * len(timeline_neighbor)
                 )
-
-                neighbor_vector = np.zeros((len(full_timeline), 2))
-                neighbor_vector[:, :] = np.nan
-
-                intersection_vector = np.zeros((len(full_timeline)))
-                intersection_vector[:] = np.nan
-
-                centre_of_mass_columns = [
-                    (c, c.replace("POSITION_X", "POSITION_Y"))
-                    for c in list(neighbor_properties.columns)
-                    if c.endswith("centre_of_mass_POSITION_X")
-                ]
-                centre_of_mass_labels = [
-                    c.replace("_centre_of_mass_POSITION_X", "")
-                    for c in list(neighbor_properties.columns)
-                    if c.endswith("centre_of_mass_POSITION_X")
+                coords_centre_of_mass = [
+                    group_neigh[[col[0], col[1]]].to_numpy() for col in centre_of_mass_columns
                 ]
 
-                mass_displacement_vector = np.zeros(
-                    (len(centre_of_mass_columns), len(full_timeline), 2)
-                )
-                mass_displacement_vector[:, :, :] = np.nan
+                full_timeline, _, _ = timeline_matching(timeline_reference, timeline_neighbor)
 
-                dot_product_vector = np.zeros(
-                    (len(centre_of_mass_columns), len(full_timeline))
-                )
-                dot_product_vector[:, :] = np.nan
-
-                cosine_dot_vector = np.zeros(
-                    (len(centre_of_mass_columns), len(full_timeline))
-                )
-                cosine_dot_vector[:, :] = np.nan
-
-                coords_centre_of_mass = []
-                for col in centre_of_mass_columns:
-                    coords_centre_of_mass.append(
-                        group_neigh[[col[0], col[1]]].to_numpy()
+                _, angle, relative_distance, dot_product_vector, cosine_dot_vector, exclude = (
+                    _compute_pair_geometry(
+                        coords_reference,
+                        coords_neighbor,
+                        coords_centre_of_mass,
+                        centre_of_mass_columns,
+                        timeline_reference,
+                        timeline_neighbor,
+                        full_timeline,
                     )
-
-                # Relative distance
-                for t in range(len(full_timeline)):
-
-                    if (
-                        t in timeline_reference and t in timeline_neighbor
-                    ):  # meaning position exists on both sides
-
-                        idx_reference = list(timeline_reference).index(
-                            t
-                        )  # index_reference[list(full_timeline).index(t)]
-                        idx_neighbor = list(timeline_neighbor).index(
-                            t
-                        )  # index_neighbor[list(full_timeline).index(t)]
-
-                        neighbor_vector[t, 0] = (
-                            coords_neighbor[idx_neighbor, 0]
-                            - coords_reference[idx_reference, 0]
-                        )
-                        neighbor_vector[t, 1] = (
-                            coords_neighbor[idx_neighbor, 1]
-                            - coords_reference[idx_reference, 1]
-                        )
-
-                        for z, cols in enumerate(centre_of_mass_columns):
-
-                            mass_displacement_vector[z, t, 0] = (
-                                coords_centre_of_mass[z][idx_neighbor, 0]
-                                - coords_neighbor[idx_neighbor, 0]
-                            )
-                            mass_displacement_vector[z, t, 1] = (
-                                coords_centre_of_mass[z][idx_neighbor, 1]
-                                - coords_neighbor[idx_neighbor, 1]
-                            )
-
-                            dot_product_vector[z, t] = np.dot(
-                                mass_displacement_vector[z, t], -neighbor_vector[t]
-                            )
-                            cosine_dot_vector[z, t] = np.dot(
-                                mass_displacement_vector[z, t], -neighbor_vector[t]
-                            ) / (
-                                np.linalg.norm(mass_displacement_vector[z, t])
-                                * np.linalg.norm(-neighbor_vector[t])
-                            )
-                            if tid == 44.0 and nc == 173.0:
-                                print(
-                                    f"{centre_of_mass_columns[z]=} {mass_displacement_vector[z,t]=} {-neighbor_vector[t]=} {dot_product_vector[z,t]=} {cosine_dot_vector[z,t]=}"
-                                )
-
-                angle = np.zeros(len(full_timeline))
-                angle[:] = np.nan
-
-                exclude = neighbor_vector[:, 1] != neighbor_vector[:, 1]
-                angle[~exclude] = np.arctan2(
-                    neighbor_vector[:, 1][~exclude], neighbor_vector[:, 0][~exclude]
                 )
-                # print(f'Angle before unwrap: {angle}')
-                angle[~exclude] = np.unwrap(angle[~exclude])
-                # print(f'Angle after unwrap: {angle}')
-                relative_distance = np.sqrt(
-                    neighbor_vector[:, 0] ** 2 + neighbor_vector[:, 1] ** 2
+
+                rel_velocity, rel_velocity_smooth, angular_velocity, angular_velocity_smooth = (
+                    _compute_pair_velocities(
+                        relative_distance, angle, full_timeline, exclude, velocity_kwargs
+                    )
                 )
-                # print(f'Timeline: {full_timeline}; Distance: {relative_distance}')
-
-                if compute_velocity:
-                    rel_velocity = derivative(
-                        relative_distance, full_timeline, **velocity_kwargs
-                    )
-                    rel_velocity_long_timescale = derivative(
-                        relative_distance, full_timeline, window=7, mode="bi"
-                    )
-                    # rel_velocity = np.insert(rel_velocity, 0, np.nan)[:-1]
-
-                    angular_velocity = np.zeros(len(full_timeline))
-                    angular_velocity[:] = np.nan
-                    angular_velocity_long_timescale = np.zeros(len(full_timeline))
-                    angular_velocity_long_timescale[:] = np.nan
-
-                    angular_velocity[~exclude] = derivative(
-                        angle[~exclude], full_timeline[~exclude], **velocity_kwargs
-                    )
-                    angular_velocity_long_timescale[~exclude] = derivative(
-                        angle[~exclude], full_timeline[~exclude], window=7, mode="bi"
-                    )
-
-                # 	angular_velocity = np.zeros(len(full_timeline))
-                # 	angular_velocity[:] = np.nan
-
-                # 	for t in range(1, len(relative_angle1)):
-                # 		if not np.isnan(relative_angle1[t]) and not np.isnan(relative_angle1[t - 1]):
-                # 			delta_angle = relative_angle1[t] - relative_angle1[t - 1]
-                # 			delta_time = full_timeline[t] - full_timeline[t - 1]
-                # 			if delta_time != 0:
-                # 				angular_velocity[t] = delta_angle / delta_time
-
-                duration_in_neigh = list(neighbor_ids).count(nc)
-                # print(nc, duration_in_neigh, ' frames')
 
                 cum_sum = 0
                 for t in range(len(full_timeline)):
+                    if t not in timeline_reference or t not in timeline_neighbor:
+                        continue
 
-                    if (
-                        t in timeline_reference and t in timeline_neighbor
-                    ):  # meaning position exists on both sides
+                    idx_reference = list(timeline_reference).index(t)
+                    idx_neighbor = list(timeline_neighbor).index(t)
 
-                        idx_reference = list(timeline_reference).index(t)
-                        idx_neighbor = list(timeline_neighbor).index(t)
-                        inter = intersection_values.loc[
-                            (intersection_values["neigh_id"] == nc)
-                            & (intersection_values["frame"] == t),
-                            "intersection",
-                        ].values
-                        if len(inter) == 0:
-                            inter = np.nan
-                        else:
-                            inter = inter[0]
+                    inter_vals = intersection_values.loc[
+                        (intersection_values["neigh_id"] == nc)
+                        & (intersection_values["frame"] == t),
+                        "intersection",
+                    ].values
+                    inter = np.nan if len(inter_vals) == 0 else inter_vals[0]
 
-                        neigh_inter_fraction = np.nan
-                        if (
-                            inter == inter
-                            and neigh_area[idx_neighbor] == neigh_area[idx_neighbor]
-                        ):
-                            neigh_inter_fraction = inter / neigh_area[idx_neighbor]
+                    neigh_inter_fraction = (
+                        inter / neigh_area[idx_neighbor]
+                        if inter == inter and neigh_area[idx_neighbor] == neigh_area[idx_neighbor]
+                        else np.nan
+                    )
+                    ref_inter_fraction = (
+                        inter / ref_area[idx_reference]
+                        if inter == inter and ref_area[idx_reference] == ref_area[idx_reference]
+                        else np.nan
+                    )
 
-                        ref_inter_fraction = np.nan
-                        if (
-                            inter == inter
-                            and ref_area[idx_reference] == ref_area[idx_reference]
-                        ):
-                            ref_inter_fraction = inter / ref_area[idx_reference]
+                    in_neighborhood = nc in neighbor_ids_per_t[idx_reference]
+                    if in_neighborhood:
+                        cum_sum += 1
+                    status = 1 if in_neighborhood else 0
 
-                        if nc in neighbor_ids_per_t[idx_reference]:
+                    row = _build_pair_row(
+                        tid,
+                        nc,
+                        reference_population,
+                        neighbor_population,
+                        t,
+                        relative_distance,
+                        rel_velocity,
+                        rel_velocity_smooth,
+                        angle,
+                        angular_velocity,
+                        angular_velocity_smooth,
+                        inter,
+                        ref_inter_fraction,
+                        neigh_inter_fraction,
+                        status,
+                        cum_sum,
+                        neighborhood_description,
+                        time_of_first_entrance,
+                        ref_tracked,
+                        neigh_tracked,
+                        centre_of_mass_labels,
+                        dot_product_vector,
+                        cosine_dot_vector,
+                    )
+                    relative_measurements.append(row)
 
-                            cum_sum += 1
-                            relative_measurements.append(
-                                {
-                                    "REFERENCE_ID": tid,
-                                    "NEIGHBOR_ID": nc,
-                                    "reference_population": reference_population,
-                                    "neighbor_population": neighbor_population,
-                                    "FRAME": t,
-                                    "distance": relative_distance[t],
-                                    "intersection": inter,
-                                    "reference_frac_area_intersection": ref_inter_fraction,
-                                    "neighbor_frac_area_intersection": neigh_inter_fraction,
-                                    "velocity": rel_velocity[t],
-                                    "velocity_smooth": rel_velocity_long_timescale[t],
-                                    "angle": angle[t] * 180 / np.pi,
-                                    #'angle-neigh-ref': angle[t] * 180 / np.pi,
-                                    "angular_velocity": angular_velocity[t],
-                                    "angular_velocity_smooth": angular_velocity_long_timescale[
-                                        t
-                                    ],
-                                    f"status_{neighborhood_description}": 1,
-                                    f"residence_time_in_{neighborhood_description}": cum_sum,
-                                    f"class_{neighborhood_description}": 0,
-                                    f"t0_{neighborhood_description}": time_of_first_entrance_in_neighborhood[
-                                        nc
-                                    ],
-                                    "reference_tracked": ref_tracked,
-                                    "neighbors_tracked": neigh_tracked,
-                                }
-                            )
-                            for z, lbl in enumerate(centre_of_mass_labels):
-                                relative_measurements[-1].update(
-                                    {
-                                        lbl
-                                        + "_centre_of_mass_dot_product": dot_product_vector[
-                                            z, t
-                                        ],
-                                        lbl
-                                        + "_centre_of_mass_dot_cosine": cosine_dot_vector[
-                                            z, t
-                                        ],
-                                    }
-                                )
-
-                        else:
-                            relative_measurements.append(
-                                {
-                                    "REFERENCE_ID": tid,
-                                    "NEIGHBOR_ID": nc,
-                                    "reference_population": reference_population,
-                                    "neighbor_population": neighbor_population,
-                                    "FRAME": t,
-                                    "distance": relative_distance[t],
-                                    "intersection": inter,
-                                    "reference_frac_area_intersection": ref_inter_fraction,
-                                    "neighbor_frac_area_intersection": neigh_inter_fraction,
-                                    "velocity": rel_velocity[t],
-                                    "velocity_smooth": rel_velocity_long_timescale[t],
-                                    "angle": angle[t] * 180 / np.pi,
-                                    #'angle-neigh-ref': angle[t] * 180 / np.pi,
-                                    "angular_velocity": angular_velocity[t],
-                                    "angular_velocity_smooth": angular_velocity_long_timescale[
-                                        t
-                                    ],
-                                    f"status_{neighborhood_description}": 0,
-                                    f"residence_time_in_{neighborhood_description}": cum_sum,
-                                    f"class_{neighborhood_description}": 0,
-                                    f"t0_{neighborhood_description}": time_of_first_entrance_in_neighborhood[
-                                        nc
-                                    ],
-                                    "reference_tracked": ref_tracked,
-                                    "neighbors_tracked": neigh_tracked,
-                                }
-                            )
-                            for z, lbl in enumerate(centre_of_mass_labels):
-                                relative_measurements[-1].update(
-                                    {
-                                        lbl
-                                        + "_centre_of_mass_dot_product": dot_product_vector[
-                                            z, t
-                                        ],
-                                        lbl
-                                        + "_centre_of_mass_dot_cosine": cosine_dot_vector[
-                                            z, t
-                                        ],
-                                    }
-                                )
-
-        df_pairs = pd.DataFrame(relative_measurements)
-
-        return df_pairs
+        return pd.DataFrame(relative_measurements)
 
     except KeyError:
-        print(
-            f"Neighborhood not found in data frame. Measurements for this neighborhood will not be calculated"
+        logger.warning(
+            "Neighborhood not found in data frame. Measurements for this neighborhood will not be calculated."
         )
 
 
@@ -736,12 +652,15 @@ def rel_measure_at_position(pos: str) -> None:
 
     pos = pos.replace("\\", "/")
     pos = rf"{pos}"
-    assert os.path.exists(pos), f"Position {pos} is not a valid path."
+    if not os.path.exists(pos):
+        raise FileNotFoundError(f"Position {pos} is not a valid path.")
     if not pos.endswith("/"):
         pos += "/"
     script_path = os.sep.join([abs_path, "scripts", "measure_relative.py"])
-    cmd = f'python "{script_path}" --pos "{pos}"'
-    subprocess.call(cmd, shell=True)
+    subprocess.run(
+        [sys.executable, script_path, "--pos", pos],
+        check=False,
+    )
 
 
 # def mcf7_size_model(x,x0,x2):
@@ -826,7 +745,7 @@ def update_effector_table(
             df_effector.loc[
                 df_effector["TRACK_ID"] == effector, "group_neighborhood"
             ] = 0
-        except:
+        except KeyError:
             df_effector.loc[df_effector["ID"] == effector, "group_neighborhood"] = 0
     return df_effector
 
@@ -963,13 +882,14 @@ def extract_neighborhood_settings(
 
     """
 
-    assert neigh_string.startswith("neighborhood")
-    print(f"{neigh_string=}")
+    if not neigh_string.startswith("neighborhood"):
+        raise ValueError(f"Expected a neighborhood string starting with 'neighborhood', got: '{neigh_string}'")
+    logger.debug(f"neigh_string={neigh_string}")
 
     if "_(" in neigh_string and ")_" in neigh_string:
         # determine neigh pop from string
         neighbor_population = neigh_string.split("_(")[-1].split(")_")[0].split("-")[-1]
-        print(f"{neighbor_population=}")
+        logger.debug(f"neighbor_population={neighbor_population}")
     else:
         # old method
         if population == "targets":
@@ -1062,12 +982,10 @@ def expand_pair_table(data: pd.DataFrame) -> pd.DataFrame:
 
     """
 
-    assert "reference_population" in list(
-        data.columns
-    ), "Please provide a valid pair table..."
-    assert "neighbor_population" in list(
-        data.columns
-    ), "Please provide a valid pair table..."
+    if "reference_population" not in data.columns:
+        raise KeyError("Please provide a valid pair table...")
+    if "neighbor_population" not in data.columns:
+        raise KeyError("Please provide a valid pair table...")
 
     data.__dict__.update(
         data.astype({"reference_population": str, "neighbor_population": str}).__dict__

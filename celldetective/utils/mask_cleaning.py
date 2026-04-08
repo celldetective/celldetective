@@ -1,8 +1,11 @@
 import threading
+import logging
 from pathlib import Path
 from typing import Union, Optional, Any, List, Dict, Tuple, Callable
 
 import numpy as np
+
+logger = logging.getLogger("celldetective")
 import pandas as pd
 from skimage.measure import regionprops_table, label
 from skimage.transform import resize
@@ -32,7 +35,6 @@ def fill_label_holes(lbl_img: np.ndarray, **kwargs: Any) -> np.ndarray:
         Label image with filled holes.
     """
 
-    # TODO: refactor 'fill_label_holes' and 'edt_prob' to share code
     def grow(
         sl: Tuple[slice, ...], interior: List[Tuple[bool, bool]]
     ) -> Tuple[slice, ...]:
@@ -169,7 +171,8 @@ def auto_correct_masks(
                [0, 2, 0, 0]])
     """
 
-    assert masks.ndim == 2, "`masks` should be a 2D numpy array..."
+    if masks.ndim != 2:
+        raise ValueError("`masks` should be a 2D numpy array...")
 
     # Avoid negative mask values
     masks[masks < 0] = np.abs(masks[masks < 0])
@@ -406,12 +409,12 @@ def relabel_segmentation(
                 # print(f"Thread {i} output check: ", return_value)
                 pass
         except Exception as e:
-            print("Exception: ", e)
+            logger.error(f"Thread exception in relabeling: {e}")
 
     if shared_progress.get("cancelled", False):
-        print("Relabeling cancelled.")
+        logger.info("Relabeling cancelled.")
         return None
 
-    print("\nDone.")
+    logger.info("Relabeling done.")
 
     return new_labels

@@ -133,15 +133,7 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
             [c.startswith("class") for c in list(self.df_tracks.columns)]
         )
 
-        self.class_cols = list(cols[self.class_cols])
-        try:
-            self.class_cols.remove("class_id")
-        except Exception:
-            pass
-        try:
-            self.class_cols.remove("class_color")
-        except Exception:
-            pass
+        self.class_cols = [c for c in list(cols[self.class_cols]) if c not in ("class_id", "class_color")]
 
         self.class_choice_cb.addItems(self.class_cols)
         self.class_choice_cb.currentIndexChanged.connect(self.compute_status_and_colors)
@@ -293,10 +285,10 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
 
         signal_choice_vbox = QVBoxLayout()
         signal_choice_vbox.setContentsMargins(30, 0, 30, 0)
-        for i in range(len(self.signal_choice_cb)):
+        for lbl, cb in zip(self.signal_choice_label, self.signal_choice_cb):
             hlayout = QHBoxLayout()
-            hlayout.addWidget(self.signal_choice_label[i], 20)
-            hlayout.addWidget(self.signal_choice_cb[i], 75)
+            hlayout.addWidget(lbl, 20)
+            hlayout.addWidget(cb, 75)
             signal_choice_vbox.addLayout(hlayout)
 
         self.left_panel.addLayout(signal_choice_vbox, 15)
@@ -373,25 +365,20 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
 
         meta = get_experiment_metadata(self.exp_dir)
         if meta is not None:
-            keys = list(meta.keys())
-            to_remove.extend(keys)
+            to_remove.extend(meta.keys())
 
         labels = get_experiment_labels(self.exp_dir)
         if labels is not None:
-            keys = list(labels.keys())
-            to_remove.extend(labels)
+            to_remove.extend(labels.keys())
 
         for c in to_remove:
             if c in signals:
                 signals.remove(c)
 
-        for i in range(len(self.signal_choice_cb)):
-            self.signal_choice_cb[i].addItems(["--"] + signals)
-            if i + 1 < self.signal_choice_cb[i].count():
-                self.signal_choice_cb[i].setCurrentIndex(i + 1)
-            else:
-                self.signal_choice_cb[i].setCurrentIndex(0)
-            self.signal_choice_cb[i].currentIndexChanged.connect(self.plot_signals)
+        for i, cb in enumerate(self.signal_choice_cb):
+            cb.addItems(["--"] + signals)
+            cb.setCurrentIndex(i + 1 if i + 1 < cb.count() else 0)
+            cb.currentIndexChanged.connect(self.plot_signals)
 
     def on_scatter_pick(self, event: Any) -> None:
         """
@@ -427,8 +414,6 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
 
         elif len(ind) > 0 and len(self.selection) == 1:
             self.cancel_btn.click()
-        else:
-            pass
 
         # self.draw_frame(self.current_frame)
         # self.fcanvas.canvas.draw()
@@ -437,44 +422,21 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
     def load_annotator_config(self):
         """Load settings from config or set default values."""
 
+        self.rgb_mode = False
+        self.log_option = False
+        self.percentile_mode = True
+        self.target_channels = [[self.channel_names[0], 0.01, 99.99]]
+        self.fraction = 0.25
+        self.anim_interval = 33
+
         if os.path.exists(self.instructions_path):
             with open(self.instructions_path, "r") as f:
-
                 instructions = json.load(f)
-
-                if "rgb_mode" in instructions:
-                    self.rgb_mode = instructions["rgb_mode"]
-                else:
-                    self.rgb_mode = False
-
-                if "percentile_mode" in instructions:
-                    self.percentile_mode = instructions["percentile_mode"]
-                else:
-                    self.percentile_mode = True
-
-                if "channels" in instructions:
-                    self.target_channels = instructions["channels"]
-                else:
-                    self.target_channels = [[self.channel_names[0], 0.01, 99.99]]
-
-                if "fraction" in instructions:
-                    self.fraction = float(instructions["fraction"])
-                else:
-                    self.fraction = 0.25
-
-                self.anim_interval = 33
-
-                if "log" in instructions:
-                    self.log_option = instructions["log"]
-                else:
-                    self.log_option = False
-        else:
-            self.rgb_mode = False
-            self.log_option = False
-            self.percentile_mode = True
-            self.target_channels = [[self.channel_names[0], 0.01, 99.99]]
-            self.fraction = 0.25
-            self.anim_interval = 33
+            self.rgb_mode = instructions.get("rgb_mode", self.rgb_mode)
+            self.percentile_mode = instructions.get("percentile_mode", self.percentile_mode)
+            self.target_channels = instructions.get("channels", self.target_channels)
+            self.fraction = float(instructions.get("fraction", self.fraction))
+            self.log_option = instructions.get("log", self.log_option)
 
     def locate_stack(self):
         """Locate the target movie."""
@@ -538,10 +500,10 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
                 [np.linspace(0, self.len_movie - 1, self.len_movie)],
                 [np.zeros(self.len_movie)],
             )[0]
-            for i in range(len(self.signal_choice_cb))
+            for _ in self.signal_choice_cb
         ]
-        for i in range(len(self.lines)):
-            self.lines[i].set_label(f"signal {i}")
+        for i, line in enumerate(self.lines):
+            line.set_label(f"signal {i}")
 
         min_val, max_val = self.cell_ax.get_ylim()
         (self.line_dt,) = self.cell_ax.plot(
@@ -565,8 +527,8 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
         super().resizeEvent(event)
         try:
             self.cell_fig.tight_layout()
-        except:
-            pass
+        except Exception as e:
+            logger.debug(f"tight_layout failed on resize: {e}")
 
     def locate_tracks(self):
         """Locate the trajectories file."""
@@ -578,9 +540,8 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
             msgBox.setText("The trajectories cannot be detected.")
             msgBox.setWindowTitle("Warning")
             msgBox.setStandardButtons(QMessageBox.Ok)
-            returnValue = msgBox.exec()
-            if returnValue == QMessageBox.Yes:
-                self.close()
+            msgBox.exec()
+            self.close()
         else:
 
             # Load and prep tracks
@@ -592,15 +553,7 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
             self.class_cols = np.array(
                 [c.startswith("class") for c in list(self.df_tracks.columns)]
             )
-            self.class_cols = list(cols[self.class_cols])
-            try:
-                self.class_cols.remove("class_id")
-            except:
-                pass
-            try:
-                self.class_cols.remove("class_color")
-            except:
-                pass
+            self.class_cols = [c for c in list(cols[self.class_cols]) if c not in ("class_id", "class_color")]
             if len(self.class_cols) > 0:
                 self.class_name = self.class_cols[0]
                 self.expected_status = "status"
@@ -617,21 +570,11 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
                 self.time_name = "t0"
                 self.status_name = "status"
 
-            if (
-                self.time_name in self.df_tracks.columns
-                and self.class_name in self.df_tracks.columns
-                and not self.status_name in self.df_tracks.columns
-            ):
-                # only create the status column if it does not exist to not erase static classification results
-                self.make_status_column()
-            elif (
-                self.time_name in self.df_tracks.columns
-                and self.class_name in self.df_tracks.columns
-            ):
-                # all good, do nothing
-                pass
+            if self.time_name in self.df_tracks.columns and self.class_name in self.df_tracks.columns:
+                if self.status_name not in self.df_tracks.columns:
+                    self.make_status_column()
             else:
-                if not self.status_name in self.df_tracks.columns:
+                if self.status_name not in self.df_tracks.columns:
                     self.df_tracks[self.status_name] = 0
                     self.df_tracks["status_color"] = color_from_status(0)
                     self.df_tracks["class_color"] = color_from_class(1)
@@ -706,13 +649,11 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
 
             meta = get_experiment_metadata(self.exp_dir)
             if meta is not None:
-                keys = list(meta.keys())
-                cols_to_remove.extend(keys)
+                cols_to_remove.extend(meta.keys())
 
             labels = get_experiment_labels(self.exp_dir)
             if labels is not None:
-                keys = list(labels.keys())
-                cols_to_remove.extend(labels)
+                cols_to_remove.extend(labels.keys())
 
             cols = np.array(list(self.df_tracks.columns))
             time_cols = np.array([c.startswith("t_") for c in cols])
@@ -723,11 +664,7 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
             status_cols = list(cols[status_cols])
             cols_to_remove += status_cols
 
-            for tr in cols_to_remove:
-                try:
-                    self.columns_to_rescale.remove(tr)
-                except:
-                    pass
+            self.columns_to_rescale = [c for c in self.columns_to_rescale if c not in cols_to_remove]
 
             x = self.df_tracks[self.columns_to_rescale].values
             self.MinMaxScaler.fit(x)
@@ -754,7 +691,7 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
                 try:
                     self.df_tracks = self.df_tracks.drop([c], axis=1)
                 except Exception as e:
-                    logger.error(e)
+                    logger.error(f"{e}")
             item_idx = self.class_choice_cb.findText(class_to_delete)
             self.class_choice_cb.removeItem(item_idx)
 
@@ -797,7 +734,7 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
                 self.log_btn.setIcon(icon(MDI6.math_log, color="black"))
                 self.log_scale = False
         except Exception as e:
-            logger.error(e)
+            logger.error(f"{e}")
 
         # self.cell_ax.autoscale()
         self.cell_fcanvas.canvas.draw_idle()
@@ -828,12 +765,8 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
 
     def show_outliers(self):
         """Toggle outliers visibility."""
-        if self.outliers_check.isChecked():
-            self.show_fliers = True
-            self.plot_signals()
-        else:
-            self.show_fliers = False
-            self.plot_signals()
+        self.show_fliers = self.outliers_check.isChecked()
+        self.plot_signals()
 
     def export_signals(self):
         """Export signals to a file."""
@@ -964,18 +897,15 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
     def cancel_selection(self):
         """Cancel the current selection."""
         self.hide_annotation_buttons()
-        self.correct_btn.setEnabled(False)
-        self.correct_btn.setText("correct")
-        self.cancel_btn.setEnabled(False)
 
         try:
             self.selection.pop(0)
         except Exception as e:
-            pass
+            logger.debug(f"Could not pop selection: {e}")
 
         try:
             for k, (t, idx) in enumerate(zip(self.loc_t, self.loc_idx)):
                 self.colors[t][idx, 0] = self.previous_color[k][0]
                 # self.colors[t][idx, 1] = self.previous_color[k][1]
         except Exception as e:
-            pass
+            logger.debug(f"Could not revert colors on cancel: {e}")

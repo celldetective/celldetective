@@ -340,7 +340,7 @@ class BackgroundFitCorrectionLayout(QGridLayout, Styles):
                 )
                 self.viewer.show()
             else:
-                print("Corrected stack could not be generated...")
+                logger.warning("Corrected stack could not be generated...")
 
         def on_finished() -> None:
             """Handle completion of the preview worker."""

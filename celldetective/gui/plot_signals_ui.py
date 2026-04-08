@@ -186,8 +186,8 @@ class ConfigSignalPlot(CelldetectiveWidget):
             if hasattr(matplotlib.cm, str(cm).lower()):
                 try:
                     self.cbs[-1].addColormap(cm.lower())
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Could not add colormap '{cm}' to selector: {e}")
 
         self.cbs[0].setCurrentIndex(1)
         self.cbs[0].setCurrentIndex(0)

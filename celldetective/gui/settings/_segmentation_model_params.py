@@ -1,6 +1,9 @@
 import json
+import logging
 import os
 from typing import Optional
+
+logger = logging.getLogger("celldetective")
 
 import numpy as np
 from PyQt5.QtCore import QSize, Qt
@@ -75,13 +78,13 @@ class SegModelParamsWidget(CelldetectiveWidget):
         """Locate the model path."""
         self.model_complete_path = locate_segmentation_model(self.model_name)
         if self.model_complete_path is None:
-            print("Model could not be found. Abort.")
+            logger.error("Model could not be found. Abort.")
             self.abort_process()
         else:
-            print(f"Model path: {self.model_complete_path}...")
+            logger.info(f"Model path: {self.model_complete_path}...")
 
         if not os.path.exists(self.model_complete_path + "config_input.json"):
-            print(
+            logger.error(
                 "The configuration for the inputs to the model could not be located. Abort."
             )
             self.abort_process()

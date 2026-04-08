@@ -42,30 +42,43 @@ class BackgroundLoader(QThread):
     def run(self) -> None:
         """
         Load background packages and modules.
+
+        Note: napari is intentionally excluded — importing Qt-based packages
+        (napari, vispy) from a background thread on Windows triggers heap
+        corruption and access violations when paired with the main thread's
+        event loop. Napari is imported lazily at point-of-use instead.
         """
         logger.info("Loading background packages...")
         try:
+            if self.isInterruptionRequested():
+                return
             from celldetective.gui.control_panel import ControlPanel
 
             self.ControlPanel = ControlPanel
+            if self.isInterruptionRequested():
+                return
             from celldetective.gui.about import AboutWidget
 
             self.AboutWidget = AboutWidget
+            if self.isInterruptionRequested():
+                return
             from celldetective.processes.downloader import DownloadProcess
 
             self.DownloadProcess = DownloadProcess
+            if self.isInterruptionRequested():
+                return
             from celldetective.gui.configure_new_exp import ConfigNewExperiment
 
             self.ConfigNewExperiment = ConfigNewExperiment
+            if self.isInterruptionRequested():
+                return
             import pandas
             import matplotlib.pyplot
             import scipy.ndimage
             import tifffile
             import numpy
-            import napari
-            from celldetective.napari.utils import launch_napari_viewer
-        except Exception:
-            logger.error("Background packages not loaded...")
+        except Exception as e:
+            logger.error(f"Background packages not loaded: {e}")
         logger.info("Background packages loaded...")
 
 
@@ -139,6 +152,7 @@ class AppInitWindow(CelldetectiveMainWindow):
 
         # Stop background loader thread
         if hasattr(self, "bg_loader") and self.bg_loader.isRunning():
+            self.bg_loader.requestInterruption()
             self.bg_loader.quit()
             self.bg_loader.wait(3000)
 
@@ -646,7 +660,7 @@ class AppInitWindow(CelldetectiveMainWindow):
                 QMessageBox.critical(
                     self,
                     "Error Loading Experiment",
-                    f"Could not load experiment configuration.\n\nError: {str(e)}\n\nPlease ensure 'config.ini' exists in the selected folder.",
+                    f"Could not load experiment configuration.\n\nError: {e}\n\nPlease ensure 'config.ini' exists in the selected folder.",
                 )
                 return
 

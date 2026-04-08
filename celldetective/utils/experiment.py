@@ -684,9 +684,8 @@ def get_config(experiment: Union[str, Path]) -> str:
     config = experiment + "config.ini"
     config = rf"{config}"
 
-    assert os.path.exists(
-        config
-    ), "The experiment configuration could not be located..."
+    if not os.path.exists(config):
+        raise FileNotFoundError("The experiment configuration could not be located...")
     return config
 
 
@@ -788,7 +787,7 @@ def collect_experiment_metadata(
             well_path += os.sep
         experiment = extract_experiment_from_well(well_path)
     else:
-        print("Please provide a position or well path...")
+        logger.error("Please provide a position or well path...")
         return None
 
     wells = list(get_experiment_wells(experiment))
@@ -821,7 +820,7 @@ def collect_experiment_metadata(
         try:
             dico.update({k: values[idx]})
         except Exception as e:
-            print(f"{e=}")
+            logger.warning(f"Failed to retrieve label for key '{k}': {e}")
 
     return dico
 
@@ -884,7 +883,7 @@ def interpret_wells_and_positions(
     elif isinstance(well_option, list):
         well_indices = well_option
     else:
-        print("Well indices could not be interpreted...")
+        logger.error("Well indices could not be interpreted...")
         return None
 
     if position_option == "*":
@@ -894,7 +893,7 @@ def interpret_wells_and_positions(
     elif isinstance(position_option, list):
         position_indices = position_option
     else:
-        print("Position indices could not be interpreted...")
+        logger.error("Position indices could not be interpreted...")
         return None
 
     return well_indices, position_indices
@@ -1146,7 +1145,7 @@ def auto_load_number_of_frames(stack_path: str) -> Optional[int]:
                 attr[np.argmax([s.startswith("channels") for s in attr])].split("=")[-1]
             )
         except Exception as e:
-            pass
+            logger.debug(f"Could not parse channel count from TIFF tags, defaulting to 1: {e}")
         try:
             nslices = int(
                 attr[np.argmax([s.startswith("frames") for s in attr])].split("=")[-1]
@@ -1155,7 +1154,7 @@ def auto_load_number_of_frames(stack_path: str) -> Optional[int]:
                 len_movie = nslices
             else:
                 raise ValueError("Single slice detected")
-        except:
+        except (ValueError, IndexError, TypeError):
             try:
                 frames = int(
                     attr[np.argmax([s.startswith("slices") for s in attr])].split("=")[
@@ -1163,14 +1162,14 @@ def auto_load_number_of_frames(stack_path: str) -> Optional[int]:
                     ]
                 )
                 len_movie = frames
-            except:
+            except (ValueError, IndexError, TypeError):
                 pass
 
     try:
         del tif
         del tif_tags
         del img_desc
-    except:
+    except NameError:
         pass
 
     if "len_movie" not in locals():
@@ -1224,7 +1223,8 @@ def locate_stack(
                 memmap(stack_path[0].replace("\\", "/")), chunks=(1, None, None)
             )
         except ValueError:
-            pass
+            logger.debug("Lazy memmap failed, falling back to eager load.")
+            stack = imread(stack_path[0].replace("\\", "/"))
     else:
         stack = imread(stack_path[0].replace("\\", "/"))
 
@@ -1329,7 +1329,7 @@ def locate_labels(
         tzfill = str(int(frames)).zfill(4)
         try:
             idx = label_names.index(f"{tzfill}.tif")
-        except:
+        except ValueError:
             idx = -1
 
         if idx == -1:
@@ -1343,7 +1343,7 @@ def locate_labels(
             tzfill = str(int(f)).zfill(4)
             try:
                 idx = label_names.index(f"{tzfill}.tif")
-            except:
+            except ValueError:
                 idx = -1
 
             if idx == -1:
@@ -1439,9 +1439,8 @@ def locate_stack_and_labels(
     if len(labels) < len(stack):
         fix_missing_labels(position, population=population, prefix=prefix)
         labels = locate_labels(position, population=population)
-    assert len(stack) == len(
-        labels
-    ), f"The shape of the stack {stack.shape} does not match with the shape of the labels {labels.shape}"
+    if len(stack) != len(labels):
+        raise ValueError(f"The shape of the stack {stack.shape} does not match with the shape of the labels {labels.shape}")
 
     return stack, labels
 
@@ -1523,7 +1522,7 @@ def get_position_table(
         try:
             df_pos = pd.read_csv(table, low_memory=False)
         except Exception as e:
-            logger.error(e)
+            logger.error(f"{e}")
             df_pos = None
     else:
         df_pos = None
@@ -1763,6 +1762,7 @@ def relabel_segmentation(
 
     new_labels = np.zeros_like(labels)
     shared_data = {"s": 0}
+    _lock = threading.Lock()
 
     if dialog:
         from PyQt5.QtWidgets import QApplication
@@ -1797,7 +1797,7 @@ def relabel_segmentation(
                 labels_at_t.remove(0)
             labels_not_in_df = [lbl for lbl in labels_at_t if lbl not in identities]
             for lbl in labels_not_in_df:
-                with threading.Lock():  # Synchronize access to `shared_data["s"]`
+                with _lock:  # Synchronize access to `shared_data["s"]`
                     track_id = max(all_track_ids) + shared_data["s"]
                     shared_data["s"] += 1
                 tracks_at_t.append(track_id)
@@ -1836,9 +1836,8 @@ def relabel_segmentation(
                 if dialog:
                     dialog.setValue(i + 1)
                     QApplication.processEvents()
-                pass
         except Exception as e:
-            logger.error("Exception in relabel_segmentation: " + str(e))
+            logger.error(f"Exception in relabel_segmentation: {e}")
 
     return new_labels
 
@@ -2020,20 +2019,6 @@ def view_tracks_in_napari(
         widget_adder=add_export_widget,
     )
     return True
-    # io.py line 2139 defined _view_on_napari arguments.
-    # Wait, io.py `view_tracks_in_napari` line 1250...
-    # I didn't see the call to `_view_on_napari`.
-    # I should have read more of `view_tracks_in_napari`.
-
-    # Let's assume standard viewer logic.
-    # But wait, `view_tracks_in_napari` implies viewing TRACKS.
-    # `_view_on_napari` takes `tracks` arg.
-    # In `control_tracking_table` it passes `tracks`.
-    # In `view_tracks_in_napari`, does it pass tracks?
-    # I will assume it does via `df`.
-
-    # Actually, let's implement `control_tracking_table` which I know fully.
-    pass
 
 
 def control_tracking_table(

@@ -1,8 +1,11 @@
 import re
+import logging
 from typing import Optional, List, Union, Dict, Any, Tuple
 
 import numpy as np
 import pandas as pd
+
+logger = logging.getLogger("celldetective")
 
 
 def _remove_invalid_cols(df: pd.DataFrame) -> pd.DataFrame:
@@ -161,10 +164,9 @@ def extract_cols_from_table_list(tables: List[str], nrows: int = 1) -> np.ndarra
             cols = pd.read_csv(tab, nrows=nrows).columns.tolist()
             all_columns.extend(cols)
         except pd.errors.EmptyDataError:
-            pass
+            logger.debug(f"Skipping empty table file: {tab}")
         except Exception as e:
-            print(f"Error reading {tab}: {e}")
-            pass
+            logger.warning(f"Error reading {tab}: {e}")
 
     if len(all_columns) > 0:
         all_columns = np.unique(all_columns)
@@ -202,7 +204,7 @@ def extract_identity_col(trajectories: pd.DataFrame) -> Optional[str]:
         if col in trajectories.columns and not trajectories[col].isnull().all():
             return col
 
-    print("ID or TRACK_ID column could not be found in the table...")
+    logger.warning("ID or TRACK_ID column could not be found in the table...")
     return None
 
 
@@ -354,11 +356,6 @@ def rename_intensity_column(
         if np.any(test_digit):
             index = int(sections[np.where(test_digit)[0]][-1])
         else:
-            # Check if the column already contains a channel name
-            already_named = any(ch in col_name for ch in channel_names)
-            if not already_named:
-                # Only warn if it looks like an intensity column that should have been renamed
-                pass
             continue
 
         channel_name = channel_names[np.where(channel_indices == index)[0]][0]
@@ -420,12 +417,12 @@ def remove_redundant_features(
 
     """
 
-    new_features = features[:]
+    to_remove = set()
 
     for f in features:
 
         if f in reference_features:
-            new_features.remove(f)
+            to_remove.add(f)
 
         if ("intensity" in f) and (channel_names is not None):
 
@@ -434,11 +431,9 @@ def remove_redundant_features(
 
             for p in pattern:
                 if p in reference_features:
-                    try:
-                        new_features.remove(f)
-                    except:
-                        pass
-    return new_features
+                    to_remove.add(f)
+
+    return [f for f in features if f not in to_remove]
 
 
 def remove_trajectory_measurements(
@@ -574,7 +569,7 @@ def collapse_trajectories_by_status(
     ]
 
     if status is None or status not in list(df.columns):
-        print("invalid status selection...")
+        logger.warning("Invalid status selection...")
         return None
 
     df = df.dropna(subset=status, ignore_index=True)
@@ -592,8 +587,7 @@ def collapse_trajectories_by_status(
                     lambda x: x.unique()[0]
                 )
             except Exception as e:
-                print(e)
-                pass
+                logger.warning(f"Column projection failed: {e}")
         subtab_projected["duration_in_state"] = frame_duration
         df_sections.append(subtab_projected)
 

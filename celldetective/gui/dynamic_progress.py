@@ -284,16 +284,16 @@ class DynamicProgressDialog(QDialog, Styles):
                 QTimer.singleShot(
                     100, lambda: self.resize(self.width() - 1, self.height() - 1)
                 )
-            except:
-                pass
+            except Exception as e:
+                logger.debug(f"Window resize trigger failed: {e}")
         else:
             self.btn_log.setIcon(icon(MDI6.math_log, color="white"))
             try:
                 QTimer.singleShot(
                     100, lambda: self.resize(self.width() + 1, self.height() + 1)
                 )
-            except:
-                pass
+            except Exception as e:
+                logger.debug(f"Window resize trigger failed: {e}")
 
     def auto_scale(self):
         """Auto scale the plot."""
@@ -491,15 +491,15 @@ class DynamicProgressDialog(QDialog, Styles):
                 QTimer.singleShot(
                     100, lambda: self.resize(self.width() + 1, self.height() + 1)
                 )
-            except:
-                pass
+            except Exception as e:
+                logger.debug(f"Window resize trigger failed: {e}")
         else:
             try:
                 QTimer.singleShot(
                     100, lambda: self.resize(self.width() - 1, self.height() - 1)
                 )
-            except:
-                pass
+            except Exception as e:
+                logger.debug(f"Window resize trigger failed: {e}")
 
     def update_status(self, text: str) -> None:
         """
@@ -516,5 +516,5 @@ class DynamicProgressDialog(QDialog, Styles):
                 QTimer.singleShot(
                     100, lambda: self.status_label.setText("Training model...")
                 )
-            except:
-                pass
+            except Exception as e:
+                logger.debug(f"Status label update trigger failed: {e}")

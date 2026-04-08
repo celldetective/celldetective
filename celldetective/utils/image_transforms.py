@@ -1,7 +1,10 @@
 import collections
+import logging
 from typing import Optional, Union, Tuple, List, Any, Iterable, Dict
 
 import numpy as np
+
+logger = logging.getLogger("celldetective")
 
 
 def consume(iterator: Iterable[Any]) -> None:
@@ -38,7 +41,8 @@ def axes_check_and_normalize(
         Whether to return the allowed axes string. Default is False.
     """
     allowed = "STCZYX"
-    assert axes is not None, ValueError("axis cannot be None.")
+    if axes is None:
+        raise ValueError("axis cannot be None.")
     axes = str(axes).upper()
     consume(a in allowed for a in axes)
     disallowed is None or consume(a not in disallowed for a in axes)
@@ -312,7 +316,7 @@ def _estimate_scale_factor(
     epsilon = 0.05
     if scale is not None:
         if not np.all([scale >= (1 - epsilon), scale <= (1 + epsilon)]):
-            print(
+            logger.info(
                 f"Each frame will be rescaled by a factor {scale} to match with the model training data..."
             )
         else:

@@ -227,7 +227,7 @@ class StackVisualizer(CelldetectiveWidget):
         window_title: str = "StackVisualizer",
         PxToUm: float = 1.0,
         background_color: str = "white",
-        imshow_kwargs: Dict[str, Any] = {"cmap": "gray"},
+        imshow_kwargs: Optional[Dict[str, Any]] = None,
         *args: Any,
         **kwargs: Any,
     ) -> None:
@@ -265,7 +265,7 @@ class StackVisualizer(CelldetectiveWidget):
 
         # Default mutable argument handling
         if imshow_kwargs is None:
-            imshow_kwargs = {}
+            imshow_kwargs = {"cmap": "gray"}
 
         # self.setWindowTitle(window_title)
         self.window_title = window_title
@@ -713,8 +713,10 @@ class StackVisualizer(CelldetectiveWidget):
             self.last_frame = self.stack[-1, :, :, self.target_channel]
         else:
             self.mode = "virtual"
-            assert isinstance(self.stack_path, str)
-            assert self.stack_path.endswith(".tif")
+            if not isinstance(self.stack_path, str):
+                raise TypeError("stack_path must be a string.")
+            if not self.stack_path.endswith(".tif"):
+                raise ValueError("stack_path must point to a .tif file.")
             self.locate_image_virtual()
 
     def locate_image_virtual(self):
@@ -1064,8 +1066,8 @@ class StackVisualizer(CelldetectiveWidget):
             # queued signal from dispatching after the widget is destroyed.
             try:
                 self.loader_thread.frame_loaded.disconnect()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Could not disconnect frame_loaded signal: {e}")
 
             # Step 2: Signal the thread to stop (non-blocking).
             self.loader_thread.stop()
@@ -1086,5 +1088,5 @@ class StackVisualizer(CelldetectiveWidget):
             self.frame_cache.clear()
         try:
             self.canvas.close()
-        except RuntimeError:
-            pass
+        except RuntimeError as e:
+            logger.debug(f"Canvas already closed during cleanup: {e}")

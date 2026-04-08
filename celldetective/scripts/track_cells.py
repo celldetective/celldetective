@@ -4,6 +4,7 @@ Copright © 2022 Laboratoire Adhesion et Inflammation, Authored by Remy Torro.
 
 import argparse
 import datetime
+import sys
 from typing import List
 import json
 from celldetective.utils.data_loaders import interpret_tracking_configuration
@@ -31,6 +32,9 @@ import os
 from natsort import natsorted
 from art import tprint
 import concurrent.futures
+import logging
+
+logger = logging.getLogger("celldetective")
 
 
 tprint("Track")
@@ -65,24 +69,24 @@ if mode.lower() == "target" or mode.lower() == "targets":
     instruction_file = os.sep.join(["configs", "tracking_instructions_targets.json"])
     napari_name = "napari_target_trajectories.npy"
     table_name = "trajectories_targets.csv"
-
 elif mode.lower() == "effector" or mode.lower() == "effectors":
     label_folder = "labels_effectors"
     instruction_file = os.sep.join(["configs", "tracking_instructions_effectors.json"])
     napari_name = "napari_effector_trajectories.npy"
     table_name = "trajectories_effectors.csv"
+else:
+    raise ValueError(f"Unknown mode {mode!r}. Expected 'target' or 'effector'.")
 
 # Locate experiment config
 parent1 = Path(pos).parent
 expfolder = parent1.parent
 config = PurePath(expfolder, Path("config.ini"))
-assert os.path.exists(
-    config
-), "The configuration file for the experiment could not be located. Abort."
+if not os.path.exists(config):
+    raise FileNotFoundError("The configuration file for the experiment could not be located. Abort.")
 
-print(f"Position: {extract_position_name(pos)}...")
-print("Configuration file: ", config)
-print(f"Population: {mode}...")
+logger.info(f"Position: {extract_position_name(pos)}...")
+logger.info(f"Configuration file: {config}")
+logger.info(f"Population: {mode}...")
 
 # from exp config fetch spatial calib, channel names
 movie_prefix = config_section_to_dict(config, "MovieSettings")["movie_prefix"]
@@ -96,10 +100,10 @@ channel_names, channel_indices = extract_experiment_channels(expfolder)
 nbr_channels = len(channel_names)
 
 # from tracking instructions, fetch btrack config, features, haralick, clean_traj, idea: fetch custom timeline?
-print("Looking for tracking instruction file...")
+logger.info("Looking for tracking instruction file...")
 instr_path = PurePath(expfolder, Path(f"{instruction_file}"))
 if os.path.exists(instr_path):
-    print(f"Tracking instruction file successfully loaded...")
+    logger.info("Tracking instruction file successfully loaded...")
     with open(instr_path, "r") as f:
         instructions = json.load(f)
     btrack_config = interpret_tracking_configuration(instructions["btrack_config_path"])
@@ -134,9 +138,7 @@ if os.path.exists(instr_path):
     if "memory" in instructions:
         memory = instructions["memory"]
 else:
-    print(
-        "Tracking instructions could not be located... Using a standard bTrack motion model instead..."
-    )
+    logger.warning("Tracking instructions could not be located... Using a standard bTrack motion model instead...")
     btrack_config = interpret_tracking_configuration(None)
     features = None
     mask_channels = None
@@ -151,20 +153,16 @@ if features is None:
 # from pos fetch labels
 label_path = natsorted(glob(pos + f"{label_folder}" + os.sep + "*.tif"))
 if len(label_path) > 0:
-    print(f"Found {len(label_path)} segmented frames...")
+    logger.info(f"Found {len(label_path)} segmented frames...")
 else:
-    print(
-        f"No segmented frames have been found. Please run segmentation first. Abort..."
-    )
-    os.abort()
+    logger.error("No segmented frames have been found. Please run segmentation first. Abort...")
+    sys.exit(1)
 
 # Do this if features or Haralick is not None, else don't need stack
 try:
     file = glob(pos + os.sep.join(["movie", f"{movie_prefix}*.tif"]))[0]
 except IndexError:
-    print(
-        "Movie could not be found. Check the prefix. If you intended to measure texture or tone, this will not be performed."
-    )
+    logger.warning("Movie could not be found. Check the prefix. If you intended to measure texture or tone, this will not be performed.")
     file = None
     haralick_option = None
     features = drop_tonal_features(features)
@@ -245,7 +243,7 @@ def measure_index(indices: List[int]) -> List[pd.DataFrame]:
     return props
 
 
-print(f"Measuring features with {n_threads} thread(s)...")
+logger.info(f"Measuring features with {n_threads} thread(s)...")
 
 # Multithreading
 indices = list(range(img_num_channels.shape[1]))
@@ -256,12 +254,12 @@ with concurrent.futures.ThreadPoolExecutor() as executor:
     results = executor.map(measure_index, chunks)
     try:
         for i, return_value in enumerate(results):
-            print(f"Thread {i} completed...")
+            logger.debug(f"Thread {i} completed...")
             timestep_dataframes.extend(return_value)
     except Exception as e:
-        print("Exception: ", e)
+        logger.error(f"Exception: {e}")
 
-print("Features successfully measured...")
+logger.info("Features successfully measured...")
 
 df = pd.concat(timestep_dataframes)
 df.reset_index(inplace=True, drop=True)
@@ -274,7 +272,7 @@ if btrack_option:
 else:
     tracker = "trackpy"
 
-print(f"Start the tracking step using the {tracker} tracker...")
+logger.info(f"Start the tracking step using the {tracker} tracker...")
 
 trajectories, napari_data = track(
     None,
@@ -291,7 +289,7 @@ trajectories, napari_data = track(
     search_range=search_range,
     memory=memory,
 )
-print(f"Tracking successfully performed...")
+logger.info("Tracking successfully performed...")
 
 # out trajectory table, create POSITION_X_um, POSITION_Y_um, TIME_min (new ones)
 # Save napari data # deprecated, should disappear progressively
@@ -300,9 +298,7 @@ np.save(
 )
 
 trajectories.to_csv(pos + os.sep.join(["output", "tables", table_name]), index=False)
-print(
-    f"Trajectory table successfully exported in {os.sep.join(['output', 'tables'])}..."
-)
+logger.info(f"Trajectory table successfully exported in {os.sep.join(['output', 'tables'])}...")
 
 if os.path.exists(
     pos + os.sep.join(["output", "tables", table_name.replace(".csv", ".pkl")])

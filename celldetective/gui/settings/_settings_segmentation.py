@@ -5,7 +5,10 @@ from superqt.fonticon import icon
 from fonticon_mdi6 import MDI6
 from celldetective.gui.settings._settings_base import CelldetectiveSettingsPanel
 import json
+import logging
 import os
+
+logger = logging.getLogger("celldetective")
 
 
 class SettingsSegmentation(CelldetectiveSettingsPanel):
@@ -63,9 +66,9 @@ class SettingsSegmentation(CelldetectiveSettingsPanel):
     def _write_instructions(self):
         """Save instructions to JSON file."""
         instructions = {"flip": self.flip_segmentation_checkbox.isChecked()}
-        print("Segmentation instructions: ", instructions)
+        logger.debug(f"Segmentation instructions: {instructions}")
         file_name = self._instructions_path
         with open(file_name, "w") as f:
             json.dump(instructions, f, indent=4)
-        print("Done.")
+        logger.debug("Done.")
         self.close()

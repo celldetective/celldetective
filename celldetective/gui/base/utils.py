@@ -1,6 +1,9 @@
+import logging
 from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget
 from typing import Union
 from prettytable import PrettyTable
+
+logger = logging.getLogger("celldetective")
 
 
 def center_window(window: Union[QMainWindow, QWidget]) -> None:
@@ -39,4 +42,4 @@ def pretty_table(dct: dict):
     for c in dct.keys():
         table.add_column(str(c), [])
     table.add_row([dct.get(c, "") for c in dct.keys()])
-    print(table)
+    logger.debug(str(table))

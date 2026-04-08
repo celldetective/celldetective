@@ -217,10 +217,6 @@ class SettingsTracking(CelldetectiveSettingsPanel):
         if self.ContentsPostProc.isHidden():
             self.collapse_post_proc_btn.setIcon(icon(MDI6.chevron_down, color="black"))
             self.collapse_post_proc_btn.setIconSize(QSize(20, 20))
-            if len(is_open[is_open]) == 0:
-                pass
-                # self._scroll_area.setMinimumHeight(int(self.minimum_height))
-                # self._adjustSize()
         else:
             self.collapse_post_proc_btn.setIcon(icon(MDI6.chevron_up, color="black"))
             self.collapse_post_proc_btn.setIconSize(QSize(20, 20))
@@ -350,10 +346,6 @@ class SettingsTracking(CelldetectiveSettingsPanel):
         if self.ContentsFeatures.isHidden():
             self.collapse_features_btn.setIcon(icon(MDI6.chevron_down, color="black"))
             self.collapse_features_btn.setIconSize(QSize(20, 20))
-            if len(is_open[is_open]) == 0:
-                pass
-                # self._scroll_area.setMinimumHeight(int(self.minimum_height))
-                # self._adjustSize()
         else:
             self.collapse_features_btn.setIcon(icon(MDI6.chevron_up, color="black"))
             self.collapse_features_btn.setIconSize(QSize(20, 20))
@@ -722,10 +714,6 @@ class SettingsTracking(CelldetectiveSettingsPanel):
         if self.ContentsConfig.isHidden():
             self.collapse_config_btn.setIcon(icon(MDI6.chevron_down, color="black"))
             self.collapse_config_btn.setIconSize(QSize(20, 20))
-            if len(is_open[is_open]) == 0:
-                pass
-                # self._scroll_area.setMinimumHeight(int(self.minimum_height))
-                # self._adjustSize()
         else:
             self.collapse_config_btn.setIcon(icon(MDI6.chevron_up, color="black"))
             self.collapse_config_btn.setIconSize(QSize(20, 20))
@@ -743,10 +731,6 @@ class SettingsTracking(CelldetectiveSettingsPanel):
                 icon(MDI6.chevron_down, color="black")
             )
             self.collapse_config_trackpy_btn.setIconSize(QSize(20, 20))
-            if len(is_open[is_open]) == 0:
-                pass
-                # self._scroll_area.setMinimumHeight(int(self.minimum_height))
-                # self._adjustSize()
         else:
             self.collapse_config_trackpy_btn.setIcon(
                 icon(MDI6.chevron_up, color="black")
@@ -849,7 +833,7 @@ class SettingsTracking(CelldetectiveSettingsPanel):
                 )
                 + os.sep
             )
-            print("Track config path: ", modelpath)
+            logger.debug(f"Track config path: {modelpath}")
             self.filename = self.file_dialog.getOpenFileName(
                 None, "Load config", modelpath, "json files (*.json)"
             )[0]
@@ -857,7 +841,7 @@ class SettingsTracking(CelldetectiveSettingsPanel):
                 copyfile(self.filename, self.config_path)
             self.load_cell_config()
         except Exception as e:
-            print(e)
+            logger.error(f"{e}")
             return None
 
     def reset_btrack_config(self):
@@ -969,7 +953,7 @@ class SettingsTracking(CelldetectiveSettingsPanel):
         Write the selected options in a json file for later reading by the software.
         """
 
-        print("Writing instructions...")
+        logger.debug("Writing instructions...")
 
         if self.btrack_option.isChecked():
             btrack_option = True
@@ -1037,7 +1021,7 @@ class SettingsTracking(CelldetectiveSettingsPanel):
         file_name = self.config_path
         with open(file_name, "w") as f:
             f.write(self.config_le.toPlainText())
-        print("Done.")
+        logger.debug("Done.")
         self.close()
 
     def uncheck_post_proc(self):
@@ -1114,11 +1098,11 @@ class SettingsTracking(CelldetectiveSettingsPanel):
         Read the tracking options from a previously written json file.
         """
 
-        print("Reading instructions..")
+        logger.debug("Reading instructions..")
         if os.path.exists(self.track_instructions_write_path):
             with open(self.track_instructions_write_path, "r") as f:
                 tracking_instructions = json.load(f)
-                print(tracking_instructions)
+                logger.debug(f"{tracking_instructions}")
 
                 # Features
                 features = tracking_instructions["features"]

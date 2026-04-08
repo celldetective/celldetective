@@ -499,7 +499,7 @@ class SettingsSegmentationModelTraining(CelldetectiveSettingsPanel):
 
             subfiles = glob(self.dataset_folder + os.sep + "*.tif")
             if len(subfiles) > 0:
-                print(f"found {len(subfiles)} files in folder")
+                logger.debug(f"found {len(subfiles)} files in folder")
                 self.data_folder_label.setText(self.dataset_folder[:16] + "...")
                 self.data_folder_label.setToolTip(self.dataset_folder)
                 self.cancel_dataset.setVisible(True)
@@ -550,8 +550,8 @@ class SettingsSegmentationModelTraining(CelldetectiveSettingsPanel):
 
     def load_pretrained_config(self):
         """Load configuration from the pretrained model."""
-        f = open(os.sep.join([self.pretrained_model, "config_input.json"]))
-        data = json.load(f)
+        with open(os.sep.join([self.pretrained_model, "config_input.json"])) as f:
+            data = json.load(f)
         channels = data["channels"]
         self.seg_folder = self.pretrained_model.split("/")[-2]
         self.model_name = self.pretrained_model.split("/")[-1]
@@ -690,7 +690,7 @@ class SettingsSegmentationModelTraining(CelldetectiveSettingsPanel):
 
         try:
             lr = float(self.lr_le.text().replace(",", "."))
-        except:
+        except ValueError:
             generic_message("Invalid value encountered for the learning rate.")
             return None
 
@@ -716,7 +716,7 @@ class SettingsSegmentationModelTraining(CelldetectiveSettingsPanel):
         }
 
         model_folder = os.sep.join([self.software_models_dir, model_name, ""])
-        print(model_folder)
+        logger.debug(f"model_folder={model_folder}")
         if not os.path.exists(model_folder):
             os.mkdir(model_folder)
 
@@ -724,7 +724,7 @@ class SettingsSegmentationModelTraining(CelldetectiveSettingsPanel):
             {"target_directory": self.software_models_dir}
         )
 
-        print(f"Set of instructions: {self.training_instructions}")
+        logger.debug(f"Set of instructions: {self.training_instructions}")
 
         self.instructions = model_folder + "training_instructions.json"
 

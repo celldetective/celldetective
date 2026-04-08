@@ -114,7 +114,8 @@ def derivative(
     dxdt[:] = np.nan
 
     if mode == "bi":
-        assert window % 2 == 1, "Please set an odd window for the bidirectional mode"
+        if window % 2 != 1:
+            raise ValueError("Please set an odd window for the bidirectional mode")
         lower_bound = window // 2
         upper_bound = len(x) - window // 2
     elif mode == "forward":

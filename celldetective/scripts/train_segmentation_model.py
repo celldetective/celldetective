@@ -4,6 +4,7 @@ Copright © 2023 Laboratoire Adhesion et Inflammation, Authored by Remy Torro.
 
 import argparse
 import os
+import sys
 import shutil
 from typing import Dict, Any
 from glob import glob
@@ -19,6 +20,9 @@ from celldetective.utils.normalization import normalize_multichannel
 from celldetective.utils.mask_cleaning import fill_label_holes
 from art import tprint
 from distutils.dir_util import copy_tree
+import logging
+
+logger = logging.getLogger("celldetective")
 
 
 def save_json(data: Dict[str, Any], fpath: str, **kwargs: Any) -> None:
@@ -56,8 +60,8 @@ if os.path.exists(instructions):
     with open(instructions, "r") as f:
         training_instructions = json.load(f)
 else:
-    print("Training instructions could not be found. Abort.")
-    os.abort()
+    logger.error("Training instructions could not be found. Abort.")
+    sys.exit(1)
 
 model_name = training_instructions["model_name"]
 target_directory = training_instructions["target_directory"]
@@ -81,14 +85,14 @@ batch_size = training_instructions["batch_size"]
 
 
 # Load dataset
-print(f"Datasets: {datasets}")
+logger.info(f"Datasets: {datasets}")
 X, Y, filenames = load_image_dataset(
     datasets,
     target_channels,
     train_spatial_calibration=spatial_calibration,
     mask_suffix="labelled",
 )
-print("Dataset loaded...")
+logger.info("Dataset loaded...")
 
 values = []
 percentiles = []
@@ -116,7 +120,8 @@ for k in range(len(X)):
 
 Y = [fill_label_holes(y) for y in tqdm(Y)]
 
-assert len(X) > 1, "not enough training data"
+if len(X) <= 1:
+    raise ValueError("not enough training data")
 rng = np.random.RandomState()
 ind = rng.permutation(len(X))
 n_val = max(1, int(round(validation_split * len(ind))))
@@ -127,9 +132,9 @@ X_trn, Y_trn = [X[i] for i in ind_train], [Y[i] for i in ind_train]
 files_train = [filenames[i] for i in ind_train]
 files_val = [filenames[i] for i in ind_val]
 
-print("number of images: %3d" % len(X))
-print("- training:       %3d" % len(X_trn))
-print("- validation:     %3d" % len(X_val))
+logger.info(f"number of images: {len(X):3d}")
+logger.info(f"- training:       {len(X_trn):3d}")
+logger.info(f"- validation:     {len(X_val):3d}")
 
 if model_type == "cellpose":
 
@@ -138,7 +143,7 @@ if model_type == "cellpose":
     Y_aug = []
     n_val = max(1, int(round(augmentation_factor * len(X_trn))))
     indices = random.choices(list(np.arange(len(X_trn))), k=n_val)
-    print("Performing image augmentation pre-training...")
+    logger.info("Performing image augmentation pre-training...")
     for i in tqdm(indices):
         x_aug, y_aug = augmenter(X_trn[i], Y_trn[i])
         X_aug.append(x_aug)
@@ -147,21 +152,21 @@ if model_type == "cellpose":
     # Channel axis in front for cellpose_utils
     X_aug = [np.moveaxis(x, -1, 0) for x in X_aug]
     X_val = [np.moveaxis(x, -1, 0) for x in X_val]
-    print("number of augmented images: %3d" % len(X_aug))
+    logger.info(f"number of augmented images: {len(X_aug):3d}")
 
     from cellpose.models import CellposeModel
     from cellpose.io import logger_setup
     import torch
 
     if not use_gpu:
-        print("Using CPU for training...")
+        logger.info("Using CPU for training...")
         device = torch.device("cpu")
     else:
-        print("Using GPU for training...")
+        logger.info("Using GPU for training...")
 
     diam_mean = 30.0
-    logger, log_file = logger_setup()
-    print(f"Pretrained model: ", pretrained)
+    _cellpose_logger, log_file = logger_setup()
+    logger.info(f"Pretrained model: {pretrained}")
     if pretrained is not None:
         if pretrained.endswith("CP_nuclei"):
             diam_mean = 17.0
@@ -177,7 +182,7 @@ if model_type == "cellpose":
         nchan=X_aug[0].shape[0],
     )
     for name, module in model.net.named_children():
-        print(name, type(module))
+        logger.debug(f"{name} {type(module)}")
 
     # Freeze parts of the UNET (if we loaded a pretrained model)
     if pretrained is not None:
@@ -261,7 +266,7 @@ elif model_type == "stardist":
     from stardist.models import Config2D, StarDist2D
 
     n_rays = 32
-    print(gputools_available())
+    logger.debug(f"gputools_available={gputools_available()}")
 
     n_channel = X_trn[0].shape[-1]
 
@@ -322,7 +327,7 @@ elif model_type == "stardist":
         )
         model.config.use_gpu = use_gpu
         model.config.train_reduce_lr = {"factor": 0.1, "patience": 10, "min_delta": 0}
-        print(f"{model.config=}")
+        logger.debug(f"model.config={model.config}")
 
         save_json(
             vars(model.config),
@@ -331,12 +336,10 @@ elif model_type == "stardist":
 
     median_size = calculate_extents(list(Y_trn), np.mean)
     fov = np.array(model._axes_tile_overlap("YX"))
-    print(f"median object size:      {median_size}")
-    print(f"network field of view :  {fov}")
+    logger.info(f"median object size:      {median_size}")
+    logger.info(f"network field of view :  {fov}")
     if any(median_size > fov):
-        print(
-            "WARNING: median object size larger than field of view of the neural network."
-        )
+        logger.warning("median object size larger than field of view of the neural network.")
 
     if pretrained is not None:
 
@@ -398,4 +401,4 @@ elif model_type == "stardist":
     ) as outfile:
         outfile.write(json_input_config)
 
-print("Done.")
+logger.info("Done.")

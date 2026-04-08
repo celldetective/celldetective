@@ -1395,9 +1395,7 @@ class SurvivalPlotWidget(GenericSignalPlotWidget):
             data = self.df_pos_info
             groupby = ["pos_path"]
         if self.plot_options[2].isChecked():
-            print(
-                'Not implemented yet... Please select "well" or "position" as grouping...'
-            )
+            logger.warning('Not implemented yet... Please select "well" or "position" as grouping...')
             return None
 
         if self.all_values_rb.isChecked():
@@ -1405,7 +1403,7 @@ class SurvivalPlotWidget(GenericSignalPlotWidget):
             survival_table = []
             tid = 0
             for name, group in data.groupby(groupby):
-                print(name)
+                logger.debug(f"Processing group: {name}")
                 if groupby[0] == "pos_path":
                     metadata = collect_experiment_metadata(pos_path=name[0])
                 elif groupby[0] == "well_path":
@@ -1448,7 +1446,7 @@ class SurvivalPlotWidget(GenericSignalPlotWidget):
             survival_table = []
             tid = 0
             for name, group in data.groupby(groupby):
-                print(name)
+                logger.debug(f"Processing group: {name}")
                 if groupby[0] == "pos_path":
                     metadata = collect_experiment_metadata(pos_path=name[0])
                 elif groupby[0] == "well_path":
@@ -1479,7 +1477,7 @@ class SurvivalPlotWidget(GenericSignalPlotWidget):
             survival_table = []
             tid = 0
             for name, group in data.groupby(groupby):
-                print(name)
+                logger.debug(f"Processing group: {name}")
                 if groupby[0] == "pos_path":
                     metadata = collect_experiment_metadata(pos_path=name[0])
                 elif groupby[0] == "well_path":

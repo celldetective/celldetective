@@ -77,7 +77,7 @@ def get_position_table(
         try:
             df_pos = pd.read_csv(table, low_memory=False)
         except Exception as e:
-            logger.error(e)
+            logger.error(f"{e}")
             df_pos = None
     else:
         df_pos = None
@@ -254,7 +254,7 @@ def load_experiment_tables(
             try:
                 positions = positions[position_indices]
             except Exception as e:
-                logger.error(e)
+                logger.error(f"{e}")
                 continue
 
         real_pos_index = 0
@@ -294,7 +294,7 @@ def load_experiment_tables(
                     try:
                         df_pos[k] = values[widx]
                     except Exception as e:
-                        logger.error(f"{e=}")
+                        logger.error(f"{e}")
 
                 if metadata is not None:
                     keys = list(metadata.keys())

@@ -1,7 +1,10 @@
+import logging
 import random
 from typing import Tuple
 
 import numpy as np
+
+logger = logging.getLogger("celldetective")
 from scipy.ndimage import shift
 from skimage.filters import gaussian
 from skimage.util import random_noise
@@ -99,9 +102,8 @@ def augmenter(
             x, y = random_shift(x, y)
 
         if channel_extinction:
-            assert (
-                extinction_probability <= 1.0
-            ), "The extinction probability must be a number between 0 and 1."
+            if extinction_probability > 1.0:
+                raise ValueError("The extinction probability must be a number between 0 and 1.")
             channel_off = [
                 np.random.random() < extinction_probability for i in range(x.shape[-1])
             ]
@@ -168,8 +170,8 @@ def noise(
                     x_noise[:, :, k] = random_noise(
                         x_noise[:, :, k], mode=m, clip=clip_option
                     )
-                except:
-                    pass
+                except Exception as e:
+                    logger.debug(f"random_noise augmentation failed (mode={m}): {e}")
 
     x_noise[loc_i, loc_j, loc_c] = 0.0
 
@@ -204,7 +206,8 @@ def random_fliprot(img: np.ndarray, mask: np.ndarray) -> Tuple[np.ndarray, np.nd
 
     """
 
-    assert img.ndim >= mask.ndim
+    if img.ndim < mask.ndim:
+        raise ValueError(f"Image ndim ({img.ndim}) must be >= mask ndim ({mask.ndim}).")
     axes = tuple(range(mask.ndim))
     perm = tuple(np.random.permutation(axes))
     img = img.transpose(perm + tuple(range(mask.ndim, img.ndim)))

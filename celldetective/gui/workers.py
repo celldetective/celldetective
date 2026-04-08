@@ -364,8 +364,7 @@ class Runner(QRunnable):
                     self.signals.error.emit("Unknown error")
 
             except Exception as e:
-                logger.error(e)
-                pass
+                logger.error(f"{e}")
 
     def close(self) -> None:
         """Close the process."""
