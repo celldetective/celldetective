@@ -327,7 +327,11 @@ def measure(
         measurements = measurements.sort_values(
             by=[column_labels["track"], column_labels["time"]]
         )
+        n_before = len(measurements)
         measurements = measurements.dropna(subset=[column_labels["track"]])
+        n_dropped = n_before - len(measurements)
+        if n_dropped > 0:
+            logger.warning(f"Dropped {n_dropped} row(s) with NaN {column_labels['track']} after measurement.")
     else:
         measurements["ID"] = np.arange(len(measurements))
 
@@ -1195,10 +1199,13 @@ def measure_at_position(
     if not pos.endswith("/"):
         pos += "/"
     script_path = os.sep.join([abs_path, "scripts", "measure_cells.py"])
-    subprocess.run(
+    result = subprocess.run(
         [sys.executable, script_path, "--pos", pos, "--mode", mode, "--threads", str(threads)],
         check=False,
     )
+    if result.returncode != 0:
+        logger.error(f"Measurement script exited with code {result.returncode} for position {pos}.")
+        raise RuntimeError(f"Measurement failed for position {pos} (exit code {result.returncode}).")
 
     table = pos + os.sep.join(["output", "tables", f"trajectories_{mode}.csv"])
     if return_measurements:

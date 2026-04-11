@@ -1,5 +1,5 @@
 from multiprocessing import Queue
-from PyQt5.QtWidgets import QPushButton, QVBoxLayout, QHBoxLayout, QLabel, QProgressBar
+from PyQt5.QtWidgets import QPushButton, QVBoxLayout, QHBoxLayout, QLabel, QProgressBar, QApplication
 from PyQt5.QtCore import QRunnable, QObject, pyqtSignal, QThreadPool, QSize, Qt
 from PyQt5.QtGui import QPixmap, QImage
 from typing import Optional, Any, Dict
@@ -163,8 +163,14 @@ class ProgressWindow(CelldetectiveDialog):
         evnt : QCloseEvent
             The close event.
         """
-        evnt.ignore()
-        self.setWindowState(Qt.WindowMinimized)
+        if QApplication.closingDown():
+            # App is shutting down — stop the job and allow the close.
+            self.__runner.close()
+            evnt.accept()
+        else:
+            # Accidental X-button press while job is running — minimize instead.
+            evnt.ignore()
+            self.setWindowState(Qt.WindowMinimized)
 
     def __run_net(self) -> None:
         """Start the runner."""
@@ -305,7 +311,15 @@ class Runner(QRunnable):
         self.__process.start()
         while True:
             try:
-                data = self.__queue.get()
+                data = self.__queue.get(timeout=2)
+            except Exception:
+                # Timeout — check if the subprocess died without sending "finished"
+                if not self.__process.is_alive():
+                    logger.error("Subprocess exited without sending a status message.")
+                    self.signals.error.emit("Process exited unexpectedly.")
+                    break
+                continue
+            try:
 
                 # Handle dictionary for triple progress
                 if isinstance(data, dict):
@@ -477,8 +491,14 @@ class GenericProgressWindow(CelldetectiveDialog):
         evnt : QCloseEvent
             The close event.
         """
-        evnt.ignore()
-        self.setWindowState(Qt.WindowMinimized)
+        if QApplication.closingDown():
+            # App is shutting down — stop the job and allow the close.
+            self.__runner.close()
+            evnt.accept()
+        else:
+            # Accidental X-button press while job is running — minimize instead.
+            evnt.ignore()
+            self.setWindowState(Qt.WindowMinimized)
 
     def __run_net(self) -> None:
         """Start the runner."""

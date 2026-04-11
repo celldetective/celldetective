@@ -1,5 +1,6 @@
 from pathlib import Path
 from typing import Optional
+import time
 from time import time
 from PyQt5.QtWidgets import (
     QMessageBox,
@@ -48,9 +49,9 @@ class BackgroundLoader(QThread):
             )
 
             self.TrainSignalModelProcess = TrainSignalModelProcess
+            logger.info("Librairies loaded...")
         except Exception:
             logger.error("Librairies not loaded...")
-        logger.info("Librairies loaded...")
 
 
 class SettingsEventDetectionModelTraining(CelldetectiveSettingsPanel):
@@ -111,6 +112,14 @@ class SettingsEventDetectionModelTraining(CelldetectiveSettingsPanel):
 
         self.bg_loader = BackgroundLoader()
         self.bg_loader.start()
+
+    def closeEvent(self, event) -> None:
+        """Stop background loader on close."""
+        if self.bg_loader.isRunning():
+            self.bg_loader.requestInterruption()
+            self.bg_loader.quit()
+            self.bg_loader.wait(3000)
+        super().closeEvent(event)
 
     def _add_to_layout(self):
         """Add widgets to the layout."""

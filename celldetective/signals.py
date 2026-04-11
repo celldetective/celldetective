@@ -333,10 +333,13 @@ def analyze_signals_at_position(
         pos += "/"
 
     script_path = os.sep.join([abs_path, "scripts", "analyze_signals.py"])
-    subprocess.run(
+    result = subprocess.run(
         [sys.executable, script_path, "--pos", pos, "--model", model, "--mode", mode, "--use_gpu", str(use_gpu)],
         check=False,
     )
+    if result.returncode != 0:
+        logger.error(f"Signal analysis script exited with code {result.returncode} for position {pos}.")
+        raise RuntimeError(f"Signal analysis failed for position {pos} (exit code {result.returncode}).")
 
     table = pos + os.sep.join(["output", "tables", f"trajectories_{mode}.csv"])
     if return_table:
@@ -694,10 +697,13 @@ def train_signal_model(config: str) -> None:
         raise FileNotFoundError(f"Config {config} is not a valid path.")
 
     script_path = os.sep.join([abs_path, "scripts", "train_signal_model.py"])
-    subprocess.run(
+    result = subprocess.run(
         [sys.executable, script_path, "--config", config],
         check=False,
     )
+    if result.returncode != 0:
+        logger.error(f"Signal model training script exited with code {result.returncode}.")
+        raise RuntimeError(f"Signal model training failed (exit code {result.returncode}).")
 
 
 def T_MSD(

@@ -62,9 +62,9 @@ class BackgroundLoader(QThread):
             from scipy.ndimage._measurements import label
             import pandas as pd
             from celldetective.regionprops._regionprops import regionprops_table
+            logger.info("Background packages loaded...")
         except Exception:
             logger.error("Background packages not loaded...")
-        logger.info("Background packages loaded...")
 
 
 class ThresholdConfigWizard(CelldetectiveMainWindow):

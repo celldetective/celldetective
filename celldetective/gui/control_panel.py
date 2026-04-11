@@ -70,9 +70,9 @@ class BackgroundLoader(QThread):
             from celldetective.gui.viewers.base_viewer import StackVisualizer
 
             self.StackVisualizer = StackVisualizer
+            logger.info("Background packages loaded...")
         except Exception:
             logger.error("Background packages not loaded...")
-        logger.info("Background packages loaded...")
 
 
 class ControlPanel(CelldetectiveMainWindow):
@@ -401,10 +401,10 @@ class ControlPanel(CelldetectiveMainWindow):
         """
 
         try:
-            subprocess.Popen(f"explorer {os.path.realpath(self.exp_dir)}")
+            subprocess.Popen(["explorer", os.path.realpath(self.exp_dir)])
         except Exception:
             try:
-                os.system('xdg-open "%s"' % self.exp_dir)
+                subprocess.run(["xdg-open", self.exp_dir], check=False)
             except Exception:
                 return None
 
@@ -509,6 +509,7 @@ class ControlPanel(CelldetectiveMainWindow):
             self.bg_loader.wait(3000)
 
         gc.collect()
+        super().closeEvent(event)
 
     def display_positions(self):
         """

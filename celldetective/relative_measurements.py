@@ -48,13 +48,15 @@ def _load_pair_tables(
         ["output", "tables", f"trajectories_{reference_population}.pkl"]
     )
     if os.path.exists(tab_ref):
-        df_reference = np.load(tab_ref, allow_pickle=True)
+        df_reference = pd.read_pickle(tab_ref)
+    elif os.path.exists(tab_ref.replace(".pkl", ".csv")):
+        df_reference = pd.read_csv(tab_ref.replace(".pkl", ".csv"))
     else:
         df_reference = None
 
     tab_neigh = tab_ref.replace(reference_population, neighbor_population)
     if os.path.exists(tab_neigh):
-        df_neighbor = np.load(tab_neigh, allow_pickle=True)
+        df_neighbor = pd.read_pickle(tab_neigh)
     elif os.path.exists(tab_neigh.replace(".pkl", ".csv")):
         df_neighbor = pd.read_csv(tab_neigh.replace(".pkl", ".csv"))
     else:
@@ -113,10 +115,13 @@ def _compute_pair_geometry(
     dot_product_vector = np.full((n_com, n), np.nan)
     cosine_dot_vector = np.full((n_com, n), np.nan)
 
+    ref_idx_map = {frame: i for i, frame in enumerate(timeline_reference)}
+    neigh_idx_map = {frame: i for i, frame in enumerate(timeline_neighbor)}
+
     for t in range(n):
-        if t in timeline_reference and t in timeline_neighbor:
-            idx_ref = list(timeline_reference).index(t)
-            idx_neigh = list(timeline_neighbor).index(t)
+        if t in ref_idx_map and t in neigh_idx_map:
+            idx_ref = ref_idx_map[t]
+            idx_neigh = neigh_idx_map[t]
 
             neighbor_vector[t, 0] = coords_neighbor[idx_neigh, 0] - coords_reference[idx_ref, 0]
             neighbor_vector[t, 1] = coords_neighbor[idx_neigh, 1] - coords_reference[idx_ref, 1]
@@ -657,10 +662,13 @@ def rel_measure_at_position(pos: str) -> None:
     if not pos.endswith("/"):
         pos += "/"
     script_path = os.sep.join([abs_path, "scripts", "measure_relative.py"])
-    subprocess.run(
+    result = subprocess.run(
         [sys.executable, script_path, "--pos", pos],
         check=False,
     )
+    if result.returncode != 0:
+        logger.error(f"Relative measurement script exited with code {result.returncode} for position {pos}.")
+        raise RuntimeError(f"Relative measurement failed for position {pos} (exit code {result.returncode}).")
 
 
 # def mcf7_size_model(x,x0,x2):
@@ -800,7 +808,7 @@ def extract_neighborhoods_from_pickles(
     for pop in populations:
         tab_pop = pos + os.sep.join(["output", "tables", f"trajectories_{pop}.pkl"])
         if os.path.exists(tab_pop):
-            df_pop = np.load(tab_pop, allow_pickle=True)
+            df_pop = pd.read_pickle(tab_pop)
             for column in list(df_pop.columns):
                 if column.startswith("neighborhood"):
                     neigh_protocol = extract_neighborhood_settings(

@@ -135,7 +135,7 @@ def get_position_pickle(
         )
 
     if os.path.exists(table):
-        df_pos = np.load(table, allow_pickle=True)
+        df_pos = pd.read_pickle(table)
     else:
         df_pos = None
 
