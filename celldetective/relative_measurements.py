@@ -899,11 +899,15 @@ def extract_neighborhood_settings(
         neighbor_population = neigh_string.split("_(")[-1].split(")_")[0].split("-")[-1]
         logger.debug(f"neighbor_population={neighbor_population}")
     else:
-        # old method
+        # Legacy fallback: neighborhood string predates the _(pop)_ encoding.
+        # Assume canonical target/effector pairing; for any other population
+        # default to self-neighboring (same population).
         if population == "targets":
             neighbor_population = "effectors"
         elif population == "effectors":
             neighbor_population = "targets"
+        else:
+            neighbor_population = population
 
     if "self" in neigh_string:
 

@@ -724,6 +724,8 @@ def segment_at_position(
     pos = rf"{pos}"
     if not os.path.exists(pos):
         raise FileNotFoundError(f"Position {pos} is not a valid path.")
+    if not pos.endswith("/"):
+        pos += "/"
 
     name_path = locate_segmentation_model(model_name)
 
@@ -802,6 +804,8 @@ def segment_from_threshold_at_position(
     pos = rf"{pos}"
     if not os.path.exists(pos):
         raise FileNotFoundError(f"Position {pos} is not a valid path.")
+    if not pos.endswith("/"):
+        pos += "/"
 
     config = config.replace("\\", "/")
     config = rf"{config}"

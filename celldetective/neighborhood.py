@@ -922,6 +922,8 @@ def compute_neighborhood_at_position(
     pos = rf"{pos}"
     if not os.path.exists(pos):
         raise FileNotFoundError(f"Position {pos} is not a valid path.")
+    if not pos.endswith("/"):
+        pos += "/"
 
     if isinstance(population, str):
         population = [population, population]
@@ -1873,6 +1875,8 @@ def compute_contact_neighborhood_at_position(
     pos = rf"{pos}"
     if not os.path.exists(pos):
         raise FileNotFoundError(f"Position {pos} is not a valid path.")
+    if not pos.endswith("/"):
+        pos += "/"
 
     if isinstance(population, str):
         population = [population, population]

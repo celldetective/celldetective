@@ -92,11 +92,11 @@ def get_position_pickle(
     pos: str, population: str, return_path: bool = False
 ) -> Union[Optional[pd.DataFrame], Tuple[Optional[pd.DataFrame], str]]:
     """
-    Retrieves the data table for a specified population at a given position, optionally returning the table's file path.
+    Retrieves the pickle data table for a specified population at a given position, optionally returning the table's file path.
 
-    This function locates and loads a CSV data table associated with a specific population (e.g., 'targets', 'cells')
+    This function locates and loads a pickle data table associated with a specific population (e.g., 'targets', 'cells')
     from a specified position directory. The position directory should contain an 'output/tables' subdirectory where
-    the CSV file named 'trajectories_{population}.csv' is expected to be found. If the file exists, it is loaded into
+    the pickle file named 'trajectories_{population}.pkl' is expected to be found. If the file exists, it is loaded into
     a pandas DataFrame; otherwise, None is returned.
 
     Parameters
@@ -105,9 +105,9 @@ def get_position_pickle(
             The path to the position directory from which to load the data table.
     population : str
             The name of the population for which the data table is to be retrieved. This name is used to construct the
-            file name of the CSV file to be loaded.
+            file name of the pickle file to be loaded.
     return_path : bool, optional
-            If True, returns a tuple containing the loaded data table (or None) and the path to the CSV file. If False,
+            If True, returns a tuple containing the loaded data table (or None) and the path to the pickle file. If False,
             only the loaded data table (or None) is returned (default is False).
 
     Returns
@@ -115,15 +115,15 @@ def get_position_pickle(
     pandas.DataFrame or None, or (pandas.DataFrame or None, str)
             If return_path is False, returns the loaded data table as a pandas DataFrame, or None if the table file does
             not exist. If return_path is True, returns a tuple where the first element is the data table (or None) and the
-            second element is the path to the CSV file.
+            second element is the path to the pickle file.
 
     Examples
     --------
-    >>> df_pos = get_position_table('/path/to/position', 'targets')
-    # This will load the 'trajectories_targets.csv' table from the specified position directory into a pandas DataFrame.
+    >>> df_pos = get_position_pickle('/path/to/position', 'targets')
+    # This will load the 'trajectories_targets.pkl' table from the specified position directory into a pandas DataFrame.
 
-    >>> df_pos, table_path = get_position_table('/path/to/position', 'targets', return_path=True)
-    # This will load the 'trajectories_targets.csv' table and also return the path to the CSV file.
+    >>> df_pos, table_path = get_position_pickle('/path/to/position', 'targets', return_path=True)
+    # This will load the 'trajectories_targets.pkl' table and also return the path to the pickle file.
 
     """
 

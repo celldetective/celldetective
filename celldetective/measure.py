@@ -215,6 +215,14 @@ def measure(
     if trajectories is None:
         do_features = True
         features += ["centroid"]
+        # When measuring without a trajectory table, cells get a temporary per-frame
+        # integer ID instead of a persistent TRACK_ID.
+        column_labels = {
+            "track": "ID",
+            "time": column_labels["time"],
+            "x": column_labels["x"],
+            "y": column_labels["y"],
+        }
     else:
         if clear_previous:
             trajectories = remove_trajectory_measurements(trajectories, column_labels)
@@ -262,25 +270,19 @@ def measure(
                     inplace=True,
                 )
                 positions_at_t["FRAME"] = int(t)
-                column_labels = {
-                    "track": "ID",
-                    "time": column_labels["time"],
-                    "x": column_labels["x"],
-                    "y": column_labels["y"],
-                }
 
         center_of_mass_x_cols = [
-            c for c in list(positions_at_t.columns) if c.endswith("centre_of_mass_x")
+            c for c in list(positions_at_t.columns) if c.endswith("center_of_mass_dx")
         ]
         center_of_mass_y_cols = [
-            c for c in list(positions_at_t.columns) if c.endswith("centre_of_mass_y")
+            c for c in list(positions_at_t.columns) if c.endswith("center_of_mass_dy")
         ]
         for c in center_of_mass_x_cols:
-            positions_at_t.loc[:, c.replace("_x", "_POSITION_X")] = (
+            positions_at_t.loc[:, c.replace("_dx", "_POSITION_X")] = (
                 positions_at_t[c] + positions_at_t["POSITION_X"]
             )
         for c in center_of_mass_y_cols:
-            positions_at_t.loc[:, c.replace("_y", "_POSITION_Y")] = (
+            positions_at_t.loc[:, c.replace("_dy", "_POSITION_Y")] = (
                 positions_at_t[c] + positions_at_t["POSITION_Y"]
             )
         positions_at_t = positions_at_t.drop(
@@ -2264,15 +2266,15 @@ def center_of_mass_to_abs_coordinates(df: pd.DataFrame) -> pd.DataFrame:
     """
 
     center_of_mass_x_cols = [
-        c for c in list(df.columns) if c.endswith("centre_of_mass_x")
+        c for c in list(df.columns) if c.endswith("center_of_mass_dx")
     ]
     center_of_mass_y_cols = [
-        c for c in list(df.columns) if c.endswith("centre_of_mass_y")
+        c for c in list(df.columns) if c.endswith("center_of_mass_dy")
     ]
     for c in center_of_mass_x_cols:
-        df.loc[:, c.replace("_x", "_POSITION_X")] = df[c] + df["POSITION_X"]
+        df.loc[:, c.replace("_dx", "_POSITION_X")] = df[c] + df["POSITION_X"]
     for c in center_of_mass_y_cols:
-        df.loc[:, c.replace("_y", "_POSITION_Y")] = df[c] + df["POSITION_Y"]
+        df.loc[:, c.replace("_dy", "_POSITION_Y")] = df[c] + df["POSITION_Y"]
     df = df.drop(columns=center_of_mass_x_cols + center_of_mass_y_cols)
 
     return df
