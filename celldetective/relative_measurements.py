@@ -122,28 +122,29 @@ def _compute_pair_geometry(
     ref_idx_map = {frame: i for i, frame in enumerate(timeline_reference)}
     neigh_idx_map = {frame: i for i, frame in enumerate(timeline_neighbor)}
 
-    for t in range(n):
-        if t in ref_idx_map and t in neigh_idx_map:
-            idx_ref = ref_idx_map[t]
-            idx_neigh = neigh_idx_map[t]
+    for t_idx in range(n):
+        frame = full_timeline[t_idx]
+        if frame in ref_idx_map and frame in neigh_idx_map:
+            idx_ref = ref_idx_map[frame]
+            idx_neigh = neigh_idx_map[frame]
 
-            neighbor_vector[t, 0] = coords_neighbor[idx_neigh, 0] - coords_reference[idx_ref, 0]
-            neighbor_vector[t, 1] = coords_neighbor[idx_neigh, 1] - coords_reference[idx_ref, 1]
+            neighbor_vector[t_idx, 0] = coords_neighbor[idx_neigh, 0] - coords_reference[idx_ref, 0]
+            neighbor_vector[t_idx, 1] = coords_neighbor[idx_neigh, 1] - coords_reference[idx_ref, 1]
 
             for z in range(n_com):
-                mass_displacement_vector[z, t, 0] = (
+                mass_displacement_vector[z, t_idx, 0] = (
                     coords_center_of_mass[z][idx_neigh, 0] - coords_neighbor[idx_neigh, 0]
                 )
-                mass_displacement_vector[z, t, 1] = (
+                mass_displacement_vector[z, t_idx, 1] = (
                     coords_center_of_mass[z][idx_neigh, 1] - coords_neighbor[idx_neigh, 1]
                 )
-                dot_product_vector[z, t] = np.dot(
-                    mass_displacement_vector[z, t], -neighbor_vector[t]
+                dot_product_vector[z, t_idx] = np.dot(
+                    mass_displacement_vector[z, t_idx], -neighbor_vector[t_idx]
                 )
-                norm_prod = np.linalg.norm(mass_displacement_vector[z, t]) * np.linalg.norm(
-                    -neighbor_vector[t]
+                norm_prod = np.linalg.norm(mass_displacement_vector[z, t_idx]) * np.linalg.norm(
+                    -neighbor_vector[t_idx]
                 )
-                cosine_dot_vector[z, t] = dot_product_vector[z, t] / norm_prod
+                cosine_dot_vector[z, t_idx] = dot_product_vector[z, t_idx] / norm_prod
 
     exclude = neighbor_vector[:, 1] != neighbor_vector[:, 1]
     angle = np.full(n, np.nan)
