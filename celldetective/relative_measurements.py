@@ -183,6 +183,7 @@ def _build_pair_row(
     reference_population: str,
     neighbor_population: str,
     t: int,
+    idx: int,
     relative_distance: np.ndarray,
     rel_velocity: np.ndarray,
     rel_velocity_smooth: np.ndarray,
@@ -202,22 +203,32 @@ def _build_pair_row(
     dot_product_vector: np.ndarray,
     cosine_dot_vector: np.ndarray,
 ) -> dict:
-    """Assemble a single measurement row dict for one pair at one timepoint."""
+    """Assemble a single measurement row dict for one pair at one timepoint.
+
+    Parameters
+    ----------
+    t : int
+        Actual frame number (used for the FRAME column).
+    idx : int
+        Position of ``t`` within ``full_timeline`` (used to index geometry arrays).
+        When full_timeline = [0, 1, 2, ...], ``idx == t``; they differ when tracks
+        start at a frame other than 0.
+    """
     row: dict = {
         "REFERENCE_ID": tid,
         "NEIGHBOR_ID": nc,
         "reference_population": reference_population,
         "neighbor_population": neighbor_population,
         "FRAME": t,
-        "distance": relative_distance[t],
+        "distance": relative_distance[idx],
         "intersection": inter,
         "reference_frac_area_intersection": ref_inter_fraction,
         "neighbor_frac_area_intersection": neigh_inter_fraction,
-        "velocity": rel_velocity[t],
-        "velocity_smooth": rel_velocity_smooth[t],
-        "angle": angle[t] * 180 / np.pi,
-        "angular_velocity": angular_velocity[t],
-        "angular_velocity_smooth": angular_velocity_smooth[t],
+        "velocity": rel_velocity[idx],
+        "velocity_smooth": rel_velocity_smooth[idx],
+        "angle": angle[idx] * 180 / np.pi,
+        "angular_velocity": angular_velocity[idx],
+        "angular_velocity_smooth": angular_velocity_smooth[idx],
         f"status_{neighborhood_description}": status,
         f"residence_time_in_{neighborhood_description}": cum_sum,
         f"class_{neighborhood_description}": 0,
@@ -226,8 +237,8 @@ def _build_pair_row(
         "neighbors_tracked": neigh_tracked,
     }
     for z, lbl in enumerate(center_of_mass_labels):
-        row[lbl + "_center_of_mass_dot_product"] = dot_product_vector[z, t]
-        row[lbl + "_center_of_mass_dot_cosine"] = cosine_dot_vector[z, t]
+        row[lbl + "_center_of_mass_dot_product"] = dot_product_vector[z, idx]
+        row[lbl + "_center_of_mass_dot_cosine"] = cosine_dot_vector[z, idx]
     return row
 
 
@@ -442,7 +453,8 @@ def _measure_contact_site_intensity(
     result: Dict[str, float] = {}
     try:
         zone = _contact_site_mask(labelsA_t, labelsB_t, ref_class_id, neigh_class_id, border)
-    except Exception:
+    except Exception as e:
+        logger.debug(f"_contact_site_mask failed for ids ({ref_class_id}, {neigh_class_id}): {e}")
         zone = np.zeros_like(labelsA_t, dtype=bool)
 
     for ch_idx, ch_name in enumerate(channel_names):
@@ -541,10 +553,12 @@ def measure_pair_signals_at_position(
     ref_class_lookup: Dict[Tuple, int] = {}
     neigh_class_lookup: Dict[Tuple, int] = {}
     if channel_names and "class_id" in df_reference.columns:
-        for _, row in df_reference[["FRAME", ref_id_col, "class_id"]].iterrows():
+        sub = df_reference[["FRAME", ref_id_col, "class_id"]].dropna(subset=["class_id", "FRAME"])
+        for _, row in sub.iterrows():
             ref_class_lookup[(row[ref_id_col], int(row["FRAME"]))] = int(row["class_id"])
     if channel_names and "class_id" in df_neighbor.columns:
-        for _, row in df_neighbor[["FRAME", neigh_id_col, "class_id"]].iterrows():
+        sub = df_neighbor[["FRAME", neigh_id_col, "class_id"]].dropna(subset=["class_id", "FRAME"])
+        for _, row in sub.iterrows():
             neigh_class_lookup[(row[neigh_id_col], int(row["FRAME"]))] = int(row["class_id"])
     # -------------------------------------------------------------------------
 
@@ -614,13 +628,18 @@ def measure_pair_signals_at_position(
                     )
                 )
 
+                # Pre-build frame→position maps to avoid repeated O(N) list.index() calls
+                ref_frame_to_idx = {int(f): i for i, f in enumerate(timeline_reference)}
+                neigh_frame_to_idx = {int(f): i for i, f in enumerate(timeline_neighbor)}
+
                 cum_sum = 0
-                for t in range(len(full_timeline)):
-                    if t not in timeline_reference or t not in timeline_neighbor:
+                for idx, t in enumerate(full_timeline):
+                    t = int(t)
+                    if t not in ref_frame_to_idx or t not in neigh_frame_to_idx:
                         continue
 
-                    idx_reference = list(timeline_reference).index(t)
-                    idx_neighbor = list(timeline_neighbor).index(t)
+                    idx_reference = ref_frame_to_idx[t]
+                    idx_neighbor = neigh_frame_to_idx[t]
 
                     inter_vals = intersection_values.loc[
                         (intersection_values["neigh_id"] == nc)
@@ -651,6 +670,7 @@ def measure_pair_signals_at_position(
                         reference_population,
                         neighbor_population,
                         t,
+                        idx,
                         relative_distance,
                         rel_velocity,
                         rel_velocity_smooth,

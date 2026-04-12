@@ -824,8 +824,8 @@ def compute_attention_weight(
 
     """
 
-    weights = np.empty(dist_matrix.shape[axis])
-    closest_opposite = np.empty(dist_matrix.shape[axis])
+    weights = np.full(dist_matrix.shape[axis], np.nan)
+    closest_opposite = np.full(dist_matrix.shape[axis], np.nan)
 
     for i in range(dist_matrix.shape[axis]):
         if axis == 1:
@@ -838,16 +838,15 @@ def compute_attention_weight(
         if not include_dead_weight:
             stat = opposite_cell_status[np.where(row <= cut_distance)[0]]
             nbr_opposite = len(stat[stat == 1])
-            index_subpop = np.argmin(row[opposite_cell_status == 1])
-            closest_opposite[i] = opposite_cell_ids[opposite_cell_status == 1][
-                index_subpop
-            ]
+            alive_mask = opposite_cell_status == 1
+            if np.any(alive_mask):
+                index_subpop = np.argmin(row[alive_mask])
+                closest_opposite[i] = opposite_cell_ids[alive_mask][index_subpop]
         else:
             closest_opposite[i] = opposite_cell_ids[np.argmin(row)]
 
         if nbr_opposite > 0:
-            weight = 1.0 / float(nbr_opposite)
-            weights[i] = weight
+            weights[i] = 1.0 / float(nbr_opposite)
 
     return weights, closest_opposite
 
