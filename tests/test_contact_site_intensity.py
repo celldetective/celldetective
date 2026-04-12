@@ -3,6 +3,7 @@ Tests for contact-site intensity measurement:
   - _contact_site_mask    (helper)
   - _measure_contact_intensity_at_t (per-frame writer)
   - mask_contact_neighborhood with intensity_images / channel_names
+  - _measure_contact_site_intensity (pair-table helper)
 """
 
 import numpy as np
@@ -14,6 +15,7 @@ from celldetective.neighborhood import (
     _measure_contact_intensity_at_t,
     mask_contact_neighborhood,
 )
+from celldetective.relative_measurements import _measure_contact_site_intensity
 
 
 # ---------------------------------------------------------------------------
@@ -293,3 +295,81 @@ class TestMaskContactNeighborhoodWithIntensity:
             vals = dfA_out[f"contact_{ch}_mean"].dropna()
             assert np.all(vals >= 0.0)
             assert np.all(vals <= 1.0)
+
+
+# ---------------------------------------------------------------------------
+# _measure_contact_site_intensity (pair-table helper)
+# ---------------------------------------------------------------------------
+
+class TestMeasureContactSiteIntensity:
+    """Tests for the pair-table contact intensity helper in relative_measurements."""
+
+    def setup_method(self):
+        size = 60
+        rng = np.random.default_rng(7)
+        lA, lB = make_adjacent_labels(size)
+        self.lA = lA
+        self.lB = lB
+        # Two channels: first channel bright on left half, second on right
+        self.img = np.stack(
+            [rng.uniform(0.8, 1.0, (size, size)),  # bright everywhere
+             rng.uniform(0.0, 0.2, (size, size))],  # dim everywhere
+            axis=-1,
+        ).astype(np.float32)
+        self.channel_names = ["bright", "dim"]
+
+    def test_returns_all_stat_keys(self):
+        result = _measure_contact_site_intensity(
+            self.lA, self.lB, 1, 2, self.img, self.channel_names, border=3
+        )
+        for ch in self.channel_names:
+            for stat in ("mean", "max", "std"):
+                assert f"contact_{ch}_{stat}" in result, f"Missing key contact_{ch}_{stat}"
+
+    def test_adjacent_cells_give_finite_values(self):
+        result = _measure_contact_site_intensity(
+            self.lA, self.lB, 1, 2, self.img, self.channel_names, border=3
+        )
+        for ch in self.channel_names:
+            assert np.isfinite(result[f"contact_{ch}_mean"])
+            assert np.isfinite(result[f"contact_{ch}_max"])
+            assert np.isfinite(result[f"contact_{ch}_std"])
+
+    def test_distant_cells_give_nan(self):
+        lA, lB = make_adjacent_labels(60, gap=20)  # 20-px gap
+        result = _measure_contact_site_intensity(
+            lA, lB, 1, 2, self.img, self.channel_names, border=3
+        )
+        for ch in self.channel_names:
+            assert np.isnan(result[f"contact_{ch}_mean"])
+
+    def test_mean_leq_max(self):
+        result = _measure_contact_site_intensity(
+            self.lA, self.lB, 1, 2, self.img, self.channel_names, border=5
+        )
+        for ch in self.channel_names:
+            assert result[f"contact_{ch}_mean"] <= result[f"contact_{ch}_max"]
+
+    def test_std_nonnegative(self):
+        result = _measure_contact_site_intensity(
+            self.lA, self.lB, 1, 2, self.img, self.channel_names, border=5
+        )
+        for ch in self.channel_names:
+            assert result[f"contact_{ch}_std"] >= 0.0
+
+    def test_none_labelsB_uses_labelsA(self):
+        """Self-contact: labelsB=None should fall back to labelsA without error."""
+        result = _measure_contact_site_intensity(
+            self.lA, None, 1, 2, self.img, self.channel_names, border=3
+        )
+        # With the same label image for both, result may be NaN (cell 2 not in lA),
+        # but the function must not raise
+        assert isinstance(result, dict)
+        assert len(result) == len(self.channel_names) * 3
+
+    def test_bright_channel_mean_higher(self):
+        """The 'bright' channel contact mean should exceed the 'dim' channel mean."""
+        result = _measure_contact_site_intensity(
+            self.lA, self.lB, 1, 2, self.img, self.channel_names, border=5
+        )
+        assert result["contact_bright_mean"] > result["contact_dim_mean"]

@@ -166,6 +166,14 @@ class TestGetExtraPropertiesFunctions:
 class TestFeatureChoiceWidget:
     """Tests for the FeatureChoice combo-box widget."""
 
+    @pytest.fixture(autouse=True)
+    def reset_cache(self):
+        """Ensure the extra-properties cache is cleared before each test."""
+        import celldetective.gui.base.feature_choice as fc
+        fc.CACHED_EXTRA_PROPERTIES = None
+        yield
+        fc.CACHED_EXTRA_PROPERTIES = None
+
     @pytest.fixture
     def feature_choice(self, qtbot):
         # FeatureChoice requires a parent with a list_widget attribute.

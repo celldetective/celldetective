@@ -257,6 +257,14 @@ class TestListWidget:
 class TestFeatureChoice:
     """Tests for FeatureChoice."""
 
+    @pytest.fixture(autouse=True)
+    def restore_cache(self):
+        """Restore the module-level cache after each test so other tests are not polluted."""
+        import celldetective.gui.base.feature_choice as fc
+        original = fc.CACHED_EXTRA_PROPERTIES
+        yield
+        fc.CACHED_EXTRA_PROPERTIES = original
+
     @patch("celldetective.gui.base.feature_choice.get_extra_properties_functions")
     def test_initialization(self, mock_extras, qtbot):
         """Test FeatureChoice populates standard measurements."""

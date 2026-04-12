@@ -22,12 +22,14 @@ Input
 Requires pre-computed tracking tables (`pkl` or `csv`) containing neighborhood information columns.
 """
 
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Dict
 
 import pandas as pd
 import numpy as np
 from celldetective.utils.maths import derivative
 from celldetective.utils.data_cleaning import extract_identity_col
+from celldetective.utils.image_loaders import locate_labels, locate_stack
+from celldetective.neighborhood import _contact_site_mask
 import os
 import subprocess
 import sys
@@ -398,6 +400,64 @@ def measure_pairs(pos: str, neighborhood_protocol: dict) -> Optional[pd.DataFram
     return df_pairs
 
 
+def _measure_contact_site_intensity(
+    labelsA_t: np.ndarray,
+    labelsB_t: Optional[np.ndarray],
+    ref_class_id: int,
+    neigh_class_id: int,
+    intensity_t: np.ndarray,
+    channel_names: List[str],
+    border: int = 3,
+) -> Dict[str, float]:
+    """
+    Compute contact-zone intensity statistics for one pair at one timepoint.
+
+    Parameters
+    ----------
+    labelsA_t : ndarray, shape (H, W)
+        Label image for population A at this timepoint.
+    labelsB_t : ndarray or None, shape (H, W)
+        Label image for population B at this timepoint. If None (self-contact),
+        labelsA_t is used for both populations.
+    ref_class_id : int
+        Label value of the reference cell in labelsA_t.
+    neigh_class_id : int
+        Label value of the neighbor cell in labelsB_t.
+    intensity_t : ndarray, shape (H, W, C)
+        Multi-channel intensity image at this timepoint.
+    channel_names : list of str
+        Names of the C channels in intensity_t.
+    border : int
+        Dilation radius (pixels) used to define the contact zone.
+
+    Returns
+    -------
+    dict
+        Keys ``contact_{ch}_mean``, ``contact_{ch}_max``, ``contact_{ch}_std``
+        for each channel.  Values are NaN when the contact zone is empty.
+    """
+    if labelsB_t is None:
+        labelsB_t = labelsA_t
+
+    result: Dict[str, float] = {}
+    try:
+        zone = _contact_site_mask(labelsA_t, labelsB_t, ref_class_id, neigh_class_id, border)
+    except Exception:
+        zone = np.zeros_like(labelsA_t, dtype=bool)
+
+    for ch_idx, ch_name in enumerate(channel_names):
+        if not np.any(zone) or intensity_t.ndim < 3 or ch_idx >= intensity_t.shape[2]:
+            result[f"contact_{ch_name}_mean"] = np.nan
+            result[f"contact_{ch_name}_max"] = np.nan
+            result[f"contact_{ch_name}_std"] = np.nan
+        else:
+            pixels = intensity_t[:, :, ch_idx][zone].astype(float)
+            result[f"contact_{ch_name}_mean"] = float(np.mean(pixels))
+            result[f"contact_{ch_name}_max"] = float(np.max(pixels))
+            result[f"contact_{ch_name}_std"] = float(np.std(pixels))
+    return result
+
+
 def measure_pair_signals_at_position(
     pos: str,
     neighborhood_protocol: dict,
@@ -457,6 +517,36 @@ def measure_pair_signals_at_position(
     else:
         logger.error("ID or TRACK ID column could not be found in neighbor table. Abort.")
         return None
+
+    # --- Contact-site intensity setup (mask_contact neighborhoods only) -------
+    channel_names = neighborhood_protocol.get("channel_names")
+    contact_border = int(neighborhood_protocol.get("contact_border", 3))
+    labelsA_all = None
+    labelsB_all = None
+    intensity_stack = None  # list of (H, W, C) arrays, one per frame
+
+    if channel_names:
+        try:
+            labelsA_all = locate_labels(pos, population=reference_population)
+            if neighbor_population != reference_population:
+                labelsB_all = locate_labels(pos, population=neighbor_population)
+            raw_stack = locate_stack(pos)  # (T, H, W, C)
+            if raw_stack is not None:
+                intensity_stack = [raw_stack[t] for t in range(raw_stack.shape[0])]
+        except Exception as e:
+            logger.warning(f"Could not load labels/stack for contact-site intensity: {e}")
+            channel_names = None  # disable gracefully
+
+    # Build fast lookup: (track_id, frame) -> class_id for both populations
+    ref_class_lookup: Dict[Tuple, int] = {}
+    neigh_class_lookup: Dict[Tuple, int] = {}
+    if channel_names and "class_id" in df_reference.columns:
+        for _, row in df_reference[["FRAME", ref_id_col, "class_id"]].iterrows():
+            ref_class_lookup[(row[ref_id_col], int(row["FRAME"]))] = int(row["class_id"])
+    if channel_names and "class_id" in df_neighbor.columns:
+        for _, row in df_neighbor[["FRAME", neigh_id_col, "class_id"]].iterrows():
+            neigh_class_lookup[(row[neigh_id_col], int(row["FRAME"]))] = int(row["class_id"])
+    # -------------------------------------------------------------------------
 
     relative_measurements: list = []
 
@@ -580,6 +670,21 @@ def measure_pair_signals_at_position(
                         dot_product_vector,
                         cosine_dot_vector,
                     )
+
+                    # Contact-site intensity (mask_contact only, cells in contact)
+                    if channel_names and in_neighborhood and intensity_stack is not None:
+                        lA_t = labelsA_all[t] if labelsA_all is not None and t < len(labelsA_all) else None
+                        lB_t = labelsB_all[t] if labelsB_all is not None and t < len(labelsB_all) else lA_t
+                        img_t = intensity_stack[t] if t < len(intensity_stack) else None
+                        ref_cid = ref_class_lookup.get((tid, t))
+                        neigh_cid = neigh_class_lookup.get((nc, t))
+                        if lA_t is not None and img_t is not None and ref_cid is not None and neigh_cid is not None:
+                            contact_stats = _measure_contact_site_intensity(
+                                lA_t, lB_t, ref_cid, neigh_cid,
+                                img_t, channel_names, contact_border,
+                            )
+                            row.update(contact_stats)
+
                     relative_measurements.append(row)
 
         return pd.DataFrame(relative_measurements)
