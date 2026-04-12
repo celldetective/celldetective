@@ -1841,7 +1841,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
 
         # self.configure_ylims()
         if len(range_values) > 0:
-            range_values = np.array(range_values)
+            range_values = np.array(pd.to_numeric(range_values, errors='coerce'), dtype=float)
             if len(range_values[range_values == range_values]) > 0:
                 if len(range_values[range_values > 0]) > 0:
                     self.value_magnitude = np.nanpercentile(range_values, 1)

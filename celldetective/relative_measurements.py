@@ -72,6 +72,7 @@ def _build_neighbor_timeline(
 ) -> Tuple[list, list, pd.DataFrame, dict]:
     """Build per-frame neighbor ID lists and intersection values for one reference cell."""
     neighbor_dicts = group.loc[:, f"{neighborhood_description}"].values
+    frames = group["FRAME"].values
 
     neighbor_ids: list = []
     neighbor_ids_per_t: list = []
@@ -80,14 +81,15 @@ def _build_neighbor_timeline(
 
     for t in range(len(group)):
         neighbors_at_t = neighbor_dicts[t]
+        frame_t = int(frames[t])
         neighs_t: list = []
         if not (isinstance(neighbors_at_t, float) or neighbors_at_t != neighbors_at_t):
             for neigh in neighbors_at_t:
                 if neigh["id"] not in neighbor_ids:
-                    time_of_first_entrance[neigh["id"]] = t
+                    time_of_first_entrance[neigh["id"]] = frame_t
                 intersection_rows.append(
                     {
-                        "frame": t,
+                        "frame": frame_t,
                         "neigh_id": neigh["id"],
                         "intersection": neigh.get("intersection", np.nan),
                     }
