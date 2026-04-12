@@ -100,15 +100,15 @@ def _build_neighbor_timeline(
 def _compute_pair_geometry(
     coords_reference: np.ndarray,
     coords_neighbor: np.ndarray,
-    coords_centre_of_mass: list,
-    centre_of_mass_columns: list,
+    coords_center_of_mass: list,
+    center_of_mass_columns: list,
     timeline_reference: np.ndarray,
     timeline_neighbor: np.ndarray,
     full_timeline: np.ndarray,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Compute relative position vectors, angles, distances, and dot products over time."""
     n = len(full_timeline)
-    n_com = len(centre_of_mass_columns)
+    n_com = len(center_of_mass_columns)
 
     neighbor_vector = np.full((n, 2), np.nan)
     mass_displacement_vector = np.full((n_com, n, 2), np.nan)
@@ -128,10 +128,10 @@ def _compute_pair_geometry(
 
             for z in range(n_com):
                 mass_displacement_vector[z, t, 0] = (
-                    coords_centre_of_mass[z][idx_neigh, 0] - coords_neighbor[idx_neigh, 0]
+                    coords_center_of_mass[z][idx_neigh, 0] - coords_neighbor[idx_neigh, 0]
                 )
                 mass_displacement_vector[z, t, 1] = (
-                    coords_centre_of_mass[z][idx_neigh, 1] - coords_neighbor[idx_neigh, 1]
+                    coords_center_of_mass[z][idx_neigh, 1] - coords_neighbor[idx_neigh, 1]
                 )
                 dot_product_vector[z, t] = np.dot(
                     mass_displacement_vector[z, t], -neighbor_vector[t]
@@ -196,7 +196,7 @@ def _build_pair_row(
     time_of_first_entrance: dict,
     ref_tracked: bool,
     neigh_tracked: bool,
-    centre_of_mass_labels: list,
+    center_of_mass_labels: list,
     dot_product_vector: np.ndarray,
     cosine_dot_vector: np.ndarray,
 ) -> dict:
@@ -223,9 +223,9 @@ def _build_pair_row(
         "reference_tracked": ref_tracked,
         "neighbors_tracked": neigh_tracked,
     }
-    for z, lbl in enumerate(centre_of_mass_labels):
-        row[lbl + "_centre_of_mass_dot_product"] = dot_product_vector[z, t]
-        row[lbl + "_centre_of_mass_dot_cosine"] = cosine_dot_vector[z, t]
+    for z, lbl in enumerate(center_of_mass_labels):
+        row[lbl + "_center_of_mass_dot_product"] = dot_product_vector[z, t]
+        row[lbl + "_center_of_mass_dot_cosine"] = cosine_dot_vector[z, t]
     return row
 
 
@@ -276,15 +276,15 @@ def measure_pairs(pos: str, neighborhood_protocol: dict) -> Optional[pd.DataFram
     elif neigh_id_col == "TRACK_ID":
         neigh_tracked = True
 
-    centre_of_mass_columns = [
+    center_of_mass_columns = [
         (c, c.replace("POSITION_X", "POSITION_Y"))
         for c in list(df_neighbor.columns)
-        if c.endswith("centre_of_mass_POSITION_X")
+        if c.endswith("center_of_mass_POSITION_X")
     ]
-    centre_of_mass_labels = [
-        c.replace("_centre_of_mass_POSITION_X", "")
+    center_of_mass_labels = [
+        c.replace("_center_of_mass_POSITION_X", "")
         for c in list(df_neighbor.columns)
-        if c.endswith("centre_of_mass_POSITION_X")
+        if c.endswith("center_of_mass_POSITION_X")
     ]
 
     for t in np.unique(
@@ -315,18 +315,18 @@ def measure_pairs(pos: str, neighborhood_protocol: dict) -> Optional[pd.DataFram
 
                 neighbor_vector = np.zeros(2)
                 neighbor_vector[:] = np.nan
-                mass_displacement_vector = np.zeros((len(centre_of_mass_columns), 2))
+                mass_displacement_vector = np.zeros((len(center_of_mass_columns), 2))
 
-                coords_centre_of_mass = []
-                for col in centre_of_mass_columns:
-                    coords_centre_of_mass.append(
+                coords_center_of_mass = []
+                for col in center_of_mass_columns:
+                    coords_center_of_mass.append(
                         group_neigh[[col[0], col[1]]].to_numpy()[0]
                     )
 
-                dot_product_vector = np.zeros((len(centre_of_mass_columns)))
+                dot_product_vector = np.zeros((len(center_of_mass_columns)))
                 dot_product_vector[:] = np.nan
 
-                cosine_dot_vector = np.zeros((len(centre_of_mass_columns)))
+                cosine_dot_vector = np.zeros((len(center_of_mass_columns)))
                 cosine_dot_vector[:] = np.nan
 
                 coords_neighbor = group_neigh[["POSITION_X", "POSITION_Y"]].to_numpy()[
@@ -348,13 +348,13 @@ def measure_pairs(pos: str, neighborhood_protocol: dict) -> Optional[pd.DataFram
                         neighbor_vector[0] ** 2 + neighbor_vector[1] ** 2
                     )
 
-                    for z, cols in enumerate(centre_of_mass_columns):
+                    for z, cols in enumerate(center_of_mass_columns):
 
                         mass_displacement_vector[z, 0] = (
-                            coords_centre_of_mass[z][0] - coords_neighbor[0]
+                            coords_center_of_mass[z][0] - coords_neighbor[0]
                         )
                         mass_displacement_vector[z, 1] = (
-                            coords_centre_of_mass[z][1] - coords_neighbor[1]
+                            coords_center_of_mass[z][1] - coords_neighbor[1]
                         )
 
                         dot_product_vector[z] = np.dot(
@@ -383,13 +383,13 @@ def measure_pairs(pos: str, neighborhood_protocol: dict) -> Optional[pd.DataFram
                             "neighbors_tracked": neigh_tracked,
                         }
                     )
-                    for z, lbl in enumerate(centre_of_mass_labels):
+                    for z, lbl in enumerate(center_of_mass_labels):
                         relative_measurements[-1].update(
                             {
                                 lbl
-                                + "_centre_of_mass_dot_product": dot_product_vector[z],
+                                + "_center_of_mass_dot_product": dot_product_vector[z],
                                 lbl
-                                + "_centre_of_mass_dot_cosine": cosine_dot_vector[z],
+                                + "_center_of_mass_dot_cosine": cosine_dot_vector[z],
                             }
                         )
 
@@ -480,15 +480,15 @@ def measure_pair_signals_at_position(
 
             neighbor_properties = df_neighbor.loc[df_neighbor[neigh_id_col].isin(unique_neigh)]
 
-            centre_of_mass_columns = [
+            center_of_mass_columns = [
                 (c, c.replace("POSITION_X", "POSITION_Y"))
                 for c in neighbor_properties.columns
-                if c.endswith("centre_of_mass_POSITION_X")
+                if c.endswith("center_of_mass_POSITION_X")
             ]
-            centre_of_mass_labels = [
-                c.replace("_centre_of_mass_POSITION_X", "")
+            center_of_mass_labels = [
+                c.replace("_center_of_mass_POSITION_X", "")
                 for c in neighbor_properties.columns
-                if c.endswith("centre_of_mass_POSITION_X")
+                if c.endswith("center_of_mass_POSITION_X")
             ]
 
             for nc, group_neigh in neighbor_properties.groupby(neigh_id_col):
@@ -500,8 +500,8 @@ def measure_pair_signals_at_position(
                     if "area" in group_neigh.columns
                     else [np.nan] * len(timeline_neighbor)
                 )
-                coords_centre_of_mass = [
-                    group_neigh[[col[0], col[1]]].to_numpy() for col in centre_of_mass_columns
+                coords_center_of_mass = [
+                    group_neigh[[col[0], col[1]]].to_numpy() for col in center_of_mass_columns
                 ]
 
                 full_timeline, _, _ = timeline_matching(timeline_reference, timeline_neighbor)
@@ -510,8 +510,8 @@ def measure_pair_signals_at_position(
                     _compute_pair_geometry(
                         coords_reference,
                         coords_neighbor,
-                        coords_centre_of_mass,
-                        centre_of_mass_columns,
+                        coords_center_of_mass,
+                        center_of_mass_columns,
                         timeline_reference,
                         timeline_neighbor,
                         full_timeline,
@@ -576,7 +576,7 @@ def measure_pair_signals_at_position(
                         time_of_first_entrance,
                         ref_tracked,
                         neigh_tracked,
-                        centre_of_mass_labels,
+                        center_of_mass_labels,
                         dot_product_vector,
                         cosine_dot_vector,
                     )

@@ -15,6 +15,7 @@ from celldetective.utils.experiment import extract_experiment_channels
 from celldetective.utils.parsing import config_section_to_dict
 from celldetective.utils.data_cleaning import (
     _extract_coordinates_from_features,
+    _remove_invalid_cols,
     remove_trajectory_measurements,
 )
 from glob import glob
@@ -597,8 +598,7 @@ class MeasurementProcess(Process):
                 df = df.sort_values(by=[self.column_labels["time"], "ID"])
 
             df = df.reset_index(drop=True)
-            # df = _remove_invalid_cols(df)
-            logger.info(f"Final columns before export: {df.columns.tolist()}")
+            df = _remove_invalid_cols(df)
             df = df.replace([np.inf, -np.inf], np.nan)
 
             df.to_csv(

@@ -271,24 +271,6 @@ def measure(
                 )
                 positions_at_t["FRAME"] = int(t)
 
-        center_of_mass_x_cols = [
-            c for c in list(positions_at_t.columns) if c.endswith("center_of_mass_dx")
-        ]
-        center_of_mass_y_cols = [
-            c for c in list(positions_at_t.columns) if c.endswith("center_of_mass_dy")
-        ]
-        for c in center_of_mass_x_cols:
-            positions_at_t.loc[:, c.replace("_dx", "_POSITION_X")] = (
-                positions_at_t[c] + positions_at_t["POSITION_X"]
-            )
-        for c in center_of_mass_y_cols:
-            positions_at_t.loc[:, c.replace("_dy", "_POSITION_Y")] = (
-                positions_at_t[c] + positions_at_t["POSITION_Y"]
-            )
-        positions_at_t = positions_at_t.drop(
-            columns=center_of_mass_x_cols + center_of_mass_y_cols
-        )
-
         # Isotropic measurements (circle, ring)
         if do_iso_intensities:
             iso_table = measure_isotropic_intensity(
@@ -314,13 +296,10 @@ def measure(
         elif do_features and trajectories is None:
             measurements_at_t = positions_at_t
 
-        try:
-            measurements_at_t["radial_distance"] = np.sqrt(
-                (measurements_at_t[column_labels["x"]] - img.shape[0] / 2) ** 2
-                + (measurements_at_t[column_labels["y"]] - img.shape[1] / 2) ** 2
-            )
-        except Exception as e:
-            logger.error(f"{e}")
+        measurements_at_t = center_of_mass_to_abs_coordinates(measurements_at_t)
+        measurements_at_t = measure_radial_distance_to_center(
+            measurements_at_t, volume=img.shape if img is not None else None, column_labels=column_labels
+        )
 
         timestep_dataframes.append(measurements_at_t)
 
@@ -665,6 +644,12 @@ def measure_features(
     )
 
     df_props = pd.DataFrame(props)
+
+    if spot_detection is not None and df_spots is None:
+        logger.warning(
+            "Spot detection was configured but returned no results (channel not found or detection failed). "
+            "Spot columns will be absent from the output."
+        )
 
     if spot_detection is not None and df_spots is not None:
         df_props = df_props.merge(

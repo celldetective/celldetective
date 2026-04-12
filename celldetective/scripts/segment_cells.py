@@ -172,7 +172,7 @@ os.mkdir(pos + label_folder)
 logger.info("Labels folder successfully generated...")
 
 log = f"segmentation model: {modelname}\n"
-with open(pos + f"log_{mode}.json", "a") as f:
+with open(pos + f"log_{mode}.txt", "a") as f:
     f.write(f"{datetime.datetime.now()} SEGMENT \n")
     f.write(log)
 

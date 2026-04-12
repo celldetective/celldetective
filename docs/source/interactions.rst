@@ -22,7 +22,7 @@ Neighborhood analysis quantifies the spatial relationships between two cell popu
 Pair measurements
 -----------------
 
-If the **MEASURE PAIRS** option is selected, all computed neighborhoods are detected automatically from the pickle files for both target and effector cell populations. All pairs existing at least once, at one timepoint, are identified. The complete signals (before/after entering the neighborhood) are recovered for the two cells of interest. Several quantities are computed (relative distance, velocity, angle, angular velocity, in-neighborhood or not). 
+If the **MEASURE PAIRS** option is selected, all computed neighborhoods are detected automatically from the pickle files for all configured cell populations. All pairs existing at least once, at one timepoint, are identified. The complete signals (before/after entering the neighborhood) are recovered for the two cells of interest. Several quantities are computed (relative distance, velocity, angle, angular velocity, in-neighborhood or not). 
 
 If the center of mass displacements were computed for the neighbor population, an additional pair measurement computed automatically is the scalar product between the center of mass displacement vector on the neighbor cell and the cell-pair vector, as well as the cosine of the angle between the two vectors. 
 

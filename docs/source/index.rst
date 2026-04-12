@@ -73,6 +73,7 @@ Check the :doc:`overview <overview>` for more general information or :doc:`get s
    reference/file-formats
    reference/menus
    reference/measurements
+   reference/regionprops
    reference/glossary
    API
 

@@ -210,6 +210,14 @@ else:
     features += ["centroid"]
     do_iso_intensities = False
 
+if trajectories is None:
+    column_labels = {
+        "track": "ID",
+        "time": column_labels["time"],
+        "x": column_labels["x"],
+        "y": column_labels["y"],
+    }
+
 
 len_movie_auto = auto_load_number_of_frames(file)
 if len_movie_auto is not None:
@@ -272,7 +280,7 @@ log = "\n".join(
         isotropic_options_log,
     ]
 )
-with open(pos + f"log_{mode}.json", "a") as f:
+with open(pos + f"log_{mode}.txt", "a") as f:
     f.write(f"{datetime.datetime.now()} MEASURE \n")
     f.write(log + "\n")
 
@@ -328,12 +336,6 @@ def measure_index(indices: List[int]) -> None:
                 positions_at_t = _extract_coordinates_from_features(
                     feature_table, timepoint=t
                 )
-                column_labels = {
-                    "track": "ID",
-                    "time": column_labels["time"],
-                    "x": column_labels["x"],
-                    "y": column_labels["y"],
-                }
             feature_table.rename(
                 columns={"centroid-1": "POSITION_X", "centroid-0": "POSITION_Y"},
                 inplace=True,

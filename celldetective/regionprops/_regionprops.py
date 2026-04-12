@@ -151,6 +151,10 @@ class CustomRegionProps(RegionProperties):
                             self.channel_names is not None
                             and "target_channel" in arg_dict
                         ):
+                            # Channel-specific function: read the DEFAULT value of
+                            # `target_channel` via inspect.signature to find which
+                            # channel to run on.  The function is called once for
+                            # that channel only; all other slots stay NaN.
                             multichannel_list = [
                                 np.nan for i in range(self.image_intensity.shape[-1])
                             ]

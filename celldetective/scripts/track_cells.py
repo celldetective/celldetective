@@ -193,7 +193,7 @@ log_list = [
 ]
 log = "\n".join(log_list)
 
-with open(pos + f"log_{mode}.json", "a") as f:
+with open(pos + f"log_{mode}.txt", "a") as f:
     f.write(f"{datetime.datetime.now()} TRACK \n")
     f.write(log + "\n")
 
