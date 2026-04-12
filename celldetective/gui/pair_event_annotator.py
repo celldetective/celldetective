@@ -2781,6 +2781,15 @@ class PairEventAnnotator(CelldetectiveMainWindow):
                     logger.warning(f"Failed to find closest marker: {e}")
             else:
                 self.index = None
+        else:
+            # Pair midpoint marker clicked: update self.index from this event
+            # so it is valid for the self.points scatter (which may be small).
+            if len(ind) == 1:
+                self.index = ind[0]
+            elif len(ind) > 1:
+                self.index = ind[0]
+            else:
+                self.index = None
 
     def show_annotation_buttons(self):
         """Show annotation buttons."""
