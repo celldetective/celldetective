@@ -224,8 +224,8 @@ def analyze_signals(
                 status[:] = 2
             if cclass > 2:
                 status[:] = 42
-            status_color = [list(color_from_status(s)) for s in status]
-            class_color = [list(color_from_class(cclass)) for i in range(len(status))]
+            status_color = [color_from_status(s) for s in status]
+            class_color = [color_from_class(cclass)] * len(status)
 
             trajectories.loc[indices, status_col] = status
             trajectories.loc[indices, "status_color"] = pd.Series(status_color, index=indices)
