@@ -119,11 +119,11 @@ def _compute_pair_geometry(
     dot_product_vector = np.full((n_com, n), np.nan)
     cosine_dot_vector = np.full((n_com, n), np.nan)
 
-    ref_idx_map = {frame: i for i, frame in enumerate(timeline_reference)}
-    neigh_idx_map = {frame: i for i, frame in enumerate(timeline_neighbor)}
+    ref_idx_map = {int(frame): i for i, frame in enumerate(timeline_reference)}
+    neigh_idx_map = {int(frame): i for i, frame in enumerate(timeline_neighbor)}
 
     for t_idx in range(n):
-        frame = full_timeline[t_idx]
+        frame = int(full_timeline[t_idx])
         if frame in ref_idx_map and frame in neigh_idx_map:
             idx_ref = ref_idx_map[frame]
             idx_neigh = neigh_idx_map[frame]
@@ -316,9 +316,11 @@ def measure_pairs(pos: str, neighborhood_protocol: dict) -> Optional[pd.DataFram
             coords_reference = group[["POSITION_X", "POSITION_Y"]].to_numpy()[0]
 
             neighbors = []
+            neighbors_info = {}
             if not (isinstance(neighborhood, float) or neighborhood != neighborhood):
                 for neigh in neighborhood:
                     neighbors.append(neigh["id"])
+                    neighbors_info[neigh["id"]] = neigh.get("intersection", np.nan)
 
             unique_neigh = list(np.unique(neighbors))
             logger.debug(f"unique_neigh={unique_neigh}")
@@ -348,9 +350,7 @@ def measure_pairs(pos: str, neighborhood_protocol: dict) -> Optional[pd.DataFram
                 coords_neighbor = group_neigh[["POSITION_X", "POSITION_Y"]].to_numpy()[
                     0
                 ]
-                intersection = np.nan
-                if "intersection" in list(group_neigh.columns):
-                    intersection = group_neigh["intersection"].values[0]
+                intersection = neighbors_info.get(nc, np.nan)
 
                 neighbor_vector[0] = coords_neighbor[0] - coords_reference[0]
                 neighbor_vector[1] = coords_neighbor[1] - coords_reference[1]
@@ -874,7 +874,8 @@ def update_effector_table(
         Updated effector DataFrame with 'group_neighborhood' column.
     """
     df_effector["group_neighborhood"] = 1
-    effectors = np.unique(df_relative["EFFECTOR_ID"].to_numpy())
+    col = "EFFECTOR_ID" if "EFFECTOR_ID" in df_relative.columns else "NEIGHBOR_ID"
+    effectors = np.unique(df_relative[col].to_numpy())
     for effector in effectors:
         try:
             # Set group_neighborhood to 0 where TRACK_ID matches effector
@@ -934,9 +935,16 @@ def extract_neighborhoods_from_pickles(
     neighborhood_protocols = []
 
     for pop in populations:
-        tab_pop = pos + os.sep.join(["output", "tables", f"trajectories_{pop}.pkl"])
-        if os.path.exists(tab_pop):
-            df_pop = pd.read_pickle(tab_pop)
+        tab_pop_pkl = pos + os.sep.join(["output", "tables", f"trajectories_{pop}.pkl"])
+        tab_pop_csv = tab_pop_pkl.replace(".pkl", ".csv")
+        df_pop = None
+
+        if os.path.exists(tab_pop_pkl):
+            df_pop = pd.read_pickle(tab_pop_pkl)
+        elif os.path.exists(tab_pop_csv):
+            df_pop = pd.read_csv(tab_pop_csv)
+
+        if df_pop is not None:
             for column in list(df_pop.columns):
                 if column.startswith("neighborhood"):
                     neigh_protocol = extract_neighborhood_settings(
@@ -1140,15 +1148,22 @@ def expand_pair_table(data: pd.DataFrame) -> pd.DataFrame:
 
         for pos, pos_group in group.groupby("position"):
 
-            ref_tab = os.sep.join(
+            ref_tab_csv = os.sep.join(
                 [pos, "output", "tables", f"trajectories_{ref_pop}.csv"]
             )
-            neigh_tab = os.sep.join(
+            ref_tab_pkl = ref_tab_csv.replace(".csv", ".pkl")
+            neigh_tab_csv = os.sep.join(
                 [pos, "output", "tables", f"trajectories_{neigh_pop}.csv"]
             )
+            neigh_tab_pkl = neigh_tab_csv.replace(".csv", ".pkl")
 
-            if os.path.exists(ref_tab):
-                df_ref = pd.read_csv(ref_tab)
+            df_ref = None
+            if os.path.exists(ref_tab_pkl):
+                df_ref = pd.read_pickle(ref_tab_pkl)
+            elif os.path.exists(ref_tab_csv):
+                df_ref = pd.read_csv(ref_tab_csv)
+                
+            if df_ref is not None:
                 if "TRACK_ID" in df_ref.columns:
                     if not np.all(df_ref["TRACK_ID"].isnull()):
                         ref_merge_cols = ["TRACK_ID", "FRAME"]
@@ -1157,8 +1172,13 @@ def expand_pair_table(data: pd.DataFrame) -> pd.DataFrame:
                 else:
                     ref_merge_cols = ["ID", "FRAME"]
 
-            if os.path.exists(neigh_tab):
-                df_neigh = pd.read_csv(neigh_tab)
+            df_neigh = None
+            if os.path.exists(neigh_tab_pkl):
+                df_neigh = pd.read_pickle(neigh_tab_pkl)
+            elif os.path.exists(neigh_tab_csv):
+                df_neigh = pd.read_csv(neigh_tab_csv)
+                
+            if df_neigh is not None:
                 if "TRACK_ID" in df_neigh.columns:
                     if not np.all(df_neigh["TRACK_ID"].isnull()):
                         neigh_merge_cols = ["TRACK_ID", "FRAME"]
@@ -1166,6 +1186,9 @@ def expand_pair_table(data: pd.DataFrame) -> pd.DataFrame:
                         neigh_merge_cols = ["ID", "FRAME"]
                 else:
                     neigh_merge_cols = ["ID", "FRAME"]
+
+            if df_ref is None or df_neigh is None:
+                continue
 
             df_ref = df_ref.add_prefix("reference_", axis=1)
             df_neigh = df_neigh.add_prefix("neighbor_", axis=1)
@@ -1188,6 +1211,8 @@ def expand_pair_table(data: pd.DataFrame) -> pd.DataFrame:
             )
             expanded_table.append(merge_neigh)
 
+    if not expanded_table:
+        return data
     df_expanded = pd.concat(expanded_table, axis=0, ignore_index=True)
     df_expanded = df_expanded.sort_values(
         by=[

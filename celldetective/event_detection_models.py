@@ -966,14 +966,17 @@ class SignalDetectionModel(object):
             for k in range(x_set.shape[-1]):
                 x = x_set[i, :, k]
                 not_nan = np.logical_not(np.isnan(x))
-                indices = np.arange(len(x))
-                interp = interp1d(
-                    indices[not_nan],
-                    x[not_nan],
-                    fill_value=(0.0, 0.0),
-                    bounds_error=False,
-                )
-                x_set[i, :, k] = interp(indices)
+                if np.sum(not_nan) > 1:
+                    indices = np.arange(len(x))
+                    interp = interp1d(
+                        indices[not_nan],
+                        x[not_nan],
+                        fill_value=(0.0, 0.0),
+                        bounds_error=False,
+                    )
+                    x_set[i, :, k] = interp(indices)
+                else:
+                    x_set[i, :, k] = np.nan_to_num(x, nan=0.0)
         return x_set
 
     def _compile_classifier(self) -> None:
@@ -1047,6 +1050,8 @@ class SignalDetectionModel(object):
         mae_fn = MeanAbsoluteError()
 
         mask = np.argmax(y_class, axis=1) == 0
+        if not np.any(mask):
+            return {}
         predictions = self.model_reg.predict(x[mask], batch_size=self.batch_size)[:, 0]
         ground_truth = y_time[mask]
 
@@ -1099,6 +1104,8 @@ class SignalDetectionModel(object):
         dict
             Scores dictionary suitable for merging into ``self.dico``.
         """
+        if len(x) == 0:
+            return {}
         predictions = self.model_class.predict(x).argmax(axis=1)
         ground_truth = y_class.argmax(axis=1)
         if predictions.shape != ground_truth.shape:
@@ -1272,21 +1279,23 @@ class SignalDetectionModel(object):
         # Train on subset of data with event
 
         subset = self.x_train[np.argmax(self.y_class_train, axis=1) == 0]
-        # for i in range(30):
-        # 	plt.plot(subset[i,:,0],c="tab:red")
-        # 	plt.plot(subset[i,:,1],c="tab:blue")
-        # 	plt.show()
 
+        val_data = None
         if hasattr(self, "x_val"):
+            val_mask = np.argmax(self.y_class_val, axis=1) == 0
+            if np.any(val_mask):
+                val_data = (
+                    self.x_val[val_mask],
+                    self.y_time_val[val_mask],
+                )
+
+        if val_data is not None:
             self.history_regressor = self.model_reg.fit(
                 x=self.x_train[np.argmax(self.y_class_train, axis=1) == 0],
                 y=self.y_time_train[np.argmax(self.y_class_train, axis=1) == 0],
                 batch_size=self.batch_size,
                 epochs=self.epochs * 2,
-                validation_data=(
-                    self.x_val[np.argmax(self.y_class_val, axis=1) == 0],
-                    self.y_time_val[np.argmax(self.y_class_val, axis=1) == 0],
-                ),
+                validation_data=val_data,
                 callbacks=self.cb,
                 verbose=1,
             )
@@ -1642,11 +1651,24 @@ class SignalDetectionModel(object):
         unique, counts = np.unique(
             self.y_class_train.argmax(axis=1), return_counts=True
         )
-        frac = counts / sum(counts)
-        weights = [frac[0] / f for f in frac]
-        weights[0] = weights[0] * 3
 
-        self.pre_augment_weights = weights / sum(weights)
+        class_counts = np.zeros(self.n_classes)
+        for c, count in zip(unique, counts):
+            class_counts[c] = count
+
+        sum_counts = max(1, sum(class_counts))
+        frac = class_counts / sum_counts
+
+        max_frac = max(frac) if max(frac) > 0 else 1.0
+        weights = np.zeros(self.n_classes)
+        for c in range(self.n_classes):
+             if frac[c] > 0:
+                 weights[c] = frac[0] / frac[c] if frac[0] > 0 else max_frac / frac[c]
+
+        weights[0] = weights[0] * 3
+        sum_weights = max(1e-9, sum(weights))
+        self.pre_augment_weights = weights / sum_weights
+
         weights_array = [
             self.pre_augment_weights[a.argmax()] for a in self.y_class_train
         ]
@@ -2360,18 +2382,25 @@ def normalize_signal_set(
         values = signal_set[:, :, k]
 
         if normalization_percentile[k]:
-            min_val = np.nanpercentile(
-                values[values != 0.0], normalization_values[k][0]
-            )
-            max_val = np.nanpercentile(
-                values[values != 0.0], normalization_values[k][1]
-            )
+            non_zero_values = values[values != 0.0]
+            if len(non_zero_values) > 0:
+                min_val = np.nanpercentile(
+                    non_zero_values, normalization_values[k][0]
+                )
+                max_val = np.nanpercentile(
+                    non_zero_values, normalization_values[k][1]
+                )
+            else:
+                min_val, max_val = 0.0, 1.0
         else:
             min_val = normalization_values[k][0]
             max_val = normalization_values[k][1]
 
         signal_set[:, :, k] -= min_val
-        signal_set[:, :, k] /= max_val - min_val
+        divisor = max_val - min_val
+        if divisor == 0:
+            divisor = 1.0
+        signal_set[:, :, k] /= divisor
 
         if normalization_clip[k]:
             signal_set[:, :, k] = np.clip(signal_set[:, :, k], 0.0, 1.0)

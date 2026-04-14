@@ -3135,8 +3135,20 @@ class PairEventAnnotator(CelldetectiveMainWindow):
             pair_selected = f"Pair: ({self.reference_track_of_interest},{self.neighbor_track_of_interest})\n"
             pair_populations = ""  # f"populations: ({self.reference_population}, {self.neighbor_population})\n"
             current_class = self.relative_class_choice_cb.currentText()
-            pair_class = f"Event class: {self.df_relative.loc[(self.df_relative['REFERENCE_ID']==self.reference_track_of_interest)&(self.df_relative['NEIGHBOR_ID']==self.neighbor_track_of_interest)&(self.df_relative['reference_population']==self.reference_population)&(self.df_relative['neighbor_population']==self.neighbor_population)&(~self.df_relative['status_'+self.current_neighborhood].isnull()), current_class].values[0]}\n"
-            pair_time = f"Time: {self.df_relative.loc[(self.df_relative['REFERENCE_ID']==self.reference_track_of_interest)&(self.df_relative['NEIGHBOR_ID']==self.neighbor_track_of_interest)&(self.df_relative['reference_population']==self.reference_population)&(self.df_relative['neighbor_population']==self.neighbor_population)&(~self.df_relative['status_'+self.current_neighborhood].isnull()), self.pair_time_name].values[0]}\n"
+            pair_filter = (
+                (self.df_relative["REFERENCE_ID"] == self.reference_track_of_interest)
+                & (self.df_relative["NEIGHBOR_ID"] == self.neighbor_track_of_interest)
+                & (self.df_relative["reference_population"] == self.reference_population)
+                & (self.df_relative["neighbor_population"] == self.neighbor_population)
+                & (~self.df_relative["status_" + self.current_neighborhood].isnull())
+            )
+            pair_subset = self.df_relative.loc[pair_filter]
+            if len(pair_subset) > 0:
+                pair_class = f"Event class: {pair_subset[current_class].values[0]}\n"
+                pair_time = f"Time: {pair_subset[self.pair_time_name].values[0]}\n"
+            else:
+                pair_class = "Event class: N/A\n"
+                pair_time = "Time: N/A\n"
             self.pair_info.setText(
                 pair_selected + pair_populations + pair_class + pair_time
             )

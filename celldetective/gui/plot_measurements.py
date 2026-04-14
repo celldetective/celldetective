@@ -739,6 +739,8 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
                         data = pd.read_csv(tab_tc)
                         data["position"] = pos_name
                     full_data.append(data)
+        if not full_data:
+            return None
         self.plot_data = pd.concat(full_data, ignore_index=True)
 
     def generate_synchronized_matrix(
@@ -1427,6 +1429,8 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
         logger.info("unselecting position")
         self.survival_window.canvas.clear()
         ind = event.ind  # index of selected position
+        if len(ind) == 0:
+            return
         well_idx = self.df_pos_info.iloc[ind]["well_index"].values[0]
         selectedPos = self.df_pos_info.iloc[ind]["pos_path"].values[0]
         currentSelState = self.df_pos_info.iloc[ind]["select"].values[0]

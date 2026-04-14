@@ -224,12 +224,12 @@ def analyze_signals(
                 status[:] = 2
             if cclass > 2:
                 status[:] = 42
-            status_color = [color_from_status(s) for s in status]
-            class_color = [color_from_class(cclass) for i in range(len(status))]
+            status_color = [list(color_from_status(s)) for s in status]
+            class_color = [list(color_from_class(cclass)) for i in range(len(status))]
 
             trajectories.loc[indices, status_col] = status
-            trajectories.loc[indices, "status_color"] = status_color
-            trajectories.loc[indices, "class_color"] = class_color
+            trajectories.loc[indices, "status_color"] = pd.Series(status_color, index=indices)
+            trajectories.loc[indices, "class_color"] = pd.Series(class_color, index=indices)
 
         if plot_outcome:
             fig, ax = plt.subplots(1, len(selected_signals), figsize=(10, 5))
@@ -386,6 +386,10 @@ def analyze_pair_signals_at_position(
     for pop in populations:
         dataframes.update({pop: get_position_pickle(pos, population=pop)})
     df_pairs = get_position_table(pos, population="pairs")
+    
+    if df_pairs is None:
+        logger.error(f"No tabulated data can be found for the pair population in {pos}... Abort...")
+        return None
 
     # Need to identify expected reference / neighbor tables
     complete_path, model_config_path = _resolve_signal_model_paths(model, pairs=True)
@@ -552,7 +556,14 @@ def analyze_pair_signals(
     )
     logger.debug(f"Pair table columns: {list(trajectories_pairs_clean.columns)}")
 
-    max_signal_size = int(trajectories_pairs_clean["pair_FRAME"].max()) + 2
+    max_pair = int(trajectories_pairs_clean["pair_FRAME"].max()) if len(trajectories_pairs_clean) > 0 else 0
+    max_ref = int(trajectories_reference_clean["reference_FRAME"].max()) if len(trajectories_reference_clean) > 0 else 0
+    max_neigh = int(trajectories_neighbors_clean["neighbor_FRAME"].max()) if len(trajectories_neighbors_clean) > 0 else 0
+    max_signal_size = max(max_pair, max_ref, max_neigh) + 2
+    model_signal_length = config.get("model_signal_length", max_signal_size)
+    if max_signal_size > model_signal_length:
+        raise ValueError(f"The current signals are longer ({max_signal_size}) than the maximum expected input ({model_signal_length}). Abort...")
+
     pair_tracks = trajectories_pairs_clean.groupby(pair_groupby_cols).size()
     signals = np.zeros((len(pair_tracks), max_signal_size, len(selected_signals)))
     logger.debug(f"max_signal_size={max_signal_size}, n_pair_tracks={len(pair_tracks)}, signals_shape={signals.shape}")
@@ -595,26 +606,29 @@ def analyze_pair_signals(
         for j, col in enumerate(selected_signals):
             if col.startswith("pair_"):
                 signal = group[col].to_numpy()
-                signals[i, pair_frames, j] = signal
-                signals[i, max(pair_frames) :, j] = signal[-1]
+                if len(pair_frames) > 0:
+                    signals[i, pair_frames, j] = signal
+                    signals[i, int(max(pair_frames)) :, j] = signal[-1]
             elif col.startswith("reference_"):
                 signal = trajectories_reference_clean.loc[
                     reference_filter, col
                 ].to_numpy()
                 timeline = trajectories_reference_clean.loc[
                     reference_filter, "reference_FRAME"
-                ].to_numpy()
-                signals[i, timeline, j] = signal
-                signals[i, max(timeline) :, j] = signal[-1]
+                ].to_numpy().astype(int)
+                if len(timeline) > 0:
+                    signals[i, timeline, j] = signal
+                    signals[i, int(max(timeline)) :, j] = signal[-1]
             elif col.startswith("neighbor_"):
                 signal = trajectories_neighbors_clean.loc[
                     neighbor_filter, col
                 ].to_numpy()
                 timeline = trajectories_neighbors_clean.loc[
                     neighbor_filter, "neighbor_FRAME"
-                ].to_numpy()
-                signals[i, timeline, j] = signal
-                signals[i, max(timeline) :, j] = signal[-1]
+                ].to_numpy().astype(int)
+                if len(timeline) > 0:
+                    signals[i, timeline, j] = signal
+                    signals[i, int(max(timeline)) :, j] = signal[-1]
 
     model = SignalDetectionModel(pretrained=complete_path)
     logger.debug(f"Signal shape: {signals.shape}")
@@ -1265,7 +1279,9 @@ def mean_signal(
 
         timeline = track_group["FRAME"].unique().astype(int)
         timeline_shifted = timeline - ref_time + max_duration
-        signal_matrix[trackid, timeline_shifted.astype(int)] = signal
+        
+        valid_mask = (timeline_shifted >= 0) & (timeline_shifted < signal_matrix.shape[1])
+        signal_matrix[trackid, timeline_shifted[valid_mask].astype(int)] = signal[valid_mask]
         trackid += 1
 
     mean_signal, std_signal = columnwise_mean(

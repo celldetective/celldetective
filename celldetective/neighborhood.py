@@ -121,7 +121,6 @@ def _fill_distance_neighborhood_at_t(
     for k in range(dist_map.shape[0]):
 
         col = dist_map[k, :]
-        col[col == 0.0] = 1.0e06
 
         neighs_B = np.array([ids_B[i] for i in np.where((col <= distance))[0]])
         status_neigh_B = np.array([status_B[i] for i in np.where((col <= distance))[0]])
@@ -330,7 +329,6 @@ def _fill_contact_neighborhood_at_t(
 
         col = dist_map[k, :]
         col_inter = intersection_map[k, :]
-        col[col == 0.0] = 1.0e06
 
         neighs_B = np.array([ids_B[i] for i in np.where((col <= d_filter))[0]])
         status_neigh_B = np.array([status_B[i] for i in np.where((col <= d_filter))[0]])
@@ -668,8 +666,13 @@ def _compute_mask_contact_dist_map(
 
             cp = np.abs(cp)
             mask_A, mask_B = cp
-            idx_A = np.where(mask_ids_A == int(mask_A))[0][0]
-            idx_B = np.where(mask_ids_B == int(mask_B))[0][0]
+            idx_A_candidates = np.where(mask_ids_A == int(mask_A))[0]
+            idx_B_candidates = np.where(mask_ids_B == int(mask_B))[0]
+            if len(idx_A_candidates) == 0 or len(idx_B_candidates) == 0:
+                logger.debug(f"Contact pair ({mask_A}, {mask_B}) not found in DataFrame mask IDs; skipping.")
+                continue
+            idx_A = idx_A_candidates[0]
+            idx_B = idx_B_candidates[0]
 
             intersection = 0
             if labelsB is not None:
@@ -832,7 +835,7 @@ def compute_attention_weight(
             row = dist_matrix[:, i]
         elif axis == 0:
             row = dist_matrix[i, :]
-        row[row == 0.0] = 1.0e06
+
         nbr_opposite = len(row[row <= cut_distance])
 
         if not include_dead_weight:
@@ -959,6 +962,9 @@ def distance_cut_neighborhood(
 
                 # compute distance matrix
                 dist_map = cdist(coordinates_A, coordinates_B, metric="euclidean")
+                
+                if mode == "self":
+                    np.fill_diagonal(dist_map, 1.0e06)
 
                 if attention_weight:
                     weights, closest_A = compute_attention_weight(
@@ -1279,7 +1285,7 @@ def compute_neighborhood_metrics(
     neigh_table.sort_values(by=groupbycols + ["FRAME"], inplace=True)
 
     for tid, group in neigh_table.groupby(groupbycols):
-        group = group.dropna(subset=neigh_col)
+        group = group.dropna(subset=[neigh_col])
         indices = list(group.index)
         neighbors = group[neigh_col].to_numpy()
 
@@ -1317,9 +1323,9 @@ def compute_neighborhood_metrics(
         for t in range(len(neighbors)):
 
             neighs_at_t = neighbors[t]
-            weights_at_t = [n["weight"] for n in neighs_at_t]
-            status_at_t = [n["status"] for n in neighs_at_t]
-            closest_at_t = [n["closest"] for n in neighs_at_t]
+            weights_at_t = [n.get("weight", np.nan) for n in neighs_at_t]
+            status_at_t = [n.get("status", np.nan) for n in neighs_at_t]
+            closest_at_t = [n.get("closest", False) for n in neighs_at_t]
 
             if "intermediate" in metrics:
                 n_intermediate[t] = np.sum(weights_at_t)
@@ -1449,7 +1455,7 @@ def mean_neighborhood_before_event(
 
     for tid, group in neigh_table.groupby(groupbycols):
 
-        group = group.dropna(subset=neigh_col)
+        group = group.dropna(subset=[neigh_col])
         indices = list(group.index)
 
         event_time_values = group[event_time_col].to_numpy()
@@ -1462,8 +1468,9 @@ def mean_neighborhood_before_event(
             event_time = group["FRAME"].max()
 
         if "intermediate" in metrics:
+            target_col = "intermediate_count_s1_" + neigh_col if "intermediate_count_s1_" + neigh_col in group.columns else "intermediate_count_" + neigh_col
             valid_counts_intermediate = group.loc[
-                group["FRAME"] <= event_time, "intermediate_count_s1_" + neigh_col
+                group["FRAME"] <= event_time, target_col
             ].to_numpy()
             if (
                 len(
@@ -1477,8 +1484,9 @@ def mean_neighborhood_before_event(
                     indices, f"mean_count_intermediate_{neigh_col}{suffix}"
                 ] = np.nanmean(valid_counts_intermediate)
         if "inclusive" in metrics:
+            target_col = "inclusive_count_s1_" + neigh_col if "inclusive_count_s1_" + neigh_col in group.columns else "inclusive_count_" + neigh_col
             valid_counts_inclusive = group.loc[
-                group["FRAME"] <= event_time, "inclusive_count_s1_" + neigh_col
+                group["FRAME"] <= event_time, target_col
             ].to_numpy()
             if (
                 len(
@@ -1492,8 +1500,9 @@ def mean_neighborhood_before_event(
                     indices, f"mean_count_inclusive_{neigh_col}{suffix}"
                 ] = np.nanmean(valid_counts_inclusive)
         if "exclusive" in metrics:
+            target_col = "exclusive_count_s1_" + neigh_col if "exclusive_count_s1_" + neigh_col in group.columns else "exclusive_count_" + neigh_col
             valid_counts_exclusive = group.loc[
-                group["FRAME"] <= event_time, "exclusive_count_s1_" + neigh_col
+                group["FRAME"] <= event_time, target_col
             ].to_numpy()
             if (
                 len(
@@ -1566,7 +1575,7 @@ def mean_neighborhood_after_event(
 
     for tid, group in neigh_table.groupby(groupbycols):
 
-        group = group.dropna(subset=neigh_col)
+        group = group.dropna(subset=[neigh_col])
         indices = list(group.index)
 
         event_time_values = group[event_time_col].to_numpy()
@@ -1578,8 +1587,9 @@ def mean_neighborhood_after_event(
         if event_time is not None and (event_time >= 0.0):
 
             if "intermediate" in metrics:
+                target_col = "intermediate_count_s1_" + neigh_col if "intermediate_count_s1_" + neigh_col in group.columns else "intermediate_count_" + neigh_col
                 valid_counts_intermediate = group.loc[
-                    group["FRAME"] > event_time, "intermediate_count_s1_" + neigh_col
+                    group["FRAME"] > event_time, target_col
                 ].to_numpy()
                 if (
                     len(
@@ -1593,8 +1603,9 @@ def mean_neighborhood_after_event(
                         indices, f"mean_count_intermediate_{neigh_col}{suffix}"
                     ] = np.nanmean(valid_counts_intermediate)
             if "inclusive" in metrics:
+                target_col = "inclusive_count_s1_" + neigh_col if "inclusive_count_s1_" + neigh_col in group.columns else "inclusive_count_" + neigh_col
                 valid_counts_inclusive = group.loc[
-                    group["FRAME"] > event_time, "inclusive_count_s1_" + neigh_col
+                    group["FRAME"] > event_time, target_col
                 ].to_numpy()
                 if (
                     len(
@@ -1608,8 +1619,9 @@ def mean_neighborhood_after_event(
                         indices, f"mean_count_inclusive_{neigh_col}{suffix}"
                     ] = np.nanmean(valid_counts_inclusive)
             if "exclusive" in metrics:
+                target_col = "exclusive_count_s1_" + neigh_col if "exclusive_count_s1_" + neigh_col in group.columns else "exclusive_count_" + neigh_col
                 valid_counts_exclusive = group.loc[
-                    group["FRAME"] > event_time, "exclusive_count_s1_" + neigh_col
+                    group["FRAME"] > event_time, target_col
                 ].to_numpy()
                 if (
                     len(
@@ -1927,6 +1939,9 @@ def mask_contact_neighborhood(
                     column_labelsA=cl[0],
                     column_labelsB=cl[1],
                 )
+
+                if mode == "self":
+                    np.fill_diagonal(dist_map, 1.0e06)
 
                 d_filter = 1.0e05
                 if attention_weight:

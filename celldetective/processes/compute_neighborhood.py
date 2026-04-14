@@ -203,6 +203,9 @@ class NeighborhoodProcess(Process):
                         column_labelsB=cl[1],
                     )
 
+                    if mode == "self":
+                        np.fill_diagonal(dist_map, 1.0e06)
+
                     d_filter = 1.0e05
                     if attention_weight:
                         status_A = setA_t[status[0]].to_numpy()

@@ -623,6 +623,8 @@ class GenericSignalPlotWidget(CelldetectiveWidget):
         """
 
         ind = event.ind  # index of selected position
+        if len(ind) == 0:
+            return
         well_idx = self.df_pos_info.iloc[ind]["well_index"].values[0]
         selectedPos = self.df_pos_info.iloc[ind]["pos_path"].values[0]
         currentSelState = self.df_pos_info.iloc[ind]["select"].values[0]
