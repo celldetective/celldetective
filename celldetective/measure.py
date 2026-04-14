@@ -1560,7 +1560,7 @@ def estimate_time(
         indices = group.index
         status_col = class_attr.replace("class", "status")
 
-        group_clean = group.dropna(subset=status_col)
+        group_clean = group.dropna(subset=[status_col])
         status_signal = group_clean[status_col].values
         if np.all(np.array(status_signal) == 1):
             continue
@@ -1917,7 +1917,7 @@ def classify_irreversible_events(
             df.loc[indices_pre_detection, stat_col] = 0.0
 
         # The non-NaN part of track (post pre-event)
-        track_valid = track.dropna(subset=stat_col, inplace=False)
+        track_valid = track.dropna(subset=[stat_col], inplace=False)
         status_values = track_valid[stat_col].to_numpy()
 
         if np.all([s == 0 for s in status_values]):
@@ -2033,7 +2033,7 @@ def classify_unique_states(
                 track.loc[track["FRAME"] <= t_pre_event, stat_col] = np.nan
 
         # Post pre-event track
-        track_valid = track.dropna(subset=stat_col, inplace=False)
+        track_valid = track.dropna(subset=[stat_col], inplace=False)
         status_values = track_valid[stat_col].to_numpy()
         frames = track_valid["FRAME"].to_numpy()
         t_first = track["t_firstdetection"].to_numpy()[0]

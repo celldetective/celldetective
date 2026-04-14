@@ -572,7 +572,7 @@ def collapse_trajectories_by_status(
         logger.warning("Invalid status selection...")
         return None
 
-    df = df.dropna(subset=status, ignore_index=True)
+    df = df.dropna(subset=[status], ignore_index=True)
     unique_statuses = np.unique(df[status].to_numpy())
 
     df_sections = []

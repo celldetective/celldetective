@@ -694,7 +694,7 @@ class GenericSignalPlotWidget(CelldetectiveWidget):
             which="minor", color="lightgray", linestyle="--", linewidth=0.5, alpha=0.1
         )
         # Lims
-        safe_df = self.df.dropna(subset=self.feature_selected)
+        safe_df = self.df.dropna(subset=[self.feature_selected])
         values = safe_df[self.feature_selected].values
         if len(values) > 0:
             self.ax.set_ylim(

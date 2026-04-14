@@ -421,10 +421,10 @@ class ClassifierWidget(CelldetectiveWidget):
 
                 feat_x = self.features_cb[1].currentText()
                 feat_y = self.features_cb[0].currentText()
-                min_x = self.df.dropna(subset=feat_x)[feat_x].min()
-                max_x = self.df.dropna(subset=feat_x)[feat_x].max()
-                min_y = self.df.dropna(subset=feat_y)[feat_y].min()
-                max_y = self.df.dropna(subset=feat_y)[feat_y].max()
+                min_x = self.df.dropna(subset=[feat_x])[feat_x].min()
+                max_x = self.df.dropna(subset=[feat_x])[feat_x].max()
+                min_y = self.df.dropna(subset=[feat_y])[feat_y].min()
+                max_y = self.df.dropna(subset=[feat_y])[feat_y].max()
 
                 x_padding = (max_x - min_x) * 0.05
                 y_padding = (max_y - min_y) * 0.05
@@ -696,8 +696,8 @@ class ClassifierWidget(CelldetectiveWidget):
         if i == 1:
             try:
                 feat_x = self.features_cb[1].currentText()
-                min_x = self.df.dropna(subset=feat_x)[feat_x].min()
-                max_x = self.df.dropna(subset=feat_x)[feat_x].max()
+                min_x = self.df.dropna(subset=[feat_x])[feat_x].min()
+                max_x = self.df.dropna(subset=[feat_x])[feat_x].max()
                 x_padding = (max_x - min_x) * 0.05
                 if x_padding == 0:
                     x_padding = 0.05
@@ -715,8 +715,8 @@ class ClassifierWidget(CelldetectiveWidget):
         elif i == 0:
             try:
                 feat_y = self.features_cb[0].currentText()
-                min_y = self.df.dropna(subset=feat_y)[feat_y].min()
-                max_y = self.df.dropna(subset=feat_y)[feat_y].max()
+                min_y = self.df.dropna(subset=[feat_y])[feat_y].min()
+                max_y = self.df.dropna(subset=[feat_y])[feat_y].max()
                 y_padding = (max_y - min_y) * 0.05
                 if y_padding == 0:
                     y_padding = 0.05

@@ -314,7 +314,7 @@ def relabel_segmentation(
     n_threads = threads
     df = df.sort_values(by=[column_labels["track"], column_labels["frame"]])
     if exclude_nans:
-        df = df.dropna(subset=column_labels["label"])
+        df = df.dropna(subset=[column_labels["label"]])
 
     new_labels = np.zeros_like(labels)
     shared_data = {"s": 0}

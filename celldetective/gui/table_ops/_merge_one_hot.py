@@ -102,8 +102,11 @@ class MergeOneHotWidget(CelldetectiveWidget):
     def merge_cols(self):
         """Merge the selected columns."""
 
+        selected = [cb.currentText() for cb in self.cbs if cb.currentText() != "--"]
+        if len(selected) < 2:
+            return
         self.parent_window.data[self.new_col_le.text()] = self.parent_window.data.loc[
-            :, list(self.selected_columns)
+            :, selected
         ].idxmax(axis=1)
         self.parent_window.model = PandasModel(self.parent_window.data)
         self.parent_window.table_view.setModel(self.parent_window.model)
