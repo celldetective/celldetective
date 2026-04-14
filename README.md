@@ -16,9 +16,9 @@
 ![ico2](https://img.shields.io/github/forks/remyeltorro/celldetective?link=https%3A%2F%2Fgithub.com%2Fremyeltorro%2Fcelldetective%2Fforks)
 ![ico3](https://img.shields.io/github/stars/remyeltorro/celldetective?link=https%3A%2F%2Fgithub.com%2Fremyeltorro%2Fcelldetective%2Fstargazers)
 
-Celldetective is a python package and graphical user interface to perform single-cell
-analysis on multimodal time lapse microscopy images.
-<!--Celldetective is an open-source Python platform designed for biologists to study interacting cell populations in multimodal time-lapse microscopy-->
+<!--Celldetective is a python package and graphical user interface to perform single-cell
+analysis on multimodal time lapse microscopy images.-->
+Celldetective is an open-source Python platform designed for biologists to study interacting cell populations in multimodal time-lapse microscopy
 
 -  [Check the full documentation](https://celldetective.readthedocs.io)
 -  [Report a bug or request a new feature](https://github.com/remyeltorro/celldetective/issues/new/choose)
