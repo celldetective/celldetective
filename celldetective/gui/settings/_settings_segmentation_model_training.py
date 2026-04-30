@@ -1,6 +1,5 @@
 from typing import Optional
 import time
-from time import time
 
 from PyQt5.QtGui import QCloseEvent
 from PyQt5.QtWidgets import (
