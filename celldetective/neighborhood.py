@@ -125,9 +125,10 @@ def _fill_distance_neighborhood_at_t(
         neighs_B = np.array([ids_B[i] for i in np.where((col <= distance))[0]])
         status_neigh_B = np.array([status_B[i] for i in np.where((col <= distance))[0]])
         dist_B = [round(col[i], 2) for i in np.where((col <= distance))[0]]
+        closest_B_cell = None
         if len(dist_B) > 0:
             closest_B_cell = neighs_B[np.argmin(dist_B)]
-
+        weight_A = None
         if symmetrize and attention_weight:
             n_neighs = float(len(neighs_B))
             if not include_dead_weight:
@@ -150,12 +151,14 @@ def _fill_distance_neighborhood_at_t(
             # index in setB
             n_index = np.where(ids_B == neighs_B[n])[0][0]
             # Assess if neigh B is closest to A
+            closest = False
             if attention_weight:
                 if closest_A[n_index] == ids_A[k]:
                     closest = True
                 else:
                     closest = False
 
+            sym_neigh = None
             if symmetrize:
                 # Load neighborhood previous data
                 sym_neigh = setB.loc[index_B[n_index], neigh_col]
@@ -197,6 +200,7 @@ def _fill_distance_neighborhood_at_t(
                 ]
                 past_neighs = [item for sublist in past_neighs for item in sublist]
 
+                past_weights = None
                 if attention_weight:
                     past_weights = [
                         [ll["weight"] for ll in l] if len(l) > 0 else [None]
@@ -334,10 +338,10 @@ def _fill_contact_neighborhood_at_t(
         status_neigh_B = np.array([status_B[i] for i in np.where((col <= d_filter))[0]])
         dist_B = [round(col[i], 2) for i in np.where((col <= d_filter))[0]]
         intersect_B = [round(col_inter[i], 2) for i in np.where((col <= d_filter))[0]]
-
+        closest_B_cell = None
         if len(dist_B) > 0:
             closest_B_cell = neighs_B[np.argmin(dist_B)]
-
+        weight_A = None
         if symmetrize and attention_weight:
             n_neighs = float(len(neighs_B))
             if not include_dead_weight:
@@ -360,12 +364,14 @@ def _fill_contact_neighborhood_at_t(
             # index in setB
             n_index = np.where(ids_B == neighs_B[n])[0][0]
             # Assess if neigh B is closest to A
+            closest = False
             if attention_weight:
                 if closest_A[n_index] == ids_A[k]:
                     closest = True
                 else:
                     closest = False
 
+            sym_neigh = None
             if symmetrize:
                 # Load neighborhood previous data
                 sym_neigh = setB.loc[index_B[n_index], neigh_col]
@@ -418,6 +424,7 @@ def _fill_contact_neighborhood_at_t(
                 ]
                 past_neighs = [item for sublist in past_neighs for item in sublist]
 
+                past_weights = None
                 if attention_weight:
                     past_weights = [
                         [ll["weight"] for ll in l] if len(l) > 0 else [None]
@@ -919,6 +926,16 @@ def distance_cut_neighborhood(
             neigh_col = f"neighborhood_2_circle_{d}_px"
         elif mode == "self":
             neigh_col = f"neighborhood_self_circle_{d}_px"
+        else:
+            logger.error("Please provide a valid mode between `two-pop` and `self`...")
+            return None, None
+
+        weight_A = None
+        closest = None
+        sym_neigh = None
+        past_weights = None
+        weights = None
+        closest_A = None
 
         cl = []
         for s in [setA, setB]:
@@ -966,6 +983,8 @@ def distance_cut_neighborhood(
                 if mode == "self":
                     np.fill_diagonal(dist_map, 1.0e06)
 
+                weights = None
+                closest_A = None
                 if attention_weight:
                     weights, closest_A = compute_attention_weight(
                         dist_map,
