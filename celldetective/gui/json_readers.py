@@ -1,4 +1,5 @@
 import os
+import subprocess
 from subprocess import Popen
 
 from PyQt5.QtWidgets import (
@@ -80,10 +81,10 @@ class ConfigEditor(CelldetectiveWidget):
         """
         path = self.config_path
         try:
-            Popen(f"explorer {os.path.realpath(path)}")
+            Popen(["explorer", os.path.realpath(path)])
         except Exception:
             try:
-                os.system('xdg-open "%s"' % path)
+                subprocess.run(["xdg-open", path], check=False)
             except Exception:
                 return None
 

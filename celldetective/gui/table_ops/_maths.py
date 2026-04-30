@@ -211,7 +211,6 @@ class OperationOnColsWidget(CelldetectiveWidget):
                     res[res == np.inf] = np.nan
                     res[self.col1 != self.col1] = np.nan
                     res[self.col2 != self.col2] = np.nan
-                    self.parent_window.data[name] = res
 
             elif self.operation == "multiply":
                 name = f"{self.col1_txt}*{self.col2_txt}"
@@ -225,7 +224,8 @@ class OperationOnColsWidget(CelldetectiveWidget):
                 name = f"{self.col1_txt}-{self.col2_txt}"
                 res = np.subtract(self.col1, self.col2)
             else:
-                logger.info(f"Operation {self.operation} not implemented...")
+                logger.warning(f"Operation '{self.operation}' is not implemented.")
+                return
 
             self.parent_window.data[name] = res
             self.parent_window.model = PandasModel(self.parent_window.data)

@@ -623,6 +623,8 @@ class GenericSignalPlotWidget(CelldetectiveWidget):
         """
 
         ind = event.ind  # index of selected position
+        if len(ind) == 0:
+            return
         well_idx = self.df_pos_info.iloc[ind]["well_index"].values[0]
         selectedPos = self.df_pos_info.iloc[ind]["pos_path"].values[0]
         currentSelState = self.df_pos_info.iloc[ind]["select"].values[0]
@@ -692,7 +694,7 @@ class GenericSignalPlotWidget(CelldetectiveWidget):
             which="minor", color="lightgray", linestyle="--", linewidth=0.5, alpha=0.1
         )
         # Lims
-        safe_df = self.df.dropna(subset=self.feature_selected)
+        safe_df = self.df.dropna(subset=[self.feature_selected])
         values = safe_df[self.feature_selected].values
         if len(values) > 0:
             self.ax.set_ylim(

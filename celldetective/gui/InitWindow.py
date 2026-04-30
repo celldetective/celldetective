@@ -4,6 +4,7 @@ import os
 import threading
 import time
 from glob import glob
+import subprocess
 from subprocess import Popen, check_output
 
 from PyQt5.QtCore import QUrl, Qt, QThread
@@ -519,11 +520,11 @@ class AppInitWindow(CelldetectiveMainWindow):
 
         path = os.sep.join([self.soft_path, "celldetective", "models", os.sep])
         try:
-            Popen(f"explorer {os.path.realpath(path)}")
+            Popen(["explorer", os.path.realpath(path)])
         except Exception as e:
             logger.warning(f"{e}")
             try:
-                os.system('xdg-open "%s"' % path)
+                subprocess.run(["xdg-open", path], check=False)
             except Exception as e:
                 logger.error(f"Error {e}...")
                 return None

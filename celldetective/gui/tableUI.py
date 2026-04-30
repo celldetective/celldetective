@@ -33,6 +33,7 @@ from celldetective.gui.base.components import (
 )
 from math import floor
 import re
+import atexit
 from celldetective import get_logger
 from celldetective.utils.stats import test_2samp_generic
 from celldetective.utils.types import test_bool_array
@@ -2255,6 +2256,7 @@ class TableUI(CelldetectiveMainWindow):
         )
         tmp_path = tmp.name
         tmp.close()
+        atexit.register(lambda p=tmp_path: os.unlink(p) if os.path.exists(p) else None)
         fig.write_html(tmp_path, include_plotlyjs="cdn")
 
         try:
@@ -2431,6 +2433,7 @@ class TableUI(CelldetectiveMainWindow):
         )
         tmp_path = tmp.name
         tmp.close()
+        atexit.register(lambda p=tmp_path: os.unlink(p) if os.path.exists(p) else None)
         fig.write_html(tmp_path, include_plotlyjs="cdn")
 
         try:

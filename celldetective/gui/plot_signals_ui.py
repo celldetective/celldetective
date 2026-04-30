@@ -547,13 +547,16 @@ class ConfigSignalPlot(CelldetectiveWidget):
 
         if self.population == "pairs":
             self.df = expand_pair_table(self.df)
-            self.df = extract_neighborhood_in_pair_table(
-                self.df,
-                reference_population=self.population_reference,
-                neighbor_population=self.population_neigh,
-                neighborhood_key=self.neighborhood_keys[0],
-                contact_only=True,
-            )
+            if not self.neighborhood_keys:
+                logger.warning("No neighborhood key found for this pair population; skipping neighborhood extraction.")
+            else:
+                self.df = extract_neighborhood_in_pair_table(
+                    self.df,
+                    reference_population=self.population_reference,
+                    neighbor_population=self.population_neigh,
+                    neighborhood_key=self.neighborhood_keys[0],
+                    contact_only=True,
+                )
 
         if self.df is None:
             logger.warning("No table could be found.")
@@ -766,10 +769,7 @@ class ConfigSignalPlot(CelldetectiveWidget):
                 try:
                     timeline = track_group["FRAME"].to_numpy().astype(int)
                     feature = track_group[feature_selected].to_numpy()
-                    if self.checkBox_feature.isChecked():
-                        second_feature = track_group[
-                            self.second_feature_selected
-                        ].to_numpy()
+                    second_feature = None
                     if (
                         self.cbs[2].currentText().startswith("t")
                         and not self.abs_time_checkbox.isChecked()

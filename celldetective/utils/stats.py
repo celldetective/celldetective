@@ -58,8 +58,8 @@ def test_2samp_generic(
 
     results = []
 
-    for lbl1, group1 in data.dropna(subset=feature).groupby(groupby_cols):
-        for lbl2, group2 in data.dropna(subset=feature).groupby(groupby_cols):
+    for lbl1, group1 in data.dropna(subset=[feature]).groupby(groupby_cols):
+        for lbl2, group2 in data.dropna(subset=[feature]).groupby(groupby_cols):
 
             dist1 = group1[feature].values
             dist2 = group2[feature].values

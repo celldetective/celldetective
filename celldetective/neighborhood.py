@@ -34,7 +34,8 @@ logger = logging.getLogger("celldetective")
 from celldetective.utils.masks import contour_of_instance_segmentation
 from celldetective.utils.data_cleaning import extract_identity_col
 from scipy.spatial.distance import cdist
-from celldetective.utils.image_loaders import locate_labels
+from scipy.ndimage import binary_dilation
+from celldetective.utils.image_loaders import locate_labels, locate_stack
 from celldetective.utils.data_loaders import get_position_table, get_position_pickle
 
 abs_path = os.sep.join(
@@ -120,14 +121,14 @@ def _fill_distance_neighborhood_at_t(
     for k in range(dist_map.shape[0]):
 
         col = dist_map[k, :]
-        col[col == 0.0] = 1.0e06
 
         neighs_B = np.array([ids_B[i] for i in np.where((col <= distance))[0]])
         status_neigh_B = np.array([status_B[i] for i in np.where((col <= distance))[0]])
         dist_B = [round(col[i], 2) for i in np.where((col <= distance))[0]]
+        closest_B_cell = None
         if len(dist_B) > 0:
             closest_B_cell = neighs_B[np.argmin(dist_B)]
-
+        weight_A = None
         if symmetrize and attention_weight:
             n_neighs = float(len(neighs_B))
             if not include_dead_weight:
@@ -150,12 +151,14 @@ def _fill_distance_neighborhood_at_t(
             # index in setB
             n_index = np.where(ids_B == neighs_B[n])[0][0]
             # Assess if neigh B is closest to A
+            closest = False
             if attention_weight:
                 if closest_A[n_index] == ids_A[k]:
                     closest = True
                 else:
                     closest = False
 
+            sym_neigh = None
             if symmetrize:
                 # Load neighborhood previous data
                 sym_neigh = setB.loc[index_B[n_index], neigh_col]
@@ -197,6 +200,7 @@ def _fill_distance_neighborhood_at_t(
                 ]
                 past_neighs = [item for sublist in past_neighs for item in sublist]
 
+                past_weights = None
                 if attention_weight:
                     past_weights = [
                         [ll["weight"] for ll in l] if len(l) > 0 else [None]
@@ -329,16 +333,15 @@ def _fill_contact_neighborhood_at_t(
 
         col = dist_map[k, :]
         col_inter = intersection_map[k, :]
-        col[col == 0.0] = 1.0e06
 
         neighs_B = np.array([ids_B[i] for i in np.where((col <= d_filter))[0]])
         status_neigh_B = np.array([status_B[i] for i in np.where((col <= d_filter))[0]])
         dist_B = [round(col[i], 2) for i in np.where((col <= d_filter))[0]]
         intersect_B = [round(col_inter[i], 2) for i in np.where((col <= d_filter))[0]]
-
+        closest_B_cell = None
         if len(dist_B) > 0:
             closest_B_cell = neighs_B[np.argmin(dist_B)]
-
+        weight_A = None
         if symmetrize and attention_weight:
             n_neighs = float(len(neighs_B))
             if not include_dead_weight:
@@ -361,12 +364,14 @@ def _fill_contact_neighborhood_at_t(
             # index in setB
             n_index = np.where(ids_B == neighs_B[n])[0][0]
             # Assess if neigh B is closest to A
+            closest = False
             if attention_weight:
                 if closest_A[n_index] == ids_A[k]:
                     closest = True
                 else:
                     closest = False
 
+            sym_neigh = None
             if symmetrize:
                 # Load neighborhood previous data
                 sym_neigh = setB.loc[index_B[n_index], neigh_col]
@@ -419,6 +424,7 @@ def _fill_contact_neighborhood_at_t(
                 ]
                 past_neighs = [item for sublist in past_neighs for item in sublist]
 
+                past_weights = None
                 if attention_weight:
                     past_weights = [
                         [ll["weight"] for ll in l] if len(l) > 0 else [None]
@@ -455,6 +461,139 @@ def _fill_contact_neighborhood_at_t(
             neighs.append(neigh_dico)
 
         setA.at[index_A[k], neigh_col] = neighs
+
+
+def _contact_site_mask(
+    labelsA: np.ndarray,
+    labelsB: Optional[np.ndarray],
+    mask_id_A: int,
+    mask_id_B: int,
+    border: int = 3,
+) -> np.ndarray:
+    """
+    Returns a binary mask of the pixels in cell A that lie within ``border``
+    pixels of cell B's mask.
+
+    This defines the contact zone from cell A's perspective: the portion of
+    A's segmentation mask that faces B.  Used for contact-site intensity
+    sampling.
+
+    Parameters
+    ----------
+    labelsA : ndarray
+        Label image for population A.
+    labelsB : ndarray or None
+        Label image for population B.  Pass ``None`` for a self-contact
+        computation (both cells come from ``labelsA``).
+    mask_id_A : int
+        Label value of the reference cell in ``labelsA``.
+    mask_id_B : int
+        Label value of the contact neighbor.
+    border : int, optional
+        Dilation radius in pixels used to probe proximity.  Should match the
+        ``distance`` parameter used when computing the contact neighborhood.
+        Default is 3.
+
+    Returns
+    -------
+    ndarray
+        Boolean array of the same shape as ``labelsA``.  True pixels belong
+        to cell A and are within ``border`` pixels of cell B.
+    """
+    mask_A = labelsA == mask_id_A
+    lB = labelsA if labelsB is None else labelsB
+    mask_B = lB == mask_id_B
+    dilated_B = binary_dilation(mask_B, iterations=max(1, border))
+    return mask_A & dilated_B
+
+
+def _measure_contact_intensity_at_t(
+    time_index: int,
+    setA: pd.DataFrame,
+    setA_t: pd.DataFrame,
+    setB_t: pd.DataFrame,
+    labelsA: np.ndarray,
+    labelsB: Optional[np.ndarray],
+    intensity_image: np.ndarray,
+    channel_names: List[str],
+    dist_map: np.ndarray,
+    border: float,
+    column_labelsA: Dict[str, str],
+    column_labelsB: Dict[str, str],
+) -> None:
+    """
+    Computes contact-site intensity statistics and writes them back to
+    ``setA`` in-place.
+
+    For each cell in ``setA_t``, the closest contact neighbor in ``setB_t``
+    is identified from ``dist_map``.  The contact zone (pixels of cell A
+    within ``border`` pixels of the neighbor) is extracted and, for each
+    channel in ``channel_names``, the mean, max and std of the intensity
+    are written as new columns:
+
+    ``contact_{channel}_mean``, ``contact_{channel}_max``,
+    ``contact_{channel}_std``.
+
+    Cells with no contact neighbor, or whose contact zone is empty, receive
+    NaN for all channel stats.
+
+    Parameters
+    ----------
+    time_index : int
+        Current frame index (used only for logging).
+    setA : pd.DataFrame
+        Full (all-timepoints) DataFrame for population A.  Results are
+        written here.
+    setA_t : pd.DataFrame
+        Subset of ``setA`` at ``time_index``.
+    setB_t : pd.DataFrame
+        Subset of setB at ``time_index``.
+    labelsA : ndarray
+        Label image for population A at ``time_index``.
+    labelsB : ndarray or None
+        Label image for population B at ``time_index``.
+    intensity_image : ndarray, shape (Y, X, C)
+        Multi-channel intensity image at ``time_index``.
+    channel_names : list of str
+        Names of the C channels in ``intensity_image``.
+    dist_map : ndarray, shape (nA, nB)
+        Distance matrix; non-contact pairs have value 1e6.
+    border : float
+        Contact border size in pixels (passed to ``_contact_site_mask``).
+    column_labelsA : dict
+        Column label mapping for setA (keys: 'mask_id', etc.).
+    column_labelsB : dict
+        Column label mapping for setB (keys: 'mask_id', etc.).
+    """
+    mask_ids_A = setA_t[column_labelsA["mask_id"]].to_numpy()
+    mask_ids_B = setB_t[column_labelsB["mask_id"]].to_numpy()
+    index_A = setA_t.index
+    border_int = max(1, int(round(border)))
+    lB = labelsB if labelsB is not None else labelsA
+
+    for k, (idx, mask_id_A) in enumerate(zip(index_A, mask_ids_A)):
+        row_dist = dist_map[k, :]
+        if not np.any(row_dist < 1.0e05):
+            continue
+
+        closest_idx = int(np.argmin(row_dist))
+        mask_id_B = mask_ids_B[closest_idx]
+
+        contact_zone = _contact_site_mask(
+            labelsA, labelsB, int(mask_id_A), int(mask_id_B), border=border_int
+        )
+        if not np.any(contact_zone):
+            continue
+
+        for ch_idx, ch_name in enumerate(channel_names):
+            if intensity_image.ndim == 3:
+                ch_img = intensity_image[..., ch_idx]
+            else:
+                ch_img = intensity_image
+            pixels = ch_img[contact_zone].astype(float)
+            setA.at[idx, f"contact_{ch_name}_mean"] = float(np.mean(pixels))
+            setA.at[idx, f"contact_{ch_name}_max"] = float(np.max(pixels))
+            setA.at[idx, f"contact_{ch_name}_std"] = float(np.std(pixels))
 
 
 def _compute_mask_contact_dist_map(
@@ -534,8 +673,13 @@ def _compute_mask_contact_dist_map(
 
             cp = np.abs(cp)
             mask_A, mask_B = cp
-            idx_A = np.where(mask_ids_A == int(mask_A))[0][0]
-            idx_B = np.where(mask_ids_B == int(mask_B))[0][0]
+            idx_A_candidates = np.where(mask_ids_A == int(mask_A))[0]
+            idx_B_candidates = np.where(mask_ids_B == int(mask_B))[0]
+            if len(idx_A_candidates) == 0 or len(idx_B_candidates) == 0:
+                logger.debug(f"Contact pair ({mask_A}, {mask_B}) not found in DataFrame mask IDs; skipping.")
+                continue
+            idx_A = idx_A_candidates[0]
+            idx_B = idx_B_candidates[0]
 
             intersection = 0
             if labelsB is not None:
@@ -690,30 +834,29 @@ def compute_attention_weight(
 
     """
 
-    weights = np.empty(dist_matrix.shape[axis])
-    closest_opposite = np.empty(dist_matrix.shape[axis])
+    weights = np.full(dist_matrix.shape[axis], np.nan)
+    closest_opposite = np.full(dist_matrix.shape[axis], np.nan)
 
     for i in range(dist_matrix.shape[axis]):
         if axis == 1:
             row = dist_matrix[:, i]
         elif axis == 0:
             row = dist_matrix[i, :]
-        row[row == 0.0] = 1.0e06
+
         nbr_opposite = len(row[row <= cut_distance])
 
         if not include_dead_weight:
             stat = opposite_cell_status[np.where(row <= cut_distance)[0]]
             nbr_opposite = len(stat[stat == 1])
-            index_subpop = np.argmin(row[opposite_cell_status == 1])
-            closest_opposite[i] = opposite_cell_ids[opposite_cell_status == 1][
-                index_subpop
-            ]
+            alive_mask = opposite_cell_status == 1
+            if np.any(alive_mask):
+                index_subpop = np.argmin(row[alive_mask])
+                closest_opposite[i] = opposite_cell_ids[alive_mask][index_subpop]
         else:
             closest_opposite[i] = opposite_cell_ids[np.argmin(row)]
 
         if nbr_opposite > 0:
-            weight = 1.0 / float(nbr_opposite)
-            weights[i] = weight
+            weights[i] = 1.0 / float(nbr_opposite)
 
     return weights, closest_opposite
 
@@ -783,6 +926,16 @@ def distance_cut_neighborhood(
             neigh_col = f"neighborhood_2_circle_{d}_px"
         elif mode == "self":
             neigh_col = f"neighborhood_self_circle_{d}_px"
+        else:
+            logger.error("Please provide a valid mode between `two-pop` and `self`...")
+            return None, None
+
+        weight_A = None
+        closest = None
+        sym_neigh = None
+        past_weights = None
+        weights = None
+        closest_A = None
 
         cl = []
         for s in [setA, setB]:
@@ -826,7 +979,12 @@ def distance_cut_neighborhood(
 
                 # compute distance matrix
                 dist_map = cdist(coordinates_A, coordinates_B, metric="euclidean")
+                
+                if mode == "self":
+                    np.fill_diagonal(dist_map, 1.0e06)
 
+                weights = None
+                closest_A = None
                 if attention_weight:
                     weights, closest_A = compute_attention_weight(
                         dist_map,
@@ -922,6 +1080,8 @@ def compute_neighborhood_at_position(
     pos = rf"{pos}"
     if not os.path.exists(pos):
         raise FileNotFoundError(f"Position {pos} is not a valid path.")
+    if not pos.endswith("/"):
+        pos += "/"
 
     if isinstance(population, str):
         population = [population, population]
@@ -1144,7 +1304,7 @@ def compute_neighborhood_metrics(
     neigh_table.sort_values(by=groupbycols + ["FRAME"], inplace=True)
 
     for tid, group in neigh_table.groupby(groupbycols):
-        group = group.dropna(subset=neigh_col)
+        group = group.dropna(subset=[neigh_col])
         indices = list(group.index)
         neighbors = group[neigh_col].to_numpy()
 
@@ -1182,9 +1342,9 @@ def compute_neighborhood_metrics(
         for t in range(len(neighbors)):
 
             neighs_at_t = neighbors[t]
-            weights_at_t = [n["weight"] for n in neighs_at_t]
-            status_at_t = [n["status"] for n in neighs_at_t]
-            closest_at_t = [n["closest"] for n in neighs_at_t]
+            weights_at_t = [n.get("weight", np.nan) for n in neighs_at_t]
+            status_at_t = [n.get("status", np.nan) for n in neighs_at_t]
+            closest_at_t = [n.get("closest", False) for n in neighs_at_t]
 
             if "intermediate" in metrics:
                 n_intermediate[t] = np.sum(weights_at_t)
@@ -1314,7 +1474,7 @@ def mean_neighborhood_before_event(
 
     for tid, group in neigh_table.groupby(groupbycols):
 
-        group = group.dropna(subset=neigh_col)
+        group = group.dropna(subset=[neigh_col])
         indices = list(group.index)
 
         event_time_values = group[event_time_col].to_numpy()
@@ -1327,8 +1487,9 @@ def mean_neighborhood_before_event(
             event_time = group["FRAME"].max()
 
         if "intermediate" in metrics:
+            target_col = "intermediate_count_s1_" + neigh_col if "intermediate_count_s1_" + neigh_col in group.columns else "intermediate_count_" + neigh_col
             valid_counts_intermediate = group.loc[
-                group["FRAME"] <= event_time, "intermediate_count_s1_" + neigh_col
+                group["FRAME"] <= event_time, target_col
             ].to_numpy()
             if (
                 len(
@@ -1342,8 +1503,9 @@ def mean_neighborhood_before_event(
                     indices, f"mean_count_intermediate_{neigh_col}{suffix}"
                 ] = np.nanmean(valid_counts_intermediate)
         if "inclusive" in metrics:
+            target_col = "inclusive_count_s1_" + neigh_col if "inclusive_count_s1_" + neigh_col in group.columns else "inclusive_count_" + neigh_col
             valid_counts_inclusive = group.loc[
-                group["FRAME"] <= event_time, "inclusive_count_s1_" + neigh_col
+                group["FRAME"] <= event_time, target_col
             ].to_numpy()
             if (
                 len(
@@ -1357,8 +1519,9 @@ def mean_neighborhood_before_event(
                     indices, f"mean_count_inclusive_{neigh_col}{suffix}"
                 ] = np.nanmean(valid_counts_inclusive)
         if "exclusive" in metrics:
+            target_col = "exclusive_count_s1_" + neigh_col if "exclusive_count_s1_" + neigh_col in group.columns else "exclusive_count_" + neigh_col
             valid_counts_exclusive = group.loc[
-                group["FRAME"] <= event_time, "exclusive_count_s1_" + neigh_col
+                group["FRAME"] <= event_time, target_col
             ].to_numpy()
             if (
                 len(
@@ -1431,7 +1594,7 @@ def mean_neighborhood_after_event(
 
     for tid, group in neigh_table.groupby(groupbycols):
 
-        group = group.dropna(subset=neigh_col)
+        group = group.dropna(subset=[neigh_col])
         indices = list(group.index)
 
         event_time_values = group[event_time_col].to_numpy()
@@ -1443,8 +1606,9 @@ def mean_neighborhood_after_event(
         if event_time is not None and (event_time >= 0.0):
 
             if "intermediate" in metrics:
+                target_col = "intermediate_count_s1_" + neigh_col if "intermediate_count_s1_" + neigh_col in group.columns else "intermediate_count_" + neigh_col
                 valid_counts_intermediate = group.loc[
-                    group["FRAME"] > event_time, "intermediate_count_s1_" + neigh_col
+                    group["FRAME"] > event_time, target_col
                 ].to_numpy()
                 if (
                     len(
@@ -1458,8 +1622,9 @@ def mean_neighborhood_after_event(
                         indices, f"mean_count_intermediate_{neigh_col}{suffix}"
                     ] = np.nanmean(valid_counts_intermediate)
             if "inclusive" in metrics:
+                target_col = "inclusive_count_s1_" + neigh_col if "inclusive_count_s1_" + neigh_col in group.columns else "inclusive_count_" + neigh_col
                 valid_counts_inclusive = group.loc[
-                    group["FRAME"] > event_time, "inclusive_count_s1_" + neigh_col
+                    group["FRAME"] > event_time, target_col
                 ].to_numpy()
                 if (
                     len(
@@ -1473,8 +1638,9 @@ def mean_neighborhood_after_event(
                         indices, f"mean_count_inclusive_{neigh_col}{suffix}"
                     ] = np.nanmean(valid_counts_inclusive)
             if "exclusive" in metrics:
+                target_col = "exclusive_count_s1_" + neigh_col if "exclusive_count_s1_" + neigh_col in group.columns else "exclusive_count_" + neigh_col
                 valid_counts_exclusive = group.loc[
-                    group["FRAME"] > event_time, "exclusive_count_s1_" + neigh_col
+                    group["FRAME"] > event_time, target_col
                 ].to_numpy()
                 if (
                     len(
@@ -1667,6 +1833,8 @@ def mask_contact_neighborhood(
         "y": "POSITION_Y",
         "mask_id": "class_id",
     },
+    intensity_images: Optional[List[np.ndarray]] = None,
+    channel_names: Optional[List[str]] = None,
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
 
@@ -1701,6 +1869,14 @@ def mask_contact_neighborhood(
     column_labels : dict, optional
             Dictionary specifying column names for 'track', 'time', 'x', 'y' and 'mask_id'.
             Default is {'track': 'TRACK_ID', 'time': 'FRAME', 'x': 'POSITION_X', 'y': 'POSITION_Y', 'mask_id': 'class_id'}.
+    intensity_images : list of ndarray, optional
+            Per-frame multi-channel intensity images with shape ``(Y, X, C)``.
+            When provided together with ``channel_names``, contact-site
+            intensity statistics are computed for each cell and written as new
+            columns ``contact_{channel}_mean/max/std``.  Default is None.
+    channel_names : list of str, optional
+            Names of the C channels in ``intensity_images``.  Must be provided
+            when ``intensity_images`` is not None.  Default is None.
     """
 
     if setA is not None and setB is not None:
@@ -1711,6 +1887,10 @@ def mask_contact_neighborhood(
     # Check distance option
     if not isinstance(distance, list):
         distance = [distance]
+
+    measure_contact_intensity = (
+        intensity_images is not None and channel_names is not None
+    )
 
     cl = []
     for s in [setA, setB]:
@@ -1748,6 +1928,14 @@ def mask_contact_neighborhood(
         setB[neigh_col] = np.nan
         setB[neigh_col] = setB[neigh_col].astype(object)
 
+        # Initialise contact-site intensity columns (NaN) once per distance
+        if measure_contact_intensity:
+            for ch_name in channel_names:
+                for stat in ("mean", "max", "std"):
+                    col = f"contact_{ch_name}_{stat}"
+                    if col not in setA.columns:
+                        setA[col] = np.nan
+
         # Loop over each available timestep
         timeline = np.unique(
             np.concatenate(
@@ -1770,6 +1958,9 @@ def mask_contact_neighborhood(
                     column_labelsA=cl[0],
                     column_labelsB=cl[1],
                 )
+
+                if mode == "self":
+                    np.fill_diagonal(dist_map, 1.0e06)
 
                 d_filter = 1.0e05
                 if attention_weight:
@@ -1807,6 +1998,22 @@ def mask_contact_neighborhood(
                     d_filter=d_filter,
                 )
 
+                if measure_contact_intensity and intensity_images[t] is not None:
+                    _measure_contact_intensity_at_t(
+                        t,
+                        setA,
+                        setA_t,
+                        setB_t,
+                        labelsA[t],
+                        labelsB[t],
+                        intensity_images[t],
+                        channel_names,
+                        dist_map,
+                        d,
+                        cl[0],
+                        cl[1],
+                    )
+
     return setA, setB
 
 
@@ -1819,6 +2026,7 @@ def compute_contact_neighborhood_at_position(
     return_tables: bool = True,
     clear_neigh: bool = True,
     event_time_col: Optional[str] = None,
+    channel_names: Optional[List[str]] = None,
     neighborhood_kwargs: Dict[str, Any] = {
         "mode": "two-pop",
         "status": None,
@@ -1873,6 +2081,8 @@ def compute_contact_neighborhood_at_position(
     pos = rf"{pos}"
     if not os.path.exists(pos):
         raise FileNotFoundError(f"Position {pos} is not a valid path.")
+    if not pos.endswith("/"):
+        pos += "/"
 
     if isinstance(population, str):
         population = [population, population]
@@ -1948,6 +2158,18 @@ def compute_contact_neighborhood_at_position(
     else:
         labelsB = locate_labels(pos, population=population[1])
 
+    # Load intensity stack if contact-site intensity measurement is requested
+    intensity_images = None
+    if channel_names is not None:
+        try:
+            stack = locate_stack(pos)  # shape (T, Y, X, C)
+            intensity_images = [stack[t] for t in range(stack.shape[0])]
+        except Exception as e:
+            logger.warning(
+                f"Could not load intensity stack for contact-site measurements: {e}. "
+                "Contact-site intensity columns will be absent."
+            )
+
     if clear_neigh:
         unwanted = df_A.columns[df_A.columns.str.contains("neighborhood")]
         df_A = df_A.drop(columns=unwanted)
@@ -1956,7 +2178,10 @@ def compute_contact_neighborhood_at_position(
 
     logger.debug(f"Distance: {distance} for mask contact")
     df_A, df_B = mask_contact_neighborhood(
-        df_A, df_B, labelsA, labelsB, distance, **neighborhood_kwargs
+        df_A, df_B, labelsA, labelsB, distance,
+        intensity_images=intensity_images,
+        channel_names=channel_names,
+        **neighborhood_kwargs
     )
     if df_A is None or df_B is None or len(df_A) == 0:
         return None

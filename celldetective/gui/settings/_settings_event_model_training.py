@@ -1,6 +1,6 @@
 from pathlib import Path
 from typing import Optional
-from time import time
+import time
 from PyQt5.QtWidgets import (
     QMessageBox,
     QComboBox,
@@ -12,7 +12,8 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
     QLabel,
     QHBoxLayout,
-    QPushButton, QMainWindow,
+    QPushButton,
+    QMainWindow,
 )
 from PyQt5.QtCore import Qt, QSize, QThread
 from celldetective.gui.base.channel_norm_generator import ChannelNormGenerator
@@ -48,9 +49,9 @@ class BackgroundLoader(QThread):
             )
 
             self.TrainSignalModelProcess = TrainSignalModelProcess
+            logger.info("Librairies loaded...")
         except Exception:
             logger.error("Librairies not loaded...")
-        logger.info("Librairies loaded...")
 
 
 class SettingsEventDetectionModelTraining(CelldetectiveSettingsPanel):
@@ -111,6 +112,14 @@ class SettingsEventDetectionModelTraining(CelldetectiveSettingsPanel):
 
         self.bg_loader = BackgroundLoader()
         self.bg_loader.start()
+
+    def closeEvent(self, event) -> None:
+        """Stop background loader on close."""
+        if self.bg_loader.isRunning():
+            self.bg_loader.requestInterruption()
+            self.bg_loader.quit()
+            self.bg_loader.wait(3000)
+        super().closeEvent(event)
 
     def _add_to_layout(self):
         """Add widgets to the layout."""
@@ -564,7 +573,9 @@ class SettingsEventDetectionModelTraining(CelldetectiveSettingsPanel):
             label = data["label"]
             self.class_name_le.setText(label)
         except KeyError:
-            logger.debug("Model config has no 'label' field; class name not pre-filled.")
+            logger.debug(
+                "Model config has no 'label' field; class name not pre-filled."
+            )
         self.model_length_slider.setValue(int(signal_length))
         self.model_length_slider.setEnabled(False)
 

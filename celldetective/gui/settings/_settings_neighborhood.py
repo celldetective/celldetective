@@ -574,6 +574,14 @@ class SettingsNeighborhood(CelldetectiveWidget):
 
         neighborhood_options.update({"neighborhood_kwargs": neighborhood_kwargs})
 
+        if self.neighborhood_type == "mask_contact":
+            try:
+                ch_names = list(self.attr_parent.exp_channels)
+                if ch_names:
+                    neighborhood_options.update({"channel_names": ch_names})
+            except Exception:
+                pass
+
         logger.debug(f"Neighborhood instructions: {neighborhood_options}")
         file_name = self.neigh_instructions
         with open(file_name, "w") as f:

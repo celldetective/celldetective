@@ -11,17 +11,45 @@ Function Signature Specification
 
 To be valid, a function in this module must adhere to the following signature:
 
+There are three valid signatures depending on whether the function needs the intensity image and, if so, which channels it should run on:
+
+**Shape-only measurement** (regionmask only — called once per cell, no channel suffix):
+
 .. code-block:: python
 
-    def my_custom_measurement(regionmask, intensity_image, target_channel='adhesion_channel', **kwargs):
-        # ... calculation ...
+    def my_shape_measurement(regionmask):
+        # No intensity image needed.  Produces column named exactly 'my_shape_measurement'.
         return scalar_value
+
+**Run on all channels** (no ``target_channel`` — called once per channel):
+
+.. code-block:: python
+
+    def my_custom_measurement(regionmask, intensity_image, **kwargs):
+        # intensity_image is a single-channel 2-D crop for each channel in turn
+        return scalar_value
+
+**Run on one specific channel** (with ``target_channel`` default):
+
+.. code-block:: python
+
+    def my_custom_measurement(regionmask, intensity_image, target_channel='my_channel', **kwargs):
+        # intensity_image is the crop for 'my_channel' only
+        return scalar_value
+
+**How channel selection works:**
+
+*   ``target_channel`` is **never passed** as an argument at call time.
+*   The framework reads its **default value** via ``inspect.signature`` to identify which channel to use.
+*   The function is then called **once**, receiving only the crop for that channel.
+*   All other channel output slots are filled with ``NaN`` automatically.
+*   If the named channel is not present in the experiment, a warning is logged and all slots remain ``NaN``.
 
 **Arguments:**
 
 *   **regionmask** (*ndarray*): A binary mask of the object (cell) within its bounding box.
-*   **intensity_image** (*ndarray*): The intensity image crop corresponding to the bounding box. **Note:** Unlike `regionprops`, this image is *not* masked (background is not zeroed), allowing for threshold-based analysis within the bounding box.
-*   **target_channel** (*str, optional*): The name of the channel being analyzed (e.g., 'adhesion_channel').
+*   **intensity_image** (*ndarray*): The intensity image crop. **Note:** Unlike scikit-image's ``regionprops``, this image is *not* masked — the background is not zeroed — allowing threshold-based analysis within the bounding box.
+*   **target_channel** (*str, optional*): If present, its **default value** names the channel this function applies to. Do not pass it explicitly — it is read by the framework via ``inspect.signature``.
 *   **kwargs**: Additional keyword arguments may be passed by the system.
 
 **Return Value:**
@@ -72,7 +100,8 @@ Authored by R. Torro, K. Dervanova, L. Limozin
 import warnings
 
 import numpy as np
-from scipy.ndimage import distance_transform_edt, center_of_mass
+from scipy.ndimage import distance_transform_edt, center_of_mass, binary_erosion
+from scipy.stats import skew, kurtosis
 from celldetective.utils.masks import contour_of_instance_segmentation
 from celldetective.utils.image_cleaning import interpolate_nan
 import skimage.measure as skm
@@ -262,7 +291,10 @@ def area_dark_intensity(
     - The default threshold for defining "dark" intensity regions is `0.95`, but it can be adjusted.
     - If `fill_holes` is `True`, the function applies hole-filling to the detected dark regions
       using `skimage.measure.label` and `fill_label_holes()`.
-    - The `target_channel` parameter tells regionprops to only measure this channel.
+    - The ``target_channel`` default value (``'adhesion_channel'``) tells the framework which
+      channel to measure. The parameter is never passed at call time; instead, the framework
+      reads the default via ``inspect.signature``, calls the function once with that channel's
+      crop, and fills all other channel slots with ``NaN``.
 
     """
 
@@ -1136,3 +1168,164 @@ def intensity_percentile_twenty_five(
         25th percentile of intensity.
     """
     return np.nanpercentile(intensity_image[regionmask], 25)
+
+
+# Shape descriptors
+
+
+def circularity(regionmask: np.ndarray) -> float:
+    """
+    Computes the circularity of the cell mask.
+
+    Circularity is defined as 4π × area / perimeter², equal to 1.0 for a
+    perfect circle and approaching 0 for elongated or highly irregular shapes.
+    Valid for both fluorescence and label-free cells.
+
+    This function uses a **1-argument signature** (regionmask only), so the
+    framework calls it once per cell — not once per channel — and produces a
+    single scalar column named ``circularity`` with no channel suffix.
+
+    Parameters
+    ----------
+    regionmask : ndarray
+        Binary mask of the region of interest.
+
+    Returns
+    -------
+    float
+        Circularity value in [0, 1]. Returns NaN if the perimeter is zero.
+    """
+    area = float(np.sum(regionmask))
+    p = skm.perimeter(regionmask)
+    if p == 0:
+        return np.nan
+    return float((4.0 * np.pi * area) / (p ** 2))
+
+
+def aspect_ratio(regionmask: np.ndarray) -> float:
+    """
+    Computes the aspect ratio of the cell mask (major axis / minor axis).
+
+    Values close to 1 indicate round cells; higher values indicate elongated
+    cells. Valid for both fluorescence and label-free cells.
+
+    This function uses a **1-argument signature** (regionmask only), so the
+    framework calls it once per cell — not once per channel — and produces a
+    single scalar column named ``aspect_ratio`` with no channel suffix.
+
+    Parameters
+    ----------
+    regionmask : ndarray
+        Binary mask of the region of interest.
+
+    Returns
+    -------
+    float
+        Aspect ratio (≥ 1). Returns NaN if the minor axis has zero length.
+    """
+    props = skm.regionprops(regionmask.astype(np.uint8))
+    if not props:
+        return np.nan
+    p = props[0]
+    if p.axis_minor_length == 0:
+        return np.nan
+    return float(p.axis_major_length / p.axis_minor_length)
+
+
+# Per-channel intensity distribution moments
+
+
+def intensity_skewness(regionmask: np.ndarray, intensity_image: np.ndarray, **kwargs) -> float:
+    """
+    Computes the skewness of the in-mask pixel intensity distribution.
+
+    Positive skewness indicates a long right tail (e.g., sparse bright puncta
+    over a dim background). Negative skewness indicates a long left tail.
+    Near-zero values are typical of uniformly distributed cytoplasmic staining.
+
+    Parameters
+    ----------
+    regionmask : ndarray
+        Binary mask of the region of interest.
+    intensity_image : ndarray
+        Intensity image (single channel).
+
+    Returns
+    -------
+    float
+        Fisher skewness of in-mask pixels. Returns NaN if fewer than 3 pixels
+        are available.
+    """
+    pixels = intensity_image[regionmask]
+    if len(pixels) < 3:
+        return np.nan
+    return float(skew(pixels))
+
+
+def intensity_kurtosis(regionmask: np.ndarray, intensity_image: np.ndarray, **kwargs) -> float:
+    """
+    Computes the excess kurtosis of the in-mask pixel intensity distribution.
+
+    High positive kurtosis indicates a heavy-tailed or peaked distribution
+    (e.g., bright puncta concentrated in a small area). Negative kurtosis
+    indicates a flatter distribution than a Gaussian. Zero is the Gaussian
+    reference (Fisher definition).
+
+    Parameters
+    ----------
+    regionmask : ndarray
+        Binary mask of the region of interest.
+    intensity_image : ndarray
+        Intensity image (single channel).
+
+    Returns
+    -------
+    float
+        Excess kurtosis of in-mask pixels (Fisher definition, Gaussian = 0).
+        Returns NaN if fewer than 4 pixels are available.
+    """
+    pixels = intensity_image[regionmask]
+    if len(pixels) < 4:
+        return np.nan
+    return float(kurtosis(pixels))
+
+
+# Membrane-to-cytoplasm intensity ratio
+
+
+def intensity_membrane_cytoplasm_ratio(
+    regionmask: np.ndarray, intensity_image: np.ndarray, **kwargs
+) -> float:
+    """
+    Computes the ratio of mean membrane-zone intensity to mean cytoplasm intensity.
+
+    The membrane zone is approximated by eroding the cell mask by 3 pixels; the
+    resulting core is the cytoplasm region, and the ring between the full mask
+    and the eroded core is the membrane zone.
+
+    A ratio > 1 indicates membrane enrichment; a ratio < 1 indicates cytoplasmic
+    enrichment. Useful for assessing receptor polarisation, membrane trafficking,
+    or cortical actin accumulation.
+
+    Parameters
+    ----------
+    regionmask : ndarray
+        Binary mask of the region of interest.
+    intensity_image : ndarray
+        Intensity image (single channel).
+
+    Returns
+    -------
+    float
+        Mean membrane intensity divided by mean cytoplasm intensity. Returns NaN
+        if either zone is empty or if the cytoplasm mean is zero.
+    """
+    cytoplasm_mask = binary_erosion(regionmask, iterations=3)
+    membrane_mask = regionmask & ~cytoplasm_mask
+    if not np.any(membrane_mask) or not np.any(cytoplasm_mask):
+        return np.nan
+    mem_mean = np.mean(intensity_image[membrane_mask])
+    cyt_mean = np.mean(intensity_image[cytoplasm_mask])
+    if cyt_mean == 0:
+        return np.nan
+    return float(mem_mean / cyt_mean)

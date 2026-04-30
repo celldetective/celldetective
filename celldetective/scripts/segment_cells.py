@@ -83,12 +83,12 @@ if not use_gpu:
 
 modelname = str(process_arguments["model"])
 
-if mode.lower() == "target" or mode.lower() == "targets":
+if mode.lower() in ("target", "targets"):
     label_folder = "labels_targets"
-elif mode.lower() == "effector" or mode.lower() == "effectors":
+elif mode.lower() in ("effector", "effectors"):
     label_folder = "labels_effectors"
 else:
-    raise ValueError(f"Unknown mode {mode!r}. Expected 'target' or 'effector'.")
+    label_folder = f"labels_{mode}"
 
 # Locate experiment config
 parent1 = Path(pos).parent
@@ -172,7 +172,7 @@ os.mkdir(pos + label_folder)
 logger.info("Labels folder successfully generated...")
 
 log = f"segmentation model: {modelname}\n"
-with open(pos + f"log_{mode}.json", "a") as f:
+with open(pos + f"log_{mode}.txt", "a") as f:
     f.write(f"{datetime.datetime.now()} SEGMENT \n")
     f.write(log)
 

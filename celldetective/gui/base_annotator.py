@@ -876,6 +876,7 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
         # 			  )
         # del self.img
         gc.collect()
+        super().closeEvent(event)
 
     def save_trajectories(self):
         """Save trajectories (not implemented)."""

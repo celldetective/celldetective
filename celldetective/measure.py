@@ -215,6 +215,14 @@ def measure(
     if trajectories is None:
         do_features = True
         features += ["centroid"]
+        # When measuring without a trajectory table, cells get a temporary per-frame
+        # integer ID instead of a persistent TRACK_ID.
+        column_labels = {
+            "track": "ID",
+            "time": column_labels["time"],
+            "x": column_labels["x"],
+            "y": column_labels["y"],
+        }
     else:
         if clear_previous:
             trajectories = remove_trajectory_measurements(trajectories, column_labels)
@@ -262,30 +270,6 @@ def measure(
                     inplace=True,
                 )
                 positions_at_t["FRAME"] = int(t)
-                column_labels = {
-                    "track": "ID",
-                    "time": column_labels["time"],
-                    "x": column_labels["x"],
-                    "y": column_labels["y"],
-                }
-
-        center_of_mass_x_cols = [
-            c for c in list(positions_at_t.columns) if c.endswith("centre_of_mass_x")
-        ]
-        center_of_mass_y_cols = [
-            c for c in list(positions_at_t.columns) if c.endswith("centre_of_mass_y")
-        ]
-        for c in center_of_mass_x_cols:
-            positions_at_t.loc[:, c.replace("_x", "_POSITION_X")] = (
-                positions_at_t[c] + positions_at_t["POSITION_X"]
-            )
-        for c in center_of_mass_y_cols:
-            positions_at_t.loc[:, c.replace("_y", "_POSITION_Y")] = (
-                positions_at_t[c] + positions_at_t["POSITION_Y"]
-            )
-        positions_at_t = positions_at_t.drop(
-            columns=center_of_mass_x_cols + center_of_mass_y_cols
-        )
 
         # Isotropic measurements (circle, ring)
         if do_iso_intensities:
@@ -312,13 +296,10 @@ def measure(
         elif do_features and trajectories is None:
             measurements_at_t = positions_at_t
 
-        try:
-            measurements_at_t["radial_distance"] = np.sqrt(
-                (measurements_at_t[column_labels["x"]] - img.shape[0] / 2) ** 2
-                + (measurements_at_t[column_labels["y"]] - img.shape[1] / 2) ** 2
-            )
-        except Exception as e:
-            logger.error(f"{e}")
+        measurements_at_t = center_of_mass_to_abs_coordinates(measurements_at_t)
+        measurements_at_t = measure_radial_distance_to_center(
+            measurements_at_t, volume=img.shape if img is not None else None, column_labels=column_labels
+        )
 
         timestep_dataframes.append(measurements_at_t)
 
@@ -327,7 +308,11 @@ def measure(
         measurements = measurements.sort_values(
             by=[column_labels["track"], column_labels["time"]]
         )
+        n_before = len(measurements)
         measurements = measurements.dropna(subset=[column_labels["track"]])
+        n_dropped = n_before - len(measurements)
+        if n_dropped > 0:
+            logger.warning(f"Dropped {n_dropped} row(s) with NaN {column_labels['track']} after measurement.")
     else:
         measurements["ID"] = np.arange(len(measurements))
 
@@ -659,6 +644,12 @@ def measure_features(
     )
 
     df_props = pd.DataFrame(props)
+
+    if spot_detection is not None and df_spots is None:
+        logger.warning(
+            "Spot detection was configured but returned no results (channel not found or detection failed). "
+            "Spot columns will be absent from the output."
+        )
 
     if spot_detection is not None and df_spots is not None:
         df_props = df_props.merge(
@@ -1195,10 +1186,13 @@ def measure_at_position(
     if not pos.endswith("/"):
         pos += "/"
     script_path = os.sep.join([abs_path, "scripts", "measure_cells.py"])
-    subprocess.run(
+    result = subprocess.run(
         [sys.executable, script_path, "--pos", pos, "--mode", mode, "--threads", str(threads)],
         check=False,
     )
+    if result.returncode != 0:
+        logger.error(f"Measurement script exited with code {result.returncode} for position {pos}.")
+        raise RuntimeError(f"Measurement failed for position {pos} (exit code {result.returncode}).")
 
     table = pos + os.sep.join(["output", "tables", f"trajectories_{mode}.csv"])
     if return_measurements:
@@ -1566,7 +1560,7 @@ def estimate_time(
         indices = group.index
         status_col = class_attr.replace("class", "status")
 
-        group_clean = group.dropna(subset=status_col)
+        group_clean = group.dropna(subset=[status_col])
         status_signal = group_clean[status_col].values
         if np.all(np.array(status_signal) == 1):
             continue
@@ -1923,7 +1917,7 @@ def classify_irreversible_events(
             df.loc[indices_pre_detection, stat_col] = 0.0
 
         # The non-NaN part of track (post pre-event)
-        track_valid = track.dropna(subset=stat_col, inplace=False)
+        track_valid = track.dropna(subset=[stat_col], inplace=False)
         status_values = track_valid[stat_col].to_numpy()
 
         if np.all([s == 0 for s in status_values]):
@@ -2039,7 +2033,7 @@ def classify_unique_states(
                 track.loc[track["FRAME"] <= t_pre_event, stat_col] = np.nan
 
         # Post pre-event track
-        track_valid = track.dropna(subset=stat_col, inplace=False)
+        track_valid = track.dropna(subset=[stat_col], inplace=False)
         status_values = track_valid[stat_col].to_numpy()
         frames = track_valid["FRAME"].to_numpy()
         t_first = track["t_firstdetection"].to_numpy()[0]
@@ -2257,15 +2251,15 @@ def center_of_mass_to_abs_coordinates(df: pd.DataFrame) -> pd.DataFrame:
     """
 
     center_of_mass_x_cols = [
-        c for c in list(df.columns) if c.endswith("centre_of_mass_x")
+        c for c in list(df.columns) if c.endswith("center_of_mass_dx")
     ]
     center_of_mass_y_cols = [
-        c for c in list(df.columns) if c.endswith("centre_of_mass_y")
+        c for c in list(df.columns) if c.endswith("center_of_mass_dy")
     ]
     for c in center_of_mass_x_cols:
-        df.loc[:, c.replace("_x", "_POSITION_X")] = df[c] + df["POSITION_X"]
+        df.loc[:, c.replace("_dx", "_POSITION_X")] = df[c] + df["POSITION_X"]
     for c in center_of_mass_y_cols:
-        df.loc[:, c.replace("_y", "_POSITION_Y")] = df[c] + df["POSITION_Y"]
+        df.loc[:, c.replace("_dy", "_POSITION_Y")] = df[c] + df["POSITION_Y"]
     df = df.drop(columns=center_of_mass_x_cols + center_of_mass_y_cols)
 
     return df

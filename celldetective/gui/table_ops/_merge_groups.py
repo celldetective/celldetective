@@ -135,7 +135,7 @@ class MergeGroupWidget(CelldetectiveWidget):
         ]
         name = self.name_le.text()
         if " " in name:
-            name.replace(" ", "_")
+            name = name.replace(" ", "_")
         if name == "":
             name = "multilabel"
         if not name.startswith("group_"):

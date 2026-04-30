@@ -1415,10 +1415,13 @@ def track_at_position(
         pos += "/"
 
     script_path = os.sep.join([abs_path, "scripts", "track_cells.py"])
-    subprocess.run(
+    result = subprocess.run(
         [sys.executable, script_path, "--pos", pos, "--mode", mode, "--threads", str(threads)],
         check=False,
     )
+    if result.returncode != 0:
+        logger.error(f"Tracking script exited with code {result.returncode} for position {pos}.")
+        raise RuntimeError(f"Tracking failed for position {pos} (exit code {result.returncode}).")
 
     track_table = pos + os.sep.join(["output", "tables", f"trajectories_{mode}.csv"])
     if return_tracks:

@@ -62,9 +62,9 @@ class BackgroundLoader(QThread):
             from scipy.ndimage._measurements import label
             import pandas as pd
             from celldetective.regionprops._regionprops import regionprops_table
+            logger.info("Background packages loaded...")
         except Exception:
             logger.error("Background packages not loaded...")
-        logger.info("Background packages loaded...")
 
 
 class ThresholdConfigWizard(CelldetectiveMainWindow):
@@ -150,6 +150,7 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
         if hasattr(self, "viewer") and self.viewer is not None:
             # viewer.closeEvent handles signal disconnect + thread stop + wait
             try:
+                self.viewer.closeEvent(event)
                 self.viewer.close()
             except RuntimeError as e:
                 logger.debug(f"Viewer already closed during cleanup: {e}")

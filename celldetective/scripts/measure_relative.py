@@ -75,8 +75,9 @@ if os.path.exists(previous_pair_table_path):
         if c.startswith("status_neighborhood")
     ]
     for n in previous_neighborhoods:
+        ref_pop_series = df_0.loc[~df_0["status_" + n].isnull(), "reference_population"]
         associated_reference_population.append(
-            df_0.loc[~df_0["status_" + n].isnull(), "reference_population"].values[0]
+            ref_pop_series.values[0] if len(ref_pop_series) > 0 else None
         )
     logger.debug(f"previous_neighborhoods={previous_neighborhoods} associated_reference_population={associated_reference_population}")
     all_df_pairs.append(df_0)
@@ -84,7 +85,7 @@ for k, neigh_protocol in enumerate(neighborhoods_to_measure):
     if neigh_protocol["description"] not in previous_neighborhoods:
         df_pairs = measure_pair_signals_at_position(pos, neigh_protocol)
         logger.debug(f"df_pairs={df_pairs}")
-        if "REFERENCE_ID" in list(df_pairs.columns):
+        if df_pairs is not None and "REFERENCE_ID" in df_pairs.columns:
             all_df_pairs.append(df_pairs)
     elif (
         neigh_protocol["description"] in previous_neighborhoods
@@ -94,7 +95,7 @@ for k, neigh_protocol in enumerate(neighborhoods_to_measure):
         ]
     ):
         df_pairs = measure_pair_signals_at_position(pos, neigh_protocol)
-        if "REFERENCE_ID" in list(df_pairs.columns):
+        if df_pairs is not None and "REFERENCE_ID" in df_pairs.columns:
             all_df_pairs.append(df_pairs)
 
 logger.info(f"{len(all_df_pairs)} neighborhood measurements sets were computed...")

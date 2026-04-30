@@ -22,12 +22,14 @@ Input
 Requires pre-computed tracking tables (`pkl` or `csv`) containing neighborhood information columns.
 """
 
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Dict
 
 import pandas as pd
 import numpy as np
 from celldetective.utils.maths import derivative
 from celldetective.utils.data_cleaning import extract_identity_col
+from celldetective.utils.image_loaders import locate_labels, locate_stack
+from celldetective.neighborhood import _contact_site_mask
 import os
 import subprocess
 import sys
@@ -48,13 +50,15 @@ def _load_pair_tables(
         ["output", "tables", f"trajectories_{reference_population}.pkl"]
     )
     if os.path.exists(tab_ref):
-        df_reference = np.load(tab_ref, allow_pickle=True)
+        df_reference = pd.read_pickle(tab_ref)
+    elif os.path.exists(tab_ref.replace(".pkl", ".csv")):
+        df_reference = pd.read_csv(tab_ref.replace(".pkl", ".csv"))
     else:
         df_reference = None
 
     tab_neigh = tab_ref.replace(reference_population, neighbor_population)
     if os.path.exists(tab_neigh):
-        df_neighbor = np.load(tab_neigh, allow_pickle=True)
+        df_neighbor = pd.read_pickle(tab_neigh)
     elif os.path.exists(tab_neigh.replace(".pkl", ".csv")):
         df_neighbor = pd.read_csv(tab_neigh.replace(".pkl", ".csv"))
     else:
@@ -68,6 +72,7 @@ def _build_neighbor_timeline(
 ) -> Tuple[list, list, pd.DataFrame, dict]:
     """Build per-frame neighbor ID lists and intersection values for one reference cell."""
     neighbor_dicts = group.loc[:, f"{neighborhood_description}"].values
+    frames = group["FRAME"].values
 
     neighbor_ids: list = []
     neighbor_ids_per_t: list = []
@@ -76,14 +81,15 @@ def _build_neighbor_timeline(
 
     for t in range(len(group)):
         neighbors_at_t = neighbor_dicts[t]
+        frame_t = int(frames[t])
         neighs_t: list = []
         if not (isinstance(neighbors_at_t, float) or neighbors_at_t != neighbors_at_t):
             for neigh in neighbors_at_t:
                 if neigh["id"] not in neighbor_ids:
-                    time_of_first_entrance[neigh["id"]] = t
+                    time_of_first_entrance[neigh["id"]] = frame_t
                 intersection_rows.append(
                     {
-                        "frame": t,
+                        "frame": frame_t,
                         "neigh_id": neigh["id"],
                         "intersection": neigh.get("intersection", np.nan),
                     }
@@ -98,43 +104,47 @@ def _build_neighbor_timeline(
 def _compute_pair_geometry(
     coords_reference: np.ndarray,
     coords_neighbor: np.ndarray,
-    coords_centre_of_mass: list,
-    centre_of_mass_columns: list,
+    coords_center_of_mass: list,
+    center_of_mass_columns: list,
     timeline_reference: np.ndarray,
     timeline_neighbor: np.ndarray,
     full_timeline: np.ndarray,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Compute relative position vectors, angles, distances, and dot products over time."""
     n = len(full_timeline)
-    n_com = len(centre_of_mass_columns)
+    n_com = len(center_of_mass_columns)
 
     neighbor_vector = np.full((n, 2), np.nan)
     mass_displacement_vector = np.full((n_com, n, 2), np.nan)
     dot_product_vector = np.full((n_com, n), np.nan)
     cosine_dot_vector = np.full((n_com, n), np.nan)
 
-    for t in range(n):
-        if t in timeline_reference and t in timeline_neighbor:
-            idx_ref = list(timeline_reference).index(t)
-            idx_neigh = list(timeline_neighbor).index(t)
+    ref_idx_map = {int(frame): i for i, frame in enumerate(timeline_reference)}
+    neigh_idx_map = {int(frame): i for i, frame in enumerate(timeline_neighbor)}
 
-            neighbor_vector[t, 0] = coords_neighbor[idx_neigh, 0] - coords_reference[idx_ref, 0]
-            neighbor_vector[t, 1] = coords_neighbor[idx_neigh, 1] - coords_reference[idx_ref, 1]
+    for t_idx in range(n):
+        frame = int(full_timeline[t_idx])
+        if frame in ref_idx_map and frame in neigh_idx_map:
+            idx_ref = ref_idx_map[frame]
+            idx_neigh = neigh_idx_map[frame]
+
+            neighbor_vector[t_idx, 0] = coords_neighbor[idx_neigh, 0] - coords_reference[idx_ref, 0]
+            neighbor_vector[t_idx, 1] = coords_neighbor[idx_neigh, 1] - coords_reference[idx_ref, 1]
 
             for z in range(n_com):
-                mass_displacement_vector[z, t, 0] = (
-                    coords_centre_of_mass[z][idx_neigh, 0] - coords_neighbor[idx_neigh, 0]
+                mass_displacement_vector[z, t_idx, 0] = (
+                    coords_center_of_mass[z][idx_neigh, 0] - coords_neighbor[idx_neigh, 0]
                 )
-                mass_displacement_vector[z, t, 1] = (
-                    coords_centre_of_mass[z][idx_neigh, 1] - coords_neighbor[idx_neigh, 1]
+                mass_displacement_vector[z, t_idx, 1] = (
+                    coords_center_of_mass[z][idx_neigh, 1] - coords_neighbor[idx_neigh, 1]
                 )
-                dot_product_vector[z, t] = np.dot(
-                    mass_displacement_vector[z, t], -neighbor_vector[t]
+                dot_product_vector[z, t_idx] = np.dot(
+                    mass_displacement_vector[z, t_idx], -neighbor_vector[t_idx]
                 )
-                norm_prod = np.linalg.norm(mass_displacement_vector[z, t]) * np.linalg.norm(
-                    -neighbor_vector[t]
+                norm_prod = np.linalg.norm(mass_displacement_vector[z, t_idx]) * np.linalg.norm(
+                    -neighbor_vector[t_idx]
                 )
-                cosine_dot_vector[z, t] = dot_product_vector[z, t] / norm_prod
+                cosine_dot_vector[z, t_idx] = dot_product_vector[z, t_idx] / norm_prod
 
     exclude = neighbor_vector[:, 1] != neighbor_vector[:, 1]
     angle = np.full(n, np.nan)
@@ -176,6 +186,7 @@ def _build_pair_row(
     reference_population: str,
     neighbor_population: str,
     t: int,
+    idx: int,
     relative_distance: np.ndarray,
     rel_velocity: np.ndarray,
     rel_velocity_smooth: np.ndarray,
@@ -191,26 +202,36 @@ def _build_pair_row(
     time_of_first_entrance: dict,
     ref_tracked: bool,
     neigh_tracked: bool,
-    centre_of_mass_labels: list,
+    center_of_mass_labels: list,
     dot_product_vector: np.ndarray,
     cosine_dot_vector: np.ndarray,
 ) -> dict:
-    """Assemble a single measurement row dict for one pair at one timepoint."""
+    """Assemble a single measurement row dict for one pair at one timepoint.
+
+    Parameters
+    ----------
+    t : int
+        Actual frame number (used for the FRAME column).
+    idx : int
+        Position of ``t`` within ``full_timeline`` (used to index geometry arrays).
+        When full_timeline = [0, 1, 2, ...], ``idx == t``; they differ when tracks
+        start at a frame other than 0.
+    """
     row: dict = {
         "REFERENCE_ID": tid,
         "NEIGHBOR_ID": nc,
         "reference_population": reference_population,
         "neighbor_population": neighbor_population,
         "FRAME": t,
-        "distance": relative_distance[t],
+        "distance": relative_distance[idx],
         "intersection": inter,
         "reference_frac_area_intersection": ref_inter_fraction,
         "neighbor_frac_area_intersection": neigh_inter_fraction,
-        "velocity": rel_velocity[t],
-        "velocity_smooth": rel_velocity_smooth[t],
-        "angle": angle[t] * 180 / np.pi,
-        "angular_velocity": angular_velocity[t],
-        "angular_velocity_smooth": angular_velocity_smooth[t],
+        "velocity": rel_velocity[idx],
+        "velocity_smooth": rel_velocity_smooth[idx],
+        "angle": angle[idx] * 180 / np.pi,
+        "angular_velocity": angular_velocity[idx],
+        "angular_velocity_smooth": angular_velocity_smooth[idx],
         f"status_{neighborhood_description}": status,
         f"residence_time_in_{neighborhood_description}": cum_sum,
         f"class_{neighborhood_description}": 0,
@@ -218,9 +239,9 @@ def _build_pair_row(
         "reference_tracked": ref_tracked,
         "neighbors_tracked": neigh_tracked,
     }
-    for z, lbl in enumerate(centre_of_mass_labels):
-        row[lbl + "_centre_of_mass_dot_product"] = dot_product_vector[z, t]
-        row[lbl + "_centre_of_mass_dot_cosine"] = cosine_dot_vector[z, t]
+    for z, lbl in enumerate(center_of_mass_labels):
+        row[lbl + "_center_of_mass_dot_product"] = dot_product_vector[z, idx]
+        row[lbl + "_center_of_mass_dot_cosine"] = cosine_dot_vector[z, idx]
     return row
 
 
@@ -271,15 +292,15 @@ def measure_pairs(pos: str, neighborhood_protocol: dict) -> Optional[pd.DataFram
     elif neigh_id_col == "TRACK_ID":
         neigh_tracked = True
 
-    centre_of_mass_columns = [
+    center_of_mass_columns = [
         (c, c.replace("POSITION_X", "POSITION_Y"))
         for c in list(df_neighbor.columns)
-        if c.endswith("centre_of_mass_POSITION_X")
+        if c.endswith("center_of_mass_POSITION_X")
     ]
-    centre_of_mass_labels = [
-        c.replace("_centre_of_mass_POSITION_X", "")
+    center_of_mass_labels = [
+        c.replace("_center_of_mass_POSITION_X", "")
         for c in list(df_neighbor.columns)
-        if c.endswith("centre_of_mass_POSITION_X")
+        if c.endswith("center_of_mass_POSITION_X")
     ]
 
     for t in np.unique(
@@ -295,9 +316,11 @@ def measure_pairs(pos: str, neighborhood_protocol: dict) -> Optional[pd.DataFram
             coords_reference = group[["POSITION_X", "POSITION_Y"]].to_numpy()[0]
 
             neighbors = []
+            neighbors_info = {}
             if not (isinstance(neighborhood, float) or neighborhood != neighborhood):
                 for neigh in neighborhood:
                     neighbors.append(neigh["id"])
+                    neighbors_info[neigh["id"]] = neigh.get("intersection", np.nan)
 
             unique_neigh = list(np.unique(neighbors))
             logger.debug(f"unique_neigh={unique_neigh}")
@@ -310,26 +333,24 @@ def measure_pairs(pos: str, neighborhood_protocol: dict) -> Optional[pd.DataFram
 
                 neighbor_vector = np.zeros(2)
                 neighbor_vector[:] = np.nan
-                mass_displacement_vector = np.zeros((len(centre_of_mass_columns), 2))
+                mass_displacement_vector = np.zeros((len(center_of_mass_columns), 2))
 
-                coords_centre_of_mass = []
-                for col in centre_of_mass_columns:
-                    coords_centre_of_mass.append(
+                coords_center_of_mass = []
+                for col in center_of_mass_columns:
+                    coords_center_of_mass.append(
                         group_neigh[[col[0], col[1]]].to_numpy()[0]
                     )
 
-                dot_product_vector = np.zeros((len(centre_of_mass_columns)))
+                dot_product_vector = np.zeros((len(center_of_mass_columns)))
                 dot_product_vector[:] = np.nan
 
-                cosine_dot_vector = np.zeros((len(centre_of_mass_columns)))
+                cosine_dot_vector = np.zeros((len(center_of_mass_columns)))
                 cosine_dot_vector[:] = np.nan
 
                 coords_neighbor = group_neigh[["POSITION_X", "POSITION_Y"]].to_numpy()[
                     0
                 ]
-                intersection = np.nan
-                if "intersection" in list(group_neigh.columns):
-                    intersection = group_neigh["intersection"].values[0]
+                intersection = neighbors_info.get(nc, np.nan)
 
                 neighbor_vector[0] = coords_neighbor[0] - coords_reference[0]
                 neighbor_vector[1] = coords_neighbor[1] - coords_reference[1]
@@ -343,13 +364,13 @@ def measure_pairs(pos: str, neighborhood_protocol: dict) -> Optional[pd.DataFram
                         neighbor_vector[0] ** 2 + neighbor_vector[1] ** 2
                     )
 
-                    for z, cols in enumerate(centre_of_mass_columns):
+                    for z, cols in enumerate(center_of_mass_columns):
 
                         mass_displacement_vector[z, 0] = (
-                            coords_centre_of_mass[z][0] - coords_neighbor[0]
+                            coords_center_of_mass[z][0] - coords_neighbor[0]
                         )
                         mass_displacement_vector[z, 1] = (
-                            coords_centre_of_mass[z][1] - coords_neighbor[1]
+                            coords_center_of_mass[z][1] - coords_neighbor[1]
                         )
 
                         dot_product_vector[z] = np.dot(
@@ -378,19 +399,78 @@ def measure_pairs(pos: str, neighborhood_protocol: dict) -> Optional[pd.DataFram
                             "neighbors_tracked": neigh_tracked,
                         }
                     )
-                    for z, lbl in enumerate(centre_of_mass_labels):
+                    for z, lbl in enumerate(center_of_mass_labels):
                         relative_measurements[-1].update(
                             {
                                 lbl
-                                + "_centre_of_mass_dot_product": dot_product_vector[z],
+                                + "_center_of_mass_dot_product": dot_product_vector[z],
                                 lbl
-                                + "_centre_of_mass_dot_cosine": cosine_dot_vector[z],
+                                + "_center_of_mass_dot_cosine": cosine_dot_vector[z],
                             }
                         )
 
     df_pairs = pd.DataFrame(relative_measurements)
 
     return df_pairs
+
+
+def _measure_contact_site_intensity(
+    labelsA_t: np.ndarray,
+    labelsB_t: Optional[np.ndarray],
+    ref_class_id: int,
+    neigh_class_id: int,
+    intensity_t: np.ndarray,
+    channel_names: List[str],
+    border: int = 3,
+) -> Dict[str, float]:
+    """
+    Compute contact-zone intensity statistics for one pair at one timepoint.
+
+    Parameters
+    ----------
+    labelsA_t : ndarray, shape (H, W)
+        Label image for population A at this timepoint.
+    labelsB_t : ndarray or None, shape (H, W)
+        Label image for population B at this timepoint. If None (self-contact),
+        labelsA_t is used for both populations.
+    ref_class_id : int
+        Label value of the reference cell in labelsA_t.
+    neigh_class_id : int
+        Label value of the neighbor cell in labelsB_t.
+    intensity_t : ndarray, shape (H, W, C)
+        Multi-channel intensity image at this timepoint.
+    channel_names : list of str
+        Names of the C channels in intensity_t.
+    border : int
+        Dilation radius (pixels) used to define the contact zone.
+
+    Returns
+    -------
+    dict
+        Keys ``contact_{ch}_mean``, ``contact_{ch}_max``, ``contact_{ch}_std``
+        for each channel.  Values are NaN when the contact zone is empty.
+    """
+    if labelsB_t is None:
+        labelsB_t = labelsA_t
+
+    result: Dict[str, float] = {}
+    try:
+        zone = _contact_site_mask(labelsA_t, labelsB_t, ref_class_id, neigh_class_id, border)
+    except Exception as e:
+        logger.debug(f"_contact_site_mask failed for ids ({ref_class_id}, {neigh_class_id}): {e}")
+        zone = np.zeros_like(labelsA_t, dtype=bool)
+
+    for ch_idx, ch_name in enumerate(channel_names):
+        if not np.any(zone) or intensity_t.ndim < 3 or ch_idx >= intensity_t.shape[2]:
+            result[f"contact_{ch_name}_mean"] = np.nan
+            result[f"contact_{ch_name}_max"] = np.nan
+            result[f"contact_{ch_name}_std"] = np.nan
+        else:
+            pixels = intensity_t[:, :, ch_idx][zone].astype(float)
+            result[f"contact_{ch_name}_mean"] = float(np.mean(pixels))
+            result[f"contact_{ch_name}_max"] = float(np.max(pixels))
+            result[f"contact_{ch_name}_std"] = float(np.std(pixels))
+    return result
 
 
 def measure_pair_signals_at_position(
@@ -453,6 +533,38 @@ def measure_pair_signals_at_position(
         logger.error("ID or TRACK ID column could not be found in neighbor table. Abort.")
         return None
 
+    # --- Contact-site intensity setup (mask_contact neighborhoods only) -------
+    channel_names = neighborhood_protocol.get("channel_names")
+    contact_border = int(neighborhood_protocol.get("contact_border", 3))
+    labelsA_all = None
+    labelsB_all = None
+    intensity_stack = None  # list of (H, W, C) arrays, one per frame
+
+    if channel_names:
+        try:
+            labelsA_all = locate_labels(pos, population=reference_population)
+            if neighbor_population != reference_population:
+                labelsB_all = locate_labels(pos, population=neighbor_population)
+            raw_stack = locate_stack(pos)  # (T, H, W, C)
+            if raw_stack is not None:
+                intensity_stack = [raw_stack[t] for t in range(raw_stack.shape[0])]
+        except Exception as e:
+            logger.warning(f"Could not load labels/stack for contact-site intensity: {e}")
+            channel_names = None  # disable gracefully
+
+    # Build fast lookup: (track_id, frame) -> class_id for both populations
+    ref_class_lookup: Dict[Tuple, int] = {}
+    neigh_class_lookup: Dict[Tuple, int] = {}
+    if channel_names and "class_id" in df_reference.columns:
+        sub = df_reference[["FRAME", ref_id_col, "class_id"]].dropna(subset=["class_id", "FRAME"])
+        for _, row in sub.iterrows():
+            ref_class_lookup[(row[ref_id_col], int(row["FRAME"]))] = int(row["class_id"])
+    if channel_names and "class_id" in df_neighbor.columns:
+        sub = df_neighbor[["FRAME", neigh_id_col, "class_id"]].dropna(subset=["class_id", "FRAME"])
+        for _, row in sub.iterrows():
+            neigh_class_lookup[(row[neigh_id_col], int(row["FRAME"]))] = int(row["class_id"])
+    # -------------------------------------------------------------------------
+
     relative_measurements: list = []
 
     try:
@@ -475,15 +587,15 @@ def measure_pair_signals_at_position(
 
             neighbor_properties = df_neighbor.loc[df_neighbor[neigh_id_col].isin(unique_neigh)]
 
-            centre_of_mass_columns = [
+            center_of_mass_columns = [
                 (c, c.replace("POSITION_X", "POSITION_Y"))
                 for c in neighbor_properties.columns
-                if c.endswith("centre_of_mass_POSITION_X")
+                if c.endswith("center_of_mass_POSITION_X")
             ]
-            centre_of_mass_labels = [
-                c.replace("_centre_of_mass_POSITION_X", "")
+            center_of_mass_labels = [
+                c.replace("_center_of_mass_POSITION_X", "")
                 for c in neighbor_properties.columns
-                if c.endswith("centre_of_mass_POSITION_X")
+                if c.endswith("center_of_mass_POSITION_X")
             ]
 
             for nc, group_neigh in neighbor_properties.groupby(neigh_id_col):
@@ -495,8 +607,8 @@ def measure_pair_signals_at_position(
                     if "area" in group_neigh.columns
                     else [np.nan] * len(timeline_neighbor)
                 )
-                coords_centre_of_mass = [
-                    group_neigh[[col[0], col[1]]].to_numpy() for col in centre_of_mass_columns
+                coords_center_of_mass = [
+                    group_neigh[[col[0], col[1]]].to_numpy() for col in center_of_mass_columns
                 ]
 
                 full_timeline, _, _ = timeline_matching(timeline_reference, timeline_neighbor)
@@ -505,8 +617,8 @@ def measure_pair_signals_at_position(
                     _compute_pair_geometry(
                         coords_reference,
                         coords_neighbor,
-                        coords_centre_of_mass,
-                        centre_of_mass_columns,
+                        coords_center_of_mass,
+                        center_of_mass_columns,
                         timeline_reference,
                         timeline_neighbor,
                         full_timeline,
@@ -519,13 +631,18 @@ def measure_pair_signals_at_position(
                     )
                 )
 
+                # Pre-build frame→position maps to avoid repeated O(N) list.index() calls
+                ref_frame_to_idx = {int(f): i for i, f in enumerate(timeline_reference)}
+                neigh_frame_to_idx = {int(f): i for i, f in enumerate(timeline_neighbor)}
+
                 cum_sum = 0
-                for t in range(len(full_timeline)):
-                    if t not in timeline_reference or t not in timeline_neighbor:
+                for idx, t in enumerate(full_timeline):
+                    t = int(t)
+                    if t not in ref_frame_to_idx or t not in neigh_frame_to_idx:
                         continue
 
-                    idx_reference = list(timeline_reference).index(t)
-                    idx_neighbor = list(timeline_neighbor).index(t)
+                    idx_reference = ref_frame_to_idx[t]
+                    idx_neighbor = neigh_frame_to_idx[t]
 
                     inter_vals = intersection_values.loc[
                         (intersection_values["neigh_id"] == nc)
@@ -556,6 +673,7 @@ def measure_pair_signals_at_position(
                         reference_population,
                         neighbor_population,
                         t,
+                        idx,
                         relative_distance,
                         rel_velocity,
                         rel_velocity_smooth,
@@ -571,10 +689,25 @@ def measure_pair_signals_at_position(
                         time_of_first_entrance,
                         ref_tracked,
                         neigh_tracked,
-                        centre_of_mass_labels,
+                        center_of_mass_labels,
                         dot_product_vector,
                         cosine_dot_vector,
                     )
+
+                    # Contact-site intensity (mask_contact only, cells in contact)
+                    if channel_names and in_neighborhood and intensity_stack is not None:
+                        lA_t = labelsA_all[t] if labelsA_all is not None and t < len(labelsA_all) else None
+                        lB_t = labelsB_all[t] if labelsB_all is not None and t < len(labelsB_all) else lA_t
+                        img_t = intensity_stack[t] if t < len(intensity_stack) else None
+                        ref_cid = ref_class_lookup.get((tid, t))
+                        neigh_cid = neigh_class_lookup.get((nc, t))
+                        if lA_t is not None and img_t is not None and ref_cid is not None and neigh_cid is not None:
+                            contact_stats = _measure_contact_site_intensity(
+                                lA_t, lB_t, ref_cid, neigh_cid,
+                                img_t, channel_names, contact_border,
+                            )
+                            row.update(contact_stats)
+
                     relative_measurements.append(row)
 
         return pd.DataFrame(relative_measurements)
@@ -657,10 +790,13 @@ def rel_measure_at_position(pos: str) -> None:
     if not pos.endswith("/"):
         pos += "/"
     script_path = os.sep.join([abs_path, "scripts", "measure_relative.py"])
-    subprocess.run(
+    result = subprocess.run(
         [sys.executable, script_path, "--pos", pos],
         check=False,
     )
+    if result.returncode != 0:
+        logger.error(f"Relative measurement script exited with code {result.returncode} for position {pos}.")
+        raise RuntimeError(f"Relative measurement failed for position {pos} (exit code {result.returncode}).")
 
 
 # def mcf7_size_model(x,x0,x2):
@@ -738,7 +874,8 @@ def update_effector_table(
         Updated effector DataFrame with 'group_neighborhood' column.
     """
     df_effector["group_neighborhood"] = 1
-    effectors = np.unique(df_relative["EFFECTOR_ID"].to_numpy())
+    col = "EFFECTOR_ID" if "EFFECTOR_ID" in df_relative.columns else "NEIGHBOR_ID"
+    effectors = np.unique(df_relative[col].to_numpy())
     for effector in effectors:
         try:
             # Set group_neighborhood to 0 where TRACK_ID matches effector
@@ -798,9 +935,16 @@ def extract_neighborhoods_from_pickles(
     neighborhood_protocols = []
 
     for pop in populations:
-        tab_pop = pos + os.sep.join(["output", "tables", f"trajectories_{pop}.pkl"])
-        if os.path.exists(tab_pop):
-            df_pop = np.load(tab_pop, allow_pickle=True)
+        tab_pop_pkl = pos + os.sep.join(["output", "tables", f"trajectories_{pop}.pkl"])
+        tab_pop_csv = tab_pop_pkl.replace(".pkl", ".csv")
+        df_pop = None
+
+        if os.path.exists(tab_pop_pkl):
+            df_pop = pd.read_pickle(tab_pop_pkl)
+        elif os.path.exists(tab_pop_csv):
+            df_pop = pd.read_csv(tab_pop_csv)
+
+        if df_pop is not None:
             for column in list(df_pop.columns):
                 if column.startswith("neighborhood"):
                     neigh_protocol = extract_neighborhood_settings(
@@ -891,11 +1035,15 @@ def extract_neighborhood_settings(
         neighbor_population = neigh_string.split("_(")[-1].split(")_")[0].split("-")[-1]
         logger.debug(f"neighbor_population={neighbor_population}")
     else:
-        # old method
+        # Legacy fallback: neighborhood string predates the _(pop)_ encoding.
+        # Assume canonical target/effector pairing; for any other population
+        # default to self-neighboring (same population).
         if population == "targets":
             neighbor_population = "effectors"
         elif population == "effectors":
             neighbor_population = "targets"
+        else:
+            neighbor_population = population
 
     if "self" in neigh_string:
 
@@ -1000,15 +1148,22 @@ def expand_pair_table(data: pd.DataFrame) -> pd.DataFrame:
 
         for pos, pos_group in group.groupby("position"):
 
-            ref_tab = os.sep.join(
+            ref_tab_csv = os.sep.join(
                 [pos, "output", "tables", f"trajectories_{ref_pop}.csv"]
             )
-            neigh_tab = os.sep.join(
+            ref_tab_pkl = ref_tab_csv.replace(".csv", ".pkl")
+            neigh_tab_csv = os.sep.join(
                 [pos, "output", "tables", f"trajectories_{neigh_pop}.csv"]
             )
+            neigh_tab_pkl = neigh_tab_csv.replace(".csv", ".pkl")
 
-            if os.path.exists(ref_tab):
-                df_ref = pd.read_csv(ref_tab)
+            df_ref = None
+            if os.path.exists(ref_tab_pkl):
+                df_ref = pd.read_pickle(ref_tab_pkl)
+            elif os.path.exists(ref_tab_csv):
+                df_ref = pd.read_csv(ref_tab_csv)
+                
+            if df_ref is not None:
                 if "TRACK_ID" in df_ref.columns:
                     if not np.all(df_ref["TRACK_ID"].isnull()):
                         ref_merge_cols = ["TRACK_ID", "FRAME"]
@@ -1017,8 +1172,13 @@ def expand_pair_table(data: pd.DataFrame) -> pd.DataFrame:
                 else:
                     ref_merge_cols = ["ID", "FRAME"]
 
-            if os.path.exists(neigh_tab):
-                df_neigh = pd.read_csv(neigh_tab)
+            df_neigh = None
+            if os.path.exists(neigh_tab_pkl):
+                df_neigh = pd.read_pickle(neigh_tab_pkl)
+            elif os.path.exists(neigh_tab_csv):
+                df_neigh = pd.read_csv(neigh_tab_csv)
+                
+            if df_neigh is not None:
                 if "TRACK_ID" in df_neigh.columns:
                     if not np.all(df_neigh["TRACK_ID"].isnull()):
                         neigh_merge_cols = ["TRACK_ID", "FRAME"]
@@ -1026,6 +1186,9 @@ def expand_pair_table(data: pd.DataFrame) -> pd.DataFrame:
                         neigh_merge_cols = ["ID", "FRAME"]
                 else:
                     neigh_merge_cols = ["ID", "FRAME"]
+
+            if df_ref is None or df_neigh is None:
+                continue
 
             df_ref = df_ref.add_prefix("reference_", axis=1)
             df_neigh = df_neigh.add_prefix("neighbor_", axis=1)
@@ -1048,6 +1211,8 @@ def expand_pair_table(data: pd.DataFrame) -> pd.DataFrame:
             )
             expanded_table.append(merge_neigh)
 
+    if not expanded_table:
+        return data
     df_expanded = pd.concat(expanded_table, axis=0, ignore_index=True)
     df_expanded = df_expanded.sort_values(
         by=[

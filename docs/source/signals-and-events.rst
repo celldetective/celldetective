@@ -6,7 +6,7 @@ Signals and events
 Prerequisites
 -------------
 
-Perform segmentation, tracking, and measurements for either target or effector cells. Select a single position.
+Perform segmentation, tracking, and measurements for the cell population of interest. Select a single position.
 
 
 Overview

@@ -55,7 +55,7 @@ else:
 
 log=f'segmentation model: {model} \n'
 
-with open(pos+f'log_{mode}.json', 'a') as f:
+with open(pos+f'log_{mode}.txt', 'a') as f:
 	f.write(f'{datetime.datetime.now()} SIGNAL ANALYSIS \n')
 	f.write(log)
 

@@ -724,14 +724,19 @@ def segment_at_position(
     pos = rf"{pos}"
     if not os.path.exists(pos):
         raise FileNotFoundError(f"Position {pos} is not a valid path.")
+    if not pos.endswith("/"):
+        pos += "/"
 
     name_path = locate_segmentation_model(model_name)
 
     script_path = os.sep.join([abs_path, "scripts", "segment_cells.py"])
-    subprocess.run(
+    result = subprocess.run(
         [sys.executable, script_path, "--pos", pos, "--model", model_name, "--mode", mode, "--use_gpu", str(use_gpu), "--threads", str(threads)],
         check=False,
     )
+    if result.returncode != 0:
+        logger.error(f"Segmentation script exited with code {result.returncode} for position {pos}.")
+        raise RuntimeError(f"Segmentation failed for position {pos} (exit code {result.returncode}).")
 
     if return_labels or view_on_napari:
         labels = locate_labels(pos, population=mode)
@@ -799,6 +804,8 @@ def segment_from_threshold_at_position(
     pos = rf"{pos}"
     if not os.path.exists(pos):
         raise FileNotFoundError(f"Position {pos} is not a valid path.")
+    if not pos.endswith("/"):
+        pos += "/"
 
     config = config.replace("\\", "/")
     config = rf"{config}"
@@ -806,10 +813,13 @@ def segment_from_threshold_at_position(
         raise FileNotFoundError(f"Config {config} is not a valid path.")
 
     script_path = os.sep.join([abs_path, "scripts", "segment_cells_thresholds.py"])
-    subprocess.run(
+    result = subprocess.run(
         [sys.executable, script_path, "--pos", pos, "--config", config, "--mode", mode, "--threads", str(threads)],
         check=False,
     )
+    if result.returncode != 0:
+        logger.error(f"Threshold segmentation script exited with code {result.returncode} for position {pos}.")
+        raise RuntimeError(f"Threshold segmentation failed for position {pos} (exit code {result.returncode}).")
 
 
 def train_segmentation_model(config: str, use_gpu: bool = True) -> None:
@@ -856,10 +866,13 @@ def train_segmentation_model(config: str, use_gpu: bool = True) -> None:
         raise FileNotFoundError(f"Config {config} is not a valid path.")
 
     script_path = os.sep.join([abs_path, "scripts", "train_segmentation_model.py"])
-    subprocess.run(
+    result = subprocess.run(
         [sys.executable, script_path, "--config", config, "--use_gpu", str(use_gpu)],
         check=False,
     )
+    if result.returncode != 0:
+        logger.error(f"Segmentation model training script exited with code {result.returncode}.")
+        raise RuntimeError(f"Segmentation model training failed (exit code {result.returncode}).")
 
 
 def merge_instance_segmentation(

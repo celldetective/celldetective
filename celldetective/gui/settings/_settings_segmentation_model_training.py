@@ -1,5 +1,5 @@
 from typing import Optional
-from time import time
+import time
 
 from PyQt5.QtGui import QCloseEvent
 from PyQt5.QtWidgets import (
@@ -109,6 +109,8 @@ class SettingsSegmentationModelTraining(CelldetectiveSettingsPanel):
         """
         if self.bg_loader.isRunning():
             logger.info("Waiting for background loader to finish...")
+            self.bg_loader.requestInterruption()
+            self.bg_loader.quit()
             self.bg_loader.wait(3000)
         super().closeEvent(event)
 

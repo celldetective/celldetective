@@ -1,3 +1,4 @@
+import subprocess
 from subprocess import Popen
 
 from typing import Optional, List
@@ -470,10 +471,10 @@ class SettingsMeasurements(CelldetectiveSettingsPanel):
             [self._software_path, "celldetective", os.sep, "extra_properties.py"]
         )
         try:
-            Popen(f"explorer {os.path.realpath(path)}")
+            Popen(["explorer", os.path.realpath(path)])
         except Exception:
             try:
-                os.system('xdg-open "%s"' % path)
+                subprocess.run(["xdg-open", path], check=False)
             except Exception:
                 return None
 

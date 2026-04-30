@@ -469,6 +469,9 @@ class InteractiveEventViewer(QDialog, Styles):
         x1, y1 = eclick.xdata, eclick.ydata
         x2, y2 = erelease.xdata, erelease.ydata
 
+        if None in (x1, y1, x2, y2):
+            return
+
         xmin, xmax = sorted([x1, x2])
         ymin, ymax = sorted([y1, y2])
 

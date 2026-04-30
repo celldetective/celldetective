@@ -203,6 +203,9 @@ class NeighborhoodProcess(Process):
                         column_labelsB=cl[1],
                     )
 
+                    if mode == "self":
+                        np.fill_diagonal(dist_map, 1.0e06)
+
                     d_filter = 1.0e05
                     if attention_weight:
                         status_A = setA_t[status[0]].to_numpy()
@@ -963,6 +966,11 @@ class NeighborhoodProcess(Process):
                     "distance": d,
                     "description": neigh_col,
                 }
+                if self.protocol["neighborhood_type"] == "mask_contact":
+                    ch = self.protocol.get("channel_names")
+                    if ch:
+                        pair_protocol["channel_names"] = ch
+                        pair_protocol["contact_border"] = d
 
                 logger.info(f"Processing pairs for {neigh_col}...")
                 df_pairs = measure_pair_signals_at_position(self.pos, pair_protocol)

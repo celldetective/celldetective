@@ -1061,6 +1061,16 @@ class StackVisualizer(CelldetectiveWidget):
         """
         from PyQt5.QtWidgets import QApplication
 
+        # Disconnect matplotlib event handlers if line mode is still active.
+        if getattr(self, "line_mode", False):
+            if hasattr(self, "cid_press"):
+                try:
+                    self.fig.canvas.mpl_disconnect(self.cid_press)
+                    self.fig.canvas.mpl_disconnect(self.cid_move)
+                    self.fig.canvas.mpl_disconnect(self.cid_release)
+                except Exception as e:
+                    logger.debug(f"Could not disconnect matplotlib events: {e}")
+
         if self.loader_thread:
             # Step 1: Disconnect signals FIRST to prevent any in-flight
             # queued signal from dispatching after the widget is destroyed.
@@ -1090,3 +1100,4 @@ class StackVisualizer(CelldetectiveWidget):
             self.canvas.close()
         except RuntimeError as e:
             logger.debug(f"Canvas already closed during cleanup: {e}")
+        super().closeEvent(event)

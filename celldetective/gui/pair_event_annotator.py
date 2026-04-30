@@ -1841,7 +1841,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
 
         # self.configure_ylims()
         if len(range_values) > 0:
-            range_values = np.array(range_values)
+            range_values = np.array(pd.to_numeric(range_values, errors='coerce'), dtype=float)
             if len(range_values[range_values == range_values]) > 0:
                 if len(range_values[range_values > 0]) > 0:
                     self.value_magnitude = np.nanpercentile(range_values, 1)
@@ -2781,6 +2781,15 @@ class PairEventAnnotator(CelldetectiveMainWindow):
                     logger.warning(f"Failed to find closest marker: {e}")
             else:
                 self.index = None
+        else:
+            # Pair midpoint marker clicked: update self.index from this event
+            # so it is valid for the self.points scatter (which may be small).
+            if len(ind) == 1:
+                self.index = ind[0]
+            elif len(ind) > 1:
+                self.index = ind[0]
+            else:
+                self.index = None
 
     def show_annotation_buttons(self):
         """Show annotation buttons."""
@@ -3126,8 +3135,20 @@ class PairEventAnnotator(CelldetectiveMainWindow):
             pair_selected = f"Pair: ({self.reference_track_of_interest},{self.neighbor_track_of_interest})\n"
             pair_populations = ""  # f"populations: ({self.reference_population}, {self.neighbor_population})\n"
             current_class = self.relative_class_choice_cb.currentText()
-            pair_class = f"Event class: {self.df_relative.loc[(self.df_relative['REFERENCE_ID']==self.reference_track_of_interest)&(self.df_relative['NEIGHBOR_ID']==self.neighbor_track_of_interest)&(self.df_relative['reference_population']==self.reference_population)&(self.df_relative['neighbor_population']==self.neighbor_population)&(~self.df_relative['status_'+self.current_neighborhood].isnull()), current_class].values[0]}\n"
-            pair_time = f"Time: {self.df_relative.loc[(self.df_relative['REFERENCE_ID']==self.reference_track_of_interest)&(self.df_relative['NEIGHBOR_ID']==self.neighbor_track_of_interest)&(self.df_relative['reference_population']==self.reference_population)&(self.df_relative['neighbor_population']==self.neighbor_population)&(~self.df_relative['status_'+self.current_neighborhood].isnull()), self.pair_time_name].values[0]}\n"
+            pair_filter = (
+                (self.df_relative["REFERENCE_ID"] == self.reference_track_of_interest)
+                & (self.df_relative["NEIGHBOR_ID"] == self.neighbor_track_of_interest)
+                & (self.df_relative["reference_population"] == self.reference_population)
+                & (self.df_relative["neighbor_population"] == self.neighbor_population)
+                & (~self.df_relative["status_" + self.current_neighborhood].isnull())
+            )
+            pair_subset = self.df_relative.loc[pair_filter]
+            if len(pair_subset) > 0:
+                pair_class = f"Event class: {pair_subset[current_class].values[0]}\n"
+                pair_time = f"Time: {pair_subset[self.pair_time_name].values[0]}\n"
+            else:
+                pair_class = "Event class: N/A\n"
+                pair_time = "Time: N/A\n"
             self.pair_info.setText(
                 pair_selected + pair_populations + pair_class + pair_time
             )
