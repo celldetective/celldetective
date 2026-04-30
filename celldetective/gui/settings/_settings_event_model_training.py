@@ -1,7 +1,6 @@
 from pathlib import Path
 from typing import Optional
 import time
-from time import time
 from PyQt5.QtWidgets import (
     QMessageBox,
     QComboBox,
@@ -13,7 +12,8 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
     QLabel,
     QHBoxLayout,
-    QPushButton, QMainWindow,
+    QPushButton,
+    QMainWindow,
 )
 from PyQt5.QtCore import Qt, QSize, QThread
 from celldetective.gui.base.channel_norm_generator import ChannelNormGenerator
@@ -573,7 +573,9 @@ class SettingsEventDetectionModelTraining(CelldetectiveSettingsPanel):
             label = data["label"]
             self.class_name_le.setText(label)
         except KeyError:
-            logger.debug("Model config has no 'label' field; class name not pre-filled.")
+            logger.debug(
+                "Model config has no 'label' field; class name not pre-filled."
+            )
         self.model_length_slider.setValue(int(signal_length))
         self.model_length_slider.setEnabled(False)
 
