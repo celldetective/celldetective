@@ -950,12 +950,14 @@ class NeighborhoodProcess(Process):
                     neigh_type = "circle"
                     if mode == "two-pop":
                         neigh_col = f"neighborhood_2_circle_{d}_px"
+                        neigh_col = neigh_col.replace("_2_", f"_({self.protocol['population'][0]}-{self.protocol['population'][1]})_")
                     elif mode == "self":
                         neigh_col = f"neighborhood_self_circle_{d}_px"
                 elif self.protocol["neighborhood_type"] == "mask_contact":
                     neigh_type = "contact"
                     if mode == "two-pop":
                         neigh_col = f"neighborhood_2_contact_{d}_px"
+                        neigh_col = neigh_col.replace("_2_", f"_({self.protocol['population'][0]}-{self.protocol['population'][1]})_")
                     elif mode == "self":
                         neigh_col = f"neighborhood_self_contact_{d}_px"
 
