@@ -2167,39 +2167,17 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         val = int(1000 / max(1, fps))
 
         self.anim_interval = val
-        logger.debug(f"Speed slider moved. FPS: {fps} -> Interval: {val} ms. Recreating animation object.")
+        logger.debug(f"Speed slider moved. FPS: {fps} -> Interval: {val} ms. Updating animation interval.")
 
-        # Check if animation is allowed to run (Pause button is visible means we are Playing)
-        should_play = self.stop_btn.isVisible()
-
-        if hasattr(self, "anim") and self.anim:
+        if hasattr(self, "anim") and self.anim and hasattr(self.anim, "event_source") and self.anim.event_source:
             try:
-                self.anim.event_source.stop()
+                self.anim._interval = self.anim_interval
+                self.anim.event_source.interval = self.anim_interval
+                if self.stop_btn.isVisible():  # if currently playing
+                    self.anim.event_source.stop()
+                    self.anim.event_source.start()
             except Exception as e:
-                logger.debug(f"Error stopping animation: {e}")
-
-        # Recreate animation with new interval
-        try:
-            # We must disconnect the old pick event to avoid accumulating connections
-            # although mpl_connect returns a cid, we didn't store it properly before.
-            # However, the canvas clears usually handle this if we cleared axes, but we aren't clearing axes here.
-            # Ideally we should clean up, but for now let's focus on the animation object replacement.
-
-            self.anim = FuncAnimation(
-                self.fig,
-                self.draw_frame,
-                frames=self.animation_generator,
-                interval=self.anim_interval,
-                blit=True,
-                cache_frame_data=False,
-            )
-
-            # If we were NOT playing (i.e. Paused), pause the new animation immediately
-            if not should_play:
-                self.anim.event_source.stop()
-
-        except Exception as e:
-            logger.debug(f"Error recreating animation: {e}")
+                logger.debug(f"Error updating animation interval: {e}")
 
     def closeEvent(self, event: QCloseEvent) -> None:
         """

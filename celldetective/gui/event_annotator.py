@@ -1162,46 +1162,17 @@ class EventAnnotator(BaseAnnotator):
         # FPS = 1000 / interval_ms => interval_ms = 1000 / FPS
         val = int(1000 / max(1, fps))
         self.anim_interval = val
-        logger.debug(f"Speed slider moved. FPS: {fps} -> Interval: {val} ms. Recreating animation object.")
+        logger.debug(f"Speed slider moved. FPS: {fps} -> Interval: {val} ms. Updating animation interval.")
 
-        # Check if animation is allowed to run (Pause button is visible means we are Playing)
-        should_play = self.stop_btn.isVisible()
-
-        if hasattr(self, "anim") and self.anim:
+        if hasattr(self, "anim") and self.anim and hasattr(self.anim, "event_source") and self.anim.event_source:
             try:
-                self.anim.event_source.stop()
+                self.anim._interval = self.anim_interval
+                self.anim.event_source.interval = self.anim_interval
+                if self.stop_btn.isVisible():  # if currently playing
+                    self.anim.event_source.stop()
+                    self.anim.event_source.start()
             except Exception as e:
-                logger.debug(f"Error stopping animation: {e}")
-
-        # Recreate animation with new interval
-        try:
-            # Disconnect the old pick event to avoid accumulating connections
-            if hasattr(self, "_pick_cid"):
-                try:
-                    self.fig.canvas.mpl_disconnect(self._pick_cid)
-                except Exception as e:
-                    logger.debug(f"Could not disconnect pick event: {e}")
-
-            self.anim = FuncAnimation(
-                self.fig,
-                self.draw_frame,
-                frames=self.animation_generator,
-                interval=self.anim_interval,
-                blit=True,
-                cache_frame_data=False,
-            )
-
-            # Reconnect pick event and store cid
-            self._pick_cid = self.fig.canvas.mpl_connect(
-                "pick_event", self.on_scatter_pick
-            )
-
-            # If we were NOT playing (i.e. Paused), pause the new animation immediately
-            if not should_play:
-                self.anim.event_source.stop()
-
-        except Exception as e:
-            logger.debug(f"Error recreating animation: {e}")
+                logger.debug(f"Error updating animation interval: {e}")
 
     def give_cell_information(self):
         """Display cell information."""
