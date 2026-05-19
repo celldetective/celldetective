@@ -85,7 +85,7 @@ class BackgroundFitCorrectionLayout(QGridLayout, Styles):
         self.model_lbl = QLabel("Model: ")
         self.model_lbl.setToolTip("2D model to fit the background with.")
         self.models_cb = QComboBox()
-        self.models_cb.addItems(["paraboloid", "plane"])
+        self.models_cb.addItems(["paraboloid", "plane", "gaussian"])
         self.models_cb.setToolTip("2D model to fit the background with.")
 
         self.corrected_stack_viewer = QPushButton("")
@@ -403,6 +403,7 @@ class PreviewWorker(QThread):
                 return_stacks=True,
                 activation_protocol=self.process_args["activation_protocol"],
                 downsample=self.process_args["downsample"],
+                radius=self.process_args.get("radius", 100),
                 subset_indices=self.process_args["subset_indices"],
                 show_progress_per_well=False,
                 show_progress_per_pos=False,

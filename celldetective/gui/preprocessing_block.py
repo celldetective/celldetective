@@ -25,8 +25,10 @@ from celldetective.gui.gui_utils import help_generic
 from celldetective.gui.layouts import (
     BackgroundFitCorrectionLayout,
     BackgroundModelFreeCorrectionLayout,
+    BackgroundRollingBallCorrectionLayout,
     ChannelOffsetOptionsLayout,
     ProtocolDesignerLayout,
+    FourierRegistrationOptionsLayout,
 )
 from celldetective.utils.experiment import extract_experiment_channels
 from celldetective import get_logger
@@ -155,11 +157,12 @@ class PreprocessingPanel(QFrame, Styles):
 
         self.model_free_correction_layout = BackgroundModelFreeCorrectionLayout(self)
         self.fit_correction_layout = BackgroundFitCorrectionLayout(self)
+        self.rolling_ball_correction_layout = BackgroundRollingBallCorrectionLayout(self)
 
         self.protocol_layout = ProtocolDesignerLayout(
             parent_window=self,
-            tab_layouts=[self.fit_correction_layout, self.model_free_correction_layout],
-            tab_names=["Fit", "Model-free"],
+            tab_layouts=[self.fit_correction_layout, self.model_free_correction_layout, self.rolling_ball_correction_layout],
+            tab_names=["Fit", "Model-free", "Rolling ball"],
             title="BACKGROUND CORRECTION",
             list_title="Corrections to apply:",
         )
@@ -196,6 +199,29 @@ class PreprocessingPanel(QFrame, Styles):
         self.protocol_layout.correction_layout.addWidget(QLabel(""))
         self.protocol_layout.correction_layout.addLayout(
             self.channel_offset_correction_layout
+        )
+
+        self.fourier_registration_layout = QVBoxLayout()
+
+        self.fourier_registration_lbl = QLabel("TIME REGISTRATION (DRIFT CORRECTION)")
+        self.fourier_registration_lbl.setStyleSheet(
+            """
+			font-weight: bold;
+			padding: 0px;
+			"""
+        )
+        self.fourier_registration_layout.addWidget(
+            self.fourier_registration_lbl, alignment=Qt.AlignCenter
+        )
+
+        self.fourier_registration_options_layout = FourierRegistrationOptionsLayout(self)
+        self.fourier_registration_layout.addLayout(
+            self.fourier_registration_options_layout
+        )
+
+        self.protocol_layout.correction_layout.addWidget(QLabel(""))
+        self.protocol_layout.correction_layout.addLayout(
+            self.fourier_registration_layout
         )
 
         self.grid_contents.addLayout(self.protocol_layout, 0, 0, 1, 4)
@@ -361,6 +387,46 @@ class PreprocessingPanel(QFrame, Styles):
                 if result == QDialog.Rejected:
                     logger.info("Correction cancelled.")
                     return None
+            elif correction_protocol["correction_type"] == "registration":
+                logger.info(
+                    f"Fourier registration; {movie_prefix=} {export_prefix=} {correction_protocol=}"
+                )
+                from celldetective.gui.workers import ProgressWindow
+                from celldetective.processes.background_correction import (
+                    BackgroundCorrectionProcess,
+                )
+
+                current_export_prefix = export_prefix
+                if current_export_prefix == "Corrected":
+                    current_export_prefix = "Aligned"
+
+                process_args = {
+                    "exp_dir": self.exp_dir,
+                    "well_option": well_option,
+                    "position_option": position_option,
+                    "movie_prefix": movie_prefix,
+                    "export_prefix": current_export_prefix,
+                    "export": True,
+                    "return_stacks": False,
+                }
+                process_args.update(correction_protocol)
+
+                self.job = ProgressWindow(
+                    BackgroundCorrectionProcess,
+                    parent_window=None,
+                    title="Fourier Image Registration",
+                    position_info=False,
+                    process_args=process_args,
+                )
+                result = self.job.exec_()
+                if result == QDialog.Rejected:
+                    logger.info("Registration cancelled.")
+                    return None
+                
+                if correction_protocol.get("plot_trajectory", True) and getattr(self.job, "plot_data", None):
+                    from celldetective.gui.workers import DriftTrajectoryPlotDialog
+                    dialog = DriftTrajectoryPlotDialog(self.job.plot_data, parent_window=self.parent_window)
+                    dialog.exec_()
         logger.info("Done.")
 
     def locate_image(self):

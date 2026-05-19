@@ -1,5 +1,5 @@
 from multiprocessing import Queue
-from PyQt5.QtWidgets import QPushButton, QVBoxLayout, QHBoxLayout, QLabel, QProgressBar, QApplication
+from PyQt5.QtWidgets import QPushButton, QVBoxLayout, QHBoxLayout, QLabel, QProgressBar, QApplication, QComboBox
 from PyQt5.QtCore import QRunnable, QObject, pyqtSignal, QThreadPool, QSize, Qt
 from PyQt5.QtGui import QPixmap, QImage
 from typing import Optional, Any, Dict
@@ -51,6 +51,7 @@ class ProgressWindow(CelldetectiveDialog):
         self.setWindowTitle(f"{title}")
         self.__process = process
         self.parent_window = parent_window
+        self.plot_data = {}
 
         self.position_info = position_info
         if self.position_info:
@@ -107,6 +108,7 @@ class ProgressWindow(CelldetectiveDialog):
 
         self.__runner.signals.update_status.connect(self.__label.setText)
         self.__runner.signals.update_image.connect(self.update_image)
+        self.__runner.signals.update_plot.connect(self.on_update_plot)
 
         self.image_label = QLabel()
         self.image_label.setFixedSize(250, 250)
@@ -279,6 +281,12 @@ class ProgressWindow(CelldetectiveDialog):
             self.image_label.setPixmap(scaled_pixmap)
         except Exception as e:
             logger.error(f"Image update failed: {e}")
+
+    def on_update_plot(self, plot_data: dict) -> None:
+        """Cache the received plot data by its stack path."""
+        if isinstance(plot_data, dict) and "stack_path" in plot_data:
+            path = plot_data["stack_path"]
+            self.plot_data[path] = plot_data
 
 
 class Runner(QRunnable):
@@ -543,3 +551,168 @@ class GenericProgressWindow(CelldetectiveDialog):
         msg.exec_()
 
         self.reject()
+
+
+class DriftTrajectoryPlotDialog(CelldetectiveDialog):
+    def __init__(self, plot_data: dict, parent_window: Optional[Any] = None) -> None:
+        """
+        Initialize the interactive DriftTrajectoryPlotDialog.
+        
+        Parameters
+        ----------
+        plot_data : dict
+            A dictionary mapping stack paths to drift registration metadata dictionaries.
+        parent_window : QMainWindow, optional
+            The parent window.
+        """
+        super().__init__()
+        self.setWindowTitle("Drift Trajectory Plotter")
+        self.plot_data = plot_data
+        self.parent_window = parent_window
+
+        # UI Layout
+        layout = QVBoxLayout()
+        
+        # Header layout for dropdown
+        header_layout = QHBoxLayout()
+        header_layout.addWidget(QLabel("Select Registered Movie/Position: "))
+        
+        self.position_cb = QComboBox()
+        # Populate the combobox with nice display names
+        import os
+        for path in self.plot_data.keys():
+            display_name = os.path.basename(path)
+            self.position_cb.addItem(display_name, path)
+            
+        header_layout.addWidget(self.position_cb, 1)
+        layout.addLayout(header_layout)
+
+        # Matplotlib Figure & Canvas
+        import matplotlib
+        matplotlib.use("Qt5Agg")
+        from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+        from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
+        from matplotlib.figure import Figure
+
+        # Premium dark/blue styling
+        self.fig = Figure(figsize=(9, 7), dpi=100, facecolor="#f5f5f5")
+        self.canvas = FigureCanvas(self.fig)
+        self.toolbar = NavigationToolbar(self.canvas, self)
+        
+        layout.addWidget(self.toolbar)
+        layout.addWidget(self.canvas, 1)
+
+        # Bottom Close button
+        btn_layout = QHBoxLayout()
+        self.close_btn = QPushButton("Close")
+        self.close_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #1565c0;
+                color: white;
+                border-radius: 4px;
+                padding: 6px 12px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #1976d2;
+            }
+        """)
+        self.close_btn.clicked.connect(self.accept)
+        btn_layout.addStretch()
+        btn_layout.addWidget(self.close_btn)
+        layout.addLayout(btn_layout)
+
+        self.setLayout(layout)
+        self.resize(950, 750)
+
+        # Connect position change event
+        self.position_cb.currentIndexChanged.connect(self.update_plot)
+        
+        # Initial plot
+        self.update_plot()
+
+    def update_plot(self) -> None:
+        """Redraw drift trajectory and quality metrics subplots."""
+        import numpy as np
+        
+        path = self.position_cb.currentData()
+        if not path or path not in self.plot_data:
+            return
+            
+        data = self.plot_data[path]
+        shifts = np.array(data["shifts"])  # (N, 2) -> [dy, dx]
+        raw_shifts = np.array(data["raw_shifts"]) # (N, 2)
+        fallbacks = data.get("fallbacks", [])
+        sift_inliers = np.array(data.get("sift_inliers", []))
+        max_shift_limit = data.get("max_shift_limit", 0.0)
+
+        self.fig.clear()
+        
+        # Create subplots
+        ax1 = self.fig.add_subplot(211)
+        ax2 = self.fig.add_subplot(212, sharex=ax1)
+
+        # Premium Color Palette
+        color_y = "#1565c0"  # Vibrant blue for Y drift
+        color_x = "#7b1fa2"  # Vibrant purple for X drift
+        color_raw = "#9e9e9e"  # Soft gray for raw shifts
+        color_outlier = "#d32f2f"  # Red for outliers
+        color_fallback = "#fbc02d"  # Amber for SIFT fallback
+
+        # Plot Subplot 1: Accumulated Translation Drift
+        frames = np.arange(len(shifts))
+        
+        # Raw shifts (dashed)
+        ax1.plot(frames, raw_shifts[:, 0], color=color_y, linestyle="--", alpha=0.4, label="Raw dy (Unfiltered)")
+        ax1.plot(frames, raw_shifts[:, 1], color=color_x, linestyle="--", alpha=0.4, label="Raw dx (Unfiltered)")
+        
+        # Filtered shifts (solid)
+        ax1.plot(frames, shifts[:, 0], color=color_y, linestyle="-", linewidth=2.0, label="Filtered dy (Median)")
+        ax1.plot(frames, shifts[:, 1], color=color_x, linestyle="-", linewidth=2.0, label="Filtered dx (Median)")
+
+        # Highlight outliers where raw != filtered
+        outliers = np.where(np.any(raw_shifts != shifts, axis=1))[0]
+        if len(outliers) > 0:
+            ax1.scatter(outliers, raw_shifts[outliers, 0], color=color_outlier, marker="o", s=30, zorder=5, label="Filtered Outlier")
+            ax1.scatter(outliers, raw_shifts[outliers, 1], color=color_outlier, marker="o", s=30, zorder=5)
+
+        # Highlight SIFT/Fourier fallback events
+        if len(fallbacks) > 0:
+            first = True
+            for fb in fallbacks:
+                ax1.axvline(x=fb, color=color_fallback, linestyle=":", alpha=0.7, linewidth=1.5,
+                            label="Fallback Event" if first else "")
+                first = False
+
+        # Max shift threshold lines
+        if max_shift_limit > 0:
+            ax1.axhline(y=max_shift_limit, color="#b71c1c", linestyle="-.", alpha=0.5, label=f"Max Shift Limit ({max_shift_limit} px)")
+            ax1.axhline(y=-max_shift_limit, color="#b71c1c", linestyle="-.", alpha=0.5)
+
+        ax1.set_title("Drift Trajectory Analysis (Accumulated Translation shifts)", fontsize=11, fontweight="bold", color="#333333")
+        ax1.set_ylabel("Drift Translation (pixels)", fontsize=10, fontweight="semibold")
+        ax1.grid(True, linestyle=":", alpha=0.6)
+        ax1.legend(loc="upper left", frameon=True, facecolor="white", edgecolor="none", fontsize=9)
+
+        # Plot Subplot 2: SIFT keypoints / Quality metrics
+        if len(sift_inliers) > 0 and np.any(sift_inliers > 0):
+            ax2.plot(frames, sift_inliers, color="#2e7d32", linestyle="-", linewidth=1.5, marker=".", markersize=4, label="SIFT Inliers (RANSAC)")
+            ax2.set_ylabel("RANSAC Inliers Count", fontsize=10, fontweight="semibold")
+            ax2.axhline(y=3, color=color_outlier, linestyle="--", alpha=0.5, label="Min SIFT Inliers (3)")
+            ax2.grid(True, linestyle=":", alpha=0.6)
+            ax2.legend(loc="upper left", frameon=True, facecolor="white", edgecolor="none", fontsize=9)
+            ax2.set_title("SIFT Feature Matching Quality Metrics", fontsize=11, fontweight="bold", color="#333333")
+        else:
+            # Fourier phase cross-correlation quality placeholder
+            ax2.text(0.5, 0.5, "Fourier Phase Cross-Correlation Mode\n(No SIFT features extracted)",
+                     horizontalalignment="center", verticalalignment="center",
+                     transform=ax2.transAxes, fontsize=10, color="#666666", style="italic")
+            ax2.set_title("Matching Confidence / Quality Metrics", fontsize=11, fontweight="bold", color="#333333")
+            ax2.set_ylabel("Quality Index", fontsize=10, fontweight="semibold")
+            ax2.grid(True, linestyle=":", alpha=0.6)
+
+        ax2.set_xlabel("Frame Index (Time)", fontsize=10, fontweight="semibold")
+        
+        # Adjust subplot margins nicely
+        self.fig.tight_layout()
+        self.canvas.draw()

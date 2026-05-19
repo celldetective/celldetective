@@ -55,8 +55,25 @@ class BackgroundCorrectionProcess(Process):
                 config_section_to_dict(self.config, "MovieSettings")["len_movie"]
             )
             self.nbr_channels = len(extract_experiment_channels(self.exp_dir)[0])
+            if not hasattr(self, "target_channel") or self.target_channel is None:
+                self.target_channel = getattr(self, "reference_channel", None)
+                if self.target_channel is None:
+                    channels, _ = extract_experiment_channels(self.exp_dir)
+                    if channels:
+                        self.target_channel = channels[0]
+
+            if isinstance(self.target_channel, str):
+                if "," in self.target_channel:
+                    target_channels_list = [c.strip() for c in self.target_channel.split(",")]
+                else:
+                    target_channels_list = [self.target_channel]
+            elif isinstance(self.target_channel, list):
+                target_channels_list = self.target_channel
+            else:
+                target_channels_list = [self.target_channel]
+
             channel_indices = _extract_channel_indices_from_config(
-                self.config, [self.target_channel]
+                self.config, target_channels_list
             )
             self.img_num_channels = _get_img_num_per_channel(
                 channel_indices, int(self.len_movie), self.nbr_channels
@@ -179,15 +196,19 @@ class BackgroundCorrectionProcess(Process):
                 elapsed = current_time - getattr(self, "t0_frame", current_time)
                 measured_count = iteration
 
+                stage_prefix = f"{stage}: " if stage else ""
                 if measured_count > 0:
                     avg = elapsed / measured_count
                     rem = total - (iteration + 1)
                     rem_t = rem * avg
                     mins = int(rem_t // 60)
                     secs = int(rem_t % 60)
-                    data["frame_time"] = f"{mins} m {secs} s"
+                    data["frame_time"] = f"{stage_prefix}{mins} m {secs} s"
                 else:
-                    data["frame_time"] = f"{iteration + 1}/{total} frames"
+                    data["frame_time"] = f"{stage_prefix}{iteration + 1}/{total} frames"
+
+            elif level == "plot_data":
+                data["plot_data"] = kwargs.get("plot_data")
 
             if data:
                 self.queue.put(data)
@@ -239,6 +260,31 @@ class BackgroundCorrectionProcess(Process):
                     correction_vertical=getattr(self, "correction_vertical", 0),
                     **self.kwargs if hasattr(self, "kwargs") else {},
                 )
+            elif correction_type == "registration":
+                from celldetective.preprocessing import register_experiment_fourier
+
+                corrected_stacks = register_experiment_fourier(
+                    self.exp_dir,
+                    well_option=self.well_option,
+                    position_option=self.position_option,
+                    reference_channel=getattr(self, "reference_channel", self.target_channel),
+                    reference_frame_idx=getattr(self, "reference_frame_idx", 0),
+                    upsample_factor=getattr(self, "upsample_factor", 1),
+                    sliding=getattr(self, "sliding", False),
+                    export=export,
+                    return_stacks=return_stacks,
+                    show_progress_per_well=False,
+                    show_progress_per_pos=False,
+                    movie_prefix=movie_prefix,
+                    export_prefix=export_prefix,
+                    progress_callback=progress_callback,
+                    sigma=getattr(self, "sigma", 1.0),
+                    max_shift=getattr(self, "max_shift", 0.0),
+                    filter_outliers=getattr(self, "filter_outliers", False),
+                    method=getattr(self, "method", "fourier"),
+                    shift_method=getattr(self, "shift_method", "spatial"),
+                    **self.kwargs if hasattr(self, "kwargs") else {},
+                )
             else:
                 from celldetective.preprocessing import correct_background_model
 
@@ -260,6 +306,9 @@ class BackgroundCorrectionProcess(Process):
                     export_prefix=export_prefix,
                     progress_callback=progress_callback,
                     downsample=getattr(self, "downsample", 10),
+                    radius=getattr(self, "radius", 100),
+                    light_background=getattr(self, "light_background", False),
+                    smooth=getattr(self, "smooth", True),
                     subset_indices=getattr(self, "subset_indices", None),
                 )
 
