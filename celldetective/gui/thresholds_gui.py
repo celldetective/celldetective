@@ -92,8 +92,8 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
         self.screen_width = (
             self.parent_window.parent_window.parent_window.parent_window.screen_width
         )
-        self.setMinimumWidth(int(0.8 * self.screen_width))
-        self.setMinimumHeight(int(0.8 * self.screen_height))
+        self.setMinimumWidth(800)
+        self.setMinimumHeight(600)
         self.setWindowTitle("Threshold configuration wizard")
 
         self._createActions()
@@ -218,7 +218,7 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
 
         self.setCentralWidget(self.button_widget)
         self.show()
-
+        self.resize(int(0.8 * self.screen_width), int(0.8 * self.screen_height))
         QApplication.processEvents()
 
     def populate_left_panel(self):

@@ -20,6 +20,8 @@ if __name__ == "__main__":
 
     from PyQt5.QtCore import Qt
 
+    QApplication.setAttribute(Qt.AA_EnableHighDpiScaling)
+    QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps)
     QApplication.setAttribute(Qt.AA_ShareOpenGLContexts)
     App = QApplication(sys.argv)
     App.setStyle("Fusion")

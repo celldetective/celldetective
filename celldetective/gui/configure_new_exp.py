@@ -779,8 +779,8 @@ class SetupConditionLabels(CelldetectiveWidget):
         btn_hbox.addWidget(self.submit_btn)
 
         self.outer_layout.addLayout(btn_hbox)  # outside scroll
-        self.setMinimumWidth(int(0.6 * self.parent_window.parent_window.screen_width))
-
+        self.setMinimumWidth(500)
+        self.resize(int(0.6 * self.parent_window.parent_window.screen_width), self.height())
         center_window(self)
 
     def populate(self):

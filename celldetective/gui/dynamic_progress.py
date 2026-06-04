@@ -158,12 +158,11 @@ class DynamicProgressDialog(QDialog, Styles):
 
     def _get_screen_height(self):
         """
-        Get the screen dimensions.
+        Get the screen dimensions for the monitor where the cursor is.
         """
-        app = QApplication.instance()
-        screen = app.primaryScreen()
-        geometry = screen.availableGeometry()
-        self._screen_width, self._screen_height = geometry.getRect()[-2:]
+        from celldetective.gui.base.utils import get_current_screen_geometry
+        geometry = get_current_screen_geometry()
+        self._screen_width, self._screen_height = geometry.width(), geometry.height()
 
     def on_skip(self):
         """Handle skip button click."""

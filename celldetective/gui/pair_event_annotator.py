@@ -222,8 +222,8 @@ class PairEventAnnotator(CelldetectiveMainWindow):
             self.parent_window.parent_window.parent_window.screen_height
         )
         self.screen_width = self.parent_window.parent_window.parent_window.screen_width
-        self.setMinimumWidth(int(0.8 * self.screen_width))
-        self.setMinimumHeight(int(0.8 * self.screen_height))
+        self.setMinimumWidth(800)
+        self.setMinimumHeight(600)
 
         # self.cell_fcanvas.setMinimumHeight(int(0.3*self.screen_height))
 
@@ -607,7 +607,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
 
         self.setCentralWidget(self.button_widget)
         self.show()
-
+        self.resize(int(0.8 * self.screen_width), int(0.8 * self.screen_height))
         QApplication.processEvents()
 
     def fill_class_cbs(self):

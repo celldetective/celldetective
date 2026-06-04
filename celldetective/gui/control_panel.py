@@ -11,7 +11,6 @@ from PyQt5.QtWidgets import (
     QTabWidget,
     QVBoxLayout,
     QScrollArea,
-    QDesktopWidget,
 )
 from celldetective.gui.base.components import (
     CelldetectiveMainWindow,
@@ -134,7 +133,6 @@ class ControlPanel(CelldetectiveMainWindow):
         self.scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.scroll.setWidgetResizable(True)
-        desktop = QDesktopWidget()
         self.scroll.setMinimumHeight(550)
         # self.scroll.setMinimumHeight(int(0.4*screen_height))
 
@@ -156,8 +154,11 @@ class ControlPanel(CelldetectiveMainWindow):
 
         self.initial_height = self.size().height()
         self.initial_width = self.size().width()
-        self.screen_height = desktop.screenGeometry().height()
-        self.screen_width = desktop.screenGeometry().width()
+        from celldetective.gui.base.utils import get_current_screen_geometry
+        _screen_geo = get_current_screen_geometry()
+        self.screen_height = _screen_geo.height()
+        self.screen_width = _screen_geo.width()
+        self.setMaximumHeight(int(0.9 * self.screen_height))
         self.scroll.setMinimumWidth(440)
 
         self.well_list.setCurrentIndex(0)
@@ -168,6 +169,24 @@ class ControlPanel(CelldetectiveMainWindow):
 
         self.bg_loader = BackgroundLoader()
         self.bg_loader.start()
+
+    @property
+    def screen_height(self):
+        from celldetective.gui.base.utils import get_current_screen_geometry
+        return get_current_screen_geometry(self).height()
+
+    @screen_height.setter
+    def screen_height(self, value):
+        pass
+
+    @property
+    def screen_width(self):
+        from celldetective.gui.base.utils import get_current_screen_geometry
+        return get_current_screen_geometry(self).width()
+
+    @screen_width.setter
+    def screen_width(self, value):
+        pass
 
     def init_wells_and_positions(self):
         """

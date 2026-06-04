@@ -174,8 +174,9 @@ class PivotTableUI(CelldetectiveWidget):
 
         content_height = h_header_height + v_header_length + extra_widgets_height
 
-        # Get screen geometry
-        screen = QApplication.primaryScreen().availableGeometry()
+        # Get screen geometry for the monitor where the cursor is
+        from celldetective.gui.base.utils import get_current_screen_geometry
+        screen = get_current_screen_geometry()
         max_width = int(screen.width() * 0.8)
         max_height = int(screen.height() * 0.8)
 

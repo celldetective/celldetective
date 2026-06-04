@@ -236,6 +236,9 @@ class ProcessPanel(QFrame, Styles):
         )
         is_open = np.array(panels_open + [interactions_open, preprocessing_open])
 
+        # Dynamically update the parent window's maximum height based on the current screen geometry
+        self.parent_window.setMaximumHeight(int(0.9 * self.parent_window.screen_height))
+
         if self.ContentsFrame.isHidden():
             self.collapse_btn.setIcon(icon(MDI6.chevron_down, color="black"))
             self.collapse_btn.setIconSize(QSize(20, 20))

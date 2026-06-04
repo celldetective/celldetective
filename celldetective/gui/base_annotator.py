@@ -100,8 +100,8 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
         self.screen_width = self.parent_window.parent_window.parent_window.screen_width
         self.value_magnitude = 1
 
-        self.setMinimumWidth(int(0.8 * self.screen_width))
-        self.setMinimumHeight(int(0.8 * self.screen_height))
+        self.setMinimumWidth(800)
+        self.setMinimumHeight(600)
 
         self.proceed = True
         self.locate_stack()
@@ -306,6 +306,7 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
         # self.compute_status_and_colors(0)
 
         self.setCentralWidget(self.button_widget)
+        self.resize(int(0.8 * self.screen_width), int(0.8 * self.screen_height))
         # self.show()
 
         self.del_shortcut = QShortcut(Qt.Key_Delete, self)  # QKeySequence("s")

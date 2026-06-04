@@ -32,7 +32,7 @@ from celldetective.gui.base.components import (
     CelldetectiveMainWindow,
     generic_message,
 )
-from celldetective.gui.base.utils import center_window, pretty_table
+from celldetective.gui.base.utils import center_window, get_current_screen_geometry, pretty_table
 from celldetective.log_manager import get_logger
 from typing import Optional
 
@@ -121,10 +121,9 @@ class AppInitWindow(CelldetectiveMainWindow):
         self._create_actions()
         self._create_menu_bar()
 
-        app = QApplication.instance()
-        self.screen = app.primaryScreen()
-        self.geometry = self.screen.availableGeometry()
-        self.screen_width, self.screen_height = self.geometry.getRect()[-2:]
+        screen_geo = get_current_screen_geometry()
+        self.screen_width = screen_geo.width()
+        self.screen_height = screen_geo.height()
 
         central_widget = CelldetectiveWidget()
         self.vertical_layout = QVBoxLayout(central_widget)
@@ -135,7 +134,7 @@ class AppInitWindow(CelldetectiveMainWindow):
         self.setCentralWidget(central_widget)
         self.reload_previous_gpu_threads()
         self.adjustSize()
-        self.setFixedSize(self.size())
+        self.setMinimumSize(self.sizeHint())
         self.show()
 
         self.bg_loader = BackgroundLoader()
@@ -654,7 +653,14 @@ class AppInitWindow(CelldetectiveMainWindow):
             try:
                 self.control_panel = ControlPanel(self, self.exp_dir)
                 self.control_panel.adjustSize()
-                self.control_panel.setFixedSize(self.control_panel.size())
+                # Cap height at 90% of the *current* screen (where cursor is)
+                # to keep buttons accessible on multi-monitor / high-DPI setups
+                cur_screen = get_current_screen_geometry()
+                max_h = int(0.9 * cur_screen.height())
+                if self.control_panel.height() > max_h:
+                    self.control_panel.resize(
+                        self.control_panel.width(), max_h
+                    )
                 self.control_panel.show()
                 center_window(self.control_panel)
             except (AssertionError, FileNotFoundError) as e:

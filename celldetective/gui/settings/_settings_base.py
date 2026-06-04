@@ -55,11 +55,10 @@ class CelldetectiveSettingsPanel(CelldetectiveMainWindow):
         return center_window(self)
 
     def _get_screen_height(self):
-        """Get the screen height."""
-        app = QApplication.instance()
-        screen = app.primaryScreen()
-        geometry = screen.availableGeometry()
-        self._screen_width, self._screen_height = geometry.getRect()[-2:]
+        """Get the available screen height for the monitor where the cursor is."""
+        from celldetective.gui.base.utils import get_current_screen_geometry
+        geometry = get_current_screen_geometry()
+        self._screen_width, self._screen_height = geometry.width(), geometry.height()
 
     def _adjust_size(self):
         """Adjust the size of the widget."""
