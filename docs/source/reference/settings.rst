@@ -419,6 +419,25 @@ Accessible via the **Preprocessing** module.
 *   **Shift (h)/(v)**: Pixel shift (horizontal and vertical) to align the target channel with the reference.
 *   **Viewer**: Use the :icon:`image-check,black` button to open the *Offset Viewer*. Use arrow keys to visually align the channels.
 
+**Image Registration**
+
+*   **Method**: Select the registration backend engine (``Fourier``, ``SIFT``, ``Hybrid``, or ``SPT``).
+*   **Consensus Channels**: The channel(s) used to compute drift. If multiple are selected, joint consensus is computed.
+*   **Reference Frame**: 0-based index of the template reference frame (in fixed template mode).
+*   **Sliding Mode**: If checked, registers each frame relative to the previous frame to handle cumulative drift.
+*   **Max Shift Constraint**: Rejects shifts larger than this threshold, falling back to last valid drift.
+*   **Median Outlier Filter**: Uses a moving median filter to smooth trajectory drift and eliminate spikes.
+*   **Subpixel Precision**: Upsampling factor for subpixel accuracy in Fourier mode.
+*   **Shift Method**:
+    *   **Spatial**: Uses bilinear/bicubic spline interpolation.
+    *   **Fourier**: Performs subpixel shift using phase multipliers in the frequency domain (avoids interpolation artifacts).
+*   **SPT-Specific Parameters**:
+    *   **Min. Distance [px]**: Minimum pixel distance between detected landmark spots.
+    *   **Rel. Threshold**: Relative detection threshold (min-max normalized) for local peak detection.
+    *   **Smoothing Sigma [px]**: Sigma of the Gaussian pre-filter applied before peak detection.
+    *   **Search Range [px]**: Maximum tracking distance a particle can move between consecutive frames.
+    *   **Track Memory [frames]**: Maximum consecutive frames a particle can go undetected and still be linked to its trajectory.
+
 .. _ref_signal_settings:
 
 Signal Analysis

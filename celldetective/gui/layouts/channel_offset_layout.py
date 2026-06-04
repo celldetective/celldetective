@@ -118,13 +118,18 @@ class ChannelOffsetOptionsLayout(QVBoxLayout, Styles):
         """Add instructions to the parent protocol list."""
 
         self.generate_instructions()
-        self.parent_window.protocol_layout.protocols.append(self.instructions)
+        if hasattr(self.parent_window, "protocol_layout"):
+            parent = self.parent_window.protocol_layout
+        else:
+            parent = self.parent_window
+
+        parent.protocols.append(self.instructions)
         correction_description = ""
         for index, (key, value) in enumerate(self.instructions.items()):
             if index > 0:
                 correction_description += ", "
             correction_description += str(key) + " : " + str(value)
-        self.parent_window.protocol_layout.protocol_list.addItem(correction_description)
+        parent.protocol_list.addItem(correction_description)
 
     def generate_instructions(self):
         """Generate the instructions dictionary."""

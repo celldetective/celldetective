@@ -51,6 +51,7 @@ class FourierRegistrationOptionsLayout(QVBoxLayout, Styles):
         self.setContentsMargins(15, 15, 15, 15)
         self.generate_widgets()
         self.add_to_layout()
+        self.on_method_changed()
 
     def generate_widgets(self):
         """Generate the widgets."""
@@ -60,6 +61,7 @@ class FourierRegistrationOptionsLayout(QVBoxLayout, Styles):
         self.method_cb.addItem("Fourier (Phase Cross-Correlation)", "fourier")
         self.method_cb.addItem("SIFT Feature Matching", "sift")
         self.method_cb.addItem("Hybrid (SIFT + Fourier Fallback)", "hybrid")
+        self.method_cb.addItem("Single-Particle Tracking (SPT)", "spt")
         self.method_cb.currentIndexChanged.connect(self.on_method_changed)
 
         self.reference_channel_lbl = QLabel("Reference Channel: ")
@@ -160,17 +162,140 @@ class FourierRegistrationOptionsLayout(QVBoxLayout, Styles):
             "after drift registration has finished, letting you inspect the drift curves."
         )
 
+        # SPT parameters
+        self.min_distance_lbl = QLabel("Min Distance (px): ")
+        self.min_distance_le = ThresholdLineEdit(
+            init_value=15.0,
+            connected_buttons=[self.add_correction_btn],
+            placeholder="px (e.g. 15.0)",
+            value_type="float",
+        )
+        self.min_distance_le.setToolTip("Minimum distance between detected spots (beads) in pixels.")
+
+        self.detection_threshold_lbl = QLabel("Detection Threshold (0-1): ")
+        self.detection_threshold_le = ThresholdLineEdit(
+            init_value=0.1,
+            connected_buttons=[self.add_correction_btn],
+            placeholder="threshold (e.g. 0.1)",
+            value_type="float",
+        )
+        self.detection_threshold_le.setToolTip("Relative peak detection threshold on min-max normalized frames.")
+
+        self.search_range_lbl = QLabel("Search Range (px): ")
+        self.search_range_le = ThresholdLineEdit(
+            init_value=5.0,
+            connected_buttons=[self.add_correction_btn],
+            placeholder="px (e.g. 5.0)",
+            value_type="float",
+        )
+        self.search_range_le.setToolTip("Maximum displacement for trackpy linking between consecutive frames.")
+
+        self.memory_lbl = QLabel("Memory (frames): ")
+        self.memory_le = ThresholdLineEdit(
+            init_value=1,
+            connected_buttons=[self.add_correction_btn],
+            placeholder="frames (e.g. 1)",
+            value_type="int",
+        )
+        self.memory_le.setToolTip("Maximum number of skipped frames allowed for a trajectory in trackpy.")
+
+        self.preview_spots_btn = QPushButton("Preview Spot Detection")
+        self.preview_spots_btn.setStyleSheet(self.button_style_sheet_2)
+        self.preview_spots_btn.setIcon(icon(MDI6.eye, color="#1565c0"))
+        self.preview_spots_btn.setToolTip("Launch live interactive visualizer to tune spot detection parameters.")
+        self.preview_spots_btn.setIconSize(QSize(25, 25))
+        self.preview_spots_btn.clicked.connect(self.preview_spot_detection)
+
+        # SPT Preprocessing Layout
+        from celldetective.gui.gui_utils import PreprocessingLayout2
+        self.spt_preprocessing = PreprocessingLayout2(fraction=40, parent_window=self)
+
     def on_method_changed(self):
-        """Slot to enable/disable widgets based on registration method."""
+        """Slot to show/hide and enable/disable widgets based on registration method."""
         method = self.method_cb.currentData()
+        
+        is_spt = (method == "spt")
+        
+        # Show/hide SPT parameters
+        self.min_distance_lbl.setVisible(is_spt)
+        self.min_distance_le.setVisible(is_spt)
+        self.detection_threshold_lbl.setVisible(is_spt)
+        self.detection_threshold_le.setVisible(is_spt)
+        self.search_range_lbl.setVisible(is_spt)
+        self.search_range_le.setVisible(is_spt)
+        self.memory_lbl.setVisible(is_spt)
+        self.memory_le.setVisible(is_spt)
+        self.preview_spots_btn.setVisible(is_spt)
+
+        self.spt_preprocessing.list.setVisible(is_spt)
+        self.spt_preprocessing.add_filter_btn.setVisible(is_spt)
+        self.spt_preprocessing.delete_filter_btn.setVisible(is_spt)
+        self.spt_preprocessing.preprocess_lbl.setVisible(is_spt)
+        
+        # Joint Consensus Handling for SPT
+        if is_spt:
+            self.joint_consensus_cb.setChecked(False)
+            self.joint_consensus_cb.setVisible(False)
+            for cb in self.channel_checkboxes.values():
+                cb.setVisible(False)
+            self.reference_channels_cb.setEnabled(True)
+            self.reference_channel_lbl.setEnabled(True)
+        else:
+            self.joint_consensus_cb.setVisible(True)
+            for cb in self.channel_checkboxes.values():
+                cb.setVisible(True)
+            self.on_consensus_changed()
+        
         if method == "sift":
+            self.sigma_lbl.setText("Gaussian Blur (sigma): ")
+            self.sigma_lbl.setToolTip("Sigma value for Gaussian smoothing before SIFT (0.0 to disable).")
+            self.upsample_lbl.setVisible(True)
+            self.upsample_factor_cb.setVisible(True)
             self.upsample_lbl.setEnabled(False)
             self.upsample_factor_cb.setEnabled(False)
+            self.sigma_lbl.setVisible(True)
+            self.sigma_le.setVisible(True)
             self.sigma_lbl.setEnabled(False)
             self.sigma_le.setEnabled(False)
-        else:
+            self.shift_method_lbl.setVisible(True)
+            self.shift_method_cb.setVisible(True)
+        elif method == "spt":
+            self.sigma_lbl.setText("Spot Size [px]: ")
+            self.sigma_lbl.setToolTip(
+                "Expected diameter of fluorescent spots/landmarks (odd integer, minimum is 5).\n"
+                "Diameters below 5px are automatically treated as 5px in trackpy to prevent numerical instabilities."
+            )
+            self.min_distance_lbl.setText("Min Distance [px]: ")
+            self.min_distance_lbl.setToolTip(
+                "Minimum distance (separation) between detected spots in pixels.\n"
+                "Features closer than this are filtered out. If not specified, trackpy defaults to Spot Size + 1."
+            )
+            try:
+                val = float(self.sigma_le.get_threshold())
+                if val < 5.0:
+                    self.sigma_le.setText("15.0")
+            except Exception:
+                pass
+            self.upsample_lbl.setVisible(False)
+            self.upsample_factor_cb.setVisible(False)
+            self.shift_method_lbl.setVisible(False)
+            self.shift_method_cb.setVisible(False)
+            # Keep Spot Size visible and enabled for SPT spot detection
+            self.sigma_lbl.setVisible(True)
+            self.sigma_le.setVisible(True)
+            self.sigma_lbl.setEnabled(True)
+            self.sigma_le.setEnabled(True)
+        else:  # fourier or hybrid
+            self.sigma_lbl.setText("Gaussian Blur (sigma): ")
+            self.sigma_lbl.setToolTip("Sigma value for Gaussian smoothing before cross-correlation (0.0 to disable).")
+            self.upsample_lbl.setVisible(True)
+            self.upsample_factor_cb.setVisible(True)
             self.upsample_lbl.setEnabled(True)
             self.upsample_factor_cb.setEnabled(True)
+            self.shift_method_lbl.setVisible(True)
+            self.shift_method_cb.setVisible(True)
+            self.sigma_lbl.setVisible(True)
+            self.sigma_le.setVisible(True)
             self.sigma_lbl.setEnabled(True)
             self.sigma_le.setEnabled(True)
 
@@ -225,6 +350,33 @@ class FourierRegistrationOptionsLayout(QVBoxLayout, Styles):
         sigma_hbox.addWidget(self.sigma_le, 60)
         self.addLayout(sigma_hbox)
 
+        # SPT parameters added to layout
+        min_distance_hbox = QHBoxLayout()
+        min_distance_hbox.addWidget(self.min_distance_lbl, 40)
+        min_distance_hbox.addWidget(self.min_distance_le, 60)
+        self.addLayout(min_distance_hbox)
+
+        detection_threshold_hbox = QHBoxLayout()
+        detection_threshold_hbox.addWidget(self.detection_threshold_lbl, 40)
+        detection_threshold_hbox.addWidget(self.detection_threshold_le, 60)
+        self.addLayout(detection_threshold_hbox)
+
+        search_range_hbox = QHBoxLayout()
+        search_range_hbox.addWidget(self.search_range_lbl, 40)
+        search_range_hbox.addWidget(self.search_range_le, 60)
+        self.addLayout(search_range_hbox)
+
+        memory_hbox = QHBoxLayout()
+        memory_hbox.addWidget(self.memory_lbl, 40)
+        memory_hbox.addWidget(self.memory_le, 60)
+        self.addLayout(memory_hbox)
+
+        self.addLayout(self.spt_preprocessing)
+
+        preview_spots_hbox = QHBoxLayout()
+        preview_spots_hbox.addWidget(self.preview_spots_btn, 95)
+        self.addLayout(preview_spots_hbox)
+
         max_shift_hbox = QHBoxLayout()
         max_shift_hbox.addWidget(self.max_shift_lbl, 40)
         max_shift_hbox.addWidget(self.max_shift_le, 60)
@@ -250,29 +402,99 @@ class FourierRegistrationOptionsLayout(QVBoxLayout, Styles):
         """Add instructions to the parent protocol list."""
 
         self.generate_instructions()
-        self.parent_window.protocol_layout.protocols.append(self.instructions)
+        if hasattr(self.parent_window, "protocol_layout"):
+            parent = self.parent_window.protocol_layout
+        else:
+            parent = self.parent_window
+
+        parent.protocols.append(self.instructions)
         correction_description = ""
         for index, (key, value) in enumerate(self.instructions.items()):
             if index > 0:
                 correction_description += ", "
             correction_description += str(key) + " : " + str(value)
-        self.parent_window.protocol_layout.protocol_list.addItem(correction_description)
+        parent.protocol_list.addItem(correction_description)
 
     def generate_instructions(self):
         """Generate the instructions dictionary."""
 
+        method = self.method_cb.currentData()
+        is_spt = (method == "spt")
+
         self.instructions = {
             "correction_type": "registration",
-            "method": self.method_cb.currentData(),
+            "method": method,
             "shift_method": self.shift_method_cb.currentData(),
-            "reference_channel": ",".join([ch for ch, cb in self.channel_checkboxes.items() if cb.isChecked()]) if self.joint_consensus_cb.isChecked() else self.reference_channels_cb.currentText(),
+            "reference_channel": ",".join([ch for ch, cb in self.channel_checkboxes.items() if cb.isChecked()]) if (self.joint_consensus_cb.isChecked() and not is_spt) else self.reference_channels_cb.currentText(),
             "reference_frame_idx": int(self.reference_frame_le.get_threshold()),
-            "upsample_factor": int(self.upsample_factor_cb.currentData()),
+            "upsample_factor": int(self.upsample_factor_cb.currentData()) if not is_spt else 1,
             "sliding": self.sliding_cb.isChecked(),
             "sigma": float(self.sigma_le.get_threshold()),
             "max_shift": float(self.max_shift_le.get_threshold()),
             "filter_outliers": self.filter_outliers_cb.isChecked(),
-            "joint_consensus": self.joint_consensus_cb.isChecked(),
-            "consensus_channels": [ch for ch, cb in self.channel_checkboxes.items() if cb.isChecked()],
+            "joint_consensus": self.joint_consensus_cb.isChecked() if not is_spt else False,
+            "consensus_channels": [ch for ch, cb in self.channel_checkboxes.items() if cb.isChecked()] if not is_spt else [self.reference_channels_cb.currentText()],
             "plot_trajectory": self.plot_trajectory_cb.isChecked(),
+            "min_distance": float(self.min_distance_le.get_threshold()),
+            "detection_threshold": float(self.detection_threshold_le.get_threshold()),
+            "search_range": float(self.search_range_le.get_threshold()),
+            "memory": int(self.memory_le.get_threshold()),
+            "image_preprocessing": self.spt_preprocessing.list.items if is_spt else None,
         }
+
+    def preview_spot_detection(self):
+        """Launch the spot detection preview dialog."""
+        from celldetective.gui.viewers.spt_preview_viewer import SPTPreviewVisualizer
+        
+        self.attr_parent.locate_image()
+        stack_path = getattr(self.attr_parent, "current_stack", None)
+        if stack_path is None:
+            logger.warning("No stack selected. Cannot preview spot detection.")
+            return
+            
+        try:
+            initial_sigma = float(self.sigma_le.get_threshold())
+        except Exception:
+            initial_sigma = 1.0
+
+        try:
+            initial_min_dist = float(self.min_distance_le.get_threshold())
+        except Exception:
+            initial_min_dist = 15.0
+
+        try:
+            initial_thresh = float(self.detection_threshold_le.get_threshold())
+        except Exception:
+            initial_thresh = 0.1
+
+        # Use the first channel as the tracking channel.
+        # If consensus is checked, use the first selected channel; otherwise use reference_channels_cb.
+        if self.joint_consensus_cb.isChecked():
+            consensus = [ch for ch, cb in self.channel_checkboxes.items() if cb.isChecked()]
+            tracking_chan = consensus[0] if len(consensus) > 0 else self.channel_names[0]
+        else:
+            tracking_chan = self.reference_channels_cb.currentText()
+            
+        try:
+            target_chan_idx = list(self.channel_names).index(tracking_chan)
+        except (ValueError, AttributeError):
+            target_chan_idx = 0
+
+        self.spt_viewer = SPTPreviewVisualizer(
+            parent_window=self.parent_window,
+            parent_sigma_le=self.sigma_le,
+            parent_min_distance_le=self.min_distance_le,
+            parent_detection_threshold_le=self.detection_threshold_le,
+            parent_preprocessing_list=self.spt_preprocessing.list,
+            initial_sigma=initial_sigma,
+            initial_min_distance=initial_min_dist,
+            initial_detection_threshold=initial_thresh,
+            initial_preprocessing=list(self.spt_preprocessing.list.items),
+            stack_path=stack_path,
+            channel_names=self.channel_names,
+            n_channels=len(self.channel_names),
+            channel_cb=True,
+            target_channel=target_chan_idx,
+            window_title="SPT Spot Detection Preview",
+        )
+        self.spt_viewer.show()

@@ -48,6 +48,7 @@ class SpotDetectionVisualizer(StackVisualizer):
         initial_diameter: Optional[float] = None,
         initial_threshold: Optional[float] = None,
         initial_preprocessing: Optional[List[Any]] = None,
+        require_labels: bool = True,
         *args: Any,
         **kwargs: Any,
     ) -> None:
@@ -74,6 +75,8 @@ class SpotDetectionVisualizer(StackVisualizer):
             Initial detection threshold.
         initial_preprocessing : list, optional
             Initial preprocessing steps.
+        require_labels : bool, optional
+            Whether cell labels are required.
         *args
             Variable length argument list.
         **kwargs
@@ -84,6 +87,7 @@ class SpotDetectionVisualizer(StackVisualizer):
 
         self.cell_type = cell_type
         self.labels = labels
+        self.require_labels = require_labels
         self.detection_channel = self.target_channel
         self.switch_from_channel = False
         self.preview_preprocessing = False
@@ -127,35 +131,53 @@ class SpotDetectionVisualizer(StackVisualizer):
         self.main_layout.addWidget(self.canvas)
 
         self.generate_detection_channel()
-        self.detection_channel = self.detection_channel_cb.currentIndex()
+        if hasattr(self, "detection_channel_cb") and self.detection_channel_cb is not None:
+            self.detection_channel = self.detection_channel_cb.currentIndex()
+        else:
+            self.detection_channel = self.target_channel
 
         self.generate_spot_detection_params()
         self.generate_add_measurement_btn()
-        self.load_labels()
+        
+        if self.require_labels:
+            self.load_labels()
+        else:
+            if self.labels is not None:
+                self.mode = "direct"
+            else:
+                self.mode = "virtual"
+        
         self.change_frame(self.mid_time)
 
         self.ax.callbacks.connect("xlim_changed", self.update_marker_sizes)
         self.ax.callbacks.connect("ylim_changed", self.update_marker_sizes)
         self._axis_callbacks_connected = True
 
-        self.apply_diam_btn.clicked.connect(self.detect_and_display_spots)
-        self.apply_thresh_btn.clicked.connect(self.detect_and_display_spots)
+        if hasattr(self, "apply_diam_btn") and self.apply_diam_btn is not None:
+            self.apply_diam_btn.clicked.connect(self.detect_and_display_spots)
+        if hasattr(self, "apply_thresh_btn") and self.apply_thresh_btn is not None:
+            self.apply_thresh_btn.clicked.connect(self.detect_and_display_spots)
 
-        self.channel_cb.setCurrentIndex(min(self.target_channel, self.n_channels - 1))
-        self.detection_channel_cb.setCurrentIndex(
-            min(self.target_channel, self.n_channels - 1)
-        )
+        if hasattr(self, "channel_cb") and self.channel_cb is not None:
+            self.channel_cb.setCurrentIndex(min(self.target_channel, self.n_channels - 1))
+        if hasattr(self, "detection_channel_cb") and self.detection_channel_cb is not None:
+            self.detection_channel_cb.setCurrentIndex(
+                min(self.target_channel, self.n_channels - 1)
+            )
 
         # Initialize from provided values (sync with settings panel)
         if initial_diameter is not None:
-            self.spot_diam_le.setText(str(initial_diameter))
+            if hasattr(self, "spot_diam_le") and self.spot_diam_le is not None:
+                self.spot_diam_le.setText(str(initial_diameter))
         if initial_threshold is not None:
-            self.spot_thresh_le.setText(str(initial_threshold))
+            if hasattr(self, "spot_thresh_le") and self.spot_thresh_le is not None:
+                self.spot_thresh_le.setText(str(initial_threshold))
         if initial_preprocessing is not None and len(initial_preprocessing) > 0:
-            items_for_list = [a[0] for a in initial_preprocessing]
-            for it in items_for_list:
-                self.preprocessing.list.addItemToList(it)
-            self.preprocessing.list.items = list(initial_preprocessing)
+            if hasattr(self, "preprocessing") and self.preprocessing is not None:
+                items_for_list = [a[0] for a in initial_preprocessing]
+                for it in items_for_list:
+                    self.preprocessing.list.addItemToList(it)
+                self.preprocessing.list.items = list(initial_preprocessing)
 
     def closeEvent(self, event: QEvent) -> None:
         """
@@ -238,15 +260,17 @@ class SpotDetectionVisualizer(StackVisualizer):
         if not self.switch_from_channel:
             self.reset_detection()
 
-        if self.mode == "virtual" and hasattr(self, "mask_paths"):
-            self.init_label = imread(self.mask_paths[value])
+        if self.mode == "virtual":
+            if hasattr(self, "mask_paths"):
+                self.init_label = imread(self.mask_paths[value])
             self.target_img = load_frames(
                 self.img_num_per_channel[self.detection_channel, value],
                 self.stack_path,
                 normalize_input=False,
             )[:, :, 0]
         elif self.mode == "direct":
-            self.init_label = self.labels[value, :, :]
+            if hasattr(self, "labels") and self.labels is not None:
+                self.init_label = self.labels[value, :, :]
             self.target_img = self.stack[value, :, :, self.detection_channel].copy()
 
     def detect_and_display_spots(self):

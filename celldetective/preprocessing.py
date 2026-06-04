@@ -23,7 +23,7 @@ Notes
 The module relies heavily on the directory structure and configuration files of the experiment to locate and process images.
 """
 
-from typing import List, Optional, Union, Callable, Any, Dict, Literal
+from typing import List, Optional, Union, Callable, Any, Dict, Literal, Tuple
 import numpy as np
 import os
 from celldetective.utils.image_loaders import (
@@ -2075,6 +2075,7 @@ def _estimate_spt_shifts(
     sliding: bool = False,
     max_shift: float = 0.0,
     progress_callback: Optional[Callable] = None,
+    image_preprocessing: Optional[List[Any]] = None,
 ) -> Tuple[List[np.ndarray], List[int], List[int]]:
     """
     Estimate shifts using Single-Particle Tracking (SPT) on the first consensus channel.
@@ -2085,13 +2086,25 @@ def _estimate_spt_shifts(
     from skimage.feature import peak_local_max
     from tqdm import tqdm
 
-    # 1. Spot detection on the first consensus channel
     tracking_chan = consensus_channels[0]
     ref_frames = ref_indices_by_chan[tracking_chan]
 
+    # Map the sigma parameter (which represents Spot Size in the SPT GUI) to the odd integer expected diameter.
+    # The minimum stable diameter for trackpy.locate is 5. Larger values avoid bandpass instabilities.
+    d = int(sigma)
+    if d % 2 == 0:
+        d = max(5, d + 1)
+    else:
+        d = max(5, d)
+
+    # Silence trackpy output to keep progress clean
+    import logging
+    tp_logger = logging.getLogger("trackpy")
+    tp_logger.setLevel(logging.WARNING)
+
     detections = []
 
-    logger.info(f"Running spot detection for SPT on channel {tracking_chan}...")
+    logger.info(f"Running trackpy.locate for SPT on channel {tracking_chan} (diameter={d}, threshold={detection_threshold}, separation={min_distance})...")
     for k in tqdm(range(total_frames), desc="SPT Spot Detection"):
         if progress_callback:
             progress_callback(level="frame", iter=k, total=total_frames, stage="SPT Spot Detection")
@@ -2103,6 +2116,14 @@ def _estimate_spt_shifts(
         if np.any(img != img):
             img = interpolate_nan(img)
 
+        # Apply image preprocessing if specified
+        if image_preprocessing is not None:
+            from celldetective.filters import filter_image
+            try:
+                img = filter_image(img.copy(), filters=image_preprocessing)
+            except Exception as e:
+                logger.error(f"SPT preprocessing failed on frame {k}: {e}")
+
         # Min-max normalization for relative thresholding
         img_min, img_max = np.nanmin(img), np.nanmax(img)
         if img_max > img_min:
@@ -2110,22 +2131,14 @@ def _estimate_spt_shifts(
         else:
             img_norm = np.zeros_like(img)
 
-        # Gaussian smoothing
-        if sigma > 0:
-            img_smooth = gaussian_filter(img_norm, sigma=sigma)
-        else:
-            img_smooth = img_norm
-
-        # Find peaks
-        coords = peak_local_max(
-            img_smooth,
-            min_distance=int(min_distance),
-            threshold_rel=detection_threshold,
-            exclude_border=False
-        )
-
-        for y, x in coords:
-            detections.append({"frame": k, "y": float(y), "x": float(x)})
+        # Find spots via trackpy.locate
+        try:
+            df_frame = tp.locate(img_norm, diameter=d, threshold=detection_threshold, separation=min_distance)
+            if len(df_frame) > 0:
+                for _, row in df_frame.iterrows():
+                    detections.append({"frame": k, "y": float(row["y"]), "x": float(row["x"])})
+        except Exception as e:
+            logger.debug(f"trackpy.locate failed on frame {k}: {e}")
 
     if len(detections) == 0:
         logger.warning("No spots detected across the entire stack for SPT registration.")
@@ -2667,7 +2680,30 @@ def register_stack_fourier_single_stack(
         shifts = []
 
         logger.info(f"Computing translation shifts via {method} cross-correlation/SIFT for channels {consensus_channels}...")
-        if sliding:
+        if method == "spt":
+            min_dist = kwargs.get("min_distance", 15.0)
+            det_thresh = kwargs.get("detection_threshold", 0.1)
+            s_range = kwargs.get("search_range", 5.0)
+            mem = kwargs.get("memory", 1)
+            image_prep = kwargs.get("image_preprocessing", None)
+            
+            shifts, fallbacks_list, sift_inliers_list_all = _estimate_spt_shifts(
+                tif=tif,
+                consensus_channels=consensus_channels,
+                ref_indices_by_chan=ref_indices_by_chan,
+                reference_frame_idx=reference_frame_idx,
+                total_frames=total_frames,
+                sigma=sigma,
+                min_distance=min_dist,
+                detection_threshold=det_thresh,
+                search_range=s_range,
+                memory=mem,
+                sliding=sliding,
+                max_shift=max_shift,
+                progress_callback=progress_callback,
+                image_preprocessing=image_prep,
+            )
+        elif sliding:
             step_shifts = {}
             prev_img = {}
             prev_img_reg = {}

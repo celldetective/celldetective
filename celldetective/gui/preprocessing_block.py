@@ -14,6 +14,8 @@ from PyQt5.QtWidgets import (
     QMessageBox,
     QPushButton,
     QVBoxLayout,
+    QWidget,
+    QHBoxLayout,
 )
 from fonticon_mdi6 import MDI6
 from superqt.fonticon import icon
@@ -34,6 +36,80 @@ from celldetective.utils.experiment import extract_experiment_channels
 from celldetective import get_logger
 
 logger = get_logger(__name__)
+
+
+class PreprocessingDesignerDialog(QDialog, Styles):
+    """Floating dialog for configuring preprocessing protocols cleanly without distorting the sidebar"""
+
+    def __init__(self, parent_panel: "PreprocessingPanel") -> None:
+        super().__init__(parent_panel)
+        self.parent_panel = parent_panel
+        self.setWindowTitle("Configure Preprocessing Pipeline")
+        self.setWindowFlags(self.windowFlags() | Qt.WindowMinMaxButtonsHint)
+        self.resize(760, 500)
+
+        self.layout = QVBoxLayout(self)
+        self.layout.setContentsMargins(15, 15, 15, 15)
+        self.layout.setSpacing(10)
+
+        # Add the persistent designer container widget
+        self.layout.addWidget(self.parent_panel.designer_container_widget)
+        self.parent_panel.designer_container_widget.setVisible(True)
+
+        # Spacer/separator
+        from celldetective.gui.base.components import QHSeperationLine
+        self.layout.addWidget(QHSeperationLine())
+
+        # Buttons row
+        self.btn_layout = QHBoxLayout()
+        self.btn_layout.setContentsMargins(0, 5, 0, 5)
+
+        self.close_btn = QPushButton("Save & Close")
+        self.close_btn.setIcon(icon(MDI6.check, color="black"))
+        self.close_btn.setStyleSheet(self.parent_panel.button_select_all)
+        self.close_btn.setIconSize(QSize(18, 18))
+        self.close_btn.clicked.connect(self.accept)
+
+        self.submit_btn = QPushButton("Submit & Run Pipeline")
+        self.submit_btn.setIcon(icon(MDI6.play_circle, color="white"))
+        self.submit_btn.setStyleSheet(self.parent_panel.button_style_sheet)
+        self.submit_btn.setIconSize(QSize(18, 18))
+        self.submit_btn.clicked.connect(self.run_pipeline)
+
+        self.btn_layout.addWidget(self.close_btn, 40)
+        self.btn_layout.addWidget(self.submit_btn, 60)
+        self.layout.addLayout(self.btn_layout)
+
+        # Style the dialog
+        self.setStyleSheet(
+            """
+            QDialog {
+                background-color: #f8fafc;
+            }
+            """
+        )
+
+    def run_pipeline(self):
+        self.layout.removeWidget(self.parent_panel.designer_container_widget)
+        self.parent_panel.designer_container_widget.setParent(None)
+        super().accept()
+        self.parent_panel.launch_preprocessing()
+
+    def accept(self) -> None:
+        self.layout.removeWidget(self.parent_panel.designer_container_widget)
+        self.parent_panel.designer_container_widget.setParent(None)
+        super().accept()
+
+    def reject(self) -> None:
+        self.layout.removeWidget(self.parent_panel.designer_container_widget)
+        self.parent_panel.designer_container_widget.setParent(None)
+        super().reject()
+
+    def closeEvent(self, event):
+        self.layout.removeWidget(self.parent_panel.designer_container_widget)
+        self.parent_panel.designer_container_widget.setParent(None)
+        self.parent_panel.update_pipeline_summary()
+        super().closeEvent(event)
 
 
 class PreprocessingPanel(QFrame, Styles):
@@ -60,6 +136,9 @@ class PreprocessingPanel(QFrame, Styles):
         self.onlyFloat = QDoubleValidator()
         self.onlyInt = QIntValidator()
 
+        # Pre-initialize layouts once to preserve designer states across modal dialog launches
+        self.initialize_designer()
+
         self.setFrameStyle(QFrame.StyledPanel | QFrame.Raised)
         self.grid = QGridLayout(self)
 
@@ -80,15 +159,6 @@ class PreprocessingPanel(QFrame, Styles):
         )
 
         self.grid.addWidget(panel_title, 0, 0, 1, 4, alignment=Qt.AlignCenter)
-
-        # self.select_all_btn = QPushButton()
-        # self.select_all_btn.setIcon(icon(MDI6.checkbox_blank_outline,color="black"))
-        # self.select_all_btn.setIconSize(QSize(20, 20))
-        # self.all_ticked = False
-        # #self.select_all_btn.clicked.connect(self.tick_all_actions)
-        # self.select_all_btn.setStyleSheet(self.button_select_all)
-        # self.grid.addWidget(self.select_all_btn, 0, 0, 1, 4, alignment=Qt.AlignLeft)
-        # self.to_disable.append(self.all_tc_actions)
 
         self.collapse_btn = QPushButton()
         self.collapse_btn.setIcon(icon(MDI6.chevron_down, color="black"))
@@ -129,9 +199,9 @@ class PreprocessingPanel(QFrame, Styles):
         else:
             self.collapse_btn.setIcon(icon(MDI6.chevron_up, color="black"))
             self.collapse_btn.setIconSize(QSize(20, 20))
-            self.parent_window.scroll.setMinimumHeight(
-                min(int(930), int(0.9 * self.parent_window.screen_height))
-            )
+            # Sidebar locked height to prevent control panel distortion
+            self.parent_window.scroll.setMinimumHeight(int(550))
+            self.parent_window.adjustSize()
 
             def safe_center():
                 """
@@ -147,25 +217,59 @@ class PreprocessingPanel(QFrame, Styles):
             except Exception as e:
                 logger.debug(f"Window centering trigger failed: {e}")
 
-    def populate_contents(self):
+    def initialize_designer(self):
         """
-        Populate the content area with preprocessing options.
+        Pre-initialize the entire designer layouts and widgets so they keep state across dialog opens.
         """
-
-        self.ContentsFrame = QFrame()
-        self.grid_contents = QGridLayout(self.ContentsFrame)
+        from celldetective.gui.base.components import CelldetectiveWidget
+        from PyQt5.QtWidgets import QTabWidget, QVBoxLayout
 
         self.model_free_correction_layout = BackgroundModelFreeCorrectionLayout(self)
         self.fit_correction_layout = BackgroundFitCorrectionLayout(self)
         self.rolling_ball_correction_layout = BackgroundRollingBallCorrectionLayout(self)
+        self.channel_offset_options_layout = ChannelOffsetOptionsLayout(self)
+        self.fourier_registration_options_layout = FourierRegistrationOptionsLayout(self)
+
+        # Create nested Background Correction tab widget
+        self.background_tabs = QTabWidget()
+        self.background_tabs.setStyleSheet(self.qtab_style)
+
+        self.fit_wg = CelldetectiveWidget()
+        self.fit_wg.setLayout(self.fit_correction_layout)
+        self.background_tabs.addTab(self.fit_wg, "Fit")
+
+        self.mf_wg = CelldetectiveWidget()
+        self.mf_wg.setLayout(self.model_free_correction_layout)
+        self.background_tabs.addTab(self.mf_wg, "Model-free")
+
+        self.rb_wg = CelldetectiveWidget()
+        self.rb_wg.setLayout(self.rolling_ball_correction_layout)
+        self.background_tabs.addTab(self.rb_wg, "Rolling ball")
+
+        self.background_layout = QVBoxLayout()
+        self.background_layout.setContentsMargins(0, 0, 0, 0)
+        self.background_layout.addWidget(self.background_tabs)
 
         self.protocol_layout = ProtocolDesignerLayout(
             parent_window=self,
-            tab_layouts=[self.fit_correction_layout, self.model_free_correction_layout, self.rolling_ball_correction_layout],
-            tab_names=["Fit", "Model-free", "Rolling ball"],
-            title="BACKGROUND CORRECTION",
+            tab_layouts=[
+                self.background_layout,
+                self.channel_offset_options_layout,
+                self.fourier_registration_options_layout
+            ],
+            tab_names=[
+                "Background Correction",
+                "Channel Offset",
+                "Time Registration"
+            ],
+            title="PREPROCESSING OPERATIONS",
             list_title="Corrections to apply:",
         )
+
+        # Manually link parent window for background sub-layouts
+        self.fit_correction_layout.parent_window = self.protocol_layout
+        self.model_free_correction_layout.parent_window = self.protocol_layout
+        self.rolling_ball_correction_layout.parent_window = self.protocol_layout
 
         self.help_background_btn = QPushButton()
         self.help_background_btn.setIcon(icon(MDI6.help_circle, color=self.help_color))
@@ -178,59 +282,85 @@ class PreprocessingPanel(QFrame, Styles):
             self.help_background_btn, 5, alignment=Qt.AlignRight
         )
 
-        self.channel_offset_correction_layout = QVBoxLayout()
+        # Create persistent widget to house the layout in memory securely
+        self.designer_container_widget = QWidget()
+        self.designer_container_widget.setLayout(self.protocol_layout)
 
-        self.channel_shift_lbl = QLabel("CHANNEL OFFSET CORRECTION")
-        self.channel_shift_lbl.setStyleSheet(
-            """
-			font-weight: bold;
-			padding: 0px;
-			"""
-        )
-        self.channel_offset_correction_layout.addWidget(
-            self.channel_shift_lbl, alignment=Qt.AlignCenter
-        )
+    def populate_contents(self):
+        """
+        Populate the content area with a compact, non-stretching sidebar control interface.
+        """
+        self.ContentsFrame = QFrame()
+        self.grid_contents = QGridLayout(self.ContentsFrame)
+        self.grid_contents.setContentsMargins(10, 10, 10, 10)
+        self.grid_contents.setSpacing(8)
 
-        self.channel_offset_options_layout = ChannelOffsetOptionsLayout(self)
-        self.channel_offset_correction_layout.addLayout(
-            self.channel_offset_options_layout
-        )
+        # Status/Summary Label
+        summary_lbl = QLabel("Active Pipeline:")
+        summary_lbl.setStyleSheet("font-weight: bold; color: #64748b; font-size: 11px;")
 
-        self.protocol_layout.correction_layout.addWidget(QLabel(""))
-        self.protocol_layout.correction_layout.addLayout(
-            self.channel_offset_correction_layout
-        )
+        self.active_pipeline_summary = QLabel("<i>No operations configured.</i>")
+        self.active_pipeline_summary.setTextFormat(Qt.RichText)
+        self.active_pipeline_summary.setWordWrap(True)
+        self.active_pipeline_summary.setStyleSheet("color: #1e293b; font-size: 11px; padding: 6px; background-color: #f1f5f9; border-radius: 4px;")
 
-        self.fourier_registration_layout = QVBoxLayout()
+        self.grid_contents.addWidget(summary_lbl, 0, 0, 1, 4)
+        self.grid_contents.addWidget(self.active_pipeline_summary, 1, 0, 1, 4)
 
-        self.fourier_registration_lbl = QLabel("TIME REGISTRATION (DRIFT CORRECTION)")
-        self.fourier_registration_lbl.setStyleSheet(
-            """
-			font-weight: bold;
-			padding: 0px;
-			"""
-        )
-        self.fourier_registration_layout.addWidget(
-            self.fourier_registration_lbl, alignment=Qt.AlignCenter
-        )
-
-        self.fourier_registration_options_layout = FourierRegistrationOptionsLayout(self)
-        self.fourier_registration_layout.addLayout(
-            self.fourier_registration_options_layout
-        )
-
-        self.protocol_layout.correction_layout.addWidget(QLabel(""))
-        self.protocol_layout.correction_layout.addLayout(
-            self.fourier_registration_layout
-        )
-
-        self.grid_contents.addLayout(self.protocol_layout, 0, 0, 1, 4)
+        # Action buttons
+        self.configure_pipeline_btn = QPushButton("Configure Pipeline...")
+        self.configure_pipeline_btn.setIcon(icon(MDI6.cog, color="#1565c0"))
+        self.configure_pipeline_btn.setStyleSheet(self.button_style_sheet_2)
+        self.configure_pipeline_btn.setIconSize(QSize(18, 18))
+        self.configure_pipeline_btn.setToolTip("Open the floating Designer dialog to configure background correction, offsets, and drift registration.")
+        self.configure_pipeline_btn.clicked.connect(self.open_designer_dialog)
 
         self.submit_preprocessing_btn = QPushButton("Submit")
         self.submit_preprocessing_btn.setStyleSheet(self.button_style_sheet)
+        self.submit_preprocessing_btn.setIcon(icon(MDI6.play_circle, color="white"))
+        self.submit_preprocessing_btn.setIconSize(QSize(18, 18))
+        self.submit_preprocessing_btn.setEnabled(False)
         self.submit_preprocessing_btn.clicked.connect(self.launch_preprocessing)
 
-        self.grid_contents.addWidget(self.submit_preprocessing_btn, 1, 0, 1, 4)
+        self.grid_contents.addWidget(self.configure_pipeline_btn, 2, 0, 1, 4)
+        self.grid_contents.addWidget(self.submit_preprocessing_btn, 3, 0, 1, 4)
+
+        # Initial summary update
+        self.update_pipeline_summary()
+
+    def open_designer_dialog(self):
+        """Open the floating dialog containing the ProtocolDesignerLayout"""
+        dialog = PreprocessingDesignerDialog(self)
+        dialog.exec_()
+        self.update_pipeline_summary()
+
+    def update_pipeline_summary(self):
+        """Update the readable summary in the sidebar of what steps are currently configured"""
+        if not hasattr(self, "protocol_layout") or not hasattr(self, "active_pipeline_summary"):
+            return
+
+        steps = []
+        for proto in self.protocol_layout.protocols:
+            ptype = proto.get("correction_type", "")
+            if ptype == "model-free":
+                steps.append("Background (MF)")
+            elif ptype == "fit":
+                steps.append("Background (Fit)")
+            elif ptype == "rolling-ball" or ptype == "rolling_ball":
+                steps.append("Background (RB)")
+            elif ptype == "offset":
+                steps.append("Offset")
+            elif ptype == "registration":
+                steps.append("Registration")
+            else:
+                steps.append(str(ptype).capitalize())
+
+        if not steps:
+            self.active_pipeline_summary.setText("<i>No operations configured.</i>")
+            self.submit_preprocessing_btn.setEnabled(False)
+        else:
+            self.active_pipeline_summary.setText(" ➔ ".join(steps))
+            self.submit_preprocessing_btn.setEnabled(True)
 
     def add_offset_instructions_to_parent_list(self):
         """

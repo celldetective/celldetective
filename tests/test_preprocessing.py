@@ -470,6 +470,115 @@ class TestFourierRegistration(unittest.TestCase):
 			smoothed_expected_f2 = gaussian_filter(expected_aligned_f2, sigma=3.0)
 			self.assertTrue(np.allclose(smoothed_f2[15:85, 15:85], smoothed_expected_f2[15:85, 15:85], atol=15))
 
+	def test_spt_registration_single_stack(self):
+		import tempfile
+		from celldetective.preprocessing import register_stack_fourier_single_stack
+		from celldetective.utils.io import save_tiff_imagej_compatible
+		from scipy.ndimage import shift
+
+		# Create a patterned image with multiple dots so SPT finds them
+		base_img = np.zeros((100, 100))
+		y, x = np.ogrid[:100, :100]
+		centers = [(30, 30), (70, 30), (30, 70), (70, 70), (50, 50)]
+		for cy, cx in centers:
+			base_img += np.exp(-((y - cy)**2 + (x - cx)**2) / (2 * 2**2)) * 100.0
+
+		frame0 = base_img.copy()
+		frame1 = shift(base_img, [3.0, -2.0])
+		frame2 = shift(base_img, [-1.0, 4.0])
+
+		stack = np.stack([frame0, frame1, frame2], axis=0)
+
+		with tempfile.TemporaryDirectory() as tmpdir:
+			tmp_path = os.path.join(tmpdir, "test_stack_spt.tif")
+			save_tiff_imagej_compatible(tmp_path, stack.astype(np.float32), axes="TYX")
+
+			aligned = register_stack_fourier_single_stack(
+				tmp_path,
+				target_channel_index=0,
+				nbr_channels=1,
+				stack_length=3,
+				reference_frame_idx=0,
+				method="spt",
+				min_distance=10.0,
+				detection_threshold=0.05,
+				search_range=10.0,
+				memory=1,
+				export=False,
+				return_stacks=True
+			)
+
+			self.assertIsNotNone(aligned)
+			self.assertEqual(aligned.shape, (3, 100, 100, 1))
+
+			aligned_frame0 = aligned[0, :, :, 0]
+			aligned_frame1 = aligned[1, :, :, 0]
+			aligned_frame2 = aligned[2, :, :, 0]
+
+			from scipy.ndimage import gaussian_filter
+			smoothed_f0 = gaussian_filter(frame0, sigma=3.0)
+			smoothed_f1 = gaussian_filter(aligned_frame1, sigma=3.0)
+			smoothed_f2 = gaussian_filter(aligned_frame2, sigma=3.0)
+
+			self.assertTrue(np.allclose(aligned_frame0[15:85, 15:85], frame0[15:85, 15:85], atol=5))
+			self.assertTrue(np.allclose(smoothed_f1[15:85, 15:85], smoothed_f0[15:85, 15:85], atol=5))
+			self.assertTrue(np.allclose(smoothed_f2[15:85, 15:85], smoothed_f0[15:85, 15:85], atol=5))
+
+	def test_spt_registration_single_stack_sliding(self):
+		import tempfile
+		from celldetective.preprocessing import register_stack_fourier_single_stack
+		from celldetective.utils.io import save_tiff_imagej_compatible
+		from scipy.ndimage import shift
+
+		# Create a patterned image with multiple dots so SPT finds them
+		base_img = np.zeros((100, 100))
+		y, x = np.ogrid[:100, :100]
+		centers = [(30, 30), (70, 30), (30, 70), (70, 70), (50, 50)]
+		for cy, cx in centers:
+			base_img += np.exp(-((y - cy)**2 + (x - cx)**2) / (2 * 2**2)) * 100.0
+
+		frame0 = base_img.copy()
+		frame1 = shift(base_img, [3.0, -2.0])
+		frame2 = shift(base_img, [5.0, 0.0]) # cumulative shift is 5.0, step shift relative to frame1 is 2.0, 2.0
+
+		stack = np.stack([frame0, frame1, frame2], axis=0)
+
+		with tempfile.TemporaryDirectory() as tmpdir:
+			tmp_path = os.path.join(tmpdir, "test_stack_spt_sliding.tif")
+			save_tiff_imagej_compatible(tmp_path, stack.astype(np.float32), axes="TYX")
+
+			aligned = register_stack_fourier_single_stack(
+				tmp_path,
+				target_channel_index=0,
+				nbr_channels=1,
+				stack_length=3,
+				reference_frame_idx=0,
+				method="spt",
+				min_distance=10.0,
+				detection_threshold=0.05,
+				search_range=10.0,
+				memory=1,
+				sliding=True,
+				export=False,
+				return_stacks=True
+			)
+
+			self.assertIsNotNone(aligned)
+			self.assertEqual(aligned.shape, (3, 100, 100, 1))
+
+			aligned_frame0 = aligned[0, :, :, 0]
+			aligned_frame1 = aligned[1, :, :, 0]
+			aligned_frame2 = aligned[2, :, :, 0]
+
+			from scipy.ndimage import gaussian_filter
+			smoothed_f0 = gaussian_filter(frame0, sigma=3.0)
+			smoothed_f1 = gaussian_filter(aligned_frame1, sigma=3.0)
+			smoothed_f2 = gaussian_filter(aligned_frame2, sigma=3.0)
+
+			self.assertTrue(np.allclose(aligned_frame0[15:85, 15:85], frame0[15:85, 15:85], atol=5))
+			self.assertTrue(np.allclose(smoothed_f1[15:85, 15:85], smoothed_f0[15:85, 15:85], atol=5))
+			self.assertTrue(np.allclose(smoothed_f2[15:85, 15:85], smoothed_f0[15:85, 15:85], atol=5))
+
 
 class TestMultiChannelConsensus(unittest.TestCase):
 
