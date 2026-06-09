@@ -297,6 +297,11 @@ def launch_napari_viewer(
 
     viewer = napari.Viewer()
 
+    # Prevent default double-click to zoom behavior
+    for cb in list(viewer.mouse_double_click_callbacks):
+        if getattr(cb, "__name__", "") == "double_click_to_zoom":
+            viewer.mouse_double_click_callbacks.remove(cb)
+
     if stack is not None:
         viewer.add_image(
             stack,
@@ -434,6 +439,9 @@ def launch_napari_viewer(
         event : Event
             The event object.
         """
+
+        # Prevent double click event from propagating to the viewer and zooming
+        event.handled = True
 
         df = shared_data["df"]
         position = shared_data["position"]
