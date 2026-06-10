@@ -1093,11 +1093,19 @@ def _get_contrast_limits(stack: np.ndarray) -> Optional[List[Tuple[float, float]
         List of (min, max) contrast limits for each channel.
     """
     try:
+        # Lazy (dask) stacks: don't ravel the whole movie — that would force
+        # every frame to load. Sample a few representative frames instead.
+        is_lazy = not isinstance(stack, np.ndarray) and hasattr(stack, "compute")
+
         limits = []
         n_channels = stack.shape[-1]
         for c in range(n_channels):
             channel_data = stack[..., c]
-            if channel_data.size > 1e6:
+            if is_lazy:
+                n_t = channel_data.shape[0]
+                idxs = sorted({0, n_t // 2, max(0, n_t - 1)})
+                subset = np.asarray(channel_data[idxs]).ravel()
+            elif channel_data.size > 1e6:
                 subset = channel_data.ravel()[:: int(max(1, channel_data.size / 1e5))]
             else:
                 subset = channel_data

@@ -264,10 +264,13 @@ class SegmentCellDLProcess(BaseSegmentProcess):
 
         super().__init__(*args, **kwargs)
 
-        # Model (must come before check_gpu so model_type is known)
+        # Model (must come before check_gpu so model_type is known).
+        # NOTE: check_gpu() is intentionally NOT called here — it imports torch,
+        # which is slow, and __init__ runs on the GUI thread (the Process object
+        # is built by the Runner before start()). It is deferred to run(), which
+        # executes in the spawned child, so the progress window stays responsive.
         self.locate_model_path()
         self.extract_model_input_parameters()
-        self.check_gpu()
         self.detect_rescaling()
 
         self.sum_done = 0
@@ -515,6 +518,15 @@ class SegmentCellDLProcess(BaseSegmentProcess):
 
         try:
 
+            # GPU check is done here (in the child) rather than __init__ so its
+            # torch import never blocks the GUI thread.
+            self.check_gpu()
+
+            # Loading the DL backend (TensorFlow/PyTorch) and the model weights
+            # is the dominant startup cost and emits no progress, so tell the
+            # user what is happening instead of leaving the bars at 0%.
+            self.queue.put({"status": f"Loading {self.model_type} model…"})
+
             if self.model_type == "stardist":
                 from celldetective.utils.stardist_utils import _prep_stardist_model
 
@@ -535,6 +547,8 @@ class SegmentCellDLProcess(BaseSegmentProcess):
                     n_channels=len(self.required_channels),
                     scale=self.scale,
                 )
+
+            self.queue.put({"status": "Segmenting…"})
 
             # Wrapper for single-position compatibility if batch_structure is missing
             if not hasattr(self, "batch_structure"):
@@ -838,6 +852,11 @@ class SegmentCellThresholdProcess(BaseSegmentProcess):
 
     def run(self):
         """Run the segmentation process."""
+
+        # The child must re-import the celldetective module tree (Windows spawn)
+        # before the first frame is ready; signal that work has begun so the
+        # bars don't look frozen at 0%.
+        self.queue.put({"status": "Segmenting…"})
 
         # Wrapper for single-position compatibility if batch_structure is missing
         if not hasattr(self, "batch_structure"):

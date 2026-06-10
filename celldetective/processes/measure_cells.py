@@ -349,6 +349,9 @@ class MeasurementProcess(Process):
             measurements_at_t = None
             perform_measurement = True
 
+            # Default to no image so measurements still run (morphology only)
+            # when the movie is missing, instead of raising NameError on `img`.
+            img = None
             if self.file is not None:
                 img = load_frames(
                     self.img_num_channels[:, t],
@@ -466,7 +469,7 @@ class MeasurementProcess(Process):
 
                 measurements_at_t = measure_radial_distance_to_center(
                     measurements_at_t,
-                    volume=img.shape,
+                    volume=img.shape if img is not None else None,
                     column_labels=self.column_labels,
                 )
 

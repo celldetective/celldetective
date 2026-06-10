@@ -303,6 +303,9 @@ def measure_index(indices: List[int]) -> None:
 
     for t in tqdm(indices, desc="frame"):
 
+        # Default to no image so measurements still run (morphology only) when
+        # the movie is missing, instead of raising NameError on `img`.
+        img = None
         if file is not None:
             img = load_frames(
                 img_num_channels[:, t], file, scale=None, normalize_input=False
@@ -371,7 +374,9 @@ def measure_index(indices: List[int]) -> None:
 
         measurements_at_t = center_of_mass_to_abs_coordinates(measurements_at_t)
         measurements_at_t = measure_radial_distance_to_center(
-            measurements_at_t, volume=img.shape, column_labels=column_labels
+            measurements_at_t,
+            volume=img.shape if img is not None else None,
+            column_labels=column_labels,
         )
 
         if measurements_at_t is not None:

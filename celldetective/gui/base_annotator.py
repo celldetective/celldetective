@@ -58,7 +58,10 @@ logger = get_logger(__name__)
 class BaseAnnotator(CelldetectiveMainWindow, Styles):
 
     def __init__(
-        self, parent_window: Optional[QMainWindow] = None, read_config: bool = True
+        self,
+        parent_window: Optional[QMainWindow] = None,
+        read_config: bool = True,
+        lazy_load: bool = False,
     ) -> None:
         """
         Initialize the BaseAnnotator.
@@ -69,6 +72,11 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
             The parent window.
         read_config : bool, optional
             Whether to read the configuration file, default is True.
+        lazy_load : bool, optional
+            If True, defer the (potentially slow) trajectory loading and the base
+            widget construction so a caller can run them under a progress dialog
+            (the track load off the GUI thread, the widgets in a finalize step).
+            Default is False.
         """
 
         super().__init__()
@@ -110,8 +118,9 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
         else:
             if self.read_config:
                 self.load_annotator_config()
-            self.locate_tracks()
-            self._init_base_widgets()
+            if not lazy_load:
+                self.locate_tracks()
+                self._init_base_widgets()
 
     def _init_base_widgets(self):
         """Initialize base widgets."""

@@ -497,7 +497,9 @@ class NeighPanel(QFrame, Styles):
                 msgBox.exec()
 
         if total_positions == 1:
-            # Synchronous load for single position
+            # Single position: load synchronously. It's fast and avoids the
+            # worker-process spawn latency that a popup would add to this common
+            # case (the well/position bars are not informative for one position).
             from celldetective.utils.data_loaders import load_experiment_tables
 
             df = load_experiment_tables(
@@ -508,7 +510,7 @@ class NeighPanel(QFrame, Styles):
             )
             show_table(df)
         else:
-            # Asynchronous load for multiple positions
+            # Multiple positions: load in a worker with the well/position popup.
             process_args = {
                 "experiment": self.exp_dir,
                 "population": "pairs",
@@ -540,7 +542,7 @@ class NeighPanel(QFrame, Styles):
                 well_label="Wells loaded:",
                 pos_label="Positions loaded:",
             )
-            self.job._ProgressWindow__runner.signals.result.connect(on_table_loaded)
+            self.job.connect_result(on_table_loaded)
             self.job.exec_()
 
     def activate_neigh_options(self):

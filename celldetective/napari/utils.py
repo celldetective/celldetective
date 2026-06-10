@@ -16,7 +16,13 @@ from tqdm import tqdm
 
 from celldetective.utils.data_cleaning import tracks_to_btrack
 from celldetective.utils.mask_cleaning import auto_correct_masks, relabel_segmentation
-from celldetective.utils.image_loaders import locate_labels, locate_stack_and_labels
+from celldetective.utils.image_loaders import (
+    locate_labels,
+    locate_stack,
+    locate_stack_and_labels,
+    locate_stack_lazy,
+    fix_missing_labels,
+)
 from celldetective.utils.data_loaders import get_position_table, load_tracking_data
 from celldetective.utils.experiment import (
     extract_experiment_from_position,
@@ -41,6 +47,7 @@ def control_tracks(
     flush_memory: bool = True,
     threads: int = 1,
     progress_callback: Optional[Callable[[int], bool]] = None,
+    status_callback: Optional[Callable[[str], None]] = None,
     prepare_only: bool = False,
 ) -> Optional[Union[napari.Viewer, Dict[str, Any]]]:
     """
@@ -98,9 +105,44 @@ def control_tracks(
     if progress_callback:
         progress_callback(0)
 
-    stack, labels = locate_stack_and_labels(
-        position, prefix=prefix, population=population
+    # --- Load masks (parallel, with progress) ---
+    if status_callback:
+        status_callback("Loading masks…")
+
+    def _labels_progress(p: int) -> None:
+        # Map mask-loading progress onto the 0–20 band of the overall bar.
+        if progress_callback:
+            progress_callback(int(p * 0.20))
+
+    n_label_threads = max(int(threads), 4)
+    labels = locate_labels(
+        position,
+        population=population,
+        threads=n_label_threads,
+        progress_callback=_labels_progress,
     )
+
+    # --- Load image stack (lazily when possible, else eagerly) ---
+    if status_callback:
+        status_callback("Loading image stack…")
+    if progress_callback:
+        progress_callback(20)
+
+    stack = locate_stack_lazy(position, prefix=prefix)
+    if stack is None:
+        stack = locate_stack(position, prefix=prefix)
+
+    # Mirror locate_stack_and_labels: repair/realign label count if needed.
+    if labels is None or len(labels) < len(stack):
+        fix_missing_labels(position, population=population, prefix=prefix)
+        labels = locate_labels(
+            position, population=population, threads=n_label_threads
+        )
+    if len(stack) != len(labels):
+        raise ValueError(
+            f"The shape of the stack {getattr(stack, 'shape', None)} does not "
+            f"match with the shape of the labels {getattr(labels, 'shape', None)}"
+        )
 
     if progress_callback:
         progress_callback(25)
@@ -114,6 +156,7 @@ def control_tracks(
         flush_memory=flush_memory,
         threads=threads,
         progress_callback=progress_callback,
+        status_callback=status_callback,
         prepare_only=prepare_only,
     )
 
@@ -137,7 +180,10 @@ def tracks_to_napari(
         A tuple containing vertices, tracks, properties, and graph.
     """
 
-    data, properties, graph = tracks_to_btrack(df, exclude_nans=exclude_nans)
+    # tracks_to_btrack mutates its input in place (inplace dropna, adds 'z'/'dummy'
+    # columns). Pass a copy so the caller's working DataFrame is never silently
+    # modified (otherwise displaying the tracks would permanently drop NaN rows).
+    data, properties, graph = tracks_to_btrack(df.copy(), exclude_nans=exclude_nans)
     vertices = data[:, [1, -2, -1]]
     if data.shape[1] == 4:
         tracks = data
@@ -155,6 +201,7 @@ def view_tracks_in_napari(
     flush_memory: bool = True,
     threads: int = 1,
     progress_callback: Optional[Callable[[int], bool]] = None,
+    status_callback: Optional[Callable[[str], None]] = None,
     prepare_only: bool = False,
 ) -> Optional[Union[napari.Viewer, Dict[str, Any]]]:
     """
@@ -188,6 +235,8 @@ def view_tracks_in_napari(
     """
 
     logger.debug(f"view_tracks_in_napari called with pos={position}, pop={population}")
+    if status_callback:
+        status_callback("Reading trajectories…")
     df, df_path = get_position_table(position, population=population, return_path=True)
     logger.debug(f"get_position_table returned df={df is not None}")
 
@@ -205,8 +254,10 @@ def view_tracks_in_napari(
         "selected_frame": None,
     }
 
-    if (labels is not None) * relabel:
+    if (labels is not None) and relabel:
         logger.info("Replacing the cell mask labels with the track ID...")
+        if status_callback:
+            status_callback("Relabeling masks…")
 
         def wrapped_callback(p: int) -> bool:
             """
@@ -231,6 +282,8 @@ def view_tracks_in_napari(
         if labels is None:
             return None
 
+    if status_callback:
+        status_callback("Preparing tracks…")
     vertices, tracks, properties, graph = tracks_to_napari(df, exclude_nans=True)
 
     contrast_limits = _get_contrast_limits(stack)
@@ -311,8 +364,12 @@ def launch_napari_viewer(
         )
 
     if labels is not None:
+        # Avoid a full int64 copy of the whole TYX stack when the labels are
+        # already an integer type (relabel_segmentation now returns int32).
+        if not np.issubdtype(labels.dtype, np.integer):
+            labels = labels.astype(np.int32)
         labels_layer = viewer.add_labels(
-            labels.astype(int), name="segmentation", opacity=0.4
+            labels, name="segmentation", opacity=0.4
         )
     viewer.add_points(vertices, size=4, name="points", opacity=0.3)
     viewer.add_tracks(tracks, properties=properties, graph=graph, name="tracks")
@@ -363,6 +420,74 @@ def launch_napari_viewer(
     selected_frame = viewer.dims.current_step[0]
     shared_data["selected_frame"] = selected_frame
 
+    # Cache the running maximum label/track id so we never have to scan the whole
+    # label stack on every correction (see on_second_click_of_double_click).
+    max_label = 0
+    seg_data_init = viewer.layers["segmentation"].data if "segmentation" in viewer.layers else None
+    if seg_data_init is not None and seg_data_init.size:
+        max_label = int(np.max(seg_data_init))
+    try:
+        df_max = np.nanmax(shared_data["df"]["TRACK_ID"].to_numpy())
+        if np.isfinite(df_max):
+            max_label = max(max_label, int(df_max))
+    except (ValueError, KeyError, TypeError):
+        pass
+    shared_data["max_label"] = max_label
+
+    # Bounded undo history: snapshots of (df, modified label tail, counters).
+    undo_stack: List[Dict[str, Any]] = []
+    MAX_UNDO = 5
+
+    def push_undo_snapshot(frame_start: int) -> None:
+        """
+        Snapshot the current state before a correction so it can be reverted.
+
+        Parameters
+        ----------
+        frame_start : int
+            First frame index whose labels are about to be modified. Only the
+            label tail from this frame onward is copied, to bound memory use.
+        """
+        seg = viewer.layers["segmentation"].data
+        undo_stack.append(
+            {
+                "df": shared_data["df"].copy(),
+                "frame_start": frame_start,
+                "labels_tail": seg[frame_start:].copy(),
+                "max_label": shared_data["max_label"],
+                "selected_frame": shared_data["selected_frame"],
+            }
+        )
+        if len(undo_stack) > MAX_UNDO:
+            undo_stack.pop(0)
+
+    def refresh_track_layers() -> None:
+        """Rebuild the points/tracks layers from the current DataFrame."""
+        vertices, tracks, properties, graph = tracks_to_napari(
+            shared_data["df"], exclude_nans=True
+        )
+        viewer.layers["tracks"].data = tracks
+        viewer.layers["tracks"].properties = properties
+        viewer.layers["tracks"].graph = graph
+        viewer.layers["points"].data = vertices
+        viewer.layers["segmentation"].refresh()
+        viewer.layers["tracks"].refresh()
+        viewer.layers["points"].refresh()
+
+    def undo_last_correction() -> None:
+        """Revert the most recent correction, if any."""
+        if not undo_stack:
+            logger.info("Nothing to undo.")
+            return
+        snap = undo_stack.pop()
+        shared_data["df"] = snap["df"]
+        shared_data["max_label"] = snap["max_label"]
+        shared_data["selected_frame"] = snap["selected_frame"]
+        seg = viewer.layers["segmentation"].data
+        seg[snap["frame_start"]:] = snap["labels_tail"]
+        refresh_track_layers()
+        logger.info("Reverted the last correction.")
+
     def export_modifications():
         """Export modified tracks."""
 
@@ -404,7 +529,13 @@ def launch_napari_viewer(
         """Widget to trigger export."""
         return export_modifications()
 
+    @magicgui(call_button="Undo last\ncorrection")
+    def undo_widget():
+        """Widget to revert the last correction."""
+        return undo_last_correction()
+
     export_table_widget.native.setStyleSheet(Styles().button_style_sheet)
+    undo_widget.native.setStyleSheet(Styles().button_style_sheet)
 
     def label_changed(event: str) -> None:
         """
@@ -423,7 +554,12 @@ def launch_napari_viewer(
 
     viewer.layers["segmentation"].events.selected_label.connect(label_changed)
 
-    viewer.window.add_dock_widget(export_table_widget, area="right")
+    track_button_container = QWidget()
+    track_button_layout = QVBoxLayout(track_button_container)
+    track_button_layout.setSpacing(10)
+    track_button_layout.addWidget(export_table_widget.native)
+    track_button_layout.addWidget(undo_widget.native)
+    viewer.window.add_dock_widget(track_button_container, area="right")
 
     @labels_layer.mouse_double_click_callbacks.append
     def on_second_click_of_double_click(
@@ -447,11 +583,14 @@ def launch_napari_viewer(
         position = shared_data["position"]
         population = shared_data["population"]
 
-        frame, x, y = event.position
+        seg_data = viewer.layers["segmentation"].data
+
+        # event.position is (frame, row, col) in array coordinates.
         try:
-            value_under = viewer.layers["segmentation"].data[
-                int(frame), int(x), int(y)
-            ]  # labels[0,int(y),int(x)]
+            frame = int(event.position[0])
+            row = int(event.position[1])
+            col = int(event.position[2])
+            value_under = seg_data[frame, row, col]
             if value_under == 0:
                 return None
         except Exception:
@@ -459,6 +598,24 @@ def launch_napari_viewer(
             return None
 
         target_track_id = viewer.layers["segmentation"].selected_label
+
+        # Guard: with no track picked (selected_label == 0) the propagation would
+        # silently delete the clicked track from this frame on. Refuse instead.
+        if target_track_id == 0:
+            msgBox = QMessageBox()
+            msgBox.setIcon(QMessageBox.Warning)
+            msgBox.setText(
+                "No track is currently selected. Pick the surviving track with "
+                "the colour picker (pipette) before propagating it to a cell."
+            )
+            msgBox.setWindowTitle("No track selected")
+            msgBox.setStandardButtons(QMessageBox.Ok)
+            msgBox.exec()
+            return None
+
+        if value_under == target_track_id:
+            # Nothing to do: the cell already belongs to the selected track.
+            return None
 
         msgBox = QMessageBox()
         msgBox.setIcon(QMessageBox.Question)
@@ -472,20 +629,28 @@ def launch_napari_viewer(
             return None
         else:
 
+            # Snapshot for undo before mutating anything.
+            push_undo_snapshot(frame)
+
             if target_track_id not in df[
                 "TRACK_ID"
             ].unique() and target_track_id in np.unique(
-                viewer.layers["segmentation"].data[shared_data["selected_frame"]]
+                seg_data[shared_data["selected_frame"]]
             ):
                 # the selected cell in frame -1 is not in the table... we can add it to DataFrame
-                current_labelm1 = viewer.layers["segmentation"].data[
-                    shared_data["selected_frame"]
-                ]
+                current_labelm1 = seg_data[shared_data["selected_frame"]]
                 original_labelm1 = locate_labels(
                     position,
                     population=population,
                     frames=shared_data["selected_frame"],
                 )
+                if original_labelm1 is None:
+                    logger.warning(
+                        "Could not load original labels for frame "
+                        f"{shared_data['selected_frame']}; skipping correction."
+                    )
+                    undo_stack.pop()
+                    return None
                 original_labelm1[current_labelm1 != target_track_id] = 0
                 props = regionprops_table(
                     original_labelm1,
@@ -509,18 +674,17 @@ def launch_napari_viewer(
             if value_under not in df["TRACK_ID"].unique():
                 # the cell to add is not currently part of DataFrame, need to add measurement
 
-                current_label = viewer.layers["segmentation"].data[int(frame)]
+                current_label = seg_data[frame]
                 original_label = locate_labels(
-                    position, population=population, frames=int(frame)
+                    position, population=population, frames=frame
                 )
-
-                new_datapoint = {
-                    "TRACK_ID": value_under,
-                    "FRAME": frame,
-                    "POSITION_X": np.nan,
-                    "POSITION_Y": np.nan,
-                    "class_id": np.nan,
-                }
+                if original_label is None:
+                    logger.warning(
+                        f"Could not load original labels for frame {frame}; "
+                        "skipping correction."
+                    )
+                    undo_stack.pop()
+                    return None
 
                 original_label[current_label != value_under] = 0
 
@@ -540,42 +704,32 @@ def launch_napari_viewer(
                     },
                     inplace=True,
                 )
-                new_cell["FRAME"] = int(frame)
+                new_cell["FRAME"] = frame
                 new_cell["TRACK_ID"] = value_under
                 df = pd.concat([df, new_cell], ignore_index=True)
 
-            relabel = np.amax(viewer.layers["segmentation"].data) + 1
-            for f in viewer.layers["segmentation"].data[int(frame) :]:
-                if target_track_id != 0:
-                    f[np.where(f == target_track_id)] = relabel
-                f[np.where(f == value_under)] = target_track_id
+            # Displace the tail of the selected track onto a fresh id, then hand
+            # its identity to the clicked track. Use the cached running max id to
+            # avoid scanning the whole label stack, and vectorise over the tail
+            # rather than looping frame by frame.
+            new_track_id = shared_data["max_label"] + 1
+            shared_data["max_label"] = new_track_id
 
-            if target_track_id != 0:
-                df.loc[
-                    (df["FRAME"] >= frame) & (df["TRACK_ID"] == target_track_id),
-                    "TRACK_ID",
-                ] = relabel
+            tail = seg_data[frame:]
+            tail[tail == target_track_id] = new_track_id
+            tail[tail == value_under] = target_track_id
+
+            df.loc[
+                (df["FRAME"] >= frame) & (df["TRACK_ID"] == target_track_id),
+                "TRACK_ID",
+            ] = new_track_id
             df.loc[
                 (df["FRAME"] >= frame) & (df["TRACK_ID"] == value_under), "TRACK_ID"
             ] = target_track_id
-            df = df.loc[~(df["TRACK_ID"] == 0), :]
             df = df.sort_values(by=["TRACK_ID", "FRAME"])
 
-            vertices, tracks, properties, graph = tracks_to_napari(
-                df, exclude_nans=True
-            )
-
-            viewer.layers["tracks"].data = tracks
-            viewer.layers["tracks"].properties = properties
-            viewer.layers["tracks"].graph = graph
-
-            viewer.layers["points"].data = vertices
-
-            viewer.layers["segmentation"].refresh()
-            viewer.layers["tracks"].refresh()
-            viewer.layers["points"].refresh()
-
-        shared_data["df"] = df
+            shared_data["df"] = df
+            refresh_track_layers()
 
     viewer.show(block=block)
 
@@ -698,7 +852,11 @@ def control_segmentation_napari(
     prefix: str = "Aligned",
     population: str = "target",
     flush_memory: bool = False,
-) -> None:
+    threads: int = 1,
+    progress_callback: Optional[Callable[[int], bool]] = None,
+    status_callback: Optional[Callable[[str], None]] = None,
+    prepare_only: bool = False,
+) -> Optional[Dict[str, Any]]:
     """
 
     Control the visualization of segmentation labels using the napari viewer.
@@ -713,6 +871,17 @@ def control_segmentation_napari(
             The population type for which the segmentation is performed. The default is 'target'.
     flush_memory : bool, optional
             Pop napari layers upon closing the viewer to empty the memory footprint. The default is `False`.
+    threads : int, optional
+            Number of threads used to load the per-frame masks in parallel.
+    progress_callback : function, optional
+            Called with an int in [0, 100] as the data loads.
+    status_callback : function, optional
+            Called with a short phase message (e.g. "Loading masks…").
+    prepare_only : bool, optional
+            If True, load and prepare the data but do not create the viewer;
+            return the keyword arguments for :func:`launch_segmentation_viewer`
+            instead. Use this to run the slow loading phase in a worker thread
+            and create the viewer on the GUI thread.
 
     Notes
     -----
@@ -724,6 +893,113 @@ def control_segmentation_napari(
     >>> control_segmentation_napari(position, prefix='Aligned', population="target")
     # Control the visualization of segmentation labels using the napari viewer.
 
+    """
+
+    if not position.endswith(os.sep):
+        position += os.sep
+    position = position.replace("\\", "/")
+
+    if progress_callback:
+        progress_callback(0)
+
+    # --- Load masks (parallel, with progress) ---
+    if status_callback:
+        status_callback("Loading masks…")
+
+    def _labels_progress(p: int) -> None:
+        # Map mask-loading progress onto the 0–60 band of the overall bar.
+        if progress_callback:
+            progress_callback(int(p * 0.60))
+
+    n_label_threads = max(int(threads), 4)
+    labels = locate_labels(
+        position,
+        population=population,
+        threads=n_label_threads,
+        progress_callback=_labels_progress,
+    )
+
+    # --- Load image stack (lazily when possible, else eagerly) ---
+    if status_callback:
+        status_callback("Loading image stack…")
+    if progress_callback:
+        progress_callback(60)
+
+    stack = locate_stack_lazy(position, prefix=prefix)
+    if stack is None:
+        stack = locate_stack(position, prefix=prefix)
+
+    # Mirror locate_stack_and_labels: repair/realign label count if needed.
+    if labels is None or len(labels) < len(stack):
+        fix_missing_labels(position, population=population, prefix=prefix)
+        labels = locate_labels(
+            position, population=population, threads=n_label_threads
+        )
+    if len(stack) != len(labels):
+        raise ValueError(
+            f"The shape of the stack {getattr(stack, 'shape', None)} does not "
+            f"match with the shape of the labels {getattr(labels, 'shape', None)}"
+        )
+
+    if status_callback:
+        status_callback("Adjusting the contrast…")
+    if progress_callback:
+        progress_callback(90)
+
+    contrast_limits = _get_contrast_limits(stack)
+
+    if progress_callback:
+        progress_callback(100)
+
+    data = {
+        "stack": stack,
+        "labels": labels,
+        "contrast_limits": contrast_limits,
+        "position": position,
+        "population": population,
+        "flush_memory": flush_memory,
+    }
+
+    if prepare_only:
+        return data
+
+    return launch_segmentation_viewer(**data)
+
+
+def launch_segmentation_viewer(
+    stack: np.ndarray,
+    labels: np.ndarray,
+    contrast_limits: Optional[List[Tuple[float, float]]],
+    position: str,
+    population: str = "target",
+    flush_memory: bool = False,
+    block: bool = True,
+) -> None:
+    """
+    Create the napari viewer for segmentation inspection from pre-loaded data.
+
+    Must run on the GUI thread. The data is typically prepared by
+    :func:`control_segmentation_napari` (optionally in a worker thread with
+    ``prepare_only=True``).
+
+    Parameters
+    ----------
+    stack : ndarray or dask.array.Array
+        The image stack shaped (T, Y, X, C).
+    labels : ndarray
+        The label stack shaped (T, Y, X).
+    contrast_limits : list of tuple or None
+        Per-channel contrast limits for the image layers.
+    position : str
+        The position folder (with trailing separator) — used to save labels
+        and annotations.
+    population : str, optional
+        The population whose masks are displayed. The default is 'target'.
+    flush_memory : bool, optional
+        Pop napari layers upon closing the viewer to empty the memory
+        footprint. Only effective when ``block=True``.
+    block : bool, optional
+        Whether to block execution while the viewer is open.
     """
 
     def export_labels():
@@ -957,11 +1233,6 @@ def control_segmentation_napari(
         """Widget to trigger export."""
         return export_annotation()
 
-    stack, labels = locate_stack_and_labels(
-        position, prefix=prefix, population=population
-    )
-    contrast_limits = _get_contrast_limits(stack)
-
     output_folder = position + f"labels_{population}{os.sep}"
     logger.info(f"Shape of the loaded image stack: {stack.shape}...")
 
@@ -976,7 +1247,11 @@ def control_segmentation_napari(
         colormap=["gray"] * stack.shape[-1],
         contrast_limits=contrast_limits,
     )
-    viewer.add_labels(labels.astype(int), name="segmentation", opacity=0.4)
+    # Avoid a full int64 copy of the whole TYX stack when the labels are
+    # already an integer type.
+    if not np.issubdtype(labels.dtype, np.integer):
+        labels = labels.astype(np.int32)
+    viewer.add_labels(labels, name="segmentation", opacity=0.4)
 
     button_container = QWidget()
     layout = QVBoxLayout(button_container)
@@ -1013,7 +1288,7 @@ def control_segmentation_napari(
     label_widget_list = ["polygon_button", "transform_button"]
     lock_controls(viewer.layers["segmentation"], label_widget_list)
 
-    viewer.show(block=True)
+    viewer.show(block=block)
 
     if flush_memory:
         # temporary fix for slight napari memory leak — pop until IndexError (empty)

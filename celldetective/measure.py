@@ -1072,6 +1072,11 @@ def measure_isotropic_intensity(
                 x = group[column_labels["x"]].to_numpy()[0]
                 y = group[column_labels["y"]].to_numpy()[0]
 
+                # Cells without a valid position (e.g. gap-filled/dummy points)
+                # cannot be measured; leave their intensities as NaN.
+                if not (np.isfinite(x) and np.isfinite(y)):
+                    continue
+
                 xmin = int(x)
                 xmax = int(x) + 2 * pad_value_y - 1
                 ymin = int(y)
@@ -1091,7 +1096,7 @@ def measure_isotropic_intensity(
                 projection[expanded_mask[:, :, 0] == 0.0, :] = epsilon
 
                 for op in operations:
-                    func = eval("np." + op)
+                    func = getattr(np, op)
                     intensity_values = func(
                         projection, axis=(0, 1), where=projection > epsilon
                     )
@@ -1120,6 +1125,11 @@ def measure_isotropic_intensity(
             x = group[column_labels["x"]].to_numpy()[0]
             y = group[column_labels["y"]].to_numpy()[0]
 
+            # Cells without a valid position (e.g. gap-filled/dummy points)
+            # cannot be measured; leave their intensities as NaN.
+            if not (np.isfinite(x) and np.isfinite(y)):
+                continue
+
             xmin = int(x)
             xmax = int(x) + 2 * pad_value_y - 1
             ymin = int(y)
@@ -1133,7 +1143,7 @@ def measure_isotropic_intensity(
             projection = np.multiply(crop, expanded_mask)
 
             for op in operations:
-                func = eval("np." + op)
+                func = getattr(np, op)
                 intensity_values = func(
                     projection, axis=(0, 1), where=projection == projection
                 )

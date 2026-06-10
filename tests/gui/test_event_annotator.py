@@ -155,9 +155,11 @@ class TestEventAnnotatorSaveLogic:
         df.to_csv(temp_trajectory_file, index=False)
 
         # Create a mock annotator with minimal attributes
+        from PyQt5.QtWidgets import QMessageBox
+
         with patch.object(
             EventAnnotator, "__init__", lambda self, *args, **kwargs: None
-        ):
+        ), patch.object(QMessageBox, "question", return_value=QMessageBox.Yes):
             annotator = EventAnnotator(None)
 
             # Set required attributes
@@ -173,7 +175,7 @@ class TestEventAnnotatorSaveLogic:
             annotator.len_movie = 10
             annotator.extract_scatter_from_trajectories = MagicMock()
 
-            # Call save
+            # Call save (confirm the deletion prompt via the patched QMessageBox)
             annotator.save_trajectories()
 
         # Load saved file and verify
@@ -331,6 +333,7 @@ class TestEventAnnotatorApplyModification:
             annotator.status_name = "status"
             annotator.track_of_interest = 1
             annotator.selection = [(0, 0)]  # One selection to pop
+            annotator.len_movie = 10  # required by the time-of-interest bounds check
 
             # Mock UI elements
             annotator.correct_btn = MagicMock()
