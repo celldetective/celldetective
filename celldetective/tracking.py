@@ -704,7 +704,14 @@ def interpolate_per_track(group_df: pd.DataFrame) -> pd.DataFrame:
 
     """
 
+    # class_id is a mask label, not a continuous quantity: interpolating it would
+    # invent a mask for positions that have none and (with limit_direction="both")
+    # back-fill leading NaNs, making a cell look detected before its first real
+    # mask. It must stay NaN wherever there is no mask.
+    never_interpolate = {"class_id"}
     for c in list(group_df.columns):
+        if c in never_interpolate:
+            continue
         group_df_new_dtype = group_df[c].infer_objects(copy=False)
         if group_df_new_dtype.dtype != "O":
             group_df[c] = group_df_new_dtype.interpolate(
