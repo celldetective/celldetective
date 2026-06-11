@@ -39,6 +39,48 @@ from celldetective.gui.base.styles import Styles
 logger = get_logger()
 
 
+def _drop_fully_maskless_tracks(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Remove tracks that have no mask in any frame.
+
+    A position with no mask has a NaN ``class_id``. A track whose every position
+    is maskless carries no segmentation at all and can only be a "ghost" — for
+    instance one left behind when a correction reassigned all of a track's masks
+    to another track. Such tracks are dropped, while any track that keeps at
+    least one real detection is preserved untouched (including its interpolated
+    gaps), so sparse edits don't lose data.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        Trajectory table with ``TRACK_ID`` and ``class_id`` columns.
+
+    Returns
+    -------
+    pandas.DataFrame
+        The table without fully-maskless tracks (index reset). Returned
+        unchanged if the required columns are missing.
+    """
+    if "class_id" not in df.columns or "TRACK_ID" not in df.columns:
+        return df
+    has_mask = df["class_id"].notna().groupby(df["TRACK_ID"]).transform("any")
+    n_before = df["TRACK_ID"].nunique()
+    cleaned = df[has_mask].reset_index(drop=True)
+    n_dropped = n_before - cleaned["TRACK_ID"].nunique()
+    if n_dropped > 0:
+        if cleaned.empty and not df.empty:
+            # Every track is maskless: far more likely an unpopulated class_id
+            # column than genuinely all-ghost data. Don't silently empty the
+            # table — leave it untouched and warn instead.
+            logger.warning(
+                "All tracks appear maskless (class_id is entirely NaN); keeping "
+                "the table unchanged. Has tracking/measurement populated class_id?"
+            )
+            return df
+        logger.info(f"Dropped {n_dropped} fully maskless (ghost) track(s).")
+    return cleaned
+
+
 def control_tracks(
     position: str,
     prefix: str = "Aligned",
@@ -246,6 +288,14 @@ def view_tracks_in_napari(
     if df is None:
         logger.warning("Please compute trajectories first... Abort...")
         return None
+
+    # Drop "ghost" tracks that have no mask in any frame (e.g. left behind by an
+    # earlier correction that reassigned all of a track's masks). Tracks that
+    # keep at least one real detection are preserved untouched — including their
+    # interpolated positions — so sparse edits don't lose data. Ghosts created
+    # during this session are cleaned again on export.
+    df = _drop_fully_maskless_tracks(df)
+
     shared_data = {
         "df": df,
         "path": df_path,
@@ -501,6 +551,14 @@ def launch_napari_viewer(
         position = shared_data["position"]
         population = shared_data["population"]
         df = velocity_per_track(df, window_size=3, mode="bi")
+
+        # Compute first-detection from the accurate (pre-interpolation) class_id,
+        # which is NaN wherever the cell has no mask. This must run *before*
+        # post-processing because interpolate_na fills class_id (it even
+        # back-fills leading NaNs), which would otherwise make the first
+        # detection look earlier than the first real mask. t_firstdetection is
+        # written constant per track, so clean_trajectories propagates it onto
+        # any re-interpolated rows.
         df = write_first_detection_class(df, img_shape=labels[0].shape)
 
         experiment = extract_experiment_from_position(position)
@@ -518,6 +576,23 @@ def launch_napari_viewer(
                         f"Applying the following track postprocessing: {post_processing_options}..."
                     )
                     df = clean_trajectories(df.copy(), **post_processing_options)
+
+        # Refresh the binary first-detection status after post-processing: re-
+        # interpolation can add positions before a cell's first real detection,
+        # and those frames must read status_firstdetection = 0 (cell not yet
+        # visible). t_firstdetection is the per-track appearance time propagated
+        # onto every row by clean_trajectories, so this reproduces exactly the
+        # status rule used in write_first_detection_class while also covering the
+        # newly interpolated rows.
+        if "t_firstdetection" in df.columns:
+            df["status_firstdetection"] = (
+                df["FRAME"] >= df["t_firstdetection"]
+            ).astype(int)
+
+        # Remove any ghost tracks (no mask in any frame) created by corrections
+        # before writing the table.
+        df = _drop_fully_maskless_tracks(df)
+
         unnamed_cols = [c for c in list(df.columns) if c.startswith("Unnamed")]
         df = df.drop(unnamed_cols, axis=1)
         logger.debug(f"Columns after export: {list(df.columns)}")
@@ -599,18 +674,36 @@ def launch_napari_viewer(
 
         target_track_id = viewer.layers["segmentation"].selected_label
 
-        # Guard: with no track picked (selected_label == 0) the propagation would
-        # silently delete the clicked track from this frame on. Refuse instead.
+        # No track picked (selected_label == 0). Rather than silently wiping the
+        # clicked track (the old set-to-0 behaviour), offer an explicit choice:
+        # either pick a surviving track first, or permanently delete the clicked
+        # one.
         if target_track_id == 0:
             msgBox = QMessageBox()
             msgBox.setIcon(QMessageBox.Warning)
             msgBox.setText(
-                "No track is currently selected. Pick the surviving track with "
-                "the colour picker (pipette) before propagating it to a cell."
+                f"No track is selected (the colour picker is set to 0).\n\n"
+                f"To merge tracks, pick the surviving track with the colour "
+                f"picker (pipette) first, then double-click the cell.\n\n"
+                f"Otherwise, you can permanently delete track {int(value_under)}."
             )
             msgBox.setWindowTitle("No track selected")
-            msgBox.setStandardButtons(QMessageBox.Ok)
+            delete_btn = msgBox.addButton(
+                f"Delete track {int(value_under)}", QMessageBox.DestructiveRole
+            )
+            msgBox.addButton(QMessageBox.Cancel)
+            msgBox.setDefaultButton(QMessageBox.Cancel)
             msgBox.exec()
+
+            if msgBox.clickedButton() is delete_btn:
+                # Snapshot the whole stack (frame 0 on) so the deletion is
+                # undoable, then erase the track from every frame and the table.
+                push_undo_snapshot(0)
+                seg_data[seg_data == value_under] = 0
+                df = df[df["TRACK_ID"] != value_under]
+                shared_data["df"] = df
+                refresh_track_layers()
+                logger.info(f"Permanently deleted track {int(value_under)}.")
             return None
 
         if value_under == target_track_id:
@@ -730,6 +823,14 @@ def launch_napari_viewer(
 
             shared_data["df"] = df
             refresh_track_layers()
+
+    # Open with the segmentation layer active: corrections (colour picker,
+    # double-click) all happen on it, so it should be the selected layer.
+    if "segmentation" in viewer.layers:
+        try:
+            viewer.layers.selection.active = viewer.layers["segmentation"]
+        except Exception as e:
+            logger.debug(f"Could not activate the segmentation layer: {e}")
 
     viewer.show(block=block)
 
