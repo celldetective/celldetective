@@ -507,11 +507,40 @@ class EventAnnotator(BaseAnnotator):
         case (and is a no-op while playing, where the loop handles it).
         """
         if hasattr(self, "stop_btn") and not self.stop_btn.isVisible():
-            try:
-                self.update_scatters_only()
-                self.fcanvas.canvas.draw_idle()
-            except Exception as e:
-                logger.debug(f"Could not refresh paused frame: {e}")
+            self._static_redraw_current_frame()
+
+    def _static_redraw_current_frame(self):
+        """
+        Statically repaint the current frame while the animation is paused.
+
+        The animation's artists (image + scatters) are flagged ``animated=True``
+        for blitting, so a normal full canvas draw skips them — they only appear
+        when a frame is blitted. After a selection change or a window resize
+        (which forces a full redraw) the paused frame would therefore go blank.
+        Temporarily clear the flag so a full draw paints them, then restore it so
+        blitting still works on resume.
+        """
+        artists = [
+            a
+            for a in (
+                getattr(self, "im", None),
+                getattr(self, "status_scatter", None),
+                getattr(self, "class_scatter", None),
+            )
+            if a is not None
+        ]
+        if not artists:
+            return
+        try:
+            self.draw_frame(self.framedata)
+            for a in artists:
+                a.set_animated(False)
+            self.fcanvas.canvas.draw()
+        except Exception as e:
+            logger.debug(f"Could not statically redraw paused frame: {e}")
+        finally:
+            for a in artists:
+                a.set_animated(True)
 
     def compute_status_and_colors(self, i: int) -> None:
         """
@@ -1249,6 +1278,39 @@ class EventAnnotator(BaseAnnotator):
             self.stop()
         else:
             self.start()
+
+    def resizeEvent(self, event):
+        """
+        Handle resize events.
+
+        matplotlib unconditionally restarts a blit animation's timer after the
+        post-resize redraw (``Animation._end_redraw``), even when it was paused,
+        and without touching our play/pause button — leaving the animation
+        running while the button still shows "play". If the user had paused,
+        re-assert that once the redraw has completed.
+
+        Parameters
+        ----------
+        event : QResizeEvent
+            The resize event.
+        """
+        super().resizeEvent(event)
+        if (
+            hasattr(self, "anim")
+            and hasattr(self, "stop_btn")
+            and not self.stop_btn.isVisible()
+        ):
+            QTimer.singleShot(0, self._keep_paused_after_resize)
+
+    def _keep_paused_after_resize(self):
+        """Re-pause the animation if it was resumed by a resize redraw, and
+        statically repaint so the (otherwise blit-only) frame stays visible."""
+        try:
+            if hasattr(self, "anim") and not self.stop_btn.isVisible():
+                self.anim.pause()
+                self._static_redraw_current_frame()
+        except Exception as e:
+            logger.debug(f"Could not re-pause after resize: {e}")
 
     def update_speed(self):
         """Update animation speed."""
