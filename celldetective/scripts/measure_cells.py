@@ -18,6 +18,7 @@ from celldetective.utils.experiment import (
     extract_experiment_channels,
 )
 from celldetective.utils.parsing import config_section_to_dict
+from celldetective.utils.schema import trajectory_table_name
 from celldetective.utils.data_cleaning import (
     _remove_invalid_cols,
     _extract_coordinates_from_features,
@@ -66,19 +67,17 @@ n_threads = int(process_arguments["threads"])
 
 column_labels = COLUMN_LABELS.copy()
 
+table_name = trajectory_table_name(mode)
 if mode.lower() in ("target", "targets"):
     label_folder = "labels_targets"
-    table_name = "trajectories_targets.csv"
     instruction_file = os.sep.join(["configs", "measurement_instructions_targets.json"])
 elif mode.lower() in ("effector", "effectors"):
     label_folder = "labels_effectors"
-    table_name = "trajectories_effectors.csv"
     instruction_file = os.sep.join(
         ["configs", "measurement_instructions_effectors.json"]
     )
 else:
     label_folder = f"labels_{mode}"
-    table_name = f"trajectories_{mode}.csv"
     instruction_file = os.sep.join(["configs", f"measurement_instructions_{mode}.json"])
 
 # Locate experiment config

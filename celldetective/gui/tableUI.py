@@ -24,6 +24,7 @@ from celldetective.gui.gui_utils import (
 )
 from celldetective.gui.base.utils import center_window
 from celldetective.relative_measurements import expand_pair_table
+from celldetective.utils.schema import trajectory_table_path
 import numpy as np
 import os
 from celldetective.gui.base.components import (
@@ -529,10 +530,11 @@ class TableUI(CelldetectiveMainWindow):
         # self.derivative_action.setShortcut("Ctrl+D")
         self.mathMenu.addAction(self.subtract_action)
 
-        # self.onehot_action = QAction('&One hot to categorical...', self)
-        # self.onehot_action.triggered.connect(self.transform_one_hot_cols_to_categorical)
-        # #self.onehot_action.setShortcut("Ctrl+D")
-        # self.mathMenu.addAction(self.onehot_action)
+        self.onehot_action = QAction("&One-hot to categorical...", self)
+        self.onehot_action.triggered.connect(
+            self.transform_one_hot_cols_to_categorical
+        )
+        self.mathMenu.addAction(self.onehot_action)
 
     def collapse_pairs_in_neigh(self) -> None:
         """
@@ -611,19 +613,6 @@ class TableUI(CelldetectiveMainWindow):
 
         ref_pop = self.reference_pop_cb.currentText()
         neighborhood = self.neigh_cb.currentText()
-        status_neigh = "status_" + neighborhood
-
-        if "self" in neighborhood:
-            neighbor_pop = ref_pop
-
-        neigh_col = neighborhood.replace("status_", "")
-        if "_(" in neigh_col and ")_" in neigh_col:
-            neighbor_pop = neigh_col.split("_(")[-1].split(")_")[0].split("-")[-1]
-        else:
-            if ref_pop == "targets":
-                neighbor_pop = "effectors"
-            if ref_pop == "effectors":
-                neighbor_pop = "targets"
 
         from celldetective.neighborhood import extract_neighborhood_in_pair_table
 
@@ -709,6 +698,12 @@ class TableUI(CelldetectiveMainWindow):
         col_idx = np.unique(np.array([l.column() for l in x]))
         cols = np.array(list(self.data.columns))
 
+        if len(col_idx) == 0:
+            QMessageBox.warning(
+                self, "Warning", "Please select at least one column first."
+            )
+            return None
+
         msgBox = QMessageBox()
         msgBox.setIcon(QMessageBox.Question)
         msgBox.setText(
@@ -780,10 +775,7 @@ class TableUI(CelldetectiveMainWindow):
             pos_group = pos_group[valid_visual_cols]
 
             pos_group.to_csv(
-                pos[0]
-                + os.sep.join(
-                    ["output", "tables", f"trajectories_{self.population}.csv"]
-                ),
+                trajectory_table_path(pos[0], self.population),
                 index=False,
             )
         logger.info("Done saving tables.")
@@ -913,29 +905,23 @@ class TableUI(CelldetectiveMainWindow):
         Transform one-hot encoded columns to a single categorical column.
         """
 
-        x = self.table_view.selectedIndexes()
-        col_idx = np.unique(np.array([l.column() for l in x]))
-        selected_cols = None
-        if isinstance(col_idx, (list, np.ndarray)):
-            cols = np.array(list(self.data.columns))
-            if len(col_idx) > 0:
-                selected_col = str(cols[col_idx[0]])
+        selected_cols = self._get_selected_columns()
 
         from celldetective.gui.table_ops._merge_one_hot import MergeOneHotWidget
 
-        self.mergewidget = MergeOneHotWidget(self, selected_columns=selected_cols)
+        self.mergewidget = MergeOneHotWidget(self, selected_columns=selected_cols or None)
         self.mergewidget.show()
 
     def groupby_time_table(self) -> None:
         """
 
-        Perform a time average across each track for all features
+        Average all numeric features across cells for each frame.
 
         """
 
         num_df = self.data.select_dtypes(include=self.numerics)
 
-        timeseries = num_df.groupby(["FRAME"]).sum().copy()
+        timeseries = num_df.groupby(["FRAME"]).mean().copy()
         timeseries["timeline"] = timeseries.index
         self.subtable = TableUI(
             timeseries, "Group by frames", plot_mode="plot_timeseries"
@@ -959,36 +945,6 @@ class TableUI(CelldetectiveMainWindow):
         # timeseries["timeline"] = timeseries.index
         # self.subtable = TableUI(timeseries,"Group by frames", plot_mode="plot_timeseries")
         # self.subtable.show()
-
-    def set_projection_mode_neigh(self) -> None:
-        """
-        Set projection mode for neighbors.
-        """
-
-        self.groupby_cols = [
-            "position",
-            "reference_population",
-            "neighbor_population",
-            "NEIGHBOR_ID",
-            "FRAME",
-        ]
-        self.current_data = self.data
-        self.set_projection_mode_tracks()
-
-    def set_projection_mode_ref(self) -> None:
-        """
-        Set projection mode for reference cells.
-        """
-
-        self.groupby_cols = [
-            "position",
-            "reference_population",
-            "neighbor_population",
-            "REFERENCE_ID",
-            "FRAME",
-        ]
-        self.current_data = self.data
-        self.set_projection_mode_tracks()
 
     def set_projection_mode_tracks(self) -> None:
         """
@@ -1728,10 +1684,11 @@ class TableUI(CelldetectiveMainWindow):
                         first_column = group_table.pop(col)
                         group_table.insert(0, col, first_column)
             else:
-                for col in ["TRACK_ID"]:
-                    first_column = group_table.pop(col)
-                    group_table.insert(0, col, first_column)
-                group_table.pop("FRAME")
+                if "TRACK_ID" in group_table:
+                    first_column = group_table.pop("TRACK_ID")
+                    group_table.insert(0, "TRACK_ID", first_column)
+                if "FRAME" in group_table:
+                    group_table.pop("FRAME")
 
         elif self.event_time_option.isChecked():
 
@@ -1744,24 +1701,29 @@ class TableUI(CelldetectiveMainWindow):
                     time = floor(time)  # floor for onset
                 else:
                     continue
-                frames = group["FRAME"].values
                 values = group.loc[group["FRAME"] == time, :].to_numpy()
                 if len(values) > 0:
                     values = dict(zip(list(self.current_data.columns), values[0]))
                     for k, c in enumerate(self.groupby_cols):
                         values.update({c: tid[k]})
                     new_table.append(values)
-            import pandas as pd
 
             group_table = pd.DataFrame(new_table)
+            if group_table.empty:
+                logger.warning(
+                    f"No cell has a valid '{time_of_interest}' event time at an "
+                    "available frame; nothing to collapse."
+                )
+                return
             if self.population == "pairs":
                 for col in self.groupby_cols[1:]:
-                    first_column = group_table.pop(col)
-                    group_table.insert(0, col, first_column)
+                    if col in group_table:
+                        first_column = group_table.pop(col)
+                        group_table.insert(0, col, first_column)
             else:
-                for col in ["TRACK_ID"]:
-                    first_column = group_table.pop(col)
-                    group_table.insert(0, col, first_column)
+                if "TRACK_ID" in group_table:
+                    first_column = group_table.pop("TRACK_ID")
+                    group_table.insert(0, "TRACK_ID", first_column)
 
             group_table = group_table.sort_values(
                 by=self.groupby_cols + ["FRAME"], ignore_index=True
@@ -1827,11 +1789,6 @@ class TableUI(CelldetectiveMainWindow):
         if file_name:
             if not file_name.endswith(".csv"):
                 file_name += ".csv"
-            invalid_cols = [
-                c for c in list(self.data.columns) if c.startswith("Unnamed")
-            ]
-            if len(invalid_cols) > 0:
-                self.data = self.data.drop(invalid_cols, axis=1)
 
             # Get visual column order from header mapped to the original GUI model
             header = self.table_view.horizontalHeader()
@@ -1840,8 +1797,13 @@ class TableUI(CelldetectiveMainWindow):
                 for i in range(header.count())
             ]
 
-            # Export with preserved visual order and dropped unnamed cols
-            valid_visual_cols = [c for c in visual_cols if c in self.data.columns]
+            # Export with preserved visual order, dropping unnamed cols without
+            # mutating the working dataframe.
+            valid_visual_cols = [
+                c
+                for c in visual_cols
+                if c in self.data.columns and not str(c).startswith("Unnamed")
+            ]
             data_sorted = self.data[valid_visual_cols]
 
             data_sorted.to_csv(file_name, index=False)

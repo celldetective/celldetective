@@ -83,6 +83,8 @@ train_params = {
         "normalization_percentile",
         "normalization_values",
         "normalization_clip",
+        "normalization_scope",
+        "random_state",
     )
     if k in threshold_instructions
 }

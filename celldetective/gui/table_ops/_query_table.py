@@ -1,6 +1,12 @@
 import logging
 
-from PyQt5.QtWidgets import QHBoxLayout, QLineEdit, QPushButton, QMainWindow
+from PyQt5.QtWidgets import (
+    QHBoxLayout,
+    QLineEdit,
+    QPushButton,
+    QMainWindow,
+    QMessageBox,
+)
 
 from celldetective.gui.base.components import CelldetectiveWidget
 from celldetective.gui.base.utils import center_window
@@ -53,4 +59,9 @@ class QueryWidget(CelldetectiveWidget):
             self.close()
         except Exception as e:
             logger.error(f"{e}")
+            QMessageBox.warning(
+                self,
+                "Invalid query",
+                f"The query could not be applied:\n{e}",
+            )
             return None

@@ -28,6 +28,7 @@ import pandas as pd
 import numpy as np
 from celldetective.utils.maths import derivative
 from celldetective.utils.data_cleaning import extract_identity_col
+from celldetective.utils.schema import trajectory_table_path
 from celldetective.utils.image_loaders import locate_labels, locate_stack
 from celldetective.neighborhood import _contact_site_mask
 import os
@@ -46,9 +47,7 @@ def _load_pair_tables(
     pos: str, reference_population: str, neighbor_population: str
 ) -> Tuple[Optional[pd.DataFrame], Optional[pd.DataFrame]]:
     """Load reference and neighbor trajectory tables from pkl or csv files."""
-    tab_ref = pos + os.sep.join(
-        ["output", "tables", f"trajectories_{reference_population}.pkl"]
-    )
+    tab_ref = trajectory_table_path(pos, reference_population, extension="pkl")
     if os.path.exists(tab_ref):
         df_reference = pd.read_pickle(tab_ref)
     elif os.path.exists(tab_ref.replace(".pkl", ".csv")):
@@ -56,7 +55,7 @@ def _load_pair_tables(
     else:
         df_reference = None
 
-    tab_neigh = tab_ref.replace(reference_population, neighbor_population)
+    tab_neigh = trajectory_table_path(pos, neighbor_population, extension="pkl")
     if os.path.exists(tab_neigh):
         df_neighbor = pd.read_pickle(tab_neigh)
     elif os.path.exists(tab_neigh.replace(".pkl", ".csv")):
@@ -935,7 +934,7 @@ def extract_neighborhoods_from_pickles(
     neighborhood_protocols = []
 
     for pop in populations:
-        tab_pop_pkl = pos + os.sep.join(["output", "tables", f"trajectories_{pop}.pkl"])
+        tab_pop_pkl = trajectory_table_path(pos, pop, extension="pkl")
         tab_pop_csv = tab_pop_pkl.replace(".pkl", ".csv")
         df_pop = None
 
@@ -1148,13 +1147,9 @@ def expand_pair_table(data: pd.DataFrame) -> pd.DataFrame:
 
         for pos, pos_group in group.groupby("position"):
 
-            ref_tab_csv = os.sep.join(
-                [pos, "output", "tables", f"trajectories_{ref_pop}.csv"]
-            )
+            ref_tab_csv = trajectory_table_path(pos, ref_pop)
             ref_tab_pkl = ref_tab_csv.replace(".csv", ".pkl")
-            neigh_tab_csv = os.sep.join(
-                [pos, "output", "tables", f"trajectories_{neigh_pop}.csv"]
-            )
+            neigh_tab_csv = trajectory_table_path(pos, neigh_pop)
             neigh_tab_pkl = neigh_tab_csv.replace(".csv", ".pkl")
 
             df_ref = None

@@ -13,6 +13,7 @@ from celldetective.utils.image_loaders import (
 )
 from celldetective.utils.experiment import extract_experiment_channels
 from celldetective.utils.parsing import config_section_to_dict
+from celldetective.utils.schema import trajectory_table_name
 from celldetective.utils.data_cleaning import (
     _extract_coordinates_from_features,
     _remove_invalid_cols,
@@ -208,23 +209,21 @@ class MeasurementProcess(Process):
     def prepare_folders(self):
         """Prepare folder names and table names based on the mode."""
 
+        self.table_name = trajectory_table_name(self.mode)
         if self.mode.lower() == "target" or self.mode.lower() == "targets":
             self.label_folder = "labels_targets"
-            self.table_name = "trajectories_targets.csv"
             self.instruction_file = os.sep.join(
                 ["configs", "measurement_instructions_targets.json"]
             )
 
         elif self.mode.lower() == "effector" or self.mode.lower() == "effectors":
             self.label_folder = "labels_effectors"
-            self.table_name = "trajectories_effectors.csv"
             self.instruction_file = os.sep.join(
                 ["configs", "measurement_instructions_effectors.json"]
             )
 
         else:
             self.label_folder = f"labels_{self.mode}"
-            self.table_name = f"trajectories_{self.mode}.csv"
             self.instruction_file = os.sep.join(
                 ["configs", f"measurement_instructions_{self.mode}.json"]
             )

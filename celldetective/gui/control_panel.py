@@ -21,6 +21,7 @@ from celldetective.gui.base.components import (
 
 from PyQt5.QtCore import Qt, QSize, QThread
 from celldetective.gui.base.components import generic_message
+from celldetective.utils.schema import trajectory_table_path
 from celldetective.utils.parsing import (
     config_section_to_dict,
     _extract_labels_from_config,
@@ -666,27 +667,13 @@ class ControlPanel(CelldetectiveMainWindow):
                 for i, p in enumerate(self.ProcessPopulations):
                     p.check_seg_btn.setEnabled(True)
                     if os.path.exists(
-                        os.sep.join(
-                            [
-                                self.pos,
-                                "output",
-                                "tables",
-                                f"trajectories_{self.populations[i]}.csv",
-                            ]
-                        )
+                        trajectory_table_path(self.pos, self.populations[i])
                     ):
                         try:
                             import pandas as pd
 
                             cols = pd.read_csv(
-                                os.sep.join(
-                                    [
-                                        self.pos,
-                                        "output",
-                                        "tables",
-                                        f"trajectories_{self.populations[i]}.csv",
-                                    ]
-                                ),
+                                trajectory_table_path(self.pos, self.populations[i]),
                                 nrows=0,
                             ).columns
                         except Exception as e:
@@ -719,11 +706,7 @@ class ControlPanel(CelldetectiveMainWindow):
                         p.delete_tracks_btn.hide()
                         p.signal_analysis_action.setEnabled(False)
 
-                if os.path.exists(
-                    os.sep.join(
-                        [self.pos, "output", "tables", "trajectories_pairs.csv"]
-                    )
-                ):
+                if os.path.exists(trajectory_table_path(self.pos, "pairs")):
                     self.NeighPanel.view_tab_btn.setEnabled(True)
                     self.NeighPanel.check_signals_btn.setEnabled(True)
                 else:

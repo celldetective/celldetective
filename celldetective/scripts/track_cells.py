@@ -8,6 +8,7 @@ import sys
 from typing import List
 import json
 from celldetective.utils.data_loaders import interpret_tracking_configuration
+from celldetective.utils.schema import trajectory_table_name
 from celldetective.utils.image_loaders import (
     locate_labels,
     auto_load_number_of_frames,
@@ -64,21 +65,19 @@ if not os.path.exists(pos + "output"):
 if not os.path.exists(pos + os.sep.join(["output", "tables"])):
     os.mkdir(pos + os.sep.join(["output", "tables"]))
 
+table_name = trajectory_table_name(mode)
 if mode.lower() in ("target", "targets"):
     label_folder = "labels_targets"
     instruction_file = os.sep.join(["configs", "tracking_instructions_targets.json"])
     napari_name = "napari_target_trajectories.npy"
-    table_name = "trajectories_targets.csv"
 elif mode.lower() in ("effector", "effectors"):
     label_folder = "labels_effectors"
     instruction_file = os.sep.join(["configs", "tracking_instructions_effectors.json"])
     napari_name = "napari_effector_trajectories.npy"
-    table_name = "trajectories_effectors.csv"
 else:
     label_folder = f"labels_{mode}"
     instruction_file = os.sep.join(["configs", f"tracking_instructions_{mode}.json"])
     napari_name = f"napari_{mode}_trajectories.npy"
-    table_name = f"trajectories_{mode}.csv"
 
 # Locate experiment config
 parent1 = Path(pos).parent

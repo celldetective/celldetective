@@ -375,7 +375,11 @@ class TestClassifierWidgetUI:
         qtbot.addWidget(widget)
 
         assert widget is not None
-        assert widget.df is widget_data
+        # The widget works on a copy and must not mutate the parent table: it
+        # injects a helper "custom" column that should not leak back.
+        assert widget.df is not widget_data
+        assert "custom" not in widget_data.columns
+        assert "custom" in widget.df.columns
         assert widget.mode == "targets"
 
         widget.close()

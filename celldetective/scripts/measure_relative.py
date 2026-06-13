@@ -9,6 +9,7 @@ from celldetective.utils.experiment import (
     get_experiment_populations,
 )
 from celldetective.utils.parsing import config_section_to_dict
+from celldetective.utils.schema import trajectory_table_path
 
 from pathlib import Path, PurePath
 
@@ -54,9 +55,7 @@ populations = get_experiment_populations(expfolder, dtype=str)
 
 # from tracking instructions, fetch btrack config, features, haralick, clean_traj, idea: fetch custom timeline?
 instr_path = PurePath(expfolder, Path(f"{instruction_file}"))
-previous_pair_table_path = pos + os.sep.join(
-    ["output", "tables", "trajectories_pairs.csv"]
-)
+previous_pair_table_path = trajectory_table_path(pos, "pairs")
 
 
 previous_neighborhoods = []

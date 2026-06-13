@@ -5,6 +5,44 @@ from celldetective import get_logger
 logger = get_logger()
 
 
+def resolve_signal_channels(
+    required_signals: List[str], available_signals: List[str]
+) -> Optional[List[str]]:
+    """
+    Resolve each required channel name to a concrete available column/key.
+
+    The same priority is applied at training and inference time so that a model
+    is always fed the same signal it was trained on: an exact match first, then
+    a column that starts with the required name, then any column that contains
+    it as a substring. The first candidate in that order is selected.
+
+    Parameters
+    ----------
+    required_signals : list of str
+        The generic channel names the model expects (``config["channels"]``).
+    available_signals : list of str
+        The column names (inference) or annotation keys (training) actually
+        present in the data.
+
+    Returns
+    -------
+    list of str or None
+        One resolved name per required signal, in order. Returns ``None`` if any
+        required signal has no candidate, so callers can decide whether to raise
+        or skip.
+    """
+    selected = []
+    for s in required_signals:
+        exact = [a for a in available_signals if a == s]
+        prefix = [a for a in available_signals if a.startswith(s) and a != s]
+        substring = [a for a in available_signals if s in a and not a.startswith(s)]
+        candidates = exact + prefix + substring
+        if not candidates:
+            return None
+        selected.append(candidates[0])
+    return selected
+
+
 def split_by_ratio(arr: np.ndarray, *ratios: float) -> List[List[Any]]:
     """
 

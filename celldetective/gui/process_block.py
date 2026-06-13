@@ -27,6 +27,7 @@ from celldetective.utils.model_loaders import (
     locate_segmentation_model,
     _resolve_signal_model_paths,
 )
+from celldetective.utils.schema import trajectory_table_path
 from celldetective.utils.image_loaders import fix_missing_labels
 
 from celldetective.gui.base.components import (
@@ -178,6 +179,10 @@ class ProcessPanel(QFrame, Styles):
         self.threshold_configs = [
             None for _ in range(len(self.parent_window.populations))
         ]
+        # Ordered list of (static) classification configs for the CLASSIFY step.
+        self.classification_configs = []
+        # An imported event config is routed here for the Detect events step.
+        self.signal_threshold_config = None
         self.wells = np.array(self.parent_window.wells, dtype=str)
         self.cellpose_calibrated = False
         self.stardist_calibrated = False
@@ -317,6 +322,7 @@ class ProcessPanel(QFrame, Styles):
         self.generate_tracking_options()
         self.generate_measure_options()
         self.generate_signal_analysis_options()
+        self.generate_classify_options()
 
         self.grid_contents.addWidget(QHSeperationLine(), 9, 0, 1, 4)
         self.view_tab_btn = QPushButton("Explore table")
@@ -339,6 +345,7 @@ class ProcessPanel(QFrame, Styles):
             self.track_action,
             self.measure_action,
             self.signal_analysis_action,
+            self.classify_action,
         ]:
             action.toggled.connect(self.check_readiness)
         self.check_readiness()
@@ -352,6 +359,7 @@ class ProcessPanel(QFrame, Styles):
             or self.track_action.isChecked()
             or self.measure_action.isChecked()
             or self.signal_analysis_action.isChecked()
+            or self.classify_action.isChecked()
         ):
             self.submit_btn.setEnabled(True)
         else:
@@ -372,16 +380,6 @@ class ProcessPanel(QFrame, Styles):
         self.measure_action.setToolTip("Measure.")
         measure_layout.addWidget(self.measure_action, 90)
         # self.to_disable.append(self.measure_action_tc)
-
-        self.classify_btn = QPushButton()
-        self.classify_btn.setIcon(icon(MDI6.scatter_plot, color="black"))
-        self.classify_btn.setIconSize(QSize(20, 20))
-        self.classify_btn.setToolTip("Classify data.")
-        self.classify_btn.setStyleSheet(self.button_select_all)
-        self.classify_btn.clicked.connect(self.open_classifier_ui)
-        measure_layout.addWidget(
-            self.classify_btn, 5
-        )  # 4,2,1,1, alignment=Qt.AlignRight
 
         self.check_measurements_btn = QPushButton()
         self.check_measurements_btn.setIcon(icon(MDI6.eye_check_outline, color="black"))
@@ -470,13 +468,16 @@ class ProcessPanel(QFrame, Styles):
 
         signal_layout.addLayout(signal_model_vbox)
 
-        self.grid_contents.addLayout(signal_layout, 6, 0, 1, 4)
+        self.grid_contents.addLayout(signal_layout, 7, 0, 1, 4)
 
     def refresh_signal_models(self) -> None:
         """
         Refresh the list of available signal models.
         """
         self.signal_models = get_signal_models_list()
+        # Threshold/query classification configs are a non-DL event-detection
+        # method, selectable like a model (mirrors the segmentation "Threshold").
+        self.signal_models.append("Threshold")
         self.signal_models_list.clear()
 
         thresh = 35
@@ -490,6 +491,43 @@ class ProcessPanel(QFrame, Styles):
             self.signal_models_list.setItemData(
                 i, self.signal_models[i], Qt.ToolTipRole
             )
+
+    def _get_signal_threshold_config(self) -> Optional[dict]:
+        """Prompt for and validate a time-correlated classification config.
+
+        Returns the config dict for use as an event-detection method, or None if
+        the user cancels or the selected file is not a valid event config (static
+        classifications belong to the dedicated "Classify cells" step).
+        """
+        from PyQt5.QtWidgets import QFileDialog, QMessageBox
+
+        configs_dir = os.path.join(self.exp_dir, "configs")
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Select classification config", configs_dir, "JSON (*.json)"
+        )
+        if not path:
+            return None
+        try:
+            with open(path) as f:
+                config = json.load(f)
+        except Exception as e:
+            QMessageBox.warning(self, "Invalid config", f"Could not load config: {e}")
+            return None
+
+        if "name" not in config or "query" not in config:
+            QMessageBox.warning(
+                self, "Invalid config", "This is not a valid classification config."
+            )
+            return None
+        if not config.get("time_correlated", False):
+            QMessageBox.warning(
+                self,
+                "Static classification",
+                "This config is a static (measurement) classification, not an "
+                "event. Use the 'Classify cells from config' step for it.",
+            )
+            return None
+        return config
 
     def generate_tracking_options(self) -> None:
         """
@@ -567,23 +605,11 @@ class ProcessPanel(QFrame, Styles):
             return None
         elif returnValue == QMessageBox.Yes:
             remove_file_if_exists(
-                os.sep.join(
-                    [
-                        self.parent_window.pos,
-                        "output",
-                        "tables",
-                        f"trajectories_{self.mode}.csv",
-                    ]
-                )
+                trajectory_table_path(self.parent_window.pos, self.mode)
             )
             remove_file_if_exists(
-                os.sep.join(
-                    [
-                        self.parent_window.pos,
-                        "output",
-                        "tables",
-                        f"trajectories_{self.mode}.pkl",
-                    ]
+                trajectory_table_path(
+                    self.parent_window.pos, self.mode, extension="pkl"
                 )
             )
             remove_file_if_exists(
@@ -597,14 +623,7 @@ class ProcessPanel(QFrame, Styles):
                 )
             )
             remove_file_if_exists(
-                os.sep.join(
-                    [
-                        self.parent_window.pos,
-                        "output",
-                        "tables",
-                        f"trajectories_pairs.csv",
-                    ]
-                )
+                trajectory_table_path(self.parent_window.pos, "pairs")
             )
             try:
                 QTimer.singleShot(
@@ -1349,6 +1368,127 @@ class ProcessPanel(QFrame, Styles):
             except Exception as e:
                 logger.debug(f"Classifier widget post-show trigger failed: {e}")
 
+    def generate_classify_options(self) -> None:
+        """
+        Generate the CLASSIFY pipeline step (apply saved classification configs).
+        """
+        classify_hlayout = QHBoxLayout()
+
+        self.classify_action = QCheckBox("CLASSIFY")
+        self.classify_action.setStyleSheet(self.menu_check_style)
+        self.classify_action.setIcon(icon(MDI6.shape_plus, color="black"))
+        self.classify_action.setIconSize(QSize(20, 20))
+        self.classify_action.setToolTip(
+            "Apply one or more saved classification configs to the single-cell tables."
+        )
+        classify_hlayout.addWidget(self.classify_action, 88)
+
+        self.classify_btn = QPushButton()
+        self.classify_btn.setIcon(icon(MDI6.scatter_plot, color="black"))
+        self.classify_btn.setIconSize(QSize(20, 20))
+        self.classify_btn.setToolTip("Open the classifier to build or edit a config.")
+        self.classify_btn.setStyleSheet(self.button_select_all)
+        self.classify_btn.clicked.connect(self.open_classifier_ui)
+        classify_hlayout.addWidget(self.classify_btn, 6)
+
+        # Single config control: imports (and re-imports to replace); the button
+        # shows the count and lists the configs in its tooltip. Enabled even when
+        # CLASSIFY is unchecked (an imported event config routes to Detect events).
+        self.classify_configs_btn = QPushButton()
+        self.classify_configs_btn.setIcon(icon(MDI6.playlist_plus, color="black"))
+        self.classify_configs_btn.setIconSize(QSize(20, 20))
+        self.classify_configs_btn.setToolTip(
+            "Import classification configs to apply, in order."
+        )
+        self.classify_configs_btn.setStyleSheet(self.button_select_all)
+        self.classify_configs_btn.clicked.connect(self.select_classification_configs)
+        classify_hlayout.addWidget(self.classify_configs_btn, 6)
+
+        self.grid_contents.addLayout(classify_hlayout, 6, 0, 1, 4)
+
+    def _update_classify_configs_btn(self) -> None:
+        """Reflect the selected configs on the import button (count + tooltip)."""
+        configs = self.classification_configs
+        self.classify_configs_btn.setText(str(len(configs)) if configs else "")
+        if configs:
+            self.classify_configs_btn.setToolTip(
+                "Imported configs (applied in order):\n"
+                + "\n".join(
+                    f"{i + 1}. {c['name']}" for i, c in enumerate(configs)
+                )
+            )
+        else:
+            self.classify_configs_btn.setToolTip(
+                "Import classification configs to apply, in order."
+            )
+
+    def select_classification_configs(self) -> None:
+        """
+        Select one or more saved classification configs to apply, in order.
+
+        Static (``group_``) configs are queued for the CLASSIFY step. Any imported
+        event (time-correlated) config is instead routed to Detect events: it
+        enables that step and switches its method to "Threshold", since events
+        belong there rather than in the static CLASSIFY step.
+        """
+        from PyQt5.QtWidgets import QFileDialog, QMessageBox
+
+        configs_dir = os.path.join(self.exp_dir, "configs")
+        paths, _ = QFileDialog.getOpenFileNames(
+            self, "Select classification config(s)", configs_dir, "JSON (*.json)"
+        )
+        if not paths:
+            return
+
+        static_configs = []
+        event_configs = []
+        for p in paths:
+            try:
+                with open(p) as f:
+                    cfg = json.load(f)
+            except Exception as e:
+                QMessageBox.warning(
+                    self,
+                    "Invalid config",
+                    f"Could not load {os.path.basename(p)}: {e}",
+                )
+                return
+            if "name" not in cfg or "query" not in cfg:
+                QMessageBox.warning(
+                    self,
+                    "Invalid config",
+                    f"{os.path.basename(p)} is not a valid classification config.",
+                )
+                return
+            if cfg.get("time_correlated", False):
+                event_configs.append(cfg)
+            else:
+                static_configs.append(cfg)
+
+        self.classification_configs = static_configs
+        self._update_classify_configs_btn()
+
+        if event_configs:
+            # Route event config(s) to Detect events (Threshold method).
+            self.signal_threshold_config = event_configs[0]
+            self.signal_analysis_action.setChecked(True)
+            idx = self.signal_models_list.findText("Threshold")
+            if idx >= 0:
+                self.signal_models_list.setCurrentIndex(idx)
+            extra = (
+                " (only the first will be used there)"
+                if len(event_configs) > 1
+                else ""
+            )
+            QMessageBox.information(
+                self,
+                "Event config routed",
+                "Event config(s) "
+                + ", ".join(str(c["name"]) for c in event_configs)
+                + " are time-correlated and were routed to Detect events "
+                + f"(Threshold){extra}.",
+            )
+
     def open_signal_annotator_configuration_ui(self) -> None:
         """
         Open the signal annotator configuration UI.
@@ -1432,8 +1572,7 @@ class ProcessPanel(QFrame, Styles):
             else:
                 logger.info("erase tabs!")
                 tabs = [
-                    pos
-                    + os.sep.join(["output", "tables", f"trajectories_{self.mode}.csv"])
+                    trajectory_table_path(pos, self.mode)
                     for pos in self.df_pos_info["pos_path"].unique()
                 ]
                 # tabs += [pos+os.sep.join(['output', 'tables', f'trajectories_pairs.csv']) for pos in self.df_pos_info['pos_path'].unique()]
@@ -1502,19 +1641,22 @@ class ProcessPanel(QFrame, Styles):
             return None
 
         if self.signal_analysis_action.isChecked() and not self.signalChannelsSet:
-            from celldetective.gui.settings._event_detection_model_params import (
-                SignalModelParamsWidget,
-            )
-
             self.signal_model_name = self.signal_models[
                 self.signal_models_list.currentIndex()
             ]
-            self.signalChannelWidget = SignalModelParamsWidget(
-                self, model_name=self.signal_model_name
-            )
-            self.signalChannelWidget.show()
+            # A threshold/query config carries its own query/channels — there is
+            # no DL channel mapping to configure, so skip the params dialog.
+            if self.signal_model_name != "Threshold":
+                from celldetective.gui.settings._event_detection_model_params import (
+                    SignalModelParamsWidget,
+                )
 
-            return None
+                self.signalChannelWidget = SignalModelParamsWidget(
+                    self, model_name=self.signal_model_name
+                )
+                self.signalChannelWidget.show()
+
+                return None
 
         self.movie_prefix = self.parent_window.movie_prefix
 
@@ -1576,11 +1718,13 @@ class ProcessPanel(QFrame, Styles):
         run_tracking = self.track_action.isChecked()
         run_measurement = self.measure_action.isChecked()
         run_signals = self.signal_analysis_action.isChecked()
+        run_classification = self.classify_action.isChecked()
 
         seg_args = {}
         track_args = {}
         measure_args = {}
         signal_args = {}
+        classify_args = {}
 
         # 1. SEGMENTATION CHECKS & ARGS
         if run_segmentation:
@@ -1643,9 +1787,7 @@ class ProcessPanel(QFrame, Styles):
                 and not self.parent_window.position_list.isMultipleSelection()
             ):
                 p = all_positions_flat[0]
-                table_path = os.sep.join(
-                    [p, "output", "tables", f"trajectories_{self.mode}.csv"]
-                )
+                table_path = trajectory_table_path(p, self.mode)
                 if os.path.exists(table_path):
                     msgBox = QMessageBox()
                     msgBox.setIcon(QMessageBox.Question)
@@ -1671,9 +1813,7 @@ class ProcessPanel(QFrame, Styles):
                 and not self.parent_window.position_list.isMultipleSelection()
             ):
                 p = all_positions_flat[0]
-                table_path = os.sep.join(
-                    [p, "output", "tables", f"trajectories_{self.mode}.csv"]
-                )
+                table_path = trajectory_table_path(p, self.mode)
                 if os.path.exists(table_path):
                     # Check for annotations (logic from original code)
                     try:
@@ -1703,22 +1843,62 @@ class ProcessPanel(QFrame, Styles):
                     self.signal_models_list.currentIndex()
                 ]
 
-                model_complete_path, input_config_path = _resolve_signal_model_paths(self.signal_model_name)
-                with open(input_config_path) as config_file:
-                    input_config = json.load(config_file)
+                if self.signal_model_name == "Threshold":
+                    # Use a config already routed here from an import, else prompt.
+                    threshold_config = self.signal_threshold_config
+                    if threshold_config is None:
+                        threshold_config = self._get_signal_threshold_config()
+                    if threshold_config is None:
+                        return None
+                    # Remember it so the post-run viewer can use its label.
+                    self.signal_threshold_config = threshold_config
+                    signal_args = {
+                        "mode": self.mode,
+                        "threshold_config": threshold_config,
+                    }
+                else:
+                    model_complete_path, input_config_path = _resolve_signal_model_paths(self.signal_model_name)
+                    with open(input_config_path) as config_file:
+                        input_config = json.load(config_file)
 
-                channels = input_config.get(
-                    "selected_channels", input_config.get("channels", [])
+                    channels = input_config.get(
+                        "selected_channels", input_config.get("channels", [])
+                    )
+
+                    signal_args = {
+                        "model_name": self.signal_model_name,
+                        "mode": self.mode,
+                        "channels": channels,
+                    }
+
+        # 5. CLASSIFICATION CHECKS & ARGS
+        if run_classification:
+            if not self.classification_configs:
+                msgBox = QMessageBox()
+                msgBox.setIcon(QMessageBox.Warning)
+                msgBox.setText(
+                    "Please select at least one classification config first "
+                    "(the playlist button next to CLASSIFY)."
                 )
-
-                signal_args = {
-                    "model_name": self.signal_model_name,
-                    "mode": self.mode,
-                    "channels": channels,
-                }
+                msgBox.setWindowTitle("Warning")
+                msgBox.setStandardButtons(QMessageBox.Ok)
+                msgBox.exec()
+                return None
+            classify_args = {
+                "mode": self.mode,
+                "configs": self.classification_configs,
+            }
 
         # --- EXECUTE UNIFIED PROCESS ---
-        if any([run_segmentation, run_tracking, run_measurement, run_signals]):
+        if any(
+            [
+                run_segmentation,
+                run_tracking,
+                run_measurement,
+                run_signals,
+                run_classification,
+            ]
+        ):
 
             process_args = {
                 "batch_structure": batch_structure,
@@ -1726,10 +1906,12 @@ class ProcessPanel(QFrame, Styles):
                 "run_tracking": run_tracking,
                 "run_measurement": run_measurement,
                 "run_signals": run_signals,
+                "run_classification": run_classification,
                 "seg_args": seg_args,
                 "track_args": track_args,
                 "measure_args": measure_args,
                 "signal_args": signal_args,
+                "classify_args": classify_args,
                 "log_file": getattr(self.parent_window.parent_window, "log_file", None),
             }
 
@@ -1746,7 +1928,7 @@ class ProcessPanel(QFrame, Styles):
                 return None
 
             # Post-Process actions (like updating list)
-            if run_tracking:
+            if run_tracking or run_classification:
                 self.parent_window.update_position_options()
 
             if run_signals:
@@ -1764,16 +1946,20 @@ class ProcessPanel(QFrame, Styles):
                     elif self.mode.lower() in ["effector", "effectors"]:
                         mode_fixed = "effectors"
 
-                    table_path = os.sep.join(
-                        [p, "output", "tables", f"trajectories_{mode_fixed}.csv"]
-                    )
+                    table_path = trajectory_table_path(p, mode_fixed)
 
                     if os.path.exists(table_path):
                         # Determine event label
                         event_label = None
                         signal_name = None
                         try:
-                            if hasattr(self, "signal_model_name"):
+                            if self.signal_model_name == "Threshold":
+                                # Threshold method: label comes from the config name.
+                                if self.signal_threshold_config is not None:
+                                    event_label = self.signal_threshold_config.get(
+                                        "name"
+                                    )
+                            elif hasattr(self, "signal_model_name"):
                                 _, input_config_path = _resolve_signal_model_paths(self.signal_model_name)
                                 with open(input_config_path) as f:
                                     conf = json.load(f)
@@ -1804,6 +1990,7 @@ class ProcessPanel(QFrame, Styles):
             self.track_action,
             self.measure_action,
             self.signal_analysis_action,
+            self.classify_action,
         ]:
             if action.isChecked():
                 action.setChecked(False)

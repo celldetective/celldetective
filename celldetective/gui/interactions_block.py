@@ -56,6 +56,8 @@ class NeighPanel(QFrame, Styles):
         self.wells = np.array(self.parent_window.wells, dtype=str)
         self.protocols = []
         self.mode = "neighborhood"
+        # Ordered list of (static) classification configs for the CLASSIFY PAIRS step.
+        self.pair_classification_configs = []
 
         self.setFrameStyle(QFrame.StyledPanel | QFrame.Raised)
         self.grid = QGridLayout(self)
@@ -255,17 +257,43 @@ class NeighPanel(QFrame, Styles):
         )
         rel_layout.addWidget(self.measure_pairs_action, 90)
 
+        self.grid_contents.addLayout(rel_layout, 6, 0, 1, 4)
+
+        # --- CLASSIFY PAIRS step (apply saved static classification configs) ---
+        classify_pairs_hlayout = QHBoxLayout()
+
+        self.classify_pairs_action = QCheckBox("CLASSIFY PAIRS")
+        self.classify_pairs_action.setStyleSheet(self.menu_check_style)
+        self.classify_pairs_action.setIcon(icon(MDI6.shape_plus, color="black"))
+        self.classify_pairs_action.setIconSize(QSize(20, 20))
+        self.classify_pairs_action.setToolTip(
+            "Apply one or more saved (static) classification configs to the pair tables."
+        )
+        classify_pairs_hlayout.addWidget(self.classify_pairs_action, 88)
+
         self.classify_pairs_btn = QPushButton()
         self.classify_pairs_btn.setIcon(icon(MDI6.scatter_plot, color="black"))
         self.classify_pairs_btn.setIconSize(QSize(20, 20))
-        self.classify_pairs_btn.setToolTip("Classify data.")
+        self.classify_pairs_btn.setToolTip("Open the classifier to build or edit a config.")
         self.classify_pairs_btn.setStyleSheet(self.button_select_all)
         self.classify_pairs_btn.clicked.connect(self.open_classifier_ui_pairs)
-        rel_layout.addWidget(
-            self.classify_pairs_btn, 5
-        )  # 4,2,1,1, alignment=Qt.AlignRight
+        classify_pairs_hlayout.addWidget(self.classify_pairs_btn, 6)
 
-        self.grid_contents.addLayout(rel_layout, 6, 0, 1, 4)
+        # Single config control: imports (re-import replaces); the button shows
+        # the count and lists the configs in its tooltip.
+        self.classify_pairs_configs_btn = QPushButton()
+        self.classify_pairs_configs_btn.setIcon(icon(MDI6.playlist_plus, color="black"))
+        self.classify_pairs_configs_btn.setIconSize(QSize(20, 20))
+        self.classify_pairs_configs_btn.setToolTip(
+            "Import (static) classification configs to apply, in order."
+        )
+        self.classify_pairs_configs_btn.setStyleSheet(self.button_select_all)
+        self.classify_pairs_configs_btn.clicked.connect(
+            self.select_pair_classification_configs
+        )
+        classify_pairs_hlayout.addWidget(self.classify_pairs_configs_btn, 6)
+
+        self.grid_contents.addLayout(classify_pairs_hlayout, 7, 0, 1, 4)
 
         signal_layout = QVBoxLayout()
         signal_hlayout = QHBoxLayout()
@@ -331,7 +359,7 @@ class NeighPanel(QFrame, Styles):
         pair_signal_model_vbox.addWidget(self.pair_signal_models_list)
 
         signal_layout.addLayout(pair_signal_model_vbox)
-        self.grid_contents.addLayout(signal_layout, 7, 0, 1, 4)
+        self.grid_contents.addLayout(signal_layout, 8, 0, 1, 4)
         self.grid_contents.addWidget(QHSeperationLine(), 11, 0, 1, 4)
 
         self.view_tab_btn = QPushButton("Explore table")
@@ -380,6 +408,64 @@ class NeighPanel(QFrame, Styles):
         else:
             self.ClassifierWidget = ClassifierWidget(self)
             self.ClassifierWidget.show()
+
+    def select_pair_classification_configs(self) -> None:
+        """
+        Import one or more static classification configs for the CLASSIFY PAIRS step.
+
+        Pair classification is static only (pair tables have no ``TRACK_ID``), so a
+        time-correlated (event) config is rejected here — pair events are handled
+        by DETECT PAIR EVENTS.
+        """
+        from PyQt5.QtWidgets import QFileDialog, QMessageBox
+
+        configs_dir = os.path.join(self.exp_dir, "configs")
+        paths, _ = QFileDialog.getOpenFileNames(
+            self, "Select classification config(s)", configs_dir, "JSON (*.json)"
+        )
+        if not paths:
+            return
+
+        configs = []
+        names = []
+        for p in paths:
+            try:
+                with open(p) as f:
+                    cfg = json.load(f)
+            except Exception as e:
+                QMessageBox.warning(
+                    self, "Invalid config", f"Could not load {os.path.basename(p)}: {e}"
+                )
+                return
+            if "name" not in cfg or "query" not in cfg:
+                QMessageBox.warning(
+                    self,
+                    "Invalid config",
+                    f"{os.path.basename(p)} is not a valid classification config.",
+                )
+                return
+            if cfg.get("time_correlated", False):
+                QMessageBox.warning(
+                    self,
+                    "Event config",
+                    f"{os.path.basename(p)} is a time-correlated event config, "
+                    "which is not supported for pairs. Use DETECT PAIR EVENTS instead.",
+                )
+                return
+            configs.append(cfg)
+            names.append(str(cfg["name"]))
+
+        self.pair_classification_configs = configs
+        self.classify_pairs_configs_btn.setText(str(len(configs)) if configs else "")
+        if configs:
+            self.classify_pairs_configs_btn.setToolTip(
+                "Imported configs (applied in order):\n"
+                + "\n".join(f"{i + 1}. {n}" for i, n in enumerate(names))
+            )
+        else:
+            self.classify_pairs_configs_btn.setToolTip(
+                "Import (static) classification configs to apply, in order."
+            )
 
     def help_neighborhood(self):
         """
@@ -664,6 +750,21 @@ class NeighPanel(QFrame, Styles):
         self.well_index = self.parent_window.well_list.getSelectedIndices()
         logger.info(f"Processing well {self.parent_window.well_list.currentText()}...")
 
+        if (
+            self.classify_pairs_action.isChecked()
+            and not self.pair_classification_configs
+        ):
+            msgBox = QMessageBox()
+            msgBox.setIcon(QMessageBox.Warning)
+            msgBox.setText(
+                "Please select at least one classification config first "
+                "(the playlist button next to CLASSIFY PAIRS)."
+            )
+            msgBox.setWindowTitle("Warning")
+            msgBox.setStandardButtons(QMessageBox.Ok)
+            msgBox.exec()
+            return None
+
         # self.freeze()
         # QApplication.setOverrideCursor(Qt.WaitCursor)
 
@@ -770,11 +871,34 @@ class NeighPanel(QFrame, Styles):
                         populations=self.parent_window.populations,
                     )
 
+                if self.classify_pairs_action.isChecked():
+                    from celldetective.signals import classify_position_from_config
+
+                    for config in self.pair_classification_configs:
+                        name = config.get("name", "?")
+                        logger.info(
+                            f"Applying pair classification '{name}' to {self.pos}..."
+                        )
+                        try:
+                            classify_position_from_config(
+                                self.pos, config, mode="pairs"
+                            )
+                        except FileNotFoundError as e:
+                            logger.warning(str(e))
+                            break
+                        except Exception as e:
+                            logger.error(
+                                f"Pair classification '{name}' failed for "
+                                f"{self.pos}: {e}",
+                                exc_info=True,
+                            )
+
         self.parent_window.update_position_options()
         for action in [
             self.neigh_action,
             self.measure_pairs_action,
             self.signal_analysis_action,
+            self.classify_pairs_action,
         ]:
             if action.isChecked():
                 action.setChecked(False)

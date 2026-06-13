@@ -33,7 +33,6 @@ from scipy.ndimage import shift
 from tensorflow.keras.callbacks import Callback
 
 from matplotlib import pyplot as plt
-from natsort import natsorted
 from scipy.interpolate import interp1d
 from sklearn.metrics import (
     jaccard_score,
@@ -81,11 +80,33 @@ from tensorflow.keras.metrics import Precision, Recall, MeanIoU
 from tensorflow.keras.models import clone_model, load_model
 from tensorflow.keras.losses import MeanSquaredError
 
-from celldetective.utils.dataset_helpers import compute_weights, train_test_split
+from celldetective.utils.dataset_helpers import (
+    compute_weights,
+    train_test_split,
+    resolve_signal_channels,
+)
 from celldetective.utils.plots.regression import regression_plot
 from celldetective.log_manager import get_logger
 
 logger = get_logger(__name__)
+
+
+def _set_global_seed(seed: Optional[int]) -> None:
+    """Seed Python, NumPy and TensorFlow RNGs for reproducible training.
+
+    No-op when ``seed`` is None, preserving the default non-deterministic
+    behaviour.
+    """
+    if seed is None:
+        return
+    random.seed(seed)
+    np.random.seed(seed)
+    try:
+        import tensorflow as tf
+
+        tf.random.set_seed(seed)
+    except Exception as e:  # pragma: no cover - tensorflow always present at runtime
+        logger.debug(f"Could not set TensorFlow seed: {e}")
 
 
 def TimeHistory():
@@ -404,6 +425,8 @@ class SignalDetectionModel(object):
         loss_class: Optional[Union[str, Any]] = None,
         show_plots: bool = True,
         callbacks: Optional[List[Callback]] = None,
+        random_state: Optional[int] = None,
+        normalization_scope: str = "position",
     ) -> None:
         """
         Trains the model using data from specified directories.
@@ -463,6 +486,9 @@ class SignalDetectionModel(object):
         # Lazy import for TensorFlow loss class
         if loss_class is None:
             loss_class = CategoricalCrossentropy(from_logits=False)
+
+        _set_global_seed(random_state)
+        self.normalization_scope = normalization_scope
 
         if not hasattr(self, "normalization_percentile"):
             self.normalization_percentile = normalization_percentile
@@ -543,6 +569,8 @@ class SignalDetectionModel(object):
         learning_rate: float = 0.001,
         loss_reg: Union[str, Any] = "mse",
         loss_class: Optional[Union[str, Any]] = None,
+        random_state: Optional[int] = None,
+        normalization_scope: str = "position",
     ) -> None:
         """
         Trains the model using provided datasets.
@@ -605,6 +633,9 @@ class SignalDetectionModel(object):
         if loss_class is None:
             loss_class = CategoricalCrossentropy(from_logits=False)
 
+        _set_global_seed(random_state)
+        self.normalization_scope = normalization_scope
+
         self.normalize = normalize
         if not hasattr(self, "normalization_percentile"):
             self.normalization_percentile = normalization_percentile
@@ -639,11 +670,7 @@ class SignalDetectionModel(object):
 
         # If y-class is not one-hot encoded, encode it
         if self.y_class_train.shape[-1] != self.n_classes:
-            self.class_weights = compute_weights(
-                y=self.y_class_train,
-                class_weight="balanced",
-                classes=np.unique(self.y_class_train),
-            )
+            self.class_weights = compute_weights(self.y_class_train)
             self.y_class_train = to_categorical(self.y_class_train, num_classes=3)
 
         if self.normalize:
@@ -749,6 +776,11 @@ class SignalDetectionModel(object):
             "normalization_percentile": self.normalization_percentile,
             "normalization_values": self.normalization_values,
             "normalization_clip": self.normalization_clip,
+            # Scope over which the per-batch normalization range is pooled at
+            # inference: "position" (default, per-position), "well", or
+            # "experiment". Wider scopes give a more stable range when a single
+            # position has few or atypical cells.
+            "normalization_scope": getattr(self, "normalization_scope", "position"),
         }
         json_string = json.dumps(config_input)
         with open(
@@ -784,6 +816,7 @@ class SignalDetectionModel(object):
         pad: bool = True,
         return_one_hot: bool = False,
         interpolate: bool = True,
+        normalization_values_override: Optional[List[List[float]]] = None,
     ) -> np.ndarray:
         """
         Predicts the class of input signals using the trained classification model.
@@ -831,6 +864,7 @@ class SignalDetectionModel(object):
                 normalization_percentile=self.normalization_percentile,
                 normalization_values=self.normalization_values,
                 normalization_clip=self.normalization_clip,
+                fitted_values=normalization_values_override,
             )
 
         # implement auto interpolation here!!
@@ -866,6 +900,7 @@ class SignalDetectionModel(object):
         class_predictions: Optional[np.ndarray] = None,
         normalize: bool = True,
         pad: bool = True,
+        normalization_values_override: Optional[List[List[float]]] = None,
     ) -> np.ndarray:
         """
         Predicts the time of interest for input signals using the trained regression model.
@@ -913,6 +948,7 @@ class SignalDetectionModel(object):
                 normalization_percentile=self.normalization_percentile,
                 normalization_values=self.normalization_values,
                 normalization_clip=self.normalization_clip,
+                fitted_values=normalization_values_override,
             )
 
         try:
@@ -1694,10 +1730,17 @@ class SignalDetectionModel(object):
             y_time_train_aug.append(aug[1])
             y_class_train_aug.append(aug[2])
 
-        # Save augmented training set
-        self.x_train = np.array(x_train_aug)
-        self.y_time_train = np.array(y_time_train_aug)
-        self.y_class_train = np.array(y_class_train_aug)
+        # Keep the original (clean) signals and append the augmented copies, so
+        # the model is anchored to the pristine label->shape mapping rather than
+        # trained only on perturbed versions.
+        if len(x_train_aug) > 0:
+            self.x_train = np.concatenate([self.x_train, np.array(x_train_aug)], axis=0)
+            self.y_time_train = np.concatenate(
+                [self.y_time_train, np.array(y_time_train_aug)], axis=0
+            )
+            self.y_class_train = np.concatenate(
+                [self.y_class_train, np.array(y_class_train_aug)], axis=0
+            )
 
         self.class_weights = compute_weights(self.y_class_train.argmax(axis=1))
         logger.info(f"New class weights: {self.class_weights}")
@@ -1739,23 +1782,11 @@ class SignalDetectionModel(object):
         required_signals = self.channel_option
         available_signals = list(signal_dataset[0].keys())
 
-        selected_signals = []
-        for s in required_signals:
-            pattern_test = [s in a for a in available_signals]
-            if np.any(pattern_test):
-                valid_columns = np.array(available_signals)[np.array(pattern_test)]
-                if len(valid_columns) == 1:
-                    selected_signals.append(valid_columns[0])
-                else:
-                    logger.debug(f"Found several candidate signals: {valid_columns}")
-                    for vc in natsorted(valid_columns):
-                        if "circle" in vc:
-                            selected_signals.append(vc)
-                            break
-                    else:
-                        selected_signals.append(valid_columns[0])
-            else:
-                return None
+        # Use the shared resolver so training selects exactly the same column
+        # inference will later select for the same required channel name.
+        selected_signals = resolve_signal_channels(required_signals, available_signals)
+        if selected_signals is None:
+            return None
 
         key_to_check = selected_signals[0]  # self.channel_option[0]
         signal_lengths = [len(l[key_to_check]) for l in signal_dataset]
@@ -2302,6 +2333,63 @@ def _interpret_normalization_parameters(
     return normalization_percentile, normalization_values, normalization_clip
 
 
+def compute_normalization_stats(
+    signal_set: np.ndarray,
+    channel_option: List[str],
+    normalization_percentile: Optional[List[bool]] = None,
+    normalization_values: Optional[List[List[float]]] = None,
+    normalization_clip: Optional[List[bool]] = None,
+) -> List[List[float]]:
+    """
+    Compute the per-channel ``[min, max]`` normalization range over a signal set.
+
+    The range is pooled across **all** samples and time points of the channel
+    (ignoring zero placeholders and NaNs), matching the per-batch normalization
+    strategy used by :func:`normalize_signal_set`. Splitting this "fit" step out
+    lets callers compute the range once over a wider scope (e.g. a whole well or
+    experiment) and then apply the *same* range to every position via the
+    ``fitted_values`` argument of :func:`normalize_signal_set`.
+
+    Parameters
+    ----------
+    signal_set : ndarray
+        3D array (samples, time points, channels) to compute the range from.
+    channel_option : list of str
+        Channel names; only the length is used here.
+    normalization_percentile, normalization_values, normalization_clip
+        Same meaning as in :func:`normalize_signal_set`; interpreted per channel.
+
+    Returns
+    -------
+    list of [float, float]
+        One ``[min, max]`` pair per channel.
+    """
+    n_channels = len(channel_option)
+    normalization_percentile, normalization_values, _ = (
+        _interpret_normalization_parameters(
+            n_channels,
+            normalization_percentile,
+            normalization_values,
+            normalization_clip,
+        )
+    )
+    stats = []
+    for k in range(n_channels):
+        values = signal_set[:, :, k]
+        if normalization_percentile[k]:
+            non_zero_values = values[values != 0.0]
+            if len(non_zero_values) > 0:
+                min_val = np.nanpercentile(non_zero_values, normalization_values[k][0])
+                max_val = np.nanpercentile(non_zero_values, normalization_values[k][1])
+            else:
+                min_val, max_val = 0.0, 1.0
+        else:
+            min_val = normalization_values[k][0]
+            max_val = normalization_values[k][1]
+        stats.append([float(min_val), float(max_val)])
+    return stats
+
+
 def normalize_signal_set(
     signal_set: np.ndarray,
     channel_option: List[str],
@@ -2311,6 +2399,7 @@ def normalize_signal_set(
     normalization_percentile: Optional[List[bool]] = None,
     normalization_values: Optional[List[List[float]]] = None,
     normalization_clip: Optional[List[bool]] = None,
+    fitted_values: Optional[List[List[float]]] = None,
 ) -> np.ndarray:
     """
     Normalizes a set of single-cell signals across specified channels using given percentile values or specific normalization parameters.
@@ -2372,6 +2461,17 @@ def normalize_signal_set(
             normalization_clip,
         )
     )
+
+    # Either reuse a range fitted over a wider scope, or fit it on this set.
+    if fitted_values is None:
+        fitted_values = compute_normalization_stats(
+            signal_set,
+            channel_option,
+            normalization_percentile=normalization_percentile,
+            normalization_values=normalization_values,
+            normalization_clip=normalization_clip,
+        )
+
     for k, channel in enumerate(channel_option):
 
         zero_values = []
@@ -2379,22 +2479,7 @@ def normalize_signal_set(
             zeros_loc = np.where(signal_set[i, :, k] == 0)
             zero_values.append(zeros_loc)
 
-        values = signal_set[:, :, k]
-
-        if normalization_percentile[k]:
-            non_zero_values = values[values != 0.0]
-            if len(non_zero_values) > 0:
-                min_val = np.nanpercentile(
-                    non_zero_values, normalization_values[k][0]
-                )
-                max_val = np.nanpercentile(
-                    non_zero_values, normalization_values[k][1]
-                )
-            else:
-                min_val, max_val = 0.0, 1.0
-        else:
-            min_val = normalization_values[k][0]
-            max_val = normalization_values[k][1]
+        min_val, max_val = fitted_values[k]
 
         signal_set[:, :, k] -= min_val
         divisor = max_val - min_val
@@ -2439,6 +2524,13 @@ def pad_to_model_length(signal_set: np.ndarray, model_signal_length: int) -> np.
     >>> padded_signals = pad_to_model_length(signal_set, 5)
 
     """
+
+    if signal_set.shape[1] > model_signal_length:
+        raise ValueError(
+            f"Signals are longer ({signal_set.shape[1]}) than the model input "
+            f"length ({model_signal_length}). Train a model with a larger "
+            "model_signal_length or shorten/window the signals before padding."
+        )
 
     padded = np.pad(
         signal_set,

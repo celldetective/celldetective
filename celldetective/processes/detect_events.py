@@ -12,6 +12,9 @@ from celldetective.utils.color_mappings import (
 )
 from celldetective.utils.event_detection import _prep_event_detection_model
 from celldetective.utils import COLUMN_LABELS
+from celldetective.utils.dataset_helpers import resolve_signal_channels
+from celldetective.utils.event_schema import event_column_names, status_from_event
+from celldetective.utils.schema import trajectory_table_name, trajectory_table_path
 
 logger = get_logger(__name__)
 
@@ -67,20 +70,17 @@ class SignalAnalysisProcess(Process):
         model : object
             The signal detection model.
         """
+        # Threshold/query classification path: no DL model involved.
+        if getattr(self, "threshold_config", None) is not None:
+            self._process_position_threshold()
+            return
+
         logger.info(
             f"Analyzing signals for position {self.pos} with model {self.model_name}"
         )
 
         try:
-            # Determine table name based on mode
-            if self.mode.lower() in ["target", "targets"]:
-                table_name = "trajectories_targets.csv"
-            elif self.mode.lower() in ["effector", "effectors"]:
-                table_name = "trajectories_effectors.csv"
-            else:
-                table_name = f"trajectories_{self.mode}.csv"
-
-            trajectories_path = os.path.join(self.pos, "output", "tables", table_name)
+            trajectories_path = trajectory_table_path(self.pos, self.mode)
 
             if not os.path.exists(trajectories_path):
                 logger.warning(f"No trajectories table found at {trajectories_path}")
@@ -111,29 +111,19 @@ class SignalAnalysisProcess(Process):
             required_signals = config["channels"]
             model_signal_length = config["model_signal_length"]
 
-            # Channel selection logic
+            # Channel selection logic (shared resolver — identical to training)
             available_signals = list(trajectories.columns)
             selected_signals = config.get("selected_channels", None)
 
             if selected_signals is None:
-                selected_signals = []
-                for s in required_signals:
-                    priority_cols = [a for a in available_signals if a == s]
-                    second_priority_cols = [
-                        a for a in available_signals if a.startswith(s) and a != s
-                    ]
-                    third_priority_cols = [
-                        a for a in available_signals if s in a and not a.startswith(s)
-                    ]
-                    candidates = (
-                        priority_cols + second_priority_cols + third_priority_cols
+                selected_signals = resolve_signal_channels(
+                    required_signals, available_signals
+                )
+                if selected_signals is None:
+                    logger.error(
+                        f"No match for required signals {required_signals} in {available_signals}"
                     )
-
-                    if len(candidates) > 0:
-                        selected_signals.append(candidates[0])
-                    else:
-                        logger.error(f"No match for signal {s} in {available_signals}")
-                        raise ValueError(f"Missing required channel: {s}")
+                    raise ValueError(f"Missing required channel(s): {required_signals}")
 
             # Preprocessing
             trajectories_clean = clean_trajectories(
@@ -147,8 +137,13 @@ class SignalAnalysisProcess(Process):
                 int(trajectories_clean[self.column_labels["time"]].max()) + 2
             )
             if max_signal_size > model_signal_length:
-                logger.warning(
-                    f"Signals longer than model input ({max_signal_size} > {model_signal_length}). Truncating may occur."
+                logger.error(
+                    f"Signals are longer than the model input ({max_signal_size} > "
+                    f"{model_signal_length}); this model cannot process this position."
+                )
+                raise ValueError(
+                    f"Signals longer ({max_signal_size}) than model input "
+                    f"({model_signal_length}) for position {self.pos}."
                 )
 
             tracks = trajectories_clean[self.column_labels["track"]].unique()
@@ -176,10 +171,17 @@ class SignalAnalysisProcess(Process):
                     signals[i, frames, j] = signal
                     signals[i, max(frames) :, j] = signal[-1]
 
-            # Prediction
+            # Prediction. When a wider normalization scope (well/experiment) was
+            # requested, a pooled range was pre-computed for this worker and is
+            # applied here instead of re-fitting per position.
             self.queue.put({"frame_time": "Predicting events..."})
-            classes = model.predict_class(signals)
-            times_recast = model.predict_time_of_interest(signals)
+            norm_override = getattr(self, "normalization_stats", None)
+            classes = model.predict_class(
+                signals, normalization_values_override=norm_override
+            )
+            times_recast = model.predict_time_of_interest(
+                signals, normalization_values_override=norm_override
+            )
 
             # Assign results
             try:
@@ -189,14 +191,7 @@ class SignalAnalysisProcess(Process):
             except (KeyError, AttributeError):
                 label = None
 
-            if label is None:
-                class_col = "class"
-                time_col = "t0"
-                status_col = "status"
-            else:
-                class_col = "class_" + label
-                time_col = "t_" + label
-                status_col = "status_" + label
+            class_col, time_col, status_col = event_column_names(label)
 
             self.queue.put({"frame_time": "Saving results..."})
 
@@ -226,18 +221,7 @@ class SignalAnalysisProcess(Process):
                 t0 = group[time_col].iloc[0]
                 cclass = group[class_col].iloc[0]
                 timeline = group[self.column_labels["time"]].to_numpy()
-                status = np.zeros_like(timeline)
-
-                if t0 > 0:
-                    status[timeline >= t0] = 1.0
-                if cclass == 2:
-                    status[:] = 2
-                if cclass > 2:
-                    status[:] = 42
-
-                # Color mapping is slow if done element-wise.
-                # But color_from_status returns list/string.
-                # Let's just assign status first.
+                status = status_from_event(timeline, cclass, t0)
                 trajectories.loc[indices, status_col] = status
 
             # Status colors
@@ -261,6 +245,140 @@ class SignalAnalysisProcess(Process):
         except Exception as e:
             logger.error(f"Error in SignalAnalysisProcess: {e}", exc_info=True)
             raise
+
+    def _process_position_threshold(self) -> None:
+        """Apply a saved threshold/query classification config to this position."""
+        from celldetective.signals import classify_position_from_config
+
+        name = self.threshold_config.get("name", "")
+        self.queue.put(
+            {"frame_time": f"Applying threshold classification '{name}'..."}
+        )
+        try:
+            classify_position_from_config(
+                self.pos, self.threshold_config, mode=self.mode
+            )
+            logger.info(f"Threshold classification completed for {self.pos}")
+        except FileNotFoundError as e:
+            logger.warning(str(e))
+        except Exception as e:
+            logger.error(
+                f"Threshold classification failed for {self.pos}: {e}", exc_info=True
+            )
+            raise
+
+    def _table_name(self) -> str:
+        """Return the trajectories table filename for the current mode."""
+        return trajectory_table_name(self.mode)
+
+    def compute_well_normalization_stats(self, positions, model):
+        """Pool the per-channel normalization range over every position of a well.
+
+        Used when the model's ``normalization_scope`` is ``"well"`` or
+        ``"experiment"``: the percentile range is fitted once over all the
+        positions in scope and then applied unchanged to each position, instead
+        of being re-fitted from a single (possibly small or atypical) position.
+
+        Parameters
+        ----------
+        positions : list of str
+            Position paths to pool over.
+        model : SignalDetectionModel
+            The loaded model, used for its config (channels, normalization).
+
+        Returns
+        -------
+        list of [float, float] or None
+            One ``[min, max]`` per channel, or None if normalization is disabled
+            or no signals could be gathered (caller falls back to per-position).
+        """
+        from celldetective.event_detection_models import (
+            compute_normalization_stats,
+            pad_to_model_length,
+        )
+
+        config = model.config
+        if not config.get("normalize", True):
+            return None
+
+        required_signals = config["channels"]
+        model_signal_length = config["model_signal_length"]
+        table_name = self._table_name()
+
+        # Only pool when every position in scope already has a measurement table.
+        # During an interleaved full run the sibling tables are produced
+        # just-in-time, so the pool would be incomplete; fall back to
+        # per-position normalization in that case.
+        table_paths = [
+            os.path.join(pos, "output", "tables", table_name) for pos in positions
+        ]
+        if not table_paths or not all(os.path.exists(p) for p in table_paths):
+            logger.info(
+                "Pooled normalization skipped (not all position tables are present "
+                "yet); falling back to per-position normalization."
+            )
+            return None
+
+        per_pos_signals = []
+        for pos in positions:
+            trajectories_path = os.path.join(pos, "output", "tables", table_name)
+            if not os.path.exists(trajectories_path):
+                continue
+            trajectories = pd.read_csv(trajectories_path)
+            if self.column_labels["track"] not in trajectories.columns:
+                continue
+
+            available_signals = list(trajectories.columns)
+            selected_signals = config.get("selected_channels", None)
+            if selected_signals is None:
+                selected_signals = resolve_signal_channels(
+                    required_signals, available_signals
+                )
+            if selected_signals is None:
+                continue
+
+            trajectories_clean = clean_trajectories(
+                trajectories,
+                interpolate_na=True,
+                interpolate_position_gaps=True,
+                column_labels=self.column_labels,
+            )
+            max_signal_size = (
+                int(trajectories_clean[self.column_labels["time"]].max()) + 2
+            )
+            # Cap so we can pad to a common length; out-of-range frames are dropped
+            # (they would error at prediction time anyway).
+            max_signal_size = min(max_signal_size, model_signal_length)
+            tracks = trajectories_clean[self.column_labels["track"]].unique()
+            signals = np.zeros(
+                (len(tracks), max_signal_size, len(selected_signals))
+            )
+            for i, (tid, group) in enumerate(
+                trajectories_clean.groupby(self.column_labels["track"])
+            ):
+                frames = group[self.column_labels["time"]].to_numpy().astype(int)
+                keep = frames < max_signal_size
+                frames_k = frames[keep]
+                if len(frames_k) == 0:
+                    continue
+                for j, col in enumerate(selected_signals):
+                    signal = group[col].to_numpy()[keep]
+                    signals[i, frames_k, j] = signal
+                    signals[i, max(frames_k):, j] = signal[-1]
+
+            per_pos_signals.append(pad_to_model_length(signals, model_signal_length))
+
+        if not per_pos_signals:
+            return None
+
+        pooled = np.concatenate(per_pos_signals, axis=0)
+        return compute_normalization_stats(
+            pooled,
+            required_signals,
+            normalization_percentile=config.get("normalization_percentile"),
+            normalization_values=config.get("normalization_values"),
+            normalization_clip=config.get("normalization_clip"),
+        )
 
     def run(self):
         """Run the signal analysis process."""

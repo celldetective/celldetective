@@ -30,10 +30,12 @@ import json
 import numpy as np
 from celldetective.utils.model_loaders import locate_signal_model, _resolve_signal_model_paths
 from celldetective.utils.data_loaders import get_position_table, get_position_pickle
+from celldetective.utils.dataset_helpers import resolve_signal_channels
+from celldetective.utils.schema import trajectory_table_path
 from celldetective.tracking import clean_trajectories, interpolate_nan_properties
 import matplotlib.pyplot as plt
-from natsort import natsorted
 from celldetective.utils.color_mappings import color_from_status, color_from_class
+from celldetective.utils.event_schema import event_column_names, status_from_event
 from math import floor
 from scipy.optimize import curve_fit
 import pandas as pd
@@ -146,22 +148,12 @@ def analyze_signals(
     label = _extract_config_label(config)
 
     if selected_signals is None:
-        selected_signals = []
-        for s in required_signals:
-            priority_cols = [a for a in available_signals if a == s]
-            second_priority_cols = [
-                a for a in available_signals if a.startswith(s) and a != s
-            ]
-            third_priority_cols = [
-                a for a in available_signals if s in a and not a.startswith(s)
-            ]
-            candidates = priority_cols + second_priority_cols + third_priority_cols
-            if len(candidates) == 0:
-                raise ValueError(f"No signal matches with the requirements of the model {required_signals}. Please pass the signals manually with the argument selected_signals or add measurements. Abort.")
-            logger.info(
-                f"Selecting the first time series among: {candidates} for input requirement {s}..."
-            )
-            selected_signals.append(candidates[0])
+        selected_signals = resolve_signal_channels(required_signals, available_signals)
+        if selected_signals is None:
+            raise ValueError(f"No signal matches with the requirements of the model {required_signals}. Please pass the signals manually with the argument selected_signals or add measurements. Abort.")
+        logger.info(
+            f"Resolved required channels {required_signals} to columns {selected_signals}..."
+        )
     else:
         if len(selected_signals) != len(required_signals):
             raise ValueError(f"Mismatch between the number of required signals {required_signals} and the provided signals {selected_signals}... Abort.")
@@ -196,14 +188,7 @@ def analyze_signals(
         classes = model.predict_class(signals)
         times_recast = model.predict_time_of_interest(signals)
 
-        if label is None:
-            class_col = "class"
-            time_col = "t0"
-            status_col = "status"
-        else:
-            class_col = "class_" + label
-            time_col = "t_" + label
-            status_col = "status_" + label
+        class_col, time_col, status_col = event_column_names(label)
 
         for i, (tid, group) in enumerate(trajectories.groupby(column_labels["track"])):
             indices = group.index
@@ -217,13 +202,7 @@ def analyze_signals(
             t0 = group[time_col].to_numpy()[0]
             cclass = group[class_col].to_numpy()[0]
             timeline = group[column_labels["time"]].to_numpy()
-            status = np.zeros_like(timeline)
-            if t0 > 0:
-                status[timeline >= t0] = 1.0
-            if cclass == 2:
-                status[:] = 2
-            if cclass > 2:
-                status[:] = 42
+            status = status_from_event(timeline, cclass, t0)
             status_color = [color_from_status(s) for s in status]
             class_color = [color_from_class(cclass)] * len(status)
 
@@ -341,12 +320,95 @@ def analyze_signals_at_position(
         logger.error(f"Signal analysis script exited with code {result.returncode} for position {pos}.")
         raise RuntimeError(f"Signal analysis failed for position {pos} (exit code {result.returncode}).")
 
-    table = pos + os.sep.join(["output", "tables", f"trajectories_{mode}.csv"])
+    table = trajectory_table_path(pos, mode)
     if return_table:
         df = pd.read_csv(table)
         return df
     else:
         return None
+
+
+def classify_position_from_config(
+    pos: str, config: dict, mode: str = "targets"
+) -> pd.DataFrame:
+    """Apply a saved threshold/query classification config to one position.
+
+    Headless batch counterpart of ``ClassifierWidget`` for the pipeline: it loads
+    the position's trajectory table, applies :func:`celldetective.measure.classify_from_threshold_config`
+    (which yields an event ``class_/t_/status_`` set or a static ``group_`` column
+    depending on ``config['time_correlated']``), refreshes the status/class color
+    columns for event configs so viewers render them like a model result, and
+    writes the table back.
+
+    Parameters
+    ----------
+    pos : str
+        Position directory.
+    config : dict
+        A threshold classification config (see ``classify_from_threshold_config``).
+    mode : str, optional
+        Population mode used to locate the trajectory table. Default ``"targets"``.
+
+    Returns
+    -------
+    pandas.DataFrame
+        The updated table.
+    """
+    from celldetective.measure import classify_from_threshold_config
+
+    table_path = trajectory_table_path(pos, mode)
+    if not os.path.exists(table_path):
+        raise FileNotFoundError(f"No trajectory table found at {table_path}")
+
+    trajectories = pd.read_csv(table_path)
+    trajectories = classify_from_threshold_config(trajectories, config)
+
+    if config.get("time_correlated", False):
+        class_col, _, status_col = event_column_names(config["name"])
+        if status_col in trajectories.columns:
+            trajectories["status_color"] = trajectories[status_col].apply(
+                color_from_status
+            )
+        if class_col in trajectories.columns:
+            trajectories["class_color"] = trajectories[class_col].apply(
+                color_from_class
+            )
+
+    trajectories.to_csv(table_path, index=False)
+    return trajectories
+
+
+def classify_positions_from_config(
+    positions: List[str], config: dict, mode: str = "targets"
+) -> int:
+    """Apply a saved classification config to several positions (headless batch).
+
+    Loops over positions, applying :func:`classify_position_from_config` to each;
+    positions without a table are skipped with a warning. Works for both static
+    (``group_``) and event (``class_/t_/status_``) configs.
+
+    Parameters
+    ----------
+    positions : list of str
+        Position directories.
+    config : dict
+        A threshold classification config.
+    mode : str, optional
+        Population mode. Default ``"targets"``.
+
+    Returns
+    -------
+    int
+        Number of positions successfully classified.
+    """
+    done = 0
+    for pos in positions:
+        try:
+            classify_position_from_config(pos, config, mode=mode)
+            done += 1
+        except FileNotFoundError as e:
+            logger.warning(str(e))
+    return done
 
 
 def analyze_pair_signals_at_position(
@@ -417,7 +479,7 @@ def analyze_pair_signals_at_position(
         dataframes[neighbor_population],
         model=model,
     )
-    table = pos + os.sep.join(["output", "tables", f"trajectories_pairs.csv"])
+    table = trajectory_table_path(pos, "pairs")
     df.to_csv(table, index=False)
 
     return None
@@ -521,25 +583,12 @@ def analyze_pair_signals(
     label = _extract_config_label(config)
 
     if selected_signals is None:
-        selected_signals = []
-        for s in required_signals:
-            pattern_test = [s in a or s == a for a in available_signals]
-            logger.debug(f"Pattern test for signal {s}: {pattern_test}")
-            if not np.any(pattern_test):
-                raise ValueError(f"No signal matches with the requirements of the model {required_signals}. Please pass the signals manually with the argument selected_signals or add measurements. Abort.")
-            valid_columns = np.array(available_signals)[np.array(pattern_test)]
-            if len(valid_columns) == 1:
-                selected_signals.append(valid_columns[0])
-            else:
-                logger.debug(f"Found several candidate signals: {valid_columns}")
-                for vc in natsorted(valid_columns):
-                    if "circle" in vc:
-                        selected_signals.append(vc)
-                        break
-                else:
-                    selected_signals.append(valid_columns[0])
-                # do something more complicated in case of one to many columns
-                # pass
+        selected_signals = resolve_signal_channels(required_signals, available_signals)
+        if selected_signals is None:
+            raise ValueError(f"No signal matches with the requirements of the model {required_signals}. Please pass the signals manually with the argument selected_signals or add measurements. Abort.")
+        logger.debug(
+            f"Resolved required channels {required_signals} to columns {selected_signals}..."
+        )
     else:
         if len(selected_signals) != len(required_signals):
             raise ValueError(f"Mismatch between the number of required signals {required_signals} and the provided signals {selected_signals}... Abort.")

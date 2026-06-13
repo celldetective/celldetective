@@ -21,6 +21,7 @@ from celldetective.log_manager import get_logger
 from celldetective.utils.data_cleaning import _mask_intensity_measurements
 from celldetective.utils.data_loaders import interpret_tracking_configuration
 from celldetective.utils.experiment import extract_experiment_channels
+from celldetective.utils.schema import trajectory_table_name
 from celldetective.utils.image_loaders import (
     _get_img_num_per_channel,
     auto_load_number_of_frames,
@@ -168,13 +169,13 @@ class TrackingProcess(Process):
         if not os.path.exists(self.pos + os.sep.join(["output", "tables"])):
             os.mkdir(self.pos + os.sep.join(["output", "tables"]))
 
+        self.table_name = trajectory_table_name(self.mode)
         if self.mode.lower() == "target" or self.mode.lower() == "targets":
             self.label_folder = "labels_targets"
             self.instruction_file = os.sep.join(
                 ["configs", "tracking_instructions_targets.json"]
             )
             self.napari_name = "napari_target_trajectories.npy"
-            self.table_name = "trajectories_targets.csv"
 
         elif self.mode.lower() == "effector" or self.mode.lower() == "effectors":
             self.label_folder = "labels_effectors"
@@ -182,7 +183,6 @@ class TrackingProcess(Process):
                 ["configs", "tracking_instructions_effectors.json"]
             )
             self.napari_name = "napari_effector_trajectories.npy"
-            self.table_name = "trajectories_effectors.csv"
 
         else:
             self.label_folder = f"labels_{self.mode}"
@@ -190,7 +190,6 @@ class TrackingProcess(Process):
                 ["configs", f"tracking_instructions_{self.mode}.json"]
             )
             self.napari_name = f"napari_{self.mode}_trajectories.npy"
-            self.table_name = f"trajectories_{self.mode}.csv"
 
     def extract_experiment_parameters(self):
         """Extract the experiment parameters from the configuration file."""

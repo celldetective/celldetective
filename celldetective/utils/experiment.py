@@ -8,6 +8,7 @@ import dask
 import numpy as np
 from natsort import natsorted
 
+from celldetective.utils.schema import trajectory_table_path
 from celldetective.utils.io import save_tiff_imagej_compatible
 from celldetective.utils.parsing import (
     _extract_channels_from_config,
@@ -1476,19 +1477,7 @@ def load_tracking_data(
     import pandas as pd
 
     position = position.replace("\\", "/")
-    if population.lower() == "target" or population.lower() == "targets":
-        trajectories = pd.read_csv(
-            position + os.sep.join(["output", "tables", "trajectories_targets.csv"])
-        )
-    elif population.lower() == "effector" or population.lower() == "effectors":
-        trajectories = pd.read_csv(
-            position + os.sep.join(["output", "tables", "trajectories_effectors.csv"])
-        )
-    else:
-        trajectories = pd.read_csv(
-            position
-            + os.sep.join(["output", "tables", f"trajectories_{population}.csv"])
-        )
+    trajectories = pd.read_csv(trajectory_table_path(position, population))
 
     stack, labels = locate_stack_and_labels(
         position, prefix=prefix, population=population
@@ -1519,12 +1508,7 @@ def get_position_table(
     """
     import pandas as pd
 
-    if not pos.endswith(os.sep):
-        table = os.sep.join([pos, "output", "tables", f"trajectories_{population}.csv"])
-    else:
-        table = pos + os.sep.join(
-            ["output", "tables", f"trajectories_{population}.csv"]
-        )
+    table = trajectory_table_path(pos, population)
 
     if os.path.exists(table):
         try:

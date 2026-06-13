@@ -39,6 +39,7 @@ from celldetective.log_manager import get_logger
 logger = get_logger(__name__)
 from celldetective.utils.data_cleaning import rename_intensity_column
 from celldetective.utils.data_loaders import interpret_tracking_configuration
+from celldetective.utils.schema import trajectory_table_path
 
 import os
 import subprocess
@@ -1430,7 +1431,7 @@ def track_at_position(
         logger.error(f"Tracking script exited with code {result.returncode} for position {pos}.")
         raise RuntimeError(f"Tracking failed for position {pos} (exit code {result.returncode}).")
 
-    track_table = pos + os.sep.join(["output", "tables", f"trajectories_{mode}.csv"])
+    track_table = trajectory_table_path(pos, mode)
     if return_tracks:
         df = pd.read_csv(track_table)
         return df

@@ -36,6 +36,7 @@ from celldetective.gui.base.components import (
     CelldetectiveMainWindow,
 )
 from celldetective import get_software_location
+from celldetective.utils.schema import trajectory_table_path
 from celldetective.utils.image_loaders import auto_load_number_of_frames, load_frames
 from celldetective.utils.experiment import (
     extract_experiment_channels,
@@ -98,9 +99,7 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
         self.instructions_path = self.exp_dir + os.sep.join(
             ["configs", f"signal_annotator_config_{self.mode}.json"]
         )
-        self.trajectories_path = self.pos + os.sep.join(
-            ["output", "tables", f"trajectories_{self.mode}.csv"]
-        )
+        self.trajectories_path = trajectory_table_path(self.pos, self.mode)
 
         self.screen_height = (
             self.parent_window.parent_window.parent_window.screen_height

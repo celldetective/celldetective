@@ -268,6 +268,8 @@ class TrainSignalModelProcess(Process):
                 "normalization_percentile",
                 "normalization_values",
                 "normalization_clip",
+                "normalization_scope",
+                "random_state",
             )
             if k in self.training_instructions
         }
