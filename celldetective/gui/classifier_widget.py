@@ -191,8 +191,6 @@ class ClassifierWidget(CelldetectiveWidget):
         self.irreversible_event_btn = QRadioButton("irreversible event")
         self.unique_state_btn = QRadioButton("unique state")
         self.transient_event_btn = QRadioButton("transient event")
-        # Keep a reference on self: a local QButtonGroup would be garbage-collected
-        # after __init__, dropping the buttons' mutual exclusivity.
         self.time_corr_btn_group = QButtonGroup()
         self.unique_state_btn.click()
 
