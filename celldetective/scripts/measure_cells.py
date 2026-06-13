@@ -298,12 +298,8 @@ def measure_index(indices: List[int]) -> None:
     None
     """
 
-    # global column_labels
-
     for t in tqdm(indices, desc="frame"):
 
-        # Default to no image so measurements still run (morphology only) when
-        # the movie is missing, instead of raising NameError on `img`.
         img = None
         if file is not None:
             img = load_frames(
