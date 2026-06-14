@@ -28,6 +28,7 @@ from celldetective.gui.base.components import QHSeperationLine, HoverButton
 
 from celldetective.gui.base.styles import Styles
 from celldetective.gui.base.utils import center_window
+from celldetective.gui.base.custom_icons import scatter_with_divider_icon
 from celldetective.gui.gui_utils import help_generic
 from celldetective.utils.data_loaders import load_experiment_tables
 from celldetective.utils.experiment import extract_position_name
@@ -264,7 +265,7 @@ class NeighPanel(QFrame, Styles):
 
         self.classify_pairs_action = QCheckBox("CLASSIFY PAIRS")
         self.classify_pairs_action.setStyleSheet(self.menu_check_style)
-        self.classify_pairs_action.setIcon(icon(MDI6.shape_plus, color="black"))
+        self.classify_pairs_action.setIcon(scatter_with_divider_icon(color="black"))
         self.classify_pairs_action.setIconSize(QSize(20, 20))
         self.classify_pairs_action.setToolTip(
             "Apply one or more saved (static) classification configs to the pair tables."
