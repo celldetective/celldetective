@@ -13,7 +13,11 @@ from celldetective.utils.color_mappings import (
 from celldetective.utils.event_detection import _prep_event_detection_model
 from celldetective.utils import COLUMN_LABELS
 from celldetective.utils.dataset_helpers import resolve_signal_channels
-from celldetective.utils.event_schema import event_column_names, status_from_event
+from celldetective.utils.event_schema import (
+    event_column_names,
+    status_from_event,
+    reclassify_out_of_window,
+)
 from celldetective.utils.schema import trajectory_table_name, trajectory_table_path
 
 logger = get_logger(__name__)
@@ -137,14 +141,22 @@ class SignalAnalysisProcess(Process):
                 int(trajectories_clean[self.column_labels["time"]].max()) + 2
             )
             if max_signal_size > model_signal_length:
-                logger.error(
-                    f"Signals are longer than the model input ({max_signal_size} > "
-                    f"{model_signal_length}); this model cannot process this position."
+                n_truncated = int(
+                    (
+                        trajectories_clean.groupby(self.column_labels["track"])[
+                            self.column_labels["time"]
+                        ].max()
+                        >= model_signal_length
+                    ).sum()
                 )
-                raise ValueError(
-                    f"Signals longer ({max_signal_size}) than model input "
-                    f"({model_signal_length}) for position {self.pos}."
+                logger.warning(
+                    f"Signals are longer than the model window ({max_signal_size} > "
+                    f"{model_signal_length} frames) for position {self.pos}: "
+                    f"truncating to {model_signal_length}. {n_truncated} track(s) "
+                    f"extend past it; any event after frame {model_signal_length} "
+                    f"will be reported as 'no event'."
                 )
+                max_signal_size = model_signal_length
 
             tracks = trajectories_clean[self.column_labels["track"]].unique()
             signals = np.zeros((len(tracks), max_signal_size, len(selected_signals)))
@@ -166,8 +178,12 @@ class SignalAnalysisProcess(Process):
                 )
 
                 frames = group[self.column_labels["time"]].to_numpy().astype(int)
+                keep = frames < max_signal_size
+                frames = frames[keep]
+                if len(frames) == 0:
+                    continue
                 for j, col in enumerate(selected_signals):
-                    signal = group[col].to_numpy()
+                    signal = group[col].to_numpy()[keep]
                     signals[i, frames, j] = signal
                     signals[i, max(frames) :, j] = signal[-1]
 
@@ -182,6 +198,14 @@ class SignalAnalysisProcess(Process):
             times_recast = model.predict_time_of_interest(
                 signals, normalization_values_override=norm_override
             )
+            classes, times_recast, n_demoted = reclassify_out_of_window(
+                classes, times_recast, model_signal_length
+            )
+            if n_demoted:
+                logger.info(
+                    f"{n_demoted} event(s) predicted at/after the model window "
+                    f"were set to 'no event'."
+                )
 
             # Assign results
             try:

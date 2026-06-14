@@ -119,3 +119,106 @@ class TestPadGuard:
         assert out.shape == (1, 4, 1)
         # edge padding repeats the last value
         assert out[0, -1, 0] == pytest.approx(2.0)
+
+
+class TestReclassifyOutOfWindow:
+    def test_event_beyond_window_demoted_to_no_event(self):
+        from celldetective.utils.event_schema import (
+            reclassify_out_of_window,
+            EVENT,
+            NO_EVENT,
+        )
+
+        classes = np.array([EVENT, EVENT])
+        times = np.array([10.0, 200.0])
+        cc, tt, n = reclassify_out_of_window(classes, times, window=128)
+        assert n == 1
+        # in-window event kept
+        assert cc[0] == EVENT and tt[0] == pytest.approx(10.0)
+        # out-of-window event demoted with time reset to -1
+        assert cc[1] == NO_EVENT and tt[1] == pytest.approx(-1.0)
+
+    def test_event_exactly_at_window_is_demoted(self):
+        from celldetective.utils.event_schema import (
+            reclassify_out_of_window,
+            EVENT,
+            NO_EVENT,
+        )
+
+        cc, tt, n = reclassify_out_of_window(
+            np.array([EVENT]), np.array([128.0]), window=128
+        )
+        assert n == 1 and cc[0] == NO_EVENT and tt[0] == pytest.approx(-1.0)
+
+    def test_non_event_classes_untouched(self):
+        from celldetective.utils.event_schema import (
+            reclassify_out_of_window,
+            NO_EVENT,
+            ELSE,
+        )
+
+        # NO_EVENT/ELSE tracks are never touched, even with a large time value.
+        classes = np.array([NO_EVENT, ELSE])
+        times = np.array([500.0, 500.0])
+        cc, tt, n = reclassify_out_of_window(classes, times, window=128)
+        assert n == 0
+        assert cc[0] == NO_EVENT and cc[1] == ELSE
+        np.testing.assert_allclose(tt, [500.0, 500.0])
+
+    def test_no_change_leaves_inputs_intact(self):
+        from celldetective.utils.event_schema import reclassify_out_of_window, EVENT
+
+        classes = np.array([EVENT, EVENT])
+        times = np.array([5.0, 20.0])
+        cc, tt, n = reclassify_out_of_window(classes, times, window=128)
+        assert n == 0
+        np.testing.assert_array_equal(cc, classes)
+        np.testing.assert_allclose(tt, times)
+
+
+class TestTruncateTrainingSignals:
+    def test_truncates_and_relabels_out_of_window_event(self):
+        from celldetective.utils.event_schema import (
+            truncate_training_signals,
+            EVENT,
+            NO_EVENT,
+        )
+
+        signals = np.ones((3, 200, 2))
+        classes = np.array([EVENT, EVENT, NO_EVENT])
+        times = np.array([50.0, 150.0, -1.0])
+        s, c, t, n = truncate_training_signals(signals, classes, times, window=128)
+        assert s.shape == (3, 128, 2)
+        assert n == 1
+        # in-window event kept
+        assert c[0] == EVENT and t[0] == pytest.approx(50.0)
+        # event past the window relabelled
+        assert c[1] == NO_EVENT and t[1] == pytest.approx(-1.0)
+        # non-event untouched
+        assert c[2] == NO_EVENT and t[2] == pytest.approx(-1.0)
+
+    def test_preserves_one_hot_labels(self):
+        from celldetective.utils.event_schema import (
+            truncate_training_signals,
+            EVENT,
+            NO_EVENT,
+        )
+
+        signals = np.ones((2, 200, 1))
+        classes = np.array([[1, 0, 0], [1, 0, 0]], dtype=float)  # both EVENT
+        times = np.array([10.0, 150.0])
+        s, c, t, n = truncate_training_signals(signals, classes, times, window=128)
+        assert c.shape == (2, 3)  # one-hot form preserved
+        assert n == 1
+        assert c[0].argmax() == EVENT
+        assert c[1].argmax() == NO_EVENT and t[1] == pytest.approx(-1.0)
+
+    def test_no_truncation_when_within_window(self):
+        from celldetective.utils.event_schema import truncate_training_signals, EVENT
+
+        signals = np.ones((1, 64, 1))
+        classes = np.array([EVENT])
+        times = np.array([30.0])
+        s, c, t, n = truncate_training_signals(signals, classes, times, window=128)
+        assert s.shape == (1, 64, 1)  # unchanged
+        assert n == 0 and c[0] == EVENT and t[0] == pytest.approx(30.0)

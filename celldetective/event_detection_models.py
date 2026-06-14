@@ -85,6 +85,7 @@ from celldetective.utils.dataset_helpers import (
     train_test_split,
     resolve_signal_channels,
 )
+from celldetective.utils.event_schema import truncate_training_signals
 from celldetective.utils.plots.regression import regression_plot
 from celldetective.log_manager import get_logger
 
@@ -663,6 +664,23 @@ class SignalDetectionModel(object):
             raise ValueError(f"Mismatch between the channel option and the number of channels of the model...")
 
         if pad:
+            if self.x_train.shape[1] > self.model_signal_length:
+                (
+                    self.x_train,
+                    self.y_class_train,
+                    self.y_time_train,
+                    n_relabelled,
+                ) = truncate_training_signals(
+                    self.x_train,
+                    self.y_class_train,
+                    self.y_time_train,
+                    self.model_signal_length,
+                )
+                logger.warning(
+                    f"Training signals longer than the model window: truncated to "
+                    f"{self.model_signal_length}; {n_relabelled} annotated event(s) "
+                    f"past the window relabelled as 'no event'."
+                )
             self.x_train = pad_to_model_length(self.x_train, self.model_signal_length)
 
         if self.x_train.shape[1:] != (self.model_signal_length, self.n_channels):
@@ -688,14 +706,26 @@ class SignalDetectionModel(object):
         if validation_data is not None:
             try:
                 self.x_val = validation_data[0]
+                self.y_class_val = validation_data[1]
+                self.y_time_val = validation_data[2]
                 if pad:
+                    if self.x_val.shape[1] > self.model_signal_length:
+                        (
+                            self.x_val,
+                            self.y_class_val,
+                            self.y_time_val,
+                            _,
+                        ) = truncate_training_signals(
+                            self.x_val,
+                            self.y_class_val,
+                            self.y_time_val,
+                            self.model_signal_length,
+                        )
                     self.x_val = pad_to_model_length(
                         self.x_val, self.model_signal_length
                     )
-                self.y_class_val = validation_data[1]
                 if self.y_class_val.shape[-1] != self.n_classes:
                     self.y_class_val = to_categorical(self.y_class_val, num_classes=3)
-                self.y_time_val = validation_data[2]
                 if self.normalize:
                     self.y_time_val = (
                         self.y_time_val.astype(np.float32) / self.model_signal_length
@@ -716,14 +746,26 @@ class SignalDetectionModel(object):
         if test_data is not None:
             try:
                 self.x_test = test_data[0]
+                self.y_class_test = test_data[1]
+                self.y_time_test = test_data[2]
                 if pad:
+                    if self.x_test.shape[1] > self.model_signal_length:
+                        (
+                            self.x_test,
+                            self.y_class_test,
+                            self.y_time_test,
+                            _,
+                        ) = truncate_training_signals(
+                            self.x_test,
+                            self.y_class_test,
+                            self.y_time_test,
+                            self.model_signal_length,
+                        )
                     self.x_test = pad_to_model_length(
                         self.x_test, self.model_signal_length
                     )
-                self.y_class_test = test_data[1]
                 if self.y_class_test.shape[-1] != self.n_classes:
                     self.y_class_test = to_categorical(self.y_class_test, num_classes=3)
-                self.y_time_test = test_data[2]
                 if self.normalize:
                     self.y_time_test = (
                         self.y_time_test.astype(np.float32) / self.model_signal_length
@@ -1853,6 +1895,24 @@ class SignalDetectionModel(object):
         # Correct absurd times of interest
         times_of_interest[np.nonzero(classes)] = -1
         times_of_interest[(times_of_interest <= 0.0)] = -1
+
+        # Enforce the model window on the annotations, exactly as inference does:
+        # signals longer than the model window are truncated to it, and any event
+        # annotated at/after the window becomes "no event" (it is not observable
+        # within the analyzed window). This keeps training and inference aligned
+        # and avoids a hard failure later when padding to the model length.
+        if signals_recast.shape[1] > self.model_signal_length:
+            signals_recast, classes, times_of_interest, n_relabelled = (
+                truncate_training_signals(
+                    signals_recast, classes, times_of_interest, self.model_signal_length
+                )
+            )
+            logger.warning(
+                f"Training signals longer than the model window "
+                f"({max_length} > {self.model_signal_length} frames): truncated to "
+                f"{self.model_signal_length}; {n_relabelled} annotated event(s) past "
+                f"the window relabelled as 'no event'."
+            )
 
         return signals_recast, classes, times_of_interest
 

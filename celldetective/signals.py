@@ -35,7 +35,11 @@ from celldetective.utils.schema import trajectory_table_path
 from celldetective.tracking import clean_trajectories, interpolate_nan_properties
 import matplotlib.pyplot as plt
 from celldetective.utils.color_mappings import color_from_status, color_from_class
-from celldetective.utils.event_schema import event_column_names, status_from_event
+from celldetective.utils.event_schema import (
+    event_column_names,
+    status_from_event,
+    reclassify_out_of_window,
+)
 from math import floor
 from scipy.optimize import curve_fit
 import pandas as pd
@@ -168,7 +172,21 @@ def analyze_signals(
 
     max_signal_size = int(trajectories_clean[column_labels["time"]].max()) + 2
     if max_signal_size > model_signal_length:
-        raise ValueError(f"The current signals are longer ({max_signal_size}) than the maximum expected input ({model_signal_length}) for this signal analysis model. Abort...")
+        n_truncated = int(
+            (
+                trajectories_clean.groupby(column_labels["track"])[
+                    column_labels["time"]
+                ].max()
+                >= model_signal_length
+            ).sum()
+        )
+        logger.warning(
+            f"Signals are longer than the model window ({max_signal_size} > "
+            f"{model_signal_length} frames): truncating to {model_signal_length}. "
+            f"{n_truncated} track(s) extend past it; any event after frame "
+            f"{model_signal_length} will be reported as 'no event'."
+        )
+        max_signal_size = model_signal_length
 
     tracks = trajectories_clean[column_labels["track"]].unique()
     signals = np.zeros((len(tracks), max_signal_size, len(selected_signals)))
@@ -177,8 +195,12 @@ def analyze_signals(
         trajectories_clean.groupby(column_labels["track"])
     ):
         frames = group[column_labels["time"]].to_numpy().astype(int)
+        keep = frames < max_signal_size
+        frames = frames[keep]
+        if len(frames) == 0:
+            continue
         for j, col in enumerate(selected_signals):
-            signal = group[col].to_numpy()
+            signal = group[col].to_numpy()[keep]
             signals[i, frames, j] = signal
             signals[i, max(frames) :, j] = signal[-1]
 
@@ -187,6 +209,14 @@ def analyze_signals(
 
         classes = model.predict_class(signals)
         times_recast = model.predict_time_of_interest(signals)
+        classes, times_recast, n_demoted = reclassify_out_of_window(
+            classes, times_recast, model_signal_length
+        )
+        if n_demoted:
+            logger.info(
+                f"{n_demoted} event(s) predicted at/after the model window were "
+                f"set to 'no event'."
+            )
 
         class_col, time_col, status_col = event_column_names(label)
 
@@ -611,7 +641,13 @@ def analyze_pair_signals(
     max_signal_size = max(max_pair, max_ref, max_neigh) + 2
     model_signal_length = config.get("model_signal_length", max_signal_size)
     if max_signal_size > model_signal_length:
-        raise ValueError(f"The current signals are longer ({max_signal_size}) than the maximum expected input ({model_signal_length}). Abort...")
+        logger.warning(
+            f"Pair signals are longer than the model window ({max_signal_size} > "
+            f"{model_signal_length} frames): truncating to {model_signal_length}. "
+            f"Any event after frame {model_signal_length} will be reported as "
+            f"'no event'."
+        )
+        max_signal_size = model_signal_length
 
     pair_tracks = trajectories_pairs_clean.groupby(pair_groupby_cols).size()
     signals = np.zeros((len(pair_tracks), max_signal_size, len(selected_signals)))
@@ -651,10 +687,12 @@ def analyze_pair_signals(
             )
 
         pair_frames = group["pair_FRAME"].to_numpy().astype(int)
+        pair_keep = pair_frames < max_signal_size
+        pair_frames = pair_frames[pair_keep]
 
         for j, col in enumerate(selected_signals):
             if col.startswith("pair_"):
-                signal = group[col].to_numpy()
+                signal = group[col].to_numpy()[pair_keep]
                 if len(pair_frames) > 0:
                     signals[i, pair_frames, j] = signal
                     signals[i, int(max(pair_frames)) :, j] = signal[-1]
@@ -665,6 +703,8 @@ def analyze_pair_signals(
                 timeline = trajectories_reference_clean.loc[
                     reference_filter, "reference_FRAME"
                 ].to_numpy().astype(int)
+                keep = timeline < max_signal_size
+                signal, timeline = signal[keep], timeline[keep]
                 if len(timeline) > 0:
                     signals[i, timeline, j] = signal
                     signals[i, int(max(timeline)) :, j] = signal[-1]
@@ -675,6 +715,8 @@ def analyze_pair_signals(
                 timeline = trajectories_neighbors_clean.loc[
                     neighbor_filter, "neighbor_FRAME"
                 ].to_numpy().astype(int)
+                keep = timeline < max_signal_size
+                signal, timeline = signal[keep], timeline[keep]
                 if len(timeline) > 0:
                     signals[i, timeline, j] = signal
                     signals[i, int(max(timeline)) :, j] = signal[-1]
@@ -684,6 +726,14 @@ def analyze_pair_signals(
 
     classes = model.predict_class(signals)
     times_recast = model.predict_time_of_interest(signals)
+    classes, times_recast, n_demoted = reclassify_out_of_window(
+        classes, times_recast, model_signal_length
+    )
+    if n_demoted:
+        logger.info(
+            f"{n_demoted} pair event(s) predicted at/after the model window were "
+            f"set to 'no event'."
+        )
 
     if label is None:
         class_col = "pair_class"

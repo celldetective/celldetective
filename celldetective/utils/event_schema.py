@@ -95,3 +95,88 @@ def status_from_event(
         status[:] = STATUS_INVALID
 
     return status
+
+
+def reclassify_out_of_window(
+    classes: np.ndarray, times: np.ndarray, window: int
+) -> Tuple[np.ndarray, np.ndarray, int]:
+    """Demote events whose time falls at/after the analyzed window to NO_EVENT.
+
+    When a signal longer than the model input is truncated to ``window`` frames
+    (``= model_signal_length``) before inference, an event can only be trusted if
+    it was observed *inside* that window: a positive call with a time at or
+    beyond ``window`` was never actually seen by the model and is, by the
+    window's definition, "not observed". Such tracks are relabelled
+    :data:`NO_EVENT` (with time ``-1``) so the deep-learning and threshold
+    detectors honour the same truncation contract.
+
+    Parameters
+    ----------
+    classes : ndarray
+        Per-track class predictions.
+    times : ndarray
+        Per-track event times, aligned with ``classes``.
+    window : int
+        The analyzed window length in frames (the model signal length).
+
+    Returns
+    -------
+    (ndarray, ndarray, int)
+        The corrected ``(classes, times)`` and the number of tracks demoted.
+    """
+    classes = np.asarray(classes).copy()
+    times = np.asarray(times, dtype=float).copy()
+    mask = (classes == EVENT) & (times >= window)
+    classes[mask] = NO_EVENT
+    times[mask] = -1.0
+    return classes, times, int(np.count_nonzero(mask))
+
+
+def truncate_training_signals(
+    signals: np.ndarray,
+    classes: np.ndarray,
+    times: np.ndarray,
+    window: int,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, int]:
+    """Truncate over-long *training* signals to the model window and relabel.
+
+    Training counterpart of :func:`reclassify_out_of_window`, applied to the
+    ground-truth annotations so a model is taught the same window contract it
+    will be held to at inference: a signal longer than ``window`` frames is cut
+    to its first ``window`` frames, and any example whose annotated event time is
+    at/after the window is relabelled :data:`NO_EVENT` (time ``-1``) — that event
+    is not observable inside the analyzed window. Class labels are accepted as
+    1-D integer labels or 2-D one-hot rows (the form is preserved).
+
+    Parameters
+    ----------
+    signals : ndarray
+        3-D training signals ``(samples, time, channels)``.
+    classes : ndarray
+        Per-sample class labels (1-D) or one-hot rows (2-D).
+    times : ndarray
+        Per-sample annotated event time, in frames.
+    window : int
+        The model window length in frames (``model_signal_length``).
+
+    Returns
+    -------
+    (ndarray, ndarray, ndarray, int)
+        ``(signals, classes, times, n_relabelled)`` with ``signals`` truncated
+        and ``classes``/``times`` relabelled in place on copies.
+    """
+    signals = np.asarray(signals)
+    if signals.ndim == 3 and signals.shape[1] > window:
+        signals = signals[:, :window, :]
+    classes = np.asarray(classes).copy()
+    times = np.asarray(times, dtype=float).copy()
+    one_hot = classes.ndim == 2
+    labels = classes.argmax(axis=1) if one_hot else classes
+    mask = (labels == EVENT) & (times >= window)
+    if one_hot:
+        classes[mask] = 0.0
+        classes[mask, NO_EVENT] = 1.0
+    else:
+        classes[mask] = NO_EVENT
+    times[mask] = -1.0
+    return signals, classes, times, int(np.count_nonzero(mask))
