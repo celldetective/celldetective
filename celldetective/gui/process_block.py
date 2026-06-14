@@ -36,6 +36,7 @@ from celldetective.gui.base.components import (
     QHSeperationLine,
     HoverButton,
 )
+from celldetective.gui.base.custom_icons import scatter_with_divider_icon
 
 import numpy as np
 from glob import glob
@@ -1376,7 +1377,7 @@ class ProcessPanel(QFrame, Styles):
 
         self.classify_action = QCheckBox("CLASSIFY")
         self.classify_action.setStyleSheet(self.menu_check_style)
-        self.classify_action.setIcon(icon(MDI6.shape_plus, color="black"))
+        self.classify_action.setIcon(scatter_with_divider_icon(color="black"))
         self.classify_action.setIconSize(QSize(20, 20))
         self.classify_action.setToolTip(
             "Apply one or more saved classification configs to the single-cell tables."
