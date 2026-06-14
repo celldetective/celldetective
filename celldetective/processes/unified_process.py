@@ -95,9 +95,24 @@ class UnifiedBatchProcess(Process):
                     queue=self.queue, process_args=self.seg_args
                 )
 
+                # Resolve GPU availability and force CPU fallback if needed. The
+                # standalone SegmentCellDLProcess does this in its own run();
+                # here the model is loaded directly, so we must run the same
+                # check or use_gpu / CUDA_VISIBLE_DEVICES would be left
+                # inconsistent (e.g. StarDist on CPU would still grab the GPU).
+                seg_worker.check_gpu()
+
                 if seg_worker.model_type == "stardist":
                     logger.info("Loading the StarDist library...")
                     from celldetective.utils.stardist_utils import _prep_stardist_model
+
+                    # StarDist/TF must have memory growth enabled before the GPU
+                    # context is created, otherwise it pre-allocates all VRAM and
+                    # a later event-detection model in this same process can OOM.
+                    if seg_worker.use_gpu:
+                        from celldetective.utils.resources import configure_memory_growth
+
+                        configure_memory_growth()
 
                     model, scale_model = _prep_stardist_model(
                         seg_worker.model_name,
@@ -305,6 +320,12 @@ class UnifiedBatchProcess(Process):
                         else:
                             seg_worker.process_position()
 
+                        # Verify completeness and atomically swap the temporary
+                        # masks onto the final labels folder. Raises if any frame
+                        # is missing, which the per-position handler below turns
+                        # into a skip — so tracking never runs on partial masks.
+                        seg_worker.finalize_position()
+
                     # --- TRACKING ---
                     if self.run_tracking and track_worker:
                         current_step += 1
@@ -400,6 +421,12 @@ class UnifiedBatchProcess(Process):
     def end_process(self):
         """
         Terminate the process.
+
+        Uses ``terminate()`` (an abrupt kill) rather than cooperative
+        cancellation. This can interrupt the child mid ``queue.put()`` and leave
+        that Queue inconsistent, but it is safe here: the Queue is created
+        per-Runner and discarded together with this child, so no other consumer
+        ever reads from it again.
         """
         try:
             if self.is_alive():

@@ -174,8 +174,9 @@ def auto_correct_masks(
     if masks.ndim != 2:
         raise ValueError("`masks` should be a 2D numpy array...")
 
-    # Avoid negative mask values
-    masks[masks < 0] = np.abs(masks[masks < 0])
+    # Work on a copy so we never mutate the caller's array; np.abs also folds in
+    # the previous negative-value correction.
+    masks = np.abs(masks)
 
     props = pd.DataFrame(
         regionprops_table(masks, properties=("label", "area", "area_bbox"))
@@ -203,24 +204,22 @@ def auto_correct_masks(
 
         max_lbl = np.amax(corrected_lbl)
 
-    # Second routine to eliminate objects too small
+    # Second routine to eliminate objects too small (vectorized: collect every
+    # under-sized label and zero them in one np.isin pass).
     props2 = pd.DataFrame(
-        regionprops_table(corrected_lbl, properties=("label", "area", "area_bbox"))
+        regionprops_table(corrected_lbl, properties=("label", "area"))
     )
-    for cell in props2["label"].unique():
-        area = props2.loc[props2["label"] == cell, "area"].values
-        lbl = corrected_lbl == cell
-        if area < min_area:
-            corrected_lbl[lbl] = 0
+    small_labels = props2.loc[props2["area"] < min_area, "label"].to_numpy()
+    if small_labels.size:
+        corrected_lbl[np.isin(corrected_lbl, small_labels)] = 0
 
-    # Additionnal routine to reorder labels from 1 to number of cells
-    label_ids = np.unique(corrected_lbl)[1:]
-    clean_labels = corrected_lbl.copy()
-
-    for k, lbl in enumerate(label_ids):
-        clean_labels[corrected_lbl == lbl] = k + 1
-
-    clean_labels = clean_labels.astype(int)
+    # Reorder labels from 1..N via a lookup table instead of one masked
+    # assignment per label.
+    label_ids = np.unique(corrected_lbl)
+    label_ids = label_ids[label_ids != 0]
+    lut = np.zeros(int(corrected_lbl.max()) + 1, dtype=int)
+    lut[label_ids] = np.arange(1, label_ids.size + 1)
+    clean_labels = lut[corrected_lbl]
 
     if fill_labels:
         clean_labels = fill_label_holes(clean_labels)

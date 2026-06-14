@@ -38,6 +38,24 @@ from celldetective.utils.parsing import (
 logger = get_logger(__name__)
 
 
+def _blas_thread_limit(limits):
+    """
+    Context manager that caps native BLAS/OpenMP threads to ``limits``.
+
+    Used to avoid CPU oversubscription when running our own thread pool on top
+    of numpy/skimage. Degrades to a no-op context manager if ``threadpoolctl``
+    is not installed (it normally is, via scikit-image/scikit-learn).
+    """
+    try:
+        from threadpoolctl import threadpool_limits
+
+        return threadpool_limits(limits=limits)
+    except Exception:
+        from contextlib import nullcontext
+
+        return nullcontext()
+
+
 def _create_preview_overlay(image: np.ndarray, mask: np.ndarray) -> np.ndarray:
     """
     Create a preview overlay of the segmentation mask on the image.
@@ -173,16 +191,54 @@ class BaseSegmentProcess(Process):
             self.flip = False
 
     def write_folders(self):
-        """Create the folder for the segmentation labels."""
+        """
+        Prepare a fresh *temporary* folder to segment into.
+
+        Frames are written to ``labels_<mode>.tmp`` and only swapped onto the
+        final ``labels_<mode>`` folder by :meth:`finalize_position` once every
+        frame is present. This keeps the previous masks intact if segmentation
+        crashes or is cancelled part-way (rather than deleting them up front and
+        leaving a half-populated folder behind).
+        """
 
         self.mode = self.mode.lower()
-        self.label_folder = f"labels_{self.mode}"
+        self.final_label_folder = f"labels_{self.mode}"
+        self.label_folder = f"{self.final_label_folder}.tmp"
 
-        if os.path.exists(self.pos + self.label_folder):
-            logger.info("Erasing the previous labels folder...")
-            rmtree(self.pos + self.label_folder)
-        os.mkdir(self.pos + self.label_folder)
-        logger.info(f"Labels folder successfully generated...")
+        tmp_path = self.pos + self.label_folder
+        if os.path.exists(tmp_path):
+            rmtree(tmp_path)
+        os.mkdir(tmp_path)
+        logger.info("Temporary labels folder successfully generated...")
+
+    def finalize_position(self):
+        """
+        Verify the temporary masks are complete, then atomically swap them in.
+
+        Raises
+        ------
+        RuntimeError
+            If the number of mask files written does not match the expected
+            number of frames (i.e. some frame failed to segment). The previous
+            masks are left untouched in that case.
+        """
+
+        tmp_path = self.pos + self.label_folder
+        final_path = self.pos + self.final_label_folder
+
+        n_written = len(glob(os.sep.join([tmp_path, "*.tif"])))
+        expected = int(self.len_movie)
+        if n_written != expected:
+            raise RuntimeError(
+                f"Segmentation incomplete for {extract_position_name(self.pos)}: "
+                f"{n_written}/{expected} frame masks were written. "
+                "Previous masks (if any) were left untouched."
+            )
+
+        if os.path.exists(final_path):
+            rmtree(final_path)
+        os.rename(tmp_path, final_path)
+        logger.info(f"Labels folder successfully generated ({n_written} frames)...")
 
     def extract_experiment_parameters(self):
         """Extract experiment parameters from the configuration file."""
@@ -387,6 +443,13 @@ class SegmentCellDLProcess(BaseSegmentProcess):
             os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
             return
 
+        # Pin the requested device (default "0") before any GPU context is
+        # created, so multi-GPU machines can target a specific device via the
+        # CELLDETECTIVE_GPU_DEVICE environment variable.
+        from celldetective.utils.resources import resolve_gpu_device
+
+        os.environ["CUDA_VISIBLE_DEVICES"] = resolve_gpu_device()
+
         if getattr(self, "model_type", None) == "cellpose":
             try:
                 import torch
@@ -434,32 +497,20 @@ class SegmentCellDLProcess(BaseSegmentProcess):
                 normalize_kwargs=self.normalize_kwargs,
             )
 
-            if self.model_type == "stardist":
-                from celldetective.utils.stardist_utils import (
-                    _segment_image_with_stardist_model,
-                )
+            # Shared per-frame inference + label rescaling, identical to the
+            # in-memory segment() API and the CLI script.
+            from celldetective.segmentation import _run_dl_model_on_frame
 
-                Y_pred = _segment_image_with_stardist_model(
-                    f, model=model, return_details=False
-                )
-
-            elif self.model_type == "cellpose":
-                from celldetective.utils.cellpose_utils import (
-                    _segment_image_with_cellpose_model,
-                )
-
-                Y_pred = _segment_image_with_cellpose_model(
-                    f,
-                    model=model,
-                    diameter=self.diameter,
-                    cellprob_threshold=self.cellprob_threshold,
-                    flow_threshold=self.flow_threshold,
-                )
-
-            if self.scale is not None:
-                Y_pred = _rescale_labels(Y_pred, scale_model=scale_model)
-
-            Y_pred = _check_label_dims(Y_pred, file=self.file)
+            Y_pred = _run_dl_model_on_frame(
+                f,
+                model=model,
+                model_type=self.model_type,
+                scale_model=scale_model,
+                file=self.file,
+                diameter=getattr(self, "diameter", None),
+                cellprob_threshold=getattr(self, "cellprob_threshold", None),
+                flow_threshold=getattr(self, "flow_threshold", None),
+            )
 
             from celldetective.utils.io import save_tiff_imagej_compatible
 
@@ -529,6 +580,13 @@ class SegmentCellDLProcess(BaseSegmentProcess):
 
             if self.model_type == "stardist":
                 from celldetective.utils.stardist_utils import _prep_stardist_model
+
+                # Enable TF memory growth before StarDist initializes the GPU,
+                # so it does not pre-allocate all VRAM.
+                if self.use_gpu:
+                    from celldetective.utils.resources import configure_memory_growth
+
+                    configure_memory_growth()
 
                 model, scale_model = _prep_stardist_model(
                     self.model_name,
@@ -608,6 +666,11 @@ class SegmentCellDLProcess(BaseSegmentProcess):
 
                     self.process_position(model=model, scale_model=scale_model)
 
+                    # Verify every frame was written and atomically swap the
+                    # temporary masks onto the final folder. Raises if any frame
+                    # is missing, which aborts the run (caught below).
+                    self.finalize_position()
+
                     # End of position loop
                     self.queue.put(
                         {"pos_progress": ((pos_idx + 1) / len(positions)) * 100}
@@ -619,7 +682,17 @@ class SegmentCellDLProcess(BaseSegmentProcess):
                 )
 
         except Exception as e:
-            logger.error(f"{e}")
+            # Fail loudly: report the error to the GUI/orchestrator and do NOT
+            # emit "finished" (which would let tracking run on partial masks).
+            logger.error(f"Segmentation failed: {e}", exc_info=True)
+            try:
+                del model
+            except NameError:
+                pass
+            gc.collect()
+            self.queue.put({"status": "error", "message": str(e)})
+            self.queue.close()
+            return
 
         try:
             del model
@@ -737,82 +810,76 @@ class SegmentCellThresholdProcess(BaseSegmentProcess):
             The list of indices to process.
         """
 
-        try:
-            from celldetective.segmentation import (
-                segment_frame_from_thresholds,
-                merge_instance_segmentation,
-            )
+        # Exceptions are intentionally NOT swallowed here: they propagate to the
+        # ThreadPoolExecutor result iteration in process_position, which re-raises
+        # so the whole run can fail loudly instead of silently writing fewer
+        # masks than there are frames.
+        from celldetective.segmentation import (
+            segment_frame_from_thresholds,
+            merge_instance_segmentation,
+        )
 
-            for t in tqdm(
-                indices, desc="frame"
-            ):  # for t in tqdm(range(self.len_movie),desc="frame"):
+        for t in tqdm(
+            indices, desc="frame"
+        ):  # for t in tqdm(range(self.len_movie),desc="frame"):
 
-                # Load channels at time t
-                masks = []
-                for i in range(len(self.instructions)):
-                    f = load_frames(
-                        self.img_num_channels[:, t],
-                        self.file,
-                        scale=None,
-                        normalize_input=False,
-                    )
-
-                    mask = segment_frame_from_thresholds(f, **self.instructions[i])
-                    # print(f'Frame {t}; segment with {self.instructions[i]=}...')
-                    masks.append(mask)
-
-                if len(self.instructions) > 1:
-                    mask = merge_instance_segmentation(masks, mode="OR")
-
-                from celldetective.utils.io import save_tiff_imagej_compatible
-
-                save_tiff_imagej_compatible(
-                    os.sep.join(
-                        [self.pos, self.label_folder, f"{str(t).zfill(4)}.tif"]
-                    ),
-                    mask.astype(np.uint16),
-                    axes="YX",
+            # Load channels at time t
+            masks = []
+            for i in range(len(self.instructions)):
+                f = load_frames(
+                    self.img_num_channels[:, t],
+                    self.file,
+                    scale=None,
+                    normalize_input=False,
                 )
 
-                # del f
-                # del mask
-                # gc.collect()
+                mask = segment_frame_from_thresholds(f, **self.instructions[i])
+                # print(f'Frame {t}; segment with {self.instructions[i]=}...')
+                masks.append(mask)
 
-                # Send signal for progress bar
-                self.sum_done += 1 / self.len_movie * 100
+            if len(self.instructions) > 1:
+                mask = merge_instance_segmentation(masks, mode="OR")
 
-                # Triple progress bar logic
-                data = {}
-                data["frame_progress"] = self.sum_done
+            from celldetective.utils.io import save_tiff_imagej_compatible
 
-                # Frame time estimation
-                elapsed = time.time() - getattr(self, "t0_frame", time.time())
-                measured_count = int((self.sum_done / 100) * self.len_movie)
+            save_tiff_imagej_compatible(
+                os.sep.join(
+                    [self.pos, self.label_folder, f"{str(t).zfill(4)}.tif"]
+                ),
+                mask.astype(np.uint16),
+                axes="YX",
+            )
 
-                if measured_count > 0:
-                    avg = elapsed / measured_count
-                    rem = self.len_movie - measured_count
-                    if rem < 0:
-                        rem = 0
-                    rem_t = rem * avg
-                    mins = int(rem_t // 60)
-                    secs = int(rem_t % 60)
-                    data["frame_time"] = f"Segmentation: {mins} m {secs} s"
-                else:
-                    data["frame_time"] = f"Segmentation..."
+            # Send signal for progress bar
+            self.sum_done += 1 / self.len_movie * 100
 
-                # Saturate preview: Convert labels to binary (0/1)
-                # data["image_preview"] = mask > 0
-                # Saturate preview: Convert labels to binary (0/1)
-                data["image_preview"] = (mask > 0).astype(np.uint8)
-                self.queue.put(data)
+            # Triple progress bar logic
+            data = {}
+            data["frame_progress"] = self.sum_done
 
-                del f
-                del mask
-                gc.collect()
+            # Frame time estimation
+            elapsed = time.time() - getattr(self, "t0_frame", time.time())
+            measured_count = int((self.sum_done / 100) * self.len_movie)
 
-        except Exception as e:
-            logger.error(f"{e}")
+            if measured_count > 0:
+                avg = elapsed / measured_count
+                rem = self.len_movie - measured_count
+                if rem < 0:
+                    rem = 0
+                rem_t = rem * avg
+                mins = int(rem_t // 60)
+                secs = int(rem_t % 60)
+                data["frame_time"] = f"Segmentation: {mins} m {secs} s"
+            else:
+                data["frame_time"] = f"Segmentation..."
+
+            # Saturate preview: Convert labels to binary (0/1)
+            data["image_preview"] = (mask > 0).astype(np.uint8)
+            self.queue.put(data)
+
+            del f
+            del mask
+            gc.collect()
 
         return
 
@@ -837,18 +904,25 @@ class SegmentCellThresholdProcess(BaseSegmentProcess):
         self.t0_frame = time.time()  # Reset timer for accurate frame timing
         self.sum_done = 0  # Reset progress for this pos
 
-        with concurrent.futures.ThreadPoolExecutor(
-            max_workers=self.n_threads
-        ) as executor:
-            results = executor.map(
-                self.parallel_job, chunks
-            )  # list(map(lambda x: executor.submit(self.parallel_job, x), chunks))
-            try:
-                for i, return_value in enumerate(results):
-                    pass
-            except Exception as e:
-                logger.error(f"Exception: {e}")
-                raise
+        # Cap the BLAS/OpenMP thread pool to one thread per worker for the
+        # duration of the parallel region. Each of the n_threads workers runs
+        # numpy/skimage on its own frame chunk; left uncapped, every worker
+        # would also spawn a full BLAS pool, oversubscribing the CPU (n_threads
+        # x n_cores threads) and slowing things down. _blas_thread_limit() is a
+        # no-op context manager when threadpoolctl is unavailable.
+        with _blas_thread_limit(1):
+            with concurrent.futures.ThreadPoolExecutor(
+                max_workers=self.n_threads
+            ) as executor:
+                results = executor.map(
+                    self.parallel_job, chunks
+                )  # list(map(lambda x: executor.submit(self.parallel_job, x), chunks))
+                try:
+                    for i, return_value in enumerate(results):
+                        pass
+                except Exception as e:
+                    logger.error(f"Exception: {e}")
+                    raise
 
     def run(self):
         """Run the segmentation process."""
@@ -864,46 +938,59 @@ class SegmentCellThresholdProcess(BaseSegmentProcess):
                 0: {"well_name": "Batch", "positions": self.positions}
             }
 
-        self.t0_well = time.time()
-        # Loop over Wells
-        for w_i, (w_idx, well_data) in enumerate(self.batch_structure.items()):
-            positions = well_data["positions"]
+        try:
+            self.t0_well = time.time()
+            # Loop over Wells
+            for w_i, (w_idx, well_data) in enumerate(self.batch_structure.items()):
+                positions = well_data["positions"]
 
-            # Well Time Estimation
-            elapsed = time.time() - self.t0_well
-            if w_i > 0:
-                avg_well = elapsed / w_i
-                rem_well = (len(self.batch_structure) - w_i) * avg_well
-                mins_w = int(rem_well // 60)
-                secs_w = int(rem_well % 60)
-                well_str = f"Well {w_i + 1}/{len(self.batch_structure)} - {mins_w} m {secs_w} s left"
-            else:
-                well_str = f"Processing well {w_i + 1}/{len(self.batch_structure)}..."
+                # Well Time Estimation
+                elapsed = time.time() - self.t0_well
+                if w_i > 0:
+                    avg_well = elapsed / w_i
+                    rem_well = (len(self.batch_structure) - w_i) * avg_well
+                    mins_w = int(rem_well // 60)
+                    secs_w = int(rem_well % 60)
+                    well_str = f"Well {w_i + 1}/{len(self.batch_structure)} - {mins_w} m {secs_w} s left"
+                else:
+                    well_str = f"Processing well {w_i + 1}/{len(self.batch_structure)}..."
 
-            # Update Well Progress
-            self.queue.put(
-                {
-                    "well_progress": (w_i / len(self.batch_structure)) * 100,
-                    "well_time": well_str,
-                }
-            )
+                # Update Well Progress
+                self.queue.put(
+                    {
+                        "well_progress": (w_i / len(self.batch_structure)) * 100,
+                        "well_time": well_str,
+                    }
+                )
 
-            self.t0_pos = time.time()
-            # Loop over positions in this well
-            for pos_idx, pos_path in enumerate(positions):
+                self.t0_pos = time.time()
+                # Loop over positions in this well
+                for pos_idx, pos_path in enumerate(positions):
 
-                # Setup specific variables for this position
-                self.setup_for_position(pos_path)
+                    # Setup specific variables for this position
+                    self.setup_for_position(pos_path)
 
-                self.process_position()
+                    self.process_position()
 
-                # End of position loop
-                self.queue.put({"pos_progress": ((pos_idx + 1) / len(positions)) * 100})
+                    # Verify completeness and atomically swap the temp masks in.
+                    self.finalize_position()
 
-            # End of Well loop
-            self.queue.put(
-                {"well_progress": ((w_i + 1) / len(self.batch_structure)) * 100}
-            )
+                    # End of position loop
+                    self.queue.put(
+                        {"pos_progress": ((pos_idx + 1) / len(positions)) * 100}
+                    )
+
+                # End of Well loop
+                self.queue.put(
+                    {"well_progress": ((w_i + 1) / len(self.batch_structure)) * 100}
+                )
+
+        except Exception as e:
+            # Fail loudly rather than emitting "finished" on a partial result.
+            logger.error(f"Threshold segmentation failed: {e}", exc_info=True)
+            self.queue.put({"status": "error", "message": str(e)})
+            self.queue.close()
+            return
 
         logger.info("Done.")
         # Send end signal

@@ -71,10 +71,6 @@ from tensorflow.keras.layers import (
 from tensorflow.keras.models import Model
 
 from tensorflow.keras.losses import CategoricalCrossentropy
-from tensorflow.config.experimental import (
-    list_physical_devices,
-    set_memory_growth,
-)
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.metrics import Precision, Recall, MeanIoU
 from tensorflow.keras.models import clone_model, load_model
@@ -397,12 +393,9 @@ class SignalDetectionModel(object):
 
         """
 
-        try:
-            physical_devices = list_physical_devices("GPU")
-            for gpu in physical_devices:
-                set_memory_growth(gpu, True)
-        except Exception as e:
-            logger.debug(f"GPU memory growth configuration failed: {e}")
+        from celldetective.utils.resources import configure_memory_growth
+
+        configure_memory_growth()
 
     def fit_from_directory(
         self,

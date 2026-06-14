@@ -164,12 +164,14 @@ img_num_channels = _get_img_num_per_channel(
     channel_indices, int(len_movie), nbr_channels
 )
 
-# If everything OK, prepare output, load models
-if os.path.exists(pos + label_folder):
-    logger.info("Erasing the previous labels folder...")
-    rmtree(pos + label_folder)
-os.mkdir(pos + label_folder)
-logger.info("Labels folder successfully generated...")
+# If everything OK, prepare output, load models. Segment into a temporary
+# folder and only swap it onto the final labels folder once every frame is
+# present, so the previous masks survive a crash or cancellation.
+work_folder = label_folder + ".tmp"
+if os.path.exists(pos + work_folder):
+    rmtree(pos + work_folder)
+os.mkdir(pos + work_folder)
+logger.info("Temporary labels folder successfully generated...")
 
 log = f"segmentation model: {modelname}\n"
 with open(pos + f"log_{mode}.txt", "a") as f:
@@ -215,26 +217,21 @@ def segment_index(indices: List[int]) -> None:
             normalize_kwargs=normalize_kwargs,
         )
 
-        if model_type == "stardist":
-            Y_pred = _segment_image_with_stardist_model(
-                f, model=model, return_details=False
-            )
-        elif model_type == "cellpose":
-            Y_pred = _segment_image_with_cellpose_model(
-                f,
-                model=model,
-                diameter=diameter,
-                cellprob_threshold=cellprob_threshold,
-                flow_threshold=flow_threshold,
-            )
+        from celldetective.segmentation import _run_dl_model_on_frame
 
-        if scale is not None:
-            Y_pred = _rescale_labels(Y_pred, scale_model=scale_model)
-
-        Y_pred = _check_label_dims(Y_pred, file)
+        Y_pred = _run_dl_model_on_frame(
+            f,
+            model=model,
+            model_type=model_type,
+            scale_model=scale_model,
+            file=file,
+            diameter=diameter if model_type == "cellpose" else None,
+            cellprob_threshold=cellprob_threshold if model_type == "cellpose" else None,
+            flow_threshold=flow_threshold if model_type == "cellpose" else None,
+        )
 
         save_tiff_imagej_compatible(
-            pos + os.sep.join([label_folder, f"{str(t).zfill(4)}.tif"]),
+            pos + os.sep.join([work_folder, f"{str(t).zfill(4)}.tif"]),
             Y_pred,
             axes="YX",
         )
@@ -257,11 +254,29 @@ chunks = np.array_split(indices, n_threads)
 
 with concurrent.futures.ThreadPoolExecutor() as executor:
     results = executor.map(segment_index, chunks)
+    # Iterate the results so worker exceptions are re-raised here instead of
+    # being silently dropped; a failure must abort with a non-zero exit code so
+    # the caller (segment_at_position) knows segmentation did not complete.
     try:
         for i, return_value in enumerate(results):
             logger.debug(f"Thread {i} output check: {return_value}")
     except Exception as e:
-        logger.error(f"Exception: {e}")
+        logger.error(f"Segmentation failed: {e}", exc_info=True)
+        sys.exit(1)
+
+# Verify every frame produced a mask before swapping the temp folder in.
+n_written = len(glob(pos + os.sep.join([work_folder, "*.tif"])))
+expected = int(img_num_channels.shape[1])
+if n_written != expected:
+    logger.error(
+        f"Segmentation incomplete: {n_written}/{expected} frame masks written. "
+        "Previous masks left untouched."
+    )
+    sys.exit(1)
+
+if os.path.exists(pos + label_folder):
+    rmtree(pos + label_folder)
+os.rename(pos + work_folder, pos + label_folder)
 
 logger.info("Done.")
 gc.collect()
