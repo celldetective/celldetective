@@ -29,6 +29,21 @@ If the center of mass displacements were computed for the neighbor population, a
 A unique pair is identified by four columns: ``REFERENCE_ID``, ``NEIGHBOR_ID``, ``reference_population``, and ``neighbor_population``. The pair measurements can be explored in the Table Explorer, as well as in a dedicated signal annotator viewer.
 
 
+Pair classification
+-------------------
+
+Pairs can be classified from their measured features using the dedicated **CLASSIFY PAIRS** step in the **Interactions** section. Click the :icon:`scatter-plot,black` button to open the classifier, build or edit a classification config, and save it with **Save config**; the :icon:`playlist-plus,black` button imports classification configs to queue for this step (the button text shows how many are queued). As with single cells, static (group) configs are applied in the **CLASSIFY PAIRS** step while time-correlated configs are routed to **DETECT PAIR EVENTS**.
+
+.. figure:: _static/classify-pairs-step.png
+    :align: center
+    :alt: classify-pairs-step
+
+    The **Interactions** section, showing the **CLASSIFY PAIRS** step between **MEASURE PAIRS** and **DETECT PAIR EVENTS**.
+
+.. seealso::
+    :doc:`how-to-guides/basics/perform-conditional-cell-classification` for the classifier workflow, which is shared with single-cell classification.
+
+
 Pair signal viewer
 ------------------
 
