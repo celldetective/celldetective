@@ -23,12 +23,20 @@ from celldetective.gui.settings._settings_tracking import SettingsTracking
 def process_events_after_test(qtbot):
     """Drain Qt events after every test to prevent cross-test contamination.
 
-    Without this, WA_DeleteOnClose deferred deletions from the previous test
-    can still be in the event queue when the next test's widget __init__
-    calls QApplication.processEvents(), causing an access violation on Windows.
+    Without this, WA_DeleteOnClose deferred deletions from the previous test can
+    survive into the next test's event loop (its widget ``__init__`` or
+    ``qtbot.waitExposed``), where touching the already-half-deleted C++ object
+    triggers an access violation on Windows.
+
+    ``processEvents()`` does NOT dispatch ``DeferredDelete`` events, so a plain
+    drain leaves the ``deleteLater``/``WA_DeleteOnClose`` deletions pending. We
+    therefore flush ``DeferredDelete`` explicitly so closed widgets are actually
+    destroyed before the next test runs.
     """
     yield
     qtbot.wait(10)
+    QApplication.processEvents()
+    QApplication.sendPostedEvents(None, QtCore.QEvent.DeferredDelete)
     QApplication.processEvents()
 from celldetective import get_software_location
 
