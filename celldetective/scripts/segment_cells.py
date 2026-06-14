@@ -164,14 +164,17 @@ img_num_channels = _get_img_num_per_channel(
     channel_indices, int(len_movie), nbr_channels
 )
 
-# If everything OK, prepare output, load models. Segment into a temporary
-# folder and only swap it onto the final labels folder once every frame is
-# present, so the previous masks survive a crash or cancellation.
-work_folder = label_folder + ".tmp"
-if os.path.exists(pos + work_folder):
-    rmtree(pos + work_folder)
-os.mkdir(pos + work_folder)
-logger.info("Temporary labels folder successfully generated...")
+# If everything OK, prepare output, load models. New masks are written directly
+# into labels_<mode> (so partial results stay viewable, even after an abort);
+# the previous masks are renamed to a backup folder and only removed once every
+# frame is present, so they survive a crash or cancellation.
+backup_folder = label_folder + ".bak"
+if os.path.exists(pos + backup_folder):
+    rmtree(pos + backup_folder)
+if os.path.exists(pos + label_folder):
+    os.rename(pos + label_folder, pos + backup_folder)
+os.mkdir(pos + label_folder)
+logger.info("Labels folder successfully generated...")
 
 log = f"segmentation model: {modelname}\n"
 with open(pos + f"log_{mode}.txt", "a") as f:
@@ -231,7 +234,7 @@ def segment_index(indices: List[int]) -> None:
         )
 
         save_tiff_imagej_compatible(
-            pos + os.sep.join([work_folder, f"{str(t).zfill(4)}.tif"]),
+            pos + os.sep.join([label_folder, f"{str(t).zfill(4)}.tif"]),
             Y_pred,
             axes="YX",
         )
@@ -264,19 +267,21 @@ with concurrent.futures.ThreadPoolExecutor() as executor:
         logger.error(f"Segmentation failed: {e}", exc_info=True)
         sys.exit(1)
 
-# Verify every frame produced a mask before swapping the temp folder in.
-n_written = len(glob(pos + os.sep.join([work_folder, "*.tif"])))
+# Verify every frame produced a mask. On success drop the backup of the previous
+# masks; on failure leave the partial masks in place (viewable) and keep the
+# backup so the previous masks can be recovered.
+n_written = len(glob(pos + os.sep.join([label_folder, "*.tif"])))
 expected = int(img_num_channels.shape[1])
 if n_written != expected:
     logger.error(
         f"Segmentation incomplete: {n_written}/{expected} frame masks written. "
-        "Previous masks left untouched."
+        f"Partial masks kept in '{label_folder}'; previous masks remain in "
+        f"'{backup_folder}'."
     )
     sys.exit(1)
 
-if os.path.exists(pos + label_folder):
-    rmtree(pos + label_folder)
-os.rename(pos + work_folder, pos + label_folder)
+if os.path.exists(pos + backup_folder):
+    rmtree(pos + backup_folder)
 
 logger.info("Done.")
 gc.collect()

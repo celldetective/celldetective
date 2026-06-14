@@ -94,13 +94,13 @@ class TestRunDLModelOnFrame(unittest.TestCase):
 
 
 class TestFinalizePosition(unittest.TestCase):
-    """Exercises the verification + atomic swap logic in isolation."""
+    """Verify completeness gating + backup handling (direct-write model)."""
 
     def _make_proc(self, tmp_path, n_frames):
         proc = BaseSegmentProcess.__new__(BaseSegmentProcess)
         proc.pos = str(tmp_path) + os.sep
-        proc.final_label_folder = "labels_targets"
-        proc.label_folder = "labels_targets.tmp"
+        proc.label_folder = "labels_targets"
+        proc.backup_label_folder = "labels_targets.bak"
         proc.len_movie = n_frames
         return proc
 
@@ -112,38 +112,45 @@ class TestFinalizePosition(unittest.TestCase):
                 np.zeros((4, 4), dtype=np.uint16),
             )
 
-    def test_complete_swaps_in(self):
+    def _count_tif(self, folder):
+        if not os.path.isdir(folder):
+            return 0
+        return len([f for f in os.listdir(folder) if f.endswith(".tif")])
+
+    def test_complete_drops_backup(self):
         import tempfile
 
         with tempfile.TemporaryDirectory() as d:
             proc = self._make_proc(d, n_frames=3)
-            self._write_masks(proc.pos + proc.label_folder, 3)
-            proc.finalize_position()
-            final = proc.pos + proc.final_label_folder
-            self.assertTrue(os.path.isdir(final))
-            self.assertFalse(os.path.isdir(proc.pos + proc.label_folder))
-            self.assertEqual(
-                len([f for f in os.listdir(final) if f.endswith(".tif")]), 3
-            )
+            final = proc.pos + proc.label_folder
+            backup = proc.pos + proc.backup_label_folder
+            # New masks live directly in labels_targets; backup holds the old ones.
+            self._write_masks(final, 3)
+            self._write_masks(backup, 2)
 
-    def test_incomplete_raises_and_preserves_old(self):
+            proc.finalize_position()
+
+            self.assertEqual(self._count_tif(final), 3)
+            self.assertFalse(os.path.isdir(backup), "backup should be dropped")
+
+    def test_incomplete_keeps_partial_visible_and_backup(self):
         import tempfile
 
         with tempfile.TemporaryDirectory() as d:
             proc = self._make_proc(d, n_frames=5)
-            final = proc.pos + proc.final_label_folder
-            # Pre-existing (previous) masks must survive a failed run.
-            self._write_masks(final, 5)
-            # Only 2 of 5 new frames written.
-            self._write_masks(proc.pos + proc.label_folder, 2)
+            final = proc.pos + proc.label_folder
+            backup = proc.pos + proc.backup_label_folder
+            # 2 of 5 new frames produced before the abort; old masks in backup.
+            self._write_masks(final, 2)
+            self._write_masks(backup, 5)
 
             with self.assertRaises(RuntimeError):
                 proc.finalize_position()
 
-            self.assertTrue(os.path.isdir(final))
-            self.assertEqual(
-                len([f for f in os.listdir(final) if f.endswith(".tif")]), 5
-            )
+            # Partial new masks remain inspectable in the real folder...
+            self.assertEqual(self._count_tif(final), 2)
+            # ...and the previous masks are still recoverable.
+            self.assertEqual(self._count_tif(backup), 5)
 
 
 class TestAutoCorrectMasks(unittest.TestCase):

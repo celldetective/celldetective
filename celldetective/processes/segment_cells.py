@@ -192,52 +192,66 @@ class BaseSegmentProcess(Process):
 
     def write_folders(self):
         """
-        Prepare a fresh *temporary* folder to segment into.
+        Prepare the labels folder, preserving the previous masks as a backup.
 
-        Frames are written to ``labels_<mode>.tmp`` and only swapped onto the
-        final ``labels_<mode>`` folder by :meth:`finalize_position` once every
-        frame is present. This keeps the previous masks intact if segmentation
-        crashes or is cancelled part-way (rather than deleting them up front and
-        leaving a half-populated folder behind).
+        New masks are written *directly* into ``labels_<mode>`` so they remain
+        viewable (e.g. in napari) live and even after an abort, instead of being
+        hidden in a temporary folder. The previous masks are not deleted up
+        front: they are renamed to ``labels_<mode>.bak`` and only removed by
+        :meth:`finalize_position` once the new run has produced every frame. If
+        the run fails or is cancelled, the partial new masks stay in
+        ``labels_<mode>`` (inspectable) and the previous masks remain recoverable
+        in the backup folder.
         """
 
         self.mode = self.mode.lower()
-        self.final_label_folder = f"labels_{self.mode}"
-        self.label_folder = f"{self.final_label_folder}.tmp"
+        self.label_folder = f"labels_{self.mode}"
+        self.backup_label_folder = f"labels_{self.mode}.bak"
 
-        tmp_path = self.pos + self.label_folder
-        if os.path.exists(tmp_path):
-            rmtree(tmp_path)
-        os.mkdir(tmp_path)
-        logger.info("Temporary labels folder successfully generated...")
+        final_path = self.pos + self.label_folder
+        backup_path = self.pos + self.backup_label_folder
+
+        # Drop any stale backup left behind by a previously aborted run.
+        if os.path.exists(backup_path):
+            rmtree(backup_path)
+        # Rename (not delete) the previous masks so they can be recovered.
+        if os.path.exists(final_path):
+            os.rename(final_path, backup_path)
+        os.mkdir(final_path)
+        logger.info("Labels folder successfully generated...")
 
     def finalize_position(self):
         """
-        Verify the temporary masks are complete, then atomically swap them in.
+        Verify the run is complete, then drop the backup of the previous masks.
+
+        On success the previous masks (``labels_<mode>.bak``) are removed. On an
+        incomplete run this raises, leaving the partial new masks in
+        ``labels_<mode>`` (so they can be inspected) and the previous masks in
+        the backup folder (so they can be recovered).
 
         Raises
         ------
         RuntimeError
             If the number of mask files written does not match the expected
-            number of frames (i.e. some frame failed to segment). The previous
-            masks are left untouched in that case.
+            number of frames (i.e. some frame failed to segment).
         """
 
-        tmp_path = self.pos + self.label_folder
-        final_path = self.pos + self.final_label_folder
+        final_path = self.pos + self.label_folder
+        backup_path = self.pos + self.backup_label_folder
 
-        n_written = len(glob(os.sep.join([tmp_path, "*.tif"])))
+        n_written = len(glob(os.sep.join([final_path, "*.tif"])))
         expected = int(self.len_movie)
         if n_written != expected:
             raise RuntimeError(
                 f"Segmentation incomplete for {extract_position_name(self.pos)}: "
-                f"{n_written}/{expected} frame masks were written. "
-                "Previous masks (if any) were left untouched."
+                f"{n_written}/{expected} frame masks were written. The partial "
+                f"masks are kept in '{self.label_folder}' (viewable); the previous "
+                f"masks remain in '{self.backup_label_folder}'."
             )
 
-        if os.path.exists(final_path):
-            rmtree(final_path)
-        os.rename(tmp_path, final_path)
+        # Success: the new masks are already in place; discard the backup.
+        if os.path.exists(backup_path):
+            rmtree(backup_path)
         logger.info(f"Labels folder successfully generated ({n_written} frames)...")
 
     def extract_experiment_parameters(self):
