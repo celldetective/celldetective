@@ -20,7 +20,7 @@ This guide shows you how classify cells from their features using conditional ex
 3. Name the classification to create. For **dynamic data** this becomes the name of the event. For **static** data, it is the name of the :term:`group`.
 
 .. note::
-    Use **Save config** in the classifier to store a classification as a reusable config. Saved **static** (group) configs are queued under the **CLASSIFY** step and applied in order when you run the block; **time-correlated** configs are routed to the **DETECT EVENTS** step instead.
+    Use **Save config** in the classifier to store a classification as a reusable config (a JSON file in your project's ``configs/`` folder). Saving does not queue it automatically: to apply a saved config, import it with the :icon:`playlist-plus,black` button next to the step. Imported **static** (group) configs are queued under the **CLASSIFY** step and applied in order when you run the block; **time-correlated** configs are routed to the **DETECT EVENTS** step instead.
 
 4. Select two features that can clusterize the cells (e.g. area and adhesion channel intensity in a spreading classification).
 
@@ -62,8 +62,8 @@ This guide shows you how classify cells from their features using conditional ex
 
       *Note: The **R2 tolerance** slider defines how well the sigmoid must fit the data to accept the event time.*
 
-9. **Save the config and run the step.**
-    The classifier is a config *maker*: it has no "Apply" button. Once your **Preview** looks correct, press **Save config**. The saved config is then queued under the **CLASSIFY** step in the population block (the :icon:`playlist-plus,black` button's text shows how many configs are queued).
+9. **Save the config, import it, and run the step.**
+    The classifier is a config *maker*: it has no "Apply" button. Once your **Preview** looks correct, press **Save config** to write the config to your project's ``configs/`` folder. Saving alone does not queue it: back in the population block, click the :icon:`playlist-plus,black` button to import the saved config under the **CLASSIFY** step (the button's text then shows how many configs are queued).
 
     To actually write the columns to your tables, tick the **CLASSIFY** checkbox and run the block:
 
