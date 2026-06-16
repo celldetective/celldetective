@@ -761,10 +761,17 @@ class StackVisualizer(CelldetectiveWidget):
         if np.isnan(p99):
             p99 = 1
 
-        import matplotlib.pyplot as plt
+        from matplotlib.figure import Figure
         from celldetective.gui.base.figure_canvas import FigureCanvas
 
-        self.fig, self.ax = plt.subplots(figsize=(5, 5))
+        # Use a standalone Figure rather than plt.subplots(): pyplot registers
+        # every figure it creates in a process-global manager (Gcf) and never
+        # releases it, so each embedded viewer would leak its figure + Qt canvas
+        # for the lifetime of the process. Across a test session that exhausts
+        # Windows GDI/handles and corrupts the heap (access violation). A plain
+        # Figure is owned only by this widget and is freed when it is destroyed.
+        self.fig = Figure(figsize=(5, 5))
+        self.ax = self.fig.add_subplot(111)
 
         self.fig.subplots_adjust(top=1, bottom=0, right=1, left=0, hspace=0, wspace=0)
         self.ax.margins(0)
