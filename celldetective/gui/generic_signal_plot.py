@@ -192,7 +192,7 @@ class GenericSignalPlotWidget(CelldetectiveWidget):
         plot_buttons_hbox.addWidget(self.cell_lines_btn, 5, alignment=Qt.AlignRight)
 
         self.fig, self.ax = plt.subplots(1, 1, figsize=(4, 3))
-        self.plot_widget = FigureCanvas(self.fig, title="")
+        self.plot_widget = FigureCanvas(self.fig, title="", interactive=True)
         self.plot_widget.setContentsMargins(0, 0, 0, 0)
         self.initialize_axis()
         plt.tight_layout()
@@ -1397,7 +1397,9 @@ class SurvivalPlotWidget(GenericSignalPlotWidget):
             data = self.df_pos_info
             groupby = ["pos_path"]
         if self.plot_options[2].isChecked():
-            logger.warning('Not implemented yet... Please select "well" or "position" as grouping...')
+            logger.warning(
+                'Not implemented yet... Please select "well" or "position" as grouping...'
+            )
             return None
 
         if self.all_values_rb.isChecked():
