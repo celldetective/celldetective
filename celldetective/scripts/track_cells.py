@@ -3,7 +3,6 @@ Copright © 2022 Laboratoire Adhesion et Inflammation, Authored by Remy Torro.
 """
 
 import argparse
-import datetime
 import sys
 from typing import List
 import json
@@ -35,6 +34,7 @@ import concurrent.futures
 import logging
 
 logger = logging.getLogger("celldetective")
+from celldetective.log_manager import positionlogger
 
 
 tprint("Track")
@@ -191,11 +191,11 @@ log_list = [
     haralick_option_log,
     post_processing_option_log,
 ]
-log = "\n".join(log_list)
 
-with open(pos + f"log_{mode}.txt", "a") as f:
-    f.write(f"{datetime.datetime.now()} TRACK \n")
-    f.write(log + "\n")
+with positionlogger(pos, filename=f"log_{mode}.txt"):
+    logger.info("TRACK")
+    for line in log_list:
+        logger.info(line)
 
 
 if not btrack_option:

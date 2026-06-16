@@ -67,6 +67,7 @@ from sklearn.preprocessing import MinMaxScaler
 from functools import partial
 from pandas.api.types import is_numeric_dtype
 import logging
+from celldetective.log_manager import positionlogger
 
 logger = logging.getLogger("celldetective")
 
@@ -1145,8 +1146,24 @@ class PairEventAnnotator(CelldetectiveMainWindow):
             & (~self.df_relative["status_" + self.current_neighborhood].isnull())
         )
 
+        # Record the previous class/time so the log shows what actually changed
+        old_class = self.df_relative.loc[pair_filter, self.pair_class_name].to_numpy()
+        old_class = old_class[0] if len(old_class) else None
+        old_t0 = self.df_relative.loc[pair_filter, self.pair_time_name].to_numpy()
+        old_t0 = old_t0[0] if len(old_t0) else None
+
         self.df_relative.loc[pair_filter, self.pair_class_name] = cclass
         self.df_relative.loc[pair_filter, self.pair_time_name] = t0
+
+        if not hasattr(self, "annotation_log"):
+            self.annotation_log = []
+        self.annotation_log.append(
+            f"REFERENCE_ID {self.reference_track_of_interest} - NEIGHBOR_ID "
+            f"{self.neighbor_track_of_interest} ({self.reference_population}-"
+            f"{self.neighbor_population}): {self.pair_class_name} {old_class}->{cclass}, "
+            f"{self.pair_time_name} {old_t0}->{t0}"
+        )
+
         timeline = self.df_relative.loc[pair_filter, "FRAME"].to_numpy()
 
         status = np.zeros_like(timeline)
@@ -3155,6 +3172,12 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         )
         self.df_relative.to_csv(self.relative_trajectories_path, index=False)
         logger.info("Relative table saved.")
+        with positionlogger(self.pos, filename=f"log_{self.mode}.txt"):
+            logger.info("PAIR EVENT ANNOTATION (manual)")
+            logger.info(f"relative_class_name: {self.relative_class_name}")
+            for entry in getattr(self, "annotation_log", []):
+                logger.info(f"modified {entry}")
+        self.annotation_log = []
 
     def set_last_frame(self):
         """Set the last frame of the animation."""

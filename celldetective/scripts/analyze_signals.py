@@ -3,7 +3,6 @@ Copyright © 2022 Laboratoire Adhesion et Inflammation, Authored by Remy Torro.
 """
 
 import argparse
-import datetime
 import os
 import sys
 from art import tprint
@@ -13,6 +12,7 @@ import pandas as pd
 import logging
 
 logger = logging.getLogger("celldetective")
+from celldetective.log_manager import positionlogger
 
 tprint("Signals")
 
@@ -53,11 +53,9 @@ else:
 	logger.error("The trajectories table could not be found. Abort.")
 	sys.exit(1)
 
-log=f'segmentation model: {model} \n'
-
-with open(pos+f'log_{mode}.txt', 'a') as f:
-	f.write(f'{datetime.datetime.now()} SIGNAL ANALYSIS \n')
-	f.write(log)
+with positionlogger(pos, filename=f'log_{mode}.txt'):
+	logger.info("SIGNAL ANALYSIS")
+	logger.info(f"signal model: {model}")
 
 trajectories = analyze_signals(trajectories.copy(), model, interpolate_na=True, selected_signals=None, column_labels = column_labels, plot_outcome=True,output_dir=pos+'output/')
 trajectories = trajectories.sort_values(by=[column_labels['track'], column_labels['time']])

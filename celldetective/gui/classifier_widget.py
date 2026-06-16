@@ -33,6 +33,9 @@ from celldetective.measure import (
     interpret_track_classification,
 )
 
+from celldetective.log_manager import positionlogger
+from celldetective.utils.data_cleaning import extract_identity_col
+
 logger = logging.getLogger("celldetective")
 
 
@@ -634,6 +637,27 @@ class ClassifierWidget(CelldetectiveWidget):
         if "custom" in list(self.df.columns):
             self.df = self.df.drop(["custom"], axis=1)
 
+        # Build a provenance record of the classification applied to the tables
+        if self.time_corr.isChecked():
+            classified_col = self.class_name_user
+            classification_log = [
+                f"class_name: {self.class_name_user}",
+                f"mode: {self.mode}",
+                f"property_query: {self.property_query_le.text()}",
+                f"irreversible_event: {self.irreversible_event_btn.isChecked()}",
+                f"unique_state: {self.unique_state_btn.isChecked()}",
+                f"transient_event: {self.transient_event_btn.isChecked()}",
+                f"r2_threshold: {self.r2_slider.value()}",
+                f"pre_event: {pre_event}",
+            ]
+        else:
+            classified_col = self.group_name_user
+            classification_log = [
+                f"group_name: {self.group_name_user}",
+                f"mode: {self.mode}",
+                f"property_query: {self.property_query_le.text()}",
+            ]
+
         self.fig_props.set_size_inches(4, 3)
         self.fig_props.suptitle(self.property_query_le.text(), fontsize=10)
         self.fig_props.tight_layout()
@@ -648,6 +672,23 @@ class ClassifierWidget(CelldetectiveWidget):
                 + os.sep.join(["output", "tables", f"trajectories_{self.mode}.csv"]),
                 index=False,
             )
+            with positionlogger(str(pos), filename=f"log_{self.mode}.txt"):
+                logger.info("THRESHOLD CLASSIFICATION")
+                for line in classification_log:
+                    logger.info(line)
+                # Summarise the effect on this position: how many cells per resulting value
+                try:
+                    if classified_col in pos_group.columns:
+                        id_col = extract_identity_col(pos_group)
+                        if id_col is not None:
+                            per_cell = pos_group.groupby(id_col)[classified_col].first()
+                            counts = per_cell.value_counts(dropna=False).sort_index()
+                            logger.info(
+                                f"cells per {classified_col}: {counts.to_dict()}"
+                            )
+                            logger.info(f"total cells classified: {len(per_cell)}")
+                except Exception as e:
+                    logger.warning(f"Could not summarise classification counts: {e}")
 
         self.parent_window.parent_window.update_position_options()
         self.close()

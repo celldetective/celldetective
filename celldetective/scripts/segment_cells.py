@@ -3,7 +3,6 @@ Copright © 2022 Laboratoire Adhesion et Inflammation, Authored by Remy Torro.
 """
 
 import argparse
-import datetime
 import os
 import sys
 from typing import List
@@ -44,6 +43,7 @@ import concurrent.futures
 import logging
 
 logger = logging.getLogger("celldetective")
+from celldetective.log_manager import positionlogger
 
 tprint("Segment")
 
@@ -171,10 +171,9 @@ if os.path.exists(pos + label_folder):
 os.mkdir(pos + label_folder)
 logger.info("Labels folder successfully generated...")
 
-log = f"segmentation model: {modelname}\n"
-with open(pos + f"log_{mode}.txt", "a") as f:
-    f.write(f"{datetime.datetime.now()} SEGMENT \n")
-    f.write(log)
+with positionlogger(pos, filename=f"log_{mode}.txt"):
+    logger.info("SEGMENT")
+    logger.info(f"segmentation model: {modelname}")
 
 
 # Loop over all frames and segment

@@ -31,6 +31,7 @@ from celldetective.gui.gui_utils import color_from_state, ExportPlotBtn
 from celldetective.utils.image_loaders import locate_labels
 from celldetective.gui.base.utils import center_window
 from celldetective import get_logger
+from celldetective.log_manager import positionlogger
 
 logger = get_logger(__name__)
 
@@ -1146,6 +1147,21 @@ class MeasureAnnotator(BaseAnnotator):
         logger.info(
             f"User interactions: Reclassifying cell #{self.track_of_interest} at frame {self.current_frame} to status {status}"
         )
+        # Record the previous group/status (df still holds the old value here) so the log
+        # shows which cells actually changed and how
+        id_col = "TRACK_ID" if "TRACK_ID" in self.df_tracks.columns else "ID"
+        old_status = self.df_tracks.loc[
+            (self.df_tracks[id_col] == self.track_of_interest)
+            & (self.df_tracks["FRAME"] == self.current_frame),
+            self.status_name,
+        ].to_numpy()
+        old_status = old_status[0] if len(old_status) else None
+        if not hasattr(self, "annotation_log"):
+            self.annotation_log = []
+        self.annotation_log.append(
+            f"cell {self.track_of_interest} @ FRAME {self.current_frame}: "
+            f"{self.status_name} {old_status}->{status}"
+        )
         if "TRACK_ID" in self.df_tracks.columns:
             self.df_tracks.loc[
                 (self.df_tracks["TRACK_ID"] == self.track_of_interest)
@@ -1386,6 +1402,12 @@ class MeasureAnnotator(BaseAnnotator):
 
         self.df_tracks.to_csv(self.trajectories_path, index=False)
         logger.info("Table successfully exported...")
+        with positionlogger(self.pos, filename=f"log_{self.mode}.txt"):
+            logger.info("MEASUREMENT ANNOTATION (manual)")
+            logger.info(f"group: {self.status_name}")
+            for entry in getattr(self, "annotation_log", []):
+                logger.info(f"modified {entry}")
+        self.annotation_log = []
 
         self.locate_tracks()
         self.changed_class()

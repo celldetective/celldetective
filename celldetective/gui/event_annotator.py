@@ -43,6 +43,7 @@ from matplotlib.cm import tab10
 from typing import Optional, Tuple, Any
 from celldetective.gui.base_annotator import BaseAnnotator
 import logging
+from celldetective.log_manager import positionlogger
 
 logger = logging.getLogger("celldetective")
 
@@ -599,12 +600,23 @@ class EventAnnotator(BaseAnnotator):
         elif self.suppr_btn.isChecked():
             cclass = 42
 
-        self.df_tracks.loc[
-            self.df_tracks["TRACK_ID"] == self.track_of_interest, self.class_name
-        ] = cclass
-        self.df_tracks.loc[
-            self.df_tracks["TRACK_ID"] == self.track_of_interest, self.time_name
-        ] = t0
+        track_mask = self.df_tracks["TRACK_ID"] == self.track_of_interest
+
+        # Record the previous class/time so the log shows what actually changed
+        old_class = self.df_tracks.loc[track_mask, self.class_name].to_numpy()
+        old_class = old_class[0] if len(old_class) else None
+        old_t0 = self.df_tracks.loc[track_mask, self.time_name].to_numpy()
+        old_t0 = old_t0[0] if len(old_t0) else None
+
+        self.df_tracks.loc[track_mask, self.class_name] = cclass
+        self.df_tracks.loc[track_mask, self.time_name] = t0
+
+        if not hasattr(self, "annotation_log"):
+            self.annotation_log = []
+        self.annotation_log.append(
+            f"TRACK_ID {self.track_of_interest}: {self.class_name} {old_class}->{cclass}, "
+            f"{self.time_name} {old_t0}->{t0}"
+        )
 
         indices = self.df_tracks.loc[
             self.df_tracks["TRACK_ID"] == self.track_of_interest, self.class_name
@@ -1198,6 +1210,12 @@ class EventAnnotator(BaseAnnotator):
         )
         self.df_tracks.to_csv(self.trajectories_path, index=False)
         logger.info("Table successfully exported...")
+        with positionlogger(self.pos, filename=f"log_{self.mode}.txt"):
+            logger.info("EVENT ANNOTATION (manual)")
+            logger.info(f"class_name: {self.class_name}")
+            for entry in getattr(self, "annotation_log", []):
+                logger.info(f"modified {entry}")
+        self.annotation_log = []
         if self.class_choice_cb.currentText() != "":
             self.compute_status_and_colors(0)
         self.extract_scatter_from_trajectories()

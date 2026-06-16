@@ -545,6 +545,9 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
             self.close()
         else:
 
+            # Reset the per-position record of manual modifications
+            self.annotation_log = []
+
             # Load and prep tracks
             self.df_tracks = pd.read_csv(self.trajectories_path)
             self.df_tracks = self.df_tracks.sort_values(by=["TRACK_ID", "FRAME"])

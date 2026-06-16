@@ -8,7 +8,6 @@ from tqdm import tqdm
 import numpy as np
 import gc
 import concurrent.futures
-import datetime
 import os
 import json
 from celldetective.measure import drop_tonal_features, measure_features
@@ -16,7 +15,7 @@ from celldetective.tracking import track
 import pandas as pd
 from natsort import natsorted
 from art import tprint
-from celldetective.log_manager import get_logger
+from celldetective.log_manager import get_logger, positionlogger
 
 from celldetective.utils.data_cleaning import _mask_intensity_measurements
 from celldetective.utils.data_loaders import interpret_tracking_configuration
@@ -153,11 +152,11 @@ class TrackingProcess(Process):
             haralick_option_log,
             post_processing_option_log,
         ]
-        log = "\n".join(log_list)
 
-        with open(self.pos + f"log_{self.mode}.txt", "a") as f:
-            f.write(f"{datetime.datetime.now()} TRACK \n")
-            f.write(log + "\n")
+        with positionlogger(self.pos, filename=f"log_{self.mode}.txt"):
+            logger.info("TRACK")
+            for line in log_list:
+                logger.info(line)
 
     def prepare_folders(self):
         """Create the folders for the tracking output."""
