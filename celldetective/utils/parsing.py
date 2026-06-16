@@ -494,7 +494,8 @@ def population_from_table_name(table_name: str) -> str:
 
     Inverse of the ``trajectories_{population}.csv`` naming convention used for the
     per-population tables (e.g. ``trajectories_targets.csv`` -> ``targets``). Accepts
-    either a bare file name or a full path; any directory part is ignored.
+    either a bare file name or a full path; any directory part is ignored, and both
+    ``.csv`` and ``.pkl`` table extensions are recognized.
 
     Parameters
     ----------
@@ -515,8 +516,10 @@ def population_from_table_name(table_name: str) -> str:
     """
 
     base = os.path.basename(table_name)
-    if base.endswith(".csv"):
-        base = base[: -len(".csv")]
+    for ext in (".csv", ".pkl"):
+        if base.endswith(ext):
+            base = base[: -len(ext)]
+            break
     prefix = "trajectories_"
     if base.startswith(prefix):
         base = base[len(prefix) :]
