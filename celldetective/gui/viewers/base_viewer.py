@@ -625,13 +625,12 @@ class StackVisualizer(CelldetectiveWidget):
             current_ylim = self.ax_profile.get_ylim()
 
         # Plot profile
+        # ax_profile.clear() already removes every artist on the axes,
+        # including any previous profile_line. Calling profile_line.remove()
+        # afterwards raises NotImplementedError ("cannot remove artist") because
+        # the artist is already detached, so we rely on clear() alone here.
         self.ax_profile.clear()
         self.ax_profile.set_facecolor("none")
-        if hasattr(self, "profile_line") and self.profile_line:
-            try:
-                self.profile_line.remove()
-            except ValueError:
-                pass  # Already removed
 
         (self.profile_line,) = self.ax_profile.plot(
             dist_axis, profile, color="black", linestyle="-"
