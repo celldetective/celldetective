@@ -133,7 +133,11 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
             [c.startswith("class") for c in list(self.df_tracks.columns)]
         )
 
-        self.class_cols = [c for c in list(cols[self.class_cols]) if c not in ("class_id", "class_color")]
+        self.class_cols = [
+            c
+            for c in list(cols[self.class_cols])
+            if c not in ("class_id", "class_color")
+        ]
 
         self.class_choice_cb.addItems(self.class_cols)
         self.class_choice_cb.currentIndexChanged.connect(self.compute_status_and_colors)
@@ -434,7 +438,9 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
             with open(self.instructions_path, "r") as f:
                 instructions = json.load(f)
             self.rgb_mode = instructions.get("rgb_mode", self.rgb_mode)
-            self.percentile_mode = instructions.get("percentile_mode", self.percentile_mode)
+            self.percentile_mode = instructions.get(
+                "percentile_mode", self.percentile_mode
+            )
             self.target_channels = instructions.get("channels", self.target_channels)
             self.fraction = float(instructions.get("fraction", self.fraction))
             self.log_option = instructions.get("log", self.log_option)
@@ -557,7 +563,11 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
             self.class_cols = np.array(
                 [c.startswith("class") for c in list(self.df_tracks.columns)]
             )
-            self.class_cols = [c for c in list(cols[self.class_cols]) if c not in ("class_id", "class_color")]
+            self.class_cols = [
+                c
+                for c in list(cols[self.class_cols])
+                if c not in ("class_id", "class_color")
+            ]
             if len(self.class_cols) > 0:
                 self.class_name = self.class_cols[0]
                 self.expected_status = "status"
@@ -574,7 +584,10 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
                 self.time_name = "t0"
                 self.status_name = "status"
 
-            if self.time_name in self.df_tracks.columns and self.class_name in self.df_tracks.columns:
+            if (
+                self.time_name in self.df_tracks.columns
+                and self.class_name in self.df_tracks.columns
+            ):
                 if self.status_name not in self.df_tracks.columns:
                     self.make_status_column()
             else:
@@ -668,7 +681,9 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
             status_cols = list(cols[status_cols])
             cols_to_remove += status_cols
 
-            self.columns_to_rescale = [c for c in self.columns_to_rescale if c not in cols_to_remove]
+            self.columns_to_rescale = [
+                c for c in self.columns_to_rescale if c not in cols_to_remove
+            ]
 
             x = self.df_tracks[self.columns_to_rescale].values
             self.MinMaxScaler.fit(x)

@@ -20,6 +20,7 @@ from celldetective.gui.base.figure_canvas import FigureCanvas
 import os
 from celldetective import get_logger
 from celldetective.log_manager import positionlogger
+from celldetective.utils.parsing import population_from_table_name
 
 logger = get_logger(__name__)
 
@@ -554,7 +555,7 @@ class InteractiveEventViewer(QDialog, Styles):
             pos_dir = os.path.dirname(
                 os.path.dirname(os.path.dirname(self.table_path))
             )
-            mode = table_name.replace("trajectories_", "").replace(".csv", "")
+            mode = population_from_table_name(table_name)
             with positionlogger(pos_dir, filename=f"log_{mode}.txt"):
                 logger.info("TIMESERIES MANUAL EDIT")
                 logger.info(f"table: {table_name}")

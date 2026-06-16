@@ -488,6 +488,41 @@ def extract_cols_from_query(query: str):
     return list([demangle_column_name(c) for c in cols])
 
 
+def population_from_table_name(table_name: str) -> str:
+    """
+    Recover the population/mode name from a trajectories table file name.
+
+    Inverse of the ``trajectories_{population}.csv`` naming convention used for the
+    per-population tables (e.g. ``trajectories_targets.csv`` -> ``targets``). Accepts
+    either a bare file name or a full path; any directory part is ignored.
+
+    Parameters
+    ----------
+    table_name : str
+        Trajectories table file name or path, e.g. ``"trajectories_effectors.csv"``.
+
+    Returns
+    -------
+    str
+        The population name, e.g. ``"effectors"``.
+
+    Examples
+    --------
+    >>> population_from_table_name("trajectories_targets.csv")
+    'targets'
+    >>> population_from_table_name("/exp/W1/100/output/tables/trajectories_pairs.csv")
+    'pairs'
+    """
+
+    base = os.path.basename(table_name)
+    if base.endswith(".csv"):
+        base = base[: -len(".csv")]
+    prefix = "trajectories_"
+    if base.startswith(prefix):
+        base = base[len(prefix) :]
+    return base
+
+
 def parse_isotropic_radii(string: str) -> List[Union[int, List[int]]]:
     """
     Parse a string representing isotropic radii into a structured list.
