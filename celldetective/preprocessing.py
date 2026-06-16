@@ -81,7 +81,7 @@ def _log_preprocessing_step(pos_path: str, correction_type: str, params: Dict[st
     """
 
     try:
-        with positionlogger(pos_path):
+        with positionlogger(pos_path, filename="log_preprocessing.txt"):
             logger.info(f"PREPROCESS - correction_type: {correction_type}")
             for key, value in params.items():
                 logger.info(f"PREPROCESS - {key}: {value}")
