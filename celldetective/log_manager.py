@@ -13,6 +13,16 @@ FILE_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 LIBRARY_LOGGERS = ("trackpy", "btrack", "cellpose", "stardist")
 
 
+def _close_handlers(logger: logging.Logger) -> None:
+    """Detach and close every handler on ``logger`` (releases any open file handles)."""
+    for handler in logger.handlers[:]:
+        logger.removeHandler(handler)
+        try:
+            handler.close()
+        except Exception:
+            pass
+
+
 def setup_global_logging(
     level: int = logging.INFO, log_file: Optional[str] = None
 ) -> logging.Logger:
@@ -38,25 +48,34 @@ def setup_global_logging(
     # Clear existing handlers to avoid duplicates on reload. The library loggers must be
     # cleared too: a fresh console/file handler is built on every call, so without this
     # repeated calls would accumulate duplicate handlers on them (duplicate log lines).
-    if root_logger.handlers:
-        root_logger.handlers.clear()
+    # Close each handler before discarding it: a dropped FileHandler keeps its OS file
+    # handle open until GC (which does not reliably close it), leaking a descriptor on
+    # every reconfigure — and setup_global_logging is called again in each worker process.
+    _close_handlers(root_logger)
     for lib in LIBRARY_LOGGERS:
-        logging.getLogger(lib).handlers.clear()
+        _close_handlers(logging.getLogger(lib))
 
     # Console Handler
     console_handler = logging.StreamHandler(sys.__stdout__)
     console_handler.setFormatter(logging.Formatter(CONSOLE_FORMAT))
     root_logger.addHandler(console_handler)
 
-    # Always forward library logs to the console
+    # Always forward library logs to the console. Detach them from the real root logger:
+    # they get our handlers attached directly, so propagation would duplicate every line
+    # if anything ever adds handlers to the root (e.g. a stray logging.basicConfig()).
     for lib in LIBRARY_LOGGERS:
         lib_logger = logging.getLogger(lib)
         lib_logger.setLevel(logging.INFO)
+        lib_logger.propagate = False
         lib_logger.addHandler(console_handler)
 
     # Optional Global File Handler
     if log_file:
-        os.makedirs(os.path.dirname(log_file), exist_ok=True)
+        # dirname is "" for a bare filename; os.makedirs("") would raise FileNotFoundError
+        # even though the file is creatable in the current directory.
+        log_dir = os.path.dirname(log_file)
+        if log_dir:
+            os.makedirs(log_dir, exist_ok=True)
         file_handler = logging.FileHandler(log_file)
         file_handler.setFormatter(logging.Formatter(FILE_FORMAT))
         root_logger.addHandler(file_handler)
@@ -160,6 +179,9 @@ class QueueLoggingHandler(logging.Handler):
         self.queue = queue
 
     def emit(self, record: logging.LogRecord) -> None:
+        # Only the rendered message crosses the queue: exc_info/traceback are intentionally
+        # dropped to keep the payload small and reliably picklable. Callers that need a
+        # traceback in the worker log should fold it into the message themselves.
         try:
             self.queue.put(
                 {
@@ -241,6 +263,7 @@ def capture_library_logs(
     logger_names : iterable of str
         Library loggers to capture. Defaults to :data:`LIBRARY_LOGGERS`.
     """
+    os.makedirs(position_path, exist_ok=True)
     log_file = os.path.join(position_path, filename)
     file_handler = logging.FileHandler(log_file)
     file_handler.setFormatter(logging.Formatter(FILE_FORMAT))
@@ -284,6 +307,7 @@ def positionlogger(
         The logger with the position-scoped file handler attached.
     """
     logger = logging.getLogger(logger_name)
+    os.makedirs(position_path, exist_ok=True)
     log_file = os.path.join(position_path, filename)
 
     file_handler = logging.FileHandler(log_file)
@@ -293,5 +317,7 @@ def positionlogger(
     try:
         yield logger
     finally:
-        file_handler.close()
+        # Detach before closing so a record emitted during teardown never hits a closed
+        # stream (matches the ordering in the other context managers above).
         logger.removeHandler(file_handler)
+        file_handler.close()
