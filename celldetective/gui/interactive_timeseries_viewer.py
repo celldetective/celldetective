@@ -17,7 +17,10 @@ from typing import Optional
 
 from celldetective.gui.base.styles import Styles
 from celldetective.gui.base.figure_canvas import FigureCanvas
+import os
 from celldetective import get_logger
+from celldetective.log_manager import positionlogger
+from celldetective.utils.parsing import population_from_table_name
 
 logger = get_logger(__name__)
 
@@ -548,6 +551,14 @@ class InteractiveEventViewer(QDialog, Styles):
         """
         try:
             self.df.to_csv(self.table_path, index=False)
+            table_name = os.path.basename(self.table_path)
+            pos_dir = os.path.dirname(
+                os.path.dirname(os.path.dirname(self.table_path))
+            )
+            mode = population_from_table_name(table_name)
+            with positionlogger(pos_dir, filename=f"log_{mode}.txt"):
+                logger.info("TIMESERIES MANUAL EDIT")
+                logger.info(f"table: {table_name}")
             QMessageBox.information(self, "Saved", "Table saved successfully.")
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Could not save table: {e}")

@@ -4,7 +4,7 @@ import os
 import numpy as np
 import pandas as pd
 
-from celldetective.log_manager import get_logger
+from celldetective.log_manager import get_logger, positionlogger
 from celldetective.tracking import clean_trajectories
 from celldetective.utils.color_mappings import (
     color_from_status,
@@ -255,6 +255,12 @@ class SignalAnalysisProcess(Process):
                 by=[self.column_labels["track"], self.column_labels["time"]]
             )
             trajectories.to_csv(trajectories_path, index=False)
+
+            with positionlogger(self.pos, filename=f"log_{self.mode}.txt"):
+                logger.info("SIGNAL ANALYSIS")
+                logger.info(f"signal model: {self.model_name}")
+                logger.info(f"selected_signals: {selected_signals}")
+                logger.info(f"columns_written: {[class_col, time_col, status_col]}")
 
             logger.info(f"Signal analysis completed for {self.pos}")
 

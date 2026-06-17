@@ -18,7 +18,17 @@ from celldetective.utils.normalization import normalize_multichannel
 from celldetective import get_logger
 
 import logging
+import threading
 import warnings
+
+# Serializes the native image-decode path of :func:`load_frames`. ``imageio``/
+# ``tifffile`` decoding and ``warnings.catch_warnings`` both mutate process-global
+# state and are not thread-safe; without this lock a background prefetch thread
+# (e.g. the viewer's StackLoader) decoding the same stack concurrently with the
+# main thread corrupts the heap and triggers a Windows access violation
+# (0xC0000005). The lock is process-local, so multiprocessing workers are
+# unaffected, and decoding is not a threaded hot path, so contention is negligible.
+_DECODE_LOCK = threading.Lock()
 
 logger = get_logger(__name__)
 
@@ -593,15 +603,16 @@ def load_frames(
     """
 
     try:
-        import warnings
-
-        with warnings.catch_warnings():
-            warnings.filterwarnings(
-                "ignore", message=".*MMStack series is missing files.*"
-            )
-            if isinstance(img_nums, np.ndarray):
-                img_nums = img_nums.tolist()
-            frames = imageio.imread(stack_path, key=img_nums)
+        # Serialize the global-state-mutating, non-thread-safe decode path so a
+        # background prefetch thread and the main thread never decode concurrently.
+        with _DECODE_LOCK:
+            with warnings.catch_warnings():
+                warnings.filterwarnings(
+                    "ignore", message=".*MMStack series is missing files.*"
+                )
+                if isinstance(img_nums, np.ndarray):
+                    img_nums = img_nums.tolist()
+                frames = imageio.imread(stack_path, key=img_nums)
     except Exception as e:
         logger.error(
             f"Error in loading the frame {img_nums}: {e}. Please check that the experiment channel information is consistent with the movie being read."

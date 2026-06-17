@@ -38,10 +38,10 @@ import numpy as np
 import pandas as pd
 from natsort import natsorted
 from art import tprint
-import datetime
 import logging
 
 logger = logging.getLogger("celldetective")
+from celldetective.log_manager import positionlogger
 
 tprint("Measure")
 
@@ -268,21 +268,20 @@ spot_detection_log = f"spot_detection: {spot_detection}"
 intensity_measurement_radii_log = (
     f"intensity_measurement_radii: {intensity_measurement_radii}"
 )
-isotropic_options_log = f"isotropic_operations: {isotropic_operations} \n"
-log = "\n".join(
-    [
-        features_log,
-        border_distances_log,
-        haralick_options_log,
-        background_correction_log,
-        spot_detection_log,
-        intensity_measurement_radii_log,
-        isotropic_options_log,
-    ]
-)
-with open(pos + f"log_{mode}.txt", "a") as f:
-    f.write(f"{datetime.datetime.now()} MEASURE \n")
-    f.write(log + "\n")
+isotropic_options_log = f"isotropic_operations: {isotropic_operations}"
+log_list = [
+    features_log,
+    border_distances_log,
+    haralick_options_log,
+    background_correction_log,
+    spot_detection_log,
+    intensity_measurement_radii_log,
+    isotropic_options_log,
+]
+with positionlogger(pos, filename=f"log_{mode}.txt"):
+    logger.info("MEASURE")
+    for line in log_list:
+        logger.info(line)
 
 
 def measure_index(indices: List[int]) -> None:

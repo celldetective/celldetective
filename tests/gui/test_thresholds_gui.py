@@ -112,7 +112,11 @@ def app_with_project(qtbot, ensure_experiment_test):
     # Load the ExperimentTest project
     test_app.experiment_path_selection.setText(ensure_experiment_test)
     qtbot.mouseClick(test_app.validate_button, QtCore.Qt.LeftButton)
-    qtbot.wait(INTERACTION_TIME * 5)
+    # The control panel is built via the background loader thread, so wait for it
+    # to actually exist instead of sleeping a fixed amount (which races under load).
+    qtbot.waitUntil(
+        lambda: getattr(test_app, "control_panel", None) is not None, timeout=15000
+    )
 
     yield test_app
 
@@ -144,29 +148,36 @@ def app_with_project(qtbot, ensure_experiment_test):
 def wizard_from_app(qtbot, app_with_project):
     """Launch ThresholdConfigWizard from the application."""
     app = app_with_project
+    panel = app.control_panel.ProcessPopulations[0]
 
-    # Expand the process panel for targets population
-    qtbot.mouseClick(
-        app.control_panel.ProcessPopulations[0].collapse_btn, QtCore.Qt.LeftButton
+    # Drive the process panel to a known *expanded* state. collapse_btn is a
+    # toggle and the panel's initial state can vary (screen-size-dependent
+    # auto-collapse), so blindly clicking it can collapse an already-open panel
+    # and hide upload_model_btn — making the next click silently miss and leaving
+    # seg_model_loader uncreated (the source of the flaky AttributeError).
+    if panel.ContentsFrame.isHidden():
+        qtbot.mouseClick(panel.collapse_btn, QtCore.Qt.LeftButton)
+    qtbot.waitUntil(lambda: not panel.ContentsFrame.isHidden(), timeout=5000)
+
+    # Open the segmentation model loader (upload_segmentation_model creates
+    # panel.seg_model_loader synchronously). Wait for the button to be hittable,
+    # then for the attribute to appear, rather than sleeping a fixed amount.
+    qtbot.waitUntil(lambda: panel.upload_model_btn.isVisible(), timeout=5000)
+    qtbot.mouseClick(panel.upload_model_btn, QtCore.Qt.LeftButton)
+    qtbot.waitUntil(
+        lambda: getattr(panel, "seg_model_loader", None) is not None, timeout=5000
     )
-    qtbot.wait(INTERACTION_TIME)
 
-    # Open the segmentation model loader
+    # Launch the threshold configuration wizard (creates seg_model_loader.thresh_wizard).
     qtbot.mouseClick(
-        app.control_panel.ProcessPopulations[0].upload_model_btn, QtCore.Qt.LeftButton
+        panel.seg_model_loader.threshold_config_button, QtCore.Qt.LeftButton
     )
-    qtbot.wait(INTERACTION_TIME * 2)
-
-    # Launch the threshold configuration wizard
-    qtbot.mouseClick(
-        app.control_panel.ProcessPopulations[
-            0
-        ].seg_model_loader.threshold_config_button,
-        QtCore.Qt.LeftButton,
+    qtbot.waitUntil(
+        lambda: getattr(panel.seg_model_loader, "thresh_wizard", None) is not None,
+        timeout=10000,
     )
-    qtbot.wait(INTERACTION_TIME * 3)
 
-    wizard = app.control_panel.ProcessPopulations[0].seg_model_loader.thresh_wizard
+    wizard = panel.seg_model_loader.thresh_wizard
 
     yield wizard
 

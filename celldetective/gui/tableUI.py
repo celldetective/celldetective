@@ -35,6 +35,7 @@ from math import floor
 import re
 import atexit
 from celldetective import get_logger
+from celldetective.log_manager import positionlogger
 from celldetective.utils.stats import test_2samp_generic
 from celldetective.utils.types import test_bool_array
 from celldetective.utils.data_cleaning import collapse_trajectories_by_status
@@ -786,6 +787,10 @@ class TableUI(CelldetectiveMainWindow):
                 ),
                 index=False,
             )
+            with positionlogger(pos[0], filename=f"log_{self.population}.txt"):
+                logger.info("TABLE EDIT (saved in place)")
+                logger.info(f"population: {self.population}")
+                logger.info(f"columns: {valid_visual_cols}")
         logger.info("Done saving tables.")
 
     def divide_signals(self) -> None:
