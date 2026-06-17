@@ -55,10 +55,12 @@ def setup_global_logging(
     for lib in LIBRARY_LOGGERS:
         _close_handlers(logging.getLogger(lib))
 
-    # Console Handler
-    console_handler = logging.StreamHandler(sys.__stdout__)
-    console_handler.setFormatter(logging.Formatter(CONSOLE_FORMAT))
-    root_logger.addHandler(console_handler)
+    # Console Handler (check if sys.__stdout__ is None, e.g. windowless / frozen mode)
+    console_handler = None
+    if sys.__stdout__ is not None:
+        console_handler = logging.StreamHandler(sys.__stdout__)
+        console_handler.setFormatter(logging.Formatter(CONSOLE_FORMAT))
+        root_logger.addHandler(console_handler)
 
     # Always forward library logs to the console. Detach them from the real root logger:
     # they get our handlers attached directly, so propagation would duplicate every line
@@ -67,7 +69,8 @@ def setup_global_logging(
         lib_logger = logging.getLogger(lib)
         lib_logger.setLevel(logging.INFO)
         lib_logger.propagate = False
-        lib_logger.addHandler(console_handler)
+        if console_handler is not None:
+            lib_logger.addHandler(console_handler)
 
     # Optional Global File Handler
     if log_file:
@@ -75,13 +78,21 @@ def setup_global_logging(
         # even though the file is creatable in the current directory.
         log_dir = os.path.dirname(log_file)
         if log_dir:
-            os.makedirs(log_dir, exist_ok=True)
-        file_handler = logging.FileHandler(log_file)
-        file_handler.setFormatter(logging.Formatter(FILE_FORMAT))
-        root_logger.addHandler(file_handler)
+            try:
+                os.makedirs(log_dir, exist_ok=True)
+            except Exception as e:
+                root_logger.warning(f"Could not create log directory {log_dir}: {e}")
+        try:
+            file_handler = logging.FileHandler(log_file)
+            file_handler.setFormatter(logging.Formatter(FILE_FORMAT))
+            root_logger.addHandler(file_handler)
 
-        for lib in LIBRARY_LOGGERS:
-            logging.getLogger(lib).addHandler(file_handler)
+            for lib in LIBRARY_LOGGERS:
+                logging.getLogger(lib).addHandler(file_handler)
+        except OSError as e:
+            root_logger.warning(
+                f"Could not initialize file logging to {log_file} (likely locked or access denied): {e}"
+            )
 
     # Hook to capture uncaught exceptions
     def handle_exception(
@@ -130,7 +141,15 @@ def cleanup_old_logs(log_dir: str, max_age_days: int = 30) -> None:
         return
 
     cutoff = time.time() - max_age_days * 86400
-    for name in os.listdir(log_dir):
+    try:
+        names = os.listdir(log_dir)
+    except OSError as e:
+        logging.getLogger("celldetective").warning(
+            f"Could not list log directory {log_dir}: {e}"
+        )
+        return
+
+    for name in names:
         if not name.endswith(".log"):
             continue
         path = os.path.join(log_dir, name)
@@ -182,6 +201,8 @@ class QueueLoggingHandler(logging.Handler):
         # Only the rendered message crosses the queue: exc_info/traceback are intentionally
         # dropped to keep the payload small and reliably picklable. Callers that need a
         # traceback in the worker log should fold it into the message themselves.
+        # Use block=False (put_nowait) to guarantee we never block the calling thread
+        # under the logging lock, preventing circular wait deadlocks.
         try:
             self.queue.put(
                 {
@@ -190,7 +211,8 @@ class QueueLoggingHandler(logging.Handler):
                         "levelno": record.levelno,
                         "msg": record.getMessage(),
                     }
-                }
+                },
+                block=False
             )
         except Exception:
             # Never let logging break the worker
@@ -221,18 +243,38 @@ def forward_logs_to_queue(
     handler = QueueLoggingHandler(queue)
     handler.setLevel(logging.INFO)
     saved = {}
-    for name in logger_names:
-        lg = logging.getLogger(name)
-        saved[name] = (lg.handlers[:], lg.propagate)
-        lg.handlers = [handler]
-        lg.propagate = False
+    
+    # Acquire global logging lock to ensure thread-safe reconfiguration
+    logging._acquireLock()
+    try:
+        for name in logger_names:
+            lg = logging.getLogger(name)
+            saved[name] = (lg.handlers[:], lg.propagate)
+            # Remove all handlers thread-safely
+            for h in lg.handlers[:]:
+                lg.removeHandler(h)
+            # Add the new QueueLoggingHandler
+            lg.addHandler(handler)
+            lg.propagate = False
+    finally:
+        logging._releaseLock()
+
     try:
         yield
     finally:
-        for name, (handlers, propagate) in saved.items():
-            lg = logging.getLogger(name)
-            lg.handlers = handlers
-            lg.propagate = propagate
+        logging._acquireLock()
+        try:
+            for name, (handlers, propagate) in saved.items():
+                lg = logging.getLogger(name)
+                # Remove queue handler
+                for h in lg.handlers[:]:
+                    lg.removeHandler(h)
+                # Restore original handlers and propagation
+                for h in handlers:
+                    lg.addHandler(h)
+                lg.propagate = propagate
+        finally:
+            logging._releaseLock()
         handler.close()
 
 
@@ -259,23 +301,36 @@ def capture_library_logs(
     position_path : str
         Path to the position folder.
     filename : str
-        Name of the log file inside the position folder (e.g. ``log_effectors.txt``).
+        Name of the log file inside the position folder (e.g. ``log_effectors.txt``.
     logger_names : iterable of str
         Library loggers to capture. Defaults to :data:`LIBRARY_LOGGERS`.
     """
-    os.makedirs(position_path, exist_ok=True)
+    try:
+        os.makedirs(position_path, exist_ok=True)
+    except Exception as e:
+        logging.getLogger("celldetective").warning(f"Could not create directory {position_path}: {e}")
+
     log_file = os.path.join(position_path, filename)
-    file_handler = logging.FileHandler(log_file)
-    file_handler.setFormatter(logging.Formatter(FILE_FORMAT))
+    file_handler = None
+    try:
+        file_handler = logging.FileHandler(log_file)
+        file_handler.setFormatter(logging.Formatter(FILE_FORMAT))
+    except OSError as e:
+        logging.getLogger("celldetective").warning(
+            f"Could not initialize position file handler for {log_file} (likely locked or access denied): {e}"
+        )
+
     loggers = [logging.getLogger(name) for name in logger_names]
-    for lg in loggers:
-        lg.addHandler(file_handler)
+    if file_handler is not None:
+        for lg in loggers:
+            lg.addHandler(file_handler)
     try:
         yield
     finally:
-        for lg in loggers:
-            lg.removeHandler(file_handler)
-        file_handler.close()
+        if file_handler is not None:
+            for lg in loggers:
+                lg.removeHandler(file_handler)
+            file_handler.close()
 
 
 @contextmanager
@@ -307,17 +362,27 @@ def positionlogger(
         The logger with the position-scoped file handler attached.
     """
     logger = logging.getLogger(logger_name)
-    os.makedirs(position_path, exist_ok=True)
-    log_file = os.path.join(position_path, filename)
+    try:
+        os.makedirs(position_path, exist_ok=True)
+    except Exception as e:
+        logger.warning(f"Could not create directory {position_path}: {e}")
 
-    file_handler = logging.FileHandler(log_file)
-    file_handler.setFormatter(logging.Formatter(FILE_FORMAT))
-    logger.addHandler(file_handler)
+    log_file = os.path.join(position_path, filename)
+    file_handler = None
+    try:
+        file_handler = logging.FileHandler(log_file)
+        file_handler.setFormatter(logging.Formatter(FILE_FORMAT))
+        logger.addHandler(file_handler)
+    except OSError as e:
+        logger.warning(
+            f"Could not initialize position logger file handler for {log_file} (likely locked or access denied): {e}"
+        )
 
     try:
         yield logger
     finally:
-        # Detach before closing so a record emitted during teardown never hits a closed
-        # stream (matches the ordering in the other context managers above).
-        logger.removeHandler(file_handler)
-        file_handler.close()
+        if file_handler is not None:
+            # Detach before closing so a record emitted during teardown never hits a closed
+            # stream (matches the ordering in the other context managers above).
+            logger.removeHandler(file_handler)
+            file_handler.close()
