@@ -3,7 +3,7 @@ How to write a custom measurement
 
 This guide shows you how to create your own single-cell measurement in Python, ready-to-be-used in the software.
 
-Reference keys: :term:`ROI`, :term:`Mask`, :term:`Features`
+Reference keys: **ROI**, **Mask**, **Features**
 
 .. admonition:: Prerequisite
 

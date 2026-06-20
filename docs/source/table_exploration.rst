@@ -1,7 +1,7 @@
+.. _table_exploration:
+
 Table Explorer (Table UI)
 =========================
-
-.. _table_exploration:
 
 The Table Explorer (internally ``TableUI``) is a powerful interface for interacting with your measurement data. It allows you to visualize data structure, perform calculations, generate plots, and aggregate track information.
 
@@ -67,11 +67,11 @@ Effect Size (Cliff's Delta)
 
 *   **Measure Used**: Cliff's Delta (non-parametric).
 *   **Interpretation**: Quantifies the amount of difference between two groups. It ranges from -1 to 1, where 1 means all values in the **Row** group are larger than the **Column** group, and -1 means the opposite.
-*   **Color Coding**: The pivot table colors cells based on the **absolute magnitude** of the effect size (`|d|`), using standard thresholds (Romano et al., 2006):
-    *   **Negligible**: |d| < 0.147
-    *   **Small**: 0.147 <= |d| < 0.33
-    *   **Medium**: 0.33 <= |d| < 0.474
-    *   **Large**: |d| >= 0.474
+*   **Color Coding**: The pivot table colors cells based on the **absolute magnitude** of the effect size (\|d\|), using standard thresholds (Romano et al., 2006):
+    *   **Negligible**: \|d\| < 0.147
+    *   **Small**: 0.147 <= \|d\| < 0.33
+    *   **Medium**: 0.33 <= \|d\| < 0.474
+    *   **Large**: \|d\| >= 0.474
 
 Track Collapsing
 ----------------

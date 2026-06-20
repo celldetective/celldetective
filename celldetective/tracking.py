@@ -255,20 +255,22 @@ def track(
     Examples
     --------
 
-    >>> labels = np.array([[1, 1, 2, 2, 0, 0],
-                                               [1, 1, 1, 2, 2, 0],
-                                               [0, 0, 1, 2, 0, 0]])
-    >>> configuration = cell_config()
-    >>> stack = np.random.rand(3, 6)
-    >>> df = track(labels, configuration, stack=stack, spatial_calibration=0.5)
-    >>> df.head()
+    .. code-block:: python
 
-       TRACK_ID  FRAME  POSITION_Y  POSITION_X
-    0         0      0         0.0         0.0
-    1         0      1         0.0         0.0
-    2         0      2         0.0         0.0
-    3         1      0         0.5         0.5
-    4         1      1         0.5         0.5
+        import numpy as np
+        from celldetective.tracking import track
+
+        labels = np.array([[1, 1, 2, 2, 0, 0],
+                           [1, 1, 1, 2, 2, 0],
+                           [0, 0, 1, 2, 0, 0]])
+        df = track(labels, spatial_calibration=0.5)
+        print(df.head())
+        #    TRACK_ID  FRAME  POSITION_Y  POSITION_X
+        # 0         0      0         0.0         0.0
+        # 1         0      1         0.0         0.0
+        # 2         0      2         0.0         0.0
+        # 3         1      0         0.5         0.5
+        # 4         1      1         0.5         0.5
 
     """
 
@@ -1457,23 +1459,21 @@ def write_first_detection_class(
     edge_threshold : int, optional
         The distance in pixels from the image edge to consider a detection as near the edge. Default is 20.
     column_labels : dict, optional
-        A dictionary mapping logical column names to actual column names in `df`. Keys include:
-
-        - `'track'`: The column indicating the track ID (default: `"TRACK_ID"`).
-        - `'time'`: The column indicating the frame/time (default: `"FRAME"`).
-        - `'x'`: The column indicating the X-coordinate (default: `"POSITION_X"`).
-        - `'y'`: The column indicating the Y-coordinate (default: `"POSITION_Y"`).
+        A dictionary mapping logical column names to actual column names in `df`.
+        Keys include: `'track'` (default: `"TRACK_ID"`), `'time'` (default: `"FRAME"`),
+        `'x'` (default: `"POSITION_X"`), and `'y'` (default: `"POSITION_Y"`).
 
     Returns
     -------
     pandas.DataFrame
         The input DataFrame `df` with two additional columns:
-        - `'class_firstdetection'`: A class assigned based on detection status:
-            - `0`: Valid detection not near the edge and not at the initial frame.
-            - `2`: Detection near the edge, at the initial frame, or no detection available.
-        - `'t_firstdetection'`: The adjusted first detection time (in frame units):
-            - `-1`: Indicates no valid detection or detection near the edge.
-            - A float value representing the adjusted first detection time otherwise.
+
+        *   `'class_firstdetection'`: A class assigned based on detection status:
+            *   `0`: Valid detection not near the edge and not at the initial frame.
+            *   `2`: Detection near the edge, at the initial frame, or no detection available.
+        *   `'t_firstdetection'`: The adjusted first detection time (in frame units):
+            *   `-1`: Indicates no valid detection or detection near the edge.
+            *   A float value representing the adjusted first detection time otherwise.
 
     Notes
     -----

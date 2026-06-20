@@ -3,6 +3,8 @@ Installation Reference
 
 This page details system requirements, advanced installation options and troubleshooting steps.
 
+.. _reference/system-requirements:
+
 System Requirements
 -------------------
 
@@ -20,7 +22,7 @@ Celldetective is versatile and can run on standard workstations or high-performa
 *   **GPU (Optional but Recommended)**:
 
     *   NVIDIA GPU with CUDA support (e.g., RTX 3070, 8GB VRAM).
-    *   Greatly accelerates Deep Learning inference (:term:`StarDist`, :term:`Cellpose`).
+    *   Greatly accelerates Deep Learning inference (**StarDist**, **Cellpose**).
     *   *Note*: CPU-only mode is fully supported but slower.
 
 Software Requirements

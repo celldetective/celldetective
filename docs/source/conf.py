@@ -46,6 +46,7 @@ extensions = [
 ]
 
 autosummary_generate = True
+autodoc_mock_imports = ["btrack"]
 
 hoverxref_autoref = True
 hoverxref_roles = ["term"]

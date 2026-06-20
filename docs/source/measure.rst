@@ -52,7 +52,7 @@ The segmentation mask defines the ROI over which single-cell measurements are pe
 
 *   **Contour measurements** — intensity features within specific bands relative to the cell boundary. Positive distances measure inside (erosion); negative distances measure outside (dilation). A range ``(min, max)`` defines a ring band.
 
-*   **:term:`Haralick Texture Features`** — texture analysis via gray-level co-occurrence matrices (:term:`GLCM`). Computationally expensive; optional.
+*   **Haralick Texture Features** — texture analysis via gray-level co-occurrence matrices (**GLCM**). Computationally expensive; optional.
 
 .. seealso::
     :doc:`how-to-guides/basics/measure-peripheral-intensity` |

@@ -109,7 +109,7 @@ General Terms
         Geometric properties of a segmented object, such as area, perimeter, eccentricity, and solidity. See :ref:`ref_morphological_measurements`.
 
     texture features
-        Texture descriptors calculated from the Gray Level Co-occurrence Matrix (:term:`GLCM`), quantifying properties like contrast, correlation, and homogeneity. See :ref:`ref_texture_measurements`.
+        Texture descriptors calculated from the Gray Level Co-occurrence Matrix (GLCM), quantifying properties like contrast, correlation, and homogeneity. See :ref:`ref_texture_measurements`.
 
     reference population
         The set of cells *for which* neighborhood metrics are computed (the "center" cells).
@@ -127,7 +127,7 @@ General Terms
         In survival analysis, the condition where the event of interest has not occurred by the end of the observation period (monitor/cut-off time).
 
     isotropic measurements
-        Measurements computed within circular or ring-shaped Regions of Interest (:term:`ROI`) centered on a cell.
+        Measurements computed within circular or ring-shaped Regions of Interest (ROI) centered on a cell.
 
     contour measurements
         Measurements computed within a band (dilation/erosion) defined relative to the cell's segmentation mask boundary.

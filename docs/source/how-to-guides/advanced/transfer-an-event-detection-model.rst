@@ -3,7 +3,7 @@ How to transfer an event detection model
 
 This guide shows you how to export a trained event detection model for use on another machine.
 
-Reference keys: :term:`Event`, :term:`Signal`, :term:`Model`
+Reference keys: :term:`event`, :term:`signal`, **Model**
 
 Context
 -------

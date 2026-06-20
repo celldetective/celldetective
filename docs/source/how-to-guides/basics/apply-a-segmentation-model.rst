@@ -1,7 +1,7 @@
 How to apply a segmentation model
 ----------------------------------
 
-This guide shows you how to import and run a Deep Learning segmentation model (:term:`StarDist` or :term:`Cellpose`) on your data.
+This guide shows you how to import and run a Deep Learning segmentation model (**StarDist** or **Cellpose**) on your data.
 
 Reference keys: :term:`instance segmentation`, :term:`cell population`
 
@@ -11,11 +11,11 @@ Import a model
 
 #. In the **Segmentation** section of the Control Panel, click **UPLOAD**.
 
-#. Select the model type (:term:`StarDist`, :term:`Cellpose`, or **Threshold**).
+#. Select the model type (**StarDist**, **Cellpose**, or **Threshold**).
 
-#. Click **Choose File** to select your model folder (:term:`StarDist`) or file (:term:`Cellpose`/JSON).
+#. Click **Choose File** to select your model folder (**StarDist**) or file (**Cellpose**/JSON).
 
-#. Configure the import settings (:term:`Input spatial calibration`, :term:`Channel Mapping`, :term:`Normalization`). For a detailed list of all parameters, see the :ref:`Segmentation Data Import Reference <ref_segmentation_settings>`.
+#. Configure the import settings (:term:`input spatial calibration`, **Channel Mapping**, **Normalization**). For a detailed list of all parameters, see the :ref:`Segmentation Data Import Reference <ref_segmentation_settings>`.
 
 #. Click **Upload** to save the model and its configuration to the project's model zoo.
 
@@ -37,11 +37,11 @@ If you selected a **generalist** model (e.g., ``SD_versatile_fluo``, ``CP_cyto2`
 
 For a detailed list of runtime parameters, see the :ref:`Segmentation Runtime Settings Reference <ref_runtime_segmentation_settings>`.
 
-:term:`StarDist` generalist models
+**StarDist** generalist models
 
 *   Select the channel containing the nuclei (e.g., DAPI or Hoechst).
 
-:term:`Cellpose` generalist models
+**Cellpose** generalist models
 
 *   **Channel Mapping**: Select the "Cytoplasm" (channel 1) and "Nuclei" (channel 2, optional) channels from your experiment.
 

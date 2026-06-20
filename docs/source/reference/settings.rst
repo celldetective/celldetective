@@ -12,9 +12,9 @@ These parameters appear in the **Upload Model** window when importing a pretrain
 
 **General Settings (All Models)**
 
-*   :term:`Input spatial calibration`: The pixel resolution (in microns) of the images the model was *trained on*.
-*   :term:`Channel Mapping`: Map the model's expected inputs (e.g., "Channel 1", "Cyto", "Nuclei") to your experiment's channels. Select ``--`` to ignore.
-*   :term:`Normalization`:
+*   :term:`input spatial calibration`: The pixel resolution (in microns) of the images the model was *trained on*.
+*   **Channel Mapping**: Map the model's expected inputs (e.g., "Channel 1", "Cyto", "Nuclei") to your experiment's channels. Select ``--`` to ignore.
+*   **Normalization**:
 
     *   **Mode**: Check for percentile-based standard scaling (0-1). Uncheck for raw values.
     *   **Clip**: Check to clip values outside the chosen percentile range.
@@ -22,9 +22,9 @@ These parameters appear in the **Upload Model** window when importing a pretrain
 
 **Cellpose Specifics**
 
-*   :term:`Cell Diameter` [px]: The average object diameter in the training data. If set to 30.0 (default), Cellpose assumes standard scaling.
-*   :term:`Cellprob Threshold`: Threshold for the confidence map (default 0.0). Lower values increase sensitivity.
-*   :term:`Flow Threshold`: Threshold for flow error (default 0.4). Lower values enforce stricter shapes.
+*   **Cell Diameter** [px]: The average object diameter in the training data. If set to 30.0 (default), Cellpose assumes standard scaling.
+*   **Cellprob Threshold**: Threshold for the confidence map (default 0.0). Lower values increase sensitivity.
+*   **Flow Threshold**: Threshold for flow error (default 0.4). Lower values enforce stricter shapes.
 
 .. _ref_runtime_segmentation_settings:
 
@@ -33,14 +33,14 @@ Segmentation Runtime Settings
 
 These parameters appear when applying a **generalist** model.
 
-:term:`StarDist` (Generalist)
+**StarDist** (Generalist)
 
 *   **Channel Selection**: Map specific experiment channels (e.g., Nuclei) to the model's input.
 
-:term:`Cellpose` (Generalist)
+**Cellpose** (Generalist)
 
 *   **Channel Mapping**: Select "Cytoplasm" and "Nuclei" channels.
-*   :term:`Diameter` [px]: Expected cell diameter. Use the :icon:`eye,black` button to open the *Interactive Diameter Estimator*.
+*   **Diameter** [px]: Expected cell diameter. Use the :icon:`eye,black` button to open the *Interactive Diameter Estimator*.
 *   **Flow/Cellprob Thresholds**: Adjust detection sensitivity and shape constraints on the fly.
 
 .. _ref_tracking_settings:
@@ -52,21 +52,21 @@ Accessible via the :icon:`cog-outline,black` button in the Tracking module.
 
 **Trackers**
 
-*   :term:`bTrack`: Bayesian tracker using Kalman filters and visual features.
-*   :term:`trackpy`: Particle tracker based on Crocker-Grier.
+*   **bTrack**: Bayesian tracker using Kalman filters and visual features.
+*   **trackpy**: Particle tracker based on Crocker-Grier.
 
-    *   :term:`Search range` [px]: Max movement distance per frame.
-    *   :term:`Memory` [frames]: Max frames a particle can disappear.
+    *   **Search range** [px]: Max movement distance per frame.
+    *   **Memory** [frames]: Max frames a particle can disappear.
 
 **Feature Extraction**
  
-*   :term:`Morphological features <Morphological features>` & Intensity:
+*   :term:`morphological features` & Intensity:
 
     *   **Standard**: ``area``, ``eccentricity``, ``solidity``, ``perimeter``, ``intensity_mean``, ``intensity_max``, ``intensity_min``, etc.
     *   **Advanced**: ``major_axis_length``, ``minor_axis_length``, ``orientation``, ``extent``, ``euler_number``, ``feret_diameter_max``.
     *   **Custom**: Any allowed function from ``skimage.measure.regionprops``.
 
-*   :term:`Haralick Texture Features`:
+*   **Haralick Texture Features**:
 
     *   **Target channel**: Channel to analyze (must be one of the loaded channels).
     *   **Distance**: Pixel distance for GLCM calculation (default 1).
@@ -85,17 +85,17 @@ Accessible via the :icon:`cog-outline,black` button in the Tracking module.
 
    * - Setting
      - Description
-   * - :term:`Min. tracklength <Track length>`
+   * - **Min. tracklength**
      - Filter out tracks shorter than this number of frames.
    * - **Remove tracks... (Start)**
      - Remove tracks that do not start at the first frame.
    * - **Remove tracks... (End)**
      - Remove tracks that do not end at the last frame.
-   * - :term:`Interpolate gaps`
+   * - **Interpolate gaps**
      - Fill missing detections (gaps) within a track using linear interpolation.
-   * - :term:`Extrapolate` (Pre)
+   * - **Extrapolate** (Pre)
      - Sustain the first detection's position backwards to the start of the movie.
-   * - :term:`Extrapolate` (Post)
+   * - **Extrapolate** (Post)
      - Sustain the last detection's position forwards to the end of the movie.
 
 .. _ref_neighborhood_settings:
@@ -107,14 +107,14 @@ Accessible when selecting **Neighborhood** in Measurements.
 
 **Population Configuration**
 
-*   :term:`Reference <Reference population>` / :term:`Neighbor <Neighbor population>`: Select the two populations to analyze (can be the same for self-neighborhood).
+*   :term:`reference population` / :term:`neighbor population`: Select the two populations to analyze (can be the same for self-neighborhood).
 *   **Filters**:
 
     *   **Status**: Restrict analysis to cells with a specific status (e.g., "Alive", "Positive").
     *   **Not**: Check the **"Not"** button (:icon:`alert-circle-outline,black`) to invert the status selection (e.g., Select "Alive" and check "Not" to target "Dead" cells).
     *   **Event Time**: Correlate measurements with a specific event (e.g., ``t_death``). This creates event-aligned neighborhood metrics.
 
-*   :term:`Cumulated Presence`: If checked, computes the total duration (in frames or time) that a neighbor has been present within the defined threshold.
+*   :term:`cumulated presence`: If checked, computes the total duration (in frames or time) that a neighbor has been present within the defined threshold.
 
 **Measurement Types**
 
@@ -122,7 +122,7 @@ Accessible when selecting **Neighborhood** in Measurements.
 
     *   **Distance [px]**: The radius of the neighborhood circle. Can add multiple distances.
 
-*   :term:`Mask Contact`: Detects neighbors whose boundaries are within a specific proximity.
+*   :term:`mask contact`: Detects neighbors whose boundaries are within a specific proximity.
 
     *   **Distance [px]**: The maximum distance between cell boundaries to be considered "in contact" (often 0 for touching or small positive value for near-contact).
 
@@ -203,14 +203,14 @@ Accessible via **Train > Segmentation Model**.
 
 *   **Training Data**: Folder containing images and masks (e.g., from an annotated experiment).
 *   **Include Dataset**: Select a built-in dataset to augment training.
-*   :term:`Augmentation Factor <Augmentation>`: Multiplier for data augmentation (rotation, flip, zoom). Default ``2.0``.
-*   :term:`Validation Split`: Fraction of data reserved for validation (e.g., ``0.2``).
+*   **Augmentation Factor**: Multiplier for data augmentation (rotation, flip, zoom). Default ``2.0``.
+*   **Validation Split**: Fraction of data reserved for validation (e.g., ``0.2``).
 
 **Hyperparameters**
 
-*   :term:`Learning Rate`: Step size for the optimizer (StarDist default: ``0.0003``, Cellpose default: ``0.01``).
-*   :term:`Batch Size`: Number of images per training step (default ``8``).
-*   :term:`Epochs`: Number of training iterations (StarDist default: ``100``-``500``, Cellpose default: ``100``-``10000``).
+*   **Learning Rate**: Step size for the optimizer (StarDist default: ``0.0003``, Cellpose default: ``0.01``).
+*   **Batch Size**: Number of images per training step (default ``8``).
+*   **Epochs**: Number of training iterations (StarDist default: ``100``-``500``, Cellpose default: ``100``-``10000``).
 
 .. _ref_experiment_config:
 
@@ -377,14 +377,14 @@ Accessible via the **Preprocessing** module.
 
 **General Correction Settings**
 
-*   :term:`Operation`:
+*   **Operation**:
 
     *   **Subtract**: Subtract the estimated background from the image.
     *   **Divide**: Divide the image by the background (flat-field correction).
 
-*   :term:`Clip`: (Subtract mode only) Clip negative values to zero after subtraction.
-*   :term:`Offset`: Camera black level/offset. Subtracted prior to background estimation.
-*   :term:`Interpolate NaNs`: Fill missing or NaN pixels using neighboring values.
+*   **Clip**: (Subtract mode only) Clip negative values to zero after subtraction.
+*   **Offset**: Camera black level/offset. Subtracted prior to background estimation.
+*   **Interpolate NaNs**: Fill missing or NaN pixels using neighboring values.
 
 **Background Correction**
 

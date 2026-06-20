@@ -169,4 +169,5 @@ docs/source/generated/
 
 audit_report.json
 demo_adcc
-.agent
+docs/_build_check
+scratch

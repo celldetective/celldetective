@@ -3,7 +3,7 @@ How to transfer a segmentation model
 
 This guide shows you how to export a custom segmentation model from one computer to another.
 
-Reference keys: :term:`Cellpose`, :term:`StarDist`, :term:`Experiment`
+Reference keys: **Cellpose**, **StarDist**, **Experiment**
 
 Context
 -------
@@ -31,7 +31,7 @@ Step 3: Import on the target machine
 2.  Open Celldetective on the target machine.
 3.  Go to the **Segmentation** module.
 4.  Click **UPLOAD**.
-5.  Select :term:`StarDist` or :term:`Cellpose` depending on your model type.
+5.  Select **StarDist** or **Cellpose** depending on your model type.
 6.  Click **Choose File** and select your `.zip` file (or the unzipped folder).
 7.  Click **Upload**.
 

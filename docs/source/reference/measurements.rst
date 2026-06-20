@@ -1,7 +1,7 @@
+.. _ref_measurements:
+
 Measurements Reference
 ======================
-
-.. _ref_measurements:
 
 This page provides a comprehensive reference for all single-cell measurements available in Celldetective.
 The output table (e.g., `trajectories.csv` or `tracked_data.csv`) contains one row per cell per time point, with columns corresponding to these measurements.

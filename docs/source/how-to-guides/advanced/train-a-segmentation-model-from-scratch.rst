@@ -1,7 +1,7 @@
 How to train a segmentation model from scratch
 ==============================================
 
-This guide details the steps to train a custom segmentation model (:term:`StarDist` or :term:`Cellpose`) directly within Celldetective.
+This guide details the steps to train a custom segmentation model (**StarDist** or **Cellpose**) directly within Celldetective.
 
 .. _prepare-training-data:
 
@@ -26,7 +26,7 @@ Step 2: Configure the Model
 ---------------------------
 
 1.  In the **Segmentation** module, click the **TRAIN** button to open the training window.
-2.  **Select Model Architecture:** Choose between :term:`StarDist` (convex objects, nuclei) or :term:`Cellpose` (generalist, irregular shapes).
+2.  **Select Model Architecture:** Choose between **StarDist** (convex objects, nuclei) or **Cellpose** (generalist, irregular shapes).
 3.  **Name your model:** Enter a unique name for your new model.
 4.  **(Optional) Transfer Learning:** To start from an existing model:
 
@@ -46,8 +46,8 @@ Step 3: Configure Data and Channels
 2.  **Set Input Channels:**
 
     *   Map the channels of your training images to the model inputs.
-    *   For :term:`StarDist`: Typically requires one channel (e.g., Nuclei/DAPI).
-    *   For :term:`Cellpose`: Can accept up to two channels (e.g., Cytoplasm + Nuclei). Set the second channel to "None" if training on a single channel.
+    *   For **StarDist**: Typically requires one channel (e.g., Nuclei/DAPI).
+    *   For **Cellpose**: Can accept up to two channels (e.g., Cytoplasm + Nuclei). Set the second channel to "None" if training on a single channel.
 
 3.  **Define Normalization:**
 
@@ -70,11 +70,11 @@ Micro-tune the training process in the **HYPERPARAMETERS** section:
 *   **Validation Split:** The fraction of data set aside to test the model's performance during training. Default is `0.2` (20%).
 *   **Epochs:** The number of complete passes through the training dataset.
 
-    *   :term:`StarDist`: Defaults around 100-500.
-    *   :term:`Cellpose`: Defaults around 100-500 depending on dataset size.
+    *   **StarDist**: Defaults around 100-500.
+    *   **Cellpose**: Defaults around 100-500 depending on dataset size.
     
 *   **Batch Size:** Number of images processed at once. Reduce this if you run out of GPU memory (default: 8).
-*   :term:`Learning Rate`: The step size for the optimizer. Defaults are automatically set based on the model type (e.g., `0.0003` for :term:`StarDist`, `0.01` for :term:`Cellpose`), but can be adjusted for fine-tuning.
+*   **Learning Rate**: The step size for the optimizer. Defaults are automatically set based on the model type (e.g., `0.0003` for **StarDist**, `0.01` for **Cellpose**), but can be adjusted for fine-tuning.
 
 Step 5: Run Training
 --------------------

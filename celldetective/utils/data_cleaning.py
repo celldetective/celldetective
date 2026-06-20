@@ -235,15 +235,16 @@ def rename_intensity_column(
     provided in the `channels` list.
 
     It also applies specific renaming rules for tuple properties:
-    - **Center of Mass**:
-        - `_0` -> `_distance`
-        - `_1` -> `_angle`
-        - `_2` -> `_dx`
-        - `_3` -> `_dy`
-    - **Radial Gradient**:
-        - `_0` -> `_slope`
-        - `_1` -> `_intercept`
-        - `_2` -> `_r2`
+
+    *   **Center of Mass**:
+        *   `_0` -> `_distance`
+        *   `_1` -> `_angle`
+        *   `_2` -> `_dx`
+        *   `_3` -> `_dy`
+    *   **Radial Gradient**:
+        *   `_0` -> `_slope`
+        *   `_1` -> `_intercept`
+        *   `_2` -> `_r2`
 
     Examples
     --------
