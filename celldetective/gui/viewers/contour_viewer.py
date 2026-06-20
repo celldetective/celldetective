@@ -21,6 +21,7 @@ from collections import OrderedDict
 
 from celldetective.gui.gui_utils import QuickSliderLayout
 from celldetective.gui.viewers.base_viewer import StackVisualizer
+from celldetective.utils.schema import label_folder_name
 from celldetective import get_logger
 from tifffile import imread
 import re
@@ -177,7 +178,7 @@ class CellEdgeVisualizer(StackVisualizer):
         labels_path = (
             str(Path(self.stack_path).parent.parent)
             + os.sep
-            + f"labels_{self.cell_type}"
+            + label_folder_name(self.cell_type)
             + os.sep
         )
         self.mask_paths = natsorted(glob(labels_path + "*.tif"))

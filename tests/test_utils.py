@@ -160,5 +160,23 @@ class TestEstimateFilterEdge(unittest.TestCase):
         self.assertEqual(self.expected2, estimate_unreliable_edge(self.protocol2))
 
 
+class TestPathUtilities(unittest.TestCase):
+
+    def test_normalize_path(self):
+        from celldetective.utils.schema import normalize_path
+        self.assertEqual(normalize_path(""), "")
+        self.assertEqual(normalize_path(None), None)
+        self.assertEqual(normalize_path("path/to/dir/"), os.path.normpath("path/to/dir"))
+        self.assertEqual(normalize_path("path\\to\\dir\\"), os.path.normpath("path/to/dir"))
+
+    def test_ensure_trailing_sep(self):
+        from celldetective.utils.schema import ensure_trailing_sep
+        self.assertEqual(ensure_trailing_sep(""), "")
+        self.assertEqual(ensure_trailing_sep(None), None)
+        self.assertEqual(ensure_trailing_sep("path/to/dir"), os.path.normpath("path/to/dir") + os.sep)
+        self.assertEqual(ensure_trailing_sep("path/to/dir/"), os.path.normpath("path/to/dir") + os.sep)
+
+
 if __name__ == "__main__":
     unittest.main()
+

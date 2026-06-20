@@ -35,6 +35,11 @@ from celldetective.utils.experiment import (
 from celldetective.utils.parsing import config_section_to_dict
 from celldetective import get_logger
 from celldetective.log_manager import positionlogger
+from celldetective.utils.schema import (
+    label_folder_name,
+    tracking_instructions_path,
+    napari_trajectories_name,
+)
 from celldetective.gui.base.styles import Styles
 
 logger = get_logger()
@@ -563,9 +568,7 @@ def launch_napari_viewer(
         df = write_first_detection_class(df, img_shape=labels[0].shape)
 
         experiment = extract_experiment_from_position(position)
-        instruction_file = "/".join(
-            [experiment, "configs", f"tracking_instructions_{population}.json"]
-        )
+        instruction_file = tracking_instructions_path(experiment, population)
         logger.debug(f"instruction_file={instruction_file}")
         if os.path.exists(instruction_file):
             logger.info("Tracking configuration file found...")
@@ -901,44 +904,12 @@ def load_napari_data(
         position += os.sep
 
     position = position.replace("\\", "/")
-    if population.lower() == "target" or population.lower() == "targets":
-        if os.path.exists(
-            position
-            + os.sep.join(["output", "tables", "napari_target_trajectories.npy"])
-        ):
-            napari_data = np.load(
-                position
-                + os.sep.join(["output", "tables", "napari_target_trajectories.npy"]),
-                allow_pickle=True,
-            )
-        else:
-            napari_data = None
-    elif population.lower() == "effector" or population.lower() == "effectors":
-        if os.path.exists(
-            position
-            + os.sep.join(["output", "tables", "napari_effector_trajectories.npy"])
-        ):
-            napari_data = np.load(
-                position
-                + os.sep.join(["output", "tables", "napari_effector_trajectories.npy"]),
-                allow_pickle=True,
-            )
-        else:
-            napari_data = None
+    traj_name = napari_trajectories_name(population)
+    traj_path = position + os.sep.join(["output", "tables", traj_name])
+    if os.path.exists(traj_path):
+        napari_data = np.load(traj_path, allow_pickle=True)
     else:
-        if os.path.exists(
-            position
-            + os.sep.join(["output", "tables", f"napari_{population}_trajectories.npy"])
-        ):
-            napari_data = np.load(
-                position
-                + os.sep.join(
-                    ["output", "tables", f"napari_{population}_trajectories.npy"]
-                ),
-                allow_pickle=True,
-            )
-        else:
-            napari_data = None
+        napari_data = None
 
     if napari_data is not None:
         data = napari_data.item()["data"]
@@ -1355,7 +1326,7 @@ def launch_segmentation_viewer(
         """Widget to trigger export."""
         return export_annotation()
 
-    output_folder = position + f"labels_{population}{os.sep}"
+    output_folder = position + label_folder_name(population) + os.sep
     logger.info(f"Shape of the loaded image stack: {stack.shape}...")
 
     viewer = napari.Viewer()

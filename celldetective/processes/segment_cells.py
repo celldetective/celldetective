@@ -33,6 +33,12 @@ from celldetective.utils.parsing import (
     _get_normalize_kwargs_from_config,
     _extract_channel_indices_from_config,
 )
+from celldetective.utils.schema import (
+    normalize_population,
+    label_folder_name,
+    backup_label_folder_name,
+    segmentation_instructions_relpath,
+)
 
 logger = get_logger(__name__)
 
@@ -154,9 +160,7 @@ class BaseSegmentProcess(Process):
 
         logger.info(f"Configuration file: {self.config}")
         logger.info(f"Population: {self.mode}...")
-        self.instruction_file = os.sep.join(
-            ["configs", f"segmentation_instructions_{self.mode}.json"]
-        )
+        self.instruction_file = segmentation_instructions_relpath(self.mode)
         self.read_instructions()
         self.extract_experiment_parameters()
 
@@ -203,16 +207,22 @@ class BaseSegmentProcess(Process):
         in the backup folder.
         """
 
-        self.mode = self.mode.lower()
-        self.label_folder = f"labels_{self.mode}"
-        self.backup_label_folder = f"labels_{self.mode}.bak"
+        self.mode = normalize_population(self.mode)
+        self.label_folder = label_folder_name(self.mode)
+        self.backup_label_folder = backup_label_folder_name(self.mode)
 
         final_path = self.pos + self.label_folder
         backup_path = self.pos + self.backup_label_folder
 
-        # Drop any stale backup left behind by a previously aborted run.
+        # If a previous backup folder already exists, it means a previous run failed/aborted
+        # and the user hasn't restored it yet. If we also have a final labels folder, it
+        # holds partial results from that aborted run. Restore the original backup first
+        # to prevent overwriting/losing the original pre-failure masks.
         if os.path.exists(backup_path):
-            rmtree(backup_path)
+            if os.path.exists(final_path):
+                rmtree(final_path)
+            os.rename(backup_path, final_path)
+
         # Rename (not delete) the previous masks so they can be recovered.
         if os.path.exists(final_path):
             os.rename(final_path, backup_path)

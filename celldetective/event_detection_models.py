@@ -83,6 +83,7 @@ from celldetective.utils.dataset_helpers import (
 )
 from celldetective.utils.event_schema import truncate_training_signals
 from celldetective.utils.plots.regression import regression_plot
+from celldetective.utils.schema import normalize_path
 from celldetective.log_manager import get_logger
 
 logger = get_logger(__name__)
@@ -243,8 +244,7 @@ class SignalDetectionModel(object):
 
         """
 
-        if self.pretrained.endswith(os.sep):
-            self.pretrained = os.sep.join(self.pretrained.split(os.sep)[:-1])
+        self.pretrained = normalize_path(self.pretrained)
 
         try:
             self.model_class = load_model(

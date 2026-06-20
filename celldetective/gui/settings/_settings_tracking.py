@@ -38,6 +38,7 @@ from celldetective import get_software_location
 from celldetective.measure import compute_haralick_features
 from celldetective.utils.experiment import extract_experiment_channels
 from celldetective.utils.data_loaders import interpret_tracking_configuration
+from celldetective.utils.schema import tracking_instructions_path
 import numpy as np
 import json
 from shutil import copyfile
@@ -71,8 +72,8 @@ class SettingsTracking(CelldetectiveSettingsPanel):
         self.exp_dir = self.parent_window.exp_dir
 
         self.config_name = os.sep.join(["configs", f"btrack_config_{self.mode}.json"])
-        self.track_instructions_write_path = self.parent_window.exp_dir + os.sep.join(
-            ["configs", f"tracking_instructions_{self.mode}.json"]
+        self.track_instructions_write_path = tracking_instructions_path(
+            self.parent_window.exp_dir, self.mode
         )
 
         self.config_path = self.exp_dir + self.config_name

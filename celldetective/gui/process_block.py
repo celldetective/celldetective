@@ -27,7 +27,11 @@ from celldetective.utils.model_loaders import (
     locate_segmentation_model,
     _resolve_signal_model_paths,
 )
-from celldetective.utils.schema import trajectory_table_path
+from celldetective.utils.schema import (
+    trajectory_table_path,
+    label_folder_name,
+    napari_trajectories_name,
+)
 from celldetective.utils.image_loaders import fix_missing_labels
 
 from celldetective.gui.base.components import (
@@ -619,7 +623,7 @@ class ProcessPanel(QFrame, Styles):
                         self.parent_window.pos,
                         "output",
                         "tables",
-                        f"napari_{self.mode[:-1]}_trajectories.npy",
+                        napari_trajectories_name(self.mode),
                     ]
                 )
             )
@@ -873,9 +877,9 @@ class ProcessPanel(QFrame, Styles):
         If labels exist, they are loaded into Napari for inspection.
         """
 
-        if not os.path.exists(
-            os.sep.join([self.parent_window.pos, f"labels_{self.mode}", os.sep])
-        ):
+        folder = label_folder_name(self.mode)
+        path = os.path.join(self.parent_window.pos, folder)
+        if not os.path.exists(path):
             msgBox = QMessageBox()
             msgBox.setIcon(QMessageBox.Question)
             msgBox.setText(
@@ -887,19 +891,14 @@ class ProcessPanel(QFrame, Styles):
             if returnValue == QMessageBox.No:
                 return None
             else:
-                os.mkdir(os.sep.join([self.parent_window.pos, f"labels_{self.mode}"]))
+                os.mkdir(path)
                 lbl = np.zeros(
                     (self.parent_window.shape_x, self.parent_window.shape_y), dtype=int
                 )
+                from tifffile import imwrite
                 for i in range(self.parent_window.len_movie):
                     imwrite(
-                        os.sep.join(
-                            [
-                                self.parent_window.pos,
-                                f"labels_{self.mode}",
-                                str(i).zfill(4) + ".tif",
-                            ]
-                        ),
+                        os.path.join(path, str(i).zfill(4) + ".tif"),
                         lbl,
                     )
 
@@ -1580,7 +1579,7 @@ class ProcessPanel(QFrame, Styles):
                 tabs += [
                     pos
                     + os.sep.join(
-                        ["output", "tables", f"napari_{self.mode}_trajectories.npy"]
+                        ["output", "tables", napari_trajectories_name(self.mode)]
                     )
                     for pos in self.df_pos_info["pos_path"].unique()
                 ]
@@ -1735,7 +1734,8 @@ class ProcessPanel(QFrame, Styles):
                 and not self.parent_window.position_list.isMultipleSelection()
             ):
                 p = all_positions_flat[0]
-                if len(glob(os.sep.join([p, f"labels_{self.mode}", "*.tif"]))) > 0:
+                folder = label_folder_name(self.mode)
+                if len(glob(os.path.join(p, folder, "*.tif"))) > 0:
                     msgBox = QMessageBox()
                     msgBox.setIcon(QMessageBox.Question)
                     msgBox.setText(

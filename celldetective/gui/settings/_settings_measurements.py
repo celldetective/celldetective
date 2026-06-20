@@ -31,6 +31,7 @@ from fonticon_mdi6 import MDI6
 
 from celldetective.utils.experiment import extract_experiment_channels
 from celldetective.utils.image_loaders import auto_load_number_of_frames, load_frames
+from celldetective.utils.schema import label_folder_name, measurement_instructions_path
 
 import numpy as np
 import json
@@ -74,9 +75,8 @@ class SettingsMeasurements(CelldetectiveSettingsPanel):
         self.exp_dir = self.parent_window.exp_dir
         self.background_correction = []
         self.config_name = f"btrack_config_{self.mode}.json"
-        self.measure_instructions_path = (
-            self.parent_window.exp_dir
-            + f"configs/measurement_instructions_{self.mode}.json"
+        self.measure_instructions_path = measurement_instructions_path(
+            self.parent_window.exp_dir, self.mode
         )
         self.clear_previous = False
         self.config_path = self.exp_dir + self.config_name
@@ -989,7 +989,7 @@ class SettingsMeasurements(CelldetectiveSettingsPanel):
         labels_path = (
             str(Path(self.current_stack).parent.parent)
             + os.sep
-            + f"labels_{self.mode}"
+            + label_folder_name(self.mode)
             + os.sep
         )
         masks = natsorted(glob(labels_path + "*.tif"))

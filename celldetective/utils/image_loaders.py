@@ -16,6 +16,7 @@ from celldetective.utils.image_cleaning import (
     interpolate_nan_multichannel,
 )
 from celldetective.utils.normalization import normalize_multichannel
+from celldetective.utils.schema import label_folder_name
 from celldetective import get_logger
 
 import logging
@@ -337,18 +338,10 @@ def locate_labels(
     if not position.endswith(os.sep):
         position += os.sep
 
-    if population.lower() == "target" or population.lower() == "targets":
-        label_path = natsorted(
-            glob(position + os.sep.join(["labels_targets", "*.tif"]))
-        )
-    elif population.lower() == "effector" or population.lower() == "effectors":
-        label_path = natsorted(
-            glob(position + os.sep.join(["labels_effectors", "*.tif"]))
-        )
-    else:
-        label_path = natsorted(
-            glob(position + os.sep.join([f"labels_{population}", "*.tif"]))
-        )
+    folder = label_folder_name(population)
+    label_path = natsorted(
+        glob(position + os.sep.join([folder, "*.tif"]))
+    )
 
     label_names = [os.path.split(lbl)[-1] for lbl in label_path]
 
@@ -895,21 +888,11 @@ def fix_missing_labels(
     template = np.zeros((stack[0].shape[0], stack[0].shape[1]), dtype=int)
     all_frames = np.arange(len(stack))
 
-    if population.lower() == "target" or population.lower() == "targets":
-        label_path = natsorted(
-            glob(position + os.sep.join(["labels_targets", "*.tif"]))
-        )
-        path = position + os.sep + "labels_targets"
-    elif population.lower() == "effector" or population.lower() == "effectors":
-        label_path = natsorted(
-            glob(position + os.sep.join(["labels_effectors", "*.tif"]))
-        )
-        path = position + os.sep + "labels_effectors"
-    else:
-        label_path = natsorted(
-            glob(position + os.sep.join([f"labels_{population}", "*.tif"]))
-        )
-        path = position + os.sep + f"labels_{population}"
+    folder = label_folder_name(population)
+    label_path = natsorted(
+        glob(position + os.sep.join([folder, "*.tif"]))
+    )
+    path = position + os.sep + folder
 
     if not os.path.exists(path):
         os.makedirs(path, exist_ok=True)

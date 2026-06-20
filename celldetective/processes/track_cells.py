@@ -20,7 +20,12 @@ from celldetective.log_manager import get_logger, positionlogger
 from celldetective.utils.data_cleaning import _mask_intensity_measurements
 from celldetective.utils.data_loaders import interpret_tracking_configuration
 from celldetective.utils.experiment import extract_experiment_channels
-from celldetective.utils.schema import trajectory_table_name
+from celldetective.utils.schema import (
+    trajectory_table_name,
+    label_folder_name,
+    tracking_instructions_relpath,
+    napari_trajectories_name,
+)
 from celldetective.utils.image_loaders import (
     _get_img_num_per_channel,
     auto_load_number_of_frames,
@@ -169,26 +174,9 @@ class TrackingProcess(Process):
             os.mkdir(self.pos + os.sep.join(["output", "tables"]))
 
         self.table_name = trajectory_table_name(self.mode)
-        if self.mode.lower() == "target" or self.mode.lower() == "targets":
-            self.label_folder = "labels_targets"
-            self.instruction_file = os.sep.join(
-                ["configs", "tracking_instructions_targets.json"]
-            )
-            self.napari_name = "napari_target_trajectories.npy"
-
-        elif self.mode.lower() == "effector" or self.mode.lower() == "effectors":
-            self.label_folder = "labels_effectors"
-            self.instruction_file = os.sep.join(
-                ["configs", "tracking_instructions_effectors.json"]
-            )
-            self.napari_name = "napari_effector_trajectories.npy"
-
-        else:
-            self.label_folder = f"labels_{self.mode}"
-            self.instruction_file = os.sep.join(
-                ["configs", f"tracking_instructions_{self.mode}.json"]
-            )
-            self.napari_name = f"napari_{self.mode}_trajectories.npy"
+        self.label_folder = label_folder_name(self.mode)
+        self.instruction_file = tracking_instructions_relpath(self.mode)
+        self.napari_name = napari_trajectories_name(self.mode)
 
     def extract_experiment_parameters(self):
         """Extract the experiment parameters from the configuration file."""

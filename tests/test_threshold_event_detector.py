@@ -49,6 +49,46 @@ class TestSchema:
         assert (schema.EVENT, schema.NO_EVENT, schema.ELSE) == (0, 1, 2)
         assert schema.event_column_names("x") == ("class_x", "t_x", "status_x")
 
+    def test_label_folder_helpers(self):
+        from celldetective.utils import schema
+
+        assert schema.label_folder_name("target") == "labels_targets"
+        assert schema.label_folder_name("targets") == "labels_targets"
+        assert schema.label_folder_name("effector") == "labels_effectors"
+        assert schema.label_folder_name("effectors") == "labels_effectors"
+        assert schema.label_folder_name("custom") == "labels_custom"
+
+        assert schema.backup_label_folder_name("target") == "labels_targets.bak"
+        assert schema.backup_label_folder_name("custom") == "labels_custom.bak"
+
+    def test_instruction_path_helpers(self):
+        from celldetective.utils import schema
+        import os
+
+        # tracking
+        assert schema.tracking_instructions_name("target") == "tracking_instructions_targets.json"
+        assert schema.tracking_instructions_name("custom") == "tracking_instructions_custom.json"
+        assert schema.tracking_instructions_relpath("target") == os.path.join("configs", "tracking_instructions_targets.json")
+        assert schema.tracking_instructions_path("exp", "target") == os.path.join("exp", "configs", "tracking_instructions_targets.json")
+
+        # measurement
+        assert schema.measurement_instructions_name("target") == "measurement_instructions_targets.json"
+        assert schema.measurement_instructions_relpath("target") == os.path.join("configs", "measurement_instructions_targets.json")
+        assert schema.measurement_instructions_path("exp", "target") == os.path.join("exp", "configs", "measurement_instructions_targets.json")
+
+        # segmentation
+        assert schema.segmentation_instructions_name("target") == "segmentation_instructions_targets.json"
+        assert schema.segmentation_instructions_relpath("target") == os.path.join("configs", "segmentation_instructions_targets.json")
+        assert schema.segmentation_instructions_path("exp", "target") == os.path.join("exp", "configs", "segmentation_instructions_targets.json")
+
+        # napari
+        assert schema.napari_trajectories_name("target") == "napari_target_trajectories.npy"
+        assert schema.napari_trajectories_name("targets") == "napari_target_trajectories.npy"
+        assert schema.napari_trajectories_name("effector") == "napari_effector_trajectories.npy"
+        assert schema.napari_trajectories_name("custom") == "napari_custom_trajectories.npy"
+
+
+
 
 class TestEventSchema:
     def test_column_names_default(self):

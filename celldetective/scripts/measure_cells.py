@@ -18,7 +18,11 @@ from celldetective.utils.experiment import (
     extract_experiment_channels,
 )
 from celldetective.utils.parsing import config_section_to_dict
-from celldetective.utils.schema import trajectory_table_name
+from celldetective.utils.schema import (
+    trajectory_table_name,
+    label_folder_name,
+    measurement_instructions_relpath,
+)
 from celldetective.utils.data_cleaning import (
     _remove_invalid_cols,
     _extract_coordinates_from_features,
@@ -68,17 +72,8 @@ n_threads = int(process_arguments["threads"])
 column_labels = COLUMN_LABELS.copy()
 
 table_name = trajectory_table_name(mode)
-if mode.lower() in ("target", "targets"):
-    label_folder = "labels_targets"
-    instruction_file = os.sep.join(["configs", "measurement_instructions_targets.json"])
-elif mode.lower() in ("effector", "effectors"):
-    label_folder = "labels_effectors"
-    instruction_file = os.sep.join(
-        ["configs", "measurement_instructions_effectors.json"]
-    )
-else:
-    label_folder = f"labels_{mode}"
-    instruction_file = os.sep.join(["configs", f"measurement_instructions_{mode}.json"])
+label_folder = label_folder_name(mode)
+instruction_file = measurement_instructions_relpath(mode)
 
 # Locate experiment config
 parent1 = Path(pos).parent

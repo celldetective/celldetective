@@ -8,7 +8,12 @@ import dask
 import numpy as np
 from natsort import natsorted
 
-from celldetective.utils.schema import trajectory_table_path
+from celldetective.utils.schema import (
+    trajectory_table_path,
+    label_folder_name,
+    normalize_path,
+    ensure_trailing_sep,
+)
 from celldetective.utils.io import save_tiff_imagej_compatible
 from celldetective.utils.parsing import (
     _extract_channels_from_config,
@@ -985,8 +990,7 @@ def get_positions_in_well(well: str) -> np.ndarray:
 
     """
 
-    if well.endswith(os.sep):
-        well = well[:-1]
+    well = normalize_path(well)
 
     w_numeric = os.path.split(well)[-1].replace("W", "")
     positions = natsorted(glob(os.sep.join([well, f"{w_numeric}*{os.sep}"])))
@@ -1035,12 +1039,10 @@ def extract_experiment_folder_output(
 
     """
 
-    if experiment_folder.endswith(os.sep):
-        experiment_folder = experiment_folder[:-1]
-    if destination_folder.endswith(os.sep):
-        destination_folder = destination_folder[:-1]
+    experiment_folder = normalize_path(experiment_folder)
+    destination_folder = normalize_path(destination_folder)
 
-    exp_name = experiment_folder.split(os.sep)[-1]
+    exp_name = os.path.basename(experiment_folder)
     output_path = os.sep.join([destination_folder, exp_name])
     if not os.path.exists(output_path):
         os.mkdir(output_path)
@@ -1049,7 +1051,7 @@ def extract_experiment_folder_output(
     copyfile(config, os.sep.join([output_path, os.path.split(config)[-1]]))
 
     wells_src = get_experiment_wells(experiment_folder)
-    wells = [w.split(os.sep)[-2] for w in wells_src]
+    wells = [os.path.basename(normalize_path(w)) for w in wells_src]
 
     for k, w in enumerate(wells):
 
@@ -1119,7 +1121,6 @@ def _get_contrast_limits(stack: np.ndarray) -> Optional[List[Tuple[float, float]
         return None
 
 
-# --- Appended functions from antigravity branch ---
 def auto_load_number_of_frames(stack_path: str) -> Optional[int]:
     """
     Automatically load the number of frames from a stack.
@@ -1139,7 +1140,7 @@ def auto_load_number_of_frames(stack_path: str) -> Optional[int]:
     if stack_path is None:
         return None
 
-    stack_path = stack_path.replace("\\", "/")
+    stack_path = normalize_path(stack_path)
     n_channels = 1
 
     with TiffFile(stack_path) as tif:
@@ -1154,7 +1155,9 @@ def auto_load_number_of_frames(stack_path: str) -> Optional[int]:
                 attr[np.argmax([s.startswith("channels") for s in attr])].split("=")[-1]
             )
         except Exception as e:
-            logger.debug(f"Could not parse channel count from TIFF tags, defaulting to 1: {e}")
+            logger.debug(
+                f"Could not parse channel count from TIFF tags, defaulting to 1: {e}"
+            )
         try:
             nslices = int(
                 attr[np.argmax([s.startswith("frames") for s in attr])].split("=")[-1]
@@ -1303,18 +1306,8 @@ def locate_labels(
     if not position.endswith(os.sep):
         position += os.sep
 
-    if population.lower() == "target" or population.lower() == "targets":
-        label_path = natsorted(
-            glob(position + os.sep.join(["labels_targets", "*.tif"]))
-        )
-    elif population.lower() == "effector" or population.lower() == "effectors":
-        label_path = natsorted(
-            glob(position + os.sep.join(["labels_effectors", "*.tif"]))
-        )
-    else:
-        label_path = natsorted(
-            glob(position + os.sep.join([f"labels_{population}", "*.tif"]))
-        )
+    folder = label_folder_name(population)
+    label_path = natsorted(glob(position + os.sep.join([folder, "*.tif"])))
 
     label_names = [os.path.split(lbl)[-1] for lbl in label_path]
 
@@ -1389,21 +1382,9 @@ def fix_missing_labels(
     template = np.zeros((stack[0].shape[0], stack[0].shape[1]), dtype=int)
     all_frames = np.arange(len(stack))
 
-    if population.lower() == "target" or population.lower() == "targets":
-        label_path = natsorted(
-            glob(position + os.sep.join(["labels_targets", "*.tif"]))
-        )
-        path = position + os.sep + "labels_targets"
-    elif population.lower() == "effector" or population.lower() == "effectors":
-        label_path = natsorted(
-            glob(position + os.sep.join(["labels_effectors", "*.tif"]))
-        )
-        path = position + os.sep + "labels_effectors"
-    else:
-        label_path = natsorted(
-            glob(position + os.sep.join([f"labels_{population}", "*.tif"]))
-        )
-        path = position + os.sep + f"labels_{population}"
+    folder = label_folder_name(population)
+    label_path = natsorted(glob(position + os.sep.join([folder, "*.tif"])))
+    path = position + os.sep + folder
 
     if label_path:
         int_valid = [int(lbl.split(os.sep)[-1].split(".")[0]) for lbl in label_path]
@@ -1449,7 +1430,9 @@ def locate_stack_and_labels(
         fix_missing_labels(position, population=population, prefix=prefix)
         labels = locate_labels(position, population=population)
     if len(stack) != len(labels):
-        raise ValueError(f"The shape of the stack {stack.shape} does not match with the shape of the labels {labels.shape}")
+        raise ValueError(
+            f"The shape of the stack {stack.shape} does not match with the shape of the labels {labels.shape}"
+        )
 
     return stack, labels
 

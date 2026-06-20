@@ -31,6 +31,10 @@ from celldetective.utils.parsing import (
     _extract_channel_indices_from_config,
     _extract_nbr_channels_from_config,
 )
+from celldetective.utils.schema import (
+    label_folder_name,
+    backup_label_folder_name,
+)
 from pathlib import Path, PurePath
 from glob import glob
 from shutil import rmtree
@@ -83,12 +87,7 @@ if not use_gpu:
 
 modelname = str(process_arguments["model"])
 
-if mode.lower() in ("target", "targets"):
-    label_folder = "labels_targets"
-elif mode.lower() in ("effector", "effectors"):
-    label_folder = "labels_effectors"
-else:
-    label_folder = f"labels_{mode}"
+label_folder = label_folder_name(mode)
 
 # Locate experiment config
 parent1 = Path(pos).parent
@@ -168,12 +167,23 @@ img_num_channels = _get_img_num_per_channel(
 # into labels_<mode> (so partial results stay viewable, even after an abort);
 # the previous masks are renamed to a backup folder and only removed once every
 # frame is present, so they survive a crash or cancellation.
-backup_folder = label_folder + ".bak"
-if os.path.exists(pos + backup_folder):
-    rmtree(pos + backup_folder)
-if os.path.exists(pos + label_folder):
-    os.rename(pos + label_folder, pos + backup_folder)
-os.mkdir(pos + label_folder)
+backup_folder = backup_label_folder_name(mode)
+final_path = pos + label_folder
+backup_path = pos + backup_folder
+
+# If a previous backup folder already exists, it means a previous run failed/aborted
+# and the user hasn't restored it yet. If we also have a final labels folder, it
+# holds partial results from that aborted run. Restore the original backup first
+# to prevent overwriting/losing the original pre-failure masks.
+if os.path.exists(backup_path):
+    if os.path.exists(final_path):
+        rmtree(final_path)
+    os.rename(backup_path, final_path)
+
+# Rename (not delete) the previous masks so they can be recovered.
+if os.path.exists(final_path):
+    os.rename(final_path, backup_path)
+os.mkdir(final_path)
 logger.info("Labels folder successfully generated...")
 
 with positionlogger(pos, filename=f"log_{mode}.txt"):
@@ -233,7 +243,7 @@ def segment_index(indices: List[int]) -> None:
         )
 
         save_tiff_imagej_compatible(
-            pos + os.sep.join([label_folder, f"{str(t).zfill(4)}.tif"]),
+            os.path.join(final_path, f"{str(t).zfill(4)}.tif"),
             Y_pred,
             axes="YX",
         )
@@ -269,7 +279,7 @@ with concurrent.futures.ThreadPoolExecutor() as executor:
 # Verify every frame produced a mask. On success drop the backup of the previous
 # masks; on failure leave the partial masks in place (viewable) and keep the
 # backup so the previous masks can be recovered.
-n_written = len(glob(pos + os.sep.join([label_folder, "*.tif"])))
+n_written = len(glob(os.path.join(final_path, "*.tif")))
 expected = int(img_num_channels.shape[1])
 if n_written != expected:
     logger.error(
@@ -279,8 +289,8 @@ if n_written != expected:
     )
     sys.exit(1)
 
-if os.path.exists(pos + backup_folder):
-    rmtree(pos + backup_folder)
+if os.path.exists(backup_path):
+    rmtree(backup_path)
 
 logger.info("Done.")
 gc.collect()

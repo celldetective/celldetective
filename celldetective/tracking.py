@@ -29,9 +29,6 @@ from tqdm import tqdm
 from sklearn.preprocessing import StandardScaler
 from typing import List, Optional, Union, Dict, Any, Tuple
 
-from btrack.io.utils import localizations_to_objects
-from btrack import BayesianTracker
-
 from celldetective.measure import measure_features
 from celldetective.utils.maths import velocity_per_track
 from celldetective.log_manager import get_logger
@@ -82,6 +79,7 @@ def _run_btrack_core(
     properties : dict
     graph : dict
     """
+    from btrack import BayesianTracker
     with BayesianTracker() as tracker:
         tracker.configure(configuration)
         if columns:
@@ -313,6 +311,8 @@ def track(
             logger.warning("No features were passed to bTrack.")
 
         # 2) track the objects
+        from btrack.io.utils import localizations_to_objects
+        from btrack import BayesianTracker
         new_btrack_objects = localizations_to_objects(objects)
         data, properties, graph = _run_btrack_core(
             new_btrack_objects, configuration, columns, volume, track_kwargs, optimizer_options

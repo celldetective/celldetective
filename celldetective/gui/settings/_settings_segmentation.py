@@ -4,6 +4,7 @@ from PyQt5.QtCore import QSize
 from superqt.fonticon import icon
 from fonticon_mdi6 import MDI6
 from celldetective.gui.settings._settings_base import CelldetectiveSettingsPanel
+from celldetective.utils.schema import segmentation_instructions_path
 import json
 import logging
 import os
@@ -26,9 +27,8 @@ class SettingsSegmentation(CelldetectiveSettingsPanel):
         self.parent_window = parent_window
         self.mode = self.parent_window.mode
         self.exp_dir = self.parent_window.exp_dir
-        self._instructions_path = (
-            self.parent_window.exp_dir
-            + f"configs/segmentation_instructions_{self.mode}.json"
+        self._instructions_path = segmentation_instructions_path(
+            self.parent_window.exp_dir, self.mode
         )
         self._add_to_layout()
         self._load_previous_instructions()
