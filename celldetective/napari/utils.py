@@ -14,7 +14,7 @@ from skimage.measure import regionprops_table
 from tifffile import imread
 from tqdm import tqdm
 
-from celldetective.utils.data_cleaning import tracks_to_btrack
+from celldetective.utils.data_cleaning import tracks_to_btrack, extract_identity_col
 from celldetective.utils.mask_cleaning import auto_correct_masks, relabel_segmentation
 from celldetective.utils.image_loaders import (
     locate_labels,
@@ -34,6 +34,7 @@ from celldetective.utils.experiment import (
 )
 from celldetective.utils.parsing import config_section_to_dict
 from celldetective import get_logger
+from celldetective.log_manager import positionlogger
 from celldetective.gui.base.styles import Styles
 
 logger = get_logger()
@@ -598,6 +599,15 @@ def launch_napari_viewer(
         logger.debug(f"Columns after export: {list(df.columns)}")
         df.to_csv(shared_data["path"], index=False)
         logger.info("Track export done.")
+        with positionlogger(position, filename=f"log_{population}.txt"):
+            logger.info("TRACK CORRECTION (manual, napari)")
+            logger.info(f"population: {population}")
+            try:
+                id_col = extract_identity_col(df)
+                n_tracks = df[id_col].nunique() if id_col is not None else None
+                logger.info(f"tracks: {n_tracks}, detections: {len(df)}")
+            except Exception as e:
+                logger.warning(f"Could not summarise track correction: {e}")
 
     @magicgui(call_button="Export the modified\ntracks...")
     def export_table_widget():
@@ -1109,6 +1119,8 @@ def launch_segmentation_viewer(
         if not os.path.exists(output_folder):
             os.mkdir(output_folder)
 
+        n_frames = 0
+        n_objects_total = 0
         for t, im in enumerate(tqdm(labels_layer)):
 
             try:
@@ -1119,7 +1131,16 @@ def launch_segmentation_viewer(
             save_tiff_imagej_compatible(
                 output_folder + f"{str(t).zfill(4)}.tif", im.astype(np.int16), axes="YX"
             )
+            n_frames += 1
+            n_objects_total += int((np.unique(im) != 0).sum())
         logger.info("The labels have been successfully rewritten.")
+        with positionlogger(position, filename=f"log_{population}.txt"):
+            logger.info("LABEL CORRECTION (manual, napari)")
+            logger.info(f"population: {population}")
+            logger.info(f"output_folder: {output_folder}")
+            logger.info(
+                f"frames written: {n_frames}, labelled objects (summed over frames): {n_objects_total}"
+            )
 
     def export_annotation():
         """Export annotation data."""

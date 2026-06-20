@@ -35,6 +35,9 @@ from celldetective.measure import (
     classify_cells_from_query,
 )
 
+from celldetective.log_manager import positionlogger
+from celldetective.utils.data_cleaning import extract_identity_col
+
 logger = logging.getLogger("celldetective")
 
 

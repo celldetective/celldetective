@@ -6,6 +6,7 @@ import os
 
 logger = logging.getLogger("celldetective")
 
+from celldetective.log_manager import positionlogger
 from celldetective.utils.image_loaders import locate_labels
 from celldetective.utils.data_loaders import get_position_table, get_position_pickle
 
@@ -1008,6 +1009,16 @@ class NeighborhoodProcess(Process):
 
                         df_pairs.to_csv(previous_pair_table_path, index=False)
                         logger.info(f"Pair measurements saved to {previous_pair_table_path}")
+
+        with positionlogger(self.pos, filename="log_neighborhood.txt"):
+            logger.info("NEIGHBORHOOD")
+            logger.info(f"neighborhood_type: {self.protocol.get('neighborhood_type')}")
+            logger.info(f"population: {self.protocol.get('population')}")
+            logger.info(f"distance: {self.protocol.get('distance')}")
+            logger.info(f"clear_neigh: {self.protocol.get('clear_neigh')}")
+            logger.info(f"event_time_col: {self.protocol.get('event_time_col')}")
+            logger.info(f"neighborhood_kwargs: {self.protocol.get('neighborhood_kwargs')}")
+            logger.info(f"measure_pairs: {self.measure_pairs}")
 
         # Send end signal
         self.queue.put("finished")

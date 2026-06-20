@@ -625,13 +625,12 @@ class StackVisualizer(CelldetectiveWidget):
             current_ylim = self.ax_profile.get_ylim()
 
         # Plot profile
+        # ax_profile.clear() already removes every artist on the axes,
+        # including any previous profile_line. Calling profile_line.remove()
+        # afterwards raises NotImplementedError ("cannot remove artist") because
+        # the artist is already detached, so we rely on clear() alone here.
         self.ax_profile.clear()
         self.ax_profile.set_facecolor("none")
-        if hasattr(self, "profile_line") and self.profile_line:
-            try:
-                self.profile_line.remove()
-            except ValueError:
-                pass  # Already removed
 
         (self.profile_line,) = self.ax_profile.plot(
             dist_axis, profile, color="black", linestyle="-"
@@ -762,10 +761,17 @@ class StackVisualizer(CelldetectiveWidget):
         if np.isnan(p99):
             p99 = 1
 
-        import matplotlib.pyplot as plt
+        from matplotlib.figure import Figure
         from celldetective.gui.base.figure_canvas import FigureCanvas
 
-        self.fig, self.ax = plt.subplots(figsize=(5, 5))
+        # Use a standalone Figure rather than plt.subplots(): pyplot registers
+        # every figure it creates in a process-global manager (Gcf) and never
+        # releases it, so each embedded viewer would leak its figure + Qt canvas
+        # for the lifetime of the process. Across a test session that exhausts
+        # Windows GDI/handles and corrupts the heap (access violation). A plain
+        # Figure is owned only by this widget and is freed when it is destroyed.
+        self.fig = Figure(figsize=(5, 5))
+        self.ax = self.fig.add_subplot(111)
 
         self.fig.subplots_adjust(top=1, bottom=0, right=1, left=0, hspace=0, wspace=0)
         self.ax.margins(0)

@@ -17,7 +17,7 @@ Available trackers
 
 Celldetective integrates two tracking algorithms:
 
-*   :term:`bTrack` [#]_ (default) — a Bayesian tracker that uses Kalman filters and cell features to predict motion. It handles complex behaviors such as division and apoptosis, and is the recommended choice for crowded scenes.
+*   **bTrack** [#]_ (default) — a Bayesian tracker that uses Kalman filters and cell features to predict motion. It handles complex behaviors such as division and apoptosis, and is the recommended choice for crowded scenes.
 *   **trackpy** — a Crocker–Grier particle tracker well-suited for simple Brownian motion.
 
 Both trackers produce a table of cell positions, identities, and (optionally) morphological or intensity features per frame. Results are saved as a CSV file (``trajectories_<population>.csv``) in the ``output/tables`` folder of each position.

@@ -1,14 +1,14 @@
 How to measure single-cell texture
 -----------------------------------
 
-This guide shows you how to measure :term:`Haralick Texture Features` on a per-cell basis.
+This guide shows you how to measure **Haralick Texture Features** on a per-cell basis.
 
-Reference keys: :term:`texture`, :term:`single-cell measurement`
+Reference keys: :term:`texture features`, :term:`single-cell measurement`
 
 **Prerequisite:** You must have segmented the cells. Tracking is recommended but not required.
 
 
-Enable :term:`Haralick Texture Features`
+Enable **Haralick Texture Features**
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 #. Open the **Measure** tab for your population of interest.
@@ -44,7 +44,7 @@ Run the measurements
 
 #. In the control panel, check the **MEASURE** box and click **Submit**.
 
-The following :term:`Haralick Texture Features` will be appended to your measurement table: ``haralick_contrast``, ``haralick_dissimilarity``, ``haralick_homogeneity``, ``haralick_energy``, ``haralick_correlation``, ``haralick_ASM``.
+The following **Haralick Texture Features** will be appended to your measurement table: ``haralick_contrast``, ``haralick_dissimilarity``, ``haralick_homogeneity``, ``haralick_energy``, ``haralick_correlation``, ``haralick_ASM``.
 
 .. note::
-    :term:`Haralick Texture Features` are computationally expensive. Consider lowering the gray levels or using a scale factor < 1 for large datasets.
+    **Haralick Texture Features** are computationally expensive. Consider lowering the gray levels or using a scale factor < 1 for large datasets.

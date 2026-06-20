@@ -54,8 +54,39 @@ from celldetective.utils.parsing import (
 from gc import collect
 from tqdm import tqdm
 from celldetective import get_logger
+from celldetective.log_manager import positionlogger
 
 logger = get_logger(__name__)
+
+
+def _log_preprocessing_step(pos_path: str, correction_type: str, params: Dict[str, Any]) -> None:
+    """
+    Record the preprocessing parameters in a position-level log.
+
+    Preprocessing (background correction) is common to every population analysis, so its
+    parameters are recorded in a dedicated position-level log (``log_preprocessing.txt``)
+    rather than in the population-specific ``log_{mode}.txt`` files. The parameters are
+    emitted through the integrated ``celldetective`` logger; the :func:`positionlogger`
+    context manager routes those records into the position folder for the duration of the
+    call. A logging failure never aborts the correction itself.
+
+    Parameters
+    ----------
+    pos_path : str
+        Path to the position folder.
+    correction_type : str
+        The kind of correction applied (e.g. "model-free", "model", "offset").
+    params : dict
+        The parameters that define the correction.
+    """
+
+    try:
+        with positionlogger(pos_path, filename="log_preprocessing.txt"):
+            logger.info(f"PREPROCESS - correction_type: {correction_type}")
+            for key, value in params.items():
+                logger.info(f"PREPROCESS - {key}: {value}")
+    except OSError as e:
+        logger.warning(f"Could not write preprocessing log for {pos_path}: {e}")
 
 
 def estimate_background_per_condition(
@@ -477,6 +508,26 @@ def correct_background_model_free(
                     progress_callback=progress_callback,
                 )
                 logger.info("Correction successful.")
+                _log_preprocessing_step(
+                    pos_path,
+                    "model-free",
+                    {
+                        "target_channel": target_channel,
+                        "mode": mode,
+                        "operation": operation,
+                        "clip": clip,
+                        "threshold_on_std": threshold_on_std,
+                        "offset": offset,
+                        "frame_range": frame_range,
+                        "optimize_option": optimize_option,
+                        "opt_coef_range": opt_coef_range,
+                        "opt_coef_nbr": opt_coef_nbr,
+                        "fix_nan": fix_nan,
+                        "activation_protocol": activation_protocol,
+                        "movie_prefix": movie_prefix,
+                        "export_prefix": export_prefix,
+                    },
+                )
                 if return_stacks:
                     stacks.append(corrected_stack)
                 else:
@@ -1121,6 +1172,21 @@ def correct_background_model(
                 subset_indices=kwargs.get("subset_indices", None),
             )
             logger.info("Correction successful.")
+            _log_preprocessing_step(
+                pos_path,
+                "model",
+                {
+                    "target_channel": target_channel,
+                    "model": model,
+                    "operation": operation,
+                    "clip": clip,
+                    "threshold_on_std": threshold_on_std,
+                    "activation_protocol": activation_protocol,
+                    "downsample": downsample,
+                    "movie_prefix": movie_prefix,
+                    "export_prefix": export_prefix,
+                },
+            )
             if return_stacks:
                 stacks.append(corrected_stack)
             else:
@@ -1612,6 +1678,17 @@ def correct_channel_offset(
             )
 
             logger.info("Correction successful.")
+            _log_preprocessing_step(
+                pos_path,
+                "offset",
+                {
+                    "target_channel": target_channel,
+                    "correction_horizontal": correction_horizontal,
+                    "correction_vertical": correction_vertical,
+                    "movie_prefix": movie_prefix,
+                    "export_prefix": export_prefix,
+                },
+            )
             if return_stacks:
                 stacks.append(corrected_stack)
             else:

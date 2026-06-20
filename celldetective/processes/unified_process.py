@@ -5,7 +5,12 @@ from multiprocessing import Process, Queue
 from typing import Optional, Dict, Any
 from pathlib import Path
 
-from celldetective.log_manager import get_logger
+from celldetective.log_manager import (
+    get_logger,
+    setup_global_logging,
+    forward_logs_to_queue,
+    capture_library_logs,
+)
 
 logger = get_logger(__name__)
 
@@ -52,12 +57,21 @@ class UnifiedBatchProcess(Process):
     def run(self):
         """
         Run the unified batch process.
+
+        SEGMENT/TRACK/MEASURE execute in this spawned child, whose stdout the GUI does not
+        capture. ``forward_logs_to_queue`` ships this process's logs — and those of the
+        libraries it calls (cellpose, stardist, btrack, trackpy) — back to the parent so
+        they surface where the user is watching.
         """
 
         if self.log_file is not None:
-            from celldetective.log_manager import setup_logging
+            setup_global_logging(log_file=self.log_file)
 
-            setup_logging(self.log_file)
+        with forward_logs_to_queue(self.queue):
+            self._run_batch()
+
+    def _run_batch(self):
+        """Run the segmentation/tracking/measurement/signal batch for every position."""
 
         logger.info("Starting Unified Batch Process...")
 
@@ -313,12 +327,15 @@ class UnifiedBatchProcess(Process):
 
                         seg_worker.setup_for_position(pos_path)
 
-                        if not "threshold_instructions" in self.seg_args:
-                            seg_worker.process_position(
-                                model=model, scale_model=scale_model
-                            )
-                        else:
-                            seg_worker.process_position()
+                        with capture_library_logs(
+                            seg_worker.pos, f"log_{seg_worker.mode}.txt"
+                        ):
+                            if not "threshold_instructions" in self.seg_args:
+                                seg_worker.process_position(
+                                    model=model, scale_model=scale_model
+                                )
+                            else:
+                                seg_worker.process_position()
 
                         # Verify completeness and atomically swap the temporary
                         # masks onto the final labels folder. Raises if any frame
@@ -335,7 +352,10 @@ class UnifiedBatchProcess(Process):
                         self.queue.put({"status": msg})
 
                         track_worker.setup_for_position(pos_path)
-                        track_worker.process_position()
+                        with capture_library_logs(
+                            track_worker.pos, f"log_{track_worker.mode}.txt"
+                        ):
+                            track_worker.process_position()
 
                     # --- MEASUREMENT ---
                     if self.run_measurement and measure_worker:
@@ -346,7 +366,10 @@ class UnifiedBatchProcess(Process):
                         self.queue.put({"status": msg})
 
                         measure_worker.setup_for_position(pos_path)
-                        measure_worker.process_position()
+                        with capture_library_logs(
+                            measure_worker.pos, f"log_{measure_worker.mode}.txt"
+                        ):
+                            measure_worker.process_position()
 
                     # --- CLASSIFICATION (after measurement, before events) ---
                     if self.run_classification:

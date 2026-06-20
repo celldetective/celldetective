@@ -165,6 +165,11 @@ class TestEventAnnotatorSaveLogic:
             # Set required attributes
             annotator.df_tracks = df.copy()
             annotator.trajectories_path = temp_trajectory_file
+            # save_trajectories now writes a provenance log via positionlogger,
+            # which reads self.pos/self.mode, and consumes self.annotation_log.
+            annotator.pos = os.path.dirname(temp_trajectory_file)
+            annotator.mode = "targets"
+            annotator.annotation_log = []
             annotator.class_name = "class"
             annotator.normalized_signals = False
             annotator.selection = []
@@ -197,6 +202,11 @@ class TestEventAnnotatorSaveLogic:
 
             annotator.df_tracks = sample_df_tracks.copy()
             annotator.trajectories_path = temp_trajectory_file
+            # save_trajectories now writes a provenance log via positionlogger,
+            # which reads self.pos/self.mode, and consumes self.annotation_log.
+            annotator.pos = os.path.dirname(temp_trajectory_file)
+            annotator.mode = "targets"
+            annotator.annotation_log = []
             annotator.class_name = "class"
             annotator.normalized_signals = False
             annotator.selection = []
@@ -343,6 +353,10 @@ class TestEventAnnotatorApplyModification:
             annotator.cell_info = MagicMock()
             annotator.cell_fcanvas = MagicMock()
             annotator.line_dt = MagicMock()
+            # apply_modification appends to self.annotation_log; with __init__
+            # mocked the attribute is absent, and hasattr() on the uninitialized
+            # QObject raises RuntimeError instead of returning False, so set it.
+            annotator.annotation_log = []
 
             # Set event option
             annotator.event_btn.setChecked(True)
@@ -392,6 +406,7 @@ class TestEventAnnotatorApplyModification:
             annotator.cell_info = MagicMock()
             annotator.cell_fcanvas = MagicMock()
             annotator.line_dt = MagicMock()
+            annotator.annotation_log = []
 
             annotator.no_event_btn.setChecked(True)
 
@@ -431,6 +446,7 @@ class TestEventAnnotatorApplyModification:
             annotator.cell_info = MagicMock()
             annotator.cell_fcanvas = MagicMock()
             annotator.line_dt = MagicMock()
+            annotator.annotation_log = []
 
             annotator.suppr_btn.setChecked(True)
 

@@ -3,7 +3,7 @@ How to configure and run tracking
 
 This guide shows you how to set up a tracker and run it on your segmented data.
 
-Reference keys: :term:`tracking`, :term:`cell population`
+Reference keys: **tracking**, :term:`cell population`
 
 **Prerequisite:** You must have segmented masks for the population of interest.
 
@@ -17,10 +17,10 @@ Configure the tracker
 
 #. **Select a Tracker**:
 
-   *   Choose :term:`bTrack` (default) for complex behaviors (division, apoptosis) and crowded scenes. It uses a Bayesian approach with motion prediction.
-   *   Choose :term:`trackpy` for simple particle tracking (Brownian motion).
+   *   Choose **bTrack** (default) for complex behaviors (division, apoptosis) and crowded scenes. It uses a Bayesian approach with motion prediction.
+   *   Choose **trackpy** for simple particle tracking (Brownian motion).
 
-#. **Add Features** (Optional): Click **Add features** to calculate morphological (e.g., area) or intensity features during tracking. Enable **:term:`Haralick Texture Features`** if you need texture analysis (computationally expensive).
+#. **Add Features** (Optional): Click **Add features** to calculate morphological (e.g., area) or intensity features during tracking. Enable **Haralick Texture Features** if you need texture analysis (computationally expensive).
 
 #. **Configure Post-Processing** (Optional): Enable options to filter short tracks, fill gaps, or extrapolate positions.
 

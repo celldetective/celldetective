@@ -3,6 +3,7 @@ from PyQt5.QtWidgets import QPushButton, QVBoxLayout, QHBoxLayout, QLabel, QProg
 from PyQt5.QtCore import QRunnable, QObject, pyqtSignal, QThreadPool, QSize, Qt
 from PyQt5.QtGui import QPixmap, QImage
 from typing import Optional, Any, Dict
+import logging
 import math
 import numpy as np
 
@@ -419,6 +420,16 @@ class Runner(QRunnable):
         try:
             # Handle dictionary for triple progress
             if isinstance(data, dict):
+                # Re-emit logs forwarded from the worker child process so cellpose /
+                # stardist / btrack / celldetective output surfaces in the parent
+                # (console + global log file) during SEGMENT/TRACK/MEASURE.
+                if "log_record" in data:
+                    rec = data["log_record"]
+                    logging.getLogger(rec["name"]).log(
+                        rec["levelno"], rec["msg"]
+                    )
+                    return False
+
                 if "well_progress" in data:
                     self.signals.update_well.emit(int(data["well_progress"]))
                 if "well_time" in data:

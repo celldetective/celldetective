@@ -56,30 +56,111 @@ Deep learning segmentation
 Models
 ~~~~~~
 
-Celldetective ships with Deep-learning segmentation models trained with the :term:`StarDist` [#]_ or :term:`Cellpose` [#]_ [#]_ algorithm. They are split in two families: 
+Celldetective ships with Deep-learning segmentation models trained with the **StarDist** [#stardist]_ or **Cellpose** [#cellpose]_ [#cellpose2]_ algorithm. They are split in two families: 
 
 #. **Generalist models** — models published in the literature that have been trained on thousands of images with one or two channels, on general tasks such as segmenting all nuclei visible on the images. In some cases, more than one modality was passed in the channel slots during training to force the model to generalize and be less sensitive to the modality. 
 #. **Population-specific models** — models that we trained from scratch on brand new multimodal data to achieve more specific tasks such as detecting the nuclei of a population in the presence of another. In this configuration, accurate segmentation often requires to look at multiple channels at once, *i.e.* performing a multimodal interpretation.
 
 
-.. figure:: _static/table-generalist-models.png
-    :align: center
-    :alt: table_generalist
-    
-    **Generalist models.** This table lists the different generalist models (:term:`Cellpose` or :term:`StarDist`) which can be called natively in Celldetective. The images have been sampled from their respective datasets, cropped to ( 200 × 200 ) px and rescaled homogeneously to fit in the table.
+**Generalist models.** This table lists the different generalist models (**Cellpose** or **StarDist**) which can be called natively in Celldetective. The images have been sampled from their respective datasets, cropped to ( 200 × 200 ) px and rescaled homogeneously to fit in the table.
+
+.. list-table::
+   :widths: 20 20 15 30 15
+   :header-rows: 1
+
+   * - Name
+     - Modalities
+     - # channels
+     - Dataset
+     - Sample Image
+   * - ``CP_cyto3``
+     - cytoplasm, nucleus
+     - 2
+     - Cellpose [#cellpose]_ & user-submitted images
+     - |cellpose-sample|
+   * - ``CP_livecell``
+     - cytoplasm (BF), black
+     - 2
+     - LiveCell [#livecell]_
+     - |livecell-sample|
+   * - ``CP_tissuenet``
+     - cytoplasm, nucleus
+     - 2
+     - TissueNet [#tissuenet]_
+     - /
+   * - ``CP_nuclei``
+     - nucleus, black
+     - 2
+     - ?
+     - /
+   * - ``SD_versatile_fluo``
+     - nucleus
+     - 1
+     - subset of DSB 2018 [#dsb2018]_
+     - |dsb2018|
+   * - ``SD_versatile_he``
+     - H&E RGB
+     - 1
+     - MonoNuSeg 2018 [#mononuseg]_, TNBC 2018 [#tnbc]_
+     - |mononuseg|
 
 
-.. figure:: _static/target-models.png
-    :align: center
-    :alt: table_target_models
-    
-    **Target models.** MCF-7 nuclei segmentation models that we developed for our application. The models have been trained on the ``db_mcf7_nuclei_w_primary_NK`` dataset available in Zenodo.
+**Target models.** MCF-7 nuclei segmentation models that we developed for our application. The models have been trained on the ``db_mcf7_nuclei_w_primary_NK`` dataset available in Zenodo.
 
-.. figure:: _static/effector-models.png
-    :align: center
-    :alt: table_effector_models
-    
-    **Effector models.** Primary NK segmentation models that we developed for our application. The models have been trained on the ``db_primary_NK_w_mcf7`` dataset available in Zenodo.
+.. list-table::
+   :widths: 25 25 15 15 10 10
+   :header-rows: 1
+
+   * - Name
+     - Channels
+     - Type
+     - Pretrained
+     - Spatial calib. (μm)
+     - Sample Image
+   * - ``mcf7_nuc_multimodal``
+     - Hoechst, Brightfield, CFSE, PI
+     - StarDist
+     - None
+     - 0.3112
+     - |4chan|
+   * - ``mcf7_nuc_stardist_transfer``
+     - Hoechst
+     - StarDist
+     - ``SD_versatile_fluo``
+     - 0.3112
+     - |nuchcan|
+
+
+**Effector models.** Primary NK segmentation models that we developed for our application. The models have been trained on the ``db_primary_NK_w_mcf7`` dataset available in Zenodo.
+
+.. list-table::
+   :widths: 25 25 15 15 10 10
+   :header-rows: 1
+
+   * - Name
+     - Channels
+     - Type
+     - Pretrained
+     - Spatial calib. (μm)
+     - Sample Image
+   * - ``primNK_multimodal``
+     - brightfield, CFSE, Hoechst
+     - Cellpose
+     - None
+     - 0.2178
+     - |bf-cfse-h|
+   * - ``primNK_cfse``
+     - CFSE, None
+     - Cellpose
+     - ``CP_cyto2``
+     - 0.2178
+     - |cfse|
+   * - ``lymphocytes_ricm``
+     - RICM
+     - Cellpose
+     - None
+     - 0.2
+     - |ricm|
 
 
 Importing and applying models
@@ -117,12 +198,50 @@ To train a model on your annotations, see :doc:`How to train a segmentation mode
 References
 ----------
 
-.. [#] Florian KROMP, Eva BOZSAKY, Fikret RIFATBEGOVIC, Lukas FISCHER, Magdalena AMBROS, Maria BERNEDER, Tamara WEISS, Daria LAZIC, Wolfgang DÖRR, Allan HANBURY, Klaus BEISKE et al. « An Annotated Fluorescence Image Dataset for Training Nuclear Segmentation Methods ». In : Scientific Data 7.1 (1 11 août 2020), p. 262. ISSN : 2052-4463. DOI : 10.1038/s41597-020-00608-w . URL : https://www.nature.com/articles/s41597-020-00608-w.
+.. [#kromp] Florian KROMP, Eva BOZSAKY, Fikret RIFATBEGOVIC, Lukas FISCHER, Magdalena AMBROS, Maria BERNEDER, Tamara WEISS, Daria LAZIC, Wolfgang DÖRR, Allan HANBURY, Klaus BEISKE et al. « An Annotated Fluorescence Image Dataset for Training Nuclear Segmentation Methods ». In : Scientific Data 7.1 (1 11 août 2020), p. 262. ISSN : 2052-4463. DOI : 10.1038/s41597-020-00608-w . URL : https://www.nature.com/articles/s41597-020-00608-w.
 
-.. [#] Ahlers, J. et al. napari: a multi-dimensional image viewer for Python. Zenodo https://doi.org/10.5281/zenodo.8115575 (2023).
+.. [#napari] Ahlers, J. et al. napari: a multi-dimensional image viewer for Python. Zenodo https://doi.org/10.5281/zenodo.8115575 (2023).
 
-.. [#] Schmidt, U., Weigert, M., Broaddus, C. & Myers, G. Cell Detection with Star-Convex Polygons. in Medical Image Computing and Computer Assisted Intervention – MICCAI 2018 (eds. Frangi, A. F., Schnabel, J. A., Davatzikos, C., Alberola-López, C. & Fichtinger, G.) 265–273 (Springer International Publishing, Cham, 2018). doi:10.1007/978-3-030-00934-2_30.
+.. [#stardist] Schmidt, U., Weigert, M., Broaddus, C. & Myers, G. Cell Detection with Star-Convex Polygons. in Medical Image Computing and Computer Assisted Intervention – MICCAI 2018 (eds. Frangi, A. F., Schnabel, J. A., Davatzikos, C., Alberola-López, C. & Fichtinger, G.) 265–273 (Springer International Publishing, Cham, 2018). doi:10.1007/978-3-030-00934-2_30.
 
-.. [#] Stringer, C., Wang, T., Michaelos, M. & Pachitariu, M. Cellpose: a generalist algorithm for cellular segmentation. Nat Methods 18, 100–106 (2021).
+.. [#cellpose] Stringer, C., Wang, T., Michaelos, M. & Pachitariu, M. Cellpose: a generalist algorithm for cellular segmentation. Nat Methods 18, 100–106 (2021).
 
-.. [#] Pachitariu, M. & Stringer, C. Cellpose 2.0: how to train your own model. Nat Methods 19, 1634–1641 (2022).
+.. [#cellpose2] Pachitariu, M. & Stringer, C. Cellpose 2.0: how to train your own model. Nat Methods 19, 1634–1641 (2022).
+
+.. [#livecell] Edlund, C. et al. LIVECell—A Large-Scale Dataset for Label-Free Live Cell Segmentation. Nat Methods 18, 1038–1045 (2021). doi:10.1038/s41592-021-01249-6.
+
+.. [#tissuenet] Barshir, R. et al. The TissueNet Database of Human Tissue Protein--Protein Interactions. Nucleic Acids Research 41, D841-D844 (2013). doi:10.1093/nar/gks1198.
+
+.. [#dsb2018] Caicedo, J. C. et al. Nucleus Segmentation across Imaging Experiments: The 2018 Data Science Bowl. Nat Methods 16, 1247–1253 (2019). doi:10.1038/s41592-019-0612-7.
+
+.. [#mononuseg] Kumar, N. et al. A Multi-Organ Nucleus Segmentation Challenge. IEEE Trans Med Imaging 39, 1380–1391 (2020). doi:10.1109/TMI.2019.2947628.
+
+.. [#tnbc] Naylor, P., Lae, M., Reyal, F. & Walter, T. Segmentation of Nuclei in Histopathology Images by Deep Regression of the Distance Map. IEEE Trans Med Imaging 38, 448–459 (2019). doi:10.1109/TMI.2018.2865709.
+
+
+.. |cellpose-sample| image:: _static/cellpose-sample.png
+   :width: 100px
+
+.. |livecell-sample| image:: _static/livecell-sample.png
+   :width: 100px
+
+.. |dsb2018| image:: _static/dsb2018.png
+   :width: 100px
+
+.. |mononuseg| image:: _static/mononuseg.png
+   :width: 100px
+
+.. |ricm| image:: _static/ricm.png
+   :width: 100px
+
+.. |4chan| image:: _static/4chan.png
+   :width: 100px
+
+.. |nuchcan| image:: _static/nuchcan.png
+   :width: 100px
+
+.. |bf-cfse-h| image:: _static/bf-cfse-h.png
+   :width: 100px
+
+.. |cfse| image:: _static/cfse.png
+   :width: 100px

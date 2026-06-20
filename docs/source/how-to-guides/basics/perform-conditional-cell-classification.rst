@@ -17,7 +17,7 @@ This guide shows you how classify cells from their features using conditional ex
 
     The **CLASSIFY** step in a population block. The :icon:`scatter-plot,black` button opens the classifier, and the :icon:`playlist-plus,black` button imports classification configs to queue for this step (the button text shows how many are queued).
 
-3. Name the classification to create. For **dynamic data** this becomes the name of the event. For **static** data, it is the name of the :term:`group`.
+3. Name the classification to create. For **dynamic data** this becomes the name of the event. For **static** data, it is the name of the :term:`characteristic group`.
 
 .. note::
     Use **Save config** in the classifier to store a classification as a reusable config (a JSON file in your project's ``configs/`` folder). Saving does not queue it automatically: to apply a saved config, import it with the :icon:`playlist-plus,black` button next to the step. Imported **static** (group) configs are queued under the **CLASSIFY** step and applied in order when you run the block; **time-correlated** configs are routed to the **DETECT EVENTS** step instead.

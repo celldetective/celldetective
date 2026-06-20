@@ -1,6 +1,5 @@
 from multiprocessing import Process
 import time
-import datetime
 import os
 import json
 from pathlib import Path, PurePath
@@ -37,7 +36,7 @@ from celldetective.measure import (
 import pandas as pd
 from celldetective.utils.image_loaders import locate_labels
 
-from celldetective.log_manager import get_logger
+from celldetective.log_manager import get_logger, positionlogger
 from celldetective.utils import COLUMN_LABELS
 
 logger = get_logger(__name__)
@@ -190,21 +189,20 @@ class MeasurementProcess(Process):
         intensity_measurement_radii_log = (
             f"intensity_measurement_radii: {self.intensity_measurement_radii}"
         )
-        isotropic_options_log = f"isotropic_operations: {self.isotropic_operations} \n"
-        log = "\n".join(
-            [
-                features_log,
-                border_distances_log,
-                haralick_options_log,
-                background_correction_log,
-                spot_detection_log,
-                intensity_measurement_radii_log,
-                isotropic_options_log,
-            ]
-        )
-        with open(self.pos + f"log_{self.mode}.txt", "a") as f:
-            f.write(f"{datetime.datetime.now()} MEASURE \n")
-            f.write(log + "\n")
+        isotropic_options_log = f"isotropic_operations: {self.isotropic_operations}"
+        log_list = [
+            features_log,
+            border_distances_log,
+            haralick_options_log,
+            background_correction_log,
+            spot_detection_log,
+            intensity_measurement_radii_log,
+            isotropic_options_log,
+        ]
+        with positionlogger(self.pos, filename=f"log_{self.mode}.txt"):
+            logger.info("MEASURE")
+            for line in log_list:
+                logger.info(line)
 
     def prepare_folders(self):
         """Prepare folder names and table names based on the mode."""

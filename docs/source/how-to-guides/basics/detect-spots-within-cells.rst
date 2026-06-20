@@ -3,7 +3,7 @@ How to detect sub-cellular spots
 
 This guide shows you how to count and measure spots inside your cell masks.
 
-Reference keys: :term:`single-cell measurements`
+Reference keys: :term:`single-cell measurement`
 
 **Prerequisite**: you have segmented your cell population of interest accurately.
 

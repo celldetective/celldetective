@@ -1,7 +1,6 @@
 from multiprocessing import Process, Queue
 from typing import Optional, Dict, Any, List
 import time
-import datetime
 import os
 import json
 from pathlib import Path, PurePath
@@ -13,7 +12,7 @@ import gc
 from art import tprint
 import concurrent.futures
 
-from celldetective.log_manager import get_logger
+from celldetective.log_manager import get_logger, positionlogger
 from celldetective.utils.experiment import (
     extract_position_name,
     extract_experiment_channels,
@@ -388,12 +387,27 @@ class SegmentCellDLProcess(BaseSegmentProcess):
             self.flow_threshold = self.input_config["flow_threshold"]
 
     def write_log(self):
-        """Write the logo to the log file."""
+        """Write the segmentation parameters to the log file."""
 
-        log = f"segmentation model: {self.model_name}\n"
-        with open(self.pos + f"log_{self.mode}.txt", "a") as f:
-            f.write(f"{datetime.datetime.now()} SEGMENT \n")
-            f.write(log)
+        log_lines = [
+            f"segmentation model: {self.model_name}",
+            f"model_type: {self.model_type}",
+            f"required_channels: {self.required_channels}",
+            f"spatial_calibration: {self.required_spatial_calibration}",
+            f"normalize_kwargs: {self.normalize_kwargs}",
+        ]
+        if self.target_cell_size is not None:
+            log_lines.append(f"target_cell_size_um: {self.target_cell_size}")
+            log_lines.append(f"cell_size_um: {self.cell_size}")
+        if self.model_type == "cellpose":
+            log_lines.append(f"diameter: {self.diameter}")
+            log_lines.append(f"cellprob_threshold: {self.cellprob_threshold}")
+            log_lines.append(f"flow_threshold: {self.flow_threshold}")
+
+        with positionlogger(self.pos, filename=f"log_{self.mode}.txt"):
+            logger.info("SEGMENT")
+            for line in log_lines:
+                logger.info(line)
 
     def detect_channels(self):
         """Detect the channels required for the model."""
@@ -789,12 +803,19 @@ class SegmentCellThresholdProcess(BaseSegmentProcess):
                 self.equalize_time.append(equalize_time)
 
     def write_log(self):
-        """Write the logo to the log file."""
+        """Write the threshold segmentation parameters to the log file."""
 
-        log = f"Threshold segmentation: {self.threshold_instructions}\n"
-        with open(self.pos + f"log_{self.mode}.txt", "a") as f:
-            f.write(f"{datetime.datetime.now()} SEGMENT \n")
-            f.write(log)
+        log_lines = [f"Threshold segmentation: {self.threshold_instructions}"]
+        for i, instructions in enumerate(self.instructions):
+            log_lines.append(f"threshold_instructions[{i}]: {instructions}")
+        if self.equalize:
+            log_lines.append(f"equalize: {self.equalize}")
+            log_lines.append(f"equalize_time: {self.equalize_time}")
+
+        with positionlogger(self.pos, filename=f"log_{self.mode}.txt"):
+            logger.info("SEGMENT")
+            for line in log_lines:
+                logger.info(line)
 
     def detect_channels(self):
         """Detect the channels required for the thresholding."""
