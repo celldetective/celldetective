@@ -35,6 +35,7 @@ from superqt import QLabeledDoubleRangeSlider, QSearchableComboBox, QLabeledSlid
 from celldetective import (
     get_software_location,
 )
+from celldetective.utils.schema import trajectory_table_path
 from celldetective.utils.experiment import (
     extract_experiment_channels,
     get_experiment_metadata,
@@ -1251,8 +1252,8 @@ class PairEventAnnotator(CelldetectiveMainWindow):
 
         for population in self.populations:
 
-            population_trajectories_path = self.pos + os.sep.join(
-                ["output", "tables", f"trajectories_{population}.pkl"]
+            population_trajectories_path = trajectory_table_path(
+                self.pos, population, extension="pkl"
             )
             if not os.path.exists(population_trajectories_path):
                 population_trajectories_path = population_trajectories_path.replace(
@@ -1390,9 +1391,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         """Locate relative tracks."""
 
         population = "relative"
-        self.relative_trajectories_path = self.pos + os.sep.join(
-            ["output", "tables", "trajectories_pairs.csv"]
-        )
+        self.relative_trajectories_path = trajectory_table_path(self.pos, "pairs")
 
         if not os.path.exists(self.relative_trajectories_path):
 

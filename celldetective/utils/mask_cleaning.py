@@ -174,8 +174,9 @@ def auto_correct_masks(
     if masks.ndim != 2:
         raise ValueError("`masks` should be a 2D numpy array...")
 
-    # Avoid negative mask values
-    masks[masks < 0] = np.abs(masks[masks < 0])
+    # Work on a copy so we never mutate the caller's array; np.abs also folds in
+    # the previous negative-value correction.
+    masks = np.abs(masks)
 
     props = pd.DataFrame(
         regionprops_table(masks, properties=("label", "area", "area_bbox"))
@@ -203,24 +204,22 @@ def auto_correct_masks(
 
         max_lbl = np.amax(corrected_lbl)
 
-    # Second routine to eliminate objects too small
+    # Second routine to eliminate objects too small (vectorized: collect every
+    # under-sized label and zero them in one np.isin pass).
     props2 = pd.DataFrame(
-        regionprops_table(corrected_lbl, properties=("label", "area", "area_bbox"))
+        regionprops_table(corrected_lbl, properties=("label", "area"))
     )
-    for cell in props2["label"].unique():
-        area = props2.loc[props2["label"] == cell, "area"].values
-        lbl = corrected_lbl == cell
-        if area < min_area:
-            corrected_lbl[lbl] = 0
+    small_labels = props2.loc[props2["area"] < min_area, "label"].to_numpy()
+    if small_labels.size:
+        corrected_lbl[np.isin(corrected_lbl, small_labels)] = 0
 
-    # Additionnal routine to reorder labels from 1 to number of cells
-    label_ids = np.unique(corrected_lbl)[1:]
-    clean_labels = corrected_lbl.copy()
-
-    for k, lbl in enumerate(label_ids):
-        clean_labels[corrected_lbl == lbl] = k + 1
-
-    clean_labels = clean_labels.astype(int)
+    # Reorder labels from 1..N via a lookup table instead of one masked
+    # assignment per label.
+    label_ids = np.unique(corrected_lbl)
+    label_ids = label_ids[label_ids != 0]
+    lut = np.zeros(int(corrected_lbl.max()) + 1, dtype=int)
+    lut[label_ids] = np.arange(1, label_ids.size + 1)
+    clean_labels = lut[corrected_lbl]
 
     if fill_labels:
         clean_labels = fill_label_holes(clean_labels)
@@ -316,12 +315,19 @@ def relabel_segmentation(
     if exclude_nans:
         df = df.dropna(subset=[column_labels["label"]])
 
-    new_labels = np.zeros_like(labels)
+    # int32 output: track IDs routinely exceed the int16 range of the on-disk
+    # masks, which would otherwise silently overflow.
+    new_labels = np.zeros(labels.shape, dtype=np.int32)
     shared_data = {"s": 0}
+    counter_lock = threading.Lock()  # protects shared_data["s"] across threads
 
     # Progress tracking
     shared_progress = {"val": 0, "lock": threading.Lock()}
     total_frames = len(df[column_labels["frame"]].dropna().unique())
+
+    # Base value for fresh IDs given to masks that are not in the table.
+    all_track_ids = df[column_labels["track"]].dropna().to_numpy()
+    base_track_id = int(np.max(all_track_ids)) if all_track_ids.size else 0
 
     def rewrite_labels(indices: List[int]) -> None:
         """
@@ -332,8 +338,6 @@ def relabel_segmentation(
         indices : list
             List of frame indices to process.
         """
-
-        all_track_ids = df[column_labels["track"]].dropna().unique()
 
         # Check for cancellation
         if progress_callback:
@@ -360,40 +364,45 @@ def relabel_segmentation(
                     return
 
             f = int(t)
+            frame_lbl = labels[f]
+            max_lbl = int(frame_lbl.max())
+            if max_lbl <= 0:
+                continue
+
+            # (track_id, class_id) pairs for this frame; cast to float so NaNs
+            # survive the comparison regardless of the source dtype.
             cells = df.loc[
                 df[column_labels["frame"]] == f,
                 [column_labels["track"], column_labels["label"]],
-            ].to_numpy()
-            tracks_at_t = list(cells[:, 0])
-            identities = list(cells[:, 1])
+            ].to_numpy(dtype=float)
 
-            labels_at_t = list(np.unique(labels[f]))
-            if 0 in labels_at_t:
-                labels_at_t.remove(0)
-            labels_not_in_df = [lbl for lbl in labels_at_t if lbl not in identities]
-            for lbl in labels_not_in_df:
-                with threading.Lock():  # Synchronize access to `shared_data["s"]`
-                    track_id = max(all_track_ids) + shared_data["s"]
-                    shared_data["s"] += 1
-                tracks_at_t.append(track_id)
-                identities.append(lbl)
+            if cells.size:
+                valid = ~(np.isnan(cells[:, 0]) | np.isnan(cells[:, 1]))
+                tracked_class = cells[valid, 1].astype(np.int64)
+                tracked_track = np.rint(cells[valid, 0]).astype(np.int64)
+            else:
+                tracked_class = np.empty(0, dtype=np.int64)
+                tracked_track = np.empty(0, dtype=np.int64)
 
-            # exclude NaN
-            tracks_at_t = np.array(tracks_at_t)
-            identities = np.array(identities)
+            # Build a lookup table mapping each mask value (class_id) to its
+            # track ID, then apply it to the whole frame in one vectorized pass.
+            lut = np.zeros(max_lbl + 1, dtype=np.int32)
+            in_range = (tracked_class > 0) & (tracked_class <= max_lbl)
+            lut[tracked_class[in_range]] = tracked_track[in_range].astype(np.int32)
 
-            tracks_at_t = tracks_at_t[identities == identities]
-            identities = identities[identities == identities]
+            # Masks present in the frame but absent from the table get fresh IDs.
+            present = np.unique(frame_lbl)
+            present = present[present != 0]
+            tracked_set = set(tracked_class.tolist())
+            untracked = [int(lbl) for lbl in present.tolist() if int(lbl) not in tracked_set]
+            if untracked:
+                with counter_lock:
+                    for lbl in untracked:
+                        shared_data["s"] += 1
+                        if lbl <= max_lbl:
+                            lut[lbl] = base_track_id + shared_data["s"]
 
-            for k in range(len(identities)):
-
-                # need routine to check values from labels not in class_id of this frame and add new track id
-
-                loc_i, loc_j = np.where(labels[f] == identities[k])
-                track_id = tracks_at_t[k]
-
-                if track_id == track_id:
-                    new_labels[f, loc_i, loc_j] = round(track_id)
+            new_labels[f] = lut[frame_lbl]
 
     # Multithreading
     indices = list(df[column_labels["frame"]].dropna().unique())

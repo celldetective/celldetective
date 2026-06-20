@@ -30,10 +30,16 @@ import json
 import numpy as np
 from celldetective.utils.model_loaders import locate_signal_model, _resolve_signal_model_paths
 from celldetective.utils.data_loaders import get_position_table, get_position_pickle
+from celldetective.utils.dataset_helpers import resolve_signal_channels
+from celldetective.utils.schema import trajectory_table_path
 from celldetective.tracking import clean_trajectories, interpolate_nan_properties
 import matplotlib.pyplot as plt
-from natsort import natsorted
 from celldetective.utils.color_mappings import color_from_status, color_from_class
+from celldetective.utils.event_schema import (
+    event_column_names,
+    status_from_event,
+    reclassify_out_of_window,
+)
 from math import floor
 from scipy.optimize import curve_fit
 import pandas as pd
@@ -146,22 +152,12 @@ def analyze_signals(
     label = _extract_config_label(config)
 
     if selected_signals is None:
-        selected_signals = []
-        for s in required_signals:
-            priority_cols = [a for a in available_signals if a == s]
-            second_priority_cols = [
-                a for a in available_signals if a.startswith(s) and a != s
-            ]
-            third_priority_cols = [
-                a for a in available_signals if s in a and not a.startswith(s)
-            ]
-            candidates = priority_cols + second_priority_cols + third_priority_cols
-            if len(candidates) == 0:
-                raise ValueError(f"No signal matches with the requirements of the model {required_signals}. Please pass the signals manually with the argument selected_signals or add measurements. Abort.")
-            logger.info(
-                f"Selecting the first time series among: {candidates} for input requirement {s}..."
-            )
-            selected_signals.append(candidates[0])
+        selected_signals = resolve_signal_channels(required_signals, available_signals)
+        if selected_signals is None:
+            raise ValueError(f"No signal matches with the requirements of the model {required_signals}. Please pass the signals manually with the argument selected_signals or add measurements. Abort.")
+        logger.info(
+            f"Resolved required channels {required_signals} to columns {selected_signals}..."
+        )
     else:
         if len(selected_signals) != len(required_signals):
             raise ValueError(f"Mismatch between the number of required signals {required_signals} and the provided signals {selected_signals}... Abort.")
@@ -176,7 +172,21 @@ def analyze_signals(
 
     max_signal_size = int(trajectories_clean[column_labels["time"]].max()) + 2
     if max_signal_size > model_signal_length:
-        raise ValueError(f"The current signals are longer ({max_signal_size}) than the maximum expected input ({model_signal_length}) for this signal analysis model. Abort...")
+        n_truncated = int(
+            (
+                trajectories_clean.groupby(column_labels["track"])[
+                    column_labels["time"]
+                ].max()
+                >= model_signal_length
+            ).sum()
+        )
+        logger.warning(
+            f"Signals are longer than the model window ({max_signal_size} > "
+            f"{model_signal_length} frames): truncating to {model_signal_length}. "
+            f"{n_truncated} track(s) extend past it; any event after frame "
+            f"{model_signal_length} will be reported as 'no event'."
+        )
+        max_signal_size = model_signal_length
 
     tracks = trajectories_clean[column_labels["track"]].unique()
     signals = np.zeros((len(tracks), max_signal_size, len(selected_signals)))
@@ -185,8 +195,12 @@ def analyze_signals(
         trajectories_clean.groupby(column_labels["track"])
     ):
         frames = group[column_labels["time"]].to_numpy().astype(int)
+        keep = frames < max_signal_size
+        frames = frames[keep]
+        if len(frames) == 0:
+            continue
         for j, col in enumerate(selected_signals):
-            signal = group[col].to_numpy()
+            signal = group[col].to_numpy()[keep]
             signals[i, frames, j] = signal
             signals[i, max(frames) :, j] = signal[-1]
 
@@ -195,15 +209,16 @@ def analyze_signals(
 
         classes = model.predict_class(signals)
         times_recast = model.predict_time_of_interest(signals)
+        classes, times_recast, n_demoted = reclassify_out_of_window(
+            classes, times_recast, model_signal_length
+        )
+        if n_demoted:
+            logger.info(
+                f"{n_demoted} event(s) predicted at/after the model window were "
+                f"set to 'no event'."
+            )
 
-        if label is None:
-            class_col = "class"
-            time_col = "t0"
-            status_col = "status"
-        else:
-            class_col = "class_" + label
-            time_col = "t_" + label
-            status_col = "status_" + label
+        class_col, time_col, status_col = event_column_names(label)
 
         for i, (tid, group) in enumerate(trajectories.groupby(column_labels["track"])):
             indices = group.index
@@ -217,13 +232,7 @@ def analyze_signals(
             t0 = group[time_col].to_numpy()[0]
             cclass = group[class_col].to_numpy()[0]
             timeline = group[column_labels["time"]].to_numpy()
-            status = np.zeros_like(timeline)
-            if t0 > 0:
-                status[timeline >= t0] = 1.0
-            if cclass == 2:
-                status[:] = 2
-            if cclass > 2:
-                status[:] = 42
+            status = status_from_event(timeline, cclass, t0)
             status_color = [color_from_status(s) for s in status]
             class_color = [color_from_class(cclass)] * len(status)
 
@@ -341,12 +350,95 @@ def analyze_signals_at_position(
         logger.error(f"Signal analysis script exited with code {result.returncode} for position {pos}.")
         raise RuntimeError(f"Signal analysis failed for position {pos} (exit code {result.returncode}).")
 
-    table = pos + os.sep.join(["output", "tables", f"trajectories_{mode}.csv"])
+    table = trajectory_table_path(pos, mode)
     if return_table:
         df = pd.read_csv(table)
         return df
     else:
         return None
+
+
+def classify_position_from_config(
+    pos: str, config: dict, mode: str = "targets"
+) -> pd.DataFrame:
+    """Apply a saved threshold/query classification config to one position.
+
+    Headless batch counterpart of ``ClassifierWidget`` for the pipeline: it loads
+    the position's trajectory table, applies :func:`celldetective.measure.classify_from_threshold_config`
+    (which yields an event ``class_/t_/status_`` set or a static ``group_`` column
+    depending on ``config['time_correlated']``), refreshes the status/class color
+    columns for event configs so viewers render them like a model result, and
+    writes the table back.
+
+    Parameters
+    ----------
+    pos : str
+        Position directory.
+    config : dict
+        A threshold classification config (see ``classify_from_threshold_config``).
+    mode : str, optional
+        Population mode used to locate the trajectory table. Default ``"targets"``.
+
+    Returns
+    -------
+    pandas.DataFrame
+        The updated table.
+    """
+    from celldetective.measure import classify_from_threshold_config
+
+    table_path = trajectory_table_path(pos, mode)
+    if not os.path.exists(table_path):
+        raise FileNotFoundError(f"No trajectory table found at {table_path}")
+
+    trajectories = pd.read_csv(table_path)
+    trajectories = classify_from_threshold_config(trajectories, config)
+
+    if config.get("time_correlated", False):
+        class_col, _, status_col = event_column_names(config["name"])
+        if status_col in trajectories.columns:
+            trajectories["status_color"] = trajectories[status_col].apply(
+                color_from_status
+            )
+        if class_col in trajectories.columns:
+            trajectories["class_color"] = trajectories[class_col].apply(
+                color_from_class
+            )
+
+    trajectories.to_csv(table_path, index=False)
+    return trajectories
+
+
+def classify_positions_from_config(
+    positions: List[str], config: dict, mode: str = "targets"
+) -> int:
+    """Apply a saved classification config to several positions (headless batch).
+
+    Loops over positions, applying :func:`classify_position_from_config` to each;
+    positions without a table are skipped with a warning. Works for both static
+    (``group_``) and event (``class_/t_/status_``) configs.
+
+    Parameters
+    ----------
+    positions : list of str
+        Position directories.
+    config : dict
+        A threshold classification config.
+    mode : str, optional
+        Population mode. Default ``"targets"``.
+
+    Returns
+    -------
+    int
+        Number of positions successfully classified.
+    """
+    done = 0
+    for pos in positions:
+        try:
+            classify_position_from_config(pos, config, mode=mode)
+            done += 1
+        except FileNotFoundError as e:
+            logger.warning(str(e))
+    return done
 
 
 def analyze_pair_signals_at_position(
@@ -417,7 +509,7 @@ def analyze_pair_signals_at_position(
         dataframes[neighbor_population],
         model=model,
     )
-    table = pos + os.sep.join(["output", "tables", f"trajectories_pairs.csv"])
+    table = trajectory_table_path(pos, "pairs")
     df.to_csv(table, index=False)
 
     return None
@@ -521,25 +613,12 @@ def analyze_pair_signals(
     label = _extract_config_label(config)
 
     if selected_signals is None:
-        selected_signals = []
-        for s in required_signals:
-            pattern_test = [s in a or s == a for a in available_signals]
-            logger.debug(f"Pattern test for signal {s}: {pattern_test}")
-            if not np.any(pattern_test):
-                raise ValueError(f"No signal matches with the requirements of the model {required_signals}. Please pass the signals manually with the argument selected_signals or add measurements. Abort.")
-            valid_columns = np.array(available_signals)[np.array(pattern_test)]
-            if len(valid_columns) == 1:
-                selected_signals.append(valid_columns[0])
-            else:
-                logger.debug(f"Found several candidate signals: {valid_columns}")
-                for vc in natsorted(valid_columns):
-                    if "circle" in vc:
-                        selected_signals.append(vc)
-                        break
-                else:
-                    selected_signals.append(valid_columns[0])
-                # do something more complicated in case of one to many columns
-                # pass
+        selected_signals = resolve_signal_channels(required_signals, available_signals)
+        if selected_signals is None:
+            raise ValueError(f"No signal matches with the requirements of the model {required_signals}. Please pass the signals manually with the argument selected_signals or add measurements. Abort.")
+        logger.debug(
+            f"Resolved required channels {required_signals} to columns {selected_signals}..."
+        )
     else:
         if len(selected_signals) != len(required_signals):
             raise ValueError(f"Mismatch between the number of required signals {required_signals} and the provided signals {selected_signals}... Abort.")
@@ -562,7 +641,13 @@ def analyze_pair_signals(
     max_signal_size = max(max_pair, max_ref, max_neigh) + 2
     model_signal_length = config.get("model_signal_length", max_signal_size)
     if max_signal_size > model_signal_length:
-        raise ValueError(f"The current signals are longer ({max_signal_size}) than the maximum expected input ({model_signal_length}). Abort...")
+        logger.warning(
+            f"Pair signals are longer than the model window ({max_signal_size} > "
+            f"{model_signal_length} frames): truncating to {model_signal_length}. "
+            f"Any event after frame {model_signal_length} will be reported as "
+            f"'no event'."
+        )
+        max_signal_size = model_signal_length
 
     pair_tracks = trajectories_pairs_clean.groupby(pair_groupby_cols).size()
     signals = np.zeros((len(pair_tracks), max_signal_size, len(selected_signals)))
@@ -602,10 +687,12 @@ def analyze_pair_signals(
             )
 
         pair_frames = group["pair_FRAME"].to_numpy().astype(int)
+        pair_keep = pair_frames < max_signal_size
+        pair_frames = pair_frames[pair_keep]
 
         for j, col in enumerate(selected_signals):
             if col.startswith("pair_"):
-                signal = group[col].to_numpy()
+                signal = group[col].to_numpy()[pair_keep]
                 if len(pair_frames) > 0:
                     signals[i, pair_frames, j] = signal
                     signals[i, int(max(pair_frames)) :, j] = signal[-1]
@@ -616,6 +703,8 @@ def analyze_pair_signals(
                 timeline = trajectories_reference_clean.loc[
                     reference_filter, "reference_FRAME"
                 ].to_numpy().astype(int)
+                keep = timeline < max_signal_size
+                signal, timeline = signal[keep], timeline[keep]
                 if len(timeline) > 0:
                     signals[i, timeline, j] = signal
                     signals[i, int(max(timeline)) :, j] = signal[-1]
@@ -626,6 +715,8 @@ def analyze_pair_signals(
                 timeline = trajectories_neighbors_clean.loc[
                     neighbor_filter, "neighbor_FRAME"
                 ].to_numpy().astype(int)
+                keep = timeline < max_signal_size
+                signal, timeline = signal[keep], timeline[keep]
                 if len(timeline) > 0:
                     signals[i, timeline, j] = signal
                     signals[i, int(max(timeline)) :, j] = signal[-1]
@@ -635,6 +726,14 @@ def analyze_pair_signals(
 
     classes = model.predict_class(signals)
     times_recast = model.predict_time_of_interest(signals)
+    classes, times_recast, n_demoted = reclassify_out_of_window(
+        classes, times_recast, model_signal_length
+    )
+    if n_demoted:
+        logger.info(
+            f"{n_demoted} pair event(s) predicted at/after the model window were "
+            f"set to 'no event'."
+        )
 
     if label is None:
         class_col = "pair_class"

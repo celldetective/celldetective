@@ -106,7 +106,7 @@ Classifier Widget
 
 *   **Query**: Pandas-style query string (e.g., ``area > 500 and intensity_mean < 100``).
 *   **Preview**: Highlight matching cells in red on the scatter plot.
-*   **Apply**: Create the classification column.
+*   **Save config**: Store the classification as a reusable config. It is not applied here — import the config into a pipeline and run the **CLASSIFY** step (or **DETECT EVENTS** for time-correlated configs) to create the classification column.
 
 **Time Correlation**
 
@@ -147,10 +147,12 @@ Interaction Annotator
 *   **Neighborhood**: Select the neighborhood definition to visualize (e.g., ``prox_15_px``).
 *   **Interaction Event**: Select the event class to annotate (e.g., ``contact``).
 *   **Annotation Buttons**:
+
     *   **Event**: Mark the current timepoint (or time of interest) as the start of the event.
     *   **No event**: Mark the pair as having no event.
     *   **Else**: Mark as "else" (ambiguous or other).
     *   **Mark for suppression**: Flag the pair for removal.
+
 *   **Time of interest**: Manually specify the frame number for the event.
 
 **Signal Visualization**

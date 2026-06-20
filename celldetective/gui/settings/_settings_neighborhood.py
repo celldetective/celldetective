@@ -15,6 +15,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QSize
 from celldetective.gui.gui_utils import DistanceChoice
 from celldetective.gui.base.list_widget import ListWidget
+from celldetective.utils.schema import label_folder_name
 from celldetective.gui.base.utils import center_window
 from superqt.fonticon import icon
 from fonticon_mdi6 import MDI6
@@ -208,7 +209,7 @@ class SettingsNeighborhood(CelldetectiveWidget):
         labels_path = (
             str(Path(self.attr_parent.current_stack).parent.parent)
             + os.sep
-            + f"labels_{population}"
+            + label_folder_name(population)
             + os.sep
         )
         masks = natsorted(glob(labels_path + "*.tif"))

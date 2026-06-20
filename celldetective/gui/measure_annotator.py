@@ -1,5 +1,6 @@
 from PyQt5.QtWidgets import (
     QAction,
+    QApplication,
     QHBoxLayout,
     QVBoxLayout,
     QLabel,
@@ -159,33 +160,66 @@ class MeasureAnnotator(BaseAnnotator):
 
             from celldetective.utils.image_loaders import fix_missing_labels
             from celldetective.tracking import write_first_detection_class
+            from celldetective.gui.base.components import CelldetectiveProgressDialog
 
-            # Ensure labels match stack length
-            if self.len_movie > 0:
-                temp_labels = locate_labels(self.pos, population=self.mode)
-                if temp_labels is None or len(temp_labels) < self.len_movie:
-                    fix_missing_labels(
-                        self.pos,
-                        population=self.mode,
-                        prefix=self.parent_window.movie_prefix,
+            # Loading every mask frame is the dominant cost when opening the
+            # annotator. Show an animated progress bar; loading stays on the GUI
+            # thread (so construction remains synchronous), and locate_labels'
+            # progress_callback fires on this thread, where we pump events to
+            # keep the dialog responsive and animating.
+            progress = CelldetectiveProgressDialog(
+                "Loading masks...", "Cancel", 0, 100, self, window_title="Loading"
+            )
+            # Mask loading runs as one parallel batch that can't be interrupted
+            # mid-way, so don't offer a cancel button that wouldn't work.
+            progress.setCancelButton(None)
+            progress.setValue(0)
+
+            def _labels_cb(p: int) -> None:
+                """Forward locate_labels progress to the dialog and repaint."""
+                progress.setValue(int(p))
+                QApplication.processEvents()
+
+            try:
+                # Ensure labels match stack length
+                if self.len_movie > 0:
+                    temp_labels = locate_labels(
+                        self.pos, population=self.mode, progress_callback=_labels_cb
                     )
-                    self.labels = locate_labels(self.pos, population=self.mode)
-                elif len(temp_labels) > self.len_movie:
-                    self.labels = temp_labels[: self.len_movie]
+                    if temp_labels is None or len(temp_labels) < self.len_movie:
+                        progress.setLabelText("Fixing missing masks...")
+                        QApplication.processEvents()
+                        fix_missing_labels(
+                            self.pos,
+                            population=self.mode,
+                            prefix=self.parent_window.movie_prefix,
+                        )
+                        self.labels = locate_labels(
+                            self.pos, population=self.mode, progress_callback=_labels_cb
+                        )
+                    elif len(temp_labels) > self.len_movie:
+                        self.labels = temp_labels[: self.len_movie]
+                    else:
+                        self.labels = temp_labels
                 else:
-                    self.labels = temp_labels
-            else:
-                self.labels = locate_labels(self.pos, population=self.mode)
+                    self.labels = locate_labels(
+                        self.pos, population=self.mode, progress_callback=_labels_cb
+                    )
 
-            self.current_channel = 0
-            self.frame_lbl = QLabel("position: ")
+                progress.setLabelText("Building the interface...")
+                QApplication.processEvents()
 
-            # self.static_image() # Replaced by StackVisualizer initialization in populate_window
+                self.current_channel = 0
+                self.frame_lbl = QLabel("position: ")
 
-            self.populate_window()
-            self.changed_class()
+                # self.static_image() # Replaced by StackVisualizer initialization in populate_window
 
-            self.previous_index = None
+                self.populate_window()
+                self.changed_class()
+
+                self.previous_index = None
+            finally:
+                progress.close()
 
         else:
             self.close()

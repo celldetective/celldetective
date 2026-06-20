@@ -11,17 +11,17 @@ Reference keys: :term:`event`, :term:`event class`, :term:`event time`, :term:`t
 Define the classification rules
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-#. In the **Measurements** section, click **Classify data**.
+#. In the **CLASSIFY** section, click the :icon:`scatter-plot,black` button to open the classifier.
 
 #. Enter a name for the event (e.g., ``death``).
 
 #. Project features of interest to identify the transition signal. For example, plot ``PI_intensity_mean`` over time to see when cells become PI-positive.
 
-#. Write the classification condition for the event (e.g., ``PI_intensity_mean > 500``).
+#. Write the classification condition for the event (e.g., ``PI_intensity_mean > 500``), then press **Preview** to check which cells match (matching cells turn red).
 
-#. Check the **Time correlated event** option. This triggers sigmoid fitting on the resulting binary signal.
+#. Check the **Time correlated** option and select **Irreversible event**. This fits a sigmoid to the resulting binary signal to extract the event time.
 
-#. Click **Apply**.
+#. Press **Save config** to store the classification as a reusable config. The classifier has no "Apply" button: back in the population block, click the :icon:`playlist-plus,black` button to import the saved config, then tick **DETECT EVENTS** and run the block. Time-correlated configs are routed to the **DETECT EVENTS** step automatically.
 
 
 How the sigmoid fitting works

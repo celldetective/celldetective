@@ -9,9 +9,10 @@ from PyQt5.QtWidgets import (
     QLineEdit,
     QAction,
     QWidget,
+    QMessageBox,
 )
 from celldetective.gui.interactive_timeseries_viewer import InteractiveEventViewer
-from PyQt5.QtCore import Qt, QSize, QThread, pyqtSignal
+from PyQt5.QtCore import Qt, QSize, QThread, QTimer, pyqtSignal
 from PyQt5.QtGui import QKeySequence, QCloseEvent
 
 from superqt import (
@@ -42,6 +43,7 @@ from matplotlib.animation import FuncAnimation
 from matplotlib.cm import tab10
 from typing import Optional, Tuple, Any
 from celldetective.gui.base_annotator import BaseAnnotator
+import os
 import logging
 from celldetective.log_manager import positionlogger
 
@@ -52,6 +54,7 @@ class StackLoaderThread(QThread):
     progress = pyqtSignal(int)
     status_update = pyqtSignal(str)
     finished = pyqtSignal()
+    error = pyqtSignal(str)
 
     def __init__(self, annotator: QWidget) -> None:
         """
@@ -102,7 +105,9 @@ class StackLoaderThread(QThread):
                 self.finished.emit()
         except Exception as e:
             logger.error(f"Error in loader thread: {e}")
-            self.finished.emit()
+            # Report failures distinctly so the caller doesn't treat a failed
+            # load as a successful one and then crash in finalize_init.
+            self.error.emit(str(e))
 
 
 class EventAnnotator(BaseAnnotator):
@@ -132,7 +137,7 @@ class EventAnnotator(BaseAnnotator):
         **kwargs
             Arbitrary keyword arguments.
         """
-        super().__init__(*args, **kwargs)
+        super().__init__(*args, lazy_load=lazy_load, **kwargs)
         self.setWindowTitle("Signal annotator")
 
         # default params
@@ -145,6 +150,13 @@ class EventAnnotator(BaseAnnotator):
         if not self.proceed:
             self.close()
         else:
+            if lazy_load and not os.path.exists(self.trajectories_path):
+                # Missing trajectories: handle it here on the GUI thread. The
+                # deferred locate_tracks() runs inside the worker thread, where
+                # popping its warning dialog / calling close() would be unsafe.
+                self.locate_tracks()  # shows the warning and closes the window
+                self.proceed = False
+                return
             if not lazy_load:
                 self._start_threaded_loading()
 
@@ -163,6 +175,7 @@ class EventAnnotator(BaseAnnotator):
         self._loader_thread.progress.connect(self._on_load_progress)
         self._loader_thread.status_update.connect(self._on_load_status)
         self._loader_thread.finished.connect(self._on_load_finished)
+        self._loader_thread.error.connect(self._on_load_error)
         self._progress_dialog.canceled.connect(self._on_load_canceled)
 
         self._loader_thread.start()
@@ -206,8 +219,32 @@ class EventAnnotator(BaseAnnotator):
         self._loader_thread = None
         self.finalize_init()
 
+    def _on_load_error(self, message: str) -> None:
+        """
+        Handle a loading failure: close the dialog, inform the user, and abort.
+
+        Parameters
+        ----------
+        message : str
+            The error message from the loader thread.
+        """
+        if hasattr(self, "_progress_dialog") and self._progress_dialog:
+            self._progress_dialog.close()
+            self._progress_dialog = None
+        self._loader_thread = None
+        QMessageBox.warning(
+            self,
+            "Loading failed",
+            f"The signal annotator could not be loaded:\n{message}",
+        )
+        self.close()
+
     def finalize_init(self):
         """Finalize initialization after loading stack."""
+        # When lazy_load deferred them, build the base widgets now (GUI thread).
+        # The trajectories they depend on were loaded in prepare_stack.
+        if not hasattr(self, "class_choice_cb"):
+            self._init_base_widgets()
         self.frame_lbl = QLabel("frame: ")
         self.looped_animation()
         self.init_event_buttons()
@@ -397,11 +434,13 @@ class EventAnnotator(BaseAnnotator):
             self.contrast_slider.setSingleStep(0.001)
             self.contrast_slider.setTickInterval(0.001)
             self.contrast_slider.setOrientation(Qt.Horizontal)
-            # Cache percentile values to avoid recomputing on the full stack
-            self._stack_p_low = np.nanpercentile(self.stack, 0.001)
-            self._stack_p_high = np.nanpercentile(self.stack, 99.999)
-            self._stack_p1 = np.nanpercentile(self.stack, 1)
-            self._stack_p99 = np.nanpercentile(self.stack, 99.99)
+            # Use the percentiles computed in prepare_stack (worker thread); only
+            # recompute here as a fallback if that step didn't run.
+            if not hasattr(self, "_stack_p_low"):
+                self._stack_p_low = np.nanpercentile(self.stack, 0.001)
+                self._stack_p_high = np.nanpercentile(self.stack, 99.999)
+                self._stack_p1 = np.nanpercentile(self.stack, 1)
+                self._stack_p99 = np.nanpercentile(self.stack, 99.99)
             self.contrast_slider.setRange(self._stack_p_low, self._stack_p_high)
             self.contrast_slider.setValue([self._stack_p1, self._stack_p99])
             self.contrast_slider.valueChanged.connect(self.contrast_slider_action)
@@ -459,6 +498,51 @@ class EventAnnotator(BaseAnnotator):
         self.class_scatter.set_offsets(self.positions[self.framedata])
         self.class_scatter.set_edgecolor(self.colors[self.framedata][:, 0])
 
+    def refresh_current_frame_if_paused(self):
+        """
+        Repaint the current frame's overlays when the animation is paused.
+
+        While the animation plays, every tick repaints the scatters; when it is
+        paused, selection/cancellation changes to the overlay colors would not
+        appear until the user resumes. This forces an immediate redraw in that
+        case (and is a no-op while playing, where the loop handles it).
+        """
+        if hasattr(self, "stop_btn") and not self.stop_btn.isVisible():
+            self._static_redraw_current_frame()
+
+    def _static_redraw_current_frame(self):
+        """
+        Statically repaint the current frame while the animation is paused.
+
+        The animation's artists (image + scatters) are flagged ``animated=True``
+        for blitting, so a normal full canvas draw skips them — they only appear
+        when a frame is blitted. After a selection change or a window resize
+        (which forces a full redraw) the paused frame would therefore go blank.
+        Temporarily clear the flag so a full draw paints them, then restore it so
+        blitting still works on resume.
+        """
+        artists = [
+            a
+            for a in (
+                getattr(self, "im", None),
+                getattr(self, "status_scatter", None),
+                getattr(self, "class_scatter", None),
+            )
+            if a is not None
+        ]
+        if not artists:
+            return
+        try:
+            self.draw_frame(self.framedata)
+            for a in artists:
+                a.set_animated(False)
+            self.fcanvas.canvas.draw()
+        except Exception as e:
+            logger.debug(f"Could not statically redraw paused frame: {e}")
+        finally:
+            for a in artists:
+                a.set_animated(True)
+
     def compute_status_and_colors(self, i: int) -> None:
         """
         Compute the status and colors of the cells.
@@ -501,12 +585,18 @@ class EventAnnotator(BaseAnnotator):
         if not self.time_name in self.df_tracks.columns:
             self.df_tracks[self.time_name] = -1
 
-        self.df_tracks["status_color"] = [
-            color_from_status(i) for i in self.df_tracks[self.status_name].to_numpy()
-        ]
-        self.df_tracks["class_color"] = [
-            color_from_class(i) for i in self.df_tracks[self.class_name].to_numpy()
-        ]
+        # Map colors per distinct value rather than per row: this runs on every
+        # class switch and viewer update, so for large tables computing
+        # color_from_* once per unique status/class is much cheaper.
+        status_vals = self.df_tracks[self.status_name].to_numpy()
+        uniq_status, inv_status = np.unique(status_vals, return_inverse=True)
+        status_lut = np.array([color_from_status(v) for v in uniq_status], dtype=object)
+        self.df_tracks["status_color"] = status_lut[inv_status]
+
+        class_vals = self.df_tracks[self.class_name].to_numpy()
+        uniq_class, inv_class = np.unique(class_vals, return_inverse=True)
+        class_lut = np.array([color_from_class(v) for v in uniq_class], dtype=object)
+        self.df_tracks["class_color"] = class_lut[inv_class]
 
         self.extract_scatter_from_trajectories()
         if len(self.selection) > 0:
@@ -525,6 +615,9 @@ class EventAnnotator(BaseAnnotator):
                 self.colors[t][idx, 1] = self.previous_color[k][1]
         except Exception as e:
             logger.debug(f"Could not revert colors on cancel: {e}")
+
+        # Clear the highlight immediately even when the animation is paused.
+        self.refresh_current_frame_if_paused()
 
     def hide_annotation_buttons(self):
         """Hide annotation buttons."""
@@ -587,12 +680,24 @@ class EventAnnotator(BaseAnnotator):
             cclass = 0
             try:
                 t0 = float(self.time_of_interest_le.text().replace(",", "."))
-                self.line_dt.set_xdata([t0, t0])
-                self.cell_fcanvas.canvas.draw_idle()
             except ValueError:
-                # Invalid time value entered
-                t0 = -1
-                cclass = 2
+                # Abort rather than silently reclassifying the event as "else":
+                # the user picked "event", so make them fix the time instead.
+                QMessageBox.warning(
+                    self,
+                    "Invalid time of interest",
+                    "Please enter a valid numeric time of interest for the event.",
+                )
+                return
+            if t0 < 0 or t0 >= self.len_movie:
+                QMessageBox.warning(
+                    self,
+                    "Time out of range",
+                    f"The time of interest must be between 0 and {int(self.len_movie) - 1}.",
+                )
+                return
+            self.line_dt.set_xdata([t0, t0])
+            self.cell_fcanvas.canvas.draw_idle()
         elif self.no_event_btn.isChecked():
             cclass = 1
         elif self.else_btn.isChecked():
@@ -656,7 +761,8 @@ class EventAnnotator(BaseAnnotator):
         self.del_shortcut.setEnabled(False)
         self.no_event_shortcut.setEnabled(False)
 
-        self.selection.pop(0)
+        if self.selection:
+            self.selection.pop(0)
 
     def make_status_column(self):
         """Create the status column based on class and time."""
@@ -833,6 +939,15 @@ class EventAnnotator(BaseAnnotator):
             Callback for progress updates.
         """
 
+        # Load the trajectories first if they were deferred (lazy_load): doing it
+        # here keeps the CSV read off the GUI thread and under the progress
+        # dialog, instead of freezing the window during construction.
+        if not hasattr(self, "df_tracks"):
+            if progress_callback:
+                if not progress_callback(0, "Reading trajectories…"):
+                    return
+            self.locate_tracks()
+
         self.img_num_channels = _get_img_num_per_channel(
             self.channels, self.len_movie, self.nbr_channels
         )
@@ -909,6 +1024,12 @@ class EventAnnotator(BaseAnnotator):
                 self.stack[np.where(self.stack > 0.0)] = np.log(
                     self.stack[np.where(self.stack > 0.0)]
                 )
+            # Precompute contrast-slider percentiles here, on the worker thread,
+            # so populate_window doesn't freeze the GUI scanning the whole stack.
+            self._stack_p_low = float(np.nanpercentile(self.stack, 0.001))
+            self._stack_p_high = float(np.nanpercentile(self.stack, 99.999))
+            self._stack_p1 = float(np.nanpercentile(self.stack, 1))
+            self._stack_p99 = float(np.nanpercentile(self.stack, 99.99))
 
     def closeEvent(self, event: QCloseEvent) -> None:
         """
@@ -1052,6 +1173,9 @@ class EventAnnotator(BaseAnnotator):
             self.previous_color.append(self.colors[t][idx].copy())
             self.colors[t][idx] = "lime"
 
+        # Show the highlight immediately even when the animation is paused.
+        self.refresh_current_frame_if_paused()
+
     def shortcut_no_event(self):
         """Handle no event shortcut."""
         self.correct_btn.click()
@@ -1167,6 +1291,39 @@ class EventAnnotator(BaseAnnotator):
         else:
             self.start()
 
+    def resizeEvent(self, event):
+        """
+        Handle resize events.
+
+        matplotlib unconditionally restarts a blit animation's timer after the
+        post-resize redraw (``Animation._end_redraw``), even when it was paused,
+        and without touching our play/pause button — leaving the animation
+        running while the button still shows "play". If the user had paused,
+        re-assert that once the redraw has completed.
+
+        Parameters
+        ----------
+        event : QResizeEvent
+            The resize event.
+        """
+        super().resizeEvent(event)
+        if (
+            hasattr(self, "anim")
+            and hasattr(self, "stop_btn")
+            and not self.stop_btn.isVisible()
+        ):
+            QTimer.singleShot(0, self._keep_paused_after_resize)
+
+    def _keep_paused_after_resize(self):
+        """Re-pause the animation if it was resumed by a resize redraw, and
+        statically repaint so the (otherwise blit-only) frame stays visible."""
+        try:
+            if hasattr(self, "anim") and not self.stop_btn.isVisible():
+                self.anim.pause()
+                self._static_redraw_current_frame()
+        except Exception as e:
+            logger.debug(f"Could not re-pause after resize: {e}")
+
     def update_speed(self):
         """Update animation speed."""
         fps = self.speed_slider.value()
@@ -1205,9 +1362,23 @@ class EventAnnotator(BaseAnnotator):
         if self.selection:
             self.cancel_selection()
 
-        self.df_tracks = self.df_tracks.drop(
-            self.df_tracks[self.df_tracks[self.class_name] > 2].index
-        )
+        # Cells marked "remove" (class > 2) are permanently deleted on save.
+        # Confirm first, since this is irreversible.
+        to_drop = self.df_tracks[self.df_tracks[self.class_name] > 2].index
+        if len(to_drop) > 0:
+            ret = QMessageBox.question(
+                self,
+                "Confirm deletion",
+                f"{len(to_drop)} cell(s) marked for removal will be permanently "
+                "deleted from the table on save. Continue?",
+                QMessageBox.Yes | QMessageBox.No,
+            )
+            if ret != QMessageBox.Yes:
+                return
+
+        # Drop in place to keep the same DataFrame object: the interactive
+        # plotter holds a reference to it, and rebinding would desync the two.
+        self.df_tracks.drop(index=to_drop, inplace=True)
         self.df_tracks.to_csv(self.trajectories_path, index=False)
         logger.info("Table successfully exported...")
         with positionlogger(self.pos, filename=f"log_{self.mode}.txt"):

@@ -8,6 +8,7 @@ import sys
 from art import tprint
 from celldetective.signals import analyze_signals
 from celldetective.utils import COLUMN_LABELS
+from celldetective.utils.schema import trajectory_table_name
 import pandas as pd
 import logging
 
@@ -36,13 +37,7 @@ else:
 
 column_labels = COLUMN_LABELS.copy()
 
-if mode.lower()=="target" or mode.lower()=="targets":
-	table_name = "trajectories_targets.csv"
-
-elif mode.lower()=="effector" or mode.lower()=="effectors":
-	table_name = "trajectories_effectors.csv"
-else:
-	table_name = f"trajectories_{mode}.csv"
+table_name = trajectory_table_name(mode)
 
 
 # Load trajectories, add centroid if not in trajectory

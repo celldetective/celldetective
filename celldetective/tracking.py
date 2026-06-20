@@ -29,9 +29,6 @@ from tqdm import tqdm
 from sklearn.preprocessing import StandardScaler
 from typing import List, Optional, Union, Dict, Any, Tuple
 
-from btrack.io.utils import localizations_to_objects
-from btrack import BayesianTracker
-
 from celldetective.measure import measure_features
 from celldetective.utils.maths import velocity_per_track
 from celldetective.log_manager import get_logger
@@ -39,6 +36,7 @@ from celldetective.log_manager import get_logger
 logger = get_logger(__name__)
 from celldetective.utils.data_cleaning import rename_intensity_column
 from celldetective.utils.data_loaders import interpret_tracking_configuration
+from celldetective.utils.schema import trajectory_table_path
 
 import os
 import subprocess
@@ -81,6 +79,7 @@ def _run_btrack_core(
     properties : dict
     graph : dict
     """
+    from btrack import BayesianTracker
     with BayesianTracker() as tracker:
         tracker.configure(configuration)
         if columns:
@@ -312,6 +311,8 @@ def track(
             logger.warning("No features were passed to bTrack.")
 
         # 2) track the objects
+        from btrack.io.utils import localizations_to_objects
+        from btrack import BayesianTracker
         new_btrack_objects = localizations_to_objects(objects)
         data, properties, graph = _run_btrack_core(
             new_btrack_objects, configuration, columns, volume, track_kwargs, optimizer_options
@@ -706,7 +707,14 @@ def interpolate_per_track(group_df: pd.DataFrame) -> pd.DataFrame:
 
     """
 
+    # class_id is a mask label, not a continuous quantity: interpolating it would
+    # invent a mask for positions that have none and (with limit_direction="both")
+    # back-fill leading NaNs, making a cell look detected before its first real
+    # mask. It must stay NaN wherever there is no mask.
+    never_interpolate = {"class_id"}
     for c in list(group_df.columns):
+        if c in never_interpolate:
+            continue
         group_df_new_dtype = group_df[c].infer_objects(copy=False)
         if group_df_new_dtype.dtype != "O":
             group_df[c] = group_df_new_dtype.interpolate(
@@ -1425,7 +1433,7 @@ def track_at_position(
         logger.error(f"Tracking script exited with code {result.returncode} for position {pos}.")
         raise RuntimeError(f"Tracking failed for position {pos} (exit code {result.returncode}).")
 
-    track_table = pos + os.sep.join(["output", "tables", f"trajectories_{mode}.csv"])
+    track_table = trajectory_table_path(pos, mode)
     if return_tracks:
         df = pd.read_csv(track_table)
         return df

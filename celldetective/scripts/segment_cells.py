@@ -31,6 +31,10 @@ from celldetective.utils.parsing import (
     _extract_channel_indices_from_config,
     _extract_nbr_channels_from_config,
 )
+from celldetective.utils.schema import (
+    label_folder_name,
+    backup_label_folder_name,
+)
 from pathlib import Path, PurePath
 from glob import glob
 from shutil import rmtree
@@ -83,12 +87,7 @@ if not use_gpu:
 
 modelname = str(process_arguments["model"])
 
-if mode.lower() in ("target", "targets"):
-    label_folder = "labels_targets"
-elif mode.lower() in ("effector", "effectors"):
-    label_folder = "labels_effectors"
-else:
-    label_folder = f"labels_{mode}"
+label_folder = label_folder_name(mode)
 
 # Locate experiment config
 parent1 = Path(pos).parent
@@ -164,11 +163,27 @@ img_num_channels = _get_img_num_per_channel(
     channel_indices, int(len_movie), nbr_channels
 )
 
-# If everything OK, prepare output, load models
-if os.path.exists(pos + label_folder):
-    logger.info("Erasing the previous labels folder...")
-    rmtree(pos + label_folder)
-os.mkdir(pos + label_folder)
+# If everything OK, prepare output, load models. New masks are written directly
+# into labels_<mode> (so partial results stay viewable, even after an abort);
+# the previous masks are renamed to a backup folder and only removed once every
+# frame is present, so they survive a crash or cancellation.
+backup_folder = backup_label_folder_name(mode)
+final_path = pos + label_folder
+backup_path = pos + backup_folder
+
+# If a previous backup folder already exists, it means a previous run failed/aborted
+# and the user hasn't restored it yet. If we also have a final labels folder, it
+# holds partial results from that aborted run. Restore the original backup first
+# to prevent overwriting/losing the original pre-failure masks.
+if os.path.exists(backup_path):
+    if os.path.exists(final_path):
+        rmtree(final_path)
+    os.rename(backup_path, final_path)
+
+# Rename (not delete) the previous masks so they can be recovered.
+if os.path.exists(final_path):
+    os.rename(final_path, backup_path)
+os.mkdir(final_path)
 logger.info("Labels folder successfully generated...")
 
 with positionlogger(pos, filename=f"log_{mode}.txt"):
@@ -214,26 +229,21 @@ def segment_index(indices: List[int]) -> None:
             normalize_kwargs=normalize_kwargs,
         )
 
-        if model_type == "stardist":
-            Y_pred = _segment_image_with_stardist_model(
-                f, model=model, return_details=False
-            )
-        elif model_type == "cellpose":
-            Y_pred = _segment_image_with_cellpose_model(
-                f,
-                model=model,
-                diameter=diameter,
-                cellprob_threshold=cellprob_threshold,
-                flow_threshold=flow_threshold,
-            )
+        from celldetective.segmentation import _run_dl_model_on_frame
 
-        if scale is not None:
-            Y_pred = _rescale_labels(Y_pred, scale_model=scale_model)
-
-        Y_pred = _check_label_dims(Y_pred, file)
+        Y_pred = _run_dl_model_on_frame(
+            f,
+            model=model,
+            model_type=model_type,
+            scale_model=scale_model,
+            file=file,
+            diameter=diameter if model_type == "cellpose" else None,
+            cellprob_threshold=cellprob_threshold if model_type == "cellpose" else None,
+            flow_threshold=flow_threshold if model_type == "cellpose" else None,
+        )
 
         save_tiff_imagej_compatible(
-            pos + os.sep.join([label_folder, f"{str(t).zfill(4)}.tif"]),
+            os.path.join(final_path, f"{str(t).zfill(4)}.tif"),
             Y_pred,
             axes="YX",
         )
@@ -256,11 +266,31 @@ chunks = np.array_split(indices, n_threads)
 
 with concurrent.futures.ThreadPoolExecutor() as executor:
     results = executor.map(segment_index, chunks)
+    # Iterate the results so worker exceptions are re-raised here instead of
+    # being silently dropped; a failure must abort with a non-zero exit code so
+    # the caller (segment_at_position) knows segmentation did not complete.
     try:
         for i, return_value in enumerate(results):
             logger.debug(f"Thread {i} output check: {return_value}")
     except Exception as e:
-        logger.error(f"Exception: {e}")
+        logger.error(f"Segmentation failed: {e}", exc_info=True)
+        sys.exit(1)
+
+# Verify every frame produced a mask. On success drop the backup of the previous
+# masks; on failure leave the partial masks in place (viewable) and keep the
+# backup so the previous masks can be recovered.
+n_written = len(glob(os.path.join(final_path, "*.tif")))
+expected = int(img_num_channels.shape[1])
+if n_written != expected:
+    logger.error(
+        f"Segmentation incomplete: {n_written}/{expected} frame masks written. "
+        f"Partial masks kept in '{label_folder}'; previous masks remain in "
+        f"'{backup_folder}'."
+    )
+    sys.exit(1)
+
+if os.path.exists(backup_path):
+    rmtree(backup_path)
 
 logger.info("Done.")
 gc.collect()

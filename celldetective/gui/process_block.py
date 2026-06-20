@@ -27,6 +27,11 @@ from celldetective.utils.model_loaders import (
     locate_segmentation_model,
     _resolve_signal_model_paths,
 )
+from celldetective.utils.schema import (
+    trajectory_table_path,
+    label_folder_name,
+    napari_trajectories_name,
+)
 from celldetective.utils.image_loaders import fix_missing_labels
 
 from celldetective.gui.base.components import (
@@ -35,6 +40,7 @@ from celldetective.gui.base.components import (
     QHSeperationLine,
     HoverButton,
 )
+from celldetective.gui.base.custom_icons import scatter_with_divider_icon
 
 import numpy as np
 from glob import glob
@@ -49,7 +55,14 @@ class NapariLoaderThread(QThread):
     status = pyqtSignal(str)
     finished_with_result = pyqtSignal(object)
 
-    def __init__(self, pos: str, prefix: str, population: str, threads: int) -> None:
+    def __init__(
+        self,
+        pos: str,
+        prefix: str,
+        population: str,
+        threads: int,
+        task: str = "tracks",
+    ) -> None:
         """
         Initialize the NapariLoaderThread.
 
@@ -63,12 +76,16 @@ class NapariLoaderThread(QThread):
             The cell population.
         threads : int
             Number of threads to use.
+        task : str
+            What to prepare: 'tracks' (track correction) or 'segmentation'
+            (segmentation inspection).
         """
         super().__init__()
         self.pos = pos
         self.prefix = prefix
         self.population = population
         self.threads = threads
+        self.task = task
         self._is_cancelled = False
 
     def stop(self) -> None:
@@ -79,7 +96,18 @@ class NapariLoaderThread(QThread):
         """
         Run the thread to load tracks into Napari.
         """
-        from celldetective.napari.utils import control_tracks
+        # Immediate feedback before the (potentially slow) first napari import,
+        # which otherwise leaves the bar frozen at 0 with no message. -1 puts the
+        # dialog into busy/indeterminate mode so it visibly animates.
+        self.progress.emit(-1)
+        self.status.emit("Loading napari libraries…")
+
+        if self.task == "segmentation":
+            from celldetective.napari.utils import (
+                control_segmentation_napari as prepare_data,
+            )
+        else:
+            from celldetective.napari.utils import control_tracks as prepare_data
 
         def callback(p: int) -> bool:
             """
@@ -100,13 +128,18 @@ class NapariLoaderThread(QThread):
             self.progress.emit(p)
             return True
 
+        def status_cb(msg: str) -> None:
+            """Forward a phase message to the progress dialog label."""
+            self.status.emit(msg)
+
         try:
-            res = control_tracks(
+            res = prepare_data(
                 self.pos,
                 prefix=self.prefix,
                 population=self.population,
                 threads=self.threads,
                 progress_callback=callback,
+                status_callback=status_cb,
                 prepare_only=True,
             )
             self.finished_with_result.emit(res)
@@ -151,6 +184,10 @@ class ProcessPanel(QFrame, Styles):
         self.threshold_configs = [
             None for _ in range(len(self.parent_window.populations))
         ]
+        # Ordered list of (static) classification configs for the CLASSIFY step.
+        self.classification_configs = []
+        # An imported event config is routed here for the Detect events step.
+        self.signal_threshold_config = None
         self.wells = np.array(self.parent_window.wells, dtype=str)
         self.cellpose_calibrated = False
         self.stardist_calibrated = False
@@ -165,6 +202,28 @@ class ProcessPanel(QFrame, Styles):
         self.grid = QGridLayout(self)
         self.grid.setContentsMargins(5, 5, 5, 5)
         self.generate_header()
+
+        self._prewarm_napari()
+
+    def _prewarm_napari(self) -> None:
+        """
+        Import the (slow) napari stack in a background daemon thread.
+
+        The first ``import napari`` of a session takes several seconds; doing it
+        ahead of time means clicking the track-correction button doesn't pay that
+        cost on the critical path. Importing only loads modules (no Qt widgets
+        are created), so it is safe off the main thread. Failures are ignored —
+        the import simply happens again, lazily, on first use.
+        """
+        import threading
+
+        def _warm() -> None:
+            try:
+                import celldetective.napari.utils  # noqa: F401
+            except Exception as e:
+                logger.debug(f"napari pre-warm failed (will import on demand): {e}")
+
+        threading.Thread(target=_warm, daemon=True).start()
 
     def generate_header(self) -> None:
         """
@@ -268,6 +327,7 @@ class ProcessPanel(QFrame, Styles):
         self.generate_tracking_options()
         self.generate_measure_options()
         self.generate_signal_analysis_options()
+        self.generate_classify_options()
 
         self.grid_contents.addWidget(QHSeperationLine(), 9, 0, 1, 4)
         self.view_tab_btn = QPushButton("Explore table")
@@ -290,6 +350,7 @@ class ProcessPanel(QFrame, Styles):
             self.track_action,
             self.measure_action,
             self.signal_analysis_action,
+            self.classify_action,
         ]:
             action.toggled.connect(self.check_readiness)
         self.check_readiness()
@@ -303,6 +364,7 @@ class ProcessPanel(QFrame, Styles):
             or self.track_action.isChecked()
             or self.measure_action.isChecked()
             or self.signal_analysis_action.isChecked()
+            or self.classify_action.isChecked()
         ):
             self.submit_btn.setEnabled(True)
         else:
@@ -323,16 +385,6 @@ class ProcessPanel(QFrame, Styles):
         self.measure_action.setToolTip("Measure.")
         measure_layout.addWidget(self.measure_action, 90)
         # self.to_disable.append(self.measure_action_tc)
-
-        self.classify_btn = QPushButton()
-        self.classify_btn.setIcon(icon(MDI6.scatter_plot, color="black"))
-        self.classify_btn.setIconSize(QSize(20, 20))
-        self.classify_btn.setToolTip("Classify data.")
-        self.classify_btn.setStyleSheet(self.button_select_all)
-        self.classify_btn.clicked.connect(self.open_classifier_ui)
-        measure_layout.addWidget(
-            self.classify_btn, 5
-        )  # 4,2,1,1, alignment=Qt.AlignRight
 
         self.check_measurements_btn = QPushButton()
         self.check_measurements_btn.setIcon(icon(MDI6.eye_check_outline, color="black"))
@@ -421,13 +473,16 @@ class ProcessPanel(QFrame, Styles):
 
         signal_layout.addLayout(signal_model_vbox)
 
-        self.grid_contents.addLayout(signal_layout, 6, 0, 1, 4)
+        self.grid_contents.addLayout(signal_layout, 7, 0, 1, 4)
 
     def refresh_signal_models(self) -> None:
         """
         Refresh the list of available signal models.
         """
         self.signal_models = get_signal_models_list()
+        # Threshold/query classification configs are a non-DL event-detection
+        # method, selectable like a model (mirrors the segmentation "Threshold").
+        self.signal_models.append("Threshold")
         self.signal_models_list.clear()
 
         thresh = 35
@@ -441,6 +496,43 @@ class ProcessPanel(QFrame, Styles):
             self.signal_models_list.setItemData(
                 i, self.signal_models[i], Qt.ToolTipRole
             )
+
+    def _get_signal_threshold_config(self) -> Optional[dict]:
+        """Prompt for and validate a time-correlated classification config.
+
+        Returns the config dict for use as an event-detection method, or None if
+        the user cancels or the selected file is not a valid event config (static
+        classifications belong to the dedicated "Classify cells" step).
+        """
+        from PyQt5.QtWidgets import QFileDialog, QMessageBox
+
+        configs_dir = os.path.join(self.exp_dir, "configs")
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Select classification config", configs_dir, "JSON (*.json)"
+        )
+        if not path:
+            return None
+        try:
+            with open(path) as f:
+                config = json.load(f)
+        except Exception as e:
+            QMessageBox.warning(self, "Invalid config", f"Could not load config: {e}")
+            return None
+
+        if "name" not in config or "query" not in config:
+            QMessageBox.warning(
+                self, "Invalid config", "This is not a valid classification config."
+            )
+            return None
+        if not config.get("time_correlated", False):
+            QMessageBox.warning(
+                self,
+                "Static classification",
+                "This config is a static (measurement) classification, not an "
+                "event. Use the 'Classify cells from config' step for it.",
+            )
+            return None
+        return config
 
     def generate_tracking_options(self) -> None:
         """
@@ -518,13 +610,11 @@ class ProcessPanel(QFrame, Styles):
             return None
         elif returnValue == QMessageBox.Yes:
             remove_file_if_exists(
-                os.sep.join(
-                    [
-                        self.parent_window.pos,
-                        "output",
-                        "tables",
-                        f"trajectories_{self.mode}.csv",
-                    ]
+                trajectory_table_path(self.parent_window.pos, self.mode)
+            )
+            remove_file_if_exists(
+                trajectory_table_path(
+                    self.parent_window.pos, self.mode, extension="pkl"
                 )
             )
             remove_file_if_exists(
@@ -533,29 +623,12 @@ class ProcessPanel(QFrame, Styles):
                         self.parent_window.pos,
                         "output",
                         "tables",
-                        f"trajectories_{self.mode}.pkl",
+                        napari_trajectories_name(self.mode),
                     ]
                 )
             )
             remove_file_if_exists(
-                os.sep.join(
-                    [
-                        self.parent_window.pos,
-                        "output",
-                        "tables",
-                        f"napari_{self.mode[:-1]}_trajectories.npy",
-                    ]
-                )
-            )
-            remove_file_if_exists(
-                os.sep.join(
-                    [
-                        self.parent_window.pos,
-                        "output",
-                        "tables",
-                        f"trajectories_pairs.csv",
-                    ]
-                )
+                trajectory_table_path(self.parent_window.pos, "pairs")
             )
             try:
                 QTimer.singleShot(
@@ -803,11 +876,10 @@ class ProcessPanel(QFrame, Styles):
         If labels are missing, the user is asked if they want to create a new label directory.
         If labels exist, they are loaded into Napari for inspection.
         """
-        from celldetective.napari.utils import control_segmentation_napari
 
-        if not os.path.exists(
-            os.sep.join([self.parent_window.pos, f"labels_{self.mode}", os.sep])
-        ):
+        folder = label_folder_name(self.mode)
+        path = os.path.join(self.parent_window.pos, folder)
+        if not os.path.exists(path):
             msgBox = QMessageBox()
             msgBox.setIcon(QMessageBox.Question)
             msgBox.setText(
@@ -819,83 +891,152 @@ class ProcessPanel(QFrame, Styles):
             if returnValue == QMessageBox.No:
                 return None
             else:
-                os.mkdir(os.sep.join([self.parent_window.pos, f"labels_{self.mode}"]))
+                os.mkdir(path)
                 lbl = np.zeros(
                     (self.parent_window.shape_x, self.parent_window.shape_y), dtype=int
                 )
+                from tifffile import imwrite
                 for i in range(self.parent_window.len_movie):
                     imwrite(
-                        os.sep.join(
-                            [
-                                self.parent_window.pos,
-                                f"labels_{self.mode}",
-                                str(i).zfill(4) + ".tif",
-                            ]
-                        ),
+                        os.path.join(path, str(i).zfill(4) + ".tif"),
                         lbl,
                     )
 
-        # self.freeze()
-        # QApplication.setOverrideCursor(Qt.WaitCursor)
         test = self.parent_window.locate_selected_position()
         if test:
-            # print('Memory use: ', dict(psutil.virtual_memory()._asdict()))
             logger.info(f"Loading images and labels into napari...")
-            try:
-                control_segmentation_napari(
-                    self.parent_window.pos,
-                    prefix=self.parent_window.movie_prefix,
-                    population=self.mode,
-                    flush_memory=True,
-                )
-            except FileNotFoundError as e:
-                msgBox = QMessageBox()
-                msgBox.setIcon(QMessageBox.Warning)
-                msgBox.setText(str(e))
-                msgBox.setWindowTitle("Warning")
-                msgBox.setStandardButtons(QMessageBox.Ok)
-                _ = msgBox.exec()
+            self.open_napari_segmentation()
+
+    def open_napari_segmentation(self, allow_fix_retry: bool = True) -> None:
+        """
+        Load the segmentation data in a background thread, with a responsive
+        progress dialog, then open the napari viewer on the GUI thread
+        (mirrors the track-correction flow in :meth:`open_napari_tracking`).
+
+        Parameters
+        ----------
+        allow_fix_retry : bool
+            If True and loading fails, offer to pass empty frames to fix a
+            stack/labels asymmetry and retry once.
+        """
+
+        # Capture the loader and dialog as locals: the closures below must keep
+        # acting on *this* run's objects. If the user cancels and relaunches,
+        # self.napari_seg_loader points to the new loader, and the stale
+        # thread's on_finished would otherwise pass the cancel check and open a
+        # second viewer.
+        loader = NapariLoaderThread(
+            self.parent_window.pos,
+            self.parent_window.movie_prefix,
+            self.mode,
+            self.parent_window.parent_window.n_threads,
+            task="segmentation",
+        )
+        self.napari_seg_loader = loader  # keep a reference so Qt doesn't GC it
+
+        progress = CelldetectiveProgressDialog(
+            "Loading images and masks...",
+            "Cancel",
+            0,
+            100,
+            self,
+            window_title="Preparing the napari viewer...",
+        )
+        self.napari_seg_progress = progress
+
+        progress.setAutoClose(False)
+        progress.setAutoReset(False)
+
+        # Start in busy/indeterminate mode so the bar animates immediately while
+        # the napari libraries import and the data loads (phases with no % yet).
+        progress.setRange(0, 0)
+
+        def on_progress(p: int) -> None:
+            """Route progress: p < 0 -> busy/indeterminate, else determinate."""
+            if p < 0:
+                if progress.maximum() != 0:
+                    progress.setRange(0, 0)
+            else:
+                if progress.maximum() == 0:
+                    progress.setRange(0, 100)
+                progress.setValue(p)
+
+        loader.progress.connect(on_progress)
+        loader.status.connect(progress.setLabelText)
+        progress.canceled.connect(loader.stop)
+
+        def on_finished(result: Union[Dict, Exception, None]) -> None:
+            """
+            Handle completion of the segmentation loading.
+
+            Parameters
+            ----------
+            result : dict or Exception
+                The prepared viewer data or an exception if one occurred.
+            """
+            from celldetective.napari.utils import launch_segmentation_viewer
+
+            progress.blockSignals(True)
+            if loader._is_cancelled:
+                logger.info("Task was cancelled...")
+                progress.close()
                 return
-            except Exception as e:
-                logger.error(f"Task unsuccessful... Exception {e}...")
+
+            if isinstance(result, Exception):
+                logger.error(f"napari loading error: {result}")
+                progress.close()
                 msgBox = QMessageBox()
                 msgBox.setIcon(QMessageBox.Warning)
-                msgBox.setText(str(e))
+                msgBox.setText(str(result))
                 msgBox.setWindowTitle("Warning")
                 msgBox.setStandardButtons(QMessageBox.Ok)
                 _ = msgBox.exec()
 
-                msgBox = QMessageBox()
-                msgBox.setIcon(QMessageBox.Question)
-                msgBox.setText(
-                    "Would you like to pass empty frames to fix the asymmetry?"
-                )
-                msgBox.setWindowTitle("Question")
-                msgBox.setStandardButtons(
-                    QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel
-                )
-                returnValue = msgBox.exec()
-                if returnValue == QMessageBox.Yes:
-                    logger.info("Fixing the missing labels...")
-                    fix_missing_labels(
-                        self.parent_window.pos,
-                        prefix=self.parent_window.movie_prefix,
-                        population=self.mode,
+                if allow_fix_retry and not isinstance(result, FileNotFoundError):
+                    msgBox = QMessageBox()
+                    msgBox.setIcon(QMessageBox.Question)
+                    msgBox.setText(
+                        "Would you like to pass empty frames to fix the asymmetry?"
                     )
-                    try:
-                        control_segmentation_napari(
+                    msgBox.setWindowTitle("Question")
+                    msgBox.setStandardButtons(
+                        QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel
+                    )
+                    returnValue = msgBox.exec()
+                    if returnValue == QMessageBox.Yes:
+                        logger.info("Fixing the missing labels...")
+                        fix_missing_labels(
                             self.parent_window.pos,
                             prefix=self.parent_window.movie_prefix,
                             population=self.mode,
-                            flush_memory=True,
                         )
-                    except Exception as e:
-                        logger.error(f"Error {e}")
-                        return None
-                else:
-                    return None
+                        self.open_napari_segmentation(allow_fix_retry=False)
+                return
 
-            gc.collect()
+            if result:
+                logger.info("Launching the napari viewer with the segmentation...")
+                progress.setLabelText("Initializing napari viewer...")
+                progress.setRange(0, 0)
+                QApplication.processEvents()
+
+                result.pop("flush_memory", None)
+                try:
+                    launch_segmentation_viewer(
+                        **result,
+                        block=False,
+                        flush_memory=False,
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to launch napari: {e}")
+                    QMessageBox.warning(self, "Error", f"Failed to launch napari: {e}")
+                finally:
+                    progress.close()
+                    gc.collect()
+            else:
+                progress.close()
+
+        loader.finished_with_result.connect(on_finished)
+        loader.start()
 
     def check_signals(self) -> None:
         """
@@ -977,7 +1118,31 @@ class ProcessPanel(QFrame, Styles):
                     else:
                         self.event_annotator.close()
 
+                def on_error(message: str) -> None:
+                    """
+                    Handle a loading failure: close the dialog, inform the user,
+                    and discard the half-initialized annotator.
+
+                    Parameters
+                    ----------
+                    message : str
+                        The error message from the loader thread.
+                    """
+                    self.signal_progress.blockSignals(True)
+                    self.signal_progress.close()
+                    logger.error(f"Signal annotator loading failed: {message}")
+                    QMessageBox.warning(
+                        self,
+                        "Loading failed",
+                        f"The signal annotator could not be loaded:\n{message}",
+                    )
+                    try:
+                        self.event_annotator.close()
+                    except Exception as e:
+                        logger.debug(f"Could not close annotator after error: {e}")
+
                 self.signal_loader.finished.connect(on_finished)
+                self.signal_loader.error.connect(on_error)
                 self.signal_loader.start()
         else:
             # Multi position explorer: redirect to TableUI with progress bar
@@ -1203,6 +1368,127 @@ class ProcessPanel(QFrame, Styles):
             except Exception as e:
                 logger.debug(f"Classifier widget post-show trigger failed: {e}")
 
+    def generate_classify_options(self) -> None:
+        """
+        Generate the CLASSIFY pipeline step (apply saved classification configs).
+        """
+        classify_hlayout = QHBoxLayout()
+
+        self.classify_action = QCheckBox("CLASSIFY")
+        self.classify_action.setStyleSheet(self.menu_check_style)
+        self.classify_action.setIcon(scatter_with_divider_icon(color="black"))
+        self.classify_action.setIconSize(QSize(20, 20))
+        self.classify_action.setToolTip(
+            "Apply one or more saved classification configs to the single-cell tables."
+        )
+        classify_hlayout.addWidget(self.classify_action, 88)
+
+        self.classify_btn = QPushButton()
+        self.classify_btn.setIcon(icon(MDI6.scatter_plot, color="black"))
+        self.classify_btn.setIconSize(QSize(20, 20))
+        self.classify_btn.setToolTip("Open the classifier to build or edit a config.")
+        self.classify_btn.setStyleSheet(self.button_select_all)
+        self.classify_btn.clicked.connect(self.open_classifier_ui)
+        classify_hlayout.addWidget(self.classify_btn, 6)
+
+        # Single config control: imports (and re-imports to replace); the button
+        # shows the count and lists the configs in its tooltip. Enabled even when
+        # CLASSIFY is unchecked (an imported event config routes to Detect events).
+        self.classify_configs_btn = QPushButton()
+        self.classify_configs_btn.setIcon(icon(MDI6.playlist_plus, color="black"))
+        self.classify_configs_btn.setIconSize(QSize(20, 20))
+        self.classify_configs_btn.setToolTip(
+            "Import classification configs to apply, in order."
+        )
+        self.classify_configs_btn.setStyleSheet(self.button_select_all)
+        self.classify_configs_btn.clicked.connect(self.select_classification_configs)
+        classify_hlayout.addWidget(self.classify_configs_btn, 6)
+
+        self.grid_contents.addLayout(classify_hlayout, 6, 0, 1, 4)
+
+    def _update_classify_configs_btn(self) -> None:
+        """Reflect the selected configs on the import button (count + tooltip)."""
+        configs = self.classification_configs
+        self.classify_configs_btn.setText(str(len(configs)) if configs else "")
+        if configs:
+            self.classify_configs_btn.setToolTip(
+                "Imported configs (applied in order):\n"
+                + "\n".join(
+                    f"{i + 1}. {c['name']}" for i, c in enumerate(configs)
+                )
+            )
+        else:
+            self.classify_configs_btn.setToolTip(
+                "Import classification configs to apply, in order."
+            )
+
+    def select_classification_configs(self) -> None:
+        """
+        Select one or more saved classification configs to apply, in order.
+
+        Static (``group_``) configs are queued for the CLASSIFY step. Any imported
+        event (time-correlated) config is instead routed to Detect events: it
+        enables that step and switches its method to "Threshold", since events
+        belong there rather than in the static CLASSIFY step.
+        """
+        from PyQt5.QtWidgets import QFileDialog, QMessageBox
+
+        configs_dir = os.path.join(self.exp_dir, "configs")
+        paths, _ = QFileDialog.getOpenFileNames(
+            self, "Select classification config(s)", configs_dir, "JSON (*.json)"
+        )
+        if not paths:
+            return
+
+        static_configs = []
+        event_configs = []
+        for p in paths:
+            try:
+                with open(p) as f:
+                    cfg = json.load(f)
+            except Exception as e:
+                QMessageBox.warning(
+                    self,
+                    "Invalid config",
+                    f"Could not load {os.path.basename(p)}: {e}",
+                )
+                return
+            if "name" not in cfg or "query" not in cfg:
+                QMessageBox.warning(
+                    self,
+                    "Invalid config",
+                    f"{os.path.basename(p)} is not a valid classification config.",
+                )
+                return
+            if cfg.get("time_correlated", False):
+                event_configs.append(cfg)
+            else:
+                static_configs.append(cfg)
+
+        self.classification_configs = static_configs
+        self._update_classify_configs_btn()
+
+        if event_configs:
+            # Route event config(s) to Detect events (Threshold method).
+            self.signal_threshold_config = event_configs[0]
+            self.signal_analysis_action.setChecked(True)
+            idx = self.signal_models_list.findText("Threshold")
+            if idx >= 0:
+                self.signal_models_list.setCurrentIndex(idx)
+            extra = (
+                " (only the first will be used there)"
+                if len(event_configs) > 1
+                else ""
+            )
+            QMessageBox.information(
+                self,
+                "Event config routed",
+                "Event config(s) "
+                + ", ".join(str(c["name"]) for c in event_configs)
+                + " are time-correlated and were routed to Detect events "
+                + f"(Threshold){extra}.",
+            )
+
     def open_signal_annotator_configuration_ui(self) -> None:
         """
         Open the signal annotator configuration UI.
@@ -1286,15 +1572,14 @@ class ProcessPanel(QFrame, Styles):
             else:
                 logger.info("erase tabs!")
                 tabs = [
-                    pos
-                    + os.sep.join(["output", "tables", f"trajectories_{self.mode}.csv"])
+                    trajectory_table_path(pos, self.mode)
                     for pos in self.df_pos_info["pos_path"].unique()
                 ]
                 # tabs += [pos+os.sep.join(['output', 'tables', f'trajectories_pairs.csv']) for pos in self.df_pos_info['pos_path'].unique()]
                 tabs += [
                     pos
                     + os.sep.join(
-                        ["output", "tables", f"napari_{self.mode}_trajectories.npy"]
+                        ["output", "tables", napari_trajectories_name(self.mode)]
                     )
                     for pos in self.df_pos_info["pos_path"].unique()
                 ]
@@ -1356,19 +1641,22 @@ class ProcessPanel(QFrame, Styles):
             return None
 
         if self.signal_analysis_action.isChecked() and not self.signalChannelsSet:
-            from celldetective.gui.settings._event_detection_model_params import (
-                SignalModelParamsWidget,
-            )
-
             self.signal_model_name = self.signal_models[
                 self.signal_models_list.currentIndex()
             ]
-            self.signalChannelWidget = SignalModelParamsWidget(
-                self, model_name=self.signal_model_name
-            )
-            self.signalChannelWidget.show()
+            # A threshold/query config carries its own query/channels — there is
+            # no DL channel mapping to configure, so skip the params dialog.
+            if self.signal_model_name != "Threshold":
+                from celldetective.gui.settings._event_detection_model_params import (
+                    SignalModelParamsWidget,
+                )
 
-            return None
+                self.signalChannelWidget = SignalModelParamsWidget(
+                    self, model_name=self.signal_model_name
+                )
+                self.signalChannelWidget.show()
+
+                return None
 
         self.movie_prefix = self.parent_window.movie_prefix
 
@@ -1430,11 +1718,13 @@ class ProcessPanel(QFrame, Styles):
         run_tracking = self.track_action.isChecked()
         run_measurement = self.measure_action.isChecked()
         run_signals = self.signal_analysis_action.isChecked()
+        run_classification = self.classify_action.isChecked()
 
         seg_args = {}
         track_args = {}
         measure_args = {}
         signal_args = {}
+        classify_args = {}
 
         # 1. SEGMENTATION CHECKS & ARGS
         if run_segmentation:
@@ -1444,7 +1734,8 @@ class ProcessPanel(QFrame, Styles):
                 and not self.parent_window.position_list.isMultipleSelection()
             ):
                 p = all_positions_flat[0]
-                if len(glob(os.sep.join([p, f"labels_{self.mode}", "*.tif"]))) > 0:
+                folder = label_folder_name(self.mode)
+                if len(glob(os.path.join(p, folder, "*.tif"))) > 0:
                     msgBox = QMessageBox()
                     msgBox.setIcon(QMessageBox.Question)
                     msgBox.setText(
@@ -1497,9 +1788,7 @@ class ProcessPanel(QFrame, Styles):
                 and not self.parent_window.position_list.isMultipleSelection()
             ):
                 p = all_positions_flat[0]
-                table_path = os.sep.join(
-                    [p, "output", "tables", f"trajectories_{self.mode}.csv"]
-                )
+                table_path = trajectory_table_path(p, self.mode)
                 if os.path.exists(table_path):
                     msgBox = QMessageBox()
                     msgBox.setIcon(QMessageBox.Question)
@@ -1525,9 +1814,7 @@ class ProcessPanel(QFrame, Styles):
                 and not self.parent_window.position_list.isMultipleSelection()
             ):
                 p = all_positions_flat[0]
-                table_path = os.sep.join(
-                    [p, "output", "tables", f"trajectories_{self.mode}.csv"]
-                )
+                table_path = trajectory_table_path(p, self.mode)
                 if os.path.exists(table_path):
                     # Check for annotations (logic from original code)
                     try:
@@ -1557,22 +1844,62 @@ class ProcessPanel(QFrame, Styles):
                     self.signal_models_list.currentIndex()
                 ]
 
-                model_complete_path, input_config_path = _resolve_signal_model_paths(self.signal_model_name)
-                with open(input_config_path) as config_file:
-                    input_config = json.load(config_file)
+                if self.signal_model_name == "Threshold":
+                    # Use a config already routed here from an import, else prompt.
+                    threshold_config = self.signal_threshold_config
+                    if threshold_config is None:
+                        threshold_config = self._get_signal_threshold_config()
+                    if threshold_config is None:
+                        return None
+                    # Remember it so the post-run viewer can use its label.
+                    self.signal_threshold_config = threshold_config
+                    signal_args = {
+                        "mode": self.mode,
+                        "threshold_config": threshold_config,
+                    }
+                else:
+                    model_complete_path, input_config_path = _resolve_signal_model_paths(self.signal_model_name)
+                    with open(input_config_path) as config_file:
+                        input_config = json.load(config_file)
 
-                channels = input_config.get(
-                    "selected_channels", input_config.get("channels", [])
+                    channels = input_config.get(
+                        "selected_channels", input_config.get("channels", [])
+                    )
+
+                    signal_args = {
+                        "model_name": self.signal_model_name,
+                        "mode": self.mode,
+                        "channels": channels,
+                    }
+
+        # 5. CLASSIFICATION CHECKS & ARGS
+        if run_classification:
+            if not self.classification_configs:
+                msgBox = QMessageBox()
+                msgBox.setIcon(QMessageBox.Warning)
+                msgBox.setText(
+                    "Please select at least one classification config first "
+                    "(the playlist button next to CLASSIFY)."
                 )
-
-                signal_args = {
-                    "model_name": self.signal_model_name,
-                    "mode": self.mode,
-                    "channels": channels,
-                }
+                msgBox.setWindowTitle("Warning")
+                msgBox.setStandardButtons(QMessageBox.Ok)
+                msgBox.exec()
+                return None
+            classify_args = {
+                "mode": self.mode,
+                "configs": self.classification_configs,
+            }
 
         # --- EXECUTE UNIFIED PROCESS ---
-        if any([run_segmentation, run_tracking, run_measurement, run_signals]):
+        if any(
+            [
+                run_segmentation,
+                run_tracking,
+                run_measurement,
+                run_signals,
+                run_classification,
+            ]
+        ):
 
             process_args = {
                 "batch_structure": batch_structure,
@@ -1580,10 +1907,12 @@ class ProcessPanel(QFrame, Styles):
                 "run_tracking": run_tracking,
                 "run_measurement": run_measurement,
                 "run_signals": run_signals,
+                "run_classification": run_classification,
                 "seg_args": seg_args,
                 "track_args": track_args,
                 "measure_args": measure_args,
                 "signal_args": signal_args,
+                "classify_args": classify_args,
                 "log_file": getattr(self.parent_window.parent_window, "log_file", None),
             }
 
@@ -1600,7 +1929,7 @@ class ProcessPanel(QFrame, Styles):
                 return None
 
             # Post-Process actions (like updating list)
-            if run_tracking:
+            if run_tracking or run_classification:
                 self.parent_window.update_position_options()
 
             if run_signals:
@@ -1618,16 +1947,20 @@ class ProcessPanel(QFrame, Styles):
                     elif self.mode.lower() in ["effector", "effectors"]:
                         mode_fixed = "effectors"
 
-                    table_path = os.sep.join(
-                        [p, "output", "tables", f"trajectories_{mode_fixed}.csv"]
-                    )
+                    table_path = trajectory_table_path(p, mode_fixed)
 
                     if os.path.exists(table_path):
                         # Determine event label
                         event_label = None
                         signal_name = None
                         try:
-                            if hasattr(self, "signal_model_name"):
+                            if self.signal_model_name == "Threshold":
+                                # Threshold method: label comes from the config name.
+                                if self.signal_threshold_config is not None:
+                                    event_label = self.signal_threshold_config.get(
+                                        "name"
+                                    )
+                            elif hasattr(self, "signal_model_name"):
                                 _, input_config_path = _resolve_signal_model_paths(self.signal_model_name)
                                 with open(input_config_path) as f:
                                     conf = json.load(f)
@@ -1658,6 +1991,7 @@ class ProcessPanel(QFrame, Styles):
             self.track_action,
             self.measure_action,
             self.signal_analysis_action,
+            self.classify_action,
         ]:
             if action.isChecked():
                 action.setChecked(False)
@@ -1674,14 +2008,20 @@ class ProcessPanel(QFrame, Styles):
             f"View the tracks before post-processing for position {self.parent_window.pos} in napari..."
         )
 
-        self.napari_loader = NapariLoaderThread(
+        # Capture the loader and dialog as locals: the closures below must keep
+        # acting on *this* run's objects. If the user cancels and relaunches,
+        # self.napari_loader points to the new loader, and the stale thread's
+        # on_finished would otherwise pass the cancel check and open a second
+        # viewer.
+        loader = NapariLoaderThread(
             self.parent_window.pos,
             self.parent_window.movie_prefix,
             self.mode,
             self.parent_window.parent_window.n_threads,
         )
+        self.napari_loader = loader  # keep a reference so Qt doesn't GC it
 
-        self.napari_progress = CelldetectiveProgressDialog(
+        progress = CelldetectiveProgressDialog(
             "Loading images, tracks and relabeling masks...",
             "Cancel",
             0,
@@ -1689,14 +2029,28 @@ class ProcessPanel(QFrame, Styles):
             self,
             window_title="Preparing the napari viewer...",
         )
+        self.napari_progress = progress
 
-        self.napari_progress.setAutoClose(False)
-        self.napari_progress.setAutoReset(False)
+        progress.setAutoClose(False)
+        progress.setAutoReset(False)
 
-        self.napari_progress.setValue(0)
-        self.napari_loader.progress.connect(self.napari_progress.setValue)
-        self.napari_loader.status.connect(self.napari_progress.setLabelText)
-        self.napari_progress.canceled.connect(self.napari_loader.stop)
+        # Start in busy/indeterminate mode so the bar animates immediately while
+        # the napari libraries import and the data loads (phases with no % yet).
+        progress.setRange(0, 0)
+
+        def on_progress(p: int) -> None:
+            """Route progress: p < 0 -> busy/indeterminate, else determinate."""
+            if p < 0:
+                if progress.maximum() != 0:
+                    progress.setRange(0, 0)
+            else:
+                if progress.maximum() == 0:
+                    progress.setRange(0, 100)
+                progress.setValue(p)
+
+        loader.progress.connect(on_progress)
+        loader.status.connect(progress.setLabelText)
+        progress.canceled.connect(loader.stop)
 
         def on_finished(result: Union[Dict, Exception, None]) -> None:
             """
@@ -1709,16 +2063,15 @@ class ProcessPanel(QFrame, Styles):
             """
             from celldetective.napari.utils import launch_napari_viewer
 
-            self.napari_progress.blockSignals(True)
-            # self.napari_progress.close()
-            if self.napari_loader._is_cancelled:
+            progress.blockSignals(True)
+            if loader._is_cancelled:
                 logger.info("Task was cancelled...")
-                self.napari_progress.close()
+                progress.close()
                 return
 
             if isinstance(result, Exception):
                 logger.error(f"napari loading error: {result}")
-                self.napari_progress.close()
+                progress.close()
                 msgBox = QMessageBox()
                 msgBox.setIcon(QMessageBox.Warning)
                 msgBox.setText(str(result))
@@ -1729,8 +2082,8 @@ class ProcessPanel(QFrame, Styles):
 
             if result:
                 logger.info("Launching the napari viewer with tracks...")
-                self.napari_progress.setLabelText("Initializing Napari viewer...")
-                self.napari_progress.setRange(0, 0)
+                progress.setLabelText("Initializing Napari viewer...")
+                progress.setRange(0, 0)
                 QApplication.processEvents()
 
                 def progress_cb(msg: str) -> None:
@@ -1743,7 +2096,7 @@ class ProcessPanel(QFrame, Styles):
                         Progress message.
                     """
                     if isinstance(msg, str):
-                        self.napari_progress.setLabelText(msg)
+                        progress.setLabelText(msg)
                     QApplication.processEvents()
 
                 if "flush_memory" in result:
@@ -1761,9 +2114,9 @@ class ProcessPanel(QFrame, Styles):
                     logger.error(f"Failed to launch Napari: {e}")
                     QMessageBox.warning(self, "Error", f"Failed to launch Napari: {e}")
                 finally:
-                    self.napari_progress.close()
+                    progress.close()
             else:
-                self.napari_progress.close()
+                progress.close()
                 logger.warning(
                     "napari loading returned None (likely no trajectories found)."
                 )
@@ -1773,8 +2126,8 @@ class ProcessPanel(QFrame, Styles):
                     "Could not load tracks. Please ensure trajectories are computed.",
                 )
 
-        self.napari_loader.finished_with_result.connect(on_finished)
-        self.napari_loader.start()
+        loader.finished_with_result.connect(on_finished)
+        loader.start()
 
     def view_table_ui(self) -> None:
         """
@@ -1844,7 +2197,9 @@ class ProcessPanel(QFrame, Styles):
                 msgBox.exec()
 
         if total_positions == 1:
-            # Synchronous load for single position
+            # Single position: load synchronously. It's fast and avoids the
+            # worker-process spawn latency that a popup would add to this common
+            # case (the well/position bars are not informative for one position).
             from celldetective.utils.data_loaders import load_experiment_tables
 
             df = load_experiment_tables(
@@ -1855,7 +2210,7 @@ class ProcessPanel(QFrame, Styles):
             )
             show_table(df)
         else:
-            # Asynchronous load for multiple positions
+            # Multiple positions: load in a worker with the well/position popup.
             process_args = {
                 "experiment": self.exp_dir,
                 "population": self.mode,
@@ -1887,7 +2242,7 @@ class ProcessPanel(QFrame, Styles):
                 well_label="Wells loaded:",
                 pos_label="Positions loaded:",
             )
-            self.job._ProgressWindow__runner.signals.result.connect(on_table_loaded)
+            self.job.connect_result(on_table_loaded)
             self.job.exec_()
 
     def load_available_tables(self) -> None:

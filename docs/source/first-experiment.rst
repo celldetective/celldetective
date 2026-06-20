@@ -57,7 +57,7 @@ Now we will detect the cells in the images. The demo dataset contains images of 
     The progress windows shows you segmentation masks as they are produced
 
 .. tip::
-    You can visualize and correct the segmentation results by clicking the :icon:`eye-outline-check,black` button next to the segmentation entry. This opens napari with the image and mask layers.
+    You can visualize and correct the segmentation results by clicking the :icon:`eye-check-outline,black` button next to the segmentation entry. This opens napari with the image and mask layers.
 
 
 Step 3: Track Cells
@@ -96,7 +96,7 @@ Step 5: Analyze Time-Series
 This is the core of Celldetective: analyzing how single-cell features change over time.
 
 1.  Scroll to the **DETECT EVENTS** section.
-2.  Click the :icon:`eye,black` button (:term:`Event Annotator`) to open the interactive viewer.
+2.  Click the :icon:`eye-check-outline,black` button (:term:`Event Annotator`) to open the interactive viewer.
 3.  **Click on any cell** in the movie (the circle marker will turn green).
 4.  The panel on the left displays its feature time-series (e.g., ``area`` vs ``FRAME``).
 
@@ -110,7 +110,7 @@ This is the core of Celldetective: analyzing how single-cell features change ove
 
 **Detect Spreading Events**: In this demo, cells become dark (low intensity) when they :term:`spread <spreading event>`. Let's annotate this using the **Classifier Widget**:
 
-1.  In the **MEASURE** section, click the :icon:`scatter-plot,black` button (:term:`Classifier Widget`).
+1.  In the **CLASSIFY** section, click the :icon:`scatter-plot,black` button (:term:`Classifier Widget`).
 
 .. figure:: _static/tuto_ricm/classify_spreading.gif
     :align: center
@@ -120,9 +120,9 @@ This is the core of Celldetective: analyzing how single-cell features change ove
     Condition-based spreading event detection
 
 2.  Set **class name** to ``spreading``.
-3.  In the **classify** field, type ``intensity_mean < 1``.
+3.  In the **classify** field, type ``intensity_mean < 1``, then press **Preview** to check which cells match (matching cells turn red).
 4.  Check **Time correlated** and select **irreversible event**.
-5.  Click **apply** to detect this event for all tracks.
+5.  Press **Save config** to store the classification. The classifier has no "apply" button: back in the population block, click the :icon:`playlist-plus,black` button to import the saved config, then tick **DETECT EVENTS** and run the block to detect this event for all tracks. (Time-correlated configs are routed to the **DETECT EVENTS** step automatically.)
 6.  Reopen the Event Annotator (Step 5) to see the vertical lines marking the spreading time.
 
 .. figure:: _static/tuto_ricm/spreading_event.png

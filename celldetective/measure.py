@@ -43,6 +43,13 @@ from celldetective.utils.masks import (
     create_patch_mask,
 )
 from celldetective.utils.parsing import extract_cols_from_query
+from celldetective.utils.event_schema import (
+    EVENT,
+    NO_EVENT,
+    ELSE,
+    event_column_names,
+)
+from celldetective.utils.schema import trajectory_table_path
 from celldetective.utils.data_cleaning import (
     _remove_invalid_cols,
     rename_intensity_column,
@@ -1072,6 +1079,11 @@ def measure_isotropic_intensity(
                 x = group[column_labels["x"]].to_numpy()[0]
                 y = group[column_labels["y"]].to_numpy()[0]
 
+                # Cells without a valid position (e.g. gap-filled/dummy points)
+                # cannot be measured; leave their intensities as NaN.
+                if not (np.isfinite(x) and np.isfinite(y)):
+                    continue
+
                 xmin = int(x)
                 xmax = int(x) + 2 * pad_value_y - 1
                 ymin = int(y)
@@ -1091,7 +1103,7 @@ def measure_isotropic_intensity(
                 projection[expanded_mask[:, :, 0] == 0.0, :] = epsilon
 
                 for op in operations:
-                    func = eval("np." + op)
+                    func = getattr(np, op)
                     intensity_values = func(
                         projection, axis=(0, 1), where=projection > epsilon
                     )
@@ -1120,6 +1132,11 @@ def measure_isotropic_intensity(
             x = group[column_labels["x"]].to_numpy()[0]
             y = group[column_labels["y"]].to_numpy()[0]
 
+            # Cells without a valid position (e.g. gap-filled/dummy points)
+            # cannot be measured; leave their intensities as NaN.
+            if not (np.isfinite(x) and np.isfinite(y)):
+                continue
+
             xmin = int(x)
             xmax = int(x) + 2 * pad_value_y - 1
             ymin = int(y)
@@ -1133,7 +1150,7 @@ def measure_isotropic_intensity(
             projection = np.multiply(crop, expanded_mask)
 
             for op in operations:
-                func = eval("np." + op)
+                func = getattr(np, op)
                 intensity_values = func(
                     projection, axis=(0, 1), where=projection == projection
                 )
@@ -1194,7 +1211,7 @@ def measure_at_position(
         logger.error(f"Measurement script exited with code {result.returncode} for position {pos}.")
         raise RuntimeError(f"Measurement failed for position {pos} (exit code {result.returncode}).")
 
-    table = pos + os.sep.join(["output", "tables", f"trajectories_{mode}.csv"])
+    table = trajectory_table_path(pos, mode)
     if return_measurements:
 
         df = pd.read_csv(table)
@@ -1731,6 +1748,8 @@ def classify_transient_events(
     # Control input
     if "TRACK_ID" not in cols:
         raise KeyError("Please provide tracked data...")
+    if "FRAME" not in cols:
+        raise KeyError("A 'FRAME' column is required for transient event classification...")
     if "position" in cols:
         sort_cols = ["position", "TRACK_ID"]
         df = df.sort_values(by=sort_cols + ["FRAME"])
@@ -1788,7 +1807,7 @@ def classify_transient_events(
                 left = timeline_safe[int(left)]
                 right = timeline_safe[int(right)]
 
-                df.loc[indices, class_attr] = 0
+                df.loc[indices, class_attr] = EVENT
                 t0 = left  # take onset + (right - left)/2.0
                 df.loc[indices, class_attr.replace("class_", "t_")] = t0
                 df.loc[
@@ -1804,11 +1823,11 @@ def classify_transient_events(
                     continuous_stat_col,
                 ] = 1
             else:
-                df.loc[indices, class_attr] = 1
+                df.loc[indices, class_attr] = NO_EVENT
                 df.loc[indices, class_attr.replace("class_", "t_")] = -1
                 df.loc[indices, continuous_stat_col] = 0
         else:
-            df.loc[indices, class_attr] = 1
+            df.loc[indices, class_attr] = NO_EVENT
             df.loc[indices, class_attr.replace("class_", "t_")] = -1
             df.loc[indices, continuous_stat_col] = 0
 
@@ -1882,6 +1901,13 @@ def classify_irreversible_events(
         sort_cols = ["position", "TRACK_ID"]
     else:
         sort_cols = ["TRACK_ID"]
+    if "FRAME" not in cols:
+        raise KeyError("A 'FRAME' column is required for time-correlated event classification...")
+    if "t_firstdetection" not in cols:
+        raise KeyError(
+            "Column 't_firstdetection' is required for irreversible event classification "
+            "(it is produced at the tracking stage). Re-run tracking or provide tracked data..."
+        )
     if pre_event is not None:
         if "t_" + pre_event not in cols:
             raise KeyError("Pre-event time does not seem to be a valid column in the DataFrame...")
@@ -1922,33 +1948,33 @@ def classify_irreversible_events(
 
         if np.all([s == 0 for s in status_values]):
             # all negative to condition, event not observed
-            df.loc[indices, class_attr] = 1
+            df.loc[indices, class_attr] = NO_EVENT
         elif np.all([s == 1 for s in status_values]):
             # all positive, event already observed (left-censored)
-            df.loc[indices, class_attr] = 2
+            df.loc[indices, class_attr] = ELSE
         else:
             # ambiguity, possible transition, use `unique_state` technique after
-            df.loc[indices, class_attr] = 2
+            df.loc[indices, class_attr] = ELSE
 
     logger.info("Number of cells per class after the initial pass: %s",
                 df.loc[df["FRAME"] == 0, class_attr].value_counts().to_dict())
 
-    df.loc[df[class_attr] != 2, class_attr.replace("class", "t")] = -1
-    # Try to fit time on class 2 cells (ambiguous)
+    df.loc[df[class_attr] != ELSE, class_attr.replace("class", "t")] = -1
+    # Try to fit time on ELSE-class cells (ambiguous)
     df = estimate_time(
         df,
         class_attr,
         model="step_function",
-        class_of_interest=[2],
+        class_of_interest=[ELSE],
         r2_threshold=r2_threshold,
     )
 
     logger.info("Number of cells per class after conditional signal fit: %s",
                 df.loc[df["FRAME"] == 0, class_attr].value_counts().to_dict())
 
-    # Revisit class 2 cells to classify as neg/pos with percentile tolerance
-    df.loc[df[class_attr] == 2, :] = classify_unique_states(
-        df.loc[df[class_attr] == 2, :].copy(), class_attr, percentile_recovery
+    # Revisit ELSE-class cells to classify as neg/pos with percentile tolerance
+    df.loc[df[class_attr] == ELSE, :] = classify_unique_states(
+        df.loc[df[class_attr] == ELSE, :].copy(), class_attr, percentile_recovery
     )
     logger.info("Number of cells per class after recovery pass (median state): %s",
                 df.loc[df["FRAME"] == 0, class_attr].value_counts().to_dict())
@@ -2008,6 +2034,14 @@ def classify_unique_states(
     else:
         sort_cols = ["TRACK_ID"]
 
+    if "FRAME" not in cols:
+        raise KeyError("A 'FRAME' column is required for unique-state classification...")
+    if "t_firstdetection" not in cols:
+        raise KeyError(
+            "Column 't_firstdetection' is required for unique-state classification "
+            "(it is produced at the tracking stage). Re-run tracking or provide tracked data..."
+        )
+
     if pre_event is not None:
         if "t_" + pre_event not in cols:
             raise KeyError("Pre-event time does not seem to be a valid column in the DataFrame...")
@@ -2042,10 +2076,10 @@ def classify_unique_states(
         if perc_status == perc_status:
             c = ceil(perc_status)
             if c == 0:
-                df.loc[indices, class_attr] = 1
+                df.loc[indices, class_attr] = NO_EVENT
                 df.loc[indices, class_attr.replace("class", "t")] = -1
             elif c == 1:
-                df.loc[indices, class_attr] = 2
+                df.loc[indices, class_attr] = ELSE
                 df.loc[indices, class_attr.replace("class", "t")] = -1
     return df
 
@@ -2191,6 +2225,79 @@ def classify_tracks_from_query(
         percentile_recovery=percentile_recovery,
     )
 
+    return df
+
+
+def classify_from_threshold_config(df: pd.DataFrame, config: dict) -> pd.DataFrame:
+    """Apply a saved threshold/query event-detector configuration to a table.
+
+    This is the headless counterpart of ``gui.ClassifierWidget``: it runs the
+    query classification and, when the config is time-correlated, the
+    track-level interpretation — emitting the same ``class_``/``t_``/``status_``
+    (or static ``group_``) columns as the interactive widget and the
+    deep-learning detector. It lets a threshold "event detector" be saved once
+    and re-applied across positions/experiments, exactly like a model.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        The single-cell table to classify.
+    config : dict
+        Configuration with keys:
+
+        - ``name`` (str): event/group label.
+        - ``query`` (str): pandas query defining the "event-on" condition.
+        - ``time_correlated`` (bool, default False): if True, interpret as an
+          event over tracks (``class_``/``t_``/``status_``); otherwise produce a
+          static ``group_<name>`` classification.
+        - ``event_type`` (str): ``"irreversible"`` | ``"unique_state"`` |
+          ``"transient"`` (only used when ``time_correlated``).
+        - ``r2_threshold`` (float, default 0.5), ``pre_event`` (str or None).
+
+    Returns
+    -------
+    pandas.DataFrame
+        The table with the new classification columns.
+
+    Raises
+    ------
+    KeyError
+        If ``name`` or ``query`` is missing from the config.
+    EmptyQueryError, MissingColumnsError, QueryError
+        Propagated from :func:`classify_cells_from_query` for a bad query.
+    """
+    if "name" not in config or "query" not in config:
+        raise KeyError("A threshold event-detector config requires 'name' and 'query'.")
+
+    name = config["name"]
+    query = config["query"]
+    class_attr, _, status_attr = event_column_names(name)
+
+    df = classify_cells_from_query(df, name, query)  # creates status_<name>
+
+    if not config.get("time_correlated", False):
+        group_attr = "group_" + name
+        df = df.drop(list({group_attr} & set(df.columns)), axis=1).rename(
+            columns={status_attr: group_attr}
+        )
+        return df.reset_index(drop=True)
+
+    df = df.drop(list({class_attr} & set(df.columns)), axis=1).rename(
+        columns={status_attr: class_attr}
+    )
+    df = df.reset_index(drop=True)
+
+    event_type = config.get("event_type", "unique_state")
+    pre_event = config.get("pre_event") or None
+    df = interpret_track_classification(
+        df,
+        class_attr,
+        irreversible_event=event_type == "irreversible",
+        unique_state=event_type == "unique_state",
+        transient_event=event_type == "transient",
+        r2_threshold=config.get("r2_threshold", 0.5),
+        pre_event=pre_event,
+    )
     return df
 
 

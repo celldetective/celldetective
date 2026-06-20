@@ -27,6 +27,7 @@ from celldetective.neighborhood import (
 )
 from celldetective.utils.data_cleaning import extract_identity_col
 from celldetective.utils import COLUMN_LABELS
+from celldetective.utils.schema import trajectory_table_path
 from scipy.spatial.distance import cdist
 from celldetective.relative_measurements import measure_pair_signals_at_position
 
@@ -980,8 +981,8 @@ class NeighborhoodProcess(Process):
 
                 if df_pairs is not None:
                     if "REFERENCE_ID" in list(df_pairs.columns):
-                        previous_pair_table_path = self.pos + os.sep.join(
-                            ["output", "tables", "trajectories_pairs.csv"]
+                        previous_pair_table_path = trajectory_table_path(
+                            self.pos, "pairs"
                         )
 
                         if os.path.exists(previous_pair_table_path):

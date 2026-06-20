@@ -75,4 +75,24 @@ def save_tiff_imagej_compatible(
     img = move_image_axes(img, axes, "TZCYX", True)
 
     imsave_kwargs["imagej"] = True
-    imsave(file, img, **imsave_kwargs)
+
+    # Write atomically: cancelling a job hard-kills the worker process, which
+    # must never leave a half-written (truncated/corrupt) TIFF on disk. Write to
+    # a temp file in the same directory, then os.replace() it into place — atomic
+    # on the same filesystem on both POSIX and Windows. If the worker is killed
+    # before the replace, the final file is simply left untouched (a missing
+    # frame, which fix_missing_labels can repair) rather than corrupted. The temp
+    # name does not end in .tif, so the label loaders' "*.tif" globs ignore any
+    # leftover.
+    file = os.fspath(file)
+    tmp_file = f"{file}.{os.getpid()}.tmp"
+    try:
+        imsave(tmp_file, img, **imsave_kwargs)
+        os.replace(tmp_file, file)
+    except BaseException:
+        try:
+            if os.path.exists(tmp_file):
+                os.remove(tmp_file)
+        except Exception:
+            pass
+        raise

@@ -80,6 +80,80 @@ abs_path = os.sep.join(
 )
 
 
+def _run_dl_model_on_frame(
+    frame: np.ndarray,
+    model: Any,
+    model_type: str,
+    scale_model: Optional[float] = None,
+    template: Optional[np.ndarray] = None,
+    file: Optional[str] = None,
+    diameter: Optional[float] = None,
+    cellprob_threshold: Optional[float] = None,
+    flow_threshold: Optional[float] = None,
+) -> np.ndarray:
+    """
+    Run a prepared deep-learning model on a single, already-preprocessed frame.
+
+    This is the single source of truth for the per-frame inference + label
+    rescaling step shared by :func:`segment` (in-memory API),
+    ``scripts/segment_cells.py`` (per-position subprocess) and
+    :class:`celldetective.processes.segment_cells.SegmentCellDLProcess` (batch
+    process). Keeping it in one place prevents the three call sites from drifting
+    apart (they previously used *different* conditions to decide whether to
+    rescale the labels back to the image grid).
+
+    Parameters
+    ----------
+    frame : ndarray
+        The normalized, channel-arranged and (if needed) zoomed frame, shape (Y, X, C).
+    model : object
+        A loaded StarDist or Cellpose model.
+    model_type : {'stardist', 'cellpose'}
+        Which backend ``model`` belongs to.
+    scale_model : float or None, optional
+        The zoom factor that was applied to the *input* frame relative to the
+        original image grid. When not None the predicted labels are rescaled by
+        ``1 / scale_model`` back to the original grid. Default is None.
+    template : ndarray or None, optional
+        A reference frame used to restore the exact original spatial dimensions.
+    file : str or None, optional
+        Path to the movie used to load a template when ``template`` is None.
+    diameter, cellprob_threshold, flow_threshold : optional
+        Cellpose-only inference parameters.
+
+    Returns
+    -------
+    ndarray
+        The predicted instance labels on the original image grid.
+    """
+
+    if model_type == "stardist":
+        Y_pred = _segment_image_with_stardist_model(
+            frame, model=model, return_details=False
+        )
+    elif model_type == "cellpose":
+        Y_pred = _segment_image_with_cellpose_model(
+            frame,
+            model=model,
+            diameter=diameter,
+            cellprob_threshold=cellprob_threshold,
+            flow_threshold=flow_threshold,
+        )
+    else:
+        raise ValueError(f"Unknown segmentation model_type '{model_type}'.")
+
+    # Rescale the labels back to the original grid whenever the input was zoomed.
+    # Guarding on `scale_model is not None` (rather than the caller's own `scale`
+    # value, which used to differ between call sites) is the correct condition:
+    # the frame was loaded/zoomed by exactly `scale_model`.
+    if scale_model is not None:
+        Y_pred = _rescale_labels(Y_pred, scale_model=scale_model)
+
+    Y_pred = _check_label_dims(Y_pred, file=file, template=template)
+
+    return Y_pred
+
+
 def segment(
     stack: Union[np.ndarray, List[np.ndarray]],
     model_name: str,
@@ -149,16 +223,28 @@ def segment(
     if not use_gpu:
         os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
     else:
-        os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+        from celldetective.utils.resources import resolve_gpu_device
+
+        os.environ["CUDA_VISIBLE_DEVICES"] = resolve_gpu_device()
 
     if channel_axis != -1:
         stack = np.moveaxis(stack, channel_axis, -1)
 
-    if channels is not None:
-        if len(channels) != stack.shape[-1]:
-            raise ValueError(f"The channel names provided do not match with the expected number of channels in the stack: {stack.shape[-1]}.")
-
     required_channels = input_config["channels"]
+
+    if channels is None:
+        # Documented behaviour: when channel names are not provided, assume the
+        # stack's channels correspond, in order, to the channels the model
+        # requires. This keeps the public API usable without a channel list
+        # (and matches `_extract_channel_indices(None, ...)`).
+        channels = list(required_channels)
+        logger.info(
+            "No channel names provided; assuming the stack channels match the "
+            f"model's required channels in order: {required_channels}."
+        )
+    elif len(channels) != stack.shape[-1]:
+        raise ValueError(f"The channel names provided do not match with the expected number of channels in the stack: {stack.shape[-1]}.")
+
     channel_intersection = [ch for ch in channels if ch in required_channels]
     if len(channel_intersection) == 0:
         raise ValueError("None of the channels required by the model can be found in the images to segment... Abort.")
@@ -230,26 +316,19 @@ def segment(
 
         frame = _fix_no_contrast(frame)
         frame = interpolate_nan_multichannel(frame)
-        frame[:, :, none_channel_indices] = 0.0
+        if none_channel_indices.size:
+            frame[:, :, none_channel_indices] = 0.0
 
-        if model_type == "stardist":
-            Y_pred = _segment_image_with_stardist_model(
-                frame, model=model, return_details=False
-            )
-
-        elif model_type == "cellpose":
-            Y_pred = _segment_image_with_cellpose_model(
-                frame,
-                model=model,
-                diameter=diameter,
-                cellprob_threshold=cellprob_threshold,
-                flow_threshold=flow_threshold,
-            )
-
-        if Y_pred.shape != stack[0].shape[:2]:
-            Y_pred = _rescale_labels(Y_pred, scale_model)
-
-        Y_pred = _check_label_dims(Y_pred, template=template)
+        Y_pred = _run_dl_model_on_frame(
+            frame,
+            model=model,
+            model_type=model_type,
+            scale_model=scale_model,
+            template=template,
+            diameter=diameter if model_type == "cellpose" else None,
+            cellprob_threshold=cellprob_threshold if model_type == "cellpose" else None,
+            flow_threshold=flow_threshold if model_type == "cellpose" else None,
+        )
 
         labels.append(Y_pred)
 
@@ -290,9 +369,9 @@ def segment_from_thresholds(
             time dimension and C the channel dimension.
     target_channel : int, optional
             The channel index to be used for segmentation (default is 0).
-    thresholds : list of tuples, optional
-            A list of tuples specifying intensity thresholds for segmentation. Each tuple corresponds to a frame in the stack,
-            with values (lower_threshold, upper_threshold). If None, global thresholds are determined automatically (default is None).
+    thresholds : tuple of float, optional
+            A single ``(lower_threshold, upper_threshold)`` intensity pair applied to **every** frame in the stack.
+            Per-frame thresholds are not supported here. If None, global thresholds are determined automatically (default is None).
     view_on_napari : bool, optional
             If True, displays the original stack and segmentation results in Napari (default is False).
     equalize_reference : int or None, optional
@@ -544,12 +623,11 @@ def filter_on_property(
                     f"Query {query} could not be applied. Ensure that the feature exists. {e}"
                 )
 
-    cell_ids = list(np.unique(labels)[1:])
-    leftover_cells = list(properties["label"].unique())
-    to_remove = [value for value in cell_ids if value not in leftover_cells]
-
-    for c in to_remove:
-        labels[np.where(labels == c)] = 0.0
+    # Drop every label not surviving the queries in a single vectorized pass
+    # (np.isin builds the keep-mask over the whole frame at once) instead of a
+    # per-removed-cell Python loop over np.where, which was O(n_cells x pixels).
+    leftover_cells = properties["label"].to_numpy()
+    labels = np.where(np.isin(labels, leftover_cells), labels, 0)
 
     return labels
 
@@ -908,20 +986,17 @@ def merge_instance_segmentation(
     for i in range(1, len(labels)):
 
         label_to_merge = labels[i]
-        pairs = matching(
+        # Single matching() call: it returns both the matched pairs and their
+        # scores, so computing it twice just doubled the (expensive) IoU work.
+        match_result = matching(
             label_reference,
             label_to_merge,
             thresh=0.5,
             criterion="iou",
             report_matches=True,
-        ).matched_pairs
-        scores = matching(
-            label_reference,
-            label_to_merge,
-            thresh=0.5,
-            criterion="iou",
-            report_matches=True,
-        ).matched_scores
+        )
+        pairs = match_result.matched_pairs
+        scores = match_result.matched_scores
 
         accepted_pairs = []
         for k, p in enumerate(pairs):

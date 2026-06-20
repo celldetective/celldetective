@@ -23,6 +23,7 @@ from celldetective.gui.base.utils import center_window
 from fonticon_mdi6 import MDI6
 from natsort import natsorted
 from superqt.fonticon import icon
+from celldetective.utils.schema import label_folder_name
 
 from celldetective.gui.viewers.base_viewer import StackVisualizer
 from celldetective.gui.gui_utils import PreprocessingLayout2
@@ -321,7 +322,7 @@ class SpotDetectionVisualizer(StackVisualizer):
         labels_path = (
             str(Path(self.stack_path).parent.parent)
             + os.sep
-            + f"labels_{self.cell_type}"
+            + label_folder_name(self.cell_type)
             + os.sep
         )
         self.mask_paths = natsorted(glob(labels_path + "*.tif"))

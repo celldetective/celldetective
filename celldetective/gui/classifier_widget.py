@@ -10,6 +10,9 @@ from PyQt5.QtWidgets import (
     QButtonGroup,
     QComboBox,
     QMainWindow,
+    QFileDialog,
+    QMenuBar,
+    QAction,
 )
 from PyQt5.QtCore import Qt, QSize
 from PyQt5.QtGui import QCloseEvent
@@ -30,7 +33,6 @@ import logging
 from celldetective import get_software_location
 from celldetective.measure import (
     classify_cells_from_query,
-    interpret_track_classification,
 )
 
 from celldetective.log_manager import positionlogger
@@ -63,7 +65,10 @@ class ClassifierWidget(CelldetectiveWidget):
         self.setWindowTitle("Custom classification")
 
         self.mode = self.parent_window.mode
-        self.df = self.parent_window.df
+        # Work on a copy: the widget injects helper columns (e.g. "custom") and
+        # only persists results to disk on submit, so it must not mutate the
+        # parent table in place.
+        self.df = self.parent_window.df.copy()
 
         self.cols = self.df.select_dtypes(include=[np.number]).columns.tolist()
 
@@ -73,6 +78,14 @@ class ClassifierWidget(CelldetectiveWidget):
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(30, 30, 30, 30)
+
+        # File menu at the top: importing an existing config to edit.
+        self.menu_bar = QMenuBar(self)
+        file_menu = self.menu_bar.addMenu("&File")
+        self.import_config_action = QAction("&Import config...", self)
+        self.import_config_action.triggered.connect(self.load_config)
+        file_menu.addAction(self.import_config_action)
+        layout.setMenuBar(self.menu_bar)
 
         name_layout = QHBoxLayout()
         name_layout.addWidget(QLabel("class name: "), 33)
@@ -181,7 +194,7 @@ class ClassifierWidget(CelldetectiveWidget):
         self.irreversible_event_btn = QRadioButton("irreversible event")
         self.unique_state_btn = QRadioButton("unique state")
         self.transient_event_btn = QRadioButton("transient event")
-        time_corr_btn_group = QButtonGroup()
+        self.time_corr_btn_group = QButtonGroup()
         self.unique_state_btn.click()
 
         time_corr_layout = QHBoxLayout()
@@ -234,7 +247,7 @@ class ClassifierWidget(CelldetectiveWidget):
             self.unique_state_btn,
             self.transient_event_btn,
         ]:
-            time_corr_btn_group.addButton(btn)
+            self.time_corr_btn_group.addButton(btn)
             btn.setEnabled(False)
         self.time_corr.toggled.connect(self.activate_time_corr_options)
 
@@ -253,11 +266,18 @@ class ClassifierWidget(CelldetectiveWidget):
 
         layout.addWidget(QLabel())
 
-        self.submit_btn = QPushButton("apply")
-        self.submit_btn.setStyleSheet(self.button_style_sheet)
-        self.submit_btn.clicked.connect(self.submit_classification)
-        self.submit_btn.setEnabled(False)
-        layout.addWidget(self.submit_btn, 30)
+        # This widget is a config *maker*: build and preview a query above, then
+        # save it as a reusable config (import an existing one to edit via
+        # File > Import config...). Applying configs to tables is the job of the
+        # CLASSIFY pipeline step (or Detect events for event configs).
+        self.save_config_btn = QPushButton("Save config")
+        self.save_config_btn.setStyleSheet(self.button_style_sheet)
+        self.save_config_btn.setToolTip(
+            "Save this classification as a reusable config for the CLASSIFY step."
+        )
+        self.save_config_btn.clicked.connect(self.save_config)
+        self.save_config_btn.setEnabled(False)
+        layout.addWidget(self.save_config_btn, 30)
 
         self.frame_slider.valueChanged.connect(self.set_frame)
         self.alpha_slider.valueChanged.connect(self.set_transparency)
@@ -278,10 +298,10 @@ class ClassifierWidget(CelldetectiveWidget):
 
         if self.property_query_le.text() == "":
             self.submit_query_btn.setEnabled(False)
-            self.submit_btn.setEnabled(False)
+            self.save_config_btn.setEnabled(False)
         else:
             self.submit_query_btn.setEnabled(True)
-            self.submit_btn.setEnabled(True)
+            self.save_config_btn.setEnabled(True)
 
     def activate_r2(self):
         """
@@ -475,7 +495,7 @@ class ClassifierWidget(CelldetectiveWidget):
 
     def apply_property_query(self):
         """
-        Apply the property query to classify cells.
+        Run the query to preview the classification in the scatter.
         """
 
         query = self.property_query_le.text()
@@ -483,27 +503,18 @@ class ClassifierWidget(CelldetectiveWidget):
             self.df = classify_cells_from_query(self.df, self.name_le.text(), query)
         except EmptyQueryError as e:
             self.show_warning(str(e))
+            return None
         except MissingColumnsError as e:
             self.show_warning(f"{e}. Please check your column names.")
+            return None
         except QueryError as e:
             self.show_warning(f"{e}. Wrap features in backticks if needed.")
+            return None
         except Exception as e:
             self.show_warning(f"Unexpected error: {e}")
+            return None
 
         self.class_name = "status_" + self.name_le.text()
-        if self.df is None:
-            msgBox = QMessageBox()
-            msgBox.setIcon(QMessageBox.Warning)
-            msgBox.setText(
-                f"The query could not be understood. No filtering was applied."
-            )
-            msgBox.setWindowTitle("Warning")
-            msgBox.setStandardButtons(QMessageBox.Ok)
-            returnValue = msgBox.exec()
-            if returnValue == QMessageBox.Ok:
-                self.auto_close = False
-                return None
-
         self.update_props_scatter(feature_changed=False)
 
     def set_frame(self, value: int) -> None:
@@ -555,143 +566,117 @@ class ClassifierWidget(CelldetectiveWidget):
             self.frame_slider.setEnabled(False)
         self.update_props_scatter(feature_changed=False)
 
-    def submit_classification(self):
-        """
-        Submit the classification and save the results.
-        """
-
-        self.auto_close = True
-        self.apply_property_query()
-        if not self.auto_close:
-            return None
-
-        if self.time_corr.isChecked():
-            self.class_name_user = "class_" + self.name_le.text()
-            logger.info(f"User defined class name: {self.class_name_user}...")
-            if self.class_name_user in self.df.columns:
-
-                msgBox = QMessageBox()
-                msgBox.setIcon(QMessageBox.Information)
-                msgBox.setText(
-                    f"The class column {self.class_name_user} already exists in the table.\nProceeding will "
-                    f"reclassify. Do you want to continue?"
-                )
-                msgBox.setWindowTitle("Warning")
-                msgBox.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
-                returnValue = msgBox.exec()
-                if returnValue == QMessageBox.Yes:
-                    pass
-                else:
-                    return None
-
-            name_map = {self.class_name: self.class_name_user}
-            self.df = self.df.drop(
-                list(set(name_map.values()) & set(self.df.columns)), axis=1
-            ).rename(columns=name_map)
-            self.df.reset_index(inplace=True, drop=True)
-
-            pre_event = None
-            if (
-                self.prereq_event_check.isChecked()
-                and "t_" + self.prereq_event_cb.currentText() in self.cols
-            ):
-                pre_event = self.prereq_event_cb.currentText()
-
-            self.df = interpret_track_classification(
-                self.df,
-                self.class_name_user,
-                irreversible_event=self.irreversible_event_btn.isChecked(),
-                unique_state=self.unique_state_btn.isChecked(),
-                transient_event=self.transient_event_btn.isChecked(),
-                r2_threshold=self.r2_slider.value(),
-                pre_event=pre_event,
-            )
-
+    def _build_config(self) -> dict:
+        """Build a reusable classification config dict from the current widget state."""
+        if self.irreversible_event_btn.isChecked():
+            event_type = "irreversible"
+        elif self.transient_event_btn.isChecked():
+            event_type = "transient"
         else:
-            self.group_name_user = "group_" + self.name_le.text()
-            logger.info(f"User defined characteristic group name: {self.group_name_user}.")
-            if self.group_name_user in self.df.columns:
+            event_type = "unique_state"
 
-                msgBox = QMessageBox()
-                msgBox.setIcon(QMessageBox.Information)
-                msgBox.setText(
-                    f"The group column {self.group_name_user} already exists in the table.\nProceeding will "
-                    f"reclassify. Do you want to continue?"
-                )
-                msgBox.setWindowTitle("Warning")
-                msgBox.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
-                returnValue = msgBox.exec()
-                if returnValue == QMessageBox.Yes:
-                    pass
-                else:
-                    return None
+        pre_event = None
+        if (
+            self.prereq_event_check.isChecked()
+            and "t_" + self.prereq_event_cb.currentText() in self.cols
+        ):
+            pre_event = self.prereq_event_cb.currentText()
 
-            name_map = {self.class_name: self.group_name_user}
-            self.df = self.df.drop(
-                list(set(name_map.values()) & set(self.df.columns)), axis=1
-            ).rename(columns=name_map)
-            logger.debug(f"DataFrame columns after rename: {list(self.df.columns)}")
-            # self.df[self.group_name_user] = self.df[self.group_name_user].replace({0: 1, 1: 0})
-            self.df.reset_index(inplace=True, drop=True)
+        return {
+            # General threshold/query classification config. "time_correlated"
+            # selects the event mode (class_/t_/status_) vs the static phenotype
+            # mode (group_); the artifact itself is not event-specific.
+            "type": "threshold_classification",
+            "name": self.name_le.text(),
+            "query": self.property_query_le.text(),
+            "time_correlated": self.time_corr.isChecked(),
+            "event_type": event_type,
+            "r2_threshold": self.r2_slider.value(),
+            "pre_event": pre_event,
+            "population": self.mode,
+        }
 
-        if "custom" in list(self.df.columns):
-            self.df = self.df.drop(["custom"], axis=1)
+    def _configs_dir(self) -> str:
+        """Return the experiment 'configs' directory, deriving it if needed."""
+        exp_dir = getattr(self.parent_window, "exp_dir", None)
+        if not exp_dir:
+            # Fall back to deriving it from a position path (.../exp/W*/pos/).
+            pos = str(self.df["position"].iloc[0])
+            exp_dir = os.path.dirname(os.path.dirname(os.path.normpath(pos)))
+        return os.path.join(exp_dir, "configs")
 
-        # Build a provenance record of the classification applied to the tables
-        if self.time_corr.isChecked():
-            classified_col = self.class_name_user
-            classification_log = [
-                f"class_name: {self.class_name_user}",
-                f"mode: {self.mode}",
-                f"property_query: {self.property_query_le.text()}",
-                f"irreversible_event: {self.irreversible_event_btn.isChecked()}",
-                f"unique_state: {self.unique_state_btn.isChecked()}",
-                f"transient_event: {self.transient_event_btn.isChecked()}",
-                f"r2_threshold: {self.r2_slider.value()}",
-                f"pre_event: {pre_event}",
-            ]
+    def save_config(self):
+        """Save the current classification settings as a reusable JSON config."""
+        configs_dir = self._configs_dir()
+        os.makedirs(configs_dir, exist_ok=True)
+        default = os.path.join(
+            configs_dir, f"classification_config_{self.mode}_{self.name_le.text()}.json"
+        )
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Save classification config", default, "JSON (*.json)"
+        )
+        if not path:
+            return
+        if not path.endswith(".json"):
+            path += ".json"
+        try:
+            with open(path, "w") as f:
+                json.dump(self._build_config(), f, indent=4)
+            logger.info(f"Classification config saved to {path}")
+        except Exception as e:
+            self.show_warning(f"Could not save config: {e}")
+
+    def load_config(self):
+        """Load a classification config and repopulate the widget controls."""
+        configs_dir = self._configs_dir()
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Load classification config", configs_dir, "JSON (*.json)"
+        )
+        if not path:
+            return
+        try:
+            with open(path) as f:
+                config = json.load(f)
+        except Exception as e:
+            self.show_warning(f"Could not load config: {e}")
+            return
+        self._apply_config(config)
+
+    def _apply_config(self, config: dict) -> None:
+        """Repopulate the widget controls from a saved config dict."""
+        if "name" in config:
+            self.name_le.setText(str(config["name"]))
+        if "query" in config:
+            self.property_query_le.setText(str(config["query"]))
+
+        time_corr = bool(config.get("time_correlated", False))
+        if time_corr and not self.time_corr.isEnabled():
+            self.show_warning(
+                "This config is time-correlated but the current table is not tracked; "
+                "applying it as a static classification instead."
+            )
+            time_corr = False
+        self.time_corr.setChecked(time_corr)
+
+        event_type = config.get("event_type", "unique_state")
+        if event_type == "irreversible":
+            self.irreversible_event_btn.setChecked(True)
+        elif event_type == "transient":
+            self.transient_event_btn.setChecked(True)
         else:
-            classified_col = self.group_name_user
-            classification_log = [
-                f"group_name: {self.group_name_user}",
-                f"mode: {self.mode}",
-                f"property_query: {self.property_query_le.text()}",
-            ]
+            self.unique_state_btn.setChecked(True)
 
-        self.fig_props.set_size_inches(4, 3)
-        self.fig_props.suptitle(self.property_query_le.text(), fontsize=10)
-        self.fig_props.tight_layout()
-        for pos, pos_group in self.df.groupby("position"):
-            self.fig_props.savefig(
-                str(pos) + os.sep.join(["output", f"{self.class_name}.png"]),
-                bbox_inches="tight",
-                dpi=300,
-            )
-            pos_group.to_csv(
-                str(pos)
-                + os.sep.join(["output", "tables", f"trajectories_{self.mode}.csv"]),
-                index=False,
-            )
-            with positionlogger(str(pos), filename=f"log_{self.mode}.txt"):
-                logger.info("THRESHOLD CLASSIFICATION")
-                for line in classification_log:
-                    logger.info(line)
-                # Summarise the effect on this position: how many cells per resulting value
-                try:
-                    if classified_col in pos_group.columns:
-                        id_col = extract_identity_col(pos_group)
-                        if id_col is not None:
-                            per_cell = pos_group.groupby(id_col)[classified_col].first()
-                            counts = per_cell.value_counts(dropna=False).sort_index()
-                            logger.info(
-                                f"cells per {classified_col}: {counts.to_dict()}"
-                            )
-                            logger.info(f"total cells classified: {len(per_cell)}")
-                except Exception as e:
-                    logger.warning(f"Could not summarise classification counts: {e}")
+        if config.get("r2_threshold") is not None:
+            self.r2_slider.setValue(float(config["r2_threshold"]))
 
-        self.parent_window.parent_window.update_position_options()
-        self.close()
+        pre_event = config.get("pre_event")
+        if pre_event:
+            self.prereq_event_check.setChecked(True)
+            idx = self.prereq_event_cb.findText(pre_event)
+            if idx >= 0:
+                self.prereq_event_cb.setCurrentIndex(idx)
+
+        self.activate_submit_btn()
 
     def help_propagate(self):
         """

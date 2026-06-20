@@ -43,7 +43,7 @@ System requirements
 
 Celldetective is designed to run on standard workstations. It supports GPU acceleration (NVIDIA) for Deep Learning tasks but can run fully on CPU with multithreading.
 
-For detailed hardware and software specifications, see the :ref:`System Requirements Reference <reference/system-requirements>`. 
+For detailed hardware and software specifications, see the :doc:`Installation Reference <reference/installation>`.
 
 
 Bibliography

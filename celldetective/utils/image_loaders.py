@@ -1,20 +1,22 @@
 import gc
 import json
 import os
+from concurrent.futures import ThreadPoolExecutor
 from glob import glob
-from typing import Optional, List, Union, Tuple, Dict, Any
+from typing import Callable, Optional, List, Union, Tuple, Dict, Any
 
 import numpy as np
 from celldetective.utils.io import save_tiff_imagej_compatible
 from imageio import v2 as imageio
 from natsort import natsorted
-from tifffile import imread, TiffFile
+from tifffile import imread, memmap, TiffFile
 
 from celldetective.utils.image_cleaning import (
     _fix_no_contrast,
     interpolate_nan_multichannel,
 )
 from celldetective.utils.normalization import normalize_multichannel
+from celldetective.utils.schema import label_folder_name
 from celldetective import get_logger
 
 import logging
@@ -141,14 +143,40 @@ def _load_stack_from_series(file_path: str) -> Optional[np.ndarray]:
 
         stack = series.asarray()
 
-        # heuristic to fix missing T axis
-        if "T" not in axes:
-            if "C" in axes and stack.shape[axes.index("C")] > 5:
-                # C is likely T
-                axes = axes.replace("C", "T")
-            elif "Z" in axes and stack.shape[axes.index("Z")] > 5:
-                # Z is likely T
-                axes = axes.replace("Z", "T")
+    return _reshape_series_to_tyxc(stack, axes)
+
+
+def _reshape_series_to_tyxc(stack: Any, axes: str) -> Any:
+    """
+    Reshape an array given in ``axes`` order to ``(T, Y, X, C)``.
+
+    Works on both NumPy and dask arrays (every operation used here dispatches
+    through NumPy's protocol), so the eager and lazy loaders share identical
+    reshape logic.
+
+    Parameters
+    ----------
+    stack : ndarray or dask.array.Array
+        The raw array in ``axes`` order.
+    axes : str
+        Axis labels, e.g. ``'TCYX'``, ``'YX'``, ``'TYX'``.
+
+    Returns
+    -------
+    ndarray or dask.array.Array
+        Stack reshaped to ``(T, Y, X, C)``.
+    """
+
+    axes = axes.upper()
+
+    # heuristic to fix missing T axis
+    if "T" not in axes:
+        if "C" in axes and stack.shape[axes.index("C")] > 5:
+            # C is likely T
+            axes = axes.replace("C", "T")
+        elif "Z" in axes and stack.shape[axes.index("Z")] > 5:
+            # Z is likely T
+            axes = axes.replace("Z", "T")
 
     # Build target axis order: move whatever we have into (T, Y, X, C)
     # Add missing axes as singletons first
@@ -186,10 +214,76 @@ def _load_stack_from_series(file_path: str) -> Optional[np.ndarray]:
     return stack
 
 
+def locate_stack_lazy(position: str, prefix: str = "Aligned") -> Optional[Any]:
+    """
+    Lazily load the movie as a dask array shaped ``(T, Y, X, C)``.
+
+    Backed by a memory-mapped TIFF wrapped in a dask array, so only the frames
+    actually displayed are read from disk — dramatically reducing the time and
+    memory needed to open the viewer on large movies. Reuses
+    :func:`_reshape_series_to_tyxc`, so the axis handling is identical to the
+    eager loader.
+
+    Memory-mapping only works for uncompressed, contiguously stored TIFFs; for
+    anything else (or if dask is unavailable) this returns ``None`` and the
+    caller falls back to the eager :func:`locate_stack`.
+
+    Parameters
+    ----------
+    position : str
+        The position folder containing the ``movie`` subdirectory.
+    prefix : str, optional
+        The movie filename prefix. Default is ``'Aligned'``.
+
+    Returns
+    -------
+    dask.array.Array or None
+        The lazy stack, or ``None`` if lazy loading is unavailable or fails
+        (the caller should fall back to :func:`locate_stack`).
+    """
+
+    if not position.endswith(os.sep):
+        position += os.sep
+
+    stack_path = glob(position + os.sep.join(["movie", f"{prefix}*.tif"]))
+    if not stack_path:
+        return None
+    file_path = stack_path[0].replace("\\", "/")
+
+    try:
+        import dask.array as da
+
+        with TiffFile(file_path) as tif:
+            if not tif.series:
+                return None
+            axes = tif.series[0].axes.upper()
+            if "Y" not in axes or "X" not in axes:
+                return None
+
+        # memmap raises for compressed/non-contiguous TIFFs -> caught below.
+        mm = memmap(file_path)
+        if mm.ndim != len(axes):
+            # Unexpected layout; bail out to the eager path.
+            return None
+
+        # One chunk per leading-axis slice keeps per-frame reads lazy.
+        chunks = (1,) + tuple(mm.shape[1:]) if mm.ndim > 1 else mm.shape
+        arr = da.from_array(mm, chunks=chunks)
+        stack = _reshape_series_to_tyxc(arr, axes)
+        if stack.ndim != 4:
+            return None
+        return stack
+    except Exception as e:
+        logger.debug(f"Lazy stack loading unavailable, falling back to eager: {e}")
+        return None
+
+
 def locate_labels(
     position: str,
     population: str = "target",
     frames: Optional[Union[int, List[int], np.ndarray]] = None,
+    threads: int = 4,
+    progress_callback: Optional[Callable[[int], None]] = None,
 ) -> Union[np.ndarray, List[Optional[np.ndarray]], None]:
     """
     Locate and load label images for a given position and population in an experiment.
@@ -244,24 +338,38 @@ def locate_labels(
     if not position.endswith(os.sep):
         position += os.sep
 
-    if population.lower() == "target" or population.lower() == "targets":
-        label_path = natsorted(
-            glob(position + os.sep.join(["labels_targets", "*.tif"]))
-        )
-    elif population.lower() == "effector" or population.lower() == "effectors":
-        label_path = natsorted(
-            glob(position + os.sep.join(["labels_effectors", "*.tif"]))
-        )
-    else:
-        label_path = natsorted(
-            glob(position + os.sep.join([f"labels_{population}", "*.tif"]))
-        )
+    folder = label_folder_name(population)
+    label_path = natsorted(
+        glob(position + os.sep.join([folder, "*.tif"]))
+    )
 
     label_names = [os.path.split(lbl)[-1] for lbl in label_path]
 
     if frames is None:
 
-        labels = np.array([imread(i.replace("\\", "/")) for i in label_path])
+        def _read_label(path: str) -> np.ndarray:
+            return imread(path.replace("\\", "/"))
+
+        n = len(label_path)
+        if n == 0:
+            labels = np.array([])
+        elif threads and threads > 1 and n > 1:
+            # Parallel I/O: tifffile decompression releases the GIL, so reading
+            # the per-frame masks concurrently is much faster than serially.
+            results: List[Optional[np.ndarray]] = []
+            with ThreadPoolExecutor(max_workers=threads) as ex:
+                for idx, arr in enumerate(ex.map(_read_label, label_path)):
+                    results.append(arr)
+                    if progress_callback:
+                        progress_callback(int((idx + 1) / n * 100))
+            labels = np.array(results)
+        else:
+            results = []
+            for idx, path in enumerate(label_path):
+                results.append(_read_label(path))
+                if progress_callback:
+                    progress_callback(int((idx + 1) / n * 100))
+            labels = np.array(results)
 
     elif isinstance(frames, (int, float, np.int_)):
 
@@ -780,21 +888,11 @@ def fix_missing_labels(
     template = np.zeros((stack[0].shape[0], stack[0].shape[1]), dtype=int)
     all_frames = np.arange(len(stack))
 
-    if population.lower() == "target" or population.lower() == "targets":
-        label_path = natsorted(
-            glob(position + os.sep.join(["labels_targets", "*.tif"]))
-        )
-        path = position + os.sep + "labels_targets"
-    elif population.lower() == "effector" or population.lower() == "effectors":
-        label_path = natsorted(
-            glob(position + os.sep.join(["labels_effectors", "*.tif"]))
-        )
-        path = position + os.sep + "labels_effectors"
-    else:
-        label_path = natsorted(
-            glob(position + os.sep.join([f"labels_{population}", "*.tif"]))
-        )
-        path = position + os.sep + f"labels_{population}"
+    folder = label_folder_name(population)
+    label_path = natsorted(
+        glob(position + os.sep.join([folder, "*.tif"]))
+    )
+    path = position + os.sep + folder
 
     if not os.path.exists(path):
         os.makedirs(path, exist_ok=True)

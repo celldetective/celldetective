@@ -36,6 +36,7 @@ from celldetective.gui.base.components import (
     CelldetectiveMainWindow,
 )
 from celldetective import get_software_location
+from celldetective.utils.schema import trajectory_table_path
 from celldetective.utils.image_loaders import auto_load_number_of_frames, load_frames
 from celldetective.utils.experiment import (
     extract_experiment_channels,
@@ -58,7 +59,10 @@ logger = get_logger(__name__)
 class BaseAnnotator(CelldetectiveMainWindow, Styles):
 
     def __init__(
-        self, parent_window: Optional[QMainWindow] = None, read_config: bool = True
+        self,
+        parent_window: Optional[QMainWindow] = None,
+        read_config: bool = True,
+        lazy_load: bool = False,
     ) -> None:
         """
         Initialize the BaseAnnotator.
@@ -69,6 +73,11 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
             The parent window.
         read_config : bool, optional
             Whether to read the configuration file, default is True.
+        lazy_load : bool, optional
+            If True, defer the (potentially slow) trajectory loading and the base
+            widget construction so a caller can run them under a progress dialog
+            (the track load off the GUI thread, the widgets in a finalize step).
+            Default is False.
         """
 
         super().__init__()
@@ -90,9 +99,7 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
         self.instructions_path = self.exp_dir + os.sep.join(
             ["configs", f"signal_annotator_config_{self.mode}.json"]
         )
-        self.trajectories_path = self.pos + os.sep.join(
-            ["output", "tables", f"trajectories_{self.mode}.csv"]
-        )
+        self.trajectories_path = trajectory_table_path(self.pos, self.mode)
 
         self.screen_height = (
             self.parent_window.parent_window.parent_window.screen_height
@@ -110,8 +117,9 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
         else:
             if self.read_config:
                 self.load_annotator_config()
-            self.locate_tracks()
-            self._init_base_widgets()
+            if not lazy_load:
+                self.locate_tracks()
+                self._init_base_widgets()
 
     def _init_base_widgets(self):
         """Initialize base widgets."""

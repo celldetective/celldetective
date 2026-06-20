@@ -22,6 +22,7 @@ from celldetective.utils.parsing import (
     _extract_channel_indices_from_config,
     _extract_nbr_channels_from_config,
 )
+from celldetective.utils.schema import label_folder_name
 from pathlib import Path, PurePath
 from glob import glob
 from shutil import rmtree
@@ -73,12 +74,7 @@ else:
     logger.error("The configuration path is not valid. Abort.")
     sys.exit(1)
 
-if mode.lower() in ("target", "targets"):
-    label_folder = "labels_targets"
-elif mode.lower() in ("effector", "effectors"):
-    label_folder = "labels_effectors"
-else:
-    label_folder = f"labels_{mode}"
+label_folder = label_folder_name(mode)
 
 # Locate experiment config
 parent1 = Path(pos).parent
@@ -120,10 +116,11 @@ img_num_channels = _get_img_num_per_channel(
 )
 
 # If everything OK, prepare output, load models
-if os.path.exists(os.sep.join([pos, label_folder])):
+final_path = os.path.join(pos, label_folder)
+if os.path.exists(final_path):
     logger.info("Erasing the previous labels folder...")
-    rmtree(os.sep.join([pos, label_folder]))
-os.mkdir(os.sep.join([pos, label_folder]))
+    rmtree(final_path)
+os.mkdir(final_path)
 logger.info("Labels folder successfully generated...")
 
 if equalize:
@@ -159,7 +156,7 @@ def segment_index(indices: List[int]) -> None:
         f = load_frames(img_num_channels[:, t], file, scale=None, normalize_input=False)
         mask = segment_frame_from_thresholds(f, **threshold_instructions)
         save_tiff_imagej_compatible(
-            os.sep.join([pos, label_folder, f"{str(t).zfill(4)}.tif"]),
+            os.path.join(final_path, f"{str(t).zfill(4)}.tif"),
             mask.astype(np.uint16),
             axes="YX",
         )

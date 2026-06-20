@@ -45,11 +45,13 @@ class UnifiedBatchProcess(Process):
         self.run_tracking = process_args.get("run_tracking", False)
         self.run_measurement = process_args.get("run_measurement", False)
         self.run_signals = process_args.get("run_signals", False)
+        self.run_classification = process_args.get("run_classification", False)
 
         self.seg_args = process_args.get("seg_args", {})
         self.track_args = process_args.get("track_args", {})
         self.measure_args = process_args.get("measure_args", {})
         self.signal_args = process_args.get("signal_args", {})
+        self.classify_args = process_args.get("classify_args", {})
         self.log_file = process_args.get("log_file", None)
 
     def run(self):
@@ -107,9 +109,24 @@ class UnifiedBatchProcess(Process):
                     queue=self.queue, process_args=self.seg_args
                 )
 
+                # Resolve GPU availability and force CPU fallback if needed. The
+                # standalone SegmentCellDLProcess does this in its own run();
+                # here the model is loaded directly, so we must run the same
+                # check or use_gpu / CUDA_VISIBLE_DEVICES would be left
+                # inconsistent (e.g. StarDist on CPU would still grab the GPU).
+                seg_worker.check_gpu()
+
                 if seg_worker.model_type == "stardist":
                     logger.info("Loading the StarDist library...")
                     from celldetective.utils.stardist_utils import _prep_stardist_model
+
+                    # StarDist/TF must have memory growth enabled before the GPU
+                    # context is created, otherwise it pre-allocates all VRAM and
+                    # a later event-detection model in this same process can OOM.
+                    if seg_worker.use_gpu:
+                        from celldetective.utils.resources import configure_memory_growth
+
+                        configure_memory_growth()
 
                     model, scale_model = _prep_stardist_model(
                         seg_worker.model_name,
@@ -152,8 +169,12 @@ class UnifiedBatchProcess(Process):
 
         signal_worker = None
         signal_model = None
+        # A threshold/query classification config skips the DL model entirely.
+        signal_threshold_config = (
+            self.signal_args.get("threshold_config") if self.signal_args else None
+        )
 
-        if self.run_signals:
+        if self.run_signals and signal_threshold_config is None:
             try:
                 from celldetective.utils.event_detection import (
                     _prep_event_detection_model,
@@ -191,12 +212,53 @@ class UnifiedBatchProcess(Process):
                 queue=self.queue, process_args=self.signal_args
             )
             signal_worker.signal_model_instance = signal_model
+            signal_worker.normalization_stats = None
+            signal_worker.threshold_config = signal_threshold_config
+
+            # Normalization pooling only applies to the DL model path.
+            self.normalization_scope = "position"
+            if signal_model is not None:
+                # Normalization-pooling scope: "position" (default), "well" or
+                # "experiment". For experiment scope, fit the pooled range once
+                # over every position in the batch and reuse it everywhere.
+                try:
+                    self.normalization_scope = signal_model.config.get(
+                        "normalization_scope", "position"
+                    )
+                except (AttributeError, KeyError):
+                    self.normalization_scope = "position"
+
+            if signal_model is not None and self.normalization_scope == "experiment":
+                all_positions = [
+                    p
+                    for wd in self.batch_structure.values()
+                    for p in wd["positions"]
+                ]
+                signal_worker.normalization_stats = (
+                    signal_worker.compute_well_normalization_stats(
+                        all_positions, signal_model
+                    )
+                )
+                if signal_worker.normalization_stats is not None:
+                    logger.info(
+                        "Using experiment-pooled normalization for event detection."
+                    )
 
         self.t0_well = time.time()
 
         for w_i, (w_idx, well_data) in enumerate(self.batch_structure.items()):
 
             positions = well_data["positions"]
+
+            # For "well" scope, fit the pooled normalization range once over this
+            # well's positions (no-op / per-position fallback if tables aren't all
+            # present yet).
+            if self.run_signals and getattr(self, "normalization_scope", "position") == "well":
+                signal_worker.normalization_stats = (
+                    signal_worker.compute_well_normalization_stats(
+                        positions, signal_model
+                    )
+                )
 
             # Well Progress Update
             elapsed = time.time() - self.t0_well
@@ -246,6 +308,8 @@ class UnifiedBatchProcess(Process):
                     active_steps.append("Tracking")
                 if self.run_measurement:
                     active_steps.append("Measurement")
+                if self.run_classification:
+                    active_steps.append("Classification")
                 if self.run_signals:
                     active_steps.append("Event detection")
 
@@ -272,6 +336,12 @@ class UnifiedBatchProcess(Process):
                                 )
                             else:
                                 seg_worker.process_position()
+
+                        # Verify completeness and atomically swap the temporary
+                        # masks onto the final labels folder. Raises if any frame
+                        # is missing, which the per-position handler below turns
+                        # into a skip — so tracking never runs on partial masks.
+                        seg_worker.finalize_position()
 
                     # --- TRACKING ---
                     if self.run_tracking and track_worker:
@@ -300,6 +370,39 @@ class UnifiedBatchProcess(Process):
                             measure_worker.pos, f"log_{measure_worker.mode}.txt"
                         ):
                             measure_worker.process_position()
+
+                    # --- CLASSIFICATION (after measurement, before events) ---
+                    if self.run_classification:
+                        current_step += 1
+                        step_info = f"[Step {current_step}/{total_steps}]"
+                        from celldetective.signals import (
+                            classify_position_from_config,
+                        )
+
+                        configs = self.classify_args.get("configs", [])
+                        classify_mode = self.classify_args.get("mode", "targets")
+                        for config in configs:
+                            name = config.get("name", "?")
+                            msg = (
+                                f"{step_info} Classifying '{name}' in "
+                                f"{os.path.basename(pos_path)}..."
+                            )
+                            logger.info(msg)
+                            self.queue.put({"status": msg})
+                            try:
+                                classify_position_from_config(
+                                    pos_path, config, mode=classify_mode
+                                )
+                            except FileNotFoundError as e:
+                                # No table for this position: nothing to classify.
+                                logger.warning(str(e))
+                                break
+                            except Exception as e:
+                                logger.error(
+                                    f"Classification '{name}' failed for "
+                                    f"{pos_path}: {e}",
+                                    exc_info=True,
+                                )
 
                     # --- SIGNAL ANALYSIS ---
                     if self.run_signals and signal_worker:
@@ -341,6 +444,12 @@ class UnifiedBatchProcess(Process):
     def end_process(self):
         """
         Terminate the process.
+
+        Uses ``terminate()`` (an abrupt kill) rather than cooperative
+        cancellation. This can interrupt the child mid ``queue.put()`` and leave
+        that Queue inconsistent, but it is safe here: the Queue is created
+        per-Runner and discarded together with this child, so no other consumer
+        ever reads from it again.
         """
         try:
             if self.is_alive():

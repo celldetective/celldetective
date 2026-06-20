@@ -8,6 +8,7 @@ from PyQt5.QtGui import QIntValidator
 
 from celldetective.gui.layouts.model_fit_layout import BackgroundFitCorrectionLayout
 from celldetective import get_logger
+from celldetective.utils.schema import label_folder_name
 
 logger = get_logger(__name__)
 
@@ -64,7 +65,7 @@ class LocalCorrectionLayout(BackgroundFitCorrectionLayout):
         labels_path = (
             str(Path(self.attr_parent.current_stack).parent.parent)
             + os.sep
-            + f"labels_{population}"
+            + label_folder_name(population)
             + os.sep
         )
         masks = natsorted(glob(labels_path + "*.tif"))

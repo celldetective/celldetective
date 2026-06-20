@@ -8,6 +8,7 @@ ipykernel
 
 scikit-learn
 btrack>=0.5.13,<0.8
+pydantic<2.0
 
 napari<0.6.0
 tqdm
