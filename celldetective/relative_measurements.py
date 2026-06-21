@@ -567,8 +567,8 @@ def measure_pair_signals_at_position(
 
     relative_measurements: list = []
 
-    try:
-        for tid, group in df_reference.groupby(ref_id_col):
+    for tid, group in df_reference.groupby(ref_id_col):
+        try:
 
             timeline_reference = group["FRAME"].to_numpy()
             coords_reference = group[["POSITION_X", "POSITION_Y"]].to_numpy()
@@ -710,12 +710,14 @@ def measure_pair_signals_at_position(
 
                     relative_measurements.append(row)
 
-        return pd.DataFrame(relative_measurements)
+        except KeyError as e:
+            logger.warning(
+                f"Skipping reference cell {tid}: a required column/key was not "
+                f"found ({e}). Its pair measurements will be missing."
+            )
+            continue
 
-    except KeyError:
-        logger.warning(
-            "Neighborhood not found in data frame. Measurements for this neighborhood will not be calculated."
-        )
+    return pd.DataFrame(relative_measurements)
 
 
 def timeline_matching(
