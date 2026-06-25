@@ -386,16 +386,16 @@ def threshold_image(
 
 
 def pad_to_patch_size(
-    x: np.ndarray, y: np.ndarray, patch_h: int, patch_w: int
-) -> Tuple[np.ndarray, np.ndarray, bool]:
+    x: np.ndarray, y: Optional[np.ndarray] = None, patch_h: int = 256, patch_w: int = 256
+) -> Tuple[np.ndarray, Optional[np.ndarray], bool]:
     """
-    Pad image x and label y to match patch_h and patch_w if they are smaller.
+    Pad image x and optionally label y to match patch_h and patch_w if they are smaller.
 
     Parameters
     ----------
     x : ndarray
         Input image.
-    y : ndarray
+    y : ndarray, optional
         Input label mask.
     patch_h : int
         Target patch height.
@@ -406,8 +406,8 @@ def pad_to_patch_size(
     -------
     x_padded : ndarray
         Padded image.
-    y_padded : ndarray
-        Padded label mask.
+    y_padded : ndarray or None
+        Padded label mask (if y was provided).
     padded : bool
         True if padding was applied, False otherwise.
     """
@@ -430,12 +430,13 @@ def pad_to_patch_size(
             mode="constant",
             constant_values=0.0,
         )
-        y = np.pad(
-            y,
-            ((pad_h_top, pad_h_bottom), (pad_w_left, pad_w_right)),
-            mode="constant",
-            constant_values=0,
-        )
+        if y is not None:
+            y = np.pad(
+                y,
+                ((pad_h_top, pad_h_bottom), (pad_w_left, pad_w_right)),
+                mode="constant",
+                constant_values=0,
+            )
         return x, y, True
     return x, y, False
 

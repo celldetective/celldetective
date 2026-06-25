@@ -218,6 +218,9 @@ class TrainSegModelProcess(Process):
     def run(self):
         """Run the training process."""
 
+        if getattr(self, "pretrained", None) == "":
+            self.pretrained = None
+
         self.queue.put("Loading dataset...")
 
         if self.model_type == "cellpose":
@@ -230,6 +233,9 @@ class TrainSegModelProcess(Process):
 
     def train_stardist_model(self):
         """Train a StarDist model."""
+
+        if getattr(self, "pretrained", None) == "":
+            self.pretrained = None
 
         from stardist import calculate_extents, gputools_available
         from stardist.models import Config2D, StarDist2D
@@ -574,6 +580,9 @@ class TrainSegModelProcess(Process):
     def train_cellpose_model(self):
         """Train a Cellpose model."""
 
+        if getattr(self, "pretrained", None) == "":
+            self.pretrained = None
+
         # do augmentation in place
         X_aug = []
         Y_aug = []
@@ -800,11 +809,17 @@ class TrainSegModelProcess(Process):
     def end_process(self):
         """End the process."""
 
-        self.terminate()
+        try:
+            self.terminate()
+        except (AttributeError, AssertionError):
+            pass
         self.queue.put("finished")
 
     def abort_process(self):
         """Abort the process."""
 
-        self.terminate()
+        try:
+            self.terminate()
+        except (AttributeError, AssertionError):
+            pass
         self.queue.put("error")
