@@ -77,8 +77,10 @@ class TestStarDistPadding(unittest.TestCase):
         self.assertEqual(proc.Y_trn[0][78, 68], 1)
 
     def test_stardist_depth_auto_adjustment(self):
+        # Create a subclass of TrainSegModelProcess to bypass __init__ file operations
         class DummyTrainProcess(TrainSegModelProcess):
             def __init__(self):
+                # Bypassing the parent __init__ which reads files
                 self.queue = None
                 self.X_trn = []
                 self.Y_trn = []
@@ -109,18 +111,18 @@ class TestStarDistPadding(unittest.TestCase):
             proc.target_directory = tmpdir
             os.makedirs(os.path.join(tmpdir, proc.model_name), exist_ok=True)
 
-            mock_model = MagicMock()
-            mock_model.config.train_patch_size = (256, 256)
-            mock_model.config.unet_n_depth = 3
-            
-            # Dynamic overlap check: if depth was increased, return large fov to stop recursion
-            def get_overlap(axes):
-                if mock_model.config.unet_n_depth > 3:
-                    return [150, 150]
-                return [94, 94]
-            mock_model._axes_tile_overlap.side_effect = get_overlap
+            def create_mock_model(conf, name=None, basedir=None):
+                depth = getattr(conf, "unet_n_depth", 3) if conf is not None else 3
+                m = MagicMock()
+                m.config.train_patch_size = (256, 256)
+                m.config.unet_n_depth = depth
+                if depth > 3:
+                    m._axes_tile_overlap.return_value = [150, 150]
+                else:
+                    m._axes_tile_overlap.return_value = [94, 94]
+                return m
 
-            with patch('stardist.models.StarDist2D', return_value=mock_model) as mock_stardist_class, \
+            with patch('stardist.models.StarDist2D', side_effect=create_mock_model) as mock_stardist_class, \
                  patch('stardist.calculate_extents', return_value=np.array([120.0, 120.0])), \
                  patch('stardist.gputools_available', return_value=False), \
                  patch('csbdeep.utils.save_json'):
@@ -166,13 +168,15 @@ class TestStarDistPadding(unittest.TestCase):
             proc.target_directory = tmpdir
             os.makedirs(os.path.join(tmpdir, proc.model_name), exist_ok=True)
 
-            mock_model = MagicMock()
-            mock_model.config.train_patch_size = (256, 256)
-            mock_model.config.unet_n_depth = 3
-            # Keep returning small fov so depth will try to increase to max
-            mock_model._axes_tile_overlap.return_value = [94, 94]
+            def create_mock_model_no_growth(conf, name=None, basedir=None):
+                depth = getattr(conf, "unet_n_depth", 3) if conf is not None else 3
+                m = MagicMock()
+                m.config.train_patch_size = (256, 256)
+                m.config.unet_n_depth = depth
+                m._axes_tile_overlap.return_value = [94, 94]
+                return m
 
-            with patch('stardist.models.StarDist2D', return_value=mock_model) as mock_stardist_class, \
+            with patch('stardist.models.StarDist2D', side_effect=create_mock_model_no_growth) as mock_stardist_class, \
                  patch('stardist.calculate_extents', return_value=np.array([120.0, 120.0])), \
                  patch('stardist.gputools_available', return_value=False), \
                  patch('csbdeep.utils.save_json'):

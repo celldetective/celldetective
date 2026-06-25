@@ -70,6 +70,8 @@ model_name = training_instructions["model_name"]
 target_directory = training_instructions["target_directory"]
 model_type = training_instructions["model_type"]
 pretrained = training_instructions["pretrained"]
+if pretrained == "":
+    pretrained = None
 
 datasets = training_instructions["ds"]
 
@@ -341,10 +343,10 @@ elif model_type == "stardist":
     logger.info(f"median object size:      {median_size}")
     logger.info(f"network field of view :  {fov}")
 
-    initial_depth = getattr(model.config, "unet_n_depth", 3)
+    current_depth = getattr(model.config, "unet_n_depth", 3)
+    initial_depth = current_depth
     max_depth = initial_depth + 3
     while pretrained is None and any(median_size > fov):
-        current_depth = getattr(model.config, "unet_n_depth", 3)
         if current_depth >= max_depth:
             break
         new_depth = current_depth + 1
@@ -368,6 +370,7 @@ elif model_type == "stardist":
         model = StarDist2D(conf, name=model_name, basedir=target_directory)
         fov = np.array(model._axes_tile_overlap("YX"))
         logger.info(f"new network field of view :  {fov}")
+        current_depth = new_depth
 
     if any(median_size > fov):
         logger.warning(

@@ -364,10 +364,10 @@ class TrainSegModelProcess(Process):
         logger.info(f"median object size:      {median_size}")
         logger.info(f"network field of view :  {fov}")
 
-        initial_depth = getattr(model.config, "unet_n_depth", 3)
+        current_depth = getattr(model.config, "unet_n_depth", 3)
+        initial_depth = current_depth
         max_depth = initial_depth + 3
         while self.pretrained is None and any(median_size > fov):
-            current_depth = getattr(model.config, "unet_n_depth", 3)
             if current_depth >= max_depth:
                 break
             new_depth = current_depth + 1
@@ -393,6 +393,7 @@ class TrainSegModelProcess(Process):
             )
             fov = np.array(model._axes_tile_overlap("YX"))
             logger.info(f"new network field of view :  {fov}")
+            current_depth = new_depth
 
         if any(median_size > fov):
             logger.warning(
@@ -733,6 +734,8 @@ class TrainSegModelProcess(Process):
         self.target_directory = self.training_instructions["target_directory"]
         self.model_type = self.training_instructions["model_type"]
         self.pretrained = self.training_instructions["pretrained"]
+        if self.pretrained == "":
+            self.pretrained = None
 
         self.datasets = self.training_instructions["ds"]
 
