@@ -20,6 +20,9 @@ from celldetective.utils.image_loaders import load_image_dataset
 from celldetective.utils.image_cleaning import interpolate_nan
 from celldetective.utils.normalization import normalize_multichannel
 from celldetective.utils.mask_cleaning import fill_label_holes
+from celldetective.utils.image_transforms import pad_to_patch_size, pad_dataset_to_patch_size
+from celldetective.utils.model_loaders import freeze_model_encoder
+from celldetective.utils.io import make_json_safe
 from art import tprint
 from csbdeep.utils import save_json
 from celldetective import get_logger
@@ -337,60 +340,18 @@ class TrainSegModelProcess(Process):
             )
 
         if self.pretrained is not None:
-            logger.info("Freezing encoder layers for StarDist model...")
-            mod = model.keras_model
-            encoder_depth = len(mod.layers) // 2
-
-            for layer in mod.layers[:encoder_depth]:
-                layer.trainable = False
-
-            # Keep decoder trainable
-            for layer in mod.layers[encoder_depth:]:
-                layer.trainable = True
+            freeze_model_encoder(model, "stardist")
 
         # Check and pad training/validation images/labels if smaller than patch size
         train_patch_size = getattr(model.config, "train_patch_size", (256, 256))
         patch_h, patch_w = train_patch_size[0], train_patch_size[1]
-        
-        padded_trn_count = 0
-        X_trn_padded = []
-        Y_trn_padded = []
-        for x, y in zip(self.X_trn, self.Y_trn):
-            h, w = x.shape[:2]
-            if h < patch_h or w < patch_w:
-                pad_h = max(0, patch_h - h)
-                pad_w = max(0, patch_w - w)
-                pad_h_top = pad_h // 2
-                pad_h_bottom = pad_h - pad_h_top
-                pad_w_left = pad_w // 2
-                pad_w_right = pad_w - pad_w_left
-                x = np.pad(x, ((pad_h_top, pad_h_bottom), (pad_w_left, pad_w_right), (0, 0)), mode="constant", constant_values=0.0)
-                y = np.pad(y, ((pad_h_top, pad_h_bottom), (pad_w_left, pad_w_right)), mode="constant", constant_values=0)
-                padded_trn_count += 1
-            X_trn_padded.append(x)
-            Y_trn_padded.append(y)
-        self.X_trn = X_trn_padded
-        self.Y_trn = Y_trn_padded
 
-        padded_val_count = 0
-        X_val_padded = []
-        Y_val_padded = []
-        for x, y in zip(self.X_val, self.Y_val):
-            h, w = x.shape[:2]
-            if h < patch_h or w < patch_w:
-                pad_h = max(0, patch_h - h)
-                pad_w = max(0, patch_w - w)
-                pad_h_top = pad_h // 2
-                pad_h_bottom = pad_h - pad_h_top
-                pad_w_left = pad_w // 2
-                pad_w_right = pad_w - pad_w_left
-                x = np.pad(x, ((pad_h_top, pad_h_bottom), (pad_w_left, pad_w_right), (0, 0)), mode="constant", constant_values=0.0)
-                y = np.pad(y, ((pad_h_top, pad_h_bottom), (pad_w_left, pad_w_right)), mode="constant", constant_values=0)
-                padded_val_count += 1
-            X_val_padded.append(x)
-            Y_val_padded.append(y)
-        self.X_val = X_val_padded
-        self.Y_val = Y_val_padded
+        self.X_trn, self.Y_trn, padded_trn_count = pad_dataset_to_patch_size(
+            self.X_trn, self.Y_trn, patch_h, patch_w
+        )
+        self.X_val, self.Y_val, padded_val_count = pad_dataset_to_patch_size(
+            self.X_val, self.Y_val, patch_h, patch_w
+        )
 
         if padded_trn_count > 0 or padded_val_count > 0:
             logger.info(
@@ -402,7 +363,7 @@ class TrainSegModelProcess(Process):
         fov = np.array(model._axes_tile_overlap("YX"))
         logger.info(f"median object size:      {median_size}")
         logger.info(f"network field of view :  {fov}")
-        
+
         if self.pretrained is None and any(median_size > fov):
             current_depth = getattr(model.config, "unet_n_depth", 3)
             new_depth = current_depth + 1
@@ -598,28 +559,6 @@ class TrainSegModelProcess(Process):
             "dataset": {"train": self.files_train, "validation": self.files_val},
         }
 
-        def make_json_safe(obj: Any) -> Any:
-            """
-            Convert object to JSON-serializable format.
-
-            Parameters
-            ----------
-            obj : object
-                Input object.
-
-            Returns
-            -------
-            object
-                JSON-serializable object.
-            """
-            if isinstance(obj, np.ndarray):
-                return obj.tolist()
-            if isinstance(obj, (np.int64, np.int32)):
-                return int(obj)
-            if isinstance(obj, (np.float32, np.float64)):
-                return float(obj)
-            return str(obj)
-
         json_input_config = json.dumps(config_inputs, indent=4, default=make_json_safe)
         with open(
             os.sep.join([self.target_directory, self.model_name, "config_input.json"]),
@@ -689,28 +628,7 @@ class TrainSegModelProcess(Process):
             )
 
             if self.pretrained is not None:
-                logger.info("Freezing encoder layers for Cellpose model...")
-                for param in model.net.downsample.parameters():
-                    param.requires_grad = False
-
-                # Optional: freeze style branch
-                for param in model.net.make_style.parameters():
-                    param.requires_grad = False
-
-                # Keep decoder trainable
-                for param in model.net.upsample.parameters():
-                    param.requires_grad = True
-
-                # Keep output head trainable
-                for param in model.net.output.parameters():
-                    param.requires_grad = True
-
-                # Unfreeze all output heads (version-safe)
-                output_heads = ["output", "output_conv", "flow", "prob"]
-                for head_name in output_heads:
-                    if hasattr(model.net, head_name):
-                        for param in getattr(model.net, head_name).parameters():
-                            param.requires_grad = True
+                freeze_model_encoder(model, "cellpose")
 
             model.train(
                 train_data=X_aug,
@@ -771,28 +689,6 @@ class TrainSegModelProcess(Process):
             "cell_size_um": round(diameter * input_spatial_calibration, 4),
             "dataset": {"train": self.files_train, "validation": self.files_val},
         }
-
-        def make_json_safe(obj: Any) -> Any:
-            """
-            Convert object to JSON-serializable format.
-
-            Parameters
-            ----------
-            obj : object
-                Input object.
-
-            Returns
-            -------
-            object
-                JSON-serializable object.
-            """
-            if isinstance(obj, np.ndarray):
-                return obj.tolist()
-            if isinstance(obj, (np.int64, np.int32)):
-                return int(obj)
-            if isinstance(obj, (np.float32, np.float64)):
-                return float(obj)
-            return str(obj)
 
         json_input_config = json.dumps(config_inputs, indent=4, default=make_json_safe)
         with open(
@@ -897,17 +793,11 @@ class TrainSegModelProcess(Process):
     def end_process(self):
         """End the process."""
 
-        try:
-            self.terminate()
-        except (AttributeError, AssertionError):
-            pass
+        self.terminate()
         self.queue.put("finished")
 
     def abort_process(self):
         """Abort the process."""
 
-        try:
-            self.terminate()
-        except (AttributeError, AssertionError):
-            pass
+        self.terminate()
         self.queue.put("error")

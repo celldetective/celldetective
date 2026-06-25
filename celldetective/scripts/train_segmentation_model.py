@@ -18,6 +18,9 @@ from celldetective.utils.image_loaders import load_image_dataset
 from celldetective.utils.image_cleaning import interpolate_nan
 from celldetective.utils.normalization import normalize_multichannel
 from celldetective.utils.mask_cleaning import fill_label_holes
+from celldetective.utils.image_transforms import pad_dataset_to_patch_size
+from celldetective.utils.io import make_json_safe
+from celldetective.utils.model_loaders import freeze_model_encoder
 from art import tprint
 from distutils.dir_util import copy_tree
 import logging
@@ -184,29 +187,8 @@ if model_type == "cellpose":
     for name, module in model.net.named_children():
         logger.debug(f"{name} {type(module)}")
 
-    # Freeze parts of the UNET (if we loaded a pretrained model)
     if pretrained is not None:
-        for param in model.net.downsample.parameters():
-            param.requires_grad = False
-
-        # Optional: freeze style branch (recommended unless you are training on very different imaging domains)
-        for param in model.net.make_style.parameters():
-            param.requires_grad = False
-
-        # Keep decoder (upsampling path) trainable
-        for param in model.net.upsample.parameters():
-            param.requires_grad = True
-
-        # Keep output head trainable
-        for param in model.net.output.parameters():
-            param.requires_grad = True
-
-        # Unfreeze all output heads (version-safe)
-        output_heads = ["output", "output_conv", "flow", "prob"]
-        for head_name in output_heads:
-            if hasattr(model.net, head_name):
-                for param in getattr(model.net, head_name).parameters():
-                    param.requires_grad = True
+        freeze_model_encoder(model, "cellpose")
 
     # Now train normally (Cellpose will internally skip frozen params)
     model.train(
@@ -254,7 +236,7 @@ if model_type == "cellpose":
         "cell_size_um": round(diameter * input_spatial_calibration, 4),
         "dataset": {"train": files_train, "validation": files_val},
     }
-    json_input_config = json.dumps(config_inputs, indent=4)
+    json_input_config = json.dumps(config_inputs, indent=4, default=make_json_safe)
     with open(
         os.sep.join([target_directory, model_name, "config_input.json"]), "w"
     ) as outfile:
@@ -334,49 +316,19 @@ elif model_type == "stardist":
             os.sep.join([target_directory, model_name, "config.json"]),
         )
 
+    if pretrained is not None:
+        freeze_model_encoder(model, "stardist")
+
     # Check and pad training/validation images/labels if smaller than patch size
     train_patch_size = getattr(model.config, "train_patch_size", (256, 256))
     patch_h, patch_w = train_patch_size[0], train_patch_size[1]
-    
-    padded_trn_count = 0
-    X_trn_padded = []
-    Y_trn_padded = []
-    for x, y in zip(X_trn, Y_trn):
-        h, w = x.shape[:2]
-        if h < patch_h or w < patch_w:
-            pad_h = max(0, patch_h - h)
-            pad_w = max(0, patch_w - w)
-            pad_h_top = pad_h // 2
-            pad_h_bottom = pad_h - pad_h_top
-            pad_w_left = pad_w // 2
-            pad_w_right = pad_w - pad_w_left
-            x = np.pad(x, ((pad_h_top, pad_h_bottom), (pad_w_left, pad_w_right), (0, 0)), mode="constant", constant_values=0.0)
-            y = np.pad(y, ((pad_h_top, pad_h_bottom), (pad_w_left, pad_w_right)), mode="constant", constant_values=0)
-            padded_trn_count += 1
-        X_trn_padded.append(x)
-        Y_trn_padded.append(y)
-    X_trn = X_trn_padded
-    Y_trn = Y_trn_padded
 
-    padded_val_count = 0
-    X_val_padded = []
-    Y_val_padded = []
-    for x, y in zip(X_val, Y_val):
-        h, w = x.shape[:2]
-        if h < patch_h or w < patch_w:
-            pad_h = max(0, patch_h - h)
-            pad_w = max(0, patch_w - w)
-            pad_h_top = pad_h // 2
-            pad_h_bottom = pad_h - pad_h_top
-            pad_w_left = pad_w // 2
-            pad_w_right = pad_w - pad_w_left
-            x = np.pad(x, ((pad_h_top, pad_h_bottom), (pad_w_left, pad_w_right), (0, 0)), mode="constant", constant_values=0.0)
-            y = np.pad(y, ((pad_h_top, pad_h_bottom), (pad_w_left, pad_w_right)), mode="constant", constant_values=0)
-            padded_val_count += 1
-        X_val_padded.append(x)
-        Y_val_padded.append(y)
-    X_val = X_val_padded
-    Y_val = Y_val_padded
+    X_trn, Y_trn, padded_trn_count = pad_dataset_to_patch_size(
+        X_trn, Y_trn, patch_h, patch_w
+    )
+    X_val, Y_val, padded_val_count = pad_dataset_to_patch_size(
+        X_val, Y_val, patch_h, patch_w
+    )
 
     if padded_trn_count > 0 or padded_val_count > 0:
         logger.info(
@@ -388,7 +340,7 @@ elif model_type == "stardist":
     fov = np.array(model._axes_tile_overlap("YX"))
     logger.info(f"median object size:      {median_size}")
     logger.info(f"network field of view :  {fov}")
-    
+
     if pretrained is None and any(median_size > fov):
         current_depth = getattr(model.config, "unet_n_depth", 3)
         new_depth = current_depth + 1
@@ -414,7 +366,9 @@ elif model_type == "stardist":
         logger.info(f"new network field of view :  {fov}")
 
     if any(median_size > fov):
-        logger.warning("median object size larger than field of view of the neural network.")
+        logger.warning(
+            "median object size larger than field of view of the neural network."
+        )
 
     if pretrained is not None:
 
@@ -447,28 +401,6 @@ elif model_type == "stardist":
         "cell_size_um": median_size * spatial_calibration,
         "dataset": {"train": files_train, "validation": files_val},
     }
-
-    def make_json_safe(obj: Any) -> Any:
-        """
-        Convert object to JSON-serializable format.
-
-        Parameters
-        ----------
-        obj : object
-            Input object.
-
-        Returns
-        -------
-        object
-            JSON-serializable object.
-        """
-        if isinstance(obj, np.ndarray):
-            return obj.tolist()  # convert to list
-        if isinstance(obj, (np.int64, np.int32)):
-            return int(obj)
-        if isinstance(obj, (np.float32, np.float64)):
-            return float(obj)
-        return str(obj)  # fallback
 
     json_input_config = json.dumps(config_inputs, indent=4, default=make_json_safe)
     with open(

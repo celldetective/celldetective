@@ -349,3 +349,54 @@ def _resolve_signal_model_paths(
             f"Model configuration could not be located in folder {model_dir}... Abort."
         )
     return complete_path, model_config_path
+
+
+def freeze_model_encoder(model, model_type: str) -> None:
+    """
+    Freeze the encoder layers of a model for transfer learning.
+    Supports 'stardist' (TensorFlow/Keras) and 'cellpose' (PyTorch) models.
+
+    Parameters
+    ----------
+    model : Any
+        The model object to freeze layers for.
+    model_type : str
+        The type of model ('stardist' or 'cellpose').
+    """
+    if model_type == "stardist":
+        logger.info("Freezing encoder layers for StarDist model...")
+        mod = model.keras_model
+        encoder_depth = len(mod.layers) // 2
+
+        for layer in mod.layers[:encoder_depth]:
+            layer.trainable = False
+
+        # Keep decoder trainable
+        for layer in mod.layers[encoder_depth:]:
+            layer.trainable = True
+
+    elif model_type == "cellpose":
+        logger.info("Freezing encoder layers for Cellpose model...")
+        for param in model.net.downsample.parameters():
+            param.requires_grad = False
+
+        # Optional: freeze style branch
+        for param in model.net.make_style.parameters():
+            param.requires_grad = False
+
+        # Keep decoder trainable
+        for param in model.net.upsample.parameters():
+            param.requires_grad = True
+
+        # Keep output head trainable
+        for param in model.net.output.parameters():
+            param.requires_grad = True
+
+        # Unfreeze all output heads (version-safe)
+        output_heads = ["output", "output_conv", "flow", "prob"]
+        for head_name in output_heads:
+            if hasattr(model.net, head_name):
+                for param in getattr(model.net, head_name).parameters():
+                    param.requires_grad = True
+    else:
+        raise ValueError(f"Unsupported model_type for encoder freezing: {model_type}")
