@@ -288,6 +288,37 @@ class TestStarDistPadding(unittest.TestCase):
         self.assertIsInstance(mock_model._tile_overlap, list)
         self.assertEqual(len(mock_model._tile_overlap), 2)
 
+    def test_seed_tile_overlap_prevents_probe(self):
+        # Seeding must populate model._tile_overlap (so StarDist's _axes_tile_overlap
+        # hits the cache) WITHOUT ever running the _compute_receptive_field probe.
+        # This is what protects the training transfer-learning path from hanging when
+        # fine-tuning a large-grid model (e.g. the oocyst model, grid 8).
+        from celldetective.utils.stardist_utils import _seed_tile_overlap
+
+        mock_model = MagicMock()
+        mock_model.config.grid = (8, 8)
+        mock_model.config.unet_n_depth = 4
+        mock_model.config.unet_kernel_size = (3, 3)
+        mock_model.config.unet_pool = (2, 2)
+        mock_model._axes_div_by.return_value = (128, 128)
+        mock_model._tile_overlap = None
+
+        _seed_tile_overlap(mock_model)
+
+        mock_model._compute_receptive_field.assert_not_called()
+        self.assertIsInstance(mock_model._tile_overlap, list)
+        self.assertEqual(len(mock_model._tile_overlap), 2)
+        # (before, after) per spatial axis, strictly positive overlaps.
+        for pair in mock_model._tile_overlap:
+            self.assertEqual(len(pair), 2)
+            self.assertGreater(pair[0], 0)
+
+        # Idempotent: a second call must not overwrite an existing overlap.
+        existing = [(7, 7), (7, 7)]
+        mock_model._tile_overlap = existing
+        _seed_tile_overlap(mock_model)
+        self.assertEqual(mock_model._tile_overlap, existing)
+
 
 if __name__ == "__main__":
     unittest.main()

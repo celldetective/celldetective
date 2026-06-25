@@ -627,11 +627,15 @@ def load_frames(
 
     frames = _rearrange_multichannel_frame(frames)
 
-    if normalize_input:
-        frames = normalize_multichannel(frames.astype(float), **normalize_kwargs)
-
+    # Order matters and must match training: load_image_dataset rescales (zoom) to
+    # the model's spatial calibration FIRST, then normalize_multichannel is applied.
+    # Doing it in this order keeps the intensity statistics the model was trained on
+    # consistent at inference whenever a calibration mismatch triggers rescaling.
     if scale is not None:
         frames = zoom_multiframes(frames.astype(float), scale)
+
+    if normalize_input:
+        frames = normalize_multichannel(frames.astype(float), **normalize_kwargs)
 
     # add a fake pixel to prevent auto normalization errors on images that are uniform
     frames = _fix_no_contrast(frames)

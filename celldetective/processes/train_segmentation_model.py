@@ -365,6 +365,18 @@ class TrainSegModelProcess(Process):
                 f"{padded_val_count} validation images to match train_patch_size {train_patch_size} using centered constant padding."
             )
 
+        # Transfer learning from a model with a large grid/depth (e.g. a StarDist
+        # model with grid=8) would otherwise trigger StarDist's pathological
+        # receptive-field probe (_compute_receptive_field) inside _axes_tile_overlap
+        # below and hang forever -- exactly the failure that occurred at inference.
+        # Seed an analytic overlap so the probe is skipped. From-scratch models use
+        # grid=(2,2): there the probe is cheap and its result feeds the depth-adjust
+        # loop below, so we deliberately leave it untouched.
+        if self.pretrained is not None:
+            from celldetective.utils.stardist_utils import _seed_tile_overlap
+
+            _seed_tile_overlap(model)
+
         median_size = calculate_extents(list(self.Y_trn), np.mean)
         fov = np.array(model._axes_tile_overlap("YX"))
         logger.info(f"median object size:      {median_size}")
