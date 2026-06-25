@@ -348,10 +348,87 @@ class TrainSegModelProcess(Process):
             for layer in mod.layers[encoder_depth:]:
                 layer.trainable = True
 
+        # Check and pad training/validation images/labels if smaller than patch size
+        train_patch_size = getattr(model.config, "train_patch_size", (256, 256))
+        patch_h, patch_w = train_patch_size[0], train_patch_size[1]
+        
+        padded_trn_count = 0
+        X_trn_padded = []
+        Y_trn_padded = []
+        for x, y in zip(self.X_trn, self.Y_trn):
+            h, w = x.shape[:2]
+            if h < patch_h or w < patch_w:
+                pad_h = max(0, patch_h - h)
+                pad_w = max(0, patch_w - w)
+                pad_h_top = pad_h // 2
+                pad_h_bottom = pad_h - pad_h_top
+                pad_w_left = pad_w // 2
+                pad_w_right = pad_w - pad_w_left
+                x = np.pad(x, ((pad_h_top, pad_h_bottom), (pad_w_left, pad_w_right), (0, 0)), mode="constant", constant_values=0.0)
+                y = np.pad(y, ((pad_h_top, pad_h_bottom), (pad_w_left, pad_w_right)), mode="constant", constant_values=0)
+                padded_trn_count += 1
+            X_trn_padded.append(x)
+            Y_trn_padded.append(y)
+        self.X_trn = X_trn_padded
+        self.Y_trn = Y_trn_padded
+
+        padded_val_count = 0
+        X_val_padded = []
+        Y_val_padded = []
+        for x, y in zip(self.X_val, self.Y_val):
+            h, w = x.shape[:2]
+            if h < patch_h or w < patch_w:
+                pad_h = max(0, patch_h - h)
+                pad_w = max(0, patch_w - w)
+                pad_h_top = pad_h // 2
+                pad_h_bottom = pad_h - pad_h_top
+                pad_w_left = pad_w // 2
+                pad_w_right = pad_w - pad_w_left
+                x = np.pad(x, ((pad_h_top, pad_h_bottom), (pad_w_left, pad_w_right), (0, 0)), mode="constant", constant_values=0.0)
+                y = np.pad(y, ((pad_h_top, pad_h_bottom), (pad_w_left, pad_w_right)), mode="constant", constant_values=0)
+                padded_val_count += 1
+            X_val_padded.append(x)
+            Y_val_padded.append(y)
+        self.X_val = X_val_padded
+        self.Y_val = Y_val_padded
+
+        if padded_trn_count > 0 or padded_val_count > 0:
+            logger.info(
+                f"StarDist training: Padded {padded_trn_count} training images and "
+                f"{padded_val_count} validation images to match train_patch_size {train_patch_size} using centered constant padding."
+            )
+
         median_size = calculate_extents(list(self.Y_trn), np.mean)
         fov = np.array(model._axes_tile_overlap("YX"))
         logger.info(f"median object size:      {median_size}")
         logger.info(f"network field of view :  {fov}")
+        
+        if self.pretrained is None and any(median_size > fov):
+            current_depth = getattr(model.config, "unet_n_depth", 3)
+            new_depth = current_depth + 1
+            logger.info(
+                f"Auto-adjusting StarDist U-Net depth: median object size {median_size} "
+                f"exceeds network field of view {fov}. Increasing unet_n_depth from {current_depth} to {new_depth}."
+            )
+            conf = Config2D(
+                n_rays=n_rays,
+                grid=grid,
+                use_gpu=self.use_gpu,
+                n_channel_in=n_channel,
+                train_learning_rate=self.learning_rate,
+                train_patch_size=(256, 256),
+                train_epochs=self.epochs,
+                train_reduce_lr={"factor": 0.1, "patience": 30, "min_delta": 0},
+                train_batch_size=self.batch_size,
+                train_steps_per_epoch=int(self.augmentation_factor * len(self.X_trn)),
+                unet_n_depth=new_depth,
+            )
+            model = StarDist2D(
+                conf, name=self.model_name, basedir=self.target_directory
+            )
+            fov = np.array(model._axes_tile_overlap("YX"))
+            logger.info(f"new network field of view :  {fov}")
+
         if any(median_size > fov):
             logger.warning(
                 "WARNING: median object size larger than field of view of the neural network."
@@ -820,11 +897,17 @@ class TrainSegModelProcess(Process):
     def end_process(self):
         """End the process."""
 
-        self.terminate()
+        try:
+            self.terminate()
+        except (AttributeError, AssertionError):
+            pass
         self.queue.put("finished")
 
     def abort_process(self):
         """Abort the process."""
 
-        self.terminate()
+        try:
+            self.terminate()
+        except (AttributeError, AssertionError):
+            pass
         self.queue.put("error")

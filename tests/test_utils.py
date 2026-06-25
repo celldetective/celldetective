@@ -56,10 +56,18 @@ class TestExtractChannelIndices(unittest.TestCase):
         self.channels = ["ch1", "ch2", "ch3", "ch4"]
         self.required_channels = ["ch4", "ch2"]
         self.expected_indices = [3, 1]
+        self.channels_mixed = ["Ch1", "CH2", "ch3", "cH4"]
+        self.required_channels_mixed = ["ch4", "Ch2"]
 
     def test_extracted_channels_are_correct(self):
         self.assertEqual(
             list(_extract_channel_indices(self.channels, self.required_channels)),
+            self.expected_indices,
+        )
+
+    def test_extracted_channels_case_insensitive(self):
+        self.assertEqual(
+            list(_extract_channel_indices(self.channels_mixed, self.required_channels_mixed)),
             self.expected_indices,
         )
 

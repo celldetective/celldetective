@@ -933,10 +933,12 @@ def _extract_channel_indices(
     """
 
     channel_indices = []
+    channels_lower = [ch.lower() for ch in channels] if channels is not None else None
     for c in required_channels:
         if c != "None" and c is not None:
             try:
-                ch_idx = channels.index(c)
+                c_lower = c.lower()
+                ch_idx = channels_lower.index(c_lower)
                 channel_indices.append(ch_idx)
             except Exception as e:
                 channel_indices.append(None)
@@ -1044,8 +1046,10 @@ def load_image_dataset(
                         config = json.load(f)
 
                     existing_channels = config["channels"]
+                    channels_lower = [ch.lower() for ch in channels]
+                    existing_channels_lower = [ch.lower() for ch in existing_channels]
                     intersection = list(
-                        set(list(channels)) & set(list(existing_channels))
+                        set(channels_lower) & set(existing_channels_lower)
                     )
                     logger.debug(f"existing_channels={existing_channels}, intersection={intersection}")
                     if len(intersection) == 0:
@@ -1056,8 +1060,9 @@ def load_image_dataset(
                     else:
                         ch_idx = []
                         for c in channels:
-                            if c in existing_channels:
-                                idx = existing_channels.index(c)
+                            c_lower = c.lower()
+                            if c_lower in existing_channels_lower:
+                                idx = existing_channels_lower.index(c_lower)
                                 ch_idx.append(idx)
                             else:
                                 # For None or missing channel pass black frame
