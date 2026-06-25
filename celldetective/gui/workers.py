@@ -305,6 +305,7 @@ class Runner(QRunnable):
         self.__queue = Queue()
         self.__process = process(self.__queue, process_args=process_args)
         self.signals = RunnerSignal()
+        self.__closed = False
 
     def run(self) -> None:
         """Run the process."""
@@ -314,85 +315,132 @@ class Runner(QRunnable):
             try:
                 data = self.__queue.get(timeout=2)
             except Exception:
-                # Timeout — check if the subprocess died without sending "finished"
+                if self.__closed:
+                    break
+                # Timeout. If the child has exited, it may have done so right
+                # after putting its final messages but before the queue feeder
+                # thread flushed them to the pipe. Drain and dispatch whatever is
+                # still buffered; only if no terminal "finished" turns up do we
+                # treat it as an unexpected death.
                 if not self.__process.is_alive():
+                    if self.__drain():
+                        break
                     logger.error("Subprocess exited without sending a status message.")
                     self.signals.error.emit("Process exited unexpectedly.")
                     break
                 continue
+            if self.__closed:
+                break
+            if self.__dispatch(data):
+                break
+
+    def __drain(self) -> bool:
+        """
+        Dispatch every message still buffered in the queue.
+
+        Returns
+        -------
+        bool
+            True if a terminal "finished" message was seen while draining.
+        """
+        saw_finished = False
+        while True:
             try:
+                data = self.__queue.get_nowait()
+            except Exception:
+                break
+            if self.__dispatch(data):
+                saw_finished = True
+        return saw_finished
 
-                # Handle dictionary for triple progress
-                if isinstance(data, dict):
-                    # Re-emit logs forwarded from the worker child process so cellpose /
-                    # stardist / btrack / celldetective output surfaces in the parent
-                    # (console + global log file) during SEGMENT/TRACK/MEASURE.
-                    if "log_record" in data:
-                        rec = data["log_record"]
-                        logging.getLogger(rec["name"]).log(
-                            rec["levelno"], rec["msg"]
-                        )
-                        continue
+    def __dispatch(self, data: Any) -> bool:
+        """
+        Translate one queue message into Qt signals.
 
-                    if "well_progress" in data:
-                        self.signals.update_well.emit(int(data["well_progress"]))
-                    if "well_time" in data:
-                        self.signals.update_well_time.emit(data["well_time"])
+        Parameters
+        ----------
+        data : Any
+            A message from the worker process.
 
-                    if "pos_progress" in data:
-                        self.signals.update_pos.emit(int(data["pos_progress"]))
-                    if "pos_time" in data:
-                        self.signals.update_pos_time.emit(data["pos_time"])
+        Returns
+        -------
+        bool
+            True if this was the terminal "finished" message (the run loop
+            should stop).
+        """
+        try:
+            # Handle dictionary for triple progress
+            if isinstance(data, dict):
+                # Re-emit logs forwarded from the worker child process so cellpose /
+                # stardist / btrack / celldetective output surfaces in the parent
+                # (console + global log file) during SEGMENT/TRACK/MEASURE.
+                if "log_record" in data:
+                    rec = data["log_record"]
+                    logging.getLogger(rec["name"]).log(
+                        rec["levelno"], rec["msg"]
+                    )
+                    return False
 
-                    if "frame_progress" in data:
-                        self.signals.update_frame.emit(int(data["frame_progress"]))
-                    if "frame_time" in data:
-                        self.signals.update_frame_time.emit(data["frame_time"])
+                if "well_progress" in data:
+                    self.signals.update_well.emit(int(data["well_progress"]))
+                if "well_time" in data:
+                    self.signals.update_well_time.emit(data["well_time"])
 
-                    if "image_preview" in data:
-                        self.signals.update_image.emit(data["image_preview"])
-                    elif "bg_image" in data:  # Backward compatibility
-                        self.signals.update_image.emit(data["bg_image"])
+                if "pos_progress" in data:
+                    self.signals.update_pos.emit(int(data["pos_progress"]))
+                if "pos_time" in data:
+                    self.signals.update_pos_time.emit(data["pos_time"])
 
-                    if "plot_data" in data:
-                        self.signals.update_plot.emit(data["plot_data"])
+                if "frame_progress" in data:
+                    self.signals.update_frame.emit(int(data["frame_progress"]))
+                if "frame_time" in data:
+                    self.signals.update_frame_time.emit(data["frame_time"])
 
-                    if "training_result" in data:
-                        self.signals.training_result.emit(data["training_result"])
+                if "image_preview" in data:
+                    self.signals.update_image.emit(data["image_preview"])
+                elif "bg_image" in data:  # Backward compatibility
+                    self.signals.update_image.emit(data["bg_image"])
 
-                    if "result" in data:
-                        self.signals.result.emit(data["result"])
+                if "plot_data" in data:
+                    self.signals.update_plot.emit(data["plot_data"])
 
-                    if "status" in data:  # Moved this block out of frame_time check
-                        logger.info(
-                            f"Runner received status: {data['status']}"
-                        )  # New log as per instruction
-                        if data["status"] == "finished":
-                            self.signals.finished.emit()
-                            break
-                        elif data["status"] == "error":
-                            msg = data.get("message", "Unknown error")
-                            logger.error(f"Runner received error: {msg}")
-                            self.signals.error.emit(str(msg))
-                        else:
-                            self.signals.update_status.emit(data["status"])
+                if "training_result" in data:
+                    self.signals.training_result.emit(data["training_result"])
 
-                # Simple fallback for legacy list [progress, time] -> map to POS progress
-                elif isinstance(data, list) and len(data) == 2:
-                    progress, time = data
-                    self.signals.update_pos.emit(math.ceil(progress))
+                if "result" in data:
+                    self.signals.result.emit(data["result"])
 
-                elif data == "finished":
-                    self.signals.finished.emit()
-                    break
-                elif data == "error":
-                    self.signals.error.emit("Unknown error")
+                if "status" in data:
+                    logger.info(f"Runner received status: {data['status']}")
+                    if data["status"] == "finished":
+                        self.signals.finished.emit()
+                        return True
+                    elif data["status"] == "error":
+                        msg = data.get("message", "Unknown error")
+                        logger.error(f"Runner received error: {msg}")
+                        self.signals.error.emit(str(msg))
+                    else:
+                        self.signals.update_status.emit(data["status"])
 
-            except Exception as e:
-                logger.error(f"{e}")
+            # Simple fallback for legacy list [progress, time] -> map to POS progress
+            elif isinstance(data, list) and len(data) == 2:
+                progress, time = data
+                self.signals.update_pos.emit(math.ceil(progress))
+
+            elif data == "finished":
+                self.signals.finished.emit()
+                return True
+            elif data == "error":
+                self.signals.error.emit("Unknown error")
+
+        except Exception as e:
+            logger.error(f"{e}")
+
+        return False
 
     def close(self) -> None:
         """Close the process."""
+        self.__closed = True
         self.__process.end_process()
 
 

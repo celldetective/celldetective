@@ -385,9 +385,17 @@ class ChannelNormGenerator(QVBoxLayout, Styles):
     def check_valid_channels(self):
         """Check if the selected channels are valid and enable/disable the submit button."""
 
+        if hasattr(self.parent_window, "activate_train_btn"):
+            self.parent_window.activate_train_btn()
+            return
+        elif hasattr(self.parent_window, "check_readiness"):
+            self.parent_window.check_readiness()
+            return
+
         if hasattr(self.parent_window, "submit_btn"):
             if np.all([cb.currentData() == "--" for cb in self.channel_cbs]):
                 self.parent_window.submit_btn.setEnabled(False)
+                return
 
         if hasattr(self.parent_window, "spatial_calib_le") and hasattr(
             self.parent_window, "submit_btn"

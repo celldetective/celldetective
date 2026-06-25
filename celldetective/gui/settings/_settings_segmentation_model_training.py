@@ -820,7 +820,7 @@ class SettingsSegmentationModelTraining(CelldetectiveSettingsPanel):
             import shutil
 
             model_path = os.path.join(
-                self.parent_window.seg_models_dir, self.modelname_le.text()
+                self.software_models_dir, self.modelname_le.text()
             )
             if os.path.exists(model_path):
                 # Wait briefly for process to release file locks

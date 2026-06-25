@@ -142,14 +142,21 @@ def _extract_channel_indices_from_config(
         channels_to_extract = [channels_to_extract]
 
     channels = []
+    channels_dict = config_section_to_dict(config, "Channels")
+    channels_dict_lower = {k.lower(): v for k, v in channels_dict.items()} if channels_dict is not None else {}
+
     for c in channels_to_extract:
-        try:
-            c1 = int(config_section_to_dict(config, "Channels")[c])
-            channels.append(c1)
-        except Exception as e:
-            logger.warning(
-                f"The channel {c} required by the model is not available in your data..."
-            )
+        if c is not None:
+            c_lower = str(c).lower()
+            try:
+                c1 = int(channels_dict_lower[c_lower])
+                channels.append(c1)
+            except Exception as e:
+                logger.warning(
+                    f"The channel {c} required by the model is not available in your data..."
+                )
+                channels.append(None)
+        else:
             channels.append(None)
     if np.all([c is None for c in channels]):
         channels = None

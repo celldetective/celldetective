@@ -383,3 +383,96 @@ def threshold_image(
     if fill_holes:
         binary = ndi.binary_fill_holes(binary.astype(int))
     return binary
+
+
+def pad_to_patch_size(
+    x: np.ndarray, y: Optional[np.ndarray] = None, patch_h: int = 256, patch_w: int = 256
+) -> Tuple[np.ndarray, Optional[np.ndarray], bool]:
+    """
+    Pad image x and optionally label y to match patch_h and patch_w if they are smaller.
+
+    Parameters
+    ----------
+    x : ndarray
+        Input image.
+    y : ndarray, optional
+        Input label mask.
+    patch_h : int
+        Target patch height.
+    patch_w : int
+        Target patch width.
+
+    Returns
+    -------
+    x_padded : ndarray
+        Padded image.
+    y_padded : ndarray or None
+        Padded label mask (if y was provided).
+    padded : bool
+        True if padding was applied, False otherwise.
+    """
+    h, w = x.shape[:2]
+    if h < patch_h or w < patch_w:
+        pad_h = max(0, patch_h - h)
+        pad_w = max(0, patch_w - w)
+        pad_h_top = pad_h // 2
+        pad_h_bottom = pad_h - pad_h_top
+        pad_w_left = pad_w // 2
+        pad_w_right = pad_w - pad_w_left
+
+        pad_width_x = [(pad_h_top, pad_h_bottom), (pad_w_left, pad_w_right)]
+        if x.ndim > 2:
+            pad_width_x += [(0, 0)] * (x.ndim - 2)
+
+        x = np.pad(
+            x,
+            pad_width_x,
+            mode="constant",
+            constant_values=0.0,
+        )
+        if y is not None:
+            y = np.pad(
+                y,
+                ((pad_h_top, pad_h_bottom), (pad_w_left, pad_w_right)),
+                mode="constant",
+                constant_values=0,
+            )
+        return x, y, True
+    return x, y, False
+
+
+def pad_dataset_to_patch_size(
+    X: List[np.ndarray], Y: List[np.ndarray], patch_h: int, patch_w: int
+) -> Tuple[List[np.ndarray], List[np.ndarray], int]:
+    """
+    Pad a dataset of images X and label masks Y to match patch_h and patch_w if they are smaller.
+
+    Parameters
+    ----------
+    X : List[ndarray]
+        List of input images.
+    Y : List[ndarray]
+        List of label masks.
+    patch_h : int
+        Target patch height.
+    patch_w : int
+        Target patch width.
+
+    Returns
+    -------
+    X_padded : List[ndarray]
+        Padded images.
+    Y_padded : List[ndarray]
+        Padded label masks.
+    padded_count : int
+        Number of images/labels padded.
+    """
+    X_padded, Y_padded = [], []
+    padded_count = 0
+    for x, y in zip(X, Y):
+        xp, yp, padded = pad_to_patch_size(x, y, patch_h, patch_w)
+        X_padded.append(xp)
+        Y_padded.append(yp)
+        if padded:
+            padded_count += 1
+    return X_padded, Y_padded, padded_count
