@@ -341,8 +341,12 @@ elif model_type == "stardist":
     logger.info(f"median object size:      {median_size}")
     logger.info(f"network field of view :  {fov}")
 
-    if pretrained is None and any(median_size > fov):
+    initial_depth = getattr(model.config, "unet_n_depth", 3)
+    max_depth = initial_depth + 3
+    while pretrained is None and any(median_size > fov):
         current_depth = getattr(model.config, "unet_n_depth", 3)
+        if current_depth >= max_depth:
+            break
         new_depth = current_depth + 1
         logger.info(
             f"Auto-adjusting StarDist U-Net depth: median object size {median_size} "

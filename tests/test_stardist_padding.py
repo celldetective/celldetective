@@ -112,7 +112,13 @@ class TestStarDistPadding(unittest.TestCase):
             mock_model = MagicMock()
             mock_model.config.train_patch_size = (256, 256)
             mock_model.config.unet_n_depth = 3
-            mock_model._axes_tile_overlap.return_value = [94, 94]
+            
+            # Dynamic overlap check: if depth was increased, return large fov to stop recursion
+            def get_overlap(axes):
+                if mock_model.config.unet_n_depth > 3:
+                    return [150, 150]
+                return [94, 94]
+            mock_model._axes_tile_overlap.side_effect = get_overlap
 
             with patch('stardist.models.StarDist2D', return_value=mock_model) as mock_stardist_class, \
                  patch('stardist.calculate_extents', return_value=np.array([120.0, 120.0])), \
@@ -126,6 +132,57 @@ class TestStarDistPadding(unittest.TestCase):
             # The second call's first positional argument is the config object
             second_config = mock_stardist_class.call_args_list[1][0][0]
             self.assertEqual(second_config.unet_n_depth, 4)
+
+    def test_stardist_depth_auto_adjustment_max_limit(self):
+        class DummyTrainProcess(TrainSegModelProcess):
+            def __init__(self):
+                self.queue = None
+                self.X_trn = []
+                self.Y_trn = []
+                self.X_val = []
+                self.Y_val = []
+                self.pretrained = None
+                self.use_gpu = False
+                self.learning_rate = 0.0003
+                self.epochs = 1
+                self.batch_size = 1
+                self.augmentation_factor = 1.0
+                self.model_name = "test_model"
+                self.files_train = ["train1.tif"]
+                self.files_val = ["val1.tif"]
+                self.target_channels = ["ch1"]
+                self.normalization_percentile = [True]
+                self.normalization_clip = True
+                self.normalization_values = [(0.0, 99.9)]
+                self.spatial_calibration = 1.0
+
+        proc = DummyTrainProcess()
+        proc.X_trn = [np.ones((256, 256, 1), dtype=np.float32)]
+        proc.Y_trn = [np.ones((256, 256), dtype=np.int32)]
+        proc.X_val = [np.ones((256, 256, 1), dtype=np.float32)]
+        proc.Y_val = [np.ones((256, 256), dtype=np.int32)]
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            proc.target_directory = tmpdir
+            os.makedirs(os.path.join(tmpdir, proc.model_name), exist_ok=True)
+
+            mock_model = MagicMock()
+            mock_model.config.train_patch_size = (256, 256)
+            mock_model.config.unet_n_depth = 3
+            # Keep returning small fov so depth will try to increase to max
+            mock_model._axes_tile_overlap.return_value = [94, 94]
+
+            with patch('stardist.models.StarDist2D', return_value=mock_model) as mock_stardist_class, \
+                 patch('stardist.calculate_extents', return_value=np.array([120.0, 120.0])), \
+                 patch('stardist.gputools_available', return_value=False), \
+                 patch('csbdeep.utils.save_json'):
+                 
+                 proc.train_stardist_model()
+
+            # StarDist2D should be called 4 times: initial (depth 3) + depth 4 + depth 5 + depth 6 (max)
+            self.assertEqual(mock_stardist_class.call_count, 4)
+            final_config = mock_stardist_class.call_args_list[-1][0][0]
+            self.assertEqual(final_config.unet_n_depth, 6)
 
 
 if __name__ == "__main__":
