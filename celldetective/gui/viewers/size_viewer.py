@@ -95,7 +95,7 @@ class CellSizeViewer(StackVisualizer):
         import matplotlib.pyplot as plt
 
         self.circ = plt.Circle(
-            (self.init_frame.shape[0] // 2, self.init_frame.shape[1] // 2),
+            (self.init_frame.shape[1] // 2, self.init_frame.shape[0] // 2),
             self.diameter // 2 / self.PxToUm,
             ec="tab:red",
             fill=False,

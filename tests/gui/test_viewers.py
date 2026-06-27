@@ -242,10 +242,8 @@ class TestSizeViewer:
 
     def test_initialization(self, qtbot):
         """Test initialization (no stack needed strictly, but base needs it)."""
-        # Base viewer needs at least something.
-        # StackVisualizer __init__ calls load_stack which handles None?
-        # Actually StackVisualizer expects data.
-        dummy_stack = np.zeros((1, 100, 100), dtype=np.uint8)
+        # Use a rectangular stack (height=150, width=100)
+        dummy_stack = np.zeros((1, 150, 100), dtype=np.uint8)
 
         viewer = CellSizeViewer(stack=dummy_stack, initial_diameter=20)
         qtbot.addWidget(viewer)
@@ -253,6 +251,9 @@ class TestSizeViewer:
 
         assert viewer.diameter == 20
         assert hasattr(viewer, "circ")
+        # The center should be (width // 2, height // 2) which is (50, 75)
+        # and not (75, 50).
+        assert viewer.circ.center == (50.0, 75.0)
 
     def test_diameter_change(self, qtbot):
         """Test changing diameter slider."""

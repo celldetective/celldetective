@@ -92,6 +92,22 @@ class SegModelParamsWidget(CelldetectiveWidget):
         with open(self.model_complete_path + "config_input.json") as config_file:
             self.input_config = json.load(config_file)
 
+    def abort_process(self):
+        """Abort the widget initialization when the model cannot be loaded."""
+        from PyQt5.QtWidgets import QMessageBox
+
+        msgBox = QMessageBox()
+        msgBox.setIcon(QMessageBox.Critical)
+        msgBox.setText(
+            f"Segmentation model could not be found or initialized.\n\n"
+            f"Please verify that the model '{self.model_name}' exists in the 'models/segmentation/' folder."
+        )
+        msgBox.setWindowTitle("Error")
+        msgBox.setStandardButtons(QMessageBox.Ok)
+        msgBox.exec()
+
+        raise ValueError(f"Model {self.model_name} could not be located or loaded.")
+
     def populate_widgets(self):
         """Populate the widgets."""
         self.n_channels = len(self.required_channels)

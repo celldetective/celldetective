@@ -1348,10 +1348,13 @@ class ProcessPanel(QFrame, Styles):
                 SegModelParamsWidget,
             )
 
-            self.segChannelWidget = SegModelParamsWidget(
-                self, model_name=self.model_name
-            )
-            self.segChannelWidget.show()
+            try:
+                self.segChannelWidget = SegModelParamsWidget(
+                    self, model_name=self.model_name
+                )
+                self.segChannelWidget.show()
+            except Exception as e:
+                logger.error(f"Failed to load segmentation model settings widget: {e}")
 
             return None
 
@@ -1363,10 +1366,13 @@ class ProcessPanel(QFrame, Styles):
             self.signal_model_name = self.signal_models[
                 self.signal_models_list.currentIndex()
             ]
-            self.signalChannelWidget = SignalModelParamsWidget(
-                self, model_name=self.signal_model_name
-            )
-            self.signalChannelWidget.show()
+            try:
+                self.signalChannelWidget = SignalModelParamsWidget(
+                    self, model_name=self.signal_model_name
+                )
+                self.signalChannelWidget.show()
+            except Exception as e:
+                logger.error(f"Failed to load signal model settings widget: {e}")
 
             return None
 

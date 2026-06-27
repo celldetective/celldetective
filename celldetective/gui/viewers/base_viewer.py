@@ -1001,6 +1001,9 @@ class StackVisualizer(CelldetectiveWidget):
                 if len(self.frame_cache) > self.max_cache_size:
                     self.frame_cache.popitem(last=False)  # Remove oldest
 
+        if not hasattr(self, "im") or self.im is None:
+            return
+
         self.im.set_data(self.init_frame)
         rescale_contrast = False
 

@@ -1,6 +1,13 @@
 from ._version import __version__
 import os
 import datetime
+
+# Prevent matplotlib circular import issue with partially initialized IPython
+try:
+    import IPython
+except ImportError:
+    pass
+
 from .log_manager import setup_global_logging, get_logger, cleanup_old_logs
 
 # Define default log directory in user home
