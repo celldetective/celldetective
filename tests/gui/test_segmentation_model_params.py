@@ -1,5 +1,4 @@
 import pytest
-import os
 from unittest.mock import patch, MagicMock
 from PyQt5.QtWidgets import QMessageBox
 

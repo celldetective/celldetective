@@ -1354,7 +1354,9 @@ class ProcessPanel(QFrame, Styles):
                 )
                 self.segChannelWidget.show()
             except Exception as e:
-                logger.error(f"Failed to load segmentation model settings widget: {e}")
+                logger.exception(
+                    f"Failed to load segmentation model settings widget: {e}"
+                )
 
             return None
 
@@ -1372,7 +1374,9 @@ class ProcessPanel(QFrame, Styles):
                 )
                 self.signalChannelWidget.show()
             except Exception as e:
-                logger.error(f"Failed to load signal model settings widget: {e}")
+                logger.exception(
+                    f"Failed to load signal model settings widget: {e}"
+                )
 
             return None
 
