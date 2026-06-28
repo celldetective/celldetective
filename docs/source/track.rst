@@ -32,6 +32,8 @@ After tracking, optional post-processing can be applied to clean up results:
 *   Interpolate gaps (missing detections within a track).
 *   Extrapolate positions backwards or forwards to the movie boundaries.
 
+These options are configured in the tracking settings and applied automatically after tracking. The same options can also be tuned interactively in the napari track-correction viewer (pre-filled from your tracking configuration) and applied on export, letting you preview their effect on the tracks before committing -- see :doc:`How to correct a single-cell track <how-to-guides/basics/correct-a-track>`.
+
 For a full list of post-processing and tracker parameters, see the :ref:`Tracking Settings Reference <ref_tracking_settings>`.
 
 

@@ -20,6 +20,8 @@ Reference keys: :term:`instance segmentation`, :term:`cell population`
 
 #. Click on the segmentation layer. Use the segmentation layer controls to paint new cells (press :kbd:`M` to increment a new label value), the rubber to erase cells or part of cells. Use the fill bucket with a label value of 0 to erase a cell. Work within the crop region, for the current timepoint only. You can use the time slider to see what happens before/after the current timepoint but the annotation should be done only for the current timepoint.
 
+#. Optional: above the save button, adjust the auto-fix options applied on export. *Split merged labels* separates objects that accidentally share a label value, *Remove small objects* discards objects below the *Min object area (px²)* threshold, and *Fill holes in masks* fills holes inside masks. By default, splitting and small-object removal are enabled and hole filling is disabled. Disable any of them if you want your annotation saved exactly as drawn.
+
 #. Once the cell masks are as perfect as they can be within the annotated region, press the *Save the modified labels* button to export the annotation. It is written in a *labels_population-name* folder in the current experiment project.
 
 #. Repeat the process for as many regions as possible. Try to sample both spatially and temporally, limiting sub-region repetitions. Once you reach about 10-30 samples, you may attempt to train a deep learning model on your data, with the proper strategy.

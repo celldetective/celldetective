@@ -16,7 +16,13 @@ from tqdm import tqdm
 
 from celldetective.utils.data_cleaning import tracks_to_btrack, extract_identity_col
 from celldetective.utils.mask_cleaning import auto_correct_masks, relabel_segmentation
-from celldetective.utils.image_loaders import locate_labels, locate_stack_and_labels
+from celldetective.utils.image_loaders import (
+    locate_labels,
+    locate_stack,
+    locate_stack_and_labels,
+    locate_stack_lazy,
+    fix_missing_labels,
+)
 from celldetective.utils.data_loaders import get_position_table, load_tracking_data
 from celldetective.utils.experiment import (
     extract_experiment_from_position,
@@ -312,9 +318,11 @@ def launch_napari_viewer(
         )
 
     if labels is not None:
-        labels_layer = viewer.add_labels(
-            labels.astype(int), name="segmentation", opacity=0.4
-        )
+        # Avoid a full int64 copy of the whole TYX stack when the labels are
+        # already an integer type.
+        if not np.issubdtype(labels.dtype, np.integer):
+            labels = labels.astype(np.int32)
+        labels_layer = viewer.add_labels(labels, name="segmentation", opacity=0.4)
     viewer.add_points(vertices, size=4, name="points", opacity=0.3)
     viewer.add_tracks(tracks, properties=properties, graph=graph, name="tracks")
 
@@ -364,8 +372,101 @@ def launch_napari_viewer(
     selected_frame = viewer.dims.current_step[0]
     shared_data["selected_frame"] = selected_frame
 
+    # Defaults for the post-processing options: start from clean_trajectories'
+    # own defaults, then override with whatever is already configured in the
+    # position's tracking instructions (so the widgets reflect the current setup).
+    _pp_defaults = {
+        "remove_not_in_first": False,
+        "remove_not_in_last": False,
+        "minimum_tracklength": 0,
+        "interpolate_position_gaps": False,
+        "extrapolate_tracks_post": False,
+        "extrapolate_tracks_pre": False,
+        "interpolate_na": False,
+    }
+    try:
+        _experiment = extract_experiment_from_position(shared_data["position"])
+        _instruction_file = "/".join(
+            [
+                _experiment,
+                "configs",
+                f"tracking_instructions_{shared_data['population']}.json",
+            ]
+        )
+        if os.path.exists(_instruction_file):
+            with open(_instruction_file, "r") as f:
+                _opts = (json.load(f) or {}).get("post_processing_options") or {}
+            for _k in _pp_defaults:
+                if _opts.get(_k) is not None:
+                    _pp_defaults[_k] = _opts[_k]
+    except Exception as e:
+        logger.debug(f"Could not load existing post-processing options: {e}")
+
+    @magicgui(
+        layout="vertical",
+        call_button=False,
+        remove_not_in_first={
+            "widget_type": "CheckBox",
+            "text": "Remove tracks that do not start at the beginning",
+        },
+        remove_not_in_last={
+            "widget_type": "CheckBox",
+            "text": "Remove tracks that do not end at the end",
+        },
+        interpolate_position_gaps={
+            "widget_type": "CheckBox",
+            "text": "Interpolate missed detections within tracks",
+        },
+        extrapolate_tracks_pre={
+            "widget_type": "CheckBox",
+            "text": "Sustain first position from the beginning of the movie",
+        },
+        extrapolate_tracks_post={
+            "widget_type": "CheckBox",
+            "text": "Sustain last position until the end of the movie",
+        },
+        interpolate_na={
+            "widget_type": "CheckBox",
+            "text": "Interpolate missing values",
+        },
+        minimum_tracklength={
+            "label": "Min. tracklength",
+            "min": 0,
+            "max": 1_000_000,
+        },
+    )
+    def post_processing_options(
+        remove_not_in_first: bool = False,
+        remove_not_in_last: bool = False,
+        interpolate_position_gaps: bool = False,
+        extrapolate_tracks_pre: bool = False,
+        extrapolate_tracks_post: bool = False,
+        interpolate_na: bool = False,
+        minimum_tracklength: int = 0,
+    ):
+        """Track post-processing applied when exporting the corrected tracks."""
+
+    # Seed the widgets with the currently-configured options.
+    for _k, _v in _pp_defaults.items():
+        try:
+            getattr(post_processing_options, _k).value = _v
+        except Exception as e:
+            logger.debug(f"Could not set default for {_k}: {e}")
+
+    def _post_processing_kwargs() -> Dict[str, Any]:
+        """Build ``clean_trajectories`` kwargs from the option widgets."""
+        return {
+            "remove_not_in_first": post_processing_options.remove_not_in_first.value,
+            "remove_not_in_last": post_processing_options.remove_not_in_last.value,
+            "minimum_tracklength": post_processing_options.minimum_tracklength.value,
+            "interpolate_position_gaps": post_processing_options.interpolate_position_gaps.value,
+            "extrapolate_tracks_post": post_processing_options.extrapolate_tracks_post.value,
+            "extrapolate_tracks_pre": post_processing_options.extrapolate_tracks_pre.value,
+            "interpolate_na": post_processing_options.interpolate_na.value,
+        }
+
     def export_modifications():
-        """Export modified tracks."""
+        """Export modified tracks, applying the chosen post-processing options."""
 
         from celldetective.tracking import (
             write_first_detection_class,
@@ -379,29 +480,39 @@ def launch_napari_viewer(
         df = velocity_per_track(df, window_size=3, mode="bi")
         df = write_first_detection_class(df, img_shape=labels[0].shape)
 
-        experiment = extract_experiment_from_position(position)
-        instruction_file = "/".join(
-            [experiment, "configs", f"tracking_instructions_{population}.json"]
+        post_processing_opts = _post_processing_kwargs()
+        logger.info(
+            f"Applying the following track postprocessing: {post_processing_opts}..."
         )
-        logger.debug(f"instruction_file={instruction_file}")
-        if os.path.exists(instruction_file):
-            logger.info("Tracking configuration file found...")
-            with open(instruction_file, "r") as f:
-                instructions = json.load(f)
-                if "post_processing_options" in instructions:
-                    post_processing_options = instructions["post_processing_options"]
-                    logger.info(
-                        f"Applying the following track postprocessing: {post_processing_options}..."
-                    )
-                    df = clean_trajectories(df.copy(), **post_processing_options)
+        df = clean_trajectories(df.copy(), **post_processing_opts)
+
         unnamed_cols = [c for c in list(df.columns) if c.startswith("Unnamed")]
         df = df.drop(unnamed_cols, axis=1)
         logger.debug(f"Columns after export: {list(df.columns)}")
         df.to_csv(shared_data["path"], index=False)
         logger.info("Track export done.")
+
+        # Reflect the post-processed tracks in the viewer so the effect of the
+        # chosen options is visible in place (dropped tracks disappear, gaps get
+        # interpolated, etc.).
+        shared_data["df"] = df
+        try:
+            vertices, tracks, properties, graph = tracks_to_napari(
+                df, exclude_nans=True
+            )
+            viewer.layers["tracks"].data = tracks
+            viewer.layers["tracks"].properties = properties
+            viewer.layers["tracks"].graph = graph
+            viewer.layers["points"].data = vertices
+            viewer.layers["tracks"].refresh()
+            viewer.layers["points"].refresh()
+        except Exception as e:
+            logger.warning(f"Could not refresh track layers after export: {e}")
+
         with positionlogger(position, filename=f"log_{population}.txt"):
             logger.info("TRACK CORRECTION (manual, napari)")
             logger.info(f"population: {population}")
+            logger.info(f"post_processing: {post_processing_opts}")
             try:
                 id_col = extract_identity_col(df)
                 n_tracks = df[id_col].nunique() if id_col is not None else None
@@ -415,6 +526,7 @@ def launch_napari_viewer(
         return export_modifications()
 
     export_table_widget.native.setStyleSheet(Styles().button_style_sheet)
+    post_processing_options.native.setStyleSheet(Styles().button_style_sheet)
 
     def label_changed(event: str) -> None:
         """
@@ -433,7 +545,12 @@ def launch_napari_viewer(
 
     viewer.layers["segmentation"].events.selected_label.connect(label_changed)
 
-    viewer.window.add_dock_widget(export_table_widget, area="right")
+    track_button_container = QWidget()
+    track_button_layout = QVBoxLayout(track_button_container)
+    track_button_layout.setSpacing(10)
+    track_button_layout.addWidget(post_processing_options.native)
+    track_button_layout.addWidget(export_table_widget.native)
+    viewer.window.add_dock_widget(track_button_container, area="right")
 
     @labels_layer.mouse_double_click_callbacks.append
     def on_second_click_of_double_click(
@@ -708,10 +825,15 @@ def control_segmentation_napari(
     prefix: str = "Aligned",
     population: str = "target",
     flush_memory: bool = False,
-) -> None:
+    threads: int = 1,
+    progress_callback: Optional[Callable[[int], bool]] = None,
+    status_callback: Optional[Callable[[str], None]] = None,
+    prepare_only: bool = False,
+) -> Optional[Dict[str, Any]]:
     """
 
-    Control the visualization of segmentation labels using the napari viewer.
+    Load the segmentation labels and stack for a position, and (optionally) open
+    them in napari for visualization and correction.
 
     Parameters
     ----------
@@ -723,11 +845,26 @@ def control_segmentation_napari(
             The population type for which the segmentation is performed. The default is 'target'.
     flush_memory : bool, optional
             Pop napari layers upon closing the viewer to empty the memory footprint. The default is `False`.
+    threads : int, optional
+            Reserved for interface compatibility with the GUI loader thread. The default is `1`.
+    progress_callback : callable, optional
+            Callback receiving an int (0-100) while loading. The default is None.
+    status_callback : callable, optional
+            Callback receiving a status string while loading. The default is None.
+    prepare_only : bool, optional
+            If True, load the data and return it as a dict instead of opening the
+            viewer (used to run the loading step off the GUI thread). The default
+            is `False`.
+
+    Returns
+    -------
+    dict or None
+            The prepared data dict when ``prepare_only`` is True, otherwise None.
 
     Notes
     -----
     This function loads the segmentation labels and stack corresponding to the specified position and population.
-    It then creates a napari viewer and adds the stack and labels as layers for visualization.
+    The viewer itself is built by :func:`launch_segmentation_viewer`.
 
     Examples
     --------
@@ -736,26 +873,204 @@ def control_segmentation_napari(
 
     """
 
+    # --- Load masks (parallel, with granular progress) ---
+    if status_callback:
+        status_callback("Loading masks…")
+    if progress_callback:
+        progress_callback(0)
+
+    def _labels_progress(p: int):
+        # Masks dominate the load cost; map their progress onto the 0–90 band.
+        # Returns the callback's value so a cancel request (False) aborts the load.
+        if progress_callback:
+            return progress_callback(int(p * 0.9))
+        return True
+
+    n_label_threads = max(int(threads), 4)
+    labels = locate_labels(
+        position,
+        population=population,
+        threads=n_label_threads,
+        progress_callback=_labels_progress,
+    )
+
+    # locate_labels returns None when cancelled via the progress callback: stop
+    # here so we don't waste time loading the stack / computing contrast limits.
+    if labels is None:
+        if status_callback:
+            status_callback("Cancelled.")
+        return None
+
+    # --- Load image stack (lazily when possible, else eagerly) ---
+    if status_callback:
+        status_callback("Loading image stack…")
+    if progress_callback:
+        progress_callback(90)
+
+    stack = locate_stack_lazy(position, prefix=prefix)
+    if stack is None:
+        stack = locate_stack(position, prefix=prefix)
+
+    # Mirror locate_stack_and_labels: repair/realign label count if needed.
+    if len(labels) < len(stack):
+        fix_missing_labels(position, population=population, prefix=prefix)
+        labels = locate_labels(
+            position, population=population, threads=n_label_threads
+        )
+    if len(stack) != len(labels):
+        raise ValueError(
+            f"The shape of the stack {getattr(stack, 'shape', None)} does not "
+            f"match with the shape of the labels {getattr(labels, 'shape', None)}"
+        )
+
+    if progress_callback:
+        progress_callback(100)
+
+    contrast_limits = _get_contrast_limits(stack)
+
+    data = {
+        "stack": stack,
+        "labels": labels,
+        "position": position,
+        "population": population,
+        "contrast_limits": contrast_limits,
+        "flush_memory": flush_memory,
+    }
+
+    if prepare_only:
+        return data
+
+    launch_segmentation_viewer(**data)
+    return None
+
+
+def launch_segmentation_viewer(
+    stack: np.ndarray,
+    labels: np.ndarray,
+    position: str,
+    population: str = "target",
+    contrast_limits: Optional[List[Tuple[float, float]]] = None,
+    flush_memory: bool = False,
+    block: bool = True,
+    progress_callback: Optional[Callable[[Any], Any]] = None,
+) -> None:
+    """
+    Build the napari viewer for segmentation visualization and correction.
+
+    Parameters
+    ----------
+    stack : numpy.ndarray
+            The image stack (TYXC).
+    labels : numpy.ndarray
+            The label stack (TYX).
+    position : str
+            The position directory (used to locate config and write corrections).
+    population : str, optional
+            The population type. The default is 'target'.
+    contrast_limits : list, optional
+            Contrast limits for the image layers. Computed from the stack if None.
+    flush_memory : bool, optional
+            Pop napari layers upon closing the viewer to empty the memory footprint.
+    block : bool, optional
+            Whether to block while the viewer is open. The default is `True`.
+    progress_callback : callable, optional
+            Optional callback receiving status strings during viewer init.
+    """
+
+    @magicgui(
+        layout="vertical",
+        call_button=False,
+        split_merged_labels={
+            "widget_type": "CheckBox",
+            "text": "Split merged labels",
+        },
+        remove_small_objects={
+            "widget_type": "CheckBox",
+            "text": "Remove small objects",
+        },
+        fill_holes={"widget_type": "CheckBox", "text": "Fill holes in masks"},
+        min_area={
+            "label": "Min object area (px²)",
+            "min": 0,
+            "max": 1_000_000,
+        },
+    )
+    def correction_options(
+        split_merged_labels: bool = True,
+        remove_small_objects: bool = True,
+        fill_holes: bool = False,
+        min_area: int = 9,
+    ):
+        """Auto-fixes applied to the masks when saving."""
+
+    def _correction_kwargs() -> Dict[str, Any]:
+        """Build ``auto_correct_masks`` kwargs from the option widgets."""
+        return {
+            "correct_anomalies": correction_options.split_merged_labels.value,
+            "fill_labels": correction_options.fill_holes.value,
+            "min_area": (
+                correction_options.min_area.value
+                if correction_options.remove_small_objects.value
+                else 0
+            ),
+        }
+
     def export_labels():
         """Export corrected labels."""
+        from PyQt5.QtWidgets import QApplication, QProgressDialog
+        from PyQt5.QtCore import Qt
+
         labels_layer = viewer.layers["segmentation"].data
         if not os.path.exists(output_folder):
             os.mkdir(output_folder)
 
+        n_total = len(labels_layer)
+        # Saving can take a few seconds; show a modal, non-cancellable progress
+        # bar and pump the event loop each frame so it stays responsive.
+        try:
+            parent = viewer.window._qt_window
+        except Exception:
+            parent = None
+        pbar = QProgressDialog("Saving the modified labels…", None, 0, n_total, parent)
+        pbar.setWindowTitle("Saving")
+        pbar.setWindowModality(Qt.WindowModal)
+        pbar.setMinimumDuration(0)
+        pbar.setAutoClose(False)
+        # Free the dialog widget when it closes so repeated saves don't accumulate
+        # hidden QProgressDialog children on the napari main window.
+        pbar.setAttribute(Qt.WA_DeleteOnClose)
+        pbar.setValue(0)
+        QApplication.processEvents()
+
+        corrected_stack = labels_layer.copy()
         n_frames = 0
         n_objects_total = 0
-        for t, im in enumerate(tqdm(labels_layer)):
+        try:
+            for t, im in enumerate(tqdm(labels_layer)):
 
-            try:
-                im = auto_correct_masks(im)
-            except Exception as e:
-                logger.warning(f"auto_correct_masks failed: {e}")
+                try:
+                    im = auto_correct_masks(im, **_correction_kwargs())
+                except Exception as e:
+                    logger.warning(f"auto_correct_masks failed: {e}")
 
-            save_tiff_imagej_compatible(
-                output_folder + f"{str(t).zfill(4)}.tif", im.astype(np.int16), axes="YX"
-            )
-            n_frames += 1
-            n_objects_total += int((np.unique(im) != 0).sum())
+                corrected_stack[t] = im.astype(corrected_stack.dtype)
+                save_tiff_imagej_compatible(
+                    output_folder + f"{str(t).zfill(4)}.tif",
+                    im.astype(np.int16),
+                    axes="YX",
+                )
+                n_frames += 1
+                n_objects_total += int((np.unique(im) != 0).sum())
+
+                pbar.setValue(t + 1)
+                QApplication.processEvents()
+
+            # Reflect the auto-fixed masks back into the viewer so the result is visible
+            viewer.layers["segmentation"].data = corrected_stack
+            viewer.layers["segmentation"].refresh()
+        finally:
+            pbar.close()
+
         logger.info("The labels have been successfully rewritten.")
         with positionlogger(position, filename=f"log_{population}.txt"):
             logger.info("LABEL CORRECTION (manual, napari)")
@@ -808,7 +1123,7 @@ def control_segmentation_napari(
         labels_layer = viewer.layers["segmentation"].data[t]  # at current time
 
         try:
-            labels_layer = auto_correct_masks(labels_layer)
+            labels_layer = auto_correct_masks(labels_layer, **_correction_kwargs())
         except Exception as e:
             logger.warning(f"auto_correct_masks failed: {e}")
 
@@ -978,13 +1293,16 @@ def control_segmentation_napari(
         """Widget to trigger export."""
         return export_annotation()
 
-    stack, labels = locate_stack_and_labels(
-        position, prefix=prefix, population=population
-    )
-    contrast_limits = _get_contrast_limits(stack)
+    if contrast_limits is None:
+        contrast_limits = _get_contrast_limits(stack)
 
     output_folder = position + f"labels_{population}{os.sep}"
     logger.info(f"Shape of the loaded image stack: {stack.shape}...")
+    if progress_callback:
+        try:
+            progress_callback("Initializing napari viewer…")
+        except Exception:
+            pass
 
     viewer = napari.Viewer()
     try:
@@ -997,11 +1315,16 @@ def control_segmentation_napari(
         colormap=["gray"] * stack.shape[-1],
         contrast_limits=contrast_limits,
     )
-    viewer.add_labels(labels.astype(int), name="segmentation", opacity=0.4)
+    # Avoid a full int64 copy of the whole TYX stack when the labels are
+    # already an integer type.
+    if not np.issubdtype(labels.dtype, np.integer):
+        labels = labels.astype(np.int32)
+    viewer.add_labels(labels, name="segmentation", opacity=0.4)
 
     button_container = QWidget()
     layout = QVBoxLayout(button_container)
     layout.setSpacing(10)
+    layout.addWidget(correction_options.native)
     layout.addWidget(save_widget.native)
     layout.addWidget(export_widget.native)
     viewer.window.add_dock_widget(button_container, area="right")
@@ -1034,7 +1357,16 @@ def control_segmentation_napari(
     label_widget_list = ["polygon_button", "transform_button"]
     lock_controls(viewer.layers["segmentation"], label_widget_list)
 
-    viewer.show(block=True)
+    viewer.show(block=block)
+
+    if not block:
+        # Non-blocking mode (launched from the GUI loader thread): show() returns
+        # immediately and we must NOT touch the viewer afterwards. The napari main
+        # window has WA_DeleteOnClose, so closing it tears down the Qt viewer and
+        # releases the label array / memmap-backed stack through normal garbage
+        # collection. We deliberately do NOT pop layers from a `destroyed` handler:
+        # that runs during C++ teardown of the window and segfaults.
+        return
 
     if flush_memory:
         # temporary fix for slight napari memory leak — pop until IndexError (empty)
@@ -1062,13 +1394,51 @@ def correct_annotation(filename: str) -> None:
         The path to the annotation file.
     """
 
+    @magicgui(
+        layout="vertical",
+        call_button=False,
+        split_merged_labels={
+            "widget_type": "CheckBox",
+            "text": "Split merged labels",
+        },
+        remove_small_objects={
+            "widget_type": "CheckBox",
+            "text": "Remove small objects",
+        },
+        fill_holes={"widget_type": "CheckBox", "text": "Fill holes in masks"},
+        min_area={
+            "label": "Min object area (px²)",
+            "min": 0,
+            "max": 1_000_000,
+        },
+    )
+    def correction_options(
+        split_merged_labels: bool = True,
+        remove_small_objects: bool = True,
+        fill_holes: bool = False,
+        min_area: int = 9,
+    ):
+        """Auto-fixes applied to the masks when saving."""
+
+    def _correction_kwargs() -> Dict[str, Any]:
+        """Build ``auto_correct_masks`` kwargs from the option widgets."""
+        return {
+            "correct_anomalies": correction_options.split_merged_labels.value,
+            "fill_labels": correction_options.fill_holes.value,
+            "min_area": (
+                correction_options.min_area.value
+                if correction_options.remove_small_objects.value
+                else 0
+            ),
+        }
+
     def export_labels():
         """Export corrected labels to file."""
         labels_layer = viewer.layers["segmentation"].data
         for t, im in enumerate(tqdm(labels_layer)):
 
             try:
-                im = auto_correct_masks(im)
+                im = auto_correct_masks(im, **_correction_kwargs())
             except Exception as e:
                 logger.warning(f"auto_correct_masks failed: {e}")
 
@@ -1116,7 +1486,14 @@ def correct_annotation(filename: str) -> None:
         contrast_limits=contrast_limits,
     )
     viewer.add_labels(labels, name="segmentation", opacity=0.4)
-    viewer.window.add_dock_widget(save_widget, area="right")
+
+    button_container = QWidget()
+    layout = QVBoxLayout(button_container)
+    layout.setSpacing(10)
+    layout.addWidget(correction_options.native)
+    layout.addWidget(save_widget.native)
+    viewer.window.add_dock_widget(button_container, area="right")
+
     save_widget.native.setStyleSheet(Styles().button_style_sheet)
 
     viewer.show(block=False)

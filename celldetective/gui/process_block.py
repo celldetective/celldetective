@@ -49,7 +49,14 @@ class NapariLoaderThread(QThread):
     status = pyqtSignal(str)
     finished_with_result = pyqtSignal(object)
 
-    def __init__(self, pos: str, prefix: str, population: str, threads: int) -> None:
+    def __init__(
+        self,
+        pos: str,
+        prefix: str,
+        population: str,
+        threads: int,
+        task: str = "tracking",
+    ) -> None:
         """
         Initialize the NapariLoaderThread.
 
@@ -63,12 +70,16 @@ class NapariLoaderThread(QThread):
             The cell population.
         threads : int
             Number of threads to use.
+        task : str, optional
+            Which viewer to prepare data for: "tracking" (default) or
+            "segmentation".
         """
         super().__init__()
         self.pos = pos
         self.prefix = prefix
         self.population = population
         self.threads = threads
+        self.task = task
         self._is_cancelled = False
 
     def stop(self) -> None:
@@ -77,9 +88,8 @@ class NapariLoaderThread(QThread):
 
     def run(self) -> None:
         """
-        Run the thread to load tracks into Napari.
+        Run the thread to load data into Napari (tracks or segmentation).
         """
-        from celldetective.napari.utils import control_tracks
 
         def callback(p: int) -> bool:
             """
@@ -100,15 +110,34 @@ class NapariLoaderThread(QThread):
             self.progress.emit(p)
             return True
 
+        def status_cb(msg: str) -> None:
+            """Forward a phase message to the progress dialog label."""
+            self.status.emit(msg)
+
         try:
-            res = control_tracks(
-                self.pos,
-                prefix=self.prefix,
-                population=self.population,
-                threads=self.threads,
-                progress_callback=callback,
-                prepare_only=True,
-            )
+            if self.task == "segmentation":
+                from celldetective.napari.utils import control_segmentation_napari
+
+                res = control_segmentation_napari(
+                    self.pos,
+                    prefix=self.prefix,
+                    population=self.population,
+                    threads=self.threads,
+                    progress_callback=callback,
+                    status_callback=status_cb,
+                    prepare_only=True,
+                )
+            else:
+                from celldetective.napari.utils import control_tracks
+
+                res = control_tracks(
+                    self.pos,
+                    prefix=self.prefix,
+                    population=self.population,
+                    threads=self.threads,
+                    progress_callback=callback,
+                    prepare_only=True,
+                )
             self.finished_with_result.emit(res)
         except Exception as e:
             self.finished_with_result.emit(e)
@@ -803,7 +832,6 @@ class ProcessPanel(QFrame, Styles):
         If labels are missing, the user is asked if they want to create a new label directory.
         If labels exist, they are loaded into Napari for inspection.
         """
-        from celldetective.napari.utils import control_segmentation_napari
 
         if not os.path.exists(
             os.sep.join([self.parent_window.pos, f"labels_{self.mode}", os.sep])
@@ -835,36 +863,93 @@ class ProcessPanel(QFrame, Styles):
                         lbl,
                     )
 
-        # self.freeze()
-        # QApplication.setOverrideCursor(Qt.WaitCursor)
         test = self.parent_window.locate_selected_position()
         if test:
-            # print('Memory use: ', dict(psutil.virtual_memory()._asdict()))
-            logger.info(f"Loading images and labels into napari...")
-            try:
-                control_segmentation_napari(
-                    self.parent_window.pos,
-                    prefix=self.parent_window.movie_prefix,
-                    population=self.mode,
-                    flush_memory=True,
-                )
-            except FileNotFoundError as e:
-                msgBox = QMessageBox()
-                msgBox.setIcon(QMessageBox.Warning)
-                msgBox.setText(str(e))
-                msgBox.setWindowTitle("Warning")
-                msgBox.setStandardButtons(QMessageBox.Ok)
-                _ = msgBox.exec()
-                return
-            except Exception as e:
-                logger.error(f"Task unsuccessful... Exception {e}...")
-                msgBox = QMessageBox()
-                msgBox.setIcon(QMessageBox.Warning)
-                msgBox.setText(str(e))
-                msgBox.setWindowTitle("Warning")
-                msgBox.setStandardButtons(QMessageBox.Ok)
-                _ = msgBox.exec()
+            logger.info("Loading images and labels into napari...")
+            self._launch_segmentation_viewer_async()
 
+    def _launch_segmentation_viewer_async(self, allow_fix: bool = True) -> None:
+        """
+        Load the segmentation stack and labels off the GUI thread behind a
+        progress dialog, then open the napari segmentation viewer on the main
+        thread when loading completes.
+
+        Parameters
+        ----------
+        allow_fix : bool, optional
+            If True, offer to pad missing labels when loading fails because of a
+            stack/label count mismatch, then retry once. The default is True.
+        """
+
+        loader = NapariLoaderThread(
+            self.parent_window.pos,
+            self.parent_window.movie_prefix,
+            self.mode,
+            self.parent_window.parent_window.n_threads,
+            task="segmentation",
+        )
+
+        progress = CelldetectiveProgressDialog(
+            "Preparing the napari viewer...",
+            "Loading images and labels...",
+            0,
+            100,
+            self,
+            window_title="Preparing the napari viewer...",
+        )
+        progress.setAutoClose(False)
+        progress.setAutoReset(False)
+        # Free the dialog on close so it isn't retained as a child of the panel
+        # across repeated viewer-open cycles. Deletion only happens via the
+        # explicit close() calls below (after the loader thread has finished and
+        # its signals are blocked), so no slot can fire on a deleted dialog.
+        progress.setAttribute(Qt.WA_DeleteOnClose)
+        progress.setValue(0)
+        loader.progress.connect(progress.setValue)
+        loader.status.connect(progress.setLabelText)
+        progress.canceled.connect(loader.stop)
+
+        # Keep a strong reference to every in-flight loader so that launching the
+        # viewer several times in a row does not let an earlier QThread be
+        # garbage-collected mid-run; drop it once the thread has finished.
+        if not hasattr(self, "_seg_loaders"):
+            self._seg_loaders = set()
+        self._seg_loaders.add(loader)
+        loader.finished.connect(lambda: self._seg_loaders.discard(loader))
+
+        def on_finished(result: Union[Dict, Exception, None]) -> None:
+            """
+            Handle completion of the segmentation loading thread.
+
+            Bound to the specific ``loader``/``progress`` instances for this
+            launch (not ``self.*`` attributes, which get overwritten by later
+            launches) so a cancelled load never opens a viewer.
+
+            Parameters
+            ----------
+            result : dict or Exception or None
+                The prepared data dict, an exception, or None.
+            """
+            from celldetective.napari.utils import launch_segmentation_viewer
+
+            progress.blockSignals(True)
+
+            if loader._is_cancelled:
+                logger.info("Segmentation viewer loading was cancelled.")
+                progress.close()
+                return
+
+            if isinstance(result, FileNotFoundError):
+                progress.close()
+                QMessageBox.warning(self, "Warning", str(result))
+                return
+
+            if isinstance(result, Exception):
+                progress.close()
+                logger.error(f"napari loading error: {result}")
+                QMessageBox.warning(self, "Warning", str(result))
+                if not allow_fix:
+                    return
                 msgBox = QMessageBox()
                 msgBox.setIcon(QMessageBox.Question)
                 msgBox.setText(
@@ -874,28 +959,52 @@ class ProcessPanel(QFrame, Styles):
                 msgBox.setStandardButtons(
                     QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel
                 )
-                returnValue = msgBox.exec()
-                if returnValue == QMessageBox.Yes:
+                if msgBox.exec() == QMessageBox.Yes:
                     logger.info("Fixing the missing labels...")
                     fix_missing_labels(
                         self.parent_window.pos,
                         prefix=self.parent_window.movie_prefix,
                         population=self.mode,
                     )
-                    try:
-                        control_segmentation_napari(
-                            self.parent_window.pos,
-                            prefix=self.parent_window.movie_prefix,
-                            population=self.mode,
-                            flush_memory=True,
-                        )
-                    except Exception as e:
-                        logger.error(f"Error {e}")
-                        return None
-                else:
-                    return None
+                    # Retry once, without offering the fix again.
+                    self._launch_segmentation_viewer_async(allow_fix=False)
+                return
 
-            gc.collect()
+            if result:
+                logger.info("Launching the napari segmentation viewer...")
+                progress.setLabelText("Initializing napari viewer...")
+                progress.setRange(0, 0)
+                QApplication.processEvents()
+
+                def progress_cb(msg: str) -> None:
+                    """Forward viewer-init status to the dialog label."""
+                    if isinstance(msg, str):
+                        progress.setLabelText(msg)
+                    QApplication.processEvents()
+
+                if "flush_memory" in result:
+                    result.pop("flush_memory")
+
+                try:
+                    launch_segmentation_viewer(
+                        **result,
+                        block=False,
+                        flush_memory=False,
+                        progress_callback=progress_cb,
+                    )
+                    logger.info("napari segmentation viewer launched...")
+                except Exception as e:
+                    logger.error(f"Failed to launch napari: {e}")
+                    QMessageBox.warning(self, "Error", f"Failed to launch napari: {e}")
+                finally:
+                    progress.close()
+                gc.collect()
+            else:
+                progress.close()
+                logger.warning("napari loading returned None (no labels found).")
+
+        loader.finished_with_result.connect(on_finished)
+        loader.start()
 
     def check_signals(self) -> None:
         """
@@ -1684,14 +1793,14 @@ class ProcessPanel(QFrame, Styles):
             f"View the tracks before post-processing for position {self.parent_window.pos} in napari..."
         )
 
-        self.napari_loader = NapariLoaderThread(
+        loader = NapariLoaderThread(
             self.parent_window.pos,
             self.parent_window.movie_prefix,
             self.mode,
             self.parent_window.parent_window.n_threads,
         )
 
-        self.napari_progress = CelldetectiveProgressDialog(
+        progress = CelldetectiveProgressDialog(
             "Loading images, tracks and relabeling masks...",
             "Cancel",
             0,
@@ -1700,17 +1809,35 @@ class ProcessPanel(QFrame, Styles):
             window_title="Preparing the napari viewer...",
         )
 
-        self.napari_progress.setAutoClose(False)
-        self.napari_progress.setAutoReset(False)
+        progress.setAutoClose(False)
+        progress.setAutoReset(False)
+        # Free the dialog on close so it isn't retained as a child of the panel
+        # across repeated viewer-open cycles. Deletion only happens via the
+        # explicit close() calls below (after the loader thread has finished and
+        # its signals are blocked), so no slot can fire on a deleted dialog.
+        progress.setAttribute(Qt.WA_DeleteOnClose)
 
-        self.napari_progress.setValue(0)
-        self.napari_loader.progress.connect(self.napari_progress.setValue)
-        self.napari_loader.status.connect(self.napari_progress.setLabelText)
-        self.napari_progress.canceled.connect(self.napari_loader.stop)
+        progress.setValue(0)
+        loader.progress.connect(progress.setValue)
+        loader.status.connect(progress.setLabelText)
+        progress.canceled.connect(loader.stop)
+
+        # Keep a strong reference to every in-flight loader so launching the
+        # viewer several times in a row does not let an earlier QThread be
+        # garbage-collected mid-run; drop it once the thread has finished.
+        if not hasattr(self, "_track_loaders"):
+            self._track_loaders = set()
+        self._track_loaders.add(loader)
+        loader.finished.connect(lambda: self._track_loaders.discard(loader))
 
         def on_finished(result: Union[Dict, Exception, None]) -> None:
             """
             Handle completion of Napari loading.
+
+            Bound to the specific ``loader``/``progress`` instances for this
+            launch (not ``self.*`` attributes, which get overwritten by later
+            launches) so a cancelled load never opens a viewer and the correct
+            dialog is closed.
 
             Parameters
             ----------
@@ -1719,16 +1846,15 @@ class ProcessPanel(QFrame, Styles):
             """
             from celldetective.napari.utils import launch_napari_viewer
 
-            self.napari_progress.blockSignals(True)
-            # self.napari_progress.close()
-            if self.napari_loader._is_cancelled:
+            progress.blockSignals(True)
+            if loader._is_cancelled:
                 logger.info("Task was cancelled...")
-                self.napari_progress.close()
+                progress.close()
                 return
 
             if isinstance(result, Exception):
                 logger.error(f"napari loading error: {result}")
-                self.napari_progress.close()
+                progress.close()
                 msgBox = QMessageBox()
                 msgBox.setIcon(QMessageBox.Warning)
                 msgBox.setText(str(result))
@@ -1739,8 +1865,8 @@ class ProcessPanel(QFrame, Styles):
 
             if result:
                 logger.info("Launching the napari viewer with tracks...")
-                self.napari_progress.setLabelText("Initializing Napari viewer...")
-                self.napari_progress.setRange(0, 0)
+                progress.setLabelText("Initializing Napari viewer...")
+                progress.setRange(0, 0)
                 QApplication.processEvents()
 
                 def progress_cb(msg: str) -> None:
@@ -1753,7 +1879,7 @@ class ProcessPanel(QFrame, Styles):
                         Progress message.
                     """
                     if isinstance(msg, str):
-                        self.napari_progress.setLabelText(msg)
+                        progress.setLabelText(msg)
                     QApplication.processEvents()
 
                 if "flush_memory" in result:
@@ -1771,9 +1897,9 @@ class ProcessPanel(QFrame, Styles):
                     logger.error(f"Failed to launch Napari: {e}")
                     QMessageBox.warning(self, "Error", f"Failed to launch Napari: {e}")
                 finally:
-                    self.napari_progress.close()
+                    progress.close()
             else:
-                self.napari_progress.close()
+                progress.close()
                 logger.warning(
                     "napari loading returned None (likely no trajectories found)."
                 )
@@ -1783,8 +1909,8 @@ class ProcessPanel(QFrame, Styles):
                     "Could not load tracks. Please ensure trajectories are computed.",
                 )
 
-        self.napari_loader.finished_with_result.connect(on_finished)
-        self.napari_loader.start()
+        loader.finished_with_result.connect(on_finished)
+        loader.start()
 
     def view_table_ui(self) -> None:
         """

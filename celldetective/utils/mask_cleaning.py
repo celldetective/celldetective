@@ -121,6 +121,7 @@ def auto_correct_masks(
     bbox_factor: float = 1.75,
     min_area: int = 9,
     fill_labels: bool = False,
+    correct_anomalies: bool = True,
 ) -> np.ndarray:
     """
     Correct segmentation masks to ensure consistency and remove anomalies.
@@ -147,6 +148,10 @@ def auto_correct_masks(
             Discard cells that have an area smaller than this minimum area (px²). The default is `9` (3x3 pixels).
     fill_labels : bool, optional
             Fill holes within cell masks automatically. The default is `False`.
+    correct_anomalies : bool, optional
+            Split objects sharing a single label when their bounding box area is
+            disproportionately larger than the object area (see ``bbox_factor``).
+            The default is `True`.
 
     Returns
     -------
@@ -177,31 +182,33 @@ def auto_correct_masks(
     # Avoid negative mask values
     masks[masks < 0] = np.abs(masks[masks < 0])
 
-    props = pd.DataFrame(
-        regionprops_table(masks, properties=("label", "area", "area_bbox"))
-    )
-    max_lbl = props["label"].max()
     corrected_lbl = masks.copy()  # .astype(int)
 
-    for cell in props["label"].unique():
+    if correct_anomalies:
+        props = pd.DataFrame(
+            regionprops_table(masks, properties=("label", "area", "area_bbox"))
+        )
+        max_lbl = props["label"].max()
 
-        bbox_area = props.loc[props["label"] == cell, "area_bbox"].values
-        area = props.loc[props["label"] == cell, "area"].values
+        for cell in props["label"].unique():
 
-        if bbox_area > bbox_factor * area:  # condition for anomaly
+            bbox_area = props.loc[props["label"] == cell, "area_bbox"].values
+            area = props.loc[props["label"] == cell, "area"].values
 
-            lbl = masks == cell
-            lbl = lbl.astype(int)
+            if bbox_area > bbox_factor * area:  # condition for anomaly
 
-            relabelled = label(lbl, connectivity=2)
-            relabelled += max_lbl
-            relabelled[np.where(lbl == 0)] = 0
+                lbl = masks == cell
+                lbl = lbl.astype(int)
 
-            corrected_lbl[np.where(relabelled != 0)] = relabelled[
-                np.where(relabelled != 0)
-            ]
+                relabelled = label(lbl, connectivity=2)
+                relabelled += max_lbl
+                relabelled[np.where(lbl == 0)] = 0
 
-        max_lbl = np.amax(corrected_lbl)
+                corrected_lbl[np.where(relabelled != 0)] = relabelled[
+                    np.where(relabelled != 0)
+                ]
+
+            max_lbl = np.amax(corrected_lbl)
 
     # Second routine to eliminate objects too small
     props2 = pd.DataFrame(

@@ -575,6 +575,9 @@ class TestEventAnnotatorCloseEvent:
             annotator.stack = np.zeros((10, 100, 100))
             annotator.df_tracks = pd.DataFrame()
             annotator.stop = MagicMock()
+            # Real instances always have these (set in __init__ / _on_load_finished).
+            annotator._loader_thread = None
+            annotator._progress_dialog = None
 
             event = QCloseEvent()
 
@@ -600,6 +603,9 @@ class TestEventAnnotatorCloseEvent:
             annotator.stack = np.zeros((10, 100, 100))
             annotator.df_tracks = pd.DataFrame({"A": [1, 2, 3]})
             annotator.stop = MagicMock()
+            # Real instances always have these (set in __init__ / _on_load_finished).
+            annotator._loader_thread = None
+            annotator._progress_dialog = None
 
             event = QCloseEvent()
 

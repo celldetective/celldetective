@@ -919,6 +919,35 @@ class EventAnnotator(BaseAnnotator):
         event : QCloseEvent
             The close event.
         """
+        # If the stack is still loading in the background, stop and join the
+        # loader thread before tearing anything down. Otherwise it keeps running
+        # prepare_stack against this (being-destroyed) widget — racing on
+        # self.stack with the `del` below and firing finished -> finalize_init on
+        # a dead window.
+        loader = getattr(self, "_loader_thread", None)
+        if loader is not None:
+            try:
+                loader.progress.disconnect()
+                loader.status_update.disconnect()
+                loader.finished.disconnect()
+            except (TypeError, RuntimeError):
+                pass  # no connections / already deleted
+            try:
+                if loader.isRunning():
+                    loader.stop()
+                    loader.wait(5000)
+            except RuntimeError:
+                pass  # underlying C++ thread already gone
+            self._loader_thread = None
+
+        dlg = getattr(self, "_progress_dialog", None)
+        if dlg is not None:
+            try:
+                dlg.close()
+            except (RuntimeError, AttributeError) as e:
+                logger.debug(f"Could not close loading dialog: {e}")
+            self._progress_dialog = None
+
         try:
             self.stop()
         except Exception as e:

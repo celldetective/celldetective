@@ -184,6 +184,14 @@ With napari, segmentation mistakes can be corrected using the brush, eraser, and
 #. **Save the modified labels** — overwrite the masks in place.
 #. **Export a training sample** — create an annotated pair (image + mask) to train a Deep Learning model on your data.
 
+Above these buttons, a set of options controls the automatic fixes applied to the masks when they are saved or exported:
+
+*   **Split merged labels** — separate objects that mistakenly share a single label value (detected when an object's bounding box is much larger than the object itself). Enabled by default.
+*   **Remove small objects** — discard objects smaller than the **Min object area (px²)** threshold (default ``9``, i.e. 3×3 pixels). Enabled by default. Uncheck it (or set the area to ``0``) to keep every object regardless of size.
+*   **Fill holes in masks** — fill holes inside cell masks. Disabled by default.
+
+The labels are always re-numbered consecutively from ``1`` on save to avoid encoding errors, regardless of these options.
+
 For a step-by-step annotation workflow, see :doc:`How to annotate for segmentation <how-to-guides/basics/annotate-for-segmentation>`.
 To train a model on your annotations, see :doc:`How to train a segmentation model <how-to-guides/advanced/train-a-segmentation-model-from-scratch>`.
 
