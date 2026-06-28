@@ -65,6 +65,10 @@ class TestEventAnnotatorCloseEvent:
                 annotator.df_tracks = MagicMock()
                 annotator.stop = MagicMock()
 
+                # Background loader attributes set in __init__ (bypassed here)
+                annotator._loader_thread = None
+                annotator._progress_dialog = None
+
                 # Mock stop_btn for stop() method if needed
                 annotator.stop_btn = MagicMock()
                 annotator.start_btn = MagicMock()
@@ -110,6 +114,10 @@ class TestEventAnnotatorCloseEvent:
             annotator.start_btn = MagicMock()
             annotator.prev_frame_btn = MagicMock()
             annotator.next_frame_btn = MagicMock()
+
+            # Background loader attributes set in __init__ (bypassed here)
+            annotator._loader_thread = None
+            annotator._progress_dialog = None
 
             event = QCloseEvent()
 
