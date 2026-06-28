@@ -201,38 +201,50 @@ class TestStarDistPadding(unittest.TestCase):
         # When predict_instances is called, it should return a mock padded label mask.
         # Original size is 200x960. Padded size is 256x960.
         # Height pad: top = (256 - 200) // 2 = 28, bottom = 28.
+        # StarDist details use real shapes: points (n_objects, 2) and
+        # coord (n_objects, 2, n_rays) where axis 1 is the (y, x) pair.
+        n_rays = 4
+
         def mock_predict_instances(img, **kwargs):
             self.assertEqual(img.shape[:2], (256, 960))
             # Put a specific label at the padding boundary (e.g. at index 28, 10)
             res = np.zeros(img.shape[:2], dtype=np.uint16)
             res[28, 10] = 5
+            # Object 0 sits on the padded boundary (y=28 -> 0 after crop, kept).
+            # Object 1 is inside the padding (y=5 -> -23 after crop, dropped).
+            coord = np.array([
+                [[28] * n_rays, [10] * n_rays],
+                [[5] * n_rays, [10] * n_rays],
+            ])  # shape (2, 2, n_rays)
             return res, {
                 "points": np.array([[28, 10], [5, 10]]),
                 "prob": np.array([0.9, 0.8]),
-                "coord": np.array([[[28, 10]], [[5, 10]]])
+                "coord": coord,
             }
-            
+
         mock_model.predict_instances.side_effect = mock_predict_instances
-        
+
         # Input image of size 200x960
         img = np.ones((200, 960, 1), dtype=np.float32)
-        
+
         # Run prediction
         lbl, details = _segment_image_with_stardist_model(img, model=mock_model, return_details=True)
-        
+
         # Check that the returned label mask is cropped back to 200x960
         self.assertEqual(lbl.shape, (200, 960))
         # Label at (28, 10) in padded becomes (0, 10) in cropped
         self.assertEqual(lbl[0, 10], 5)
-        
+
         # Check details points are adjusted/cropped
         # point [28, 10] (padded) -> [0, 10] (cropped, valid)
         # point [5, 10] (padded) -> [-23, 10] (cropped, invalid, should be filtered out)
         self.assertEqual(len(details["points"]), 1)
         self.assertEqual(details["points"][0][0], 0)
         self.assertEqual(details["points"][0][1], 10)
-        self.assertEqual(details["coord"][0][0][0], 0)
-        self.assertEqual(details["coord"][0][0][1], 10)
+        # coord for the surviving object: y row shifted by 28 (-> 0), x row unchanged (10).
+        self.assertEqual(details["coord"].shape, (1, 2, n_rays))
+        self.assertTrue(np.all(details["coord"][0][0] == 0))
+        self.assertTrue(np.all(details["coord"][0][1] == 10))
 
     def test_stardist_safe_tiling_single_pass(self):
         # A frame below the single-pass pixel threshold must return all-ones and

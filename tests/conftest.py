@@ -60,37 +60,82 @@ def stop_leaked_threads():
     except Exception:
         return
 
-    for obj in gc.get_objects():
+    def _stop_running_celldetective_threads():
+        """Stop + join every running QThread defined in our codebase.
+
+        Returns True if at least one such thread was found running, so the
+        caller can decide whether another sweep is worthwhile.
+        """
+        found = False
+        for obj in gc.get_objects():
+            try:
+                if isinstance(obj, QThread) and obj.isRunning():
+                    # Only mess with threads from our own codebase
+                    mod_name = getattr(type(obj), '__module__', '')
+                    if mod_name.startswith('celldetective.'):
+                        found = True
+                        try:
+                            if hasattr(obj, 'frame_loaded'):
+                                obj.frame_loaded.disconnect()
+                        except Exception:
+                            pass
+
+                        try:
+                            if hasattr(obj, 'stop'):
+                                obj.stop()
+                        except Exception:
+                            pass
+
+                        try:
+                            obj.quit()
+                        except Exception:
+                            pass
+
+                        obj.wait(2000)
+
+                        # NOTE: Do NOT call terminate() on Windows.
+                        # QThread::terminate() calls TerminateThread() which can
+                        # corrupt the process heap while the thread is mid-import
+                        # or inside a memory allocator, causing access violations
+                        # in ANY thread (including the main thread) during the
+                        # next test's event processing.
+            except (ReferenceError, TypeError):
+                # Object may have been collected between iteration and access
+                pass
+        return found
+
+    # Sweep 1: stop + join any thread that is currently running and reachable.
+    _stop_running_celldetective_threads()
+
+    # Force collection of the now-stopped thread wrappers *here*, while we know
+    # none of our QThreads is running. A StackLoader's QMutex / QWaitCondition
+    # are C++ objects owned by the Python wrapper; sip frees them the moment the
+    # wrapper is collected. If that collection were left to happen later — e.g.
+    # mid-QApplication.processEvents() inside the next test's widget __init__ —
+    # the C++ mutex/condition could be freed while a still-running run() loop is
+    # parked in condition.wait(), producing the "Windows fatal exception: access
+    # violation" at base_viewer.py:run. Collecting now makes the reclaim
+    # deterministic and, because the threads are already joined, safe.
+    try:
+        gc.collect()
+    except Exception:
+        pass
+
+    # Sweep 2: gc.collect() can break reference cycles and surface a thread that
+    # only became reachable/running-detectable after collection; stop it too.
+    if _stop_running_celldetective_threads():
         try:
-            if isinstance(obj, QThread) and obj.isRunning():
-                # Only mess with threads from our own codebase
-                mod_name = getattr(type(obj), '__module__', '')
-                if mod_name.startswith('celldetective.'):
-                    try:
-                        if hasattr(obj, 'frame_loaded'):
-                            obj.frame_loaded.disconnect()
-                    except Exception:
-                        pass
-                    
-                    try:
-                        if hasattr(obj, 'stop'):
-                            obj.stop()
-                    except Exception:
-                        pass
-                    
-                    try:
-                        obj.quit()
-                    except Exception:
-                        pass
-
-                    obj.wait(2000)
-
-                    # NOTE: Do NOT call terminate() on Windows.
-                    # QThread::terminate() calls TerminateThread() which can
-                    # corrupt the process heap while the thread is mid-import
-                    # or inside a memory allocator, causing access violations
-                    # in ANY thread (including the main thread) during the
-                    # next test's event processing.
-        except (ReferenceError, TypeError):
-            # Object may have been collected between iteration and access
+            gc.collect()
+        except Exception:
             pass
+
+    # Final drain so any DeferredDelete scheduled by the collection above is
+    # dispatched against still-live objects rather than the next test's.
+    try:
+        from PyQt5.QtWidgets import QApplication
+
+        app = QApplication.instance()
+        if app is not None:
+            app.processEvents()
+    except Exception:
+        pass

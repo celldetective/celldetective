@@ -177,22 +177,24 @@ class TestPadToPatchSize(unittest.TestCase):
     def test_no_padding_needed(self):
         x = np.ones((100, 100, 1), dtype=np.float32)
         y = np.ones((100, 100), dtype=np.int32)
-        xp, yp, padded = pad_to_patch_size(x, y, 80, 80)
+        xp, yp, padded, offsets = pad_to_patch_size(x, y, 80, 80)
         self.assertFalse(padded)
+        self.assertEqual(offsets, (0, 0))
         self.assertTrue(np.array_equal(xp, x))
         self.assertTrue(np.array_equal(yp, y))
 
     def test_padding_needed_centered(self):
         x = np.ones((80, 120, 1), dtype=np.float32)
         y = np.ones((80, 120), dtype=np.int32)
-        xp, yp, padded = pad_to_patch_size(x, y, 100, 150)
+        xp, yp, padded, offsets = pad_to_patch_size(x, y, 100, 150)
         self.assertTrue(padded)
         self.assertEqual(xp.shape, (100, 150, 1))
         self.assertEqual(yp.shape, (100, 150))
-        
+
         # Original is 80x120, target is 100x150
         # Height padding: 100 - 80 = 20 -> top = 10, bottom = 10
         # Width padding: 150 - 120 = 30 -> left = 15, right = 15
+        self.assertEqual(offsets, (10, 15))
         self.assertEqual(xp[9, 15, 0], 0.0)
         self.assertEqual(xp[10, 15, 0], 1.0)
         self.assertEqual(xp[10, 14, 0], 0.0)

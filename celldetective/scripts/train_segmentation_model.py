@@ -360,7 +360,7 @@ elif model_type == "stardist":
             use_gpu=use_gpu,
             n_channel_in=n_channel,
             train_learning_rate=learning_rate,
-            train_patch_size=(256, 256),
+            train_patch_size=tuple(train_patch_size),
             train_epochs=epochs,
             train_reduce_lr={"factor": 0.1, "patience": 30, "min_delta": 0},
             train_batch_size=batch_size,

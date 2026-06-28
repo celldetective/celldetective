@@ -206,7 +206,7 @@ def _segment_image_with_stardist_model(
     patch_h, patch_w = train_patch_size[0], train_patch_size[1]
     
     from celldetective.utils.image_transforms import pad_to_patch_size
-    img, _, padded = pad_to_patch_size(img, None, patch_h, patch_w)
+    img, _, padded, (pad_h_top, pad_w_left) = pad_to_patch_size(img, None, patch_h, patch_w)
 
     n_tiles = _get_safe_n_tiles(img, model)
     logger.debug(f"Predicting instances with StarDist. Input shape: {img.shape}, range: [{img.min()}, {img.max()}]. n_tiles: {n_tiles}")
@@ -215,24 +215,25 @@ def _segment_image_with_stardist_model(
     )
 
     if padded:
-        pad_h = max(0, patch_h - h)
-        pad_w = max(0, patch_w - w)
-        pad_h_top = pad_h // 2
-        pad_w_left = pad_w // 2
-
-        # Crop back the predicted label mask to original size (H, W)
+        # Crop back the predicted label mask to original size (H, W). The
+        # centering offsets come straight from pad_to_patch_size so we never
+        # recompute (and risk drifting from) its padding math.
         lbl = lbl[pad_h_top:pad_h_top+h, pad_w_left:pad_w_left+w]
-        
+
         # Adjust details coordinate values if return_details is True
         if return_details and details is not None:
             if 'points' in details:
+                # points: (n_objects, 2) -> offset broadcasts over the y/x axis.
                 points = details['points'] - np.array([pad_h_top, pad_w_left])
                 valid = (points[:, 0] >= 0) & (points[:, 0] < h) & (points[:, 1] >= 0) & (points[:, 1] < w)
                 details['points'] = points[valid]
                 if 'prob' in details:
                     details['prob'] = details['prob'][valid]
                 if 'coord' in details:
-                    coord = details['coord'] - np.array([pad_h_top, pad_w_left])
+                    # coord: (n_objects, 2, n_rays) -> the y/x axis is axis 1, so
+                    # the offset must be reshaped to (1, 2, 1) to subtract from it
+                    # (a bare (2,) array would broadcast against n_rays instead).
+                    coord = details['coord'] - np.array([pad_h_top, pad_w_left]).reshape(1, 2, 1)
                     details['coord'] = coord[valid]
 
     if not return_details:

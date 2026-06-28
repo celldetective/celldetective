@@ -387,7 +387,7 @@ def threshold_image(
 
 def pad_to_patch_size(
     x: np.ndarray, y: Optional[np.ndarray] = None, patch_h: int = 256, patch_w: int = 256
-) -> Tuple[np.ndarray, Optional[np.ndarray], bool]:
+) -> Tuple[np.ndarray, Optional[np.ndarray], bool, Tuple[int, int]]:
     """
     Pad image x and optionally label y to match patch_h and patch_w if they are smaller.
 
@@ -410,6 +410,11 @@ def pad_to_patch_size(
         Padded label mask (if y was provided).
     padded : bool
         True if padding was applied, False otherwise.
+    offsets : tuple of int
+        ``(pad_h_top, pad_w_left)``, the top/left offset of the original image
+        within the padded array. ``(0, 0)`` when no padding was applied. Use
+        these to crop a result back to the original size instead of recomputing
+        the centering math at the call site.
     """
     h, w = x.shape[:2]
     if h < patch_h or w < patch_w:
@@ -437,8 +442,8 @@ def pad_to_patch_size(
                 mode="constant",
                 constant_values=0,
             )
-        return x, y, True
-    return x, y, False
+        return x, y, True, (pad_h_top, pad_w_left)
+    return x, y, False, (0, 0)
 
 
 def pad_dataset_to_patch_size(
@@ -470,7 +475,7 @@ def pad_dataset_to_patch_size(
     X_padded, Y_padded = [], []
     padded_count = 0
     for x, y in zip(X, Y):
-        xp, yp, padded = pad_to_patch_size(x, y, patch_h, patch_w)
+        xp, yp, padded, _ = pad_to_patch_size(x, y, patch_h, patch_w)
         X_padded.append(xp)
         Y_padded.append(yp)
         if padded:

@@ -399,7 +399,7 @@ class TrainSegModelProcess(Process):
                 use_gpu=self.use_gpu,
                 n_channel_in=n_channel,
                 train_learning_rate=self.learning_rate,
-                train_patch_size=(256, 256),
+                train_patch_size=tuple(train_patch_size),
                 train_epochs=self.epochs,
                 train_reduce_lr={"factor": 0.1, "patience": 30, "min_delta": 0},
                 train_batch_size=self.batch_size,

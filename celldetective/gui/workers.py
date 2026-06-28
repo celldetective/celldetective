@@ -434,7 +434,7 @@ class Runner(QRunnable):
                 self.signals.error.emit("Unknown error")
 
         except Exception as e:
-            logger.error(f"{e}")
+            logger.exception(f"Error while dispatching worker message: {e}")
 
         return False
 
