@@ -11,6 +11,7 @@ from celldetective.utils.color_mappings import (
     color_from_class,
 )
 from celldetective.utils.event_detection import _prep_event_detection_model
+from celldetective.utils.signal_windowing import predict_events_sliding_window
 from celldetective.utils import COLUMN_LABELS
 
 logger = get_logger(__name__)
@@ -147,8 +148,11 @@ class SignalAnalysisProcess(Process):
                 int(trajectories_clean[self.column_labels["time"]].max()) + 2
             )
             if max_signal_size > model_signal_length:
-                logger.warning(
-                    f"Signals longer than model input ({max_signal_size} > {model_signal_length}). Truncating may occur."
+                logger.info(
+                    f"Signals are longer than the model window ({max_signal_size} > "
+                    f"{model_signal_length} frames) for position {self.pos}: "
+                    f"scanning each track with overlapping windows and keeping the "
+                    f"earliest detected event."
                 )
 
             tracks = trajectories_clean[self.column_labels["track"]].unique()
@@ -178,8 +182,13 @@ class SignalAnalysisProcess(Process):
 
             # Prediction
             self.queue.put({"frame_time": "Predicting events..."})
-            classes = model.predict_class(signals)
-            times_recast = model.predict_time_of_interest(signals)
+            if max_signal_size > model_signal_length:
+                classes, times_recast = predict_events_sliding_window(
+                    model, signals, model_signal_length
+                )
+            else:
+                classes = model.predict_class(signals)
+                times_recast = model.predict_time_of_interest(signals)
 
             # Assign results
             try:

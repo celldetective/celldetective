@@ -34,6 +34,7 @@ from celldetective.tracking import clean_trajectories, interpolate_nan_propertie
 import matplotlib.pyplot as plt
 from natsort import natsorted
 from celldetective.utils.color_mappings import color_from_status, color_from_class
+from celldetective.utils.signal_windowing import predict_events_sliding_window
 from math import floor
 from scipy.optimize import curve_fit
 import pandas as pd
@@ -175,8 +176,6 @@ def analyze_signals(
     )
 
     max_signal_size = int(trajectories_clean[column_labels["time"]].max()) + 2
-    if max_signal_size > model_signal_length:
-        raise ValueError(f"The current signals are longer ({max_signal_size}) than the maximum expected input ({model_signal_length}) for this signal analysis model. Abort...")
 
     tracks = trajectories_clean[column_labels["track"]].unique()
     signals = np.zeros((len(tracks), max_signal_size, len(selected_signals)))
@@ -193,8 +192,18 @@ def analyze_signals(
     model = SignalDetectionModel(pretrained=complete_path)
     if not model.pretrained is None:
 
-        classes = model.predict_class(signals)
-        times_recast = model.predict_time_of_interest(signals)
+        if max_signal_size > model_signal_length:
+            logger.info(
+                f"Signals are longer than the model window ({max_signal_size} > "
+                f"{model_signal_length} frames): scanning each track with "
+                f"overlapping windows and keeping the earliest detected event."
+            )
+            classes, times_recast = predict_events_sliding_window(
+                model, signals, model_signal_length
+            )
+        else:
+            classes = model.predict_class(signals)
+            times_recast = model.predict_time_of_interest(signals)
 
         if label is None:
             class_col = "class"
@@ -561,8 +570,6 @@ def analyze_pair_signals(
     max_neigh = int(trajectories_neighbors_clean["neighbor_FRAME"].max()) if len(trajectories_neighbors_clean) > 0 else 0
     max_signal_size = max(max_pair, max_ref, max_neigh) + 2
     model_signal_length = config.get("model_signal_length", max_signal_size)
-    if max_signal_size > model_signal_length:
-        raise ValueError(f"The current signals are longer ({max_signal_size}) than the maximum expected input ({model_signal_length}). Abort...")
 
     pair_tracks = trajectories_pairs_clean.groupby(pair_groupby_cols).size()
     signals = np.zeros((len(pair_tracks), max_signal_size, len(selected_signals)))
@@ -633,8 +640,18 @@ def analyze_pair_signals(
     model = SignalDetectionModel(pretrained=complete_path)
     logger.debug(f"Signal shape: {signals.shape}")
 
-    classes = model.predict_class(signals)
-    times_recast = model.predict_time_of_interest(signals)
+    if max_signal_size > model_signal_length:
+        logger.info(
+            f"Pair signals are longer than the model window ({max_signal_size} > "
+            f"{model_signal_length} frames): scanning each pair with overlapping "
+            f"windows and keeping the earliest detected event."
+        )
+        classes, times_recast = predict_events_sliding_window(
+            model, signals, model_signal_length
+        )
+    else:
+        classes = model.predict_class(signals)
+        times_recast = model.predict_time_of_interest(signals)
 
     if label is None:
         class_col = "pair_class"
