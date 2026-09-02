@@ -309,8 +309,12 @@ def prepare_segmentation_model(
             model_name, Path(model_path).parent, use_gpu=use_gpu, scale=scale
         )
     elif model_type == "cellpose":
+        # `model_name` directly, as SegmentCellDLProcess does. Deriving it from
+        # the path as `model_path.split("/")[-2]` raised IndexError on Windows,
+        # where locate_segmentation_model returns os.sep-joined backslashes and
+        # the split yields a single element.
         model, scale_model = _prep_cellpose_model(
-            model_path.split("/")[-2],
+            model_name,
             model_path,
             use_gpu=use_gpu,
             n_channels=len(required_channels),
