@@ -188,7 +188,7 @@ def get_pair_signal_models_list(
 
 
 def get_segmentation_models_list(
-    mode: str = "targets", return_path: bool = False
+    mode: str = "targets", return_path: bool = False, cleanup: bool = True
 ) -> Union[List[str], Tuple[List[str], str]]:
     """
     Get available segmentation models.
@@ -199,6 +199,12 @@ def get_segmentation_models_list(
         Segmentation mode ("targets" or "effectors"). Default is "targets".
     return_path : bool, optional
         If True, return path to models. Default is False.
+    cleanup : bool, optional
+        If True, create the category directory when it is missing and delete any
+        local model directory that has no ``config_input.json`` - a model in that
+        state cannot be loaded, and leaving it in place makes it reappear in every
+        list. Set to False to list without touching the disk, for callers that are
+        only asking what is available. Default is True.
 
     Returns
     -------
@@ -216,8 +222,16 @@ def get_segmentation_models_list(
         ]
     )
     if not os.path.exists(modelpath):
-        os.mkdir(modelpath)
-        repository_models = []
+        if cleanup:
+            os.mkdir(modelpath)
+            repository_models = []
+        else:
+            # Listing the repository only reads a bundled JSON, so a caller that
+            # is not allowed to create the category directory can still be told
+            # what is downloadable into it.
+            repository_models = get_zenodo_files(
+                cat=os.sep.join(["models", f"segmentation_{mode}"])
+            )
     else:
         repository_models = get_zenodo_files(
             cat=os.sep.join(["models", f"segmentation_{mode}"])
@@ -232,7 +246,8 @@ def get_segmentation_models_list(
         path = modelpath + model
         files = glob(path + os.sep + "*")
         if path + os.sep + "config_input.json" not in files:
-            rmtree(path)
+            if cleanup:
+                rmtree(path)
             to_remove.append(model)
     for m in to_remove:
         available_models.remove(m)
