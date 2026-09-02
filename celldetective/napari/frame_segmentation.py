@@ -15,10 +15,9 @@ import os
 from typing import Any, Dict, List, Optional
 
 import numpy as np
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QDoubleValidator
 from PyQt5.QtWidgets import (
-    QApplication,
     QCheckBox,
     QComboBox,
     QFormLayout,
@@ -27,6 +26,7 @@ from PyQt5.QtWidgets import (
     QLabel,
     QLineEdit,
     QMessageBox,
+    QProgressBar,
     QPushButton,
     QVBoxLayout,
     QWidget,
@@ -139,6 +139,93 @@ class _FloatEdit(QLineEdit):
             return None
 
 
+class _SegmentationWorker(QThread):
+    """
+    Load the model and segment one frame, off the GUI thread.
+
+    Cancellation is cooperative and checked between phases: neither StarDist nor
+    Cellpose exposes a hook to interrupt a forward pass, so a cancel raised once
+    inference has started does not stop it -- it lets the interface go back to
+    normal and discards the result when it lands. Cancelling while the model is
+    still loading, which is the slow part the first time round, does take effect
+    before any inference happens.
+
+    Parameters
+    ----------
+    frame : ndarray
+        The single multichannel image to segment.
+    prepared : PreparedSegmentationModel or None
+        An already-prepared model to reuse; when None it is built from
+        ``prepare_kwargs``.
+    prepare_kwargs : dict
+        Arguments for :func:`prepare_segmentation_model`, used when `prepared`
+        is None.
+    """
+
+    #: Emitted with ``(prepared_model, labels)`` when the frame was segmented.
+    succeeded = pyqtSignal(object, object)
+    #: Emitted with a message the user should see.
+    failed = pyqtSignal(str)
+    #: Emitted with the name of the phase being entered.
+    stage = pyqtSignal(str)
+
+    def __init__(self, frame, prepared, prepare_kwargs: Dict[str, Any], parent=None):
+        super().__init__(parent)
+        self._frame = frame
+        self._prepared = prepared
+        self._prepare_kwargs = prepare_kwargs
+        self._cancelled = False
+
+    def cancel(self) -> None:
+        """Ask the worker to stop at the next phase boundary."""
+        self._cancelled = True
+
+    @property
+    def cancelled(self) -> bool:
+        """Whether cancellation was requested."""
+        return self._cancelled
+
+    def run(self) -> None:
+        """Prepare the model if needed, then segment the frame."""
+
+        from celldetective.segmentation import (
+            prepare_segmentation_model,
+            segment_frame,
+        )
+
+        try:
+            prepared = self._prepared
+            if prepared is None:
+                self.stage.emit("Loading the model…")
+                if self._cancelled:
+                    return
+                prepared = prepare_segmentation_model(**self._prepare_kwargs)
+                if prepared is None:
+                    model_name = self._prepare_kwargs.get("model_name", "the model")
+                    self.failed.emit(
+                        f"Model '{model_name}' could not be loaded. See the log for details."
+                    )
+                    return
+
+            if self._cancelled:
+                return
+
+            self.stage.emit("Segmenting the frame…")
+            labels = segment_frame(self._frame, prepared)
+        except ValueError as e:
+            # Raised when none of the mapped channels reach the model.
+            self.failed.emit(str(e))
+            return
+        except Exception as e:
+            logger.exception("Single-frame segmentation failed.")
+            self.failed.emit(f"Segmentation failed: {e}")
+            return
+
+        if self._cancelled:
+            return
+        self.succeeded.emit(prepared, labels)
+
+
 class FrameSegmentationPanel(QWidget):
     """
     Dock panel that runs a segmentation model on the frame currently displayed.
@@ -167,6 +254,11 @@ class FrameSegmentationPanel(QWidget):
         # One entry per (model, channel mapping, parameters) actually used, so
         # that repeated runs with the same settings only pay for inference.
         self._prepared: Dict[Any, Any] = {}
+
+        # The run in flight, and what it was asked to do. Kept on the panel so
+        # the thread is not garbage collected while it works.
+        self._worker: Optional[_SegmentationWorker] = None
+        self._pending: Optional[Dict[str, Any]] = None
 
         self.experiment = extract_experiment_from_position(position)
         try:
@@ -229,8 +321,22 @@ class FrameSegmentationPanel(QWidget):
         outer.addWidget(self.replace_cb)
 
         self.run_btn = QPushButton("Segment this frame")
-        self.run_btn.clicked.connect(self.segment_current_frame)
+        self.run_btn.clicked.connect(self._on_run_clicked)
         outer.addWidget(self.run_btn)
+
+        # Indeterminate: there is no progress to report from inside a forward
+        # pass, so the bar says "working" rather than how far along it is.
+        self.progress = QProgressBar()
+        self.progress.setRange(0, 0)
+        self.progress.setTextVisible(False)
+        self.progress.setFixedHeight(6)
+        self.progress.hide()
+        outer.addWidget(self.progress)
+
+        self.status_lbl = QLabel("")
+        self.status_lbl.setAlignment(Qt.AlignCenter)
+        self.status_lbl.hide()
+        outer.addWidget(self.status_lbl)
 
         self.model_cb.currentTextChanged.connect(self._reload_model)
         self._reload_model(self.model_cb.currentText())
@@ -383,13 +489,76 @@ class FrameSegmentationPanel(QWidget):
         except Exception as e:
             logger.debug(f"Could not show the segmentation error dialog: {e}")
 
+    def _set_running(self, running: bool) -> None:
+        """
+        Put the panel into its working or idle state.
+
+        Parameters
+        ----------
+        running : bool
+            True while a segmentation is in flight.
+        """
+
+        self.model_cb.setEnabled(not running)
+        self.replace_cb.setEnabled(not running)
+        for combo in self.channel_cbs:
+            combo.setEnabled(not running)
+        for edit in (
+            self.diameter_le,
+            self.cellprob_le,
+            self.flow_le,
+            self.cell_size_le,
+        ):
+            if edit is not None:
+                edit.setEnabled(not running)
+
+        self.progress.setVisible(running)
+        self.status_lbl.setVisible(running)
+        if running:
+            self.run_btn.setText("Cancel")
+            self.run_btn.setToolTip(
+                "Stop the run. Inference cannot be interrupted once it has\n"
+                "started, so the result is discarded when it lands."
+            )
+        else:
+            self.run_btn.setText("Segment this frame")
+            self.run_btn.setToolTip("")
+            # Stay disabled when there is nothing to run.
+            model_name = self.model_cb.currentText()
+            self.run_btn.setEnabled(bool(model_name) and model_name != NO_MODEL)
+            self.status_lbl.setText("")
+
+    def closeEvent(self, event) -> None:
+        """Stop a run in flight before the panel goes away."""
+        worker = self._worker
+        if worker is not None and worker.isRunning():
+            worker.cancel()
+            # Inference cannot be interrupted, so give it a moment to reach the
+            # next phase boundary rather than tearing the thread down under it.
+            worker.wait(5000)
+        super().closeEvent(event)
+
+    def _on_run_clicked(self) -> None:
+        """Start a segmentation, or cancel the one in flight."""
+        if self._worker is not None and self._worker.isRunning():
+            self._worker.cancel()
+            self.run_btn.setEnabled(False)
+            self.status_lbl.setText("Cancelling…")
+            self.viewer.status = "Cancelling the segmentation…"
+            return
+        self.segment_current_frame()
+
     def segment_current_frame(self) -> None:
         """
         Run the selected model on the frame the time slider is on.
 
-        The result is written straight into the segmentation layer; nothing
+        The work happens on a worker thread, so the viewer stays usable while it
+        runs. The result is written straight into the segmentation layer; nothing
         reaches disk until the labels are saved.
         """
+
+        if self._worker is not None and self._worker.isRunning():
+            return
 
         model_name = self.model_cb.currentText()
         if not model_name or model_name == NO_MODEL:
@@ -424,49 +593,84 @@ class FrameSegmentationPanel(QWidget):
             flow,
         )
 
-        QApplication.setOverrideCursor(Qt.WaitCursor)
+        # The GPU is left to napari's renderer: a single frame is quick on CPU,
+        # and a TensorFlow context would compete for the VRAM the viewer is
+        # already using.
+        prepare_kwargs = dict(
+            model_name=model_name,
+            channels=self.exp_channels or None,
+            spatial_calibration=self.spatial_calibration,
+            use_gpu=False,
+            selected_channels=selected,
+            target_cell_size=target_cell_size,
+            diameter=diameter,
+            cellprob_threshold=cellprob,
+            flow_threshold=flow,
+        )
+
+        self._pending = {"frame": t, "cache_key": cache_key, "model_name": model_name}
+
+        worker = _SegmentationWorker(
+            frame=np.asarray(self.stack[t]),
+            prepared=self._prepared.get(cache_key),
+            prepare_kwargs=prepare_kwargs,
+            parent=self,
+        )
+        worker.stage.connect(self._on_stage)
+        worker.succeeded.connect(self._on_succeeded)
+        worker.failed.connect(self._on_failed)
+        worker.finished.connect(self._on_worker_finished)
+        self._worker = worker
+
+        self._set_running(True)
+        self.status_lbl.setText("Starting…")
         self.viewer.status = f"Segmenting frame {t} with '{model_name}'…"
+        worker.start()
+
+    def _on_stage(self, message: str) -> None:
+        """Show the phase the worker has entered."""
+        self.status_lbl.setText(message)
+        self.viewer.status = message
+
+    def _on_failed(self, message: str) -> None:
+        """Report a worker failure."""
+        self._failed(message)
+
+    def _on_worker_finished(self) -> None:
+        """Return the panel to its idle state once the thread has ended."""
+        cancelled = self._worker is not None and self._worker.cancelled
+        self._worker = None
+        self._set_running(False)
+        if cancelled:
+            self.viewer.status = "Segmentation cancelled."
+            logger.info("Single-frame segmentation cancelled.")
+
+    def _on_succeeded(self, prepared, new_labels) -> None:
+        """
+        Write the labels the worker produced into the segmentation layer.
+
+        Parameters
+        ----------
+        prepared : PreparedSegmentationModel
+            The model used, cached so the next run with the same settings reuses it.
+        new_labels : ndarray
+            The labels for the frame that was segmented.
+        """
+
+        pending = self._pending or {}
+        t = pending.get("frame", 0)
+        model_name = pending.get("model_name", "")
+        cache_key = pending.get("cache_key")
+        if cache_key is not None:
+            self._prepared[cache_key] = prepared
+
+        # The viewer may have been closed while the worker was running.
         try:
-            prepared = self._prepared.get(cache_key)
-            if prepared is None:
-                from celldetective.segmentation import prepare_segmentation_model
-
-                # The GPU is left to napari's renderer: a single frame is quick on
-                # CPU, and a TensorFlow context would compete for the VRAM the
-                # viewer is already using.
-                prepared = prepare_segmentation_model(
-                    model_name,
-                    channels=self.exp_channels or None,
-                    spatial_calibration=self.spatial_calibration,
-                    use_gpu=False,
-                    selected_channels=selected,
-                    target_cell_size=target_cell_size,
-                    diameter=diameter,
-                    cellprob_threshold=cellprob,
-                    flow_threshold=flow,
-                )
-                if prepared is None:
-                    self._failed(
-                        f"Model '{model_name}' could not be loaded. See the log for details."
-                    )
-                    return
-                self._prepared[cache_key] = prepared
-
-            from celldetective.segmentation import segment_frame
-
-            new_labels = segment_frame(np.asarray(self.stack[t]), prepared)
-        except ValueError as e:
-            # Raised when none of the mapped channels reach the model.
-            self._failed(str(e))
-            return
+            layer = self.viewer.layers["segmentation"]
         except Exception as e:
-            logger.exception("Single-frame segmentation failed.")
-            self._failed(f"Segmentation failed: {e}")
+            logger.debug(f"Segmentation layer is gone, dropping the result: {e}")
             return
-        finally:
-            QApplication.restoreOverrideCursor()
 
-        layer = self.viewer.layers["segmentation"]
         try:
             current = layer.data[t]
             if self.replace_cb.isChecked():
