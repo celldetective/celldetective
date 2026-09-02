@@ -31,6 +31,7 @@ from celldetective.utils.experiment import (
     get_experiment_labels,
     get_experiment_metadata,
     extract_experiment_channels,
+    get_spatial_calibration,
 )
 from celldetective.utils.parsing import config_section_to_dict
 from celldetective import get_logger
@@ -1347,6 +1348,162 @@ def launch_segmentation_viewer(
         """Widget to trigger export."""
         return export_annotation()
 
+    # ------------------------------------------------------------------
+    # Segment the frame currently on screen
+    # ------------------------------------------------------------------
+
+    # Loading a segmentation model costs seconds; keep each one alive for as
+    # long as the viewer is open so that repeated calls only pay for inference.
+    prepared_models: Dict[str, Any] = {}
+
+    def _available_segmentation_models() -> List[str]:
+        """
+        List the models offered in the dropdown: population-specific, then generic.
+
+        Returns
+        -------
+        list of str
+            Model names, without duplicates, in the order they are offered.
+        """
+
+        from celldetective.utils.model_getters import get_segmentation_models_list
+
+        models: List[str] = []
+        for mode in (population, "generic"):
+            try:
+                models.extend(
+                    get_segmentation_models_list(mode=mode, return_path=False)
+                )
+            except Exception as e:
+                # Listing reaches out to the model repository; a network failure
+                # must not stop the viewer from opening.
+                logger.warning(f"Could not list the '{mode}' segmentation models: {e}")
+
+        seen = set()
+        return [m for m in models if not (m in seen or seen.add(m))]
+
+    def _segmentation_failed(message: str) -> None:
+        """
+        Report a segmentation failure without tearing down the viewer.
+
+        Parameters
+        ----------
+        message : str
+            The message shown to the user and written to the log.
+        """
+
+        logger.error(message)
+        viewer.status = message
+        try:
+            box = QMessageBox()
+            box.setIcon(QMessageBox.Warning)
+            box.setText(message)
+            box.setWindowTitle("Segmentation")
+            box.setStandardButtons(QMessageBox.Ok)
+            box.exec_()
+        except Exception as e:
+            logger.debug(f"Could not show the segmentation error dialog: {e}")
+
+    @magicgui(
+        call_button="Segment this frame",
+        model={"label": "model", "choices": _available_segmentation_models()},
+        replace_existing={
+            "widget_type": "CheckBox",
+            "text": "Replace the labels on this frame",
+        },
+    )
+    def segment_frame_widget(model: str, replace_existing: bool = True) -> None:
+        """
+        Segment the frame currently displayed, using the selected model.
+
+        Runs on the frame the time slider is on, writes the result straight into
+        the segmentation layer, and leaves every other frame untouched. Nothing
+        is written to disk until the labels are saved.
+
+        Parameters
+        ----------
+        model : str
+            Name of the segmentation model to run.
+        replace_existing : bool, optional
+            If True, the labels on this frame are replaced. If False, existing
+            labels are kept and the new ones only fill the background, so manual
+            corrections survive. The default is True.
+        """
+
+        from PyQt5.QtCore import Qt
+        from PyQt5.QtWidgets import QApplication
+
+        if not model:
+            _segmentation_failed(
+                "No segmentation model is available. Download or train one first."
+            )
+            return
+
+        t = int(viewer.dims.current_step[0])
+        experiment = extract_experiment_from_position(position)
+
+        try:
+            channel_names, _ = extract_experiment_channels(experiment)
+            channel_names = list(channel_names)
+            spatial_calibration = get_spatial_calibration(experiment)
+        except Exception as e:
+            _segmentation_failed(f"Could not read the experiment configuration: {e}")
+            return
+
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        viewer.status = f"Segmenting frame {t} with '{model}'…"
+        try:
+            prepared = prepared_models.get(model)
+            if prepared is None:
+                from celldetective.segmentation import prepare_segmentation_model
+
+                # The GPU is left to napari's renderer: a single frame is quick
+                # on CPU, and a TensorFlow context would compete for the VRAM
+                # the viewer is already using.
+                prepared = prepare_segmentation_model(
+                    model,
+                    channels=channel_names,
+                    spatial_calibration=spatial_calibration,
+                    use_gpu=False,
+                )
+                if prepared is None:
+                    _segmentation_failed(
+                        f"Model '{model}' could not be loaded. See the log for details."
+                    )
+                    return
+                prepared_models[model] = prepared
+
+            from celldetective.segmentation import segment_frame
+
+            new_labels = segment_frame(np.asarray(stack[t]), prepared)
+        except Exception as e:
+            logger.exception("Single-frame segmentation failed.")
+            _segmentation_failed(f"Segmentation failed: {e}")
+            return
+        finally:
+            QApplication.restoreOverrideCursor()
+
+        layer = viewer.layers["segmentation"]
+        try:
+            current = layer.data[t]
+            if replace_existing:
+                current[...] = new_labels
+            else:
+                # Offset the new labels past the ones already drawn so the two
+                # sets cannot collide, then keep whatever was already there.
+                offset = int(current.max())
+                incoming = np.where(new_labels > 0, new_labels + offset, 0)
+                current[...] = np.where(current > 0, current, incoming)
+        except Exception as e:
+            _segmentation_failed(f"Could not write the labels into the viewer: {e}")
+            return
+        layer.refresh()
+
+        n_objects = int(np.max(layer.data[t]))
+        message = f"Frame {t}: {n_objects} objects after segmenting with '{model}'."
+        viewer.status = message
+        logger.info(message)
+
     if contrast_limits is None:
         contrast_limits = _get_contrast_limits(stack)
 
@@ -1378,12 +1535,19 @@ def launch_segmentation_viewer(
     button_container = QWidget()
     layout = QVBoxLayout(button_container)
     layout.setSpacing(10)
+    layout.addWidget(segment_frame_widget.native)
     layout.addWidget(correction_options.native)
     layout.addWidget(save_widget.native)
     layout.addWidget(export_widget.native)
     viewer.window.add_dock_widget(button_container, area="right")
 
     save_widget.native.setStyleSheet(Styles().button_style_sheet)
+    try:
+        segment_frame_widget.call_button.native.setStyleSheet(
+            Styles().button_style_sheet
+        )
+    except Exception as e:
+        logger.debug(f"Could not style the segmentation button: {e}")
     export_widget.native.setStyleSheet(Styles().button_style_sheet)
 
     def lock_controls(
