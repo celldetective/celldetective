@@ -40,6 +40,9 @@ from celldetective.gui.base.styles import Styles
 
 logger = get_logger()
 
+# Shown in the napari "segment this frame" dropdown when no model is installed.
+_NO_SEGMENTATION_MODEL = "(no segmentation model found)"
+
 
 def _drop_fully_maskless_tracks(df: pd.DataFrame) -> pd.DataFrame:
     """
@@ -1380,7 +1383,12 @@ def launch_segmentation_viewer(
                 logger.warning(f"Could not list the '{mode}' segmentation models: {e}")
 
         seen = set()
-        return [m for m in models if not (m in seen or seen.add(m))]
+        models = [m for m in models if not (m in seen or seen.add(m))]
+
+        # magicgui cannot build a dropdown from an empty list, and raising here
+        # would stop the whole viewer from opening. Offer a placeholder instead;
+        # the callback below refuses to run on it.
+        return models or [_NO_SEGMENTATION_MODEL]
 
     def _segmentation_failed(message: str) -> None:
         """
@@ -1433,7 +1441,7 @@ def launch_segmentation_viewer(
         from PyQt5.QtCore import Qt
         from PyQt5.QtWidgets import QApplication
 
-        if not model:
+        if not model or model == _NO_SEGMENTATION_MODEL:
             _segmentation_failed(
                 "No segmentation model is available. Download or train one first."
             )
