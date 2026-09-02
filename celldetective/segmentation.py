@@ -166,6 +166,9 @@ def prepare_segmentation_model(
     use_gpu: bool = True,
     cellprob_threshold: Optional[float] = None,
     flow_threshold: Optional[float] = None,
+    selected_channels: Optional[List[str]] = None,
+    target_cell_size: Optional[float] = None,
+    diameter: Optional[float] = None,
 ) -> Optional[PreparedSegmentationModel]:
     """
 
@@ -190,6 +193,19 @@ def prepare_segmentation_model(
             Cell probability threshold for Cellpose mask computation. Default is None.
     flow_threshold : float, optional
             Flow threshold for Cellpose mask computation. Default is None.
+    selected_channels : list or None, optional
+            The experiment channels feeding the model's input slots, one per slot,
+            in the model's own order; ``"None"`` leaves a slot blank. Overrides the
+            ``selected_channels`` mapping stored in the model configuration by the
+            channel-selection dialog. Default is None (use the stored mapping).
+    target_cell_size : float or None, optional
+            Typical object size in the images, in µm. Combined with the model's
+            ``cell_size_um`` it rescales the images so objects match the size the
+            model was trained on. Overrides the stored ``target_cell_size_um``.
+            Default is None (use the stored value).
+    diameter : float or None, optional
+            Cellpose object diameter, in pixels. Overrides the value stored in the
+            model configuration. Ignored for StarDist models. Default is None.
 
     Returns
     -------
@@ -228,7 +244,15 @@ def prepare_segmentation_model(
     else:
         os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
+    # The channel-selection dialog stores the experiment channel feeding each of
+    # the model's input slots as `selected_channels`, same length and order as
+    # `channels`. Honour it exactly as SegmentCellDLProcess does, so calling this
+    # function directly gives the same masks as running the pipeline.
     required_channels = input_config["channels"]
+    if selected_channels is not None:
+        required_channels = list(selected_channels)
+    elif "selected_channels" in input_config:
+        required_channels = input_config["selected_channels"]
 
     # The docstring has always allowed channels=None; without this the channel
     # intersection below raises a TypeError instead of falling back.
@@ -248,17 +272,34 @@ def prepare_segmentation_model(
 
     normalize_kwargs = _get_normalize_kwargs_from_config(input_config)
 
-    diameter = None
     if model_type == "cellpose":
-        diameter = input_config["diameter"]
+        if diameter is None:
+            diameter = input_config["diameter"]
         if cellprob_threshold is None:
             cellprob_threshold = input_config["cellprob_threshold"]
         if flow_threshold is None:
             flow_threshold = input_config["flow_threshold"]
+    else:
+        diameter = None
 
     scale = _estimate_scale_factor(spatial_calibration, required_spatial_calibration)
+
+    # Correct the scale so that objects come out the size the model was trained
+    # on, mirroring SegmentCellDLProcess.estimate_scale. Both sizes are needed:
+    # `cell_size_um` is what the model saw, `target_cell_size_um` what these
+    # images hold.
+    cell_size = input_config.get("cell_size_um")
+    if target_cell_size is None:
+        target_cell_size = input_config.get("target_cell_size_um")
+    if target_cell_size is not None and cell_size is not None:
+        if scale is not None:
+            scale *= cell_size / target_cell_size
+        elif target_cell_size != cell_size:
+            scale = cell_size / target_cell_size
+
     logger.info(
-        f"{spatial_calibration=} {required_spatial_calibration=} Scale = {scale}..."
+        f"{spatial_calibration=} {required_spatial_calibration=} "
+        f"{cell_size=} {target_cell_size=} Scale = {scale}..."
     )
 
     model = None

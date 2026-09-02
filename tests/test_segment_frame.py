@@ -133,5 +133,81 @@ class TestPrepareSegmentationModelContract(unittest.TestCase):
             )
 
 
+class TestChannelMappingAndParameters(unittest.TestCase):
+    """
+    The channel mapping and inference parameters the napari panel exposes.
+
+    ``segment()`` used to ignore ``selected_channels`` and ``target_cell_size_um``
+    while ``SegmentCellDLProcess`` honoured both, so the library and the pipeline
+    produced different masks for the same model. These pin the aligned behaviour.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        img = imread(TEST_IMAGE_FILENAME)
+        cls.stack = np.moveaxis([img, img, img], 1, -1)
+        with open(TEST_CONFIG_FILENAME) as config_file:
+            config = json.load(config_file)
+        cls.channels = config["channels"]
+        cls.spatial_calibration = config["spatial_calibration"]
+
+    def _prepare(self, **kwargs):
+        return prepare_segmentation_model(
+            MODEL,
+            channels=self.channels,
+            spatial_calibration=self.spatial_calibration,
+            use_gpu=False,
+            **kwargs,
+        )
+
+    def _remapped_slots(self, base):
+        """
+        Feed the model's first slot from a different experiment channel.
+
+        Picking any fixed index would risk landing on the channel that already
+        occupies slot 0, making the "remapping" a no-op that proves nothing.
+        """
+        slots = list(base.required_channels)
+        replacement = next(ch for ch in self.channels if ch != slots[0])
+        slots[0] = replacement
+        return slots
+
+    def test_selected_channels_overrides_the_model_slots(self):
+        base = self._prepare()
+        remapped = self._remapped_slots(base)
+        alt = self._prepare(selected_channels=remapped)
+        self.assertEqual(list(alt.required_channels), remapped)
+        self.assertNotEqual(
+            list(alt.required_channels), list(base.required_channels)
+        )
+
+    def test_remapping_changes_the_masks(self):
+        """A mapping that is not a no-op must actually reach inference."""
+        base = self._prepare()
+        alt = self._prepare(selected_channels=self._remapped_slots(base))
+        self.assertFalse(
+            np.array_equal(
+                segment_frame(self.stack[0], base),
+                segment_frame(self.stack[0], alt),
+            )
+        )
+
+    def test_target_cell_size_rescales(self):
+        """scale = cell_size_um / target_cell_size_um, as SegmentCellDLProcess does."""
+        prepared = self._prepare(target_cell_size=6.0)
+        cell_size = 13.46  # mcf7_nuc_multimodal, from config_input.json
+        self.assertIsNotNone(prepared.scale_model)
+        self.assertAlmostEqual(prepared.scale_model, cell_size / 6.0, places=6)
+
+    def test_matching_cell_sizes_leave_the_scale_alone(self):
+        """No rescaling when the images already match the training size."""
+        self.assertIsNone(self._prepare(target_cell_size=13.46).scale_model)
+
+    def test_stardist_model_reports_no_cellpose_parameters(self):
+        prepared = self._prepare()
+        self.assertEqual(prepared.model_type, "stardist")
+        self.assertIsNone(prepared.diameter)
+
+
 if __name__ == "__main__":
     unittest.main()
