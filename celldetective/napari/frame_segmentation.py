@@ -12,12 +12,14 @@ full-stack run.
 
 import json
 import os
-from typing import Any, Dict, List, Optional
+from collections import OrderedDict
+from typing import Any, Dict, List, Optional, Set
 
 import numpy as np
-from PyQt5.QtCore import Qt, QThread, pyqtSignal
+from PyQt5.QtCore import QEvent, Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QDoubleValidator
 from PyQt5.QtWidgets import (
+    QApplication,
     QCheckBox,
     QComboBox,
     QFormLayout,
@@ -40,7 +42,7 @@ from celldetective.utils.experiment import (
 )
 from celldetective.utils.model_loaders import locate_segmentation_model
 
-logger = get_logger()
+logger = get_logger(__name__)
 
 # Offered in the model dropdown when nothing is installed, so that the panel --
 # and with it the whole viewer -- still builds.
@@ -49,6 +51,17 @@ NO_MODEL = "(no segmentation model found)"
 # The channel-selection dialog uses this spelling for an unused input slot, and
 # it is what ends up in `selected_channels`, so match it exactly.
 NO_CHANNEL = "None"
+
+# How many prepared models the panel keeps alive at once. Each one is a whole
+# StarDist / Cellpose network, so the cache trades a few hundred MB for not
+# reloading when the user goes back and forth between two settings.
+MAX_CACHED_MODELS = 2
+
+# Workers that have been started and not yet finished. A QThread must outlive its
+# own `run()`, and destroying one that is still running is a fatal error in Qt, so
+# the thread objects are parented to nothing and held here instead of on the panel
+# -- that way closing the viewer cannot take a running thread down with it.
+_LIVE_WORKERS: Set["_SegmentationWorker"] = set()
 
 
 def _read_model_config(model_name: str) -> Optional[Dict[str, Any]]:
@@ -105,18 +118,71 @@ def available_segmentation_models(population: str) -> List[str]:
 
     from celldetective.utils.model_getters import get_segmentation_models_list
 
+    # "target" / "effector" are used interchangeably with their plurals across the
+    # viewer, but the model directories are only ever named in the plural.
+    mode = population if population.endswith("s") else f"{population}s"
+
     models: List[str] = []
-    for mode in (population, "generic"):
+    for family in (mode, "generic"):
         try:
-            models.extend(get_segmentation_models_list(mode=mode, return_path=False))
+            # cleanup=False: listing must not create the category directory nor
+            # delete local model folders that happen to lack a config_input.json.
+            # Opening a viewer is not the moment to be rewriting the model tree.
+            models.extend(
+                get_segmentation_models_list(
+                    mode=family, return_path=False, cleanup=False
+                )
+            )
         except Exception as e:
             # Listing reaches out to the model repository; being offline must not
             # stop the viewer from opening.
-            logger.warning(f"Could not list the '{mode}' segmentation models: {e}")
+            logger.warning(f"Could not list the '{family}' segmentation models: {e}")
 
     seen = set()
     models = [m for m in models if not (m in seen or seen.add(m))]
     return models or [NO_MODEL]
+
+
+def _fit_to_layer_dtype(
+    labels: np.ndarray, dtype: np.dtype, remedy: str = ""
+) -> np.ndarray:
+    """
+    Cast labels to the segmentation layer's type, refusing to wrap round.
+
+    napari keeps the labels in whatever integer type they were read as, often
+    ``uint16``. A plain assignment of a larger value wraps silently, which merges
+    unrelated cells under one identifier - the sort of corruption that is only
+    noticed once it is in the measurements.
+
+    Parameters
+    ----------
+    labels : ndarray
+        The labels to write.
+    dtype : numpy.dtype
+        The layer's integer type.
+    remedy : str, optional
+        Appended to the error message to say what the user can do about it.
+
+    Returns
+    -------
+    ndarray
+        `labels`, cast to `dtype`.
+
+    Raises
+    ------
+    ValueError
+        If any label is too large for `dtype`.
+    """
+
+    info = np.iinfo(dtype)
+    highest = int(labels.max()) if labels.size else 0
+    if highest > info.max:
+        message = (
+            f"The segmentation reaches label {highest}, more than the {dtype} "
+            f"segmentation layer can hold ({info.max})."
+        )
+        raise ValueError(f"{message} {remedy}".strip())
+    return labels.astype(dtype, copy=False)
 
 
 class _FloatEdit(QLineEdit):
@@ -152,8 +218,12 @@ class _SegmentationWorker(QThread):
 
     Parameters
     ----------
-    frame : ndarray
-        The single multichannel image to segment.
+    stack : ndarray or dask.array.Array
+        The stack the frame is read from. It is only materialised inside
+        :meth:`run`, so that a lazily loaded movie is read from disk on this
+        thread rather than freezing the viewer.
+    frame_index : int
+        Index of the frame to segment along the stack's first axis.
     prepared : PreparedSegmentationModel or None
         An already-prepared model to reuse; when None it is built from
         ``prepare_kwargs``.
@@ -169,9 +239,17 @@ class _SegmentationWorker(QThread):
     #: Emitted with the name of the phase being entered.
     stage = pyqtSignal(str)
 
-    def __init__(self, frame, prepared, prepare_kwargs: Dict[str, Any], parent=None):
+    def __init__(
+        self,
+        stack,
+        frame_index: int,
+        prepared,
+        prepare_kwargs: Dict[str, Any],
+        parent=None,
+    ):
         super().__init__(parent)
-        self._frame = frame
+        self._stack = stack
+        self._frame_index = frame_index
         self._prepared = prepared
         self._prepare_kwargs = prepare_kwargs
         self._cancelled = False
@@ -186,7 +264,7 @@ class _SegmentationWorker(QThread):
         return self._cancelled
 
     def run(self) -> None:
-        """Prepare the model if needed, then segment the frame."""
+        """Read the frame, prepare the model if needed, then segment."""
 
         from celldetective.segmentation import (
             prepare_segmentation_model,
@@ -194,6 +272,9 @@ class _SegmentationWorker(QThread):
         )
 
         try:
+            self.stage.emit("Reading the frame…")
+            frame = np.asarray(self._stack[self._frame_index])
+
             prepared = self._prepared
             if prepared is None:
                 self.stage.emit("Loading the model…")
@@ -211,7 +292,7 @@ class _SegmentationWorker(QThread):
                 return
 
             self.stage.emit("Segmenting the frame…")
-            labels = segment_frame(self._frame, prepared)
+            labels = segment_frame(frame, prepared)
         except ValueError as e:
             # Raised when none of the mapped channels reach the model.
             self.failed.emit(str(e))
@@ -251,14 +332,21 @@ class FrameSegmentationPanel(QWidget):
         self.position = position
         self.population = population
 
-        # One entry per (model, channel mapping, parameters) actually used, so
-        # that repeated runs with the same settings only pay for inference.
-        self._prepared: Dict[Any, Any] = {}
+        # Prepared models, most recently used last. Keyed only on what actually
+        # goes into building one -- the model, the channel mapping and the
+        # rescaling -- because the Cellpose thresholds are inference-time
+        # arguments and re-keying on them would reload a whole network every time
+        # a threshold is nudged. Bounded, since each entry is a full network.
+        self._prepared: "OrderedDict[Any, Any]" = OrderedDict()
 
-        # The run in flight, and what it was asked to do. Kept on the panel so
-        # the thread is not garbage collected while it works.
+        # The run in flight, and what it was asked to do.
         self._worker: Optional[_SegmentationWorker] = None
         self._pending: Optional[Dict[str, Any]] = None
+
+        # Set once the panel is being torn down, so a result that lands late is
+        # dropped instead of being written into a half-destroyed viewer.
+        self._closing = False
+        self._watched_window: Optional[QWidget] = None
 
         self.experiment = extract_experiment_from_position(position)
         try:
@@ -280,6 +368,42 @@ class FrameSegmentationPanel(QWidget):
         self.config: Optional[Dict[str, Any]] = None
 
         self._build()
+        self._install_close_hook()
+
+    def _install_close_hook(self) -> None:
+        """
+        Arrange for :meth:`closeEvent` to fire when the viewer window closes.
+
+        Qt delivers a close event to top-level windows only, and this panel lives
+        inside a dock widget, so on its own it would never see one: the viewer
+        would simply be destroyed underneath it, taking a running worker with it.
+        Watching the napari window for its own close event, and the application
+        for its shutdown, gives the panel the chance to stop that worker first.
+        """
+
+        try:
+            window = self.viewer.window._qt_window
+        except Exception as e:
+            logger.debug(f"Could not reach the napari window to watch it close: {e}")
+            window = None
+
+        if window is not None:
+            window.installEventFilter(self)
+            self._watched_window = window
+
+        app = QApplication.instance()
+        if app is not None:
+            app.aboutToQuit.connect(self._stop_worker)
+
+    def eventFilter(self, watched, event) -> bool:
+        """Turn the viewer window's close into this panel's own close."""
+        if (
+            watched is self._watched_window
+            and event.type() == QEvent.Close
+            and not self._closing
+        ):
+            self.close()
+        return super().eventFilter(watched, event)
 
     # ------------------------------------------------------------------
     # Construction
@@ -528,14 +652,53 @@ class FrameSegmentationPanel(QWidget):
             self.run_btn.setEnabled(bool(model_name) and model_name != NO_MODEL)
             self.status_lbl.setText("")
 
+    def _stop_worker(self) -> None:
+        """
+        Detach and wind down the run in flight, without ever blocking on it.
+
+        Inference cannot be interrupted, so the worker is asked to stop, given a
+        moment to reach the next phase boundary, and then simply let go of: its
+        signals are disconnected so nothing lands on a panel that is going away,
+        and `_LIVE_WORKERS` keeps the thread object alive until `run()` actually
+        returns. Waiting any longer would freeze the close; destroying the thread
+        instead would be a fatal error in Qt.
+        """
+
+        self._closing = True
+        worker = self._worker
+        self._worker = None
+        if worker is None:
+            return
+
+        worker.cancel()
+        try:
+            worker.stage.disconnect()
+            worker.succeeded.disconnect()
+            worker.failed.disconnect()
+        except (TypeError, RuntimeError) as e:
+            # Already disconnected, or the C++ object is gone: nothing to undo.
+            logger.debug(f"Could not disconnect the segmentation worker: {e}")
+
+        if worker.isRunning():
+            worker.wait(2000)
+        if worker.isRunning():
+            logger.info(
+                "Leaving a single-frame segmentation to finish in the background; "
+                "its result will be discarded."
+            )
+
     def closeEvent(self, event) -> None:
         """Stop a run in flight before the panel goes away."""
-        worker = self._worker
-        if worker is not None and worker.isRunning():
-            worker.cancel()
-            # Inference cannot be interrupted, so give it a moment to reach the
-            # next phase boundary rather than tearing the thread down under it.
-            worker.wait(5000)
+        self._stop_worker()
+        if self._watched_window is not None:
+            try:
+                self._watched_window.removeEventFilter(self)
+            except RuntimeError as e:
+                logger.debug(f"Watched window already destroyed: {e}")
+            self._watched_window = None
+        # Networks can be hundreds of MB each; do not keep them alive through a
+        # dangling reference to a closed panel.
+        self._prepared.clear()
         super().closeEvent(event)
 
     def _on_run_clicked(self) -> None:
@@ -582,16 +745,16 @@ class FrameSegmentationPanel(QWidget):
         cellprob = self.cellprob_le.value() if self.cellprob_le else None
         flow = self.flow_le.value() if self.flow_le else None
 
-        # Settings are part of the identity of a prepared model: changing the
-        # mapping or a threshold has to rebuild it, not reuse the last one.
+        # Only what the model is built from. The Cellpose thresholds and diameter
+        # are passed to inference, not to the constructor, so they are re-applied
+        # to a cached model instead of forcing it to be loaded again.
         cache_key = (
             model_name,
             tuple(selected) if selected is not None else None,
             target_cell_size,
-            diameter,
-            cellprob,
-            flow,
         )
+
+        cached = self._reuse_prepared(cache_key, diameter, cellprob, flow)
 
         # The GPU is left to napari's renderer: a single frame is quick on CPU,
         # and a TensorFlow context would compete for the VRAM the viewer is
@@ -610,12 +773,17 @@ class FrameSegmentationPanel(QWidget):
 
         self._pending = {"frame": t, "cache_key": cache_key, "model_name": model_name}
 
+        # Deliberately unparented: a QThread destroyed while running aborts the
+        # process, and a panel that is closing must be able to walk away from one.
         worker = _SegmentationWorker(
-            frame=np.asarray(self.stack[t]),
-            prepared=self._prepared.get(cache_key),
+            stack=self.stack,
+            frame_index=t,
+            prepared=cached,
             prepare_kwargs=prepare_kwargs,
-            parent=self,
         )
+        _LIVE_WORKERS.add(worker)
+        worker.finished.connect(lambda w=worker: _LIVE_WORKERS.discard(w))
+        worker.finished.connect(worker.deleteLater)
         worker.stage.connect(self._on_stage)
         worker.succeeded.connect(self._on_succeeded)
         worker.failed.connect(self._on_failed)
@@ -626,6 +794,65 @@ class FrameSegmentationPanel(QWidget):
         self.status_lbl.setText("Starting…")
         self.viewer.status = f"Segmenting frame {t} with '{model_name}'…"
         worker.start()
+
+    def _reuse_prepared(
+        self,
+        cache_key,
+        diameter: Optional[float],
+        cellprob: Optional[float],
+        flow: Optional[float],
+    ):
+        """
+        Fetch a prepared model for these settings and re-apply the inference values.
+
+        The Cellpose diameter and thresholds are arguments to the forward pass, not
+        to the constructor, so a change to any of them only has to be written onto
+        the model rather than causing a new one to be loaded. A field left blank
+        means "use the model's own value", which is what
+        ``PreparedSegmentationModel.config_defaults`` holds.
+
+        Parameters
+        ----------
+        cache_key : tuple
+            Identity of the model to look up.
+        diameter, cellprob, flow : float or None
+            The values entered in the panel, None meaning the model's own.
+
+        Returns
+        -------
+        PreparedSegmentationModel or None
+            The cached model, updated in place, or None when there is no hit.
+        """
+
+        prepared = self._prepared.get(cache_key)
+        if prepared is None:
+            return None
+
+        # Most recently used last, so the eviction below drops the coldest entry.
+        self._prepared.move_to_end(cache_key)
+
+        if prepared.model_type == "cellpose":
+            defaults = prepared.config_defaults
+            prepared.diameter = (
+                diameter if diameter is not None else defaults.get("diameter")
+            )
+            prepared.cellprob_threshold = (
+                cellprob
+                if cellprob is not None
+                else defaults.get("cellprob_threshold")
+            )
+            prepared.flow_threshold = (
+                flow if flow is not None else defaults.get("flow_threshold")
+            )
+        return prepared
+
+    def _cache_prepared(self, cache_key, prepared) -> None:
+        """Store a prepared model, evicting the coldest once the cache is full."""
+        self._prepared[cache_key] = prepared
+        self._prepared.move_to_end(cache_key)
+        while len(self._prepared) > MAX_CACHED_MODELS:
+            evicted, _ = self._prepared.popitem(last=False)
+            logger.debug(f"Dropped the cached segmentation model for {evicted}.")
 
     def _on_stage(self, message: str) -> None:
         """Show the phase the worker has entered."""
@@ -638,12 +865,81 @@ class FrameSegmentationPanel(QWidget):
 
     def _on_worker_finished(self) -> None:
         """Return the panel to its idle state once the thread has ended."""
+        if self._closing:
+            return
         cancelled = self._worker is not None and self._worker.cancelled
         self._worker = None
         self._set_running(False)
         if cancelled:
             self.viewer.status = "Segmentation cancelled."
             logger.info("Single-frame segmentation cancelled.")
+
+    def _merged_labels(self, current: np.ndarray, new_labels: np.ndarray) -> np.ndarray:
+        """
+        Combine new labels with the ones already drawn on the frame.
+
+        The incoming labels are pushed past the highest existing one so the two
+        sets cannot collide, and only fill background, so manual corrections
+        survive.
+
+        Parameters
+        ----------
+        current : ndarray
+            The labels currently on the frame.
+        new_labels : ndarray
+            The labels the model produced.
+
+        Returns
+        -------
+        ndarray
+            The merged labels, in `current`'s dtype.
+
+        Raises
+        ------
+        ValueError
+            If the merged labels would not fit the layer's integer type. Wrapping
+            round silently would merge unrelated cells under one identifier.
+        """
+
+        offset = int(current.max())
+        # int64 throughout: `new_labels` is typically uint16, and adding the offset
+        # in its own dtype wraps round without a word of warning.
+        incoming = np.where(new_labels > 0, new_labels.astype(np.int64) + offset, 0)
+        merged = np.where(current > 0, current.astype(np.int64), incoming)
+        return _fit_to_layer_dtype(
+            merged,
+            current.dtype,
+            "Tick 'Replace the labels on this frame' to segment it afresh.",
+        )
+
+    def _record_undo(self, layer, t: int, before: np.ndarray, after: np.ndarray) -> None:
+        """
+        Push this write onto the labels layer's undo history, if napari lets us.
+
+        Without this the frame can be segmented but not un-segmented: napari only
+        records what its own painting tools do, so a bulk write would leave Ctrl+Z
+        undoing whatever the user had done before instead. Best-effort - the
+        history is private API, so a napari that has moved it simply gets no undo
+        step rather than an error.
+
+        Parameters
+        ----------
+        layer : napari.layers.Labels
+            The layer being written to.
+        t : int
+            Index of the frame that changed.
+        before, after : ndarray
+            The frame's labels either side of the write.
+        """
+
+        try:
+            changed = np.nonzero(before != after)
+            if len(changed[0]) == 0:
+                return
+            indices = (np.full(changed[0].shape, t, dtype=np.intp),) + changed
+            layer._save_history((indices, before[changed], after[changed]))
+        except Exception as e:
+            logger.debug(f"Could not record an undo step for the segmentation: {e}")
 
     def _on_succeeded(self, prepared, new_labels) -> None:
         """
@@ -657,12 +953,15 @@ class FrameSegmentationPanel(QWidget):
             The labels for the frame that was segmented.
         """
 
+        if self._closing:
+            return
+
         pending = self._pending or {}
         t = pending.get("frame", 0)
         model_name = pending.get("model_name", "")
         cache_key = pending.get("cache_key")
         if cache_key is not None:
-            self._prepared[cache_key] = prepared
+            self._cache_prepared(cache_key, prepared)
 
         # The viewer may have been closed while the worker was running.
         try:
@@ -673,20 +972,26 @@ class FrameSegmentationPanel(QWidget):
 
         try:
             current = layer.data[t]
+            before = current.copy()
             if self.replace_cb.isChecked():
-                current[...] = new_labels
+                merged = _fit_to_layer_dtype(new_labels, current.dtype)
             else:
-                # Offset the incoming labels past the ones already drawn so the
-                # two sets cannot collide, then keep whatever was already there.
-                offset = int(current.max())
-                incoming = np.where(new_labels > 0, new_labels + offset, 0)
-                current[...] = np.where(current > 0, current, incoming)
+                merged = self._merged_labels(current, new_labels)
+            current[...] = merged
+        except ValueError as e:
+            # Raised when the labels will not fit the layer's integer type.
+            self._failed(str(e))
+            return
         except Exception as e:
             self._failed(f"Could not write the labels into the viewer: {e}")
             return
+
+        self._record_undo(layer, t, before, layer.data[t])
         layer.refresh()
 
-        n_objects = int(np.max(layer.data[t]))
+        # Count the objects rather than reading the highest label: in merge mode
+        # the incoming labels are offset, so the maximum is not a count.
+        n_objects = int(np.count_nonzero(np.unique(layer.data[t])))
         message = f"Frame {t}: {n_objects} objects after segmenting with '{model_name}'."
         self.viewer.status = message
         logger.info(message)
