@@ -302,3 +302,57 @@ class TestMakeJsonSafe(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestSegmentationModelListing(unittest.TestCase):
+    """
+    Listing the models must not rewrite the model tree unless asked to.
+
+    ``get_segmentation_models_list`` creates the category directory and deletes any
+    local model folder without a ``config_input.json``. That is reasonable upkeep
+    for the settings dialogs that own the model tree, but the napari panel lists
+    the models just to fill a dropdown when a viewer opens - deleting folders is
+    not a side effect an ordinary "what is available?" should have.
+    """
+
+    def setUp(self):
+        from celldetective.utils.model_getters import get_segmentation_models_list
+
+        self.list_models = get_segmentation_models_list
+        _, self.modelpath = self.list_models(
+            mode="targets", return_path=True, cleanup=False
+        )
+
+    def test_a_model_without_a_config_survives_a_read_only_listing(self):
+        import os
+        from shutil import rmtree
+
+        broken = os.path.join(self.modelpath, "a-model-with-no-config")
+        os.makedirs(broken, exist_ok=True)
+        try:
+            listed = self.list_models(mode="targets", cleanup=False)
+            self.assertTrue(os.path.isdir(broken))
+            # It is still not offered: a model with no input configuration
+            # cannot be loaded, whether or not it is left on disk.
+            self.assertNotIn("a-model-with-no-config", listed)
+        finally:
+            if os.path.isdir(broken):
+                rmtree(broken)
+
+    def test_cleanup_still_removes_it_when_asked(self):
+        import os
+
+        broken = os.path.join(self.modelpath, "a-model-with-no-config")
+        os.makedirs(broken, exist_ok=True)
+        self.list_models(mode="targets", cleanup=True)
+        self.assertFalse(os.path.isdir(broken))
+
+    def test_an_unknown_category_is_not_created_by_a_read_only_listing(self):
+        import os
+
+        # "target" (singular) is not a real category; the panel normalises it, but
+        # a listing must not conjure a directory for whatever it is handed.
+        stray = os.path.join(os.path.dirname(self.modelpath.rstrip(os.sep)), "segmentation_not-a-population")
+        self.assertFalse(os.path.isdir(stray))
+        self.list_models(mode="not-a-population", cleanup=False)
+        self.assertFalse(os.path.isdir(stray))
