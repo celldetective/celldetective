@@ -209,5 +209,58 @@ class TestChannelMappingAndParameters(unittest.TestCase):
         self.assertIsNone(prepared.diameter)
 
 
+class TestCellposeModelPreparation(unittest.TestCase):
+    """Cellpose model loading, which was broken on Windows."""
+
+    CELLPOSE_MODEL = "CP_cyto3"
+    # CP_cyto3 declares ['fluorescenceuv', 'None'], which no real experiment
+    # has, so it can only be reached through an explicit mapping.
+    EXPERIMENT_CHANNELS = ["brightfield_channel", "live_nuclei_channel"]
+    MAPPING = ["live_nuclei_channel", "None"]
+
+    def _prepare(self, **kwargs):
+        return prepare_segmentation_model(
+            self.CELLPOSE_MODEL,
+            channels=self.EXPERIMENT_CHANNELS,
+            spatial_calibration=0.3112,
+            use_gpu=False,
+            selected_channels=self.MAPPING,
+            **kwargs,
+        )
+
+    def test_cellpose_model_loads(self):
+        """
+        Regression: the Cellpose branch derived the model name as
+        ``model_path.split("/")[-2]``. locate_segmentation_model returns an
+        os.sep-joined path, so on Windows the split yields a single element and
+        the index raised IndexError -- no Cellpose model could be prepared at all.
+        """
+        prepared = self._prepare()
+        self.assertIsNotNone(prepared)
+        self.assertEqual(prepared.model_type, "cellpose")
+        self.assertIsNotNone(prepared.model)
+        self.assertEqual(list(prepared.required_channels), self.MAPPING)
+
+    def test_cellpose_parameters_come_from_the_config(self):
+        prepared = self._prepare()
+        self.assertIsNotNone(prepared.diameter)
+        self.assertIsNotNone(prepared.cellprob_threshold)
+        self.assertIsNotNone(prepared.flow_threshold)
+
+    def test_cellpose_parameters_can_be_overridden(self):
+        prepared = self._prepare(
+            diameter=12.0, cellprob_threshold=0.25, flow_threshold=0.6
+        )
+        self.assertEqual(prepared.diameter, 12.0)
+        self.assertEqual(prepared.cellprob_threshold, 0.25)
+        self.assertEqual(prepared.flow_threshold, 0.6)
+
+    def test_segment_frame_runs_with_a_cellpose_model(self):
+        prepared = self._prepare()
+        frame = np.random.default_rng(0).random((64, 64, 2)) * 100
+        labels = segment_frame(frame, prepared)
+        self.assertEqual(labels.shape, (64, 64))
+
+
 if __name__ == "__main__":
     unittest.main()
