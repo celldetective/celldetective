@@ -80,6 +80,304 @@ abs_path = os.sep.join(
 )
 
 
+class PreparedSegmentationModel:
+    """
+    A segmentation model loaded and configured for a given set of image channels.
+
+    Built by :func:`prepare_segmentation_model` and consumed by
+    :func:`segment_frame`. Holding the loaded model and its resolved channel
+    mapping in one object means the expensive setup (reading
+    ``config_input.json``, estimating the rescaling factor, instantiating the
+    StarDist / Cellpose model) happens once and can then be reused across as many
+    frames as needed - a whole stack, or a single frame picked in napari.
+
+    Attributes
+    ----------
+    model : object
+            The instantiated StarDist or Cellpose model.
+    model_type : str
+            Either ``"stardist"`` or ``"cellpose"``.
+    scale_model : float or None
+            Zoom factor applied to a frame before inference, or None when the
+            image calibration already matches the model's.
+    channels : list of str
+            Channel names of the images that will be passed to :func:`segment_frame`.
+    required_channels : list of str
+            Channel names the model expects, in the order it expects them.
+    channel_intersection : list of str
+            Channels present in both of the above - the ones actually transferred.
+    none_channel_indices : numpy.ndarray
+            Indices of required channels missing from the image; zeroed before inference.
+    normalize_kwargs : dict
+            Normalization settings read from the model configuration.
+    diameter : float or None
+            Cellpose object diameter. None for StarDist models.
+    cellprob_threshold : float or None
+            Cellpose cell probability threshold. None for StarDist models.
+    flow_threshold : float or None
+            Cellpose flow threshold. None for StarDist models.
+    """
+
+    __slots__ = (
+        "model",
+        "model_type",
+        "scale_model",
+        "channels",
+        "required_channels",
+        "channel_intersection",
+        "none_channel_indices",
+        "normalize_kwargs",
+        "diameter",
+        "cellprob_threshold",
+        "flow_threshold",
+    )
+
+    def __init__(
+        self,
+        model: Any,
+        model_type: str,
+        scale_model: Optional[float],
+        channels: List[str],
+        required_channels: List[str],
+        channel_intersection: List[str],
+        none_channel_indices: np.ndarray,
+        normalize_kwargs: Dict[str, Any],
+        diameter: Optional[float] = None,
+        cellprob_threshold: Optional[float] = None,
+        flow_threshold: Optional[float] = None,
+    ) -> None:
+        self.model = model
+        self.model_type = model_type
+        self.scale_model = scale_model
+        self.channels = channels
+        self.required_channels = required_channels
+        self.channel_intersection = channel_intersection
+        self.none_channel_indices = none_channel_indices
+        self.normalize_kwargs = normalize_kwargs
+        self.diameter = diameter
+        self.cellprob_threshold = cellprob_threshold
+        self.flow_threshold = flow_threshold
+
+
+def prepare_segmentation_model(
+    model_name: str,
+    channels: Optional[List[str]] = None,
+    spatial_calibration: Optional[float] = None,
+    use_gpu: bool = True,
+    cellprob_threshold: Optional[float] = None,
+    flow_threshold: Optional[float] = None,
+) -> Optional[PreparedSegmentationModel]:
+    """
+
+    Load a segmentation model and resolve it against a set of image channels.
+
+    This is the setup half of :func:`segment`, split out so that the loaded model
+    can be reused frame by frame instead of being rebuilt on every call.
+
+    Parameters
+    ----------
+    model_name : str
+            The name of the pre-trained segmentation model to use.
+    channels : list or None, optional
+            The names of the channels in the images to segment. When None, the
+            model's own required channels are assumed, in order. Default is None.
+    spatial_calibration : float or None, optional
+            The spatial calibration factor of the images. If None, the calibration
+            factor from the model configuration will be used. Default is None.
+    use_gpu : bool, optional
+            Whether to use GPU acceleration if available. Default is True.
+    cellprob_threshold : float, optional
+            Cell probability threshold for Cellpose mask computation. Default is None.
+    flow_threshold : float, optional
+            Flow threshold for Cellpose mask computation. Default is None.
+
+    Returns
+    -------
+    PreparedSegmentationModel or None
+            The prepared model, or None if the model or its input configuration
+            could not be located.
+
+    Raises
+    ------
+    ValueError
+            If none of the channels required by the model are present in `channels`.
+
+    Examples
+    --------
+    >>> prepared = prepare_segmentation_model('model_name', channels=['brightfield_channel'])
+    >>> labels = segment_frame(frame, prepared)
+
+    """
+
+    model_path = locate_segmentation_model(model_name)
+    if model_path is None:
+        logger.error(f"Could not locate model {model_name}. Aborting segmentation.")
+        return None
+
+    input_config = model_path + "config_input.json"
+    if os.path.exists(input_config):
+        with open(input_config) as config:
+            logger.info("Loading input configuration from 'config_input.json'.")
+            input_config = json.load(config)
+    else:
+        logger.error("Model input configuration could not be located...")
+        return None
+
+    if not use_gpu:
+        os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+    else:
+        os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+
+    required_channels = input_config["channels"]
+
+    # The docstring has always allowed channels=None; without this the channel
+    # intersection below raises a TypeError instead of falling back.
+    if channels is None:
+        channels = list(required_channels)
+    else:
+        channels = list(channels)
+
+    channel_intersection = [ch for ch in channels if ch in required_channels]
+    if len(channel_intersection) == 0:
+        raise ValueError("None of the channels required by the model can be found in the images to segment... Abort.")
+
+    channel_indices = _extract_channel_indices(channels, required_channels)
+
+    required_spatial_calibration = input_config["spatial_calibration"]
+    model_type = input_config["model_type"]
+
+    normalize_kwargs = _get_normalize_kwargs_from_config(input_config)
+
+    diameter = None
+    if model_type == "cellpose":
+        diameter = input_config["diameter"]
+        if cellprob_threshold is None:
+            cellprob_threshold = input_config["cellprob_threshold"]
+        if flow_threshold is None:
+            flow_threshold = input_config["flow_threshold"]
+
+    scale = _estimate_scale_factor(spatial_calibration, required_spatial_calibration)
+    logger.info(
+        f"{spatial_calibration=} {required_spatial_calibration=} Scale = {scale}..."
+    )
+
+    model = None
+    scale_model = None
+    if model_type == "stardist":
+        model, scale_model = _prep_stardist_model(
+            model_name, Path(model_path).parent, use_gpu=use_gpu, scale=scale
+        )
+    elif model_type == "cellpose":
+        model, scale_model = _prep_cellpose_model(
+            model_path.split("/")[-2],
+            model_path,
+            use_gpu=use_gpu,
+            n_channels=len(required_channels),
+            scale=scale,
+        )
+
+    if model is None:
+        logger.error(f"Could not load model {model_name}. Aborting segmentation.")
+        return None
+
+    # Resolve the missing required channels once, rather than on every frame.
+    none_channel_indices = np.array(
+        [i for i, v in enumerate(channel_indices) if v is None], dtype=int
+    )
+
+    return PreparedSegmentationModel(
+        model=model,
+        model_type=model_type,
+        scale_model=scale_model,
+        channels=channels,
+        required_channels=required_channels,
+        channel_intersection=channel_intersection,
+        none_channel_indices=none_channel_indices,
+        normalize_kwargs=normalize_kwargs,
+        diameter=diameter,
+        cellprob_threshold=cellprob_threshold,
+        flow_threshold=flow_threshold,
+    )
+
+
+def segment_frame(
+    frame: np.ndarray,
+    prepared: PreparedSegmentationModel,
+) -> np.ndarray:
+    """
+
+    Segment a single frame with an already-prepared model.
+
+    This is the per-frame half of :func:`segment`. It performs the channel
+    transfer, normalization, rescaling and inference for one image, then rescales
+    the resulting labels back to that frame's original dimensions.
+
+    Parameters
+    ----------
+    frame : ndarray
+            A single multichannel image, with shape (height, width, channels) -
+            the channels being those named in ``prepared.channels``.
+    prepared : PreparedSegmentationModel
+            A model prepared by :func:`prepare_segmentation_model`.
+
+    Returns
+    -------
+    ndarray
+            The segmented labels, with shape (height, width).
+
+    Examples
+    --------
+    >>> prepared = prepare_segmentation_model('model_name', channels=['brightfield_channel'])
+    >>> labels = segment_frame(stack[0], prepared)
+
+    """
+
+    channels = prepared.channels
+    required_channels = prepared.required_channels
+
+    frame = _rearrange_multichannel_frame(frame).astype(float)
+
+    frame_to_segment = np.zeros(
+        (frame.shape[0], frame.shape[1], len(required_channels))
+    ).astype(float)
+    for ch in prepared.channel_intersection:
+        idx = required_channels.index(ch)
+        frame_to_segment[:, :, idx] = frame[:, :, channels.index(ch)]
+    frame = frame_to_segment
+    template = frame.copy()
+
+    frame = normalize_multichannel(frame, **prepared.normalize_kwargs)
+
+    if prepared.scale_model is not None:
+        frame = zoom_multiframes(frame, prepared.scale_model)
+
+    frame = _fix_no_contrast(frame)
+    frame = interpolate_nan_multichannel(frame)
+    frame[:, :, prepared.none_channel_indices] = 0.0
+
+    if prepared.model_type == "stardist":
+        Y_pred = _segment_image_with_stardist_model(
+            frame, model=prepared.model, return_details=False
+        )
+    elif prepared.model_type == "cellpose":
+        Y_pred = _segment_image_with_cellpose_model(
+            frame,
+            model=prepared.model,
+            diameter=prepared.diameter,
+            cellprob_threshold=prepared.cellprob_threshold,
+            flow_threshold=prepared.flow_threshold,
+        )
+    else:
+        raise ValueError(f"Unknown model type {prepared.model_type}...")
+
+    # `template` carries this frame's pre-rescaling dimensions, so the check is
+    # made per frame rather than assuming every frame matches the first.
+    if Y_pred.shape != template.shape[:2]:
+        Y_pred = _rescale_labels(Y_pred, prepared.scale_model)
+
+    return _check_label_dims(Y_pred, template=template)
+
+
 def segment(
     stack: Union[np.ndarray, List[np.ndarray]],
     model_name: str,
@@ -136,21 +434,6 @@ def segment(
 
     """
 
-    model_path = locate_segmentation_model(model_name)
-    input_config = model_path + "config_input.json"
-    if os.path.exists(input_config):
-        with open(input_config) as config:
-            logger.info("Loading input configuration from 'config_input.json'.")
-            input_config = json.load(config)
-    else:
-        logger.error("Model input configuration could not be located...")
-        return None
-
-    if not use_gpu:
-        os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
-    else:
-        os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-
     if channel_axis != -1:
         stack = np.moveaxis(stack, channel_axis, -1)
 
@@ -158,102 +441,24 @@ def segment(
         if len(channels) != stack.shape[-1]:
             raise ValueError(f"The channel names provided do not match with the expected number of channels in the stack: {stack.shape[-1]}.")
 
-    required_channels = input_config["channels"]
-    channel_intersection = [ch for ch in channels if ch in required_channels]
-    if len(channel_intersection) == 0:
-        raise ValueError("None of the channels required by the model can be found in the images to segment... Abort.")
-
-    channel_indices = _extract_channel_indices(channels, required_channels)
-
-    required_spatial_calibration = input_config["spatial_calibration"]
-    model_type = input_config["model_type"]
-
-    normalize_kwargs = _get_normalize_kwargs_from_config(input_config)
-
-    if model_type == "cellpose":
-        diameter = input_config["diameter"]
-        # if diameter!=30:
-        # 	required_spatial_calibration = None
-        if cellprob_threshold is None:
-            cellprob_threshold = input_config["cellprob_threshold"]
-        if flow_threshold is None:
-            flow_threshold = input_config["flow_threshold"]
-
-    scale = _estimate_scale_factor(spatial_calibration, required_spatial_calibration)
-    logger.info(
-        f"{spatial_calibration=} {required_spatial_calibration=} Scale = {scale}..."
+    prepared = prepare_segmentation_model(
+        model_name,
+        channels=channels,
+        spatial_calibration=spatial_calibration,
+        use_gpu=use_gpu,
+        cellprob_threshold=cellprob_threshold,
+        flow_threshold=flow_threshold,
     )
-
-    model = None
-    if model_type == "stardist":
-        model, scale_model = _prep_stardist_model(
-            model_name, Path(model_path).parent, use_gpu=use_gpu, scale=scale
-        )
-
-    elif model_type == "cellpose":
-        model, scale_model = _prep_cellpose_model(
-            model_path.split("/")[-2],
-            model_path,
-            use_gpu=use_gpu,
-            n_channels=len(required_channels),
-            scale=scale,
-        )
-
-    if model is None:
-        logger.error(f"Could not load model {model_name}. Aborting segmentation.")
+    if prepared is None:
         return None
 
-    labels = []
-
-    # Compute once before the loop: find missing channels and replace None with 0
-    none_channel_indices = np.array([i for i, v in enumerate(channel_indices) if v is None], dtype=int)
-    channel_indices = np.array([v if v is not None else 0 for v in channel_indices])
-
-    for t in tqdm(range(len(stack)), desc="frame"):
-
-        frame = stack[t]
-        frame = _rearrange_multichannel_frame(frame).astype(float)
-
-        frame_to_segment = np.zeros(
-            (frame.shape[0], frame.shape[1], len(required_channels))
-        ).astype(float)
-        for ch in channel_intersection:
-            idx = required_channels.index(ch)
-            frame_to_segment[:, :, idx] = frame[:, :, channels.index(ch)]
-        frame = frame_to_segment
-        template = frame.copy()
-
-        frame = normalize_multichannel(frame, **normalize_kwargs)
-
-        if scale_model is not None:
-            frame = zoom_multiframes(frame, scale_model)
-
-        frame = _fix_no_contrast(frame)
-        frame = interpolate_nan_multichannel(frame)
-        frame[:, :, none_channel_indices] = 0.0
-
-        if model_type == "stardist":
-            Y_pred = _segment_image_with_stardist_model(
-                frame, model=model, return_details=False
-            )
-
-        elif model_type == "cellpose":
-            Y_pred = _segment_image_with_cellpose_model(
-                frame,
-                model=model,
-                diameter=diameter,
-                cellprob_threshold=cellprob_threshold,
-                flow_threshold=flow_threshold,
-            )
-
-        if Y_pred.shape != stack[0].shape[:2]:
-            Y_pred = _rescale_labels(Y_pred, scale_model)
-
-        Y_pred = _check_label_dims(Y_pred, template=template)
-
-        labels.append(Y_pred)
-
-    labels = np.array(labels, dtype=int)
+    labels = np.array(
+        [
+            segment_frame(stack[t], prepared)
+            for t in tqdm(range(len(stack)), desc="frame")
+        ],
+        dtype=int,
+    )
 
     if view_on_napari:
         from celldetective.napari.utils import _view_on_napari
