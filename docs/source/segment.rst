@@ -203,6 +203,47 @@ To train a model on your annotations, see :doc:`How to train a segmentation mode
     **napari**. napari provides the basic requirements of image manipulation software, namely a brush, rubber, bucket and pipette, to work on the segmentation layer. In this RICM image of spreading NK cells, two couples of cells have been mistakenly segmented as one object and must be separated. On the right panel, two plugins specific to Celldetective allow 1) the export of the modified masks directly in the position folder, and 2) to create automatically an annotation consisting of the current multichannel frame, the modified mask and a configuration file specifying the modality content of the image and its spatial calibration.
 
 
+Segmenting a single frame from napari
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The top of the same right-hand panel can run a segmentation model on the frame
+currently on screen, without leaving the viewer or launching a run over the whole
+position. It is the quickest way to try a model, a channel mapping or a threshold
+on one frame and look at the result straight away.
+
+*   **model** — any model available for this population, plus the generic ones.
+    A model that has not been downloaded yet is offered too; it is fetched on the
+    first run.
+*   **channels** — one dropdown per input slot of the chosen model, seeded from
+    the mapping already saved by the import dialog. Set a slot to ``None`` to
+    leave it blank. The same experiment channel may feed several slots.
+*   **parameters** — the values that model type actually takes: **diameter**,
+    **cell probability** and **flow threshold** for Cellpose models, and **cell
+    size** wherever the model declares the size it was trained on. Leave a field
+    blank to use the model's own value.
+*   **Replace the labels on this frame** — ticked, the frame is segmented afresh.
+    Unticked, the existing labels are kept and the new ones only fill the
+    background, so manual corrections on that frame survive.
+
+The run happens on a background thread, so the viewer stays usable; the button
+turns into **Cancel** while it works. Inference itself cannot be interrupted, so
+cancelling during a forward pass returns the interface to normal and discards the
+result when it lands, while cancelling during model loading stops before any
+inference happens.
+
+The result is written into the ``segmentation`` layer and can be undone with
+:kbd:`Ctrl+Z` like any other edit. Nothing reaches disk until **Save the modified
+labels** is used, and the settings chosen here stay local to the napari session:
+they are never written back into the model configuration, so trying something out
+cannot change what the next full-position run does.
+
+.. note::
+
+    Segmentation here runs on the CPU, leaving the GPU to the viewer's renderer.
+    A single frame is quick, but expect it to be slower than the same model
+    running over a position in the main window.
+
+
 References
 ----------
 
