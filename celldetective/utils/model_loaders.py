@@ -199,6 +199,17 @@ def locate_segmentation_model(name: str, download: bool = True) -> Optional[str]
     match = None
     for m in models:
         if name == m.replace("\\", os.sep).split(os.sep)[-2]:
+            if not os.path.exists(os.sep.join([m.rstrip(os.sep), "config_input.json"])):
+                # An interrupted download leaves the directory behind without its
+                # input configuration. Matching on the name alone would hand back
+                # a model that can never be loaded, and would shadow the copy on
+                # Zenodo forever; treat it as absent so the download below can
+                # overwrite it.
+                logger.warning(
+                    f"Ignoring incomplete local model {name} in {m}: "
+                    "no 'config_input.json'."
+                )
+                continue
             match = m
             return match
     if download:

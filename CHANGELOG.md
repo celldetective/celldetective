@@ -19,20 +19,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   per-frame halves of `segment()`, so one loaded model can be reused across
   frames that do not arrive as a single stack.
 - `segment()` gained `selected_channels`, `target_cell_size` and `diameter`
-  arguments, which override what the model configuration stores.
+  arguments, which override what the model configuration stores, and
+  `use_stored_mapping`, which opts into what it stores.
 
 ### Changed
-- **`segment()` now honours two settings it used to ignore**, matching what
+- **`segment()` can now honour two settings it used to ignore**, matching what
   `SegmentCellDLProcess` has always done, so the library and the pipeline return
   the same masks for the same model: the `selected_channels` mapping stored in
   the model's `config_input.json`, and the `cell_size_um` /
   `target_cell_size_um` rescaling. Both live in the model directory, which is
-  shared across experiments, so a mapping saved while working on one experiment
-  now also applies to direct `segment()` calls made for another. Pass
-  `selected_channels` / `target_cell_size` explicitly to pin the old behaviour.
+  installed once and shared by every experiment, so applying them by default
+  would let a mapping saved while working on one experiment change the result of
+  a `segment()` call made for another. They are opt-in: pass
+  `use_stored_mapping=True` for pipeline parity, or `selected_channels` /
+  `target_cell_size` to set them explicitly. Existing calls are unaffected.
 - `CUDA_VISIBLE_DEVICES` is now set only while a segmentation model is being
-  built, and restored afterwards, instead of being left pinned for the lifetime
-  of the process.
+  built or run, and restored afterwards, instead of being left pinned for the
+  lifetime of the process. `segment_frame()` re-applies the device choice its
+  model was prepared with, so `use_gpu=False` holds even if the framework defers
+  creating its device context until the first prediction.
 
 ### Fixed
 - Cellpose models could not be loaded at all on Windows: the model name was
@@ -52,6 +57,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   cell onto an existing one.
 - Segmenting a frame from napari can be undone with `Ctrl+Z` like any other edit,
   and reports the number of objects rather than the highest label value.
+- Declining napari's "are you sure you want to close?" prompt no longer takes the
+  frame-segmentation panel down with it. The panel used to tear itself down as
+  soon as the close was *attempted*, leaving a viewer that stayed open with a
+  vanished, permanently inert panel.
+- A model whose download was interrupted no longer shadows the copy on Zenodo
+  forever. `locate_segmentation_model()` skips a local directory that has no
+  `config_input.json`, so the next run re-downloads it instead of failing with
+  "could not be loaded" every time.
+- The frame-segmentation panel builds its channel and parameter rows after a
+  model is fetched on its first run, instead of leaving the "not downloaded yet"
+  placeholder up until the model dropdown is cycled.
+- A cell size of zero is rejected with a message naming the field, rather than
+  failing the run with `float division by zero`.
+- `prepare_segmentation_model()` no longer raises `KeyError` on a Cellpose
+  `config_input.json` that omits `diameter`, `cellprob_threshold` or
+  `flow_threshold` when the caller passes those values explicitly.
 
 ## [1.5.3] - 2026-06-04
 
