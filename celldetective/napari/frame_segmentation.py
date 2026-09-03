@@ -1,9 +1,10 @@
 """
 Segment the frame on screen, from inside the napari correction viewer.
 
-The panel mirrors the channel-selection dialog of the main window: one dropdown
-per input slot of the chosen model, plus whatever inference parameters that
-model type actually takes. Values are seeded from the model's
+The panel embeds the very channel-selection widget the main window is built on
+-- :class:`~celldetective.gui.base.model_channel_selection.ModelChannelSelection`,
+one dropdown per input slot of the chosen model -- and adds whatever inference
+parameters that model type actually takes. Values are seeded from the model's
 ``config_input.json`` -- including any ``selected_channels`` mapping already set
 in the main window -- but edits stay local to the napari session and are never
 written back, so trying settings out here cannot silently change the next
@@ -35,6 +36,7 @@ from PyQt5.QtWidgets import (
 )
 
 from celldetective import get_logger
+from celldetective.gui.base.model_channel_selection import ModelChannelSelection
 from celldetective.utils.experiment import (
     extract_experiment_channels,
     extract_experiment_from_position,
@@ -47,10 +49,6 @@ logger = get_logger(__name__)
 # Offered in the model dropdown when nothing is installed, so that the panel --
 # and with it the whole viewer -- still builds.
 NO_MODEL = "(no segmentation model found)"
-
-# The channel-selection dialog uses this spelling for an unused input slot, and
-# it is what ends up in `selected_channels`, so match it exactly.
-NO_CHANNEL = "None"
 
 # How many prepared models the panel keeps alive at once. Each one is a whole
 # StarDist / Cellpose network, so the cache trades a few hundred MB for not
@@ -371,7 +369,7 @@ class FrameSegmentationPanel(QWidget):
             logger.warning(f"Could not read the spatial calibration: {e}")
             self.spatial_calibration = None
 
-        self.channel_cbs: List[QComboBox] = []
+        self.channel_selection: Optional[ModelChannelSelection] = None
         self.diameter_le: Optional[_FloatEdit] = None
         self.cellprob_le: Optional[_FloatEdit] = None
         self.flow_le: Optional[_FloatEdit] = None
@@ -457,8 +455,8 @@ class FrameSegmentationPanel(QWidget):
         outer.addLayout(model_row)
 
         self.channel_box = QGroupBox("channels")
-        self.channel_form = QFormLayout(self.channel_box)
-        self.channel_form.setContentsMargins(8, 8, 8, 8)
+        self.channel_layout = QVBoxLayout(self.channel_box)
+        self.channel_layout.setContentsMargins(8, 8, 8, 8)
         outer.addWidget(self.channel_box)
 
         self.param_box = QGroupBox("parameters")
@@ -495,12 +493,16 @@ class FrameSegmentationPanel(QWidget):
         self.model_cb.currentTextChanged.connect(self._reload_model)
         self._reload_model(self.model_cb.currentText())
 
-    def _clear(self, form: QFormLayout) -> None:
-        """Remove every row from a form layout."""
-        while form.count():
-            item = form.takeAt(0)
+    def _clear(self, layout) -> None:
+        """Remove every row from a layout, deleting the widgets it held."""
+        while layout.count():
+            item = layout.takeAt(0)
             widget = item.widget()
             if widget is not None:
+                # Unparent first: `deleteLater` only schedules the deletion, and
+                # until it runs the widget would still be shown by the box it was
+                # just taken out of.
+                widget.setParent(None)
                 widget.deleteLater()
 
     def _reload_model(self, model_name: str) -> None:
@@ -513,9 +515,9 @@ class FrameSegmentationPanel(QWidget):
             The newly selected model.
         """
 
-        self._clear(self.channel_form)
+        self._clear(self.channel_layout)
         self._clear(self.param_form)
-        self.channel_cbs = []
+        self.channel_selection = None
         self.diameter_le = None
         self.cellprob_le = None
         self.flow_le = None
@@ -523,7 +525,7 @@ class FrameSegmentationPanel(QWidget):
 
         if not model_name or model_name == NO_MODEL:
             self.config = None
-            self.channel_form.addRow(QLabel("No model available."))
+            self.channel_layout.addWidget(QLabel("No model available."))
             self.run_btn.setEnabled(False)
             return
 
@@ -533,7 +535,7 @@ class FrameSegmentationPanel(QWidget):
         if self.config is None:
             # A repository model that has not been fetched yet: its channels and
             # parameters are unknown until it lands on disk.
-            self.channel_form.addRow(
+            self.channel_layout.addWidget(
                 QLabel("Not downloaded yet.\nIt will be fetched on the first run,\nusing the model's own settings.")
             )
             return
@@ -542,33 +544,23 @@ class FrameSegmentationPanel(QWidget):
         self._build_parameter_rows()
 
     def _build_channel_rows(self) -> None:
-        """One dropdown per model input slot, seeded from the stored mapping."""
+        """
+        One dropdown per model input slot, seeded from the stored mapping.
 
-        required = list(self.config.get("channels", []))
+        The rows are the main window's own channel-selection widget, so a model's
+        inputs are mapped the same way wherever it is run from -- including the
+        ``selected_channels`` mapping already saved there, which is what makes a
+        model like ``CP_cyto3`` usable at all: it declares channel names no real
+        experiment is named after.
+        """
+
         stored = self.config.get("selected_channels")
-        options = list(self.exp_channels) + [NO_CHANNEL]
-
-        for i, slot in enumerate(required):
-            combo = QComboBox()
-            combo.addItems(options)
-            combo.setToolTip(f"Experiment channel feeding the model's '{slot}' input.")
-
-            # Prefer the mapping the main window already saved, then a plain name
-            # match, and leave the slot empty when neither is available.
-            default = None
-            if isinstance(stored, list) and i < len(stored):
-                default = stored[i]
-            if default is None or combo.findText(str(default)) < 0:
-                default = slot if slot in self.exp_channels else NO_CHANNEL
-
-            idx = combo.findText(str(default))
-            combo.setCurrentIndex(idx if idx >= 0 else len(options) - 1)
-
-            self.channel_cbs.append(combo)
-            self.channel_form.addRow(QLabel(f"{slot}:"), combo)
-
-        if not required:
-            self.channel_form.addRow(QLabel("This model declares no input channels."))
+        self.channel_selection = ModelChannelSelection(
+            required_channels=list(self.config.get("channels", [])),
+            available_channels=self.exp_channels,
+            selected_channels=stored if isinstance(stored, list) else None,
+        )
+        self.channel_layout.addWidget(self.channel_selection)
 
     def _build_parameter_rows(self) -> None:
         """Expose the inference parameters that this model type actually takes."""
@@ -617,9 +609,9 @@ class FrameSegmentationPanel(QWidget):
 
     def _selected_channels(self) -> Optional[List[str]]:
         """The channel mapping as currently set, or None when the model is unknown."""
-        if not self.channel_cbs:
+        if self.channel_selection is None:
             return None
-        return [combo.currentText() for combo in self.channel_cbs]
+        return self.channel_selection.selected_channels() or None
 
     def _failed(self, message: str) -> None:
         """
@@ -655,8 +647,8 @@ class FrameSegmentationPanel(QWidget):
 
         self.model_cb.setEnabled(not running)
         self.replace_cb.setEnabled(not running)
-        for combo in self.channel_cbs:
-            combo.setEnabled(not running)
+        if self.channel_selection is not None:
+            self.channel_selection.setEnabled(not running)
         for edit in (
             self.diameter_le,
             self.cellprob_le,
@@ -770,7 +762,7 @@ class FrameSegmentationPanel(QWidget):
             return
 
         selected = self._selected_channels()
-        if selected is not None and all(ch == NO_CHANNEL for ch in selected):
+        if self.channel_selection is not None and self.channel_selection.is_empty():
             self._failed(
                 "Every input channel is set to None. Assign at least one experiment "
                 "channel to a model input."

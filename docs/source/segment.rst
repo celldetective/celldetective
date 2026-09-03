@@ -214,9 +214,10 @@ on one frame and look at the result straight away.
 *   **model** — any model available for this population, plus the generic ones.
     A model that has not been downloaded yet is offered too; it is fetched on the
     first run.
-*   **channels** — one dropdown per input slot of the chosen model, seeded from
-    the mapping already saved by the import dialog. Set a slot to ``None`` to
-    leave it blank. The same experiment channel may feed several slots.
+*   **channels** — the same rows as the channel dialog of the main window: one
+    dropdown per input slot of the chosen model, seeded from the mapping already
+    saved there. Set a slot to ``None`` to leave it blank. The same experiment
+    channel may feed several slots.
 *   **parameters** — the values that model type actually takes: **diameter**,
     **cell probability** and **flow threshold** for Cellpose models, and **cell
     size** wherever the model declares the size it was trained on. Leave a field
