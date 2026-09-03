@@ -16,7 +16,7 @@ from collections import OrderedDict
 from typing import Any, Dict, List, Optional, Set
 
 import numpy as np
-from PyQt5.QtCore import QEvent, Qt, QThread, pyqtSignal
+from PyQt5.QtCore import QEvent, Qt, QThread, QTimer, pyqtSignal
 from PyQt5.QtGui import QDoubleValidator
 from PyQt5.QtWidgets import (
     QApplication,
@@ -188,9 +188,20 @@ def _fit_to_layer_dtype(
 class _FloatEdit(QLineEdit):
     """A line edit accepting a single float, blank meaning "use the model's value"."""
 
-    def __init__(self, value: Optional[float] = None, parent=None):
+    def __init__(
+        self,
+        value: Optional[float] = None,
+        parent=None,
+        bottom: Optional[float] = None,
+    ):
         super().__init__(parent)
-        self.setValidator(QDoubleValidator())
+        validator = QDoubleValidator()
+        if bottom is not None:
+            # Keeps a negative out of the field entirely; a value of exactly the
+            # bottom still gets through, so anything that must be strictly greater
+            # is checked again before the run starts.
+            validator.setBottom(bottom)
+        self.setValidator(validator)
         if value is not None:
             self.setText(str(value))
 
@@ -402,8 +413,27 @@ class FrameSegmentationPanel(QWidget):
             and event.type() == QEvent.Close
             and not self._closing
         ):
-            self.close()
+            # An event filter runs *before* the window's own `closeEvent`, and
+            # napari's asks for confirmation: the user may still call the close
+            # off, in which case the viewer stays open and this panel must stay
+            # with it. Settle it on the next trip through the event loop, once
+            # the window has had its say.
+            QTimer.singleShot(0, self._close_if_window_closed)
         return super().eventFilter(watched, event)
+
+    def _close_if_window_closed(self) -> None:
+        """Close the panel, but only if the viewer window really did close."""
+
+        window = self._watched_window
+        if window is None:
+            return
+        try:
+            still_open = window.isVisible()
+        except RuntimeError:
+            # The C++ window is already gone, so the close went through.
+            still_open = False
+        if not still_open:
+            self.close()
 
     # ------------------------------------------------------------------
     # Construction
@@ -567,7 +597,7 @@ class FrameSegmentationPanel(QWidget):
         if "cell_size_um" in self.config:
             trained = self.config["cell_size_um"]
             self.cell_size_le = _FloatEdit(
-                self.config.get("target_cell_size_um", trained)
+                self.config.get("target_cell_size_um", trained), bottom=0.0
             )
             self.cell_size_le.setToolTip(
                 f"Typical object size in these images, in µm.\n"
@@ -701,6 +731,15 @@ class FrameSegmentationPanel(QWidget):
         self._prepared.clear()
         super().closeEvent(event)
 
+    def showEvent(self, event) -> None:
+        """Bring the panel back to life if it is shown again after a close."""
+        # `_stop_worker` latches `_closing` so that a result landing mid-teardown
+        # is dropped rather than pushed into a dying viewer. A panel that is on
+        # screen again is not dying, and leaving the latch set would make every
+        # later run hang with its labels silently discarded.
+        self._closing = False
+        super().showEvent(event)
+
     def _on_run_clicked(self) -> None:
         """Start a segmentation, or cancel the one in flight."""
         if self._worker is not None and self._worker.isRunning():
@@ -741,6 +780,13 @@ class FrameSegmentationPanel(QWidget):
         t = int(self.viewer.dims.current_step[0])
 
         target_cell_size = self.cell_size_le.value() if self.cell_size_le else None
+        if target_cell_size is not None and target_cell_size <= 0:
+            self._failed(
+                "The cell size must be greater than zero. Clear the field to use "
+                "the model's own value."
+            )
+            return
+
         diameter = self.diameter_le.value() if self.diameter_le else None
         cellprob = self.cellprob_le.value() if self.cellprob_le else None
         flow = self.flow_le.value() if self.flow_le else None
@@ -764,6 +810,10 @@ class FrameSegmentationPanel(QWidget):
             channels=self.exp_channels or None,
             spatial_calibration=self.spatial_calibration,
             use_gpu=False,
+            # The panel mirrors the main window, so it opts in to the mapping the
+            # channel-selection dialog stored: with no channel rows yet (a model
+            # fetched on this very run) that is what the pipeline would use.
+            use_stored_mapping=True,
             selected_channels=selected,
             target_cell_size=target_cell_size,
             diameter=diameter,
@@ -962,6 +1012,23 @@ class FrameSegmentationPanel(QWidget):
         cache_key = pending.get("cache_key")
         if cache_key is not None:
             self._cache_prepared(cache_key, prepared)
+
+        # A model fetched during this very run: its configuration only reached the
+        # disk once the worker had started, so the panel is still showing the
+        # "not downloaded yet" placeholder with no channel or parameter rows.
+        # Build them now, rather than leaving the user to cycle the dropdown to
+        # get at a mapping the model has had all along.
+        if (
+            self.config is None
+            and model_name
+            and model_name == self.model_cb.currentText()
+        ):
+            self._reload_model(model_name)
+            if self.config is not None and cache_key is not None:
+                # Those rows feed the cache key, so the entry just stored is keyed
+                # on a state that can never come back; drop it rather than hold a
+                # few hundred MB of network alive for a key nothing will ask for.
+                self._prepared.pop(cache_key, None)
 
         # The viewer may have been closed while the worker was running.
         try:

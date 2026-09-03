@@ -126,6 +126,11 @@ class PreparedSegmentationModel:
             The inference parameters as the model configuration declares them, before
             any caller override. Lets a caller restore a model's own values without
             re-reading ``config_input.json``.
+    use_gpu : bool
+            The device choice this model was built under. :func:`segment_frame`
+            re-applies it around inference, since a framework that defers creating
+            its device context until the first prediction would otherwise see the
+            caller's environment rather than this one.
     """
 
     __slots__ = (
@@ -142,6 +147,7 @@ class PreparedSegmentationModel:
         "cellprob_threshold",
         "flow_threshold",
         "config_defaults",
+        "use_gpu",
     )
 
     def __init__(
@@ -159,6 +165,7 @@ class PreparedSegmentationModel:
         cellprob_threshold: Optional[float] = None,
         flow_threshold: Optional[float] = None,
         config_defaults: Optional[Dict[str, Any]] = None,
+        use_gpu: bool = True,
     ) -> None:
         self.model = model
         self.model_type = model_type
@@ -173,6 +180,7 @@ class PreparedSegmentationModel:
         self.cellprob_threshold = cellprob_threshold
         self.flow_threshold = flow_threshold
         self.config_defaults = config_defaults if config_defaults is not None else {}
+        self.use_gpu = use_gpu
 
 
 @contextmanager
@@ -183,14 +191,15 @@ def _gpu_visibility(use_gpu: bool):
     ``CUDA_VISIBLE_DEVICES`` is process-global, and both TensorFlow and Torch read
     it once, when they first initialise a device context. Leaving it set - as this
     module used to - meant that a single CPU-only call from the GUI silently pinned
-    the whole process to the CPU for good. Setting it only around model
-    construction gets the intended device and leaves the caller's environment
-    exactly as it was found.
+    the whole process to the CPU for good. Entering this context around both model
+    construction and inference gets the intended device wherever that context
+    happens to be created, and leaves the caller's environment exactly as it was
+    found.
 
     Parameters
     ----------
     use_gpu : bool
-            Whether the GPU should be visible while the model is built.
+            Whether the GPU should be visible inside the block.
     """
 
     previous = os.environ.get("CUDA_VISIBLE_DEVICES")
@@ -214,6 +223,7 @@ def prepare_segmentation_model(
     selected_channels: Optional[List[str]] = None,
     target_cell_size: Optional[float] = None,
     diameter: Optional[float] = None,
+    use_stored_mapping: bool = False,
 ) -> Optional[PreparedSegmentationModel]:
     """
 
@@ -251,6 +261,14 @@ def prepare_segmentation_model(
     diameter : float or None, optional
             Cellpose object diameter, in pixels. Overrides the value stored in the
             model configuration. Ignored for StarDist models. Default is None.
+    use_stored_mapping : bool, optional
+            Whether to fall back on the ``selected_channels`` and
+            ``target_cell_size_um`` entries that the channel-selection dialog writes
+            into the model's ``config_input.json``. That file lives in the installed
+            package, shared by every experiment, so honouring it silently would let a
+            mapping saved in the GUI change what this function returns for an
+            unrelated call. The GUI opts in to get pipeline parity; library callers
+            get the model's own channel list unless they ask. Default is False.
 
     Returns
     -------
@@ -291,7 +309,7 @@ def prepare_segmentation_model(
     required_channels = input_config["channels"]
     if selected_channels is not None:
         required_channels = list(selected_channels)
-    elif "selected_channels" in input_config:
+    elif use_stored_mapping and "selected_channels" in input_config:
         required_channels = input_config["selected_channels"]
 
     # The docstring has always allowed channels=None; without this the channel
@@ -323,10 +341,13 @@ def prepare_segmentation_model(
     config_defaults: Dict[str, Any] = {}
 
     if model_type == "cellpose":
+        # `.get`, not indexing: a hand-written or older configuration may omit
+        # these, and a caller that passes them explicitly should not be stopped by
+        # a default it never uses.
         config_defaults = {
-            "diameter": input_config["diameter"],
-            "cellprob_threshold": input_config["cellprob_threshold"],
-            "flow_threshold": input_config["flow_threshold"],
+            "diameter": input_config.get("diameter"),
+            "cellprob_threshold": input_config.get("cellprob_threshold"),
+            "flow_threshold": input_config.get("flow_threshold"),
         }
         if diameter is None:
             diameter = config_defaults["diameter"]
@@ -344,8 +365,19 @@ def prepare_segmentation_model(
     # `cell_size_um` is what the model saw, `target_cell_size_um` what these
     # images hold.
     cell_size = input_config.get("cell_size_um")
-    if target_cell_size is None:
+    if target_cell_size is None and use_stored_mapping:
         target_cell_size = input_config.get("target_cell_size_um")
+    if target_cell_size is not None and target_cell_size <= 0:
+        raise ValueError(
+            f"The target cell size must be strictly positive, got {target_cell_size}."
+        )
+    if cell_size is not None and cell_size <= 0:
+        # Comes from the model configuration, not the caller: warn and fall back on
+        # the calibration ratio alone rather than scaling everything to nothing.
+        logger.warning(
+            f"Ignoring the model's cell_size_um={cell_size}: it must be strictly positive."
+        )
+        cell_size = None
     if target_cell_size is not None and cell_size is not None:
         if scale is not None:
             scale *= cell_size / target_cell_size
@@ -400,6 +432,7 @@ def prepare_segmentation_model(
         cellprob_threshold=cellprob_threshold,
         flow_threshold=flow_threshold,
         config_defaults=config_defaults,
+        use_gpu=use_gpu,
     )
 
 
@@ -460,20 +493,25 @@ def segment_frame(
     frame = interpolate_nan_multichannel(frame)
     frame[:, :, prepared.none_channel_indices] = 0.0
 
-    if prepared.model_type == "stardist":
-        Y_pred = _segment_image_with_stardist_model(
-            frame, model=prepared.model, return_details=False
-        )
-    elif prepared.model_type == "cellpose":
-        Y_pred = _segment_image_with_cellpose_model(
-            frame,
-            model=prepared.model,
-            diameter=prepared.diameter,
-            cellprob_threshold=prepared.cellprob_threshold,
-            flow_threshold=prepared.flow_threshold,
-        )
-    else:
-        raise ValueError(f"Unknown model type {prepared.model_type}...")
+    # Same device visibility as when the model was built: TensorFlow reads
+    # CUDA_VISIBLE_DEVICES when it creates its device context, and whether that
+    # happens in the StarDist constructor or on the first `predict` is an
+    # implementation detail we should not be relying on.
+    with _gpu_visibility(prepared.use_gpu):
+        if prepared.model_type == "stardist":
+            Y_pred = _segment_image_with_stardist_model(
+                frame, model=prepared.model, return_details=False
+            )
+        elif prepared.model_type == "cellpose":
+            Y_pred = _segment_image_with_cellpose_model(
+                frame,
+                model=prepared.model,
+                diameter=prepared.diameter,
+                cellprob_threshold=prepared.cellprob_threshold,
+                flow_threshold=prepared.flow_threshold,
+            )
+        else:
+            raise ValueError(f"Unknown model type {prepared.model_type}...")
 
     # `template` carries this frame's pre-rescaling dimensions, so the check is
     # made per frame rather than assuming every frame matches the first.
@@ -496,6 +534,7 @@ def segment(
     selected_channels: Optional[List[str]] = None,
     target_cell_size: Optional[float] = None,
     diameter: Optional[float] = None,
+    use_stored_mapping: bool = False,
 ) -> Optional[np.ndarray]:
     """
 
@@ -536,6 +575,13 @@ def segment(
     diameter : float or None, optional
             Cellpose object diameter, in pixels, overriding the model configuration.
             Ignored for StarDist models. Default is None.
+    use_stored_mapping : bool, optional
+            Whether to fall back on the ``selected_channels`` and
+            ``target_cell_size_um`` entries stored in the model's
+            ``config_input.json`` by the channel-selection dialog. Set it to True to
+            reproduce exactly what the pipeline does for the same model; leave it
+            False to keep a call reproducible whatever was last set in the GUI.
+            Default is False.
 
     Returns
     -------
@@ -555,19 +601,21 @@ def segment(
 
     .. versionchanged:: 1.5.4
             Two settings that ``SegmentCellDLProcess`` had always applied, and that
-            this function had always ignored, are now honoured here too, so the
+            this function had always ignored, can now be honoured here too, so the
             library and the pipeline return the same masks for the same model:
 
             - the ``selected_channels`` mapping stored in the model's
-              ``config_input.json`` by the channel-selection dialog, which now takes
+              ``config_input.json`` by the channel-selection dialog, which then takes
               precedence over the model's own ``channels`` list;
             - the ``cell_size_um`` / ``target_cell_size_um`` rescaling.
 
-            Both come from the model directory, which is shared across experiments, so
-            a mapping saved while working on one experiment now also applies to direct
-            ``segment()`` calls made for another. Pass `selected_channels` and
-            `target_cell_size` explicitly to pin the behaviour and ignore what is
-            stored.
+            Both come from the model directory, which is installed once and shared by
+            every experiment, so applying them by default would let a mapping saved
+            while working on one experiment change what this function returns for
+            another. They are therefore opt-in: pass `use_stored_mapping=True` for
+            pipeline parity, or `selected_channels` / `target_cell_size` to set them
+            explicitly. Without either, the model's own ``channels`` list is used, as
+            before.
 
     Examples
     --------
@@ -593,6 +641,7 @@ def segment(
         selected_channels=selected_channels,
         target_cell_size=target_cell_size,
         diameter=diameter,
+        use_stored_mapping=use_stored_mapping,
     )
     if prepared is None:
         return None

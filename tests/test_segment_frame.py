@@ -171,7 +171,8 @@ class TestChannelMappingAndParameters(unittest.TestCase):
 
     ``segment()`` used to ignore ``selected_channels`` and ``target_cell_size_um``
     while ``SegmentCellDLProcess`` honoured both, so the library and the pipeline
-    produced different masks for the same model. These pin the aligned behaviour.
+    produced different masks for the same model. These pin the aligned behaviour,
+    which the stored configuration reaches only through ``use_stored_mapping``.
     """
 
     @classmethod
@@ -413,8 +414,8 @@ class TestSegmentHonoursTheStoredConfiguration(unittest.TestCase):
             labels[0], segmentation.segment_frame(self.stack[0], prepared)
         )
 
-    def test_stored_selected_channels_are_honoured(self):
-        """A mapping written into config_input.json reaches the prepared model."""
+    def test_stored_selected_channels_are_opt_in(self):
+        """A mapping written into config_input.json is used only when asked for."""
 
         model_path = segmentation.locate_segmentation_model(MODEL)
         config_path = os.path.join(model_path, "config_input.json")
@@ -428,11 +429,25 @@ class TestSegmentHonoursTheStoredConfiguration(unittest.TestCase):
             with open(config_path, "w") as config_file:
                 json.dump(config, config_file)
 
+            # config_input.json is installed once and shared by every experiment,
+            # so a mapping saved in the GUI must not silently reach a library call.
+            ignored = segmentation.prepare_segmentation_model(
+                MODEL,
+                channels=self.channels,
+                spatial_calibration=self.spatial_calibration,
+                use_gpu=False,
+            )
+            self.assertEqual(
+                list(ignored.required_channels), list(config["channels"])
+            )
+
+            # Opting in gets the pipeline's behaviour...
             prepared = segmentation.prepare_segmentation_model(
                 MODEL,
                 channels=self.channels,
                 spatial_calibration=self.spatial_calibration,
                 use_gpu=False,
+                use_stored_mapping=True,
             )
             self.assertEqual(list(prepared.required_channels), mapping)
 
@@ -442,6 +457,7 @@ class TestSegmentHonoursTheStoredConfiguration(unittest.TestCase):
                 channels=self.channels,
                 spatial_calibration=self.spatial_calibration,
                 use_gpu=False,
+                use_stored_mapping=True,
                 selected_channels=list(config["channels"]),
             )
             self.assertEqual(
