@@ -13,7 +13,9 @@ from unittest.mock import MagicMock
 
 import numpy as np
 import pytest
+from PyQt5.QtWidgets import QVBoxLayout
 
+from celldetective.gui.base.model_channel_selection import ModelChannelSelection
 from celldetective.napari import frame_segmentation as fs
 
 
@@ -260,3 +262,69 @@ class TestAvailableSegmentationModels:
             "celldetective.utils.model_getters.get_segmentation_models_list", explode
         )
         assert fs.available_segmentation_models("targets") == [fs.NO_MODEL]
+
+
+class TestChannelRows:
+    """
+    The channel rows are the main window's, not a copy of them.
+
+    Mapping a model's inputs onto the experiment's channels is the same job here
+    as in the main window's channel dialog, and the two drifting apart is how a
+    model ends up fed a different channel depending on where it was run from.
+    """
+
+    def _panel_with_rows(self, qtbot, config, exp_channels):
+        panel = _panel()
+        panel.exp_channels = exp_channels
+        panel.config = config
+        panel.channel_selection = None
+        # A real layout, so `_build_channel_rows` is exercised as it runs in the
+        # panel; the panel itself never has to be a live QWidget for that.
+        panel.channel_layout = QVBoxLayout()
+        panel._build_channel_rows()
+        qtbot.addWidget(panel.channel_selection)
+        return panel
+
+    def test_the_rows_are_the_shared_widget(self, qtbot):
+        panel = self._panel_with_rows(
+            qtbot, {"channels": ["live_nuclei_channel"]}, ["live_nuclei_channel"]
+        )
+        assert isinstance(panel.channel_selection, ModelChannelSelection)
+        assert panel._selected_channels() == ["live_nuclei_channel"]
+
+    def test_the_stored_mapping_is_honoured(self, qtbot):
+        """
+        A model declaring channels no experiment is named after is still usable.
+
+        CP_cyto3 declares ['fluorescenceuv', 'None']; only the mapping saved by
+        the main window says which channel that slot should be fed.
+        """
+
+        panel = self._panel_with_rows(
+            qtbot,
+            {
+                "channels": ["fluorescenceuv", "None"],
+                "selected_channels": ["brightfield_channel", "None"],
+            },
+            ["brightfield_channel"],
+        )
+        assert panel._selected_channels() == ["brightfield_channel", "None"]
+
+    def test_a_mapping_of_the_wrong_shape_is_ignored(self, qtbot):
+        # `selected_channels` is read off a JSON file that nothing guarantees the
+        # shape of; a bad one must fall back rather than break the panel.
+        panel = self._panel_with_rows(
+            qtbot,
+            {"channels": ["live_nuclei_channel"], "selected_channels": "brightfield"},
+            ["live_nuclei_channel"],
+        )
+        assert panel._selected_channels() == ["live_nuclei_channel"]
+
+    def test_a_model_without_inputs_reports_no_mapping(self, qtbot):
+        panel = self._panel_with_rows(qtbot, {"channels": []}, ["brightfield_channel"])
+        assert panel._selected_channels() is None
+
+    def test_no_rows_at_all_reports_no_mapping(self):
+        panel = _panel()
+        panel.channel_selection = None
+        assert panel._selected_channels() is None

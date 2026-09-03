@@ -2179,10 +2179,7 @@ class ProcessPanel(QFrame, Styles):
 
         model_complete_path = locate_segmentation_model(self.model_name)
         input_config_path = model_complete_path + "config_input.json"
-        new_channels = [
-            self.segChannelWidget.channel_cbs[i].currentText()
-            for i in range(len(self.segChannelWidget.channel_cbs))
-        ]
+        new_channels = self.segChannelWidget.channel_selection.selected_channels()
         target_cell_size = None
         if hasattr(self.segChannelWidget, "diameter_le"):
             target_cell_size = float(self.segChannelWidget.diameter_le.get_threshold())
@@ -2212,10 +2209,7 @@ class ProcessPanel(QFrame, Styles):
             self.signal_models_list.currentIndex()
         ]
         _, input_config_path = _resolve_signal_model_paths(self.signal_model_name)
-        new_channels = [
-            self.signalChannelWidget.channel_cbs[i].currentText()
-            for i in range(len(self.signalChannelWidget.channel_cbs))
-        ]
+        new_channels = self.signalChannelWidget.channel_selection.selected_channels()
         with open(input_config_path) as config_file:
             input_config = json.load(config_file)
 

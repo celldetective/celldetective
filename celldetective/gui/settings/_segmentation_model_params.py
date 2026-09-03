@@ -6,11 +6,10 @@ from typing import Optional
 logger = logging.getLogger("celldetective")
 
 import numpy as np
-from PyQt5.QtCore import QSize, Qt
+from PyQt5.QtCore import QSize
 from PyQt5.QtGui import QDoubleValidator
 from PyQt5.QtWidgets import (
     QVBoxLayout,
-    QComboBox,
     QPushButton,
     QHBoxLayout,
     QLabel,
@@ -20,6 +19,7 @@ from fonticon_mdi6 import MDI6
 from superqt.fonticon import icon
 
 from celldetective.gui.base.components import CelldetectiveWidget
+from celldetective.gui.base.model_channel_selection import ModelChannelSelection
 from celldetective.gui.base.utils import center_window
 from celldetective.gui.gui_utils import ThresholdLineEdit
 from celldetective.gui.viewers.size_viewer import CellSizeViewer
@@ -110,8 +110,17 @@ class SegModelParamsWidget(CelldetectiveWidget):
 
     def populate_widgets(self):
         """Populate the widgets."""
-        self.n_channels = len(self.required_channels)
-        self.channel_cbs = [QComboBox() for i in range(self.n_channels)]
+        # One dropdown per input slot, seeded from the mapping already stored for
+        # this model. Shared with the napari single-frame panel so that a model's
+        # inputs are mapped the same way wherever it is run from.
+        self.channel_selection = ModelChannelSelection(
+            required_channels=self.required_channels,
+            available_channels=list(self.attr_parent.exp_channels),
+            selected_channels=self.input_config.get("selected_channels"),
+        )
+        self.channel_cbs = self.channel_selection.channel_cbs
+        self.n_channels = len(self.channel_cbs)
+        self.layout.addWidget(self.channel_selection)
 
         # Button to view the current stack with a scale bar
         self.view_diameter_btn = QPushButton()
@@ -128,31 +137,6 @@ class SegModelParamsWidget(CelldetectiveWidget):
             placeholder="cell diameter in µm",
             value_type="float",
         )
-
-        available_channels = list(self.attr_parent.exp_channels) + ["None"]
-        # Populate the comboboxes with available channels from the experiment
-        for k in range(self.n_channels):
-            hbox_channel = QHBoxLayout()
-            hbox_channel.addWidget(QLabel(f"channel {k+1}: "), 33)
-
-            ch_vbox = QVBoxLayout()
-            ch_vbox.addWidget(
-                QLabel(f"Req: {self.required_channels[k]}"), alignment=Qt.AlignLeft
-            )
-            ch_vbox.addWidget(self.channel_cbs[k])
-
-            self.channel_cbs[k].addItems(
-                available_channels
-            )  # Give none option for more than one channel input
-            idx = self.channel_cbs[k].findText(self.required_channels[k])
-
-            if idx >= 0:
-                self.channel_cbs[k].setCurrentIndex(idx)
-            else:
-                self.channel_cbs[k].setCurrentIndex(len(available_channels) - 1)
-
-            hbox_channel.addLayout(ch_vbox, 66)
-            self.layout.addLayout(hbox_channel)
 
         if "cell_size_um" in self.input_config:
 
