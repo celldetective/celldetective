@@ -5,7 +5,6 @@ import numpy as np
 import pandas as pd
 
 from celldetective.log_manager import get_logger, positionlogger
-from celldetective.tracking import clean_trajectories
 from celldetective.utils.color_mappings import (
     color_from_status,
     color_from_class,
@@ -137,6 +136,10 @@ class SignalAnalysisProcess(Process):
                         raise ValueError(f"Missing required channel: {s}")
 
             # Preprocessing
+            # Imported here so that a signal-only run does not pay for btrack /
+            # trackpy / sklearn at module import time.
+            from celldetective.tracking import clean_trajectories
+
             trajectories_clean = clean_trajectories(
                 trajectories,
                 interpolate_na=True,

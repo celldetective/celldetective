@@ -1,8 +1,10 @@
 import time
 import os
 import gc
+import importlib
+import threading
 from multiprocessing import Process, Queue
-from typing import Optional, Dict, Any
+from typing import List, Optional, Dict, Any
 from pathlib import Path
 
 from celldetective.log_manager import (
@@ -13,6 +15,29 @@ from celldetective.log_manager import (
 )
 
 logger = get_logger(__name__)
+
+
+def _warm_up_imports(module_names: List[str]) -> None:
+    """
+    Import modules ahead of time, ignoring failures.
+
+    Only ``sys.modules`` is populated: the caller still performs its own import
+    later on and will surface any error then. Running this in a background
+    thread lets the (largely GIL-free) import of the deep learning backends
+    absorb the import cost of the stages that run after the first one.
+
+    Parameters
+    ----------
+    module_names : list of str
+        Dotted module names to import.
+    """
+
+    for name in module_names:
+        try:
+            importlib.import_module(name)
+        except Exception as e:
+            # The blocking import on the main thread will raise for real.
+            logger.debug(f"Warm-up import of {name} failed ({e}); ignoring.")
 
 
 class UnifiedBatchProcess(Process):
@@ -72,6 +97,39 @@ class UnifiedBatchProcess(Process):
         """Run the segmentation/tracking/measurement/signal batch for every position."""
 
         logger.info("Starting Unified Batch Process...")
+
+        # The stages are initialized in order, but only the first one blocks the
+        # start of the run. Import the modules of the later stages on a
+        # background thread so that their (multi-second) import cost overlaps
+        # with the model loading of the first stage instead of following it.
+        deferred_modules = []
+        stage_modules = [
+            (self.run_segmentation, ["celldetective.processes.segment_cells"]),
+            (self.run_tracking, ["celldetective.processes.track_cells"]),
+            (self.run_measurement, ["celldetective.processes.measure_cells"]),
+            (
+                self.run_signals,
+                [
+                    "celldetective.utils.event_detection",
+                    "celldetective.processes.detect_events",
+                ],
+            ),
+        ]
+        for enabled, modules in stage_modules:
+            if enabled:
+                deferred_modules.extend(modules)
+        # The first enabled stage is imported by the main thread right away.
+        deferred_modules = deferred_modules[1:]
+
+        warm_up_thread = None
+        if deferred_modules:
+            warm_up_thread = threading.Thread(
+                target=_warm_up_imports,
+                args=(deferred_modules,),
+                name="celldetective-warmup",
+                daemon=True,
+            )
+            warm_up_thread.start()
 
         # Initialize Workers
         # Propagate batch structure to sub-processes so they can locate experiment config
