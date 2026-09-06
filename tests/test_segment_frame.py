@@ -349,6 +349,34 @@ class TestPipelineAgreesOnTheTrainedCellSize(unittest.TestCase):
         self.assertIsNone(process.cell_size)
         self.assertIsNone(process.target_cell_size)
 
+    def test_a_non_positive_target_is_refused_rather_than_divided_by(self):
+        """
+        A size that cannot be one must not reach the scale.
+
+        `segment()` raises on these, and the channel dialog no longer writes
+        one, so only a configuration saved by an earlier build still carries
+        them. Zero used to raise ZeroDivisionError once the run had started, and
+        a negative flipped the scale; both now fall back to the calibration-only
+        scale, which is what the model declaring no size at all does.
+        """
+
+        calibration = 0.3112
+        for target in (0.0, -12.0):
+            with self.subTest(target=target):
+                config = dict(_model_config(CELLPOSE_MODEL))
+                config["target_cell_size_um"] = target
+
+                process = self._process_with(config)
+                self.assertIsNone(process.target_cell_size)
+
+                process.spatial_calibration = calibration
+                process.detect_rescaling()
+                self.assertAlmostEqual(
+                    process.scale,
+                    calibration / config["spatial_calibration"],
+                    places=6,
+                )
+
 
 @_requires_cellpose()
 @_requires_cellpose()

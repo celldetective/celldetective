@@ -942,6 +942,7 @@ class ThresholdLineEdit(QLineEdit):
         placeholder: str = "px > thresh are masked",
         value_type: str = "float",
         *args: Any,
+        bottom: Optional[float] = None,
     ):
         """
         Initialize the ThresholdLineEdit.
@@ -960,6 +961,13 @@ class ThresholdLineEdit(QLineEdit):
             Specifies the type of threshold value, either 'float' or 'int' (default is 'float').
         *args : tuple
             Additional positional arguments passed to the parent `QLineEdit`.
+        bottom : float, optional
+            Lowest value the field will accept, for a quantity that cannot go
+            below it. Keyword-only, and `None` by default so the field takes any
+            number as before. Qt keeps a value under the bottom out of the field
+            but still lets the bottom itself and a blank field stand, so a
+            quantity that must be strictly greater has to be checked again when
+            the value is read.
         """
         super().__init__(*args)
 
@@ -969,10 +977,13 @@ class ThresholdLineEdit(QLineEdit):
         self.setPlaceholderText(placeholder)
 
         if self.value_type == "float":
-            self.setValidator(QDoubleValidator())
+            validator = QDoubleValidator()
         else:
             self.init_value = int(self.init_value)
-            self.setValidator(QIntValidator())
+            validator = QIntValidator()
+        if bottom is not None:
+            validator.setBottom(bottom)
+        self.setValidator(validator)
 
         if self.connected_buttons is not None:
             self.textChanged.connect(self.enable_btn)

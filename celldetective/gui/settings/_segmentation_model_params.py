@@ -147,11 +147,16 @@ class SegModelParamsWidget(CelldetectiveWidget):
             # to save, and would otherwise write the placeholder 40 µm as though it
             # had been asked for -- rescaling every later run against a number
             # nobody entered.
+            # A cell size is a physical length, so a negative one is turned away
+            # at the field. Qt still lets a bare zero and a blank field stand,
+            # and both used to be written to the model configuration; they are
+            # caught in `set_selected_channels_for_segmentation` instead.
             self.diameter_le = ThresholdLineEdit(
                 init_value=40,
                 connected_buttons=[self.view_diameter_btn],
                 placeholder="cell diameter in µm",
                 value_type="float",
+                bottom=0.0,
             )
 
             # Layout for diameter input and button

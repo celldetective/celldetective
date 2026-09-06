@@ -303,8 +303,20 @@ class SegmentCellDLProcess(BaseSegmentProcess):
         # `segment()` and the single-frame panel applied it.
         self.target_cell_size = None
         self.cell_size = trained_cell_size_um(self.input_config)
-        if "target_cell_size_um" in self.input_config and self.cell_size is not None:
-            self.target_cell_size = self.input_config["target_cell_size_um"]
+        if self.cell_size is not None:
+            target = self.input_config.get("target_cell_size_um")
+            if target is not None and target <= 0:
+                # `segment()` rejects the same value outright, and the dialog no
+                # longer writes one, so this only catches a configuration saved by
+                # an earlier build. Dividing by it was the worse option: zero
+                # raised ZeroDivisionError once the run started, and a negative
+                # flipped the scale and segmented a mirrored frame.
+                logger.warning(
+                    f"Ignoring target_cell_size_um={target}: it must be strictly "
+                    "positive. Rescaling on spatial calibration alone."
+                )
+            else:
+                self.target_cell_size = target
 
         self.normalize_kwargs = _get_normalize_kwargs_from_config(self.input_config)
 
