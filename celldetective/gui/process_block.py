@@ -12,7 +12,7 @@ from PyQt5.QtWidgets import (
     QApplication,
 )
 from PyQt5.QtCore import Qt, QSize, QTimer, QThread, pyqtSignal
-from typing import Optional, Any, Dict, Union
+from typing import Optional, Any, Dict, List, Tuple, Union
 from superqt.fonticon import icon
 from fonticon_mdi6 import MDI6
 import gc
@@ -1264,10 +1264,21 @@ class ProcessPanel(QFrame, Styles):
         idx = self.parent_window.populations.index(self.mode)
         self.threshold_config = self.threshold_configs[idx]
 
-        self.load_available_tables()
+        # COLLECT POSITIONS
+        batch_structure, all_positions_flat = self.collect_batch_structure()
+
+        # Only the existence of the tables matters here, so probe the files
+        # instead of loading (and concatenating) every table of the experiment.
+        existing_tables = [
+            p
+            for p in all_positions_flat
+            if os.path.exists(
+                os.sep.join([p, "output", "tables", f"trajectories_{self.mode}.csv"])
+            )
+        ]
 
         # Checks for segmentation action
-        if self.df is not None and self.segment_action.isChecked():
+        if existing_tables and self.segment_action.isChecked():
             msgBox = QMessageBox()
             msgBox.setIcon(QMessageBox.Question)
             msgBox.setText(
@@ -1285,17 +1296,22 @@ class ProcessPanel(QFrame, Styles):
             else:
                 logger.info("erase tabs!")
                 tabs = [
-                    pos
-                    + os.sep.join(["output", "tables", f"trajectories_{self.mode}.csv"])
-                    for pos in self.df_pos_info["pos_path"].unique()
+                    os.sep.join(
+                        [pos, "output", "tables", f"trajectories_{self.mode}.csv"]
+                    )
+                    for pos in existing_tables
                 ]
                 # tabs += [pos+os.sep.join(['output', 'tables', f'trajectories_pairs.csv']) for pos in self.df_pos_info['pos_path'].unique()]
                 tabs += [
-                    pos
-                    + os.sep.join(
-                        ["output", "tables", f"napari_{self.mode}_trajectories.npy"]
+                    os.sep.join(
+                        [
+                            pos,
+                            "output",
+                            "tables",
+                            f"napari_{self.mode}_trajectories.npy",
+                        ]
                     )
-                    for pos in self.df_pos_info["pos_path"].unique()
+                    for pos in existing_tables
                 ]
                 for t in tabs:
                     remove_file_if_exists(t.replace(".csv", ".pkl"))
@@ -1385,42 +1401,12 @@ class ProcessPanel(QFrame, Styles):
 
         self.movie_prefix = self.parent_window.movie_prefix
 
-        # COLLECT POSITIONS
-        batch_structure = {}
-        all_positions_flat = (
-            []
-        )  # Keep flat list for legacy check logic or easy counting
-
-        for w_idx in self.well_index:
-            well = self.parent_window.wells[w_idx]
-
-            batch_structure[w_idx] = {"well_name": well, "positions": []}
-
-            pos_indices = self.parent_window.position_list.getSelectedIndices()
-            # Optimization: Glob once per well
-            all_well_positions = natsorted(
-                glob(
-                    well
-                    + f"{os.path.split(well)[-1].replace('W','').replace(os.sep,'')}*/"
-                )
-            )
-            for pos_idx in pos_indices:
-                if pos_idx < len(all_well_positions):
-                    pos = all_well_positions[pos_idx]
-                else:
-                    logger.warning(
-                        f"Position index {pos_idx} out of range for well {well}"
-                    )
-                    continue
-
-                batch_structure[w_idx]["positions"].append(pos)
-                all_positions_flat.append(pos)
-
-                # Check output folders creation
-                if not os.path.exists(pos + "output/"):
-                    os.mkdir(pos + "output/")
-                if not os.path.exists(pos + "output/tables/"):
-                    os.mkdir(pos + "output/tables/")
+        # Check output folders creation
+        for pos in all_positions_flat:
+            if not os.path.exists(pos + "output/"):
+                os.mkdir(pos + "output/")
+            if not os.path.exists(pos + "output/tables/"):
+                os.mkdir(pos + "output/tables/")
 
         # BATCH SEGMENTATION
         # --- UNIFIED BATCH PROCESS SETUP ---
@@ -1897,6 +1883,49 @@ class ProcessPanel(QFrame, Styles):
             )
             self.job._ProgressWindow__runner.signals.result.connect(on_table_loaded)
             self.job.exec_()
+
+    def collect_batch_structure(self) -> Tuple[Dict[int, Dict[str, Any]], List[str]]:
+        """
+        List the positions selected in the control panel, grouped by well.
+
+        Returns
+        -------
+        batch_structure : dict
+            Maps the well index to its name and the paths of the selected positions.
+        all_positions_flat : list of str
+            The same position paths, flattened, in well order.
+        """
+
+        batch_structure = {}
+        all_positions_flat = []
+
+        pos_indices = self.parent_window.position_list.getSelectedIndices()
+
+        for w_idx in self.well_index:
+            well = self.parent_window.wells[w_idx]
+
+            batch_structure[w_idx] = {"well_name": well, "positions": []}
+
+            # Optimization: Glob once per well
+            all_well_positions = natsorted(
+                glob(
+                    well
+                    + f"{os.path.split(well)[-1].replace('W','').replace(os.sep,'')}*/"
+                )
+            )
+            for pos_idx in pos_indices:
+                if pos_idx < len(all_well_positions):
+                    pos = all_well_positions[pos_idx]
+                else:
+                    logger.warning(
+                        f"Position index {pos_idx} out of range for well {well}"
+                    )
+                    continue
+
+                batch_structure[w_idx]["positions"].append(pos)
+                all_positions_flat.append(pos)
+
+        return batch_structure, all_positions_flat
 
     def load_available_tables(self) -> None:
         """
