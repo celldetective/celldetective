@@ -721,17 +721,26 @@ class FrameSegmentationPanel(QWidget):
             return
 
         worker.cancel()
-        try:
-            worker.stage.disconnect()
-            worker.succeeded.disconnect()
-            worker.failed.disconnect()
-            # `finished` too: `showEvent` clears `_closing`, so a panel shown
-            # again would let a detached worker's `finished` run, dropping
-            # `_worker` and flipping the UI back to idle underneath a newer run.
-            worker.finished.disconnect()
-        except (TypeError, RuntimeError) as e:
-            # Already disconnected, or the C++ object is gone: nothing to undo.
-            logger.debug(f"Could not disconnect the segmentation worker: {e}")
+        # Slot by slot, never a bare `disconnect()`: the worker also carries the
+        # bookkeeping this panel does not own -- discarding itself from
+        # `_LIVE_WORKERS` and its own `deleteLater` -- and clearing a signal
+        # wholesale would drop those too, stranding a still-running worker (and
+        # the stack and network it holds) for the life of the process.
+        # `finished` is detached like the rest: `showEvent` clears `_closing`, so
+        # a panel shown again would otherwise let a detached worker's `finished`
+        # run, dropping `_worker` and flipping the UI back to idle underneath a
+        # newer run.
+        for signal, slot in (
+            (worker.stage, self._on_stage),
+            (worker.succeeded, self._on_succeeded),
+            (worker.failed, self._on_failed),
+            (worker.finished, self._on_worker_finished),
+        ):
+            try:
+                signal.disconnect(slot)
+            except (TypeError, RuntimeError) as e:
+                # Already disconnected, or the C++ object is gone: nothing to undo.
+                logger.debug(f"Could not disconnect the segmentation worker: {e}")
 
         if worker.isRunning():
             worker.wait(2000)

@@ -255,12 +255,15 @@ def prepare_segmentation_model(
             The experiment channels feeding the model's input slots, one per slot,
             in the model's own order; ``"None"`` leaves a slot blank. Overrides the
             ``selected_channels`` mapping stored in the model configuration by the
-            channel-selection dialog. Default is None (use the stored mapping).
+            channel-selection dialog. Default is None: the stored mapping when
+            ``use_stored_mapping`` is set, the model's own ``channels`` list
+            otherwise.
     target_cell_size : float or None, optional
             Typical object size in the images, in µm. Combined with the model's
             ``cell_size_um`` it rescales the images so objects match the size the
             model was trained on. Overrides the stored ``target_cell_size_um``.
-            Default is None (use the stored value).
+            Default is None: the stored value when ``use_stored_mapping`` is set,
+            no cell-size rescaling otherwise.
     diameter : float or None, optional
             Cellpose object diameter, in pixels. Overrides the value stored in the
             model configuration. Ignored for StarDist models. Default is None.
@@ -577,11 +580,13 @@ def segment(
             the model's own order; ``"None"`` leaves a slot blank. Overrides the
             ``selected_channels`` mapping stored in the model configuration. Pass the
             model's own ``channels`` list to ignore the stored mapping entirely.
-            Default is None (use the stored mapping).
+            Default is None: the stored mapping when ``use_stored_mapping`` is set,
+            the model's own ``channels`` list otherwise.
     target_cell_size : float or None, optional
             Typical object size in the images, in µm, used together with the model's
             ``cell_size_um`` to rescale the images. Overrides the stored
-            ``target_cell_size_um``. Default is None (use the stored value).
+            ``target_cell_size_um``. Default is None: the stored value when
+            ``use_stored_mapping`` is set, no cell-size rescaling otherwise.
     diameter : float or None, optional
             Cellpose object diameter, in pixels, overriding the model configuration.
             Ignored for StarDist models. Default is None.

@@ -282,6 +282,74 @@ class TestChannelMappingAndParameters(unittest.TestCase):
         self.assertIsNone(prepared.diameter)
 
 
+class TestPipelineAgreesOnTheTrainedCellSize(unittest.TestCase):
+    """
+    A cell size set once must mean the same thing everywhere it is applied.
+
+    The main window writes ``target_cell_size_um`` into the model directory, and
+    three places read it back: ``segment()``, the napari single-frame panel, and
+    the full-position run. The first two go through ``trained_cell_size_um()``,
+    which can work the trained size out for a generalist Cellpose model from its
+    ``diameter`` and ``spatial_calibration``. The pipeline used to insist on a
+    ``cell_size_um`` key instead, which those models do not carry -- so the same
+    setting rescaled the preview and did nothing to the run it was previewing.
+    """
+
+    def _process_with(self, config):
+        """A bare process object carrying `config`, with no position set up."""
+
+        from celldetective.processes.segment_cells import SegmentCellDLProcess
+
+        process = SegmentCellDLProcess.__new__(SegmentCellDLProcess)
+        process.input_config = config
+        process.extract_model_input_parameters()
+        return process
+
+    def test_a_generalist_cellpose_size_reaches_the_pipeline(self):
+        config = dict(_model_config(CELLPOSE_MODEL))
+        self.assertNotIn("cell_size_um", config)
+        config["target_cell_size_um"] = 25.0
+
+        process = self._process_with(config)
+
+        self.assertAlmostEqual(
+            process.cell_size,
+            config["diameter"] * config["spatial_calibration"],
+            places=6,
+        )
+        self.assertEqual(process.target_cell_size, 25.0)
+
+    def test_the_pipeline_scale_matches_the_prepared_model(self):
+        """The two paths must land on the same number, not merely both rescale."""
+
+        config = dict(_model_config(CELLPOSE_MODEL))
+        config["target_cell_size_um"] = 25.0
+        calibration = 0.3112
+
+        process = self._process_with(config)
+        process.spatial_calibration = calibration
+        process.detect_rescaling()
+
+        expected = (
+            calibration / config["spatial_calibration"]
+        ) * (config["diameter"] * config["spatial_calibration"] / 25.0)
+        self.assertAlmostEqual(process.scale, expected, places=6)
+
+    def test_a_model_declaring_no_size_still_rescales_on_calibration_only(self):
+        """Nothing to measure against means no cell-size correction, not a crash."""
+
+        # A real StarDist configuration with the one key that carries the
+        # trained size taken away: a StarDist model states no diameter, so there
+        # is nothing left to work the size out from.
+        config = dict(_model_config(MODEL))
+        config.pop("cell_size_um", None)
+        config["target_cell_size_um"] = 25.0
+
+        process = self._process_with(config)
+        self.assertIsNone(process.cell_size)
+        self.assertIsNone(process.target_cell_size)
+
+
 @_requires_cellpose()
 @_requires_cellpose()
 class TestRescalingInvariance(unittest.TestCase):
@@ -519,15 +587,26 @@ class TestCellposeModelPreparation(unittest.TestCase):
     EXPERIMENT_CHANNELS = ["brightfield_channel", "live_nuclei_channel"]
     MAPPING = ["live_nuclei_channel", "None"]
 
+    # Finer than the images CP_cyto3 was trained on, so every scale below
+    # carries a calibration correction on top of any cell-size correction.
+    SPATIAL_CALIBRATION = 0.3112
+
     def _prepare(self, **kwargs):
         return segmentation.prepare_segmentation_model(
             CELLPOSE_MODEL,
             channels=self.EXPERIMENT_CHANNELS,
-            spatial_calibration=0.3112,
+            spatial_calibration=self.SPATIAL_CALIBRATION,
             use_gpu=False,
             selected_channels=self.MAPPING,
             **kwargs,
         )
+
+    def _calibration_scale(self, config):
+        """
+        The resampling the frame needs on pixel size alone, before any
+        correction for how big the cells are.
+        """
+        return self.SPATIAL_CALIBRATION / config["spatial_calibration"]
 
     def test_cellpose_model_loads(self):
         """
@@ -567,21 +646,30 @@ class TestCellposeModelPreparation(unittest.TestCase):
         config = _model_config(CELLPOSE_MODEL)
         self.assertNotIn("cell_size_um", config)
         trained = config["diameter"] * config["spatial_calibration"]
+        calibration = self._calibration_scale(config)
 
-        # Cells twice the trained size: the frame is halved so they reach the
-        # network at the diameter it was trained on.
+        # Cells twice the trained size: halved on top of the calibration
+        # correction, so they reach the network at the diameter it was
+        # trained on.
         prepared = self._prepare(target_cell_size=2 * trained)
-        self.assertAlmostEqual(prepared.scale_model, 0.5, places=6)
+        self.assertAlmostEqual(prepared.scale_model, 0.5 * calibration, places=6)
 
         # Half the trained size: doubled instead.
         prepared = self._prepare(target_cell_size=trained / 2)
-        self.assertAlmostEqual(prepared.scale_model, 2.0, places=6)
+        self.assertAlmostEqual(prepared.scale_model, 2.0 * calibration, places=6)
 
-    def test_matching_cell_size_leaves_a_generic_cellpose_model_alone(self):
+    def test_matching_cell_size_leaves_only_the_calibration_correction(self):
+        """
+        Cells already at the trained physical size need no correction of their
+        own -- but the frame still carries the model's pixel size, so what is
+        left is the calibration correction, not no rescaling at all.
+        """
         config = _model_config(CELLPOSE_MODEL)
         trained = config["diameter"] * config["spatial_calibration"]
         prepared = self._prepare(target_cell_size=trained)
-        self.assertAlmostEqual(prepared.scale_model, 1.0, places=6)
+        self.assertAlmostEqual(
+            prepared.scale_model, self._calibration_scale(config), places=6
+        )
 
     def test_the_trained_diameter_is_never_rescaled_away(self):
         """

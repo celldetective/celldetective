@@ -73,6 +73,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `prepare_segmentation_model()` no longer raises `KeyError` on a Cellpose
   `config_input.json` that omits `diameter`, `cellprob_threshold` or
   `flow_threshold` when the caller passes those values explicitly.
+- A cell size set in the model parameter dialog now reaches the full-position
+  run for a generalist Cellpose model too. The pipeline read the trained size
+  from a `cell_size_um` key those models do not carry, so the setting rescaled
+  the napari preview and `segment()` while the run it was previewing ignored it.
+  All three now go through `trained_cell_size_um()`.
+- Closing the napari viewer during a segmentation run no longer strands the
+  worker thread. Detaching the panel's slots cleared the whole `finished`
+  signal, including the worker's own cleanup, so a run still in flight kept its
+  thread, the image stack and the loaded network alive for the rest of the
+  session.
 
 ## [1.5.3] - 2026-06-04
 
