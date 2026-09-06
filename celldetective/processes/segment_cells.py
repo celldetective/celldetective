@@ -26,7 +26,10 @@ from celldetective.utils.image_loaders import (
 from celldetective.utils.image_transforms import _estimate_scale_factor
 from celldetective.utils.mask_cleaning import _check_label_dims
 from celldetective.utils.mask_transforms import _rescale_labels
-from celldetective.utils.model_loaders import locate_segmentation_model
+from celldetective.utils.model_loaders import (
+    locate_segmentation_model,
+    trained_cell_size_um,
+)
 from celldetective.utils.parsing import (
     config_section_to_dict,
     _extract_nbr_channels_from_config,
@@ -292,13 +295,16 @@ class SegmentCellDLProcess(BaseSegmentProcess):
         if "selected_channels" in self.input_config:
             self.required_channels = self.input_config["selected_channels"]
 
+        # Through the same helper the library and the napari panel use, so a
+        # cell size set in the main window means the same thing everywhere. A
+        # generalist Cellpose model states its trained size in pixels rather
+        # than as `cell_size_um`; gating on that key alone made the model
+        # parameter dialog offer a cell size that this run then ignored, while
+        # `segment()` and the single-frame panel applied it.
         self.target_cell_size = None
-        if (
-            "target_cell_size_um" in self.input_config
-            and "cell_size_um" in self.input_config
-        ):
+        self.cell_size = trained_cell_size_um(self.input_config)
+        if "target_cell_size_um" in self.input_config and self.cell_size is not None:
             self.target_cell_size = self.input_config["target_cell_size_um"]
-            self.cell_size = self.input_config["cell_size_um"]
 
         self.normalize_kwargs = _get_normalize_kwargs_from_config(self.input_config)
 
