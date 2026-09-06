@@ -111,8 +111,10 @@ class TestPreparedModelCache:
     """
     The cache holds whole networks, so it must be bounded and rarely missed.
 
-    The Cellpose diameter and thresholds are arguments to the forward pass; keying
-    the cache on them reloaded a network every time one was nudged.
+    The Cellpose thresholds are arguments to the forward pass; keying the cache
+    on them reloaded a network every time one was nudged. The diameter is not a
+    panel setting at all -- it is the size the network was trained to see -- so a
+    cached model always gets the model's own value back.
     """
 
     def _prepared(self, model_type="cellpose"):
@@ -127,27 +129,28 @@ class TestPreparedModelCache:
 
     def test_a_miss_returns_none(self):
         panel = _panel()
-        assert panel._reuse_prepared(("m", None, None), None, None, None) is None
+        assert panel._reuse_prepared(("m", None, None), None, None) is None
 
     def test_thresholds_are_re_applied_to_a_cached_model(self):
         panel = _panel()
         prepared = self._prepared()
         panel._cache_prepared(("m", None, None), prepared)
 
-        reused = panel._reuse_prepared(("m", None, None), 12.0, 0.25, 0.6)
+        reused = panel._reuse_prepared(("m", None, None), 0.25, 0.6)
 
         assert reused is prepared
-        assert prepared.diameter == 12.0
         assert prepared.cellprob_threshold == 0.25
         assert prepared.flow_threshold == 0.6
+        # Not a panel setting: the frame is rescaled to the trained size instead.
+        assert prepared.diameter == 30.0
 
     def test_a_blank_field_restores_the_models_own_value(self):
         panel = _panel()
         prepared = self._prepared()
         panel._cache_prepared(("m", None, None), prepared)
 
-        panel._reuse_prepared(("m", None, None), 12.0, 0.25, 0.6)
-        panel._reuse_prepared(("m", None, None), None, None, None)
+        panel._reuse_prepared(("m", None, None), 0.25, 0.6)
+        panel._reuse_prepared(("m", None, None), None, None)
 
         assert prepared.diameter == 30.0
         assert prepared.cellprob_threshold == 0.0
@@ -157,7 +160,7 @@ class TestPreparedModelCache:
         panel = _panel()
         prepared = self._prepared(model_type="stardist")
         panel._cache_prepared(("m", None, None), prepared)
-        reused = panel._reuse_prepared(("m", None, None), 12.0, None, None)
+        reused = panel._reuse_prepared(("m", None, None), 0.25, None)
         assert reused is prepared
         assert not isinstance(prepared.diameter, float)
 
@@ -174,7 +177,7 @@ class TestPreparedModelCache:
             panel._cache_prepared(key, self._prepared())
 
         # Touch the oldest so it is no longer the coldest.
-        panel._reuse_prepared(keys[0], None, None, None)
+        panel._reuse_prepared(keys[0], None, None)
         panel._cache_prepared(keys[-1], self._prepared())
 
         assert keys[0] in panel._prepared
@@ -328,3 +331,137 @@ class TestChannelRows:
         panel = _panel()
         panel.channel_selection = None
         assert panel._selected_channels() is None
+
+
+class TestTrainedCellSize:
+    """
+    The cell size is the only handle on rescaling, and every Cellpose model has
+    one whether or not it says so in microns.
+
+    A model is trained to see objects at a fixed pixel size, and the frame is
+    rescaled so they arrive at it. Models built through celldetective record the
+    physical size as ``cell_size_um``; a generic Cellpose model does not, but
+    records the same thing as ``diameter`` px at its own ``spatial_calibration``.
+    Without the second reading, a generic model could not be rescaled at all --
+    the correction needs the trained size and the target, and one was missing.
+    """
+
+    def _panel(self, config):
+        panel = _panel()
+        panel.config = config
+        return panel
+
+    def test_a_declared_cell_size_is_used_as_is(self):
+        panel = self._panel({"model_type": "cellpose", "cell_size_um": 9.211})
+        assert panel._trained_cell_size_um() == 9.211
+
+    def test_a_generic_cellpose_model_derives_it_from_the_diameter(self):
+        panel = self._panel(
+            {"model_type": "cellpose", "diameter": 30.0, "spatial_calibration": 0.5}
+        )
+        assert panel._trained_cell_size_um() == pytest.approx(15.0)
+
+    def test_a_declared_size_wins_over_the_derivation(self):
+        panel = self._panel(
+            {
+                "model_type": "cellpose",
+                "cell_size_um": 9.211,
+                "diameter": 30.0,
+                "spatial_calibration": 0.5,
+            }
+        )
+        assert panel._trained_cell_size_um() == 9.211
+
+    def test_a_generic_stardist_model_has_none(self):
+        # StarDist has no diameter to read a size off, so there is nothing to
+        # rescale against and the row is not offered.
+        panel = self._panel({"model_type": "stardist", "spatial_calibration": 0.31})
+        assert panel._trained_cell_size_um() is None
+
+    @pytest.mark.parametrize(
+        "config",
+        [
+            {"model_type": "cellpose", "diameter": 30.0},
+            {"model_type": "cellpose", "spatial_calibration": 0.5},
+            {"model_type": "cellpose", "diameter": 0, "spatial_calibration": 0.5},
+            {"model_type": "cellpose", "diameter": 30.0, "spatial_calibration": 0},
+            {"model_type": "cellpose", "cell_size_um": 0},
+        ],
+    )
+    def test_a_size_that_cannot_be_worked_out_is_none(self, config):
+        assert self._panel(config)._trained_cell_size_um() is None
+
+    def test_no_config_reports_none(self):
+        assert self._panel(None)._trained_cell_size_um() is None
+
+
+class TestParameterRows:
+    """The panel offers only the parameters a run should actually vary."""
+
+    def _rows(self, qtbot, config):
+        from PyQt5.QtWidgets import QFormLayout, QWidget
+
+        panel = _panel()
+        panel.config = config
+        panel.diameter_le = None
+        panel.cellprob_le = None
+        panel.flow_le = None
+        panel.cell_size_le = None
+        # Parented to the panel object so the layout and its fields outlive this
+        # helper: Qt deletes the C++ widgets as soon as the last holder goes.
+        holder = QWidget()
+        qtbot.addWidget(holder)
+        panel._holder = holder
+        panel.param_form = QFormLayout(holder)
+        panel._build_parameter_rows()
+        labels = [
+            panel.param_form.itemAt(i, QFormLayout.LabelRole).widget().text()
+            for i in range(panel.param_form.rowCount())
+            if panel.param_form.itemAt(i, QFormLayout.LabelRole) is not None
+        ]
+        return panel, labels
+
+    def test_a_generic_cellpose_model_offers_a_cell_size(self, qtbot):
+        panel, labels = self._rows(
+            qtbot,
+            {"model_type": "cellpose", "diameter": 30.0, "spatial_calibration": 0.5},
+        )
+        assert any("cell size" in text for text in labels)
+        assert panel.cell_size_le is not None
+        assert panel.cell_size_le.value() == pytest.approx(15.0)
+
+    def test_the_diameter_is_never_offered(self, qtbot):
+        """
+        It is the size the network was trained to see, not a setting: a model
+        trained on 30 px objects should keep being asked for 30 px ones, and the
+        frame rescaled until that is what it gets.
+        """
+        _, labels = self._rows(
+            qtbot,
+            {
+                "model_type": "cellpose",
+                "diameter": 30.0,
+                "spatial_calibration": 0.5,
+                "cellprob_threshold": 0.0,
+                "flow_threshold": 0.4,
+            },
+        )
+        assert not any("diameter" in text.lower() for text in labels)
+        assert any("cell probability" in text for text in labels)
+        assert any("flow threshold" in text for text in labels)
+
+    def test_a_stored_target_seeds_the_field(self, qtbot):
+        panel, _ = self._rows(
+            qtbot,
+            {
+                "model_type": "cellpose",
+                "cell_size_um": 10.0,
+                "target_cell_size_um": 25.0,
+            },
+        )
+        assert panel.cell_size_le.value() == pytest.approx(25.0)
+
+    def test_a_model_with_nothing_to_tune_says_so(self, qtbot):
+        panel, labels = self._rows(qtbot, {"model_type": "stardist"})
+        assert panel.cell_size_le is None
+        assert panel.param_form.rowCount() == 1

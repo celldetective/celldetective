@@ -37,6 +37,7 @@ from PyQt5.QtWidgets import (
 
 from celldetective import get_logger
 from celldetective.gui.base.model_channel_selection import ModelChannelSelection
+from celldetective.utils.model_loaders import trained_cell_size_um
 from celldetective.utils.experiment import (
     extract_experiment_channels,
     extract_experiment_from_position,
@@ -370,7 +371,6 @@ class FrameSegmentationPanel(QWidget):
             self.spatial_calibration = None
 
         self.channel_selection: Optional[ModelChannelSelection] = None
-        self.diameter_le: Optional[_FloatEdit] = None
         self.cellprob_le: Optional[_FloatEdit] = None
         self.flow_le: Optional[_FloatEdit] = None
         self.cell_size_le: Optional[_FloatEdit] = None
@@ -397,11 +397,24 @@ class FrameSegmentationPanel(QWidget):
             window = None
 
         if window is not None:
+            if self._watched_window is not None:
+                # Re-installing on a window already watched would have the filter
+                # run twice per event; take the old one off first.
+                try:
+                    self._watched_window.removeEventFilter(self)
+                except RuntimeError as e:
+                    logger.debug(f"Previously watched window already gone: {e}")
             window.installEventFilter(self)
             self._watched_window = window
 
         app = QApplication.instance()
         if app is not None:
+            # Qt.UniqueConnection would raise on the second call; the panel may be
+            # shown again after a close, so ask for the connection only once.
+            try:
+                app.aboutToQuit.disconnect(self._stop_worker)
+            except TypeError:
+                pass
             app.aboutToQuit.connect(self._stop_worker)
 
     def eventFilter(self, watched, event) -> bool:
@@ -518,7 +531,6 @@ class FrameSegmentationPanel(QWidget):
         self._clear(self.channel_layout)
         self._clear(self.param_form)
         self.channel_selection = None
-        self.diameter_le = None
         self.cellprob_le = None
         self.flow_le = None
         self.cell_size_le = None
@@ -562,18 +574,35 @@ class FrameSegmentationPanel(QWidget):
         )
         self.channel_layout.addWidget(self.channel_selection)
 
+    def _trained_cell_size_um(self) -> Optional[float]:
+        """
+        The physical object size the selected model was trained on, in microns.
+
+        Delegates to :func:`~celldetective.utils.model_loaders.trained_cell_size_um`,
+        which is also what ``prepare_segmentation_model`` and the main window's
+        channel dialog read: a model has to be rescaled the same way wherever it
+        is run from.
+
+        Returns
+        -------
+        float or None
+            The trained object size in microns, or None when the model gives no
+            way to work it out -- in which case there is nothing to rescale
+            against, and no cell size row is shown.
+        """
+
+        return trained_cell_size_um(self.config)
+
     def _build_parameter_rows(self) -> None:
         """Expose the inference parameters that this model type actually takes."""
 
         model_type = self.config.get("model_type")
 
         if model_type == "cellpose":
-            self.diameter_le = _FloatEdit(self.config.get("diameter"))
-            self.diameter_le.setToolTip(
-                "Cellpose object diameter, in pixels. Blank uses the model's own value."
-            )
-            self.param_form.addRow(QLabel("diameter [px]:"), self.diameter_le)
-
+            # No diameter row on purpose. It is the size the network was trained
+            # to see -- 30 px for a cyto model -- not a knob: the frame is
+            # rescaled so that objects arrive at that size, which is what the
+            # cell size below controls.
             self.cellprob_le = _FloatEdit(self.config.get("cellprob_threshold"))
             self.cellprob_le.setToolTip(
                 "Lower to keep more objects, raise to keep fewer."
@@ -586,14 +615,14 @@ class FrameSegmentationPanel(QWidget):
             )
             self.param_form.addRow(QLabel("flow threshold:"), self.flow_le)
 
-        if "cell_size_um" in self.config:
-            trained = self.config["cell_size_um"]
+        trained = self._trained_cell_size_um()
+        if trained is not None:
             self.cell_size_le = _FloatEdit(
                 self.config.get("target_cell_size_um", trained), bottom=0.0
             )
             self.cell_size_le.setToolTip(
                 f"Typical object size in these images, in µm.\n"
-                f"The model was trained on objects of about {trained} µm;\n"
+                f"The model was trained on objects of about {trained:.4g} µm;\n"
                 f"the frame is rescaled to match."
             )
             self.param_form.addRow(QLabel("cell size [µm]:"), self.cell_size_le)
@@ -650,7 +679,6 @@ class FrameSegmentationPanel(QWidget):
         if self.channel_selection is not None:
             self.channel_selection.setEnabled(not running)
         for edit in (
-            self.diameter_le,
             self.cellprob_le,
             self.flow_le,
             self.cell_size_le,
@@ -697,6 +725,10 @@ class FrameSegmentationPanel(QWidget):
             worker.stage.disconnect()
             worker.succeeded.disconnect()
             worker.failed.disconnect()
+            # `finished` too: `showEvent` clears `_closing`, so a panel shown
+            # again would let a detached worker's `finished` run, dropping
+            # `_worker` and flipping the UI back to idle underneath a newer run.
+            worker.finished.disconnect()
         except (TypeError, RuntimeError) as e:
             # Already disconnected, or the C++ object is gone: nothing to undo.
             logger.debug(f"Could not disconnect the segmentation worker: {e}")
@@ -730,6 +762,11 @@ class FrameSegmentationPanel(QWidget):
         # screen again is not dying, and leaving the latch set would make every
         # later run hang with its labels silently discarded.
         self._closing = False
+        # `closeEvent` took the filter off the viewer window and dropped the
+        # reference; without putting it back, a panel shown again would never
+        # learn that the viewer closed and would let a worker outlive it.
+        if self._watched_window is None:
+            self._install_close_hook()
         super().showEvent(event)
 
     def _on_run_clicked(self) -> None:
@@ -779,20 +816,20 @@ class FrameSegmentationPanel(QWidget):
             )
             return
 
-        diameter = self.diameter_le.value() if self.diameter_le else None
         cellprob = self.cellprob_le.value() if self.cellprob_le else None
         flow = self.flow_le.value() if self.flow_le else None
 
-        # Only what the model is built from. The Cellpose thresholds and diameter
-        # are passed to inference, not to the constructor, so they are re-applied
-        # to a cached model instead of forcing it to be loaded again.
+        # Only what the model is built from. The Cellpose thresholds are passed
+        # to inference, not to the constructor, so they are re-applied to a
+        # cached model instead of forcing it to be loaded again. The cell size is
+        # in here because it sets the rescaling, which is baked into the model.
         cache_key = (
             model_name,
             tuple(selected) if selected is not None else None,
             target_cell_size,
         )
 
-        cached = self._reuse_prepared(cache_key, diameter, cellprob, flow)
+        cached = self._reuse_prepared(cache_key, cellprob, flow)
 
         # The GPU is left to napari's renderer: a single frame is quick on CPU,
         # and a TensorFlow context would compete for the VRAM the viewer is
@@ -808,7 +845,6 @@ class FrameSegmentationPanel(QWidget):
             use_stored_mapping=True,
             selected_channels=selected,
             target_cell_size=target_cell_size,
-            diameter=diameter,
             cellprob_threshold=cellprob,
             flow_threshold=flow,
         )
@@ -840,15 +876,14 @@ class FrameSegmentationPanel(QWidget):
     def _reuse_prepared(
         self,
         cache_key,
-        diameter: Optional[float],
         cellprob: Optional[float],
         flow: Optional[float],
     ):
         """
         Fetch a prepared model for these settings and re-apply the inference values.
 
-        The Cellpose diameter and thresholds are arguments to the forward pass, not
-        to the constructor, so a change to any of them only has to be written onto
+        The Cellpose thresholds are arguments to the forward pass, not to the
+        constructor, so a change to either of them only has to be written onto
         the model rather than causing a new one to be loaded. A field left blank
         means "use the model's own value", which is what
         ``PreparedSegmentationModel.config_defaults`` holds.
@@ -857,7 +892,7 @@ class FrameSegmentationPanel(QWidget):
         ----------
         cache_key : tuple
             Identity of the model to look up.
-        diameter, cellprob, flow : float or None
+        cellprob, flow : float or None
             The values entered in the panel, None meaning the model's own.
 
         Returns
@@ -875,9 +910,9 @@ class FrameSegmentationPanel(QWidget):
 
         if prepared.model_type == "cellpose":
             defaults = prepared.config_defaults
-            prepared.diameter = (
-                diameter if diameter is not None else defaults.get("diameter")
-            )
+            # Never overridden from the panel: the diameter is the size the
+            # network was trained to see, and the frame is rescaled to it.
+            prepared.diameter = defaults.get("diameter")
             prepared.cellprob_threshold = (
                 cellprob
                 if cellprob is not None
@@ -901,8 +936,49 @@ class FrameSegmentationPanel(QWidget):
         self.status_lbl.setText(message)
         self.viewer.status = message
 
+    def _rebuild_rows_if_downloaded(
+        self, model_name: str, cache_key: Optional[tuple] = None
+    ) -> None:
+        """
+        Build the channel and parameter rows for a model fetched during this run.
+
+        A repository model has no configuration on disk until its first run
+        downloads it, so the panel is still showing the "not downloaded yet"
+        placeholder with no rows. Build them now, rather than leaving the user to
+        cycle the dropdown to get at a mapping the model has had all along --
+        which a combo box will not even do for the entry already selected.
+
+        Parameters
+        ----------
+        model_name : str
+            The model the finished run used.
+        cache_key : tuple, optional
+            The key the run's prepared model was stored under, when it succeeded.
+        """
+
+        if (
+            self.config is not None
+            or not model_name
+            or model_name != self.model_cb.currentText()
+        ):
+            return
+
+        self._reload_model(model_name)
+        if self.config is not None and cache_key is not None:
+            # Those rows feed the cache key, so the entry just stored is keyed on
+            # a state that can never come back; drop it rather than hold a few
+            # hundred MB of network alive for a key nothing will ask for.
+            self._prepared.pop(cache_key, None)
+
     def _on_failed(self, message: str) -> None:
         """Report a worker failure."""
+        # The download half of a run can succeed while inference fails -- a model
+        # whose declared channel names match nothing in the experiment fails
+        # exactly that way. Its configuration is on disk now, so pick the rows up
+        # before reporting, or the panel dead-ends: every retry resolves the same
+        # unmappable channels and fails identically.
+        pending = self._pending or {}
+        self._rebuild_rows_if_downloaded(pending.get("model_name", ""))
         self._failed(message)
 
     def _on_worker_finished(self) -> None:
@@ -1005,22 +1081,7 @@ class FrameSegmentationPanel(QWidget):
         if cache_key is not None:
             self._cache_prepared(cache_key, prepared)
 
-        # A model fetched during this very run: its configuration only reached the
-        # disk once the worker had started, so the panel is still showing the
-        # "not downloaded yet" placeholder with no channel or parameter rows.
-        # Build them now, rather than leaving the user to cycle the dropdown to
-        # get at a mapping the model has had all along.
-        if (
-            self.config is None
-            and model_name
-            and model_name == self.model_cb.currentText()
-        ):
-            self._reload_model(model_name)
-            if self.config is not None and cache_key is not None:
-                # Those rows feed the cache key, so the entry just stored is keyed
-                # on a state that can never come back; drop it rather than hold a
-                # few hundred MB of network alive for a key nothing will ask for.
-                self._prepared.pop(cache_key, None)
+        self._rebuild_rows_if_downloaded(model_name, cache_key)
 
         # The viewer may have been closed while the worker was running.
         try:

@@ -29,7 +29,10 @@ import numpy as np
 from contextlib import contextmanager
 from typing import Any, Dict, List, Optional, Tuple, Union
 
-from celldetective.utils.model_loaders import locate_segmentation_model
+from celldetective.utils.model_loaders import (
+    locate_segmentation_model,
+    trained_cell_size_um,
+)
 from celldetective.utils.normalization import normalize_multichannel
 from pathlib import Path
 from tqdm import tqdm
@@ -364,20 +367,16 @@ def prepare_segmentation_model(
     # on, mirroring SegmentCellDLProcess.estimate_scale. Both sizes are needed:
     # `cell_size_um` is what the model saw, `target_cell_size_um` what these
     # images hold.
-    cell_size = input_config.get("cell_size_um")
+    # Read from the model configuration, never from a caller's override: the
+    # override says what to ask Cellpose for, not what the network was trained on.
+    cell_size = trained_cell_size_um(input_config)
+
     if target_cell_size is None and use_stored_mapping:
         target_cell_size = input_config.get("target_cell_size_um")
     if target_cell_size is not None and target_cell_size <= 0:
         raise ValueError(
             f"The target cell size must be strictly positive, got {target_cell_size}."
         )
-    if cell_size is not None and cell_size <= 0:
-        # Comes from the model configuration, not the caller: warn and fall back on
-        # the calibration ratio alone rather than scaling everything to nothing.
-        logger.warning(
-            f"Ignoring the model's cell_size_um={cell_size}: it must be strictly positive."
-        )
-        cell_size = None
     if target_cell_size is not None and cell_size is not None:
         if scale is not None:
             scale *= cell_size / target_cell_size
@@ -471,6 +470,17 @@ def segment_frame(
     required_channels = prepared.required_channels
 
     frame = _rearrange_multichannel_frame(frame).astype(float)
+
+    # Same contract as segment(): the frame's channels are the ones named in
+    # prepared.channels. Checked here too, because the mapping is resolved
+    # against those names and not against this frame -- without the check a
+    # too-narrow frame raises deep inside the channel transfer, and a wider one
+    # silently feeds arbitrary planes to the model.
+    if frame.shape[-1] != len(prepared.channels):
+        raise ValueError(
+            f"The frame has {frame.shape[-1]} channel(s) but the model was "
+            f"prepared for {len(prepared.channels)}: {prepared.channels}."
+        )
 
     # Walk the slots, not the matched names: a name lookup collapses a mapping
     # that feeds one image channel into several slots down to the first of them,
