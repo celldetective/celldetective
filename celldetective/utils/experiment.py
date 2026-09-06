@@ -1,10 +1,13 @@
+# Annotations are kept as strings so that the heavy optional dependencies they
+# mention (dask, napari) do not have to be imported when this module is loaded.
+from __future__ import annotations
+
 import os
 from glob import glob
 from pathlib import Path, PosixPath, PurePosixPath, WindowsPath
 from shutil import copyfile
-from typing import Union, List, Tuple, Optional, Dict, Any
+from typing import TYPE_CHECKING, Union, List, Tuple, Optional, Dict, Any
 
-import dask
 import numpy as np
 from natsort import natsorted
 
@@ -19,10 +22,12 @@ from celldetective.log_manager import get_logger
 logger = get_logger(__name__)
 
 
-import napari
 import pandas as pd
-import dask.array as da
 import gc
+
+if TYPE_CHECKING:  # pragma: no cover - import only for the type annotations
+    import dask.array as da
+    import napari
 
 
 def extract_well_from_position(pos_path: str) -> str:
@@ -1559,6 +1564,7 @@ def relabel_segmentation_lazy(
     dask.array.Array
         Relabeled segmentation.
     """
+    import dask
     import dask.array as da
     import pandas as pd
 
