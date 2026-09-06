@@ -23,7 +23,10 @@ from celldetective.gui.base.model_channel_selection import ModelChannelSelection
 from celldetective.gui.base.utils import center_window
 from celldetective.gui.gui_utils import ThresholdLineEdit
 from celldetective.gui.viewers.size_viewer import CellSizeViewer
-from celldetective.utils.model_loaders import locate_segmentation_model
+from celldetective.utils.model_loaders import (
+    locate_segmentation_model,
+    trained_cell_size_um,
+)
 
 
 class SegModelParamsWidget(CelldetectiveWidget):
@@ -130,15 +133,26 @@ class SegModelParamsWidget(CelldetectiveWidget):
         self.view_diameter_btn.setIconSize(QSize(20, 20))
         self.view_diameter_btn.clicked.connect(self.view_current_stack_with_scale_bar)
 
-        # Line edit for entering cell diameter
-        self.diameter_le = ThresholdLineEdit(
-            init_value=40,
-            connected_buttons=[self.view_diameter_btn],
-            placeholder="cell diameter in µm",
-            value_type="float",
-        )
+        # The size the model was trained on, which the cell size entered below is
+        # rescaled against. Shared with the library and the napari panel, so a
+        # generic Cellpose model -- which states that size in pixels rather than
+        # in microns -- gets the row here too, and is rescaled the same way
+        # wherever it is run from.
+        trained = trained_cell_size_um(self.input_config)
 
-        if "cell_size_um" in self.input_config:
+        if trained is not None:
+
+            # Only built when it is shown: `set_selected_channels_for_segmentation`
+            # tests for this attribute to decide whether the user has a cell size
+            # to save, and would otherwise write the placeholder 40 µm as though it
+            # had been asked for -- rescaling every later run against a number
+            # nobody entered.
+            self.diameter_le = ThresholdLineEdit(
+                init_value=40,
+                connected_buttons=[self.view_diameter_btn],
+                placeholder="cell diameter in µm",
+                value_type="float",
+            )
 
             # Layout for diameter input and button
             hbox = QHBoxLayout()
@@ -147,7 +161,10 @@ class SegModelParamsWidget(CelldetectiveWidget):
             hbox.addWidget(self.view_diameter_btn)
             self.layout.addLayout(hbox)
 
-            self.diameter_le.set_threshold(self.input_config["cell_size_um"])
+            # Reopen on the size last saved for this model, as the channel rows
+            # do; only falling back on the trained size the first time round.
+            stored = self.input_config.get("target_cell_size_um")
+            self.diameter_le.set_threshold(stored if stored is not None else trained)
 
             # size_hbox = QHBoxLayout()
             # size_hbox.addWidget(QLabel('cell size [µm]: '), 33)

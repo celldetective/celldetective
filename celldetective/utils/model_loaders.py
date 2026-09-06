@@ -8,6 +8,73 @@ from celldetective.utils.downloaders import get_zenodo_files, download_zenodo_fi
 logger = logging.getLogger("celldetective")
 
 
+def trained_cell_size_um(input_config: Optional[dict]) -> Optional[float]:
+    """
+    The physical object size a segmentation model was trained on, in microns.
+
+    This is the size the rescaling is measured against: a frame is resized until
+    its objects reach the size the network was trained to see, so both readings
+    have to come from the same place wherever that is worked out -- the library,
+    the main window's channel dialog, or the napari single-frame panel.
+
+    A model built through celldetective records the size directly as
+    ``cell_size_um``. A generic Cellpose model does not, but it states the same
+    thing in pixels: it was trained to see objects ``diameter`` px across, at its
+    own ``spatial_calibration``, so the product is that size in microns. Without
+    the second reading a generic model cannot be rescaled at all -- the
+    correction needs the trained size and the target, and one of them is missing.
+
+    Parameters
+    ----------
+    input_config : dict or None
+            A model's ``config_input.json``, already parsed.
+
+    Returns
+    -------
+    float or None
+            The trained object size in microns, or None when the configuration
+            gives no way to work it out -- in which case there is nothing to
+            rescale against.
+
+    Examples
+    --------
+    >>> trained_cell_size_um({'cell_size_um': 9.211})
+    9.211
+    >>> trained_cell_size_um(
+    ...     {'model_type': 'cellpose', 'diameter': 30.0, 'spatial_calibration': 0.5}
+    ... )
+    15.0
+    """
+
+    if not input_config:
+        return None
+
+    cell_size = input_config.get("cell_size_um")
+    if cell_size is not None:
+        # Comes from the model's own configuration, so a nonsensical value is
+        # worth saying out loud rather than quietly scaling everything to nothing.
+        if cell_size > 0:
+            return cell_size
+        logger.warning(
+            f"Ignoring cell_size_um={cell_size}: it must be strictly positive."
+        )
+        return None
+
+    if input_config.get("model_type") != "cellpose":
+        return None
+
+    diameter = input_config.get("diameter")
+    calibration = input_config.get("spatial_calibration")
+    if (
+        diameter is not None
+        and calibration is not None
+        and diameter > 0
+        and calibration > 0
+    ):
+        return diameter * calibration
+    return None
+
+
 def locate_signal_model(
     name: str, path: Optional[str] = None, pairs: bool = False
 ) -> Optional[str]:

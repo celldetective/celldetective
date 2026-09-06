@@ -283,6 +283,234 @@ class TestChannelMappingAndParameters(unittest.TestCase):
 
 
 @_requires_cellpose()
+@_requires_cellpose()
+class TestRescalingInvariance(unittest.TestCase):
+    """
+    Pixel size, trained cell size and target cell size must agree.
+
+    Three numbers decide how a frame is resized before it reaches the network,
+    and they are easy to get subtly wrong in a way no unit test on any one of
+    them would catch. The property that ties them together is an invariance: one
+    physical cell, of one size in microns, must arrive at the network at the
+    pixel size it was trained on -- no matter how finely the microscope sampled
+    it, and no matter how big the cells in the sample happen to be.
+
+    So these tests do not check a formula. They put a disc of a known physical
+    diameter into a small synthetic frame, run the real preprocessing, intercept
+    the image on its way into the network, and measure the disc there.
+    """
+
+    MODEL = CELLPOSE_MODEL
+    EXPERIMENT_CHANNELS = ["fluorescenceuv"]
+    MAPPING = ["fluorescenceuv", "None"]
+
+    #: The disc is drawn on a lit background, not on zero. Normalization ignores
+    #: the gray value 0, so a disc on a black field leaves it nothing but the
+    #: disc's own constant interior to stretch, and the frame comes out blank.
+    BACKGROUND = 0.2
+    FOREGROUND = 1.0
+
+    def setUp(self):
+        self.captured = []
+        self._real_inference = segmentation._segment_image_with_cellpose_model
+
+        def spy(img, **kwargs):
+            self.captured.append(np.array(img))
+            return np.zeros(img.shape[:2], dtype=np.uint16)
+
+        segmentation._segment_image_with_cellpose_model = spy
+
+    def tearDown(self):
+        segmentation._segment_image_with_cellpose_model = self._real_inference
+
+    @staticmethod
+    def _frame_with_a_disc(diameter_px, size_px, background, foreground):
+        """A one-channel frame holding a single disc of the given pixel size."""
+        yy, xx = np.mgrid[:size_px, :size_px]
+        centre = (size_px - 1) / 2.0
+        radius = np.sqrt((yy - centre) ** 2 + (xx - centre) ** 2)
+        frame = np.where(radius <= diameter_px / 2.0, foreground, background)
+        return frame.astype(float)[:, :, None]
+
+    @staticmethod
+    def _diameter_of_the_disc(image):
+        """
+        The disc's diameter, in pixels, as it stands in `image`.
+
+        Measured from the area above half of the intensity range rather than by
+        counting a row: rescaling interpolates, so the edge is a ramp a pixel or
+        two wide and the area is the steadier reading.
+        """
+        channel = image[:, :, 0]
+        low, high = float(channel.min()), float(channel.max())
+        area = int(np.count_nonzero(channel > (low + high) / 2.0))
+        return 2.0 * np.sqrt(area / np.pi)
+
+    def _diameter_reaching_the_network(
+        self, spatial_calibration, cell_size_um, background=None
+    ):
+        """
+        Segment one synthetic frame and report the disc size the network saw.
+
+        Parameters
+        ----------
+        spatial_calibration : float
+            Microns per pixel of the imaginary microscope.
+        cell_size_um : float
+            The physical diameter of the disc, which is also what the user would
+            enter as the cell size for these images.
+        background : float, optional
+            The level the disc is drawn on. Defaults to :attr:`BACKGROUND`.
+
+        Returns
+        -------
+        tuple of (float, float)
+            The disc's diameter in pixels as the network received it, and the
+            rescaling factor that was applied to get it there.
+        """
+
+        diameter_px = cell_size_um / spatial_calibration
+        # Wide enough that the disc never touches the border, so nothing is lost
+        # to the edge on the way through.
+        size_px = int(max(64, round(diameter_px * 3)))
+
+        prepared = segmentation.prepare_segmentation_model(
+            self.MODEL,
+            channels=self.EXPERIMENT_CHANNELS,
+            spatial_calibration=spatial_calibration,
+            selected_channels=self.MAPPING,
+            target_cell_size=cell_size_um,
+            use_stored_mapping=False,
+            use_gpu=False,
+        )
+        self.assertIsNotNone(prepared)
+
+        frame = self._frame_with_a_disc(
+            diameter_px,
+            size_px,
+            self.BACKGROUND if background is None else background,
+            self.FOREGROUND,
+        )
+        segmentation.segment_frame(frame, prepared)
+
+        self.assertEqual(len(self.captured), 1)
+        scale = 1.0 if prepared.scale_model is None else prepared.scale_model
+        return self._diameter_of_the_disc(self.captured[0]), scale
+
+    def _trained_diameter_px(self):
+        """The pixel size the model expects its objects at."""
+        return _model_config(self.MODEL)["diameter"]
+
+    def test_the_pixel_size_does_not_change_what_the_network_sees(self):
+        """
+        The same 20 um cell, sampled four ways, arrives at one size.
+
+        A finer pixel size makes the cell wider in the raw image and must shrink
+        the image by exactly as much on the way in.
+        """
+
+        expected = self._trained_diameter_px()
+        for calibration in (0.2, 0.4, 0.5789739776951672, 1.0):
+            with self.subTest(spatial_calibration=calibration):
+                self.setUp()
+                measured, _ = self._diameter_reaching_the_network(calibration, 20.0)
+                self.assertAlmostEqual(measured / expected, 1.0, delta=0.05)
+
+    def test_the_cell_size_does_not_change_what_the_network_sees(self):
+        """
+        Cells of 8, 20 and 40 um, at one pixel size, arrive at one size too.
+
+        This is the leg that a generic Cellpose model could not do at all before
+        it was given a trained size in microns to be rescaled against.
+        """
+
+        expected = self._trained_diameter_px()
+        for cell_size in (8.0, 20.0, 40.0):
+            with self.subTest(cell_size_um=cell_size):
+                self.setUp()
+                measured, _ = self._diameter_reaching_the_network(0.4, cell_size)
+                self.assertAlmostEqual(measured / expected, 1.0, delta=0.05)
+
+    def test_doubling_the_cell_size_halves_the_image(self):
+        """Cells twice as big must be shrunk twice as much, and nothing else."""
+
+        _, scale = self._diameter_reaching_the_network(0.4, 20.0)
+        self.setUp()
+        _, doubled = self._diameter_reaching_the_network(0.4, 40.0)
+        self.assertAlmostEqual(scale / doubled, 2.0, places=6)
+
+    def test_halving_the_pixel_size_halves_the_image(self):
+        """A cell sampled twice as finely must be shrunk twice as much."""
+
+        _, scale = self._diameter_reaching_the_network(0.4, 20.0)
+        self.setUp()
+        _, finer = self._diameter_reaching_the_network(0.2, 20.0)
+        self.assertAlmostEqual(scale / finer, 2.0, places=6)
+
+    def test_the_background_level_cannot_be_what_makes_this_come_out(self):
+        """
+        The rescaling is the same on any background, a black one included.
+
+        Which is the point: the factor is worked out from the pixel size and the
+        two cell sizes alone, and no pixel of the image is ever read to arrive at
+        it. So the level these tests happen to draw on cannot be what produces
+        the invariance above -- it only has to let the disc be measured again
+        afterwards.
+        """
+
+        scales = []
+        for background in (0.0, 0.05, 0.2, 0.5, 0.9):
+            with self.subTest(background=background):
+                self.setUp()
+                _, scale = self._diameter_reaching_the_network(
+                    0.4, 20.0, background=background
+                )
+                scales.append(scale)
+        self.assertEqual(len(set(scales)), 1)
+
+    def test_the_measured_size_does_not_depend_on_the_background(self):
+        """And the disc measures the same size on any background that is lit."""
+
+        expected = self._trained_diameter_px()
+        for background in (0.05, 0.2, 0.5, 0.9):
+            with self.subTest(background=background):
+                self.setUp()
+                measured, _ = self._diameter_reaching_the_network(
+                    0.4, 20.0, background=background
+                )
+                self.assertAlmostEqual(measured / expected, 1.0, delta=0.05)
+
+    def test_a_disc_on_black_is_the_one_background_that_cannot_be_measured(self):
+        """
+        Why :attr:`BACKGROUND` is not zero, pinned rather than left in a comment.
+
+        Normalization ignores the gray value 0, so on a black field the only
+        pixels it has left to stretch are the disc's own constant interior: the
+        low and high percentiles come out equal and the frame reaches the network
+        carrying no disc at all. The rescaling is untouched -- the test above
+        shows the factor is the same -- but there is then nothing to measure, so
+        the disc is drawn on a lit field instead.
+        """
+
+        expected = self._trained_diameter_px()
+        measured, _ = self._diameter_reaching_the_network(0.4, 20.0, background=0.0)
+        self.assertLess(measured, 0.5 * expected)
+
+    def test_the_two_effects_cancel(self):
+        """
+        Cells twice as big, sampled twice as finely, come out where they started.
+
+        The clearest statement that the pixel size and the cell size enter the
+        rescaling the same way: doubling both is the same scene, so the frame
+        must be resized by the same factor.
+        """
+
+        _, scale = self._diameter_reaching_the_network(0.4, 20.0)
+        self.setUp()
+        _, both = self._diameter_reaching_the_network(0.8, 40.0)
+        self.assertAlmostEqual(scale, both, places=6)
+
+
 class TestCellposeModelPreparation(unittest.TestCase):
     """Cellpose model loading, which was broken on Windows."""
 
@@ -327,6 +555,45 @@ class TestCellposeModelPreparation(unittest.TestCase):
         self.assertEqual(prepared.diameter, 12.0)
         self.assertEqual(prepared.cellprob_threshold, 0.25)
         self.assertEqual(prepared.flow_threshold, 0.6)
+
+    def test_generic_cellpose_gets_a_trained_cell_size_from_its_diameter(self):
+        """
+        A generic Cellpose model declares no ``cell_size_um``, so before this it
+        could not be rescaled at all: the correction needs both the trained size
+        and the target, and one of them was always missing. The model does say
+        the same thing in pixels -- ``diameter`` px at its own
+        ``spatial_calibration`` -- so the physical size is that product.
+        """
+        config = _model_config(CELLPOSE_MODEL)
+        self.assertNotIn("cell_size_um", config)
+        trained = config["diameter"] * config["spatial_calibration"]
+
+        # Cells twice the trained size: the frame is halved so they reach the
+        # network at the diameter it was trained on.
+        prepared = self._prepare(target_cell_size=2 * trained)
+        self.assertAlmostEqual(prepared.scale_model, 0.5, places=6)
+
+        # Half the trained size: doubled instead.
+        prepared = self._prepare(target_cell_size=trained / 2)
+        self.assertAlmostEqual(prepared.scale_model, 2.0, places=6)
+
+    def test_matching_cell_size_leaves_a_generic_cellpose_model_alone(self):
+        config = _model_config(CELLPOSE_MODEL)
+        trained = config["diameter"] * config["spatial_calibration"]
+        prepared = self._prepare(target_cell_size=trained)
+        self.assertAlmostEqual(prepared.scale_model, 1.0, places=6)
+
+    def test_the_trained_diameter_is_never_rescaled_away(self):
+        """
+        Rescaling the frame is the whole mechanism, so the diameter handed to
+        Cellpose stays the one the network was trained on.
+        """
+        config = _model_config(CELLPOSE_MODEL)
+        trained = config["diameter"] * config["spatial_calibration"]
+        for target in (None, trained, 2 * trained, trained / 2):
+            with self.subTest(target=target):
+                prepared = self._prepare(target_cell_size=target)
+                self.assertEqual(prepared.diameter, config["diameter"])
 
     def test_config_defaults_survive_an_override(self):
         """

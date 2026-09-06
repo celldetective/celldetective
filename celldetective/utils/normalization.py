@@ -3,6 +3,13 @@ from typing import Optional, Union, Tuple, List, Any
 
 import numpy as np
 
+# Try to import numexpr at module level for faster access
+try:
+    import numexpr
+    HAS_NUMEXPR = True
+except ImportError:
+    HAS_NUMEXPR = False
+
 
 def normalize_mi_ma(
     x: np.ndarray,
@@ -41,11 +48,10 @@ def normalize_mi_ma(
         mi = dtype(mi) if np.isscalar(mi) else mi.astype(dtype, copy=False)
         ma = dtype(ma) if np.isscalar(ma) else ma.astype(dtype, copy=False)
         eps = dtype(eps)
-    try:
-        import numexpr
-
-        x = numexpr.evaluate("(x - mi) / ( ma - mi + eps )")
-    except ImportError:
+    
+    if HAS_NUMEXPR:
+        x = numexpr.evaluate("(x - mi) / (ma - mi + eps)")
+    else:
         x = (x - mi) / (ma - mi + eps)
 
     if clip:
@@ -119,31 +125,38 @@ def normalize(
 
     frame = frame.astype(float)
 
+    # Cache the mask and flattened array to avoid redundant operations
     if ignore_gray_value is not None:
-        subframe = frame[frame != ignore_gray_value]
+        mask = frame != ignore_gray_value
+        subframe_flat = frame[mask].flatten()
     else:
-        subframe = frame.copy()
+        mask = None
+        subframe_flat = frame.flatten()
 
     if values is not None:
         mi = values[0]
         ma = values[1]
     else:
-        mi = np.nanpercentile(subframe.flatten(), percentiles[0], keepdims=True)
-        ma = np.nanpercentile(subframe.flatten(), percentiles[1], keepdims=True)
+        # Compute percentiles once from cached flattened array
+        mi = np.nanpercentile(subframe_flat, percentiles[0])
+        ma = np.nanpercentile(subframe_flat, percentiles[1])
 
-    frame0 = frame.copy()
-    frame = normalize_mi_ma(frame0, mi, ma, clip=False, eps=1e-20, dtype=np.float32)
+    # Store original frame only if needed for ignore_gray_value masking
+    frame_orig = frame.copy() if mask is not None else None
+    frame = normalize_mi_ma(frame, mi, ma, clip=False, eps=1e-20, dtype=np.float32)
+    
     if amplification is not None:
         frame *= amplification
+    
     if clip:
         if amplification is None:
             amplification = 1.0
-        frame[frame >= amplification] = amplification
-        frame[frame <= 0.0] = 0.0
-    if ignore_gray_value is not None:
-        frame[frame0 == ignore_gray_value] = ignore_gray_value
+        frame = np.clip(frame, 0.0, amplification)
+    
+    if mask is not None:
+        frame[~mask] = frame_orig[~mask]
 
-    return frame.copy().astype(dtype)
+    return frame.astype(dtype)
 
 
 def normalize_multichannel(
@@ -220,28 +233,31 @@ def normalize_multichannel(
         if len(values) != mf.shape[-1]:
             raise ValueError("Mismatch between the normalization values provided and the number of channels.")
 
-    mf_new = []
+    # Pre-allocate output array to avoid building list and moveaxis overhead
+    mf_normalized = np.zeros_like(mf, dtype=np.float32)
+    
     for c in range(mf.shape[-1]):
-        if values is not None:
-            v = values[c]
-        else:
-            v = None
-
+        # Skip all-zero channels: they're already zero in the pre-allocated array,
+        # and processing them would cause empty-slice warnings when ignore_gray_value=0.0
+        # Plus it matches the old behavior for edge cases like values=(10,200) on dead channels
         if np.all(mf[:, :, c] == 0.0):
-            mf_new.append(mf[:, :, c].copy())
-        else:
-            norm = normalize(
-                mf[:, :, c].copy(),
-                percentiles=percentiles[c],
-                values=v,
-                ignore_gray_value=ignore_gray_value,
-                clip=clip,
-                amplification=amplification,
-                dtype=dtype,
-            )
-            mf_new.append(norm)
+            continue
+        
+        # Get normalization values for this channel
+        v = values[c] if values is not None else None
+        
+        # Normalize channel
+        mf_normalized[:, :, c] = normalize(
+            mf[:, :, c],
+            percentiles=percentiles[c],
+            values=v,
+            ignore_gray_value=ignore_gray_value,
+            clip=clip,
+            amplification=amplification,
+            dtype=np.float32,
+        )
 
-    return np.moveaxis(mf_new, 0, -1)
+    return mf_normalized.astype(dtype)
 
 
 def get_stack_normalization_values(
@@ -389,34 +405,37 @@ def normalize_per_channel(
 
     X_normalized = []
     for i in range(len(X)):
-        x = X[i].copy()
+        x = X[i].copy().astype(float)
+        
+        # Find all zero locations once for the entire image
         loc_i, loc_j, loc_c = np.where(x == 0.0)
         norm_x = np.zeros_like(x, dtype=np.float32)
+        
         for k in range(x.shape[-1]):
-            chan = x[:, :, k].copy()
-            if not np.all(chan.flatten() == 0):
+            # Use view instead of copy; check for non-zero more efficiently
+            chan = x[:, :, k]
+            if np.any(chan != 0.0):
                 if normalization_percentile_mode[k]:
-                    min_val = np.nanpercentile(
-                        chan[chan != 0.0].flatten(), normalization_values[k][0]
-                    )
-                    max_val = np.nanpercentile(
-                        chan[chan != 0.0].flatten(), normalization_values[k][1]
-                    )
+                    non_zero_vals = chan[chan != 0.0].flatten()
+                    min_val = np.nanpercentile(non_zero_vals, normalization_values[k][0])
+                    max_val = np.nanpercentile(non_zero_vals, normalization_values[k][1])
                 else:
                     min_val = normalization_values[k][0]
                     max_val = normalization_values[k][1]
 
                 clip_option = normalization_clipping[k]
+                # chan is already float, no astype needed
                 norm_x[:, :, k] = normalize_mi_ma(
-                    chan.astype(np.float32).copy(),
+                    chan,
                     min_val,
                     max_val,
                     clip=clip_option,
                     eps=1e-20,
                     dtype=np.float32,
                 )
-            else:
-                norm_x[:, :, k] = 0.0
+            # else: norm_x already zero, no need to set
+        
+        # Restore original zeros
         norm_x[loc_i, loc_j, loc_c] = 0.0
         X_normalized.append(norm_x.copy())
 

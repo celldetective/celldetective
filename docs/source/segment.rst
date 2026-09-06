@@ -168,6 +168,15 @@ Importing and applying models
 
 Models are imported via the :icon:`upload,black` button in the Segmentation panel. This creates a configuration file that maps your experiment's channels to the model's expected inputs, including spatial calibration and normalization.
 
+When you set the channels for a model, the dialog also asks for the **cell size**
+in microns whenever the model has a trained size to be rescaled against: the
+frame is resized until its objects reach the size the network was trained to see.
+Models built through celldetective record that size as ``cell_size_um``; a
+generalist Cellpose model records it in pixels instead, as the diameter it was
+trained on at its own calibration, so it is asked for those too. The dialog
+reopens on the size you last set, and a model with no trained size is never given
+one behind your back.
+
 For a detailed list of all import parameters, see the :ref:`Segmentation Data Import Reference <ref_segmentation_settings>`.
 
 For a complete step-by-step walkthrough (including generalist model configuration), see :doc:`How to apply a segmentation model <how-to-guides/basics/apply-a-segmentation-model>`.
@@ -218,10 +227,20 @@ on one frame and look at the result straight away.
     dropdown per input slot of the chosen model, seeded from the mapping already
     saved there. Set a slot to ``None`` to leave it blank. The same experiment
     channel may feed several slots.
-*   **parameters** — the values that model type actually takes: **diameter**,
-    **cell probability** and **flow threshold** for Cellpose models, and **cell
-    size** wherever the model declares the size it was trained on. Leave a field
+*   **parameters** — the values that model type actually takes: **cell
+    probability** and **flow threshold** for Cellpose models, and **cell size**
+    for every model whose trained object size can be worked out. Leave a field
     blank to use the model's own value.
+
+    **Cell size** is the typical object size in *these* images, in microns, and
+    it is what drives the rescaling: the frame is resized until objects reach the
+    size the network was trained to see, which is where a model does its best
+    work. A model built through celldetective records that size as
+    ``cell_size_um``; a generic Cellpose model records it in pixels instead, as
+    the diameter it was trained on at its own calibration, so the row is offered
+    for those too. The trained size itself — Cellpose's 30 px, say — is not a
+    setting and is never asked for: a network trained to see 30 px objects should
+    go on being asked for 30 px ones, and it is the image that moves.
 *   **Replace the labels on this frame** — ticked, the frame is segmented afresh.
     Unticked, the existing labels are kept and the new ones only fill the
     background, so manual corrections on that frame survive.
