@@ -33,6 +33,8 @@ FIELD_DISABLED = "#F5F5F5"
 DISABLED_COLOR = "#BDBDBD"
 GROOVE_COLOR = "#D8DCE0"
 HOVER_COLOR = "#ECEFF1"
+CHEVRON_COLOR = "#757575"
+CHEVRON_SIZE = 11
 
 
 def _indicator_colors(
@@ -208,7 +210,7 @@ def draw_radio_indicator(
 def draw_chevron(
     painter: QPainter,
     rect: QRectF,
-    color: Optional[str] = "#616161",
+    color: Optional[str] = CHEVRON_COLOR,
     enabled: bool = True,
 ) -> None:
     """
@@ -226,11 +228,12 @@ def draw_chevron(
         Whether the widget is enabled.
     """
 
-    side = min(rect.width(), rect.height())
+    # Kept small and thin: the arrow is a hint, not a feature of the widget.
+    side = min(rect.width(), rect.height(), CHEVRON_SIZE)
     if side < 4:
         return
 
-    half = side * 0.28
+    half = side * 0.40
     center = rect.center()
 
     path = QPainterPath()
@@ -244,7 +247,7 @@ def draw_chevron(
     painter.setPen(
         QPen(
             QColor(color) if enabled else QColor(DISABLED_COLOR),
-            max(1.3, side / 9.0),
+            1.5,
             Qt.SolidLine,
             Qt.RoundCap,
             Qt.RoundJoin,
@@ -270,7 +273,7 @@ class CelldetectiveStyle(QProxyStyle):
     radio_size = 16
     slider_handle = 16
     slider_groove = 5
-    row_padding = 6
+    row_padding = 2
 
     def __init__(
         self, base_style: Optional[str] = "Fusion", accent: Optional[str] = CELLDETECTIVE_BLUE

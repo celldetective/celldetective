@@ -24,9 +24,11 @@ if __name__ == "__main__":
     QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps)
     QApplication.setAttribute(Qt.AA_ShareOpenGLContexts)
     from celldetective.gui.base.app_style import CelldetectiveStyle
+    from celldetective.gui.base.styles import TOOLTIP_STYLE
 
     App = QApplication(sys.argv)
     App.setStyle(CelldetectiveStyle("Fusion"))
+    App.setStyleSheet(TOOLTIP_STYLE)
 
     software_location = get_software_location()
 

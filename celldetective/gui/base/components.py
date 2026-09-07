@@ -166,8 +166,8 @@ class CelldetectiveItemDelegate(QStyledItemDelegate):
     left_margin = 9
     text_gap = 9
     right_margin = 9
-    row_padding = 6
-    separator_height = 9
+    row_padding = 2
+    separator_height = 7
 
     def __init__(
         self,
