@@ -29,15 +29,32 @@ from PyQt5.QtCore import (
     QPointF,
     QSize,
 )
-from PyQt5.QtGui import QPaintEvent, QPainter, QColor, QPen, QPainterPath
+from PyQt5.QtGui import QPaintEvent, QPainter, QColor, QPen, QShowEvent
 from superqt.fonticon import icon
 from celldetective.gui.base.styles import Styles, CELLDETECTIVE_BLUE
+from celldetective.gui.base.app_style import draw_check_indicator
 from typing import Optional
 
 logger = logging.getLogger("celldetective")
 
 
-class CelldetectiveWidget(QWidget, Styles):
+class CelldetectiveStyledMixin(object):
+    """
+    Mixin applying the celldetective look to the children of a window.
+
+    The combo box popups are the only part the style cannot reach on its own
+    (Qt installs its own delegate on them), so they are styled here, once the
+    window is shown and its children exist.
+    """
+
+    def showEvent(self, event: QShowEvent) -> None:
+        """Style the combo boxes of the window, then show it."""
+
+        style_comboboxes(self)
+        super().showEvent(event)
+
+
+class CelldetectiveWidget(CelldetectiveStyledMixin, QWidget, Styles):
     def __init__(self, *args, **kwargs):
         """Initialize the CelldetectiveWidget."""
         super().__init__(*args, **kwargs)
@@ -45,7 +62,7 @@ class CelldetectiveWidget(QWidget, Styles):
         self.setAttribute(Qt.WA_DeleteOnClose)
 
 
-class CelldetectiveMainWindow(QMainWindow, Styles):
+class CelldetectiveMainWindow(CelldetectiveStyledMixin, QMainWindow, Styles):
     def __init__(self, *args, **kwargs):
         """Initialize the CelldetectiveMainWindow."""
         super().__init__(*args, **kwargs)
@@ -53,7 +70,7 @@ class CelldetectiveMainWindow(QMainWindow, Styles):
         self.setAttribute(Qt.WA_DeleteOnClose)
 
 
-class CelldetectiveDialog(QDialog, Styles):
+class CelldetectiveDialog(CelldetectiveStyledMixin, QDialog, Styles):
     def __init__(self, *args, **kwargs):
         """Initialize the CelldetectiveDialog."""
         super().__init__(*args, **kwargs)
@@ -133,21 +150,29 @@ def generic_message(message: str, msg_type: Optional[str] = "info") -> None:
     _ = message_box.exec()
 
 
-class CheckIndicatorDelegate(QStyledItemDelegate):
+class CelldetectiveItemDelegate(QStyledItemDelegate):
     """
-    Item delegate drawing a rounded, celldetective-blue check indicator instead
-    of the blocky native one, for item views holding checkable items (typically
-    the popup of a :class:`QCheckableComboBox`).
+    Item delegate for the popups of the combo boxes and for the list widgets of
+    the software.
+
+    Compared to the delegate Qt installs on a combo box popup, it gives the
+    rows some air, a rounded accent colored highlight and a thin separator,
+    instead of the blocky native rendering.
     """
+
+    show_indicator = False
 
     box_size = 15
     left_margin = 9
     text_gap = 9
     right_margin = 9
     row_padding = 6
+    separator_height = 9
 
     def __init__(
-        self, accent: Optional[str] = CELLDETECTIVE_BLUE, parent: Optional[QObject] = None
+        self,
+        accent: Optional[str] = CELLDETECTIVE_BLUE,
+        parent: Optional[QObject] = None,
     ) -> None:
         """
         Initialize the delegate.
@@ -163,16 +188,45 @@ class CheckIndicatorDelegate(QStyledItemDelegate):
         super().__init__(parent)
         self.accent = QColor(accent)
         self.hover_color = QColor("#ECEFF1")
-        self.border_color = QColor("#B8B8B8")
+        self.separator_color = QColor("#E0E0E0")
+
+    @staticmethod
+    def is_separator(index: QModelIndex) -> bool:
+        """
+        Tell whether an index is one of the separators of a combo box.
+
+        Parameters
+        ----------
+        index : QModelIndex
+            The index to test.
+
+        Returns
+        -------
+        bool
+            True for a separator row.
+        """
+
+        return index.data(Qt.AccessibleDescriptionRole) == "separator"
+
+    def text_offset(self) -> int:
+        """Return the horizontal room taken by the indicator, if any."""
+
+        if not self.show_indicator:
+            return self.left_margin
+
+        return self.left_margin + self.box_size + self.text_gap
 
     def sizeHint(self, option: QStyleOptionViewItem, index: QModelIndex) -> QSize:
         """Reserve room for the indicator and give the rows some air."""
+
+        if self.is_separator(index):
+            return QSize(super().sizeHint(option, index).width(), self.separator_height)
 
         size = super().sizeHint(option, index)
         size.setHeight(
             max(size.height() + self.row_padding, self.box_size + 2 * self.row_padding)
         )
-        size.setWidth(size.width() + self.left_margin + self.text_gap)
+        size.setWidth(size.width() + self.text_offset() + self.right_margin)
 
         return size
 
@@ -180,7 +234,7 @@ class CheckIndicatorDelegate(QStyledItemDelegate):
         self, painter: QPainter, option: QStyleOptionViewItem, index: QModelIndex
     ) -> None:
         """
-        Paint the row: background, custom check indicator, then the text.
+        Paint the row: background, optional check indicator, then the text.
 
         Parameters
         ----------
@@ -195,13 +249,21 @@ class CheckIndicatorDelegate(QStyledItemDelegate):
         opt = QStyleOptionViewItem(option)
         self.initStyleOption(opt, index)
 
+        painter.save()
+        painter.setRenderHint(QPainter.Antialiasing, True)
+
+        if self.is_separator(index):
+            painter.setPen(QPen(self.separator_color, 1.0))
+            painter.drawLine(
+                QPointF(opt.rect.left() + 8, opt.rect.center().y() + 0.5),
+                QPointF(opt.rect.right() - 8, opt.rect.center().y() + 0.5),
+            )
+            painter.restore()
+            return
+
         selected = bool(opt.state & QStyle.State_Selected)
         hovered = bool(opt.state & QStyle.State_MouseOver)
         enabled = bool(opt.state & QStyle.State_Enabled)
-        check_state = index.data(Qt.CheckStateRole)
-
-        painter.save()
-        painter.setRenderHint(QPainter.Antialiasing, True)
 
         # Row background, rounded and slightly inset.
         if selected or hovered:
@@ -209,52 +271,26 @@ class CheckIndicatorDelegate(QStyledItemDelegate):
             painter.setBrush(self.accent if selected else self.hover_color)
             painter.drawRoundedRect(QRectF(opt.rect).adjusted(2.5, 1.5, -2.5, -1.5), 5, 5)
 
-        box = QRectF(
-            opt.rect.left() + self.left_margin,
-            opt.rect.center().y() - self.box_size / 2.0 + 1,
-            self.box_size,
-            self.box_size,
-        ).adjusted(0.5, 0.5, -0.5, -0.5)
-
-        if check_state == Qt.Unchecked or check_state is None:
-            painter.setBrush(Qt.NoBrush if selected else QColor(Qt.white))
-            painter.setPen(
-                QPen(QColor(255, 255, 255, 170) if selected else self.border_color, 1.4)
+        if self.show_indicator:
+            check_state = index.data(Qt.CheckStateRole)
+            box = QRectF(
+                opt.rect.left() + self.left_margin,
+                opt.rect.center().y() - self.box_size / 2.0 + 1,
+                self.box_size,
+                self.box_size,
             )
-            painter.drawRoundedRect(box, 4, 4)
-        else:
-            # On a selected (blue) row, invert the indicator to keep it visible.
-            fill = QColor(Qt.white) if selected else self.accent
-            painter.setPen(Qt.NoPen)
-            painter.setBrush(fill)
-            painter.drawRoundedRect(box, 4, 4)
-
-            mark = QColor(self.accent if selected else Qt.white)
-            if check_state == Qt.PartiallyChecked:
-                painter.setPen(QPen(mark, 2.0, Qt.SolidLine, Qt.RoundCap))
-                painter.drawLine(
-                    QPointF(box.left() + 0.26 * box.width(), box.center().y()),
-                    QPointF(box.left() + 0.74 * box.width(), box.center().y()),
-                )
-            else:
-                path = QPainterPath()
-                path.moveTo(
-                    box.left() + 0.24 * box.width(), box.top() + 0.53 * box.height()
-                )
-                path.lineTo(
-                    box.left() + 0.43 * box.width(), box.top() + 0.72 * box.height()
-                )
-                path.lineTo(
-                    box.left() + 0.77 * box.width(), box.top() + 0.30 * box.height()
-                )
-                painter.setBrush(Qt.NoBrush)
-                painter.setPen(QPen(mark, 2.0, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
-                painter.drawPath(path)
+            draw_check_indicator(
+                painter,
+                box,
+                check_state=Qt.Unchecked if check_state is None else check_state,
+                enabled=enabled,
+                hovered=hovered,
+                on_accent=selected,
+                accent=self.accent.name(),
+            )
 
         # Item text, elided to the room left by the indicator.
-        text_rect = opt.rect.adjusted(
-            self.left_margin + self.box_size + self.text_gap, 0, -self.right_margin, 0
-        )
+        text_rect = opt.rect.adjusted(self.text_offset(), 0, -self.right_margin, 0)
         if selected:
             text_color = opt.palette.color(QPalette.HighlightedText)
         elif enabled:
@@ -270,6 +306,36 @@ class CheckIndicatorDelegate(QStyledItemDelegate):
         )
 
         painter.restore()
+
+
+class CheckIndicatorDelegate(CelldetectiveItemDelegate):
+    """
+    Item delegate drawing a rounded, celldetective-blue check indicator instead
+    of the blocky native one, for item views holding checkable items (typically
+    the popup of a :class:`QCheckableComboBox`).
+    """
+
+    show_indicator = True
+
+
+def style_comboboxes(root: QWidget) -> None:
+    """
+    Install :class:`CelldetectiveItemDelegate` on the popup of every combo box
+    below a widget.
+
+    Called when a celldetective window is shown, so that the popups of the
+    software are styled without touching the combo boxes of the libraries it
+    embeds (napari, matplotlib).
+
+    Parameters
+    ----------
+    root : QWidget
+        The window whose combo boxes must be styled.
+    """
+
+    for combo in root.findChildren(QComboBox):
+        if not isinstance(combo.itemDelegate(), CelldetectiveItemDelegate):
+            combo.setItemDelegate(CelldetectiveItemDelegate(parent=combo))
 
 
 class QCheckableComboBox(QComboBox):
@@ -432,6 +498,7 @@ class QCheckableComboBox(QComboBox):
         opt.currentText = self._title
         painter.drawComplexControl(QStyle.CC_ComboBox, opt)
         painter.drawControl(QStyle.CE_ComboBoxLabel, opt)
+
 
     def addItem(self, item: str, tooltip: Optional[str] = None) -> None:
         """
