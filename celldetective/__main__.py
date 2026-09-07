@@ -75,8 +75,10 @@ def main():
     QApplication.setAttribute(Qt.AA_EnableHighDpiScaling)
     QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps)
     QApplication.setAttribute(Qt.AA_ShareOpenGLContexts)
+    from celldetective.gui.base.app_style import CelldetectiveStyle
+
     App = QApplication(sys.argv)
-    App.setStyle("Fusion")
+    App.setStyle(CelldetectiveStyle("Fusion"))
 
     software_location = get_software_location()
 
