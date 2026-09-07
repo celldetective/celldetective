@@ -37,6 +37,7 @@ from celldetective.gui.base.components import (
 )
 from celldetective.gui.gui_utils import color_from_class, help_generic
 from celldetective.gui.base.figure_canvas import FigureCanvas
+from celldetective.gui.base.threads import start_tracked, stop_thread
 from celldetective.gui.viewers.threshold_viewer import ThresholdedStackVisualizer
 from celldetective.utils.image_loaders import load_frames
 
@@ -134,7 +135,14 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
             self.setAttribute(Qt.WA_DeleteOnClose)
 
         self.bg_loader = BackgroundLoader()
-        self.bg_loader.start()
+        # Tracked: this loader imports tensorflow-sized modules, so it easily
+        # outlives a wizard that is closed straight after opening -- and the
+        # window carries `WA_DeleteOnClose`, so the widget is deleted the moment
+        # it closes. Finalizing the thread there would abort the process.
+        start_tracked(self.bg_loader)
+        self.destroyed.connect(
+            lambda _=None, t=self.bg_loader: stop_thread(t, timeout=2000)
+        )
 
     def closeEvent(self, event: QCloseEvent) -> None:
         """
@@ -157,9 +165,9 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
             # Drain any queued signals that were already in the event loop
             QApplication.processEvents()
 
-        if hasattr(self, "bg_loader") and self.bg_loader.isRunning():
-            self.bg_loader.quit()
-            self.bg_loader.wait(3000)
+        # `run()` is a series of imports with no loop to interrupt, so this
+        # waits it out rather than trying to cut it short.
+        stop_thread(getattr(self, "bg_loader", None), timeout=3000)
         # Clear large arrays
         for attr in ["img", "labels", "edt_map", "props", "coords"]:
             if hasattr(self, attr):

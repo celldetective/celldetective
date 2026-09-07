@@ -29,6 +29,7 @@ from celldetective.gui.layouts.operation_layout import OperationLayout
 from celldetective.processes.background_correction import BackgroundCorrectionProcess
 from celldetective.utils.parsing import _extract_channel_indices_from_config
 from celldetective import get_logger
+from celldetective.gui.base.threads import start_tracked
 
 logger = get_logger(__name__)
 
@@ -515,8 +516,7 @@ class BackgroundModelFreeCorrectionLayout(QGridLayout, Styles):
         self.bg_worker.finished_with_result.connect(on_finished)
         self.bg_progress.canceled.connect(self.bg_worker.stop)
 
-        self.bg_worker.start()
-
+        start_tracked(self.bg_worker)
 
 class BackgroundEstimatorThread(QThread):
     progress = pyqtSignal(int)

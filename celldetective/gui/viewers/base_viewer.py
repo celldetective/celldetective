@@ -16,6 +16,7 @@ import matplotlib.gridspec as gridspec
 import matplotlib.backend_bases
 
 from celldetective.gui.base.components import CelldetectiveWidget
+from celldetective.gui.base.threads import start_tracked, stop_thread
 from celldetective.gui.base.utils import center_window
 from celldetective.utils.image_loaders import (
     auto_load_number_of_frames,
@@ -734,7 +735,16 @@ class StackVisualizer(CelldetectiveWidget):
             self.stack_path, self.img_num_per_channel, self.n_channels
         )
         self.loader_thread.frame_loaded.connect(self.on_frame_loaded)
-        self.loader_thread.start()
+        # Tracked, not just started: the thread is unparented and this attribute
+        # is its only other reference, so a widget that goes away without
+        # `closeEvent` finishing would otherwise let it be finalized mid-run --
+        # which aborts the process rather than raising.
+        start_tracked(self.loader_thread)
+        # `closeEvent` is the tidy path, but it does not run for a widget that is
+        # dropped or deleted by Qt. `destroyed` always does, and this handler
+        # holds only the thread, never `self`.
+        loader = self.loader_thread
+        self.destroyed.connect(lambda _=None, t=loader: stop_thread(t, timeout=2000))
 
         self.init_frame = load_frames(
             self.img_num_per_channel[self.target_channel, self.current_time_index],
@@ -1081,25 +1091,18 @@ class StackVisualizer(CelldetectiveWidget):
                     logger.debug(f"Could not disconnect matplotlib events: {e}")
 
         if self.loader_thread:
-            # Step 1: Disconnect signals FIRST to prevent any in-flight
-            # queued signal from dispatching after the widget is destroyed.
-            try:
-                self.loader_thread.frame_loaded.disconnect()
-            except Exception as e:
-                logger.debug(f"Could not disconnect frame_loaded signal: {e}")
+            # Disconnect first so an in-flight queued emission cannot be
+            # dispatched to a widget that is being torn down, then stop and
+            # join. `stop_thread` never calls terminate(): on Windows that
+            # leaves the thread's mutexes locked and aborts the process.
+            stop_thread(
+                self.loader_thread,
+                timeout=5000,
+                signals=(self.loader_thread.frame_loaded,),
+            )
 
-            # Step 2: Signal the thread to stop (non-blocking).
-            self.loader_thread.stop()
-
-            # Step 3: Flush the Qt event queue to drain any already-queued
-            # frame_loaded signals before the C++ objects are torn down.
+            # Drain anything that was already queued before the C++ objects go.
             QApplication.processEvents()
-
-            # Step 4: Wait for the thread to finish (up to 5 s).
-            # NOTE: Do NOT call terminate() on Windows — it triggers an SEH
-            # access violation. The thread's condition.wait() uses 100 ms
-            # intervals so it will exit within one cycle after stop() wakes it.
-            self.loader_thread.wait(5000)
 
             self.loader_thread = None
 

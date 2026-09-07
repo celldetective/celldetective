@@ -44,6 +44,7 @@ from typing import Optional, Tuple, Any
 from celldetective.gui.base_annotator import BaseAnnotator
 import logging
 from celldetective.log_manager import positionlogger
+from celldetective.gui.base.threads import start_tracked
 
 logger = logging.getLogger("celldetective")
 
@@ -165,7 +166,7 @@ class EventAnnotator(BaseAnnotator):
         self._loader_thread.finished.connect(self._on_load_finished)
         self._progress_dialog.canceled.connect(self._on_load_canceled)
 
-        self._loader_thread.start()
+        start_tracked(self._loader_thread)
 
     def _on_load_progress(self, value: int) -> None:
         """

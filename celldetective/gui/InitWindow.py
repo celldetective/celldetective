@@ -35,6 +35,7 @@ from celldetective.gui.base.components import (
 from celldetective.gui.base.utils import center_window, get_current_screen_geometry, pretty_table
 from celldetective.log_manager import get_logger
 from typing import Optional
+from celldetective.gui.base.threads import start_tracked
 
 logger = get_logger("celldetective")
 
@@ -138,7 +139,7 @@ class AppInitWindow(CelldetectiveMainWindow):
         self.show()
 
         self.bg_loader = BackgroundLoader()
-        self.bg_loader.start()
+        start_tracked(self.bg_loader)
 
     def closeEvent(self, event: QCloseEvent) -> None:
         """
