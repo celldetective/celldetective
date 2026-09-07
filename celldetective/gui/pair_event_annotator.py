@@ -30,7 +30,7 @@ from celldetective.gui.base.components import (
     CelldetectiveMainWindow,
     CelldetectiveWidget,
 )
-from celldetective.gui.base.utils import center_window
+from celldetective.gui.base.utils import center_window, flush_layout_events
 from superqt import QLabeledDoubleRangeSlider, QSearchableComboBox, QLabeledSlider
 from celldetective import (
     get_software_location,
@@ -609,7 +609,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         self.setCentralWidget(self.button_widget)
         self.show()
         self.resize(int(0.8 * self.screen_width), int(0.8 * self.screen_height))
-        QApplication.processEvents()
+        flush_layout_events(self)
 
     def fill_class_cbs(self):
         """Fill class combo boxes."""

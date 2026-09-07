@@ -45,6 +45,7 @@ from celldetective.gui.base_annotator import BaseAnnotator
 import logging
 from celldetective.log_manager import positionlogger
 from celldetective.gui.base.threads import start_tracked
+from celldetective.gui.base.utils import flush_layout_events
 
 logger = logging.getLogger("celldetective")
 
@@ -413,7 +414,7 @@ class EventAnnotator(BaseAnnotator):
         if self.class_choice_cb.currentText() != "":
             self.compute_status_and_colors(0)
 
-        QApplication.processEvents()
+        flush_layout_events(self)
 
         # Add Menu for Interactive Plotter
         menubar = self.menuBar()

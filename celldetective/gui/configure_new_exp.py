@@ -15,7 +15,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtGui import QIntValidator, QDoubleValidator
 from celldetective.gui.gui_utils import help_generic
-from celldetective.gui.base.utils import center_window
+from celldetective.gui.base.utils import center_window, flush_layout_events
 from celldetective import get_software_location
 import json
 
@@ -61,7 +61,7 @@ class ConfigNewExperiment(CelldetectiveMainWindow):
         self.init_widgets()
         self.add_to_layout()
         self.connect_signals()
-        QApplication.processEvents()
+        flush_layout_events(self)
         self.adjustScrollArea()
 
     def init_widgets(self):

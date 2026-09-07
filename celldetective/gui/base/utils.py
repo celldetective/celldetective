@@ -66,3 +66,30 @@ def pretty_table(dct: dict):
     table.add_row([dct.get(c, "") for c in dct.keys()])
     logger.debug(str(table))
 
+
+
+def flush_layout_events(widget: QWidget) -> None:
+    """
+    Settle a widget's own pending layout events, without running the event loop.
+
+    The replacement for a ``QApplication.processEvents()`` at the end of a
+    ``populate_*`` / ``_build_layouts`` / ``__init__``. That call was only ever
+    meant to let the window lay itself out before the next line measured it, but
+    it re-enters the event loop with the widget half-built and dispatches
+    *everything* that happens to be queued -- including the ``DeferredDelete`` of
+    any window closed earlier. Qt frees those C++ objects while events queued
+    behind the deletion are still addressed to them, and delivering one of those
+    is an access violation attributed to whatever is on the stack at the time.
+
+    ``sendPostedEvents`` restricted to `widget` does the useful half only: it
+    delivers this widget's and its children's posted events, and Qt excludes
+    ``DeferredDelete`` from it unless that type is asked for by name, so nothing
+    can be destroyed underneath the caller.
+
+    Parameters
+    ----------
+    widget : QWidget
+        The widget whose pending events should be delivered.
+    """
+
+    QApplication.sendPostedEvents(widget, 0)
