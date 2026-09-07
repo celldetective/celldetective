@@ -38,6 +38,7 @@ from celldetective.gui.base.components import (
 from celldetective.gui.gui_utils import color_from_class, help_generic
 from celldetective.gui.base.figure_canvas import FigureCanvas
 from celldetective.gui.base.threads import start_tracked, stop_thread
+from celldetective.gui.base.utils import is_alive
 from celldetective.gui.viewers.threshold_viewer import ThresholdedStackVisualizer
 from celldetective.utils.image_loaders import load_frames
 
@@ -897,6 +898,12 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
             self.features_cb[i].clear()
 
         self.property_query_le.setText("")
+
+        # The viewer is a separate window the user may already have closed;
+        # `WA_DeleteOnClose` means this attribute then refers to a deleted
+        # object, and driving it from a slider signal is an access violation.
+        if not is_alive(self.viewer):
+            return
 
         self.viewer.change_threshold(self.threshold_slider.value())
         self.viewer.scat_markers.set_color("tab:red")

@@ -9,6 +9,7 @@ from superqt import QLabeledDoubleSlider
 from celldetective.gui.gui_utils import QuickSliderLayout
 from celldetective.gui.viewers.base_viewer import StackVisualizer
 from celldetective import get_logger
+from celldetective.gui.base.utils import is_alive
 
 logger = get_logger(__name__)
 
@@ -235,7 +236,11 @@ class ThresholdedStackVisualizer(StackVisualizer):
 
         # Sync slider if value came from external source (like Wizard)
         # to prevent slider from being "stale" and overwriting with old value later
-        if hasattr(self, "threshold_slider"):
+        # `is_alive`, not just `hasattr`: the attribute survives the C++ slider,
+        # and superqt's labeled slider reaches into its own internal label on
+        # setValue -- if that has been freed, the write is an access violation
+        # rather than the RuntimeError the `except` below could absorb.
+        if is_alive(getattr(self, "threshold_slider", None)):
             display_val = value
             if isinstance(value, (list, tuple, np.ndarray)):
                 display_val = value[0]
