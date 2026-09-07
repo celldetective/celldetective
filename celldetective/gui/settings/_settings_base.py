@@ -8,7 +8,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt
 from celldetective import get_software_location
-from celldetective.gui.base.utils import center_window
+from celldetective.gui.base.utils import center_window, flush_layout_events
 from celldetective.gui.base.components import (
     CelldetectiveMainWindow,
     CelldetectiveWidget,
@@ -84,7 +84,7 @@ class CelldetectiveSettingsPanel(CelldetectiveMainWindow):
         self._scroll_area.setWidgetResizable(True)
         self.setCentralWidget(self._scroll_area)
 
-        QApplication.processEvents()
+        flush_layout_events(self)
 
     @abstractmethod
     def _load_previous_instructions(self):

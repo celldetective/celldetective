@@ -48,7 +48,7 @@ from celldetective.gui.gui_utils import (
     ExportPlotBtn,
 )
 from celldetective.gui.base.figure_canvas import FigureCanvas
-from celldetective.gui.base.utils import center_window
+from celldetective.gui.base.utils import center_window, flush_layout_events
 import gc
 from celldetective import get_logger
 
@@ -317,7 +317,7 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
         self.del_shortcut.activated.connect(self.shortcut_suppr)
         self.del_shortcut.setEnabled(False)
 
-        QApplication.processEvents()
+        flush_layout_events(self)
 
     def generate_signal_choices(self):
         """Generate signal choice combos."""
