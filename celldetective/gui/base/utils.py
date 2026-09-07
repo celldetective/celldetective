@@ -93,3 +93,42 @@ def flush_layout_events(widget: QWidget) -> None:
     """
 
     QApplication.sendPostedEvents(widget, 0)
+
+
+def is_alive(obj) -> bool:
+    """
+    Whether a Qt object's underlying C++ object is still there.
+
+    A Python wrapper outlives the object it wraps: every window here carries
+    ``WA_DeleteOnClose``, so closing one has Qt delete the C++ side while the
+    attribute holding it stays perfectly usable-looking. Calling into that is
+    sometimes a clean ``RuntimeError`` -- but when the deletion was partial, a
+    parent still standing with its children freed, it is an access violation
+    instead, which no ``except`` can catch. Asking first is the only guard.
+
+    Parameters
+    ----------
+    obj : QObject or None
+        The object to check.
+
+    Returns
+    -------
+    bool
+        True when `obj` exists and can still be used.
+    """
+
+    if obj is None:
+        return False
+    try:
+        import sip
+
+        return not sip.isdeleted(obj)
+    except ImportError:
+        try:
+            from PyQt5 import sip as _sip
+
+            return not _sip.isdeleted(_sip.cast(obj, type(obj)) if False else obj)
+        except Exception:
+            return True
+    except (TypeError, RuntimeError):
+        return False
