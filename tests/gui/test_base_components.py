@@ -10,10 +10,12 @@ Covers:
 import logging
 import pytest
 from unittest.mock import MagicMock, patch
-from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QMainWindow
+from PyQt5.QtCore import Qt, QRect
+from PyQt5.QtGui import QPainter, QPixmap
+from PyQt5.QtWidgets import QMainWindow, QStyle, QStyleOptionViewItem
 
 from celldetective.gui.base.components import (
+    CheckIndicatorDelegate,
     QCheckableComboBox,
     QHSeperationLine,
     HoverButton,
@@ -147,6 +149,59 @@ class TestQCheckableComboBox:
         cb.addItem("well_A", tooltip="This is well A")
         assert cb.count() == 1
         assert cb.itemData(0, Qt.ToolTipRole) == "This is well A"
+
+
+# =============================================================================
+# CheckIndicatorDelegate Tests
+# =============================================================================
+
+
+class TestCheckIndicatorDelegate:
+    """Tests for the custom check indicator of checkable combo boxes."""
+
+    def test_delegate_installed_on_popup(self, qtbot):
+        """The popup of a QCheckableComboBox uses the custom indicator."""
+        cb = QCheckableComboBox(obj="well")
+        qtbot.addWidget(cb)
+        cb.addItems(["well1", "well2"])
+
+        assert isinstance(cb.view().itemDelegate(), CheckIndicatorDelegate)
+
+    def test_rows_leave_room_for_the_indicator(self, qtbot):
+        """Rows are tall and wide enough for the rounded indicator."""
+        cb = QCheckableComboBox(obj="well")
+        qtbot.addWidget(cb)
+        cb.addItems(["well1", "well2"])
+
+        delegate = cb.view().itemDelegate()
+        option = QStyleOptionViewItem()
+        option.initFrom(cb.view())
+        size = delegate.sizeHint(option, cb.model().index(0, 0))
+
+        assert size.height() >= delegate.box_size + 2 * delegate.row_padding
+
+    def test_paints_every_check_state(self, qtbot):
+        """Painting checked, unchecked and partially checked items works."""
+        cb = QCheckableComboBox(obj="well")
+        qtbot.addWidget(cb)
+        cb.addItems(["well1", "well2", "well3"])
+        cb.setCurrentIndex(0)
+        cb.model().item(2, 0).setCheckState(Qt.PartiallyChecked)
+
+        pixmap = QPixmap(200, 3 * 27)
+        pixmap.fill(Qt.white)
+        painter = QPainter(pixmap)
+        delegate = cb.view().itemDelegate()
+        try:
+            for row in range(3):
+                option = QStyleOptionViewItem()
+                option.initFrom(cb.view())
+                option.rect = QRect(0, row * 27, 200, 27)
+                if row == 0:
+                    option.state |= QStyle.State_Selected
+                delegate.paint(painter, option, cb.model().index(row, 0))
+        finally:
+            painter.end()
 
 
 # =============================================================================
