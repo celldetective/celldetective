@@ -4,6 +4,20 @@ import os
 
 CELLDETECTIVE_BLUE = "#1565c0"
 
+# Tooltips, styled application wide (see __main__): a light card marked with a
+# celldetective blue edge, in the spirit of the outlined buttons.
+TOOLTIP_STYLE = f"""
+    QToolTip {{
+        background-color: #FBFCFE;
+        color: #263238;
+        border: 1px solid #D6E2F2;
+        border-left: 3px solid {CELLDETECTIVE_BLUE};
+        border-radius: 4px;
+        padding: 2px 6px;
+        font-size: 11px;
+    }}
+"""
+
 
 class Styles(object):
 
@@ -171,15 +185,13 @@ class Styles(object):
 			}
 		"""
 
+        # The indicator itself is painted by CelldetectiveStyle, hover included,
+        # so no ::indicator rule here: it would draw a square behind it.
         self.menu_check_style = """
 			QCheckBox {
 				font-size: 10px;
 				padding-left: 10px;
 				padding-top: 5px;
-			}
-			QCheckBox::indicator:unchecked:hover {
-				background-color : rgba(189, 189, 189, 1);
-				opacity : 0.3;
 			}
 		"""
 
