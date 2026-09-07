@@ -97,6 +97,7 @@ class UnifiedBatchProcess(Process):
         """Run the segmentation/tracking/measurement/signal batch for every position."""
 
         logger.info("Starting Unified Batch Process...")
+        self.queue.put({"status": "Starting up..."})
 
         # The stages are initialized in order, but only the first one blocks the
         # start of the run. Import the modules of the later stages on a
@@ -167,7 +168,12 @@ class UnifiedBatchProcess(Process):
 
                 if seg_worker.model_type == "stardist":
                     logger.info("Loading the StarDist library...")
+                    self.queue.put({"status": "Loading the StarDist library..."})
                     from celldetective.utils.stardist_utils import _prep_stardist_model
+
+                    self.queue.put(
+                        {"status": f"Loading model {seg_worker.model_name}..."}
+                    )
 
                     model, scale_model = _prep_stardist_model(
                         seg_worker.model_name,
@@ -177,7 +183,12 @@ class UnifiedBatchProcess(Process):
                     )
                 elif seg_worker.model_type == "cellpose":
                     logger.info("Loading the cellpose_utils library...")
+                    self.queue.put({"status": "Loading the Cellpose library..."})
                     from celldetective.utils.cellpose_utils import _prep_cellpose_model
+
+                    self.queue.put(
+                        {"status": f"Loading model {seg_worker.model_name}..."}
+                    )
 
                     model, scale_model = _prep_cellpose_model(
                         seg_worker.model_name,
@@ -189,10 +200,10 @@ class UnifiedBatchProcess(Process):
 
         track_worker = None
         if self.run_tracking:
-            from celldetective.processes.track_cells import TrackingProcess
-
             logger.info("Initializing the tracking worker...")
             self.queue.put({"status": "Initializing tracking..."})
+            from celldetective.processes.track_cells import TrackingProcess
+
             track_worker = TrackingProcess(
                 queue=self.queue, process_args=self.track_args
             )
@@ -200,10 +211,10 @@ class UnifiedBatchProcess(Process):
         measure_worker = None
         if self.run_measurement:
             logger.info("Loading the measurement libraries...")
+            self.queue.put({"status": "Initializing measurements..."})
             from celldetective.processes.measure_cells import MeasurementProcess
 
             logger.info("Initializing the measurement worker...")
-            self.queue.put({"status": "Initializing measurements..."})
             measure_worker = MeasurementProcess(
                 queue=self.queue, process_args=self.measure_args
             )
@@ -213,12 +224,12 @@ class UnifiedBatchProcess(Process):
 
         if self.run_signals:
             try:
+                logger.info("Loading the event detection model...")
+                self.queue.put({"status": "Loading event detection model..."})
                 from celldetective.utils.event_detection import (
                     _prep_event_detection_model,
                 )
 
-                logger.info("Loading the event detection model...")
-                self.queue.put({"status": "Loading event detection model..."})
                 model_name = self.signal_args["model_name"]
                 signal_model = _prep_event_detection_model(
                     model_name, use_gpu=self.signal_args.get("gpu", True)

@@ -26,11 +26,7 @@ This module expects input in the form of segmentation masks and configuration di
 import pandas as pd
 import numpy as np
 from tqdm import tqdm
-from sklearn.preprocessing import StandardScaler
 from typing import List, Optional, Union, Dict, Any, Tuple
-
-from btrack.io.utils import localizations_to_objects
-from btrack import BayesianTracker
 
 from celldetective.measure import measure_features
 from celldetective.utils.maths import velocity_per_track
@@ -43,7 +39,6 @@ from celldetective.utils.data_loaders import interpret_tracking_configuration
 import os
 import subprocess
 import sys
-import trackpy as tp
 
 abs_path = os.sep.join(
     [os.path.split(os.path.dirname(os.path.realpath(__file__)))[0], "celldetective"]
@@ -81,6 +76,10 @@ def _run_btrack_core(
     properties : dict
     graph : dict
     """
+    # btrack and trackpy each cost several seconds to import and only one of
+    # them is used per run, so the selected backend is imported on demand.
+    from btrack import BayesianTracker
+
     with BayesianTracker() as tracker:
         tracker.configure(configuration)
         if columns:
@@ -134,6 +133,8 @@ def _run_trackpy_tracking(
     """
     if search_range is None or memory is None:
         raise ValueError("Please provide a valid search range and memory value for trackpy.")
+    import trackpy as tp
+
     objects = objects.rename(columns={"t": "frame"})
     logger.debug(f"trackpy objects: {objects.shape}, columns: {list(objects.columns)}")
     data = tp.link(objects, search_range, memory=memory, link_strategy="auto")
@@ -302,6 +303,8 @@ def track(
             except ValueError:
                 logger.debug(f"Column {tr!r} not found in objects, skipping.")
 
+        from sklearn.preprocessing import StandardScaler
+
         scaler = StandardScaler()
         if columns:
             x = objects[columns].values
@@ -312,37 +315,13 @@ def track(
             logger.warning("No features were passed to bTrack.")
 
         # 2) track the objects
+        from btrack.io.utils import localizations_to_objects
+
         new_btrack_objects = localizations_to_objects(objects)
         data, properties, graph = _run_btrack_core(
             new_btrack_objects, configuration, columns, volume, track_kwargs, optimizer_options
         )
 
-        with BayesianTracker() as tracker:
-
-            tracker.configure(configuration)
-
-            if columns:
-                tracking_updates = ["motion", "visual"]
-                # tracker.tracking_updates = ["motion","visual"]
-                tracker.features = columns
-            else:
-                tracking_updates = ["motion"]
-
-            tracker.append(new_btrack_objects)
-            tracker.volume = (
-                (0, volume[0]),
-                (0, volume[1]),
-                (-1e5, 1e5),
-            )  # (-1e5, 1e5)
-            # print(tracker.volume)
-            tracker.track(tracking_updates=tracking_updates, **track_kwargs)
-            tracker.optimise(options=optimizer_options)
-
-            data, properties, graph = tracker.to_napari()  # ndim=2
-            print(f"DEBUG: tracker.to_napari() returned data shape: {data.shape}")
-            print(
-                f"DEBUG: tracker.to_napari() returned properties keys: {list(properties.keys()) if properties else 'None'}"
-            )
         # do the table post processing and napari options
         if data.shape[1] == 4:
             df = pd.DataFrame(
