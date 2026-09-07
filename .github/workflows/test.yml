@@ -39,7 +39,7 @@ jobs:
           python -m unittest
       - name: Test GUI
         run: |
-          python -m pytest tests/gui/
+          python tests/run_gui_tests.py -q
 
   Linux-Minimal:
     name: Linux Minimal
@@ -119,7 +119,7 @@ jobs:
           python -m unittest
       - name: Test GUI
         run: |
-          python -m pytest tests/gui/
+          python tests/run_gui_tests.py -q
 
   Windows-Minimal:
     name: Test Windows Minimal
