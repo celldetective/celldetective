@@ -35,6 +35,7 @@ from celldetective.utils.model_getters import get_signal_datasets_list
 from celldetective.utils.model_loaders import locate_signal_dataset
 from celldetective import get_logger
 import multiprocessing
+from celldetective.gui.base.threads import start_tracked
 
 logger = get_logger()
 
@@ -111,7 +112,7 @@ class SettingsEventDetectionModelTraining(CelldetectiveSettingsPanel):
         self.setMinimumWidth(new_width)
 
         self.bg_loader = BackgroundLoader()
-        self.bg_loader.start()
+        start_tracked(self.bg_loader)
 
     def closeEvent(self, event) -> None:
         """Stop background loader on close."""

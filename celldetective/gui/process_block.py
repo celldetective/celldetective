@@ -40,6 +40,7 @@ import numpy as np
 from glob import glob
 from celldetective import get_logger
 from celldetective.measure import _get_border_suffix
+from celldetective.gui.base.threads import start_tracked
 
 logger = get_logger("celldetective")
 
@@ -1004,7 +1005,7 @@ class ProcessPanel(QFrame, Styles):
                 logger.warning("napari loading returned None (no labels found).")
 
         loader.finished_with_result.connect(on_finished)
-        loader.start()
+        start_tracked(loader)
 
     def check_signals(self) -> None:
         """
@@ -1087,7 +1088,7 @@ class ProcessPanel(QFrame, Styles):
                         self.event_annotator.close()
 
                 self.signal_loader.finished.connect(on_finished)
-                self.signal_loader.start()
+                start_tracked(self.signal_loader)
         else:
             # Multi position explorer: redirect to TableUI with progress bar
             self.view_table_ui()
@@ -1910,7 +1911,7 @@ class ProcessPanel(QFrame, Styles):
                 )
 
         loader.finished_with_result.connect(on_finished)
-        loader.start()
+        start_tracked(loader)
 
     def view_table_ui(self) -> None:
         """

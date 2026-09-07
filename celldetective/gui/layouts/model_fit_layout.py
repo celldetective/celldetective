@@ -29,6 +29,7 @@ from celldetective.utils.parsing import _extract_channel_indices_from_config
 from celldetective import get_logger
 from celldetective.gui.viewers.base_viewer import StackVisualizer
 from celldetective.gui.viewers.threshold_viewer import ThresholdedStackVisualizer
+from celldetective.gui.base.threads import start_tracked
 
 logger = get_logger(__name__)
 
@@ -363,7 +364,7 @@ class BackgroundFitCorrectionLayout(QGridLayout, Styles):
         self.preview_worker.error.connect(on_error)
         self.bg_progress.canceled.connect(self.preview_worker.stop)
 
-        self.preview_worker.start()
+        start_tracked(self.preview_worker)
         self.bg_progress.exec_()
 
 

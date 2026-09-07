@@ -60,6 +60,17 @@ def stop_leaked_threads():
     except Exception:
         return
 
+    # Primary sweep: every thread the GUI started registers itself, so this
+    # reaches them by name rather than by scanning the heap, and a registered
+    # thread cannot have been collected mid-run in the first place -- which is
+    # the condition the gc sweeps below were written to chase.
+    try:
+        from celldetective.gui.base.threads import stop_all_tracked_threads
+
+        stop_all_tracked_threads(timeout=2000)
+    except Exception:
+        pass
+
     def _stop_running_celldetective_threads():
         """Stop + join every running QThread defined in our codebase.
 

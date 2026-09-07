@@ -55,6 +55,7 @@ import subprocess
 from typing import Optional
 
 import logging
+from celldetective.gui.base.threads import start_tracked
 
 logger = logging.getLogger(__name__)
 
@@ -168,8 +169,7 @@ class ControlPanel(CelldetectiveMainWindow):
         logger.info(f"Launch time: {t_loaded - self.parent_window.t_ref} s...")
 
         self.bg_loader = BackgroundLoader()
-        self.bg_loader.start()
-
+        start_tracked(self.bg_loader)
     @property
     def screen_height(self):
         from celldetective.gui.base.utils import get_current_screen_geometry

@@ -38,6 +38,7 @@ from glob import glob
 from datetime import datetime
 from celldetective.gui.settings._settings_base import CelldetectiveSettingsPanel
 from celldetective import get_logger
+from celldetective.gui.base.threads import start_tracked
 
 logger = get_logger(__name__)
 
@@ -96,7 +97,7 @@ class SettingsSegmentationModelTraining(CelldetectiveSettingsPanel):
         self.resize(int(self.width()), int(self._screen_height * 0.8))
 
         self.bg_loader = BackgroundLoader()
-        self.bg_loader.start()
+        start_tracked(self.bg_loader)
 
     def closeEvent(self, event: QCloseEvent) -> None:
         """
