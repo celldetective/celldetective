@@ -16,11 +16,22 @@ from PyQt5.QtWidgets import (
     QProgressDialog,
     QPushButton,
     QFrame,
+    QStyledItemDelegate,
+    QStyleOptionViewItem,
 )
-from PyQt5.QtCore import Qt, pyqtSignal, QEvent, QModelIndex, QObject
-from PyQt5.QtGui import QPaintEvent
+from PyQt5.QtCore import (
+    Qt,
+    pyqtSignal,
+    QEvent,
+    QModelIndex,
+    QObject,
+    QRectF,
+    QPointF,
+    QSize,
+)
+from PyQt5.QtGui import QPaintEvent, QPainter, QColor, QPen, QPainterPath
 from superqt.fonticon import icon
-from celldetective.gui.base.styles import Styles
+from celldetective.gui.base.styles import Styles, CELLDETECTIVE_BLUE
 from typing import Optional
 
 logger = logging.getLogger("celldetective")
@@ -122,6 +133,145 @@ def generic_message(message: str, msg_type: Optional[str] = "info") -> None:
     _ = message_box.exec()
 
 
+class CheckIndicatorDelegate(QStyledItemDelegate):
+    """
+    Item delegate drawing a rounded, celldetective-blue check indicator instead
+    of the blocky native one, for item views holding checkable items (typically
+    the popup of a :class:`QCheckableComboBox`).
+    """
+
+    box_size = 15
+    left_margin = 9
+    text_gap = 9
+    right_margin = 9
+    row_padding = 6
+
+    def __init__(
+        self, accent: Optional[str] = CELLDETECTIVE_BLUE, parent: Optional[QObject] = None
+    ) -> None:
+        """
+        Initialize the delegate.
+
+        Parameters
+        ----------
+        accent : str, optional
+            Color of the checked indicator and of the selected row.
+        parent : QObject, optional
+            The parent object.
+        """
+
+        super().__init__(parent)
+        self.accent = QColor(accent)
+        self.hover_color = QColor("#ECEFF1")
+        self.border_color = QColor("#B8B8B8")
+
+    def sizeHint(self, option: QStyleOptionViewItem, index: QModelIndex) -> QSize:
+        """Reserve room for the indicator and give the rows some air."""
+
+        size = super().sizeHint(option, index)
+        size.setHeight(
+            max(size.height() + self.row_padding, self.box_size + 2 * self.row_padding)
+        )
+        size.setWidth(size.width() + self.left_margin + self.text_gap)
+
+        return size
+
+    def paint(
+        self, painter: QPainter, option: QStyleOptionViewItem, index: QModelIndex
+    ) -> None:
+        """
+        Paint the row: background, custom check indicator, then the text.
+
+        Parameters
+        ----------
+        painter : QPainter
+            The painter to draw with.
+        option : QStyleOptionViewItem
+            The style options for the item.
+        index : QModelIndex
+            The index of the item to paint.
+        """
+
+        opt = QStyleOptionViewItem(option)
+        self.initStyleOption(opt, index)
+
+        selected = bool(opt.state & QStyle.State_Selected)
+        hovered = bool(opt.state & QStyle.State_MouseOver)
+        enabled = bool(opt.state & QStyle.State_Enabled)
+        check_state = index.data(Qt.CheckStateRole)
+
+        painter.save()
+        painter.setRenderHint(QPainter.Antialiasing, True)
+
+        # Row background, rounded and slightly inset.
+        if selected or hovered:
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(self.accent if selected else self.hover_color)
+            painter.drawRoundedRect(QRectF(opt.rect).adjusted(2.5, 1.5, -2.5, -1.5), 5, 5)
+
+        box = QRectF(
+            opt.rect.left() + self.left_margin,
+            opt.rect.center().y() - self.box_size / 2.0 + 1,
+            self.box_size,
+            self.box_size,
+        ).adjusted(0.5, 0.5, -0.5, -0.5)
+
+        if check_state == Qt.Unchecked or check_state is None:
+            painter.setBrush(Qt.NoBrush if selected else QColor(Qt.white))
+            painter.setPen(
+                QPen(QColor(255, 255, 255, 170) if selected else self.border_color, 1.4)
+            )
+            painter.drawRoundedRect(box, 4, 4)
+        else:
+            # On a selected (blue) row, invert the indicator to keep it visible.
+            fill = QColor(Qt.white) if selected else self.accent
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(fill)
+            painter.drawRoundedRect(box, 4, 4)
+
+            mark = QColor(self.accent if selected else Qt.white)
+            if check_state == Qt.PartiallyChecked:
+                painter.setPen(QPen(mark, 2.0, Qt.SolidLine, Qt.RoundCap))
+                painter.drawLine(
+                    QPointF(box.left() + 0.26 * box.width(), box.center().y()),
+                    QPointF(box.left() + 0.74 * box.width(), box.center().y()),
+                )
+            else:
+                path = QPainterPath()
+                path.moveTo(
+                    box.left() + 0.24 * box.width(), box.top() + 0.53 * box.height()
+                )
+                path.lineTo(
+                    box.left() + 0.43 * box.width(), box.top() + 0.72 * box.height()
+                )
+                path.lineTo(
+                    box.left() + 0.77 * box.width(), box.top() + 0.30 * box.height()
+                )
+                painter.setBrush(Qt.NoBrush)
+                painter.setPen(QPen(mark, 2.0, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+                painter.drawPath(path)
+
+        # Item text, elided to the room left by the indicator.
+        text_rect = opt.rect.adjusted(
+            self.left_margin + self.box_size + self.text_gap, 0, -self.right_margin, 0
+        )
+        if selected:
+            text_color = opt.palette.color(QPalette.HighlightedText)
+        elif enabled:
+            text_color = opt.palette.color(QPalette.Text)
+        else:
+            text_color = opt.palette.color(QPalette.Disabled, QPalette.Text)
+
+        painter.setPen(text_color)
+        painter.drawText(
+            text_rect,
+            int(Qt.AlignLeft | Qt.AlignVCenter),
+            opt.fontMetrics.elidedText(opt.text, Qt.ElideRight, text_rect.width()),
+        )
+
+        painter.restore()
+
+
 class QCheckableComboBox(QComboBox):
     """
     adapted from https://stackoverflow.com/questions/22775095/pyqt-how-to-set-combobox-items-be-checkable
@@ -163,6 +313,8 @@ class QCheckableComboBox(QComboBox):
         self.toolButton.setPopupMode(QToolButton.InstantPopup)
         self.anySelected = False
 
+        self.setItemDelegate(CheckIndicatorDelegate(parent=self))
+        self.view().setMouseTracking(True)
         self.view().viewport().installEventFilter(self)
         self.view().pressed.connect(self.handleItemPressed)
 
