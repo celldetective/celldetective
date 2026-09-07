@@ -34,12 +34,37 @@ jobs:
       - name: Install package [Full]
         run: |
           pip install ".[all]"
+      # The suite pulls its segmentation/signal models from Zenodo the first
+      # time a test asks for one. Zenodo answers 5xx often enough that an
+      # otherwise good commit fails on it, so keep the downloads between runs:
+      # the key rolls when the tests change, and falls back to the newest
+      # existing cache so a new model is added to it rather than re-fetched
+      # every run.
+      - name: Locate installed package
+        id: pkg
+        shell: bash
+        run: |
+          echo "dir=$(python -c 'import celldetective, os; print(os.path.dirname(os.path.realpath(celldetective.__file__)))')" >> "$GITHUB_OUTPUT"
+      - name: Cache Zenodo models and datasets
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ steps.pkg.outputs.dir }}/models/segmentation_targets
+            ${{ steps.pkg.outputs.dir }}/models/segmentation_effectors
+            ${{ steps.pkg.outputs.dir }}/models/segmentation_generic
+            ${{ steps.pkg.outputs.dir }}/models/segmentation_oocyst
+            ${{ steps.pkg.outputs.dir }}/models/signal_detection
+            ${{ steps.pkg.outputs.dir }}/models/pair_signal_detection
+            ${{ steps.pkg.outputs.dir }}/datasets
+          key: celldetective-zenodo-${{ runner.os }}-py${{ matrix.python-version }}-${{ hashFiles('tests/**/*.py') }}
+          restore-keys: |
+            celldetective-zenodo-${{ runner.os }}-py${{ matrix.python-version }}-
       - name: Test package
         run: |
           python -m unittest
       - name: Test GUI
         run: |
-          python tests/run_gui_tests.py -q
+          python tests/run_gui_tests.py
 
   Linux-Minimal:
     name: Linux Minimal
@@ -114,12 +139,37 @@ jobs:
       - name: Install package [Full]
         run: |
           pip install -e ".[all]"
+      # The suite pulls its segmentation/signal models from Zenodo the first
+      # time a test asks for one. Zenodo answers 5xx often enough that an
+      # otherwise good commit fails on it, so keep the downloads between runs:
+      # the key rolls when the tests change, and falls back to the newest
+      # existing cache so a new model is added to it rather than re-fetched
+      # every run.
+      - name: Locate installed package
+        id: pkg
+        shell: bash
+        run: |
+          echo "dir=$(python -c 'import celldetective, os; print(os.path.dirname(os.path.realpath(celldetective.__file__)))')" >> "$GITHUB_OUTPUT"
+      - name: Cache Zenodo models and datasets
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ steps.pkg.outputs.dir }}/models/segmentation_targets
+            ${{ steps.pkg.outputs.dir }}/models/segmentation_effectors
+            ${{ steps.pkg.outputs.dir }}/models/segmentation_generic
+            ${{ steps.pkg.outputs.dir }}/models/segmentation_oocyst
+            ${{ steps.pkg.outputs.dir }}/models/signal_detection
+            ${{ steps.pkg.outputs.dir }}/models/pair_signal_detection
+            ${{ steps.pkg.outputs.dir }}/datasets
+          key: celldetective-zenodo-${{ runner.os }}-py${{ matrix.python-version }}-${{ hashFiles('tests/**/*.py') }}
+          restore-keys: |
+            celldetective-zenodo-${{ runner.os }}-py${{ matrix.python-version }}-
       - name: Test package
         run: |
           python -m unittest
       - name: Test GUI
         run: |
-          python tests/run_gui_tests.py -q
+          python tests/run_gui_tests.py
 
   Windows-Minimal:
     name: Test Windows Minimal

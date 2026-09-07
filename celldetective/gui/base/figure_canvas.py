@@ -12,6 +12,65 @@ from celldetective import get_logger
 logger = get_logger(__name__)
 
 
+_SAFE_CANVAS_CLS = None
+
+
+def _safe_canvas_class():
+    """
+    Return a ``FigureCanvasQTAgg`` subclass whose paint cannot fault the process.
+
+    matplotlib's ``paintEvent`` opens ``QPainter(self)`` and then, without
+    checking that it actually started, calls ``painter.eraseRect(rect)``.
+    ``QPainter::eraseRect()`` is one of the few QPainter methods that reads
+    ``d->state`` with no active-painter guard, so when ``begin()`` fails the
+    call dereferences a null pointer and the interpreter dies with
+    "Windows fatal exception: access violation" -- no traceback, no failing
+    assertion, the whole process gone.
+
+    ``begin()`` fails whenever the widget has no usable paint engine: a zero
+    width or height, a backing store already torn down with the window, or a
+    paint that re-enters while another painter is still open on the widget.
+    Those all happen while a viewer is being closed or resized, and a paint
+    that could not begin would have drawn nothing anyway -- so probe the paint
+    device first and skip the paint instead of faulting on it.
+
+    The class is built lazily so importing this module does not pull in the Qt
+    backend before a figure is actually needed.
+    """
+
+    global _SAFE_CANVAS_CLS
+    if _SAFE_CANVAS_CLS is not None:
+        return _SAFE_CANVAS_CLS
+
+    from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
+    from PyQt5.QtGui import QPainter
+
+    class SafeFigureCanvasQTAgg(FigureCanvasQTAgg):
+        """FigureCanvasQTAgg that no-ops a paint it cannot safely perform."""
+
+        def paintEvent(self, event):
+            if self.width() <= 0 or self.height() <= 0:
+                return
+
+            # Ask Qt the same question matplotlib's paintEvent fails to ask.
+            probe = QPainter()
+            if not probe.begin(self):
+                logger.debug(
+                    "Skipping canvas paint: no paint engine available "
+                    "(size=%sx%s, visible=%s).",
+                    self.width(),
+                    self.height(),
+                    self.isVisible(),
+                )
+                return
+            probe.end()
+
+            super().paintEvent(event)
+
+    _SAFE_CANVAS_CLS = SafeFigureCanvasQTAgg
+    return _SAFE_CANVAS_CLS
+
+
 class FigureCanvas(CelldetectiveWidget):
     """
     Generic figure canvas.
@@ -40,9 +99,7 @@ class FigureCanvas(CelldetectiveWidget):
         super().__init__()
         self.fig = fig
         self.setWindowTitle(title)
-        from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
-
-        self.canvas = FigureCanvasQTAgg(self.fig)
+        self.canvas = _safe_canvas_class()(self.fig)
         self.canvas.setStyleSheet("background-color: transparent;")
         if interactive:
             from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT
@@ -98,6 +155,16 @@ class FigureCanvas(CelldetectiveWidget):
         event : QCloseEvent
             The close event.
         """
+        # Silence the canvas before the figure goes. WA_DeleteOnClose only
+        # *schedules* deletion, so Qt can still deliver a paint between here
+        # and the deleteLater(), and that paint would run against a figure
+        # that no longer has any axes on a window that is already going away.
+        try:
+            self.canvas.setUpdatesEnabled(False)
+            self.canvas.hide()
+        except RuntimeError as e:
+            logger.debug(f"Canvas already destroyed during cleanup: {e}")
+
         self.fig.clf()
         plt.close(self.fig)
         super(FigureCanvas, self).closeEvent(event)

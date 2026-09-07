@@ -23,11 +23,14 @@ Exits non-zero if any file fails, after running all of them, so one bad file
 does not hide the state of the rest.
 """
 
+import os
 import subprocess
 import sys
 from pathlib import Path
 
 GUI_TESTS = Path(__file__).parent / "gui"
+
+VERBOSITY_FLAGS = ("-v", "-vv", "-q", "-qq", "--verbose", "--quiet")
 
 
 def main(argv):
@@ -36,6 +39,15 @@ def main(argv):
         print(f"No GUI test files found under {GUI_TESTS}", file=sys.stderr)
         return 1
 
+    # A native crash kills the child before pytest can write its summary, so the
+    # only record of where it happened is whatever already reached the log.
+    # Default to one line per test and turn off block buffering on the child's
+    # stdout, so the last line printed names the test that died instead of
+    # leaving a file-sized haystack.
+    if not any(a in VERBOSITY_FLAGS for a in argv):
+        argv = ["-v", *argv]
+    env = {**os.environ, "PYTHONUNBUFFERED": "1"}
+
     failed = []
     for path in files:
         rel = path.relative_to(Path.cwd()) if path.is_relative_to(Path.cwd()) else path
@@ -43,6 +55,7 @@ def main(argv):
         result = subprocess.run(
             [sys.executable, "-m", "pytest", str(path), *argv],
             check=False,
+            env=env,
         )
         # A native crash shows up as a negative code (signal) or as Windows'
         # 0xC0000005; either way the file did not pass and the message needs to
