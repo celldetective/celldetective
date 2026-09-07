@@ -23,7 +23,7 @@ from celldetective.utils.image_loaders import (
     _load_frames_to_segment,
     load_frames,
 )
-from celldetective.utils.image_transforms import _estimate_scale_factor
+from celldetective.utils.image_transforms import _combined_scale_factor
 from celldetective.utils.mask_cleaning import _check_label_dims
 from celldetective.utils.mask_transforms import _rescale_labels
 from celldetective.utils.model_loaders import (
@@ -375,16 +375,16 @@ class SegmentCellDLProcess(BaseSegmentProcess):
     def detect_rescaling(self):
         """Detect the rescheduling factor for the images."""
 
-        self.scale = _estimate_scale_factor(
-            self.spatial_calibration, self.required_spatial_calibration
+        # One factor from both corrections. Estimating the calibration ratio
+        # on its own first and multiplying afterwards dropped it whenever it sat
+        # within 5% of 1 -- the "not worth resampling" shortcut, which stops
+        # being true once a cell-size correction is resampling the frame anyway.
+        self.scale = _combined_scale_factor(
+            self.spatial_calibration,
+            self.required_spatial_calibration,
+            self.cell_size,
+            self.target_cell_size,
         )
-        logger.info(f"Scale: {self.scale} [None = 1]...")
-
-        if self.target_cell_size is not None and self.scale is not None:
-            self.scale *= self.cell_size / self.target_cell_size
-        elif self.target_cell_size is not None:
-            if self.target_cell_size != self.cell_size:
-                self.scale = self.cell_size / self.target_cell_size
 
         logger.info(
             f"Scale accounting for expected cell size: {self.scale} [None = 1]..."

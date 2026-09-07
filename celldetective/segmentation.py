@@ -61,7 +61,7 @@ from celldetective.utils.cellpose_utils import (
 from celldetective.utils.mask_transforms import _rescale_labels
 from celldetective.utils.image_transforms import (
     estimate_unreliable_edge,
-    _estimate_scale_factor,
+    _combined_scale_factor,
     threshold_image,
 )
 from celldetective.utils.data_cleaning import rename_intensity_column
@@ -364,14 +364,11 @@ def prepare_segmentation_model(
     else:
         diameter = None
 
-    scale = _estimate_scale_factor(spatial_calibration, required_spatial_calibration)
-
-    # Correct the scale so that objects come out the size the model was trained
-    # on, mirroring SegmentCellDLProcess.estimate_scale. Both sizes are needed:
+    # Both corrections in one factor, mirroring SegmentCellDLProcess.
     # `cell_size_um` is what the model saw, `target_cell_size_um` what these
-    # images hold.
-    # Read from the model configuration, never from a caller's override: the
-    # override says what to ask Cellpose for, not what the network was trained on.
+    # images hold. Read from the model configuration, never from a caller's
+    # override: the override says what to ask Cellpose for, not what the network
+    # was trained on.
     cell_size = trained_cell_size_um(input_config)
 
     if target_cell_size is None and use_stored_mapping:
@@ -380,11 +377,13 @@ def prepare_segmentation_model(
         raise ValueError(
             f"The target cell size must be strictly positive, got {target_cell_size}."
         )
-    if target_cell_size is not None and cell_size is not None:
-        if scale is not None:
-            scale *= cell_size / target_cell_size
-        elif target_cell_size != cell_size:
-            scale = cell_size / target_cell_size
+
+    scale = _combined_scale_factor(
+        spatial_calibration,
+        required_spatial_calibration,
+        cell_size,
+        target_cell_size,
+    )
 
     logger.info(
         f"{spatial_calibration=} {required_spatial_calibration=} "
