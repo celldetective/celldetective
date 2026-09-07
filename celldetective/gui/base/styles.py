@@ -2,6 +2,8 @@ from celldetective import get_software_location
 from PyQt5.QtGui import QIcon
 import os
 
+CELLDETECTIVE_BLUE = "#1565c0"
+
 
 class Styles(object):
 
@@ -14,7 +16,7 @@ class Styles(object):
 
         self.help_color = "#1958b7"
 
-        self.celldetective_blue = "#1565c0"
+        self.celldetective_blue = CELLDETECTIVE_BLUE
         self.celldetective_logo_path = os.sep.join(
             [get_software_location(), "celldetective", "icons", "logo.png"]
         )
