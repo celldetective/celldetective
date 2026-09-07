@@ -379,7 +379,6 @@ class TestPipelineAgreesOnTheTrainedCellSize(unittest.TestCase):
 
 
 @_requires_cellpose()
-@_requires_cellpose()
 class TestRescalingInvariance(unittest.TestCase):
     """
     Pixel size, trained cell size and target cell size must agree.
@@ -607,6 +606,7 @@ class TestRescalingInvariance(unittest.TestCase):
         self.assertAlmostEqual(scale, both, places=6)
 
 
+@_requires_cellpose()
 class TestCellposeModelPreparation(unittest.TestCase):
     """Cellpose model loading, which was broken on Windows."""
 
