@@ -227,7 +227,14 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
         self.setCentralWidget(self.button_widget)
         self.show()
         self.resize(int(0.8 * self.screen_width), int(0.8 * self.screen_height))
-        QApplication.processEvents()
+        # No `processEvents()` here. It only forced an early repaint, but calling
+        # it from inside a constructor re-enters the event loop with this window
+        # half-built and dispatches whatever is queued -- including the
+        # `DeferredDelete` of any window closed earlier. Qt frees those C++
+        # objects while events still queued behind the deletion are addressed to
+        # them, and delivering one of those is an access violation, blamed on
+        # whatever happens to be on the stack. The window paints on the next turn
+        # of the real event loop instead.
 
     def populate_left_panel(self):
         """Populate the left panel."""
