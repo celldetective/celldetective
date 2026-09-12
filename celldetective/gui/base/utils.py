@@ -95,6 +95,45 @@ def flush_layout_events(widget: QWidget) -> None:
     QApplication.sendPostedEvents(widget, 0)
 
 
+_SIP_MODULES = None
+
+
+def _sip_modules() -> tuple:
+    """
+    The sip modules that might own a Qt wrapper, most likely first.
+
+    PyQt5 wraps its objects with the ``PyQt5.sip`` module it was built against.
+    A top-level ``sip`` module is a different build -- conda ships one, and it is
+    importable alongside a pip-installed PyQt5 -- whose ``isdeleted`` rejects
+    foreign wrappers outright. Trying the bundled module first means the common
+    case never depends on that rejection being handled.
+
+    Returns
+    -------
+    tuple
+        The importable sip modules, in the order they should be tried.
+    """
+
+    global _SIP_MODULES
+    if _SIP_MODULES is None:
+        modules = []
+        try:
+            from PyQt5 import sip as pyqt5_sip
+
+            modules.append(pyqt5_sip)
+        except ImportError:
+            pass
+        try:
+            import sip as top_level_sip
+
+            if top_level_sip not in modules:
+                modules.append(top_level_sip)
+        except ImportError:
+            pass
+        _SIP_MODULES = tuple(modules)
+    return _SIP_MODULES
+
+
 def is_alive(obj) -> bool:
     """
     Whether a Qt object's underlying C++ object is still there.
@@ -105,6 +144,11 @@ def is_alive(obj) -> bool:
     sometimes a clean ``RuntimeError`` -- but when the deletion was partial, a
     parent still standing with its children freed, it is an access violation
     instead, which no ``except`` can catch. Asking first is the only guard.
+
+    When no sip module can answer -- none importable, or none that recognises
+    the wrapper -- this returns True. The guard is then no worse than the
+    unguarded code it replaced, whereas a False would silently disable whatever
+    it protects on an environment that is otherwise perfectly healthy.
 
     Parameters
     ----------
@@ -119,16 +163,17 @@ def is_alive(obj) -> bool:
 
     if obj is None:
         return False
-    try:
-        import sip
 
-        return not sip.isdeleted(obj)
-    except ImportError:
+    for module in _sip_modules():
         try:
-            from PyQt5 import sip as _sip
-
-            return not _sip.isdeleted(_sip.cast(obj, type(obj)) if False else obj)
-        except Exception:
-            return True
-    except (TypeError, RuntimeError):
-        return False
+            return not module.isdeleted(obj)
+        except TypeError:
+            # Wrong sip build for this wrapper -- it cannot see the object at
+            # all, which says nothing about whether the object is alive. Ask the
+            # next one rather than reporting a live widget dead: every caller
+            # here uses a False to skip an update, so guessing wrong loses a
+            # slider sync or a redraw with nothing logged.
+            continue
+        except RuntimeError:
+            return False
+    return True
