@@ -1,6 +1,6 @@
-import time
+﻿import time
 
-from PyQt5.QtGui import QCloseEvent
+from PyQt5.QtGui import QCloseEvent, QShowEvent
 from PyQt5.QtWidgets import (
     QPushButton,
     QHBoxLayout,
@@ -8,19 +8,21 @@ from PyQt5.QtWidgets import (
     QMainWindow,
     QGridLayout,
     QFrame,
-    QTabWidget,
     QVBoxLayout,
     QScrollArea,
 )
 from celldetective.gui.base.components import (
+    CurrentPageTabWidget,
     CelldetectiveMainWindow,
     CelldetectiveWidget,
     QCheckableComboBox,
     QHSeperationLine,
+    ToolButton,
 )
 
-from PyQt5.QtCore import Qt, QSize, QThread
-from celldetective.gui.base.components import generic_message
+from PyQt5.QtCore import Qt, QSize, QThread, QTimer
+from celldetective.gui.base.components import generic_message, set_disabled_reason
+from celldetective.gui.base.utils import fit_window_to_content, keep_scrollbar_space
 from celldetective.utils.parsing import (
     config_section_to_dict,
     _extract_labels_from_config,
@@ -127,23 +129,35 @@ class ControlPanel(CelldetectiveMainWindow):
         for panel in self.ProcessPopulations:
             grid_process.addWidget(panel)
         grid_process.addWidget(self.NeighPanel)
+        # The blocks are as tall as they ask to be: room left over in the tab
+        # collects here, instead of being shared out as gaps between them.
+        grid_process.addStretch(1)
 
         grid_analyze.addWidget(self.SurvivalBlock)
+        grid_analyze.addStretch(1)
 
         self.scroll = QScrollArea()
         self.scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.scroll.setWidgetResizable(True)
-        self.scroll.setMinimumHeight(550)
+        # Only a floor: the window is given the height its blocks ask for, both
+        # when it opens and whenever one of them is opened or closed.
+        self.scroll.setMinimumHeight(240)
+        # The bar appears as soon as a block is opened: its width is reserved
+        # from the start, so that the panel does not shift sideways with it.
+        keep_scrollbar_space(self.scroll)
         # self.scroll.setMinimumHeight(int(0.4*screen_height))
 
-        tabWidget = QTabWidget()
+        self.tabWidget = tabWidget = CurrentPageTabWidget()
         tab_index_process = tabWidget.addTab(ProcessFrame, "Process")
         tabWidget.setTabIcon(tab_index_process, icon(MDI6.cog_outline, color="black"))
 
         tab_index_analyze = tabWidget.addTab(AnalyzeFrame, "Analyze")
         tabWidget.setTabIcon(tab_index_analyze, icon(MDI6.poll, color="black"))
         tabWidget.setStyleSheet(self.qtab_style)
+        # The tab widget follows the page on show (see CurrentPageTabWidget):
+        # the window is refitted when the user changes tab.
+        tabWidget.currentChanged.connect(self.fit_tabs_to_current_page)
 
         self.grid.addWidget(tabWidget, 7, 0, 1, 3, alignment=Qt.AlignTop)
         self.grid.setSpacing(5)
@@ -170,6 +184,48 @@ class ControlPanel(CelldetectiveMainWindow):
 
         self.bg_loader = BackgroundLoader()
         start_tracked(self.bg_loader)
+
+        self._fitted = False
+
+    def showEvent(self, event: QShowEvent) -> None:
+        """
+        Fit the window to its blocks the first time it is shown.
+
+        Parameters
+        ----------
+        event : QShowEvent
+            The show event.
+        """
+
+        super().showEvent(event)
+
+        if not getattr(self, "_fitted", False):
+            self._fitted = True
+            # Once the layout has settled: the blocks are all collapsed at this
+            # point, and the window has no reason to be taller than they are.
+            QTimer.singleShot(0, self.fit_to_content)
+
+    def fit_tabs_to_current_page(self, index: int) -> None:
+        """
+        Refit the window to the page the user just switched to.
+
+        Parameters
+        ----------
+        index : int
+            The index of the page now shown.
+        """
+
+        if getattr(self, "_fitted", False):
+            QTimer.singleShot(0, self.fit_to_content)
+
+    def fit_to_content(self) -> None:
+        """Give the window the height its blocks ask for, within the screen."""
+
+        try:
+            fit_window_to_content(self, self.scroll)
+        except RuntimeError as e:
+            logger.debug(f"Window resizing failed: {e}")
+
     @property
     def screen_height(self):
         from celldetective.gui.base.utils import get_current_screen_geometry
@@ -223,19 +279,11 @@ class ControlPanel(CelldetectiveMainWindow):
 			"""
         )
 
-        self.folder_exp_btn = QPushButton()
-        self.folder_exp_btn.setIcon(icon(MDI6.folder, color="black"))
-        self.folder_exp_btn.setIconSize(QSize(20, 20))
-        self.folder_exp_btn.setToolTip("Experiment folder")
+        self.folder_exp_btn = ToolButton(MDI6.folder, "Experiment folder")
         self.folder_exp_btn.clicked.connect(self.open_experiment_folder)
-        self.folder_exp_btn.setStyleSheet(self.button_select_all)
 
-        self.edit_config_button = QPushButton()
-        self.edit_config_button.setIcon(icon(MDI6.cog_outline, color="black"))
-        self.edit_config_button.setIconSize(QSize(20, 20))
-        self.edit_config_button.setToolTip("Configuration file")
+        self.edit_config_button = ToolButton(MDI6.cog_outline, "Configuration file")
         self.edit_config_button.clicked.connect(self.open_config_editor)
-        self.edit_config_button.setStyleSheet(self.button_select_all)
 
         self.well_list = QCheckableComboBox(obj="well", parent_window=self)
         thresh = 32
@@ -254,29 +302,20 @@ class ControlPanel(CelldetectiveMainWindow):
 
         self.position_list.activated.connect(self.update_position_options)
 
-        self.view_stack_btn = QPushButton()
-        self.view_stack_btn.setStyleSheet(self.button_select_all)
-        self.view_stack_btn.setIcon(icon(MDI6.image_check, color="black"))
-        self.view_stack_btn.setToolTip("View stack.")
-        self.view_stack_btn.setIconSize(QSize(20, 20))
+        self.view_stack_btn = ToolButton(MDI6.image_check, "View stack.")
         self.view_stack_btn.clicked.connect(self.view_current_stack)
         self.view_stack_btn.setEnabled(False)
+        set_disabled_reason(
+            self.view_stack_btn, "Select a single position to view its stack."
+        )
 
-        self.select_all_wells_btn = QPushButton()
-        self.select_all_wells_btn.setIcon(icon(MDI6.select_all, color="black"))
-        self.select_all_wells_btn.setIconSize(QSize(20, 20))
-        self.select_all_wells_btn.setToolTip("Select all wells.")
-        self.select_all_wells_btn.clicked.connect(self.select_all_wells)
-        self.select_all_wells_btn.setStyleSheet(self.button_select_all)
-        self.select_all_wells_option = False
+        self.select_all_wells_btn = ToolButton(MDI6.select_all, "Select all wells.")
+        self.select_all_wells_btn.setCheckable(True)
+        self.select_all_wells_btn.toggled.connect(self.select_all_wells)
 
-        self.select_all_pos_btn = QPushButton()
-        self.select_all_pos_btn.setIcon(icon(MDI6.select_all, color="black"))
-        self.select_all_pos_btn.setIconSize(QSize(20, 20))
-        self.select_all_pos_btn.setToolTip("Select all positions.")
-        self.select_all_pos_btn.clicked.connect(self.select_all_positions)
-        self.select_all_pos_btn.setStyleSheet(self.button_select_all)
-        self.select_all_pos_option = False
+        self.select_all_pos_btn = ToolButton(MDI6.select_all, "Select all positions.")
+        self.select_all_pos_btn.setCheckable(True)
+        self.select_all_pos_btn.toggled.connect(self.select_all_positions)
 
         well_lbl = QLabel("Well: ")
         well_lbl.setAlignment(Qt.AlignRight)
@@ -329,43 +368,49 @@ class ControlPanel(CelldetectiveMainWindow):
 
         vbox.addWidget(hsep)
 
-    def select_all_wells(self):
+    @property
+    def select_all_wells_option(self) -> bool:
+        """Whether every well is selected, held by the button itself."""
+
+        return self.select_all_wells_btn.isChecked()
+
+    @property
+    def select_all_pos_option(self) -> bool:
+        """Whether every position is selected, held by the button itself."""
+
+        return self.select_all_pos_btn.isChecked()
+
+    def select_all_wells(self, selected: bool) -> None:
         """
         Select or deselect all wells in the list.
+
+        Parameters
+        ----------
+        selected : bool
+            The new state of the select all button.
         """
 
-        if not self.select_all_wells_option:
+        if selected:
             self.well_list.selectAll()
-            self.select_all_wells_option = True
-            self.select_all_wells_btn.setIcon(
-                icon(MDI6.select_all, color=self.celldetective_blue)
-            )
-            self.select_all_wells_btn.setIconSize(QSize(20, 20))
-            self.display_positions()
         else:
             self.well_list.unselectAll()
-            self.select_all_wells_option = False
-            self.select_all_wells_btn.setIcon(icon(MDI6.select_all, color="black"))
-            self.select_all_wells_btn.setIconSize(QSize(20, 20))
-            self.display_positions()
 
-    def select_all_positions(self):
+        self.display_positions()
+
+    def select_all_positions(self, selected: bool) -> None:
         """
         Select or deselect all positions in the list.
+
+        Parameters
+        ----------
+        selected : bool
+            The new state of the select all button.
         """
 
-        if not self.select_all_pos_option:
+        if selected:
             self.position_list.selectAll()
-            self.select_all_pos_option = True
-            self.select_all_pos_btn.setIcon(
-                icon(MDI6.select_all, color=self.celldetective_blue)
-            )
-            self.select_all_pos_btn.setIconSize(QSize(20, 20))
         else:
             self.position_list.unselectAll()
-            self.select_all_pos_option = False
-            self.select_all_pos_btn.setIcon(icon(MDI6.select_all, color="black"))
-            self.select_all_pos_btn.setIconSize(QSize(20, 20))
 
     def locate_image(self):
         """
