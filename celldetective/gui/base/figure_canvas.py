@@ -19,26 +19,29 @@ def _safe_canvas_class():
     """
     Return a ``FigureCanvasQTAgg`` subclass that cannot kill the interpreter.
 
-    Qt keeps delivering paints and queued idle-draws to a canvas that is on its
-    way out -- a window mid-close, a widget whose C++ half sip has already
-    freed, a layout that has left it zero-sized. matplotlib's handlers assume
-    none of that:
+    Qt keeps delivering paints and queued idle-draws to a canvas that is in no
+    state to serve them -- a window mid-close, a widget whose C++ half sip has
+    already freed, one shown on a CI session that never composites it.
+    matplotlib's handlers assume none of that:
 
     * ``paintEvent`` opens ``QPainter(self)`` and then calls
       ``painter.eraseRect(rect)`` without checking that ``begin()`` succeeded.
-      ``QPainter::eraseRect()`` reads ``d->state`` with no active-painter
-      guard, so a painter that failed to begin is a null dereference and the
-      process dies with "Windows fatal exception: access violation".
-    * both ``paintEvent`` and ``_draw_idle`` -- the latter reached from a
+      ``QPainter::eraseRect()`` is one of the few QPainter methods that reads
+      ``d->state`` with no active-painter guard, so a painter that failed to
+      begin is a null dereference: "Windows fatal exception: access violation",
+      no traceback, no failing assertion, the whole run's results gone.
+    * ``paintEvent`` and ``_draw_idle`` -- the latter reached from a
       ``QTimer.singleShot`` that outlives the widget it was armed for -- touch
       the C++ object outside any try block. Once sip has freed it that is a
-      ``RuntimeError`` raised inside a Qt handler, and PyQt5 answers an
-      unhandled exception in a virtual with ``abort()``.
+      ``RuntimeError`` raised inside a Qt virtual, which PyQt5 answers with
+      ``abort()``.
 
-    Either way the process dies with no traceback and no failing assertion,
-    taking the whole run's results with it. A paint that cannot begin would
-    have drawn nothing anyway, so check the cheap, side-effect-free conditions
-    up front and swallow the deletion race that is left.
+    Whether ``begin()`` will succeed cannot be predicted from the widget's
+    visibility or size -- a live, visible, non-zero-sized canvas can still have
+    no paint engine. The only reliable answer is the painter itself, so open
+    one, ask it, and drive the draw from it. That is matplotlib's own paint
+    body with the missing guard added, rather than a second painter opened
+    behind its back.
 
     The class is built lazily so importing this module does not pull in the Qt
     backend before a figure is actually needed.
@@ -49,26 +52,70 @@ def _safe_canvas_class():
         return _SAFE_CANVAS_CLS
 
     from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
+    from matplotlib.transforms import Bbox
     from PyQt5 import sip
+    from PyQt5.QtCore import QPoint
+    from PyQt5.QtGui import QImage, QPainter
 
     class SafeFigureCanvasQTAgg(FigureCanvasQTAgg):
         """FigureCanvasQTAgg that no-ops a draw it cannot safely perform."""
 
-        def _is_paintable(self):
-            """Whether drawing this canvas can touch Qt at all."""
-
+        def paintEvent(self, event):
             # Ask sip before Qt: every other call here goes through the
             # wrapper, and on a freed object that is the RuntimeError we are
             # trying to avoid rather than an answer.
             if sip.isdeleted(self):
-                return False
-            return self.isVisible() and self.width() > 0 and self.height() > 0
-
-        def paintEvent(self, event):
-            if not self._is_paintable():
                 return
+
             try:
-                super().paintEvent(event)
+                self._draw_idle()  # Only does something if a draw is pending.
+
+                # No renderer yet: give up and wait for the first real draw,
+                # exactly as matplotlib does.
+                if not hasattr(self, "renderer"):
+                    return
+
+                painter = QPainter(self)
+                if not painter.isActive():
+                    # begin() failed -- no paint engine on this device. This is
+                    # the case matplotlib walks straight into.
+                    logger.debug(
+                        "Skipped canvas paint: no paint engine "
+                        f"(size={self.width()}x{self.height()}, "
+                        f"visible={self.isVisible()})."
+                    )
+                    return
+
+                try:
+                    # See documentation of QRect: bottom() and right() are off
+                    # by 1, so use left() + width() and top() + height().
+                    rect = event.rect()
+                    # Scale the rect by the screen dpi ratio to get Figure
+                    # coordinates rather than Qt ones.
+                    width = rect.width() * self.device_pixel_ratio
+                    height = rect.height() * self.device_pixel_ratio
+                    left, top = self.mouseEventCoords(rect.topLeft())
+                    # Shift "top" by the image height, and "left" by its width,
+                    # to reach the corners in our coordinate system.
+                    bottom = top - height
+                    right = left + width
+
+                    buf = memoryview(
+                        self.copy_from_bbox(Bbox([[left, bottom], [right, top]]))
+                    )
+                    painter.eraseRect(rect)
+                    qimage = QImage(
+                        buf, buf.shape[1], buf.shape[0], QImage.Format_RGBA8888
+                    )
+                    qimage.setDevicePixelRatio(self.device_pixel_ratio)
+                    painter.drawImage(QPoint(rect.left(), rect.top()), qimage)
+
+                    # The rubber band the zoom tool draws over the figure.
+                    draw_rect = getattr(self, "_draw_rect_callback", None)
+                    if draw_rect is not None:
+                        draw_rect(painter)
+                finally:
+                    painter.end()
             except RuntimeError as e:
                 # Freed between the check above and the paint itself.
                 logger.debug(f"Skipped paint on a canvas being destroyed: {e}")
