@@ -103,7 +103,14 @@ def _safe_canvas_class():
                     buf = memoryview(
                         self.copy_from_bbox(Bbox([[left, bottom], [right, top]]))
                     )
-                    painter.eraseRect(rect)
+                    # matplotlib calls painter.eraseRect(rect) here.
+                    # QPainter::eraseRect() is fillRect(r, background()), and
+                    # both eraseRect and background() read d->state with no
+                    # active-painter guard, so on a painter that did not begin
+                    # they are a null dereference rather than a no-op.
+                    # fillRect() checks d->engine first, so name the brush
+                    # ourselves and go through the guarded path instead.
+                    painter.fillRect(rect, self.palette().window())
                     qimage = QImage(
                         buf, buf.shape[1], buf.shape[0], QImage.Format_RGBA8888
                     )
