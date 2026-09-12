@@ -21,6 +21,7 @@ from celldetective.gui.base.components import (
 
 from PyQt5.QtCore import Qt, QSize, QThread
 from celldetective.gui.base.components import generic_message
+from celldetective.gui.base.utils import keep_scrollbar_space
 from celldetective.utils.parsing import (
     config_section_to_dict,
     _extract_labels_from_config,
@@ -135,6 +136,9 @@ class ControlPanel(CelldetectiveMainWindow):
         self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.scroll.setWidgetResizable(True)
         self.scroll.setMinimumHeight(550)
+        # The bar appears as soon as a block is opened: its width is reserved
+        # from the start, so that the panel does not shift sideways with it.
+        keep_scrollbar_space(self.scroll)
         # self.scroll.setMinimumHeight(int(0.4*screen_height))
 
         tabWidget = QTabWidget()

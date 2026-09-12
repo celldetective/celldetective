@@ -3,7 +3,7 @@ import os
 from glob import glob
 
 import numpy as np
-from PyQt5.QtCore import QSize, QTimer, Qt
+from PyQt5.QtCore import QSize, Qt
 from PyQt5.QtGui import QDoubleValidator, QIntValidator
 from PyQt5.QtWidgets import (
     QDialog,
@@ -19,8 +19,8 @@ from fonticon_mdi6 import MDI6
 from superqt.fonticon import icon
 
 from celldetective import get_software_location
+from celldetective.gui.base.control_panel_block import ControlPanelBlock
 from celldetective.gui.base.styles import Styles
-from celldetective.gui.base.utils import center_window
 from celldetective.gui.gui_utils import help_generic
 from celldetective.gui.layouts import (
     BackgroundFitCorrectionLayout,
@@ -34,7 +34,7 @@ from celldetective import get_logger
 logger = get_logger(__name__)
 
 
-class PreprocessingPanel(QFrame, Styles):
+class PreprocessingPanel(ControlPanelBlock, Styles):
 
     def __init__(self, parent_window: QMainWindow) -> None:
         """
@@ -46,8 +46,7 @@ class PreprocessingPanel(QFrame, Styles):
             The parent window.
         """
 
-        super().__init__()
-        self.parent_window = parent_window
+        super().__init__("PREPROCESSING", parent_window)
         self.exp_channels = self.parent_window.exp_channels
         self.exp_dir = self.parent_window.exp_dir
         self.wells = np.array(self.parent_window.wells, dtype=str)
@@ -58,95 +57,15 @@ class PreprocessingPanel(QFrame, Styles):
         self.onlyFloat = QDoubleValidator()
         self.onlyInt = QIntValidator()
 
-        self.setFrameStyle(QFrame.StyledPanel | QFrame.Raised)
-        self.grid = QGridLayout(self)
-
         self.generate_header()
 
     def generate_header(self):
         """
-        Read the mode and prepare a collapsable block to process a specific cell population.
-
+        Prepare the collapsable block holding the preprocessing options.
         """
-
-        panel_title = QLabel(f"PREPROCESSING")
-        panel_title.setStyleSheet(
-            """
-			font-weight: bold;
-			padding: 0px;
-			"""
-        )
-
-        self.grid.addWidget(panel_title, 0, 0, 1, 4, alignment=Qt.AlignCenter)
-
-        # self.select_all_btn = QPushButton()
-        # self.select_all_btn.setIcon(icon(MDI6.checkbox_blank_outline,color="black"))
-        # self.select_all_btn.setIconSize(QSize(20, 20))
-        # self.all_ticked = False
-        # #self.select_all_btn.clicked.connect(self.tick_all_actions)
-        # self.select_all_btn.setStyleSheet(self.button_select_all)
-        # self.grid.addWidget(self.select_all_btn, 0, 0, 1, 4, alignment=Qt.AlignLeft)
-        # self.to_disable.append(self.all_tc_actions)
-
-        self.collapse_btn = QPushButton()
-        self.collapse_btn.setIcon(icon(MDI6.chevron_down, color="black"))
-        self.collapse_btn.setIconSize(QSize(25, 25))
-        self.collapse_btn.setStyleSheet(self.button_select_all)
-        self.grid.addWidget(self.collapse_btn, 0, 0, 1, 4, alignment=Qt.AlignRight)
 
         self.populate_contents()
-
-        self.grid.addWidget(self.ContentsFrame, 1, 0, 1, 4, alignment=Qt.AlignTop)
-        self.collapse_btn.clicked.connect(
-            lambda: self.ContentsFrame.setHidden(not self.ContentsFrame.isHidden())
-        )
-        self.collapse_btn.clicked.connect(self.collapse_advanced)
-        self.ContentsFrame.hide()
-
-    def collapse_advanced(self):
-        """
-        Collapse or expand the advanced settings panel.
-        """
-
-        panels_open = [
-            not p.ContentsFrame.isHidden()
-            for p in self.parent_window.ProcessPopulations
-        ]
-        interactions_open = not self.parent_window.NeighPanel.ContentsFrame.isHidden()
-        preprocessing_open = (
-            not self.parent_window.PreprocessingPanel.ContentsFrame.isHidden()
-        )
-        is_open = np.array(panels_open + [interactions_open, preprocessing_open])
-
-        # Dynamically update the parent window's maximum height based on the current screen geometry
-        self.parent_window.setMaximumHeight(int(0.9 * self.parent_window.screen_height))
-
-        if self.ContentsFrame.isHidden():
-            self.collapse_btn.setIcon(icon(MDI6.chevron_down, color="black"))
-            self.collapse_btn.setIconSize(QSize(20, 20))
-            if len(is_open[is_open]) == 0:
-                self.parent_window.scroll.setMinimumHeight(int(550))
-                self.parent_window.adjustSize()
-        else:
-            self.collapse_btn.setIcon(icon(MDI6.chevron_up, color="black"))
-            self.collapse_btn.setIconSize(QSize(20, 20))
-            self.parent_window.scroll.setMinimumHeight(
-                min(int(930), int(0.9 * self.parent_window.screen_height))
-            )
-
-            def safe_center():
-                """
-                Safely center the window.
-                """
-                try:
-                    center_window(self.window())
-                except RuntimeError as e:
-                    logger.debug(f"Window centering failed: {e}")
-
-            try:
-                QTimer.singleShot(10, safe_center)
-            except Exception as e:
-                logger.debug(f"Window centering trigger failed: {e}")
+        self.set_content(self.ContentsFrame)
 
     def populate_contents(self):
         """
