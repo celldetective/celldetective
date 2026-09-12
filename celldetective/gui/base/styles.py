@@ -32,6 +32,204 @@ TOOLTIP_STYLE = f"""
 TOOLTIP_FONT_SIZE = 8
 
 
+# Colors of the buttons. Every role below is built from these, so that a state
+# looks the same wherever it appears: a pressed button darkens the accent, a
+# disabled one goes grey, and the tint under a hovered borderless button is the
+# one the item delegates and the collapsible headers already use.
+ACCENT_HOVER = "#1B74D8"
+ACCENT_PRESSED = "#0D47A1"
+ACCENT_SOFT = "#EAF2FC"
+ACCENT_SOFT_STRONG = "#D6E6F8"
+DANGER_COLOR = "#C62828"
+DANGER_SOFT = "#FBEBEA"
+DANGER_SOFT_STRONG = "#F6DAD8"
+INK_COLOR = "#1C2B36"
+SURFACE_COLOR = "#F1F4F7"
+SURFACE_BORDER = "#E0E5EA"
+SURFACE_HOVER = "#ECEFF1"
+SURFACE_PRESSED = "#DDE3E8"
+# Borderless icon buttons keep the frank grey they have always had under the
+# mouse: light tints read as nothing at all behind a small icon.
+GHOST_HOVER = "#BDBDBD"
+GHOST_PRESSED = "#A8A8A8"
+DISABLED_BG = "#E6E9EC"
+DISABLED_FG = "#A6AFB8"
+
+# The roles a button can take. `primary` is the one action a panel is for
+# (Submit), `secondary` an outlined action next to it (Explore table),
+# `secondary_plain` the same with a plain label, `chip` a small discrete action
+# (the model zoo buttons), `ghost` a borderless icon button, `danger` a
+# destructive action and `add` a left aligned entry of a list.
+BUTTON_ROLES = (
+    "primary",
+    "secondary",
+    "secondary_plain",
+    "chip",
+    "ghost",
+    "danger",
+    "add",
+)
+
+# Every role carries a transparent border of this width, colored on focus: the
+# ring then costs no layout, so a focused button does not move or resize.
+FOCUS_WIDTH = 2
+
+
+def button_style(role: str = "primary") -> str:
+    """
+    Return the style sheet of a button role.
+
+    Parameters
+    ----------
+    role : str
+        One of :data:`BUTTON_ROLES`.
+
+    Returns
+    -------
+    str
+        The style sheet to give to the buttons of that role.
+
+    Raises
+    ------
+    ValueError
+        If the role is not one of :data:`BUTTON_ROLES`.
+    """
+
+    if role not in BUTTON_ROLES:
+        raise ValueError(f"Unknown button role '{role}', expected one of {BUTTON_ROLES}.")
+
+    focus = f"QPushButton:focus {{ border-color: {ACCENT_PRESSED}; }}"
+
+    if role == "primary":
+        return f"""
+            QPushButton {{
+                background-color: {CELLDETECTIVE_BLUE};
+                color: white;
+                border: {FOCUS_WIDTH}px solid transparent;
+                border-radius: 13px;
+                padding: 5px 14px;
+                font-weight: bold;
+                font-size: 12px;
+            }}
+            QPushButton:hover {{ background-color: {ACCENT_HOVER}; }}
+            QPushButton:pressed {{ background-color: {ACCENT_PRESSED}; }}
+            QPushButton:disabled {{
+                background-color: {DISABLED_BG};
+                color: {DISABLED_FG};
+            }}
+            {focus}
+        """
+
+    if role in ("secondary", "secondary_plain"):
+        label = CELLDETECTIVE_BLUE if role == "secondary" else INK_COLOR
+        weight = "bold" if role == "secondary" else "normal"
+
+        return f"""
+            QPushButton {{
+                background-color: transparent;
+                border: 1.6px solid {CELLDETECTIVE_BLUE};
+                color: {label};
+                border-radius: 13px;
+                padding: 6px 14px;
+                font-weight: {weight};
+                font-size: 12px;
+            }}
+            QPushButton:hover {{ background-color: {ACCENT_SOFT}; }}
+            QPushButton:pressed {{
+                background-color: {ACCENT_SOFT_STRONG};
+                border-color: {ACCENT_PRESSED};
+            }}
+            QPushButton:disabled {{
+                border-color: {DISABLED_BG};
+                color: {DISABLED_FG};
+            }}
+            QPushButton:focus {{
+                border-color: {ACCENT_PRESSED};
+                background-color: {ACCENT_SOFT};
+            }}
+        """
+
+    if role == "chip":
+        return f"""
+            QPushButton {{
+                background-color: {SURFACE_COLOR};
+                color: {INK_COLOR};
+                border: 1px solid {SURFACE_BORDER};
+                border-radius: 11px;
+                padding: 3px 11px;
+                font-size: 10px;
+            }}
+            QPushButton:hover {{
+                background-color: {SURFACE_HOVER};
+                border-color: #CBD4DC;
+            }}
+            QPushButton:pressed {{ background-color: {SURFACE_PRESSED}; }}
+            QPushButton:disabled {{
+                background-color: #F5F7F9;
+                color: {DISABLED_FG};
+                border-color: #EDF0F3;
+            }}
+            {focus}
+        """
+
+    if role == "ghost":
+        return f"""
+            QPushButton {{
+                background-color: transparent;
+                color: {INK_COLOR};
+                border: {FOCUS_WIDTH}px solid transparent;
+                border-radius: 14px;
+                padding: 3px;
+                font-size: 9px;
+            }}
+            QPushButton:hover {{ background-color: {GHOST_HOVER}; }}
+            QPushButton:pressed {{ background-color: {GHOST_PRESSED}; }}
+            QPushButton:checked {{
+                background-color: {ACCENT_SOFT_STRONG};
+                color: {ACCENT_PRESSED};
+            }}
+            {focus}
+        """
+
+    if role == "danger":
+        return f"""
+            QPushButton {{
+                background-color: transparent;
+                border: 1.6px solid {DANGER_COLOR};
+                color: {DANGER_COLOR};
+                border-radius: 13px;
+                padding: 6px 14px;
+                font-weight: bold;
+                font-size: 12px;
+            }}
+            QPushButton:hover {{ background-color: {DANGER_SOFT}; }}
+            QPushButton:pressed {{ background-color: {DANGER_SOFT_STRONG}; }}
+            QPushButton:disabled {{
+                border-color: {DISABLED_BG};
+                color: {DISABLED_FG};
+            }}
+            QPushButton:focus {{
+                border-color: {DANGER_COLOR};
+                background-color: {DANGER_SOFT};
+            }}
+        """
+
+    return f"""
+        QPushButton {{
+            background-color: transparent;
+            color: {INK_COLOR};
+            border: {FOCUS_WIDTH}px solid transparent;
+            border-radius: 13px;
+            padding: 5px 7px;
+            font-size: 12px;
+            text-align: left;
+        }}
+        QPushButton:hover {{ background-color: {GHOST_HOVER}; }}
+        QPushButton:pressed {{ background-color: {GHOST_PRESSED}; }}
+        {focus}
+    """
+
+
 class Styles(object):
 
     def __init__(self):
@@ -68,135 +266,27 @@ class Styles(object):
             }}
         """
     def init_button_styles(self):
-        """Initialize button styles."""
+        """
+        Initialize button styles.
 
-        self.button_style_sheet = """
-			QPushButton {
-				background-color: #1565c0;
-				color: white;
-				border-radius: 13px;
-				padding: 7px;
-				font-weight: bold;
-				font-size: 12px;
-			}
-			QPushButton:hover {
-				background-color: #2070EB;
-			}
-			QPushButton:pressed {
-				background-color: #ff8a00;
-			}
+        The styles are built from the roles of :func:`button_style`. The names
+        the software has always used are kept as aliases of those roles, since
+        they are set in about two hundred places.
+        """
 
-			QPushButton:!enabled {
-				background-color: #92a8c0;
-				color: white;
-				border-radius: 13px;
-				padding: 7px;
-				font-weight: bold;
-				font-size: 12px;
-			}
-		"""
+        self.button_primary = button_style("primary")
+        self.button_secondary = button_style("secondary")
+        self.button_secondary_plain = button_style("secondary_plain")
+        self.button_chip = button_style("chip")
+        self.button_ghost = button_style("ghost")
+        self.button_danger = button_style("danger")
 
-        self.button_style_sheet_2 = """
-			QPushButton {
-				background-color: transparent;
-				border: 3px solid #1565c0;
-				color: #1565c0;
-				border-radius: 15px;
-				padding: 7px;
-				font-weight: bold;
-				font-size: 12px;
-			}
-			QPushButton:hover {
-				background-color: #ecf0f1;
-			}
-			QPushButton:pressed {
-				background-color: #ff8a00;
-			}
-
-			QPushButton:disabled {
-				border: 3px solid rgba(21, 101, 192, 0.50);
-				color: rgba(21, 101, 192, 0.50);
-			}
-
-		"""
-
-        self.button_style_sheet_5 = """
-			QPushButton {
-				background-color: transparent;
-				border: 3px solid #1565c0;
-				color: #000000;
-				border-radius: 15px;
-				padding: 7px;
-				font-size: 12px;
-			}
-			QPushButton:hover {
-				background-color: #ecf0f1;
-			}
-			QPushButton:pressed {
-				background-color: #ff8a00;
-			}
-
-			QPushButton:disabled {
-				border: 3px solid rgba(21, 101, 192, 0.50);
-				color: rgba(21, 101, 192, 0.50);
-			}
-
-		"""
-
-        self.button_style_sheet_2_not_done = """
-			QPushButton {
-				background-color: transparent;
-				border: 3px solid #d14334;
-				color: #d14334;
-				border-radius: 15px;
-				padding: 7px;
-				font-weight: bold;
-				font-size: 12px;
-			}
-			QPushButton:hover {
-				background-color: #ecf0f1;
-			}
-			QPushButton:pressed {
-				background-color: #ff8a00;
-			}
-		"""
-
-        self.button_style_sheet_3 = """
-			QPushButton {
-				background-color: #eeeeee;
-				color: black;
-				border-radius: 10px;
-				padding: 7px;
-				font-size: 8px;
-			}
-			QPushButton:hover {
-				color: white;
-				background-color: #2070EB;
-			}
-			QPushButton:pressed {
-				background-color: #ff8a00;
-			}
-		"""
-
-        self.button_select_all = """
-			QPushButton {
-				background-color: transparent;
-				color: black;
-				border-radius: 15px;
-				padding: 7px;
-				font-size: 9px;
-			}
-			QPushButton:hover {
-				background-color: #bdbdbd;
-			}
-			QPushButton:pressed {
-				background-color: #ff8a00;
-			}
-			QPushButton:checked {
-				background-color: #1565c0;
-				color: white;
-			}
-		"""
+        self.button_style_sheet = self.button_primary
+        self.button_style_sheet_2 = self.button_secondary
+        self.button_style_sheet_5 = self.button_secondary_plain
+        self.button_style_sheet_3 = self.button_chip
+        self.button_style_sheet_2_not_done = self.button_danger
+        self.button_select_all = self.button_ghost
 
         # The indicator itself is painted by CelldetectiveStyle, hover included,
         # so no ::indicator rule here: it would draw a square behind it.
@@ -208,22 +298,7 @@ class Styles(object):
 			}
 		"""
 
-        self.button_add = """
-			QPushButton {
-				background-color: transparent;
-				color: black;
-				border-radius: 13px;
-				padding: 7px;
-				font-size: 12px;
-				Text-align: left;
-			}
-			QPushButton:hover {
-				background-color: #bdbdbd;
-			}
-			QPushButton:pressed {
-				background-color: #ff8a00;
-			}
-		"""
+        self.button_add = button_style("add")
 
     def init_tab_styles(self):
         """Initialize tab styles."""
