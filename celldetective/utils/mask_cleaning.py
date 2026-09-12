@@ -168,12 +168,24 @@ def auto_correct_masks(
 
     Examples
     --------
-    >>> masks = np.array([[0, 0, 1, 1], [0, 2, 2, 1], [0, 2, 0, 0]])
-    >>> corrected_masks = auto_correct_masks(masks)
-    >>> corrected_masks
+    Surviving labels are renumbered consecutively -- 3 and 7 below become 1
+    and 2, which is what keeps downstream label encodings dense:
+
+    >>> masks = np.array([[0, 0, 3, 3],
+    ...                   [0, 7, 7, 3],
+    ...                   [0, 7, 0, 0]])
+    >>> auto_correct_masks(masks, min_area=3)
     array([[0, 0, 1, 1],
-               [0, 2, 2, 1],
-               [0, 2, 0, 0]])
+           [0, 2, 2, 1],
+           [0, 2, 0, 0]])
+
+    Note the explicit ``min_area``: both objects are 3 px, so the default of 9
+    treats them as noise and discards them.
+
+    >>> auto_correct_masks(masks)
+    array([[0, 0, 0, 0],
+           [0, 0, 0, 0],
+           [0, 0, 0, 0]])
     """
 
     if masks.ndim != 2:
@@ -204,7 +216,12 @@ def auto_correct_masks(
     # Second routine: drop objects that are too small and renumber the
     # survivors to consecutive labels (1..N) in a single vectorized pass.
     counts = np.bincount(corrected_lbl.ravel())
-    keep = counts >= min_area
+    # `counts > 0` as well as the area test: `np.bincount` reports a zero count
+    # for every integer below the maximum label, so a `min_area` of 0 or less
+    # would otherwise "keep" label values that are absent from the image, make
+    # the lookup table an identity, and skip the renumbering entirely. Callers
+    # do pass `min_area=0` -- that is what unticking "Remove small objects" sends.
+    keep = (counts >= min_area) & (counts > 0)
     keep[0] = False  # background
     kept_labels = np.nonzero(keep)[0]
     lut = np.zeros(counts.size, dtype=int)
