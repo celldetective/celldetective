@@ -72,6 +72,31 @@ def _indicator_colors(
     return QColor(accent), border, QColor(Qt.white)
 
 
+def is_range_slider(widget: Optional[QWidget]) -> bool:
+    """
+    Tell whether a slider carries several handles.
+
+    The range sliders of superqt are QSlider subclasses that paint a span
+    between two handles, one sub-control at a time. They are recognized by
+    name, the package offering no marker to test against.
+
+    Parameters
+    ----------
+    widget : QWidget, optional
+        The slider to test.
+
+    Returns
+    -------
+    bool
+        True for a range slider.
+    """
+
+    if widget is None:
+        return False
+
+    return any("Range" in klass.__name__ for klass in type(widget).__mro__)
+
+
 def draw_check_indicator(
     painter: QPainter,
     rect: QRectF,
@@ -500,6 +525,11 @@ class CelldetectiveStyle(QProxyStyle):
         """
         Paint a slider as a thin rounded groove with a circular handle.
 
+        Only the sub-controls Qt asks for are drawn. A slider with several
+        handles (the range sliders of superqt) paints itself one sub-control at
+        a time, so painting the whole widget on each call would cover the
+        handles drawn by the previous ones.
+
         Parameters
         ----------
         option : QStyleOptionSlider
@@ -519,53 +549,60 @@ class CelldetectiveStyle(QProxyStyle):
         enabled = bool(option.state & QStyle.State_Enabled)
         accent = QColor(self.accent) if enabled else QColor(DISABLED_COLOR)
         horizontal = option.orientation == Qt.Horizontal
+        ranged = is_range_slider(widget)
 
         painter.save()
         painter.setRenderHint(QPainter.Antialiasing, True)
         painter.setPen(Qt.NoPen)
 
         thickness = self.slider_groove
-        if horizontal:
-            line = QRectF(
-                groove.left(),
-                groove.center().y() - thickness / 2.0 + 1,
-                groove.width(),
-                thickness,
-            )
-            filled = QRectF(line)
-            # `upsideDown` tells on which end of the groove the minimum sits.
-            if option.upsideDown:
-                filled.setLeft(min(handle.center().x(), line.right()))
-            else:
-                filled.setRight(max(handle.center().x(), line.left()))
-        else:
-            line = QRectF(
-                groove.center().x() - thickness / 2.0 + 1,
-                groove.top(),
-                thickness,
-                groove.height(),
-            )
-            filled = QRectF(line)
-            if option.upsideDown:
-                filled.setTop(min(handle.center().y(), line.bottom()))
-            else:
-                filled.setBottom(max(handle.center().y(), line.top()))
-
         radius = thickness / 2.0
-        painter.setBrush(QColor(GROOVE_COLOR))
-        painter.drawRoundedRect(line, radius, radius)
 
-        if filled.width() > 0 and filled.height() > 0:
-            painter.setBrush(accent)
-            painter.drawRoundedRect(filled, radius, radius)
+        if option.subControls & QStyle.SC_SliderGroove:
+            if horizontal:
+                line = QRectF(
+                    groove.left(),
+                    groove.center().y() - thickness / 2.0 + 1,
+                    groove.width(),
+                    thickness,
+                )
+                filled = QRectF(line)
+                # `upsideDown` tells on which end of the groove the minimum sits.
+                if option.upsideDown:
+                    filled.setLeft(min(handle.center().x(), line.right()))
+                else:
+                    filled.setRight(max(handle.center().x(), line.left()))
+            else:
+                line = QRectF(
+                    groove.center().x() - thickness / 2.0 + 1,
+                    groove.top(),
+                    thickness,
+                    groove.height(),
+                )
+                filled = QRectF(line)
+                if option.upsideDown:
+                    filled.setTop(min(handle.center().y(), line.bottom()))
+                else:
+                    filled.setBottom(max(handle.center().y(), line.top()))
 
-        diameter = min(handle.width(), handle.height(), self.slider_handle)
-        center = QRectF(handle).center()
-        pressed = bool(option.state & QStyle.State_Sunken)
-        hovered = bool(option.state & QStyle.State_MouseOver)
+            painter.setBrush(QColor(GROOVE_COLOR))
+            painter.drawRoundedRect(line, radius, radius)
 
-        painter.setBrush(QColor(Qt.white))
-        painter.setPen(QPen(accent, 3.0 if (pressed or hovered) else 2.2))
-        painter.drawEllipse(center, diameter / 2.0 - 1.5, diameter / 2.0 - 1.5)
+            # What is filled on a range slider is the span between its handles,
+            # which the widget paints itself: from the minimum to a handle
+            # would be meaningless there.
+            if not ranged and filled.width() > 0 and filled.height() > 0:
+                painter.setBrush(accent)
+                painter.drawRoundedRect(filled, radius, radius)
+
+        if option.subControls & QStyle.SC_SliderHandle:
+            diameter = min(handle.width(), handle.height(), self.slider_handle)
+            center = QRectF(handle).center()
+            pressed = bool(option.state & QStyle.State_Sunken)
+            hovered = bool(option.state & QStyle.State_MouseOver)
+
+            painter.setBrush(QColor(Qt.white))
+            painter.setPen(QPen(accent, 3.0 if (pressed or hovered) else 2.2))
+            painter.drawEllipse(center, diameter / 2.0 - 1.5, diameter / 2.0 - 1.5)
 
         painter.restore()
