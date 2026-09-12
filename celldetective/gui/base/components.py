@@ -18,7 +18,9 @@ from PyQt5.QtWidgets import (
     QFrame,
     QStyledItemDelegate,
     QStyleOptionViewItem,
+    QTabWidget,
     QToolTip,
+    QAbstractButton,
     QAbstractItemView,
 )
 from PyQt5.QtCore import (
@@ -46,14 +48,16 @@ class CelldetectiveStyledMixin(object):
     Mixin applying the celldetective look to the children of a window.
 
     The combo box popups are the only part the style cannot reach on its own
-    (Qt installs its own delegate on them), so they are styled here, once the
-    window is shown and its children exist.
+    (Qt installs its own delegate on them), and the focus policy of the buttons
+    is a property rather than a style, so both are set here, once the window is
+    shown and its children exist.
     """
 
     def showEvent(self, event: QShowEvent) -> None:
         """Style the combo boxes of the window, then show it."""
 
         style_comboboxes(self)
+        soften_button_focus(self)
         super().showEvent(event)
 
 
@@ -496,6 +500,25 @@ def style_comboboxes(root: QWidget) -> None:
             combo.setItemDelegate(CelldetectiveItemDelegate(parent=combo))
 
 
+def soften_button_focus(root: QWidget) -> None:
+    """
+    Let the buttons below a widget take the focus from the keyboard only.
+
+    Qt gives a clicked button the keyboard focus, so the focus ring of the
+    button styles stayed on after a click and read as a selection that is not
+    one. Tab still walks the buttons, and the ring then means what it says.
+
+    Parameters
+    ----------
+    root : QWidget
+        The window whose buttons must be softened.
+    """
+
+    for button in root.findChildren(QAbstractButton):
+        if button.focusPolicy() == Qt.StrongFocus:
+            button.setFocusPolicy(Qt.TabFocus)
+
+
 class QCheckableComboBox(QComboBox):
     """
     adapted from https://stackoverflow.com/questions/22775095/pyqt-how-to-set-combobox-items-be-checkable
@@ -743,6 +766,55 @@ class QCheckableComboBox(QComboBox):
         return super().eventFilter(source, event)
 
 
+class CurrentPageTabWidget(QTabWidget):
+    """
+    A tab widget as tall as the page on show, not as its tallest page.
+
+    Qt sizes a tab widget from the tallest of its pages, which leaves a band of
+    nothing under every shorter one. The height of the page currently shown is
+    used instead, the chrome around it (the tab bar, the frame) being left to
+    Qt to measure.
+    """
+
+    def _page_heights(self) -> list:
+        """Return the height asked for by each page."""
+
+        return [self.widget(i).sizeHint().height() for i in range(self.count())]
+
+    def sizeHint(self) -> QSize:
+        """Return the size of the current page, plus the chrome around it."""
+
+        hint = super().sizeHint()
+        current = self.currentWidget()
+        heights = self._page_heights()
+
+        if current is not None and heights:
+            hint.setHeight(
+                hint.height() - max(heights) + current.sizeHint().height()
+            )
+
+        return hint
+
+    def minimumSizeHint(self) -> QSize:
+        """Return the smallest size the current page can take."""
+
+        hint = super().minimumSizeHint()
+        current = self.currentWidget()
+
+        if current is None:
+            return hint
+
+        heights = [
+            self.widget(i).minimumSizeHint().height() for i in range(self.count())
+        ]
+        if heights:
+            hint.setHeight(
+                hint.height() - max(heights) + current.minimumSizeHint().height()
+            )
+
+        return hint
+
+
 class QHSeperationLine(QFrame):
     """
     a horizontal seperation line\n
@@ -752,7 +824,9 @@ class QHSeperationLine(QFrame):
         """Initialize the QHSeperationLine."""
         super().__init__()
         self.setMinimumWidth(1)
-        self.setFixedHeight(20)
+        # Enough air around the rule to separate two groups, not so much that
+        # it opens a hole in a block.
+        self.setFixedHeight(13)
         self.setFrameShape(QFrame.HLine)
         self.setFrameShadow(QFrame.Sunken)
         self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Minimum)

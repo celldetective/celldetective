@@ -57,9 +57,9 @@ class ChevronButton(QAbstractButton):
     """
     The small chevron opening and closing a block.
 
-    Checked means the block is open. The chevron turns between the two states
-    instead of being swapped for another icon, and it is the only click target
-    of the header.
+    Checked means the block is open. The chevron flips over on its horizontal
+    axis between the two states instead of being swapped for another icon, and
+    it is the only click target of the header.
     """
 
     button_size = 26
@@ -84,11 +84,12 @@ class ChevronButton(QAbstractButton):
         self.setAttribute(Qt.WA_Hover, True)
         self.color = QColor(TITLE_COLOR)
 
-        self._angle = 0.0
+        # 1 points the chevron down, -1 up; in between, the flip in progress.
+        self._flip = 1.0
         self._animation = QVariantAnimation(self)
         self._animation.setDuration(self.duration)
-        self._animation.valueChanged.connect(self._set_angle)
-        self.toggled.connect(self._turn)
+        self._animation.valueChanged.connect(self._set_flip)
+        self.toggled.connect(self._flip_to)
 
     def sizeHint(self) -> QSize:
         """Return the fixed size of the button."""
@@ -108,25 +109,25 @@ class ChevronButton(QAbstractButton):
         self.color = QColor(color)
         self.update()
 
-    def _set_angle(self, angle: float) -> None:
-        """Store the angle of the chevron and repaint."""
+    def _set_flip(self, flip: float) -> None:
+        """Store how far the chevron has flipped over and repaint."""
 
-        self._angle = float(angle)
+        self._flip = float(flip)
         self.update()
 
-    def _turn(self, checked: bool) -> None:
-        """Turn the chevron towards its open or closed position."""
+    def _flip_to(self, checked: bool) -> None:
+        """Flip the chevron towards its open or closed position."""
 
         self._animation.stop()
-        target = 180.0 if checked else 0.0
+        target = -1.0 if checked else 1.0
 
         if not self.isVisible():
             # A block opened while its window is still being built has nothing
             # to animate: the chevron is simply drawn in its final position.
-            self._set_angle(target)
+            self._set_flip(target)
             return
 
-        self._animation.setStartValue(self._angle)
+        self._animation.setStartValue(self._flip)
         self._animation.setEndValue(target)
         self._animation.start()
 
@@ -156,8 +157,10 @@ class ChevronButton(QAbstractButton):
             self.chevron_size,
             self.chevron_size,
         )
+        # The flip is a scale on the vertical axis alone, so that the chevron
+        # folds onto itself and opens the other way up, rather than turning.
         painter.translate(chevron.center())
-        painter.rotate(self._angle)
+        painter.scale(1.0, self._flip if abs(self._flip) > 0.05 else 0.05)
         painter.translate(-chevron.center())
         draw_chevron(
             painter, chevron, color=self.color.name(), enabled=self.isEnabled()
@@ -191,7 +194,7 @@ class CollapsibleHeader(QWidget):
     either side of the title.
     """
 
-    header_height = 38
+    header_height = 46
     side_margin = 8
     accent_width = 3
     radius = 7
@@ -359,6 +362,11 @@ class CollapsibleFrame(QFrame):
     duration = 150
     radius = 8
 
+    # Room between the content of a card and its edges: left, top, right,
+    # bottom. Set on the layout of the content, since a layout ignores the
+    # margins of the widget it lives in once it carries its own.
+    content_margins = (12, 2, 12, 10)
+
     def __init__(
         self, title: Optional[str] = "", parent: Optional[QWidget] = None
     ) -> None:
@@ -376,6 +384,10 @@ class CollapsibleFrame(QFrame):
         super().__init__(parent)
 
         self.setFrameStyle(QFrame.NoFrame)
+        # A card is as tall as its content asks for and no taller: left to
+        # `Preferred`, it takes a share of whatever room is left in the window,
+        # which stretches the blocks of a settings panel for nothing.
+        self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
 
         self.header = CollapsibleHeader(title, parent=self)
         self.collapse_btn = self.header.toggle_btn
@@ -424,7 +436,9 @@ class CollapsibleFrame(QFrame):
 
         self.header.add_widget(widget, leading=leading)
 
-    def set_content(self, content: QWidget) -> None:
+    def set_content(
+        self, content: QWidget, margins: Optional[tuple] = None
+    ) -> None:
         """
         Set the widget shown when the block is open.
 
@@ -432,13 +446,26 @@ class CollapsibleFrame(QFrame):
         ----------
         content : QWidget
             The content of the block.
+        margins : tuple, optional
+            The room to leave around the content, as (left, top, right,
+            bottom). Defaults to :attr:`content_margins`; pass an empty tuple
+            to leave the margins of the content alone.
         """
 
         self.content = content
+
+        margins = self.content_margins if margins is None else margins
+        if margins and content.layout() is not None:
+            content.layout().setContentsMargins(*margins)
+
         self.box.addWidget(content, alignment=Qt.AlignTop)
         content.hide()
 
-        self.animation = QPropertyAnimation(content, b"maximumHeight", self)
+        # The card is what grows and shrinks, not the content: the content
+        # keeps the size it asks for from the first frame and is simply clipped
+        # by the card, so its widgets are never squeezed to nothing on the way
+        # (a button flattened mid-animation swallows the clicks aimed at it).
+        self.animation = QPropertyAnimation(self, b"maximumHeight", self)
         self.animation.setDuration(self.duration)
         self.animation.setEasingCurve(QEasingCurve.InOutCubic)
         self.animation.finished.connect(self._animation_done)
@@ -474,8 +501,19 @@ class CollapsibleFrame(QFrame):
             self.content.sizeHint().height(), self.content.minimumSizeHint().height()
         )
 
+    def _folded_height(self) -> int:
+        """Return the height of the card when only its header shows."""
+
+        margins = self.box.contentsMargins()
+        return self.header.height() + margins.top() + margins.bottom()
+
+    def _unfolded_height(self) -> int:
+        """Return the height of the card when its content shows."""
+
+        return self._folded_height() + self.box.spacing() + self._content_height()
+
     def _toggle_content(self, expanded: bool) -> None:
-        """Show or hide the content, animating its height."""
+        """Show or hide the content, growing or shrinking the card."""
 
         self.update()
 
@@ -487,37 +525,44 @@ class CollapsibleFrame(QFrame):
 
         if not self._animate_next:
             self._animate_next = True
-            self.content.setVisible(expanded)
-            self.content.setMaximumHeight(UNCONSTRAINED)
+            self._release(expanded)
             self.animation_finished.emit(expanded)
             return
 
         if expanded:
-            # Shown right away, so that the content is live from the first frame
-            # of the animation and only revealed by the growing height.
-            start = 0 if self.content.isHidden() else self.content.height()
-            self.content.setMaximumHeight(start)
+            # Shown right away, at its full size, so that the content is live
+            # from the first frame and only revealed by the growing card.
             self.content.show()
-            self.animation.setStartValue(start)
-            self.animation.setEndValue(self._content_height())
+            self.content.setMinimumHeight(self._content_height())
+            self.animation.setStartValue(self._folded_height())
+            self.animation.setEndValue(self._unfolded_height())
         else:
-            self.animation.setStartValue(self.content.height())
-            self.animation.setEndValue(0)
+            self.animation.setStartValue(self.height())
+            self.animation.setEndValue(self._folded_height())
 
         self.animation.start()
 
     def _animation_done(self) -> None:
         """Hide a folded content, and release the height of an open one."""
 
-        expanded = self.is_expanded()
+        self._release(self.is_expanded())
+        self.animation_finished.emit(self.is_expanded())
 
-        if not expanded:
-            self.content.hide()
+    def _release(self, expanded: bool) -> None:
+        """
+        Drop the constraints the animation needed, in the given state.
 
-        # The constraint only serves the animation: leaving it behind would
-        # freeze the content at the height it had when it was opened.
-        self.content.setMaximumHeight(UNCONSTRAINED)
-        self.animation_finished.emit(expanded)
+        Parameters
+        ----------
+        expanded : bool
+            The state the card has settled in.
+        """
+
+        self.content.setVisible(expanded)
+        # Both constraints only serve the animation: left behind, they would
+        # freeze the card and its content at the size they had while it ran.
+        self.content.setMinimumHeight(0)
+        self.setMaximumHeight(UNCONSTRAINED)
 
     def settle(self) -> None:
         """
@@ -532,9 +577,7 @@ class CollapsibleFrame(QFrame):
             return
 
         self.animation.stop()
-        expanded = self.is_expanded()
-        self.content.setVisible(expanded)
-        self.content.setMaximumHeight(UNCONSTRAINED)
+        self._release(self.is_expanded())
 
     def hideEvent(self, event: QEvent) -> None:
         """Settle the animation when the block is hidden."""
