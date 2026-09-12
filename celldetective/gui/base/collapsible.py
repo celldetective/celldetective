@@ -171,7 +171,7 @@ class ChevronButton(QAbstractButton):
 
         if self._animation.state() == QVariantAnimation.Running:
             self._animation.stop()
-            self._set_angle(180.0 if self.isChecked() else 0.0)
+            self._set_flip(-1.0 if self.isChecked() else 1.0)
 
         super().hideEvent(event)
 

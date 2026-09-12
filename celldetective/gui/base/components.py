@@ -22,6 +22,7 @@ from PyQt5.QtWidgets import (
     QToolTip,
     QAbstractButton,
     QAbstractItemView,
+    QHBoxLayout,
 )
 from PyQt5.QtCore import (
     Qt,
@@ -36,7 +37,17 @@ from PyQt5.QtCore import (
 )
 from PyQt5.QtGui import QPaintEvent, QPainter, QColor, QPen, QShowEvent, QHelpEvent
 from superqt.fonticon import icon
-from celldetective.gui.base.styles import Styles, CELLDETECTIVE_BLUE, INK_COLOR
+from celldetective.gui.base.styles import (
+    Styles,
+    button_style,
+    CELLDETECTIVE_BLUE,
+    DANGER_COLOR,
+    DISABLED_FG,
+    INK_COLOR,
+    TOOL_BUTTON_SIZE,
+    TOOL_ICON_SIZE,
+    TOOL_IDLE_COLOR,
+)
 from celldetective.gui.base.app_style import draw_check_indicator
 from typing import Optional
 
@@ -891,3 +902,153 @@ class HoverButton(QPushButton):
         """
         self.setIcon(icon(self.icon_enum, color=self.default_color))
         super().leaveEvent(event)
+
+
+class ToolButton(QPushButton):
+    """
+    One of the round icon buttons closing a row.
+
+    The cogs, eyes, helpers and the like: secondary controls, so the icon rests
+    in a muted blue grey and only takes the accent color under the mouse, where
+    a light disc appears behind it. A disabled button fades instead, rather
+    than keeping the weight of a control that cannot be used.
+
+    The button keeps the room it takes when hidden, so that the strips of
+    several rows stay lined up with one another even when a row hides one of
+    its tools (the delete button of the tracking row does).
+    """
+
+    size = TOOL_BUTTON_SIZE
+    icon_size = TOOL_ICON_SIZE
+
+    def __init__(
+        self,
+        icon_enum: str,
+        tooltip: Optional[str] = "",
+        hover_color: Optional[str] = CELLDETECTIVE_BLUE,
+        parent: Optional[QWidget] = None,
+    ) -> None:
+        """
+        Initialize the button.
+
+        Parameters
+        ----------
+        icon_enum : str
+            Icon name from MDI6.
+        tooltip : str, optional
+            What the button does, as a sentence.
+        hover_color : str, optional
+            The color the icon takes under the mouse. Destructive actions pass
+            :data:`DANGER_COLOR` here.
+        parent : QWidget, optional
+            The parent widget.
+        """
+
+        super().__init__(parent)
+
+        self.icon_enum = icon_enum
+        self.hover_color = hover_color
+        self._hovered = False
+
+        self.setToolTip(tooltip)
+        self.setFixedSize(self.size, self.size)
+        self.setIconSize(QSize(self.icon_size, self.icon_size))
+        self.setStyleSheet(button_style("tool"))
+
+        policy = self.sizePolicy()
+        policy.setRetainSizeWhenHidden(True)
+        self.setSizePolicy(policy)
+
+        self.toggled.connect(lambda _: self._paint_icon())
+        self._paint_icon()
+
+    def _paint_icon(self) -> None:
+        """Draw the icon in the color the current state calls for."""
+
+        if not self.isEnabled():
+            color = DISABLED_FG
+        elif self._hovered or self.isChecked():
+            # A checked button stays lit: it is the only thing marking a tool
+            # that is currently on, the disc behind it being a faint tint.
+            color = self.hover_color
+        else:
+            color = TOOL_IDLE_COLOR
+
+        self.setIcon(icon(self.icon_enum, color=color))
+
+    def set_icon_enum(self, icon_enum: str) -> None:
+        """
+        Swap the icon the button carries, keeping its colors.
+
+        Parameters
+        ----------
+        icon_enum : str
+            The new icon name from MDI6.
+        """
+
+        self.icon_enum = icon_enum
+        self._paint_icon()
+
+    def enterEvent(self, event: QEvent) -> None:
+        """Take the accent color under the mouse."""
+
+        self._hovered = True
+        self._paint_icon()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event: QEvent) -> None:
+        """Go back to the resting color."""
+
+        self._hovered = False
+        self._paint_icon()
+        super().leaveEvent(event)
+
+    def changeEvent(self, event: QEvent) -> None:
+        """Follow the enabled state in the color of the icon."""
+
+        if event.type() == QEvent.EnabledChange:
+            if not self.isEnabled():
+                # The mouse cannot leave a disabled button, so a button
+                # disabled under the cursor would stay painted as hovered.
+                self._hovered = False
+            self._paint_icon()
+
+        super().changeEvent(event)
+
+
+def tool_strip(*tools, spacing: Optional[int] = 2) -> "QHBoxLayout":
+    """
+    Lay the tools closing a row out in fixed slots.
+
+    Every row of a panel offers the same kinds of tool in the same order, but
+    not every row offers all of them. Passing ``None`` for a slot a row has
+    nothing to put in leaves it empty rather than closing it up, so that the
+    cogs of the rows sit in one column, the eyes in another, and the strip of
+    a row reads as a group rather than as items scattered along it.
+
+    Parameters
+    ----------
+    *tools : ToolButton or None
+        The tools, in slot order; ``None`` for an empty slot.
+    spacing : int, optional
+        The room between two slots.
+
+    Returns
+    -------
+    QHBoxLayout
+        The strip, to add at the end of the row.
+    """
+
+    strip = QHBoxLayout()
+    strip.setContentsMargins(0, 0, 0, 0)
+    strip.setSpacing(spacing)
+
+    for tool in tools:
+        if tool is None:
+            placeholder = QWidget()
+            placeholder.setFixedSize(TOOL_BUTTON_SIZE, TOOL_BUTTON_SIZE)
+            strip.addWidget(placeholder)
+        else:
+            strip.addWidget(tool)
+
+    return strip

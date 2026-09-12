@@ -38,6 +38,9 @@ from celldetective.gui.base.styles import (
     INK_COLOR,
     SURFACE_BORDER,
     Styles,
+    TOOL_BUTTON_SIZE,
+    TOOL_ICON_SIZE,
+    TOOL_IDLE_COLOR,
     button_style,
 )
 
@@ -46,8 +49,9 @@ logger = logging.getLogger("celldetective")
 HELP_DIR = os.path.join(get_package_location(), "gui", "help")
 
 # The color a help button rests in: present, but quieter than the actions it
-# sits next to. It takes the accent color under the mouse.
-HELP_IDLE_COLOR = "#78909C"
+# sits next to. It takes the accent color under the mouse. The tone is the one
+# every tool button rests in, the helper being one of them.
+HELP_IDLE_COLOR = TOOL_IDLE_COLOR
 
 
 def help_tree(name: str) -> Dict[str, Any]:
@@ -100,8 +104,8 @@ class HelpButton(QPushButton):
     takes the accent color.
     """
 
-    size = 28
-    icon_size = 20
+    size = TOOL_BUTTON_SIZE
+    icon_size = TOOL_ICON_SIZE
 
     def __init__(self, tooltip: str, parent: Optional[QWidget] = None) -> None:
         """
@@ -120,8 +124,14 @@ class HelpButton(QPushButton):
         self.setToolTip(tooltip)
         self.setFixedSize(self.size, self.size)
         self.setIconSize(QSize(self.icon_size, self.icon_size))
-        self.setStyleSheet(button_style("ghost"))
+        # The `tool` role, like the cogs and the eyes it shares a strip with:
+        # the helper is one of them, not a button of its own kind.
+        self.setStyleSheet(button_style("tool"))
         self._paint_icon(HELP_IDLE_COLOR)
+
+        policy = self.sizePolicy()
+        policy.setRetainSizeWhenHidden(True)
+        self.setSizePolicy(policy)
 
     def _paint_icon(self, color: str) -> None:
         """

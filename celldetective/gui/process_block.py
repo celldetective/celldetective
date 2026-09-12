@@ -33,7 +33,8 @@ from celldetective.gui.base.components import (
     CelldetectiveWidget,
     CelldetectiveProgressDialog,
     QHSeperationLine,
-    HoverButton,
+    ToolButton,
+    tool_strip,
 )
 
 import numpy as np
@@ -154,7 +155,7 @@ import json
 from celldetective.gui.base.help_panel import HelpButton, open_help, open_help_menu
 from celldetective.gui.base.components import POSITION_NEEDED, set_disabled_reason
 from celldetective.gui.base.control_panel_block import ControlPanelBlock
-from celldetective.gui.base.styles import Styles
+from celldetective.gui.base.styles import Styles, DANGER_COLOR
 from celldetective import get_software_location
 import pandas as pd
 
@@ -263,44 +264,36 @@ class ProcessPanel(ControlPanelBlock, Styles):
 
         self.measure_action = QCheckBox("MEASURE")
         self.measure_action.setStyleSheet(self.menu_check_style)
-
-        self.measure_action.setIcon(icon(MDI6.eyedropper, color="black"))
-        self.measure_action.setIconSize(QSize(20, 20))
         self.measure_action.setToolTip("Measure.")
-        measure_layout.addWidget(self.measure_action, 90)
+        measure_layout.addWidget(self.measure_action)
+        measure_layout.addStretch(1)
         # self.to_disable.append(self.measure_action_tc)
 
-        self.classify_btn = QPushButton()
-        self.classify_btn.setIcon(icon(MDI6.scatter_plot, color="black"))
-        self.classify_btn.setIconSize(QSize(20, 20))
-        self.classify_btn.setToolTip("Classify data.")
-        self.classify_btn.setStyleSheet(self.button_select_all)
+        self.classify_btn = ToolButton(MDI6.scatter_plot, "Classify data.")
         self.classify_btn.clicked.connect(self.open_classifier_ui)
         set_disabled_reason(self.classify_btn, POSITION_NEEDED)
-        measure_layout.addWidget(
-            self.classify_btn, 5
-        )  # 4,2,1,1, alignment=Qt.AlignRight
 
-        self.check_measurements_btn = QPushButton()
-        self.check_measurements_btn.setIcon(icon(MDI6.eye_check_outline, color="black"))
-        self.check_measurements_btn.setIconSize(QSize(20, 20))
-        self.check_measurements_btn.setToolTip("Explore measurements in-situ.")
-        self.check_measurements_btn.setStyleSheet(self.button_select_all)
+        self.check_measurements_btn = ToolButton(
+            MDI6.eye_check_outline, "Explore measurements in-situ."
+        )
         self.check_measurements_btn.clicked.connect(self.check_measurements)
         set_disabled_reason(self.check_measurements_btn, POSITION_NEEDED)
-        measure_layout.addWidget(self.check_measurements_btn, 5)
 
-        self.measurements_config_btn = QPushButton()
-        self.measurements_config_btn.setIcon(icon(MDI6.cog_outline, color="black"))
-        self.measurements_config_btn.setIconSize(QSize(20, 20))
-        self.measurements_config_btn.setToolTip("Configure measurements.")
-        self.measurements_config_btn.setStyleSheet(self.button_select_all)
+        self.measurements_config_btn = ToolButton(
+            MDI6.cog_outline, "Configure measurements."
+        )
         self.measurements_config_btn.clicked.connect(
             self.open_measurement_configuration_ui
         )
-        measure_layout.addWidget(
-            self.measurements_config_btn, 5
-        )  # 4,2,1,1, alignment=Qt.AlignRight
+
+        measure_layout.addLayout(
+            tool_strip(
+                self.classify_btn,
+                self.check_measurements_btn,
+                self.measurements_config_btn,
+                None,
+            )
+        )
 
         self.grid_contents.addLayout(measure_layout, 5, 0, 1, 4)
 
@@ -313,32 +306,32 @@ class ProcessPanel(ControlPanelBlock, Styles):
         signal_hlayout = QHBoxLayout()
         self.signal_analysis_action = QCheckBox("DETECT EVENTS")
         self.signal_analysis_action.setStyleSheet(self.menu_check_style)
-        self.signal_analysis_action.setIcon(
-            icon(MDI6.chart_bell_curve_cumulative, color="black")
-        )
-        self.signal_analysis_action.setIconSize(QSize(20, 20))
         self.signal_analysis_action.setToolTip("Detect events in single-cell signals.")
         self.signal_analysis_action.toggled.connect(self.enable_signal_model_list)
-        signal_hlayout.addWidget(self.signal_analysis_action, 90)
+        signal_hlayout.addWidget(self.signal_analysis_action)
+        signal_hlayout.addStretch(1)
 
-        self.check_signals_btn = QPushButton()
-        self.check_signals_btn.setIcon(icon(MDI6.eye_check_outline, color="black"))
-        self.check_signals_btn.setIconSize(QSize(20, 20))
+        self.check_signals_btn = ToolButton(
+            MDI6.eye_check_outline, "Explore signals in-situ."
+        )
         self.check_signals_btn.clicked.connect(self.check_signals)
-        self.check_signals_btn.setToolTip("Explore signals in-situ.")
-        self.check_signals_btn.setStyleSheet(self.button_select_all)
         set_disabled_reason(self.check_signals_btn, POSITION_NEEDED)
-        signal_hlayout.addWidget(self.check_signals_btn, 6)
 
-        self.config_signal_annotator_btn = QPushButton()
-        self.config_signal_annotator_btn.setIcon(icon(MDI6.cog_outline, color="black"))
-        self.config_signal_annotator_btn.setIconSize(QSize(20, 20))
-        self.config_signal_annotator_btn.setToolTip("Configure the dynamic visualizer.")
-        self.config_signal_annotator_btn.setStyleSheet(self.button_select_all)
+        self.config_signal_annotator_btn = ToolButton(
+            MDI6.cog_outline, "Configure the dynamic visualizer."
+        )
         self.config_signal_annotator_btn.clicked.connect(
             self.open_signal_annotator_configuration_ui
         )
-        signal_hlayout.addWidget(self.config_signal_annotator_btn, 6)
+
+        signal_hlayout.addLayout(
+            tool_strip(
+                None,
+                self.check_signals_btn,
+                self.config_signal_annotator_btn,
+                None,
+            )
+        )
 
         # self.to_disable.append(self.measure_action_tc)
         signal_layout.addLayout(signal_hlayout)
@@ -347,24 +340,23 @@ class ProcessPanel(ControlPanelBlock, Styles):
         signal_model_vbox.setContentsMargins(25, 0, 25, 0)
 
         model_zoo_layout = QHBoxLayout()
-        model_zoo_layout.addWidget(QLabel("Model zoo:"), 90)
+        model_zoo_layout.setSpacing(4)
+        model_zoo_layout.addWidget(QLabel("Model zoo:"))
 
         self.signal_models_list = QComboBox()
         self.signal_models_list.setEnabled(False)
         self.refresh_signal_models()
         # self.to_disable.append(self.cell_models_list)
+        model_zoo_layout.addWidget(self.signal_models_list, 1)
 
-        self.train_signal_model_btn = HoverButton("TRAIN", MDI6.redo_variant)
-        self.train_signal_model_btn.setToolTip(
-            "Train or retrain an event detection model\non newly annotated data."
+        self.train_signal_model_btn = ToolButton(
+            MDI6.redo_variant,
+            "Train or retrain an event detection model\non newly annotated data.",
         )
-        self.train_signal_model_btn.setIconSize(QSize(20, 20))
-        self.train_signal_model_btn.setStyleSheet(self.button_style_sheet_3)
-        model_zoo_layout.addWidget(self.train_signal_model_btn, 5)
+        model_zoo_layout.addWidget(self.train_signal_model_btn)
         self.train_signal_model_btn.clicked.connect(self.open_signal_model_config_ui)
 
         signal_model_vbox.addLayout(model_zoo_layout)
-        signal_model_vbox.addWidget(self.signal_models_list)
 
         signal_layout.addLayout(signal_model_vbox)
 
@@ -398,50 +390,40 @@ class ProcessPanel(ControlPanelBlock, Styles):
 
         self.track_action = QCheckBox("TRACK")
         self.track_action.setStyleSheet(self.menu_check_style)
-        self.track_action.setIcon(icon(MDI6.chart_timeline_variant, color="black"))
-        self.track_action.setIconSize(QSize(20, 20))
         self.track_action.setToolTip(f"Track the {self.mode[:-1]} cells.")
-        grid_track.addWidget(self.track_action, 75)
+        grid_track.addWidget(self.track_action)
+        grid_track.addStretch(1)
 
-        self.delete_tracks_btn = QPushButton()
-        self.delete_tracks_btn.setIcon(icon(MDI6.trash_can, color="black"))
-        self.delete_tracks_btn.setIconSize(QSize(20, 20))
-        self.delete_tracks_btn.setToolTip("Delete existing tracks.")
-        self.delete_tracks_btn.setStyleSheet(self.button_select_all)
+        # The one destructive action of the panel, so the only icon that turns
+        # red rather than blue under the mouse.
+        self.delete_tracks_btn = ToolButton(
+            MDI6.trash_can, "Delete existing tracks.", hover_color=DANGER_COLOR
+        )
         self.delete_tracks_btn.clicked.connect(self.delete_tracks)
         self.delete_tracks_btn.setEnabled(True)
         self.delete_tracks_btn.hide()
-        grid_track.addWidget(
-            self.delete_tracks_btn, 6
-        )  # 4,3,1,1, alignment=Qt.AlignLeft
 
-        self.check_tracking_result_btn = QPushButton()
-        self.check_tracking_result_btn.setIcon(
-            icon(MDI6.eye_check_outline, color="black")
+        self.check_tracking_result_btn = ToolButton(
+            MDI6.eye_check_outline, "View tracking output in napari."
         )
-        self.check_tracking_result_btn.setIconSize(QSize(20, 20))
-        self.check_tracking_result_btn.setToolTip("View tracking output in napari.")
-        self.check_tracking_result_btn.setStyleSheet(self.button_select_all)
         self.check_tracking_result_btn.clicked.connect(self.open_napari_tracking)
         self.check_tracking_result_btn.setEnabled(False)
         set_disabled_reason(self.check_tracking_result_btn, POSITION_NEEDED)
-        grid_track.addWidget(
-            self.check_tracking_result_btn, 6
-        )  # 4,3,1,1, alignment=Qt.AlignLeft
 
-        self.track_config_btn = QPushButton()
-        self.track_config_btn.setIcon(icon(MDI6.cog_outline, color="black"))
-        self.track_config_btn.setIconSize(QSize(20, 20))
-        self.track_config_btn.setToolTip("Configure tracking.")
-        self.track_config_btn.setStyleSheet(self.button_select_all)
+        self.track_config_btn = ToolButton(MDI6.cog_outline, "Configure tracking.")
         self.track_config_btn.clicked.connect(self.open_tracking_configuration_ui)
-        grid_track.addWidget(
-            self.track_config_btn, 6
-        )  # 4,2,1,1, alignment=Qt.AlignRight
 
         self.help_track_btn = HelpButton("Help me track my cells")
         self.help_track_btn.clicked.connect(self.help_tracking)
-        grid_track.addWidget(self.help_track_btn, 6)  # 4,2,1,1, alignment=Qt.AlignRight
+
+        grid_track.addLayout(
+            tool_strip(
+                self.delete_tracks_btn,
+                self.check_tracking_result_btn,
+                self.track_config_btn,
+                self.help_track_btn,
+            )
+        )
 
         self.grid_contents.addLayout(grid_track, 4, 0, 1, 4)
 
@@ -519,81 +501,81 @@ class ProcessPanel(ControlPanelBlock, Styles):
         grid_segment.setContentsMargins(0, 0, 0, 0)
         grid_segment.setSpacing(0)
 
+        # No icon on the label: the row says SEGMENT in words, and a glyph
+        # there would only compete with the check indicator next to it.
         self.segment_action = QCheckBox("SEGMENT")
         self.segment_action.setStyleSheet(self.menu_check_style)
-        self.segment_action.setIcon(icon(MDI6.bacteria, color="black"))
         self.segment_action.setToolTip(
             f"Segment the {self.mode[:-1]} cells on the images."
         )
         self.segment_action.toggled.connect(self.enable_segmentation_model_list)
         # self.to_disable.append(self.segment_action)
-        grid_segment.addWidget(self.segment_action, 90)
+        grid_segment.addWidget(self.segment_action)
+        grid_segment.addStretch(1)
 
-        # self.flip_segment_btn = QPushButton()
-        # self.flip_segment_btn.setIcon(icon(MDI6.camera_flip_outline,color="black"))
-        # self.flip_segment_btn.setIconSize(QSize(20, 20))
-        # self.flip_segment_btn.clicked.connect(self.flip_segmentation)
-        # self.flip_segment_btn.setStyleSheet(self.button_select_all)
-        # self.flip_segment_btn.setToolTip("Flip the order of the frames for segmentation.")
-        # grid_segment.addWidget(self.flip_segment_btn, 5)
-
-        self.segmentation_config_btn = QPushButton()
-        self.segmentation_config_btn.setIcon(icon(MDI6.cog_outline, color="black"))
-        self.segmentation_config_btn.setIconSize(QSize(20, 20))
-        self.segmentation_config_btn.setToolTip("Configure segmentation.")
-        self.segmentation_config_btn.setStyleSheet(self.button_select_all)
+        self.segmentation_config_btn = ToolButton(
+            MDI6.cog_outline, "Configure segmentation."
+        )
         self.segmentation_config_btn.clicked.connect(
             self.open_segmentation_configuration_ui
         )
-        grid_segment.addWidget(self.segmentation_config_btn, 5)
 
-        self.check_seg_btn = QPushButton()
-        self.check_seg_btn.setIcon(icon(MDI6.eye_check_outline, color="black"))
-        self.check_seg_btn.setIconSize(QSize(20, 20))
+        self.check_seg_btn = ToolButton(
+            MDI6.eye_check_outline, "View segmentation output in napari."
+        )
         self.check_seg_btn.clicked.connect(self.check_segmentation)
-        self.check_seg_btn.setStyleSheet(self.button_select_all)
-        self.check_seg_btn.setToolTip("View segmentation output in napari.")
         set_disabled_reason(self.check_seg_btn, POSITION_NEEDED)
-        grid_segment.addWidget(self.check_seg_btn, 5)
 
         self.help_seg_btn = HelpButton("Help me segment my cells")
         self.help_seg_btn.clicked.connect(self.help_segmentation)
-        grid_segment.addWidget(self.help_seg_btn, 5)
+
+        # Slots: extra action, view, configure, help. Segmentation has no extra
+        # action, so that slot is left empty rather than closed up.
+        grid_segment.addLayout(
+            tool_strip(
+                None,
+                self.check_seg_btn,
+                self.segmentation_config_btn,
+                self.help_seg_btn,
+            )
+        )
         self.grid_contents.addLayout(grid_segment, 0, 0, 1, 4)
 
         seg_option_vbox = QVBoxLayout()
         seg_option_vbox.setContentsMargins(25, 0, 25, 0)
+
+        # The zoo on a single row: its name, the list, and the two actions on
+        # it as icons. Spelling UPLOAD and TRAIN out cost a line of its own for
+        # two buttons that are pressed once in a while.
         model_zoo_layout = QHBoxLayout()
-        model_zoo_layout.addWidget(QLabel("Model zoo:"), 90)
+        model_zoo_layout.setSpacing(4)
+        model_zoo_layout.addWidget(QLabel("Model zoo:"))
+
         self.seg_model_list = QComboBox()
         self.seg_model_list.currentIndexChanged.connect(self.reset_generalist_setup)
         # self.to_disable.append(self.tc_seg_model_list)
         self.seg_model_list.setGeometry(50, 50, 200, 30)
         self.init_seg_model_list()
+        model_zoo_layout.addWidget(self.seg_model_list, 1)
 
-        self.upload_model_btn = HoverButton("UPLOAD", MDI6.upload)
-        self.upload_model_btn.setIconSize(QSize(20, 20))
-        self.upload_model_btn.setStyleSheet(self.button_style_sheet_3)
-        self.upload_model_btn.setToolTip(
-            "Upload a new segmentation model\n(Deep learning or threshold-based)."
+        self.upload_model_btn = ToolButton(
+            MDI6.upload,
+            "Upload a new segmentation model\n(Deep learning or threshold-based).",
         )
-        model_zoo_layout.addWidget(self.upload_model_btn, 5)
+        model_zoo_layout.addWidget(self.upload_model_btn)
         self.upload_model_btn.clicked.connect(self.upload_segmentation_model)
         # self.to_disable.append(self.upload_tc_model)
 
-        self.train_btn = HoverButton("TRAIN", MDI6.redo_variant)
-        self.train_btn.setToolTip(
-            "Train or retrain a segmentation model\non newly annotated data."
+        self.train_btn = ToolButton(
+            MDI6.redo_variant,
+            "Train or retrain a segmentation model\non newly annotated data.",
         )
-        self.train_btn.setIconSize(QSize(20, 20))
-        self.train_btn.setStyleSheet(self.button_style_sheet_3)
         self.train_btn.clicked.connect(self.open_segmentation_model_config_ui)
-        model_zoo_layout.addWidget(self.train_btn, 5)
+        model_zoo_layout.addWidget(self.train_btn)
         # self.train_button_tc.clicked.connect(self.train_stardist_model_tc)
         # self.to_disable.append(self.train_button_tc)
 
         seg_option_vbox.addLayout(model_zoo_layout)
-        seg_option_vbox.addWidget(self.seg_model_list)
         self.seg_model_list.setEnabled(False)
         self.grid_contents.addLayout(seg_option_vbox, 2, 0, 1, 4)
 
