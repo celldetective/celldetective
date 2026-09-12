@@ -15,7 +15,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QSize
 from celldetective.gui.gui_utils import DistanceChoice
 from celldetective.gui.base.list_widget import ListWidget
-from celldetective.gui.base.utils import center_window
+from celldetective.gui.base.utils import center_window, flush_layout_events
 from superqt.fonticon import icon
 from fonticon_mdi6 import MDI6
 import numpy as np
@@ -137,7 +137,7 @@ class SettingsNeighborhood(CelldetectiveWidget):
         main_layout.addWidget(self.submit_btn)
 
         self.adjustSize()
-        QApplication.processEvents()
+        flush_layout_events(self)
 
     def populate_measurement_frame(self):
         """

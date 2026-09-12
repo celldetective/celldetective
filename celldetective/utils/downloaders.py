@@ -83,6 +83,38 @@ def get_zenodo_files(
         return all_files_short, categories
 
 
+# Transient server- and network-side conditions: the file is expected to be
+# there, the host just could not serve it this second.
+RETRYABLE_HTTP_STATUS = frozenset({408, 425, 429, 500, 502, 503, 504})
+
+
+def _is_retryable(error: Exception) -> bool:
+    """
+    Return whether a failed download attempt is worth repeating.
+
+    Parameters
+    ----------
+    error : Exception
+        The exception raised by the attempt.
+
+    Returns
+    -------
+    bool
+        True for transient conditions (timeouts, dropped connections, 5xx and
+        friends), False for answers that will not change on a retry, such as a
+        404 for a file that is simply not published.
+    """
+
+    import socket
+    from urllib.error import HTTPError, URLError
+
+    if isinstance(error, HTTPError):
+        return error.code in RETRYABLE_HTTP_STATUS
+    if isinstance(error, URLError):
+        return True
+    return isinstance(error, (socket.timeout, ConnectionError, TimeoutError))
+
+
 def download_url_to_file(url: str, dst: str, progress: bool = True) -> None:
     r"""
     Download object at the given URL to a local path.
@@ -97,6 +129,8 @@ def download_url_to_file(url: str, dst: str, progress: bool = True) -> None:
     progress : bool, optional
         Whether to display a progress bar to stderr. Default is True.
     """
+    import random
+    import socket
     import ssl
     import time
     from urllib.error import HTTPError, URLError
@@ -105,12 +139,13 @@ def download_url_to_file(url: str, dst: str, progress: bool = True) -> None:
     ssl._create_default_https_context = ssl._create_unverified_context
 
     # Retry configuration
-    max_retries = 5
-    retry_delay = 10  # Initial delay in seconds
+    max_retries = 7
+    retry_delay = 5  # Initial delay in seconds
+    max_retry_delay = 60  # ~4 min of retries in total, jitter included
 
     for attempt in range(max_retries):
         try:
-            u = urlopen(url)
+            u = urlopen(url, timeout=60)
             meta = u.info()
             if hasattr(meta, "getheaders"):
                 content_length = meta.getheaders("Content-Length")
@@ -119,16 +154,28 @@ def download_url_to_file(url: str, dst: str, progress: bool = True) -> None:
             if content_length is not None and len(content_length) > 0:
                 file_size = int(content_length[0])
             break  # Success
-        except (HTTPError, URLError) as e:
-            if attempt < max_retries - 1:
-                logger.warning(
-                    f"Download check failed: {e}. Retrying in {retry_delay}s..."
+        except (HTTPError, URLError, socket.timeout, OSError) as e:
+            last_attempt = attempt == max_retries - 1
+            if last_attempt or not _is_retryable(e):
+                # A 404 is the host telling us the file is not there; sleeping
+                # through the whole backoff schedule before saying so only
+                # delays the error by minutes.
+                logger.error(
+                    f"Download of {url} failed after {attempt + 1} attempt(s): {e}"
                 )
-                time.sleep(retry_delay)
-                retry_delay *= 2  # Exponential backoff
-            else:
-                logger.error(f"Download check failed after {max_retries} attempts: {e}")
                 raise
+
+            # Zenodo answers 502/504 while it is staging an archive, and the
+            # window can outlast a short schedule. Jitter keeps the parallel CI
+            # jobs from retrying in lockstep and re-timing-out together.
+            delay = min(retry_delay, max_retry_delay)
+            delay += random.uniform(0, delay / 2)
+            logger.warning(
+                f"Download check failed ({e}). "
+                f"Retry {attempt + 2}/{max_retries} in {delay:.0f}s..."
+            )
+            time.sleep(delay)
+            retry_delay = min(retry_delay * 2, max_retry_delay)
 
     # We deliberately save it in a temp file and move it after
     dst = os.path.expanduser(dst)

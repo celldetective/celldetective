@@ -2179,13 +2179,26 @@ class ProcessPanel(QFrame, Styles):
 
         model_complete_path = locate_segmentation_model(self.model_name)
         input_config_path = model_complete_path + "config_input.json"
-        new_channels = [
-            self.segChannelWidget.channel_cbs[i].currentText()
-            for i in range(len(self.segChannelWidget.channel_cbs))
-        ]
+        new_channels = self.segChannelWidget.channel_selection.selected_channels()
         target_cell_size = None
         if hasattr(self.segChannelWidget, "diameter_le"):
-            target_cell_size = float(self.segChannelWidget.diameter_le.get_threshold())
+            # The field's bottom turns a negative away, but a blank field and a
+            # bare zero both get past it, and both reached the configuration: a
+            # blank raised TypeError on the conversion below, a zero divided by
+            # zero once the run started. Refuse them here so nothing downstream
+            # has to read a size that cannot be one.
+            entered = self.segChannelWidget.diameter_le.get_threshold(show_warning=False)
+            if entered is None or entered <= 0:
+                msgBox = QMessageBox()
+                msgBox.setIcon(QMessageBox.Warning)
+                msgBox.setText(
+                    "Please set a cell size greater than zero, in µm."
+                )
+                msgBox.setWindowTitle("Invalid cell size")
+                msgBox.setStandardButtons(QMessageBox.Ok)
+                msgBox.exec()
+                return None
+            target_cell_size = float(entered)
 
         with open(input_config_path) as config_file:
             input_config = json.load(config_file)
@@ -2212,10 +2225,7 @@ class ProcessPanel(QFrame, Styles):
             self.signal_models_list.currentIndex()
         ]
         _, input_config_path = _resolve_signal_model_paths(self.signal_model_name)
-        new_channels = [
-            self.signalChannelWidget.channel_cbs[i].currentText()
-            for i in range(len(self.signalChannelWidget.channel_cbs))
-        ]
+        new_channels = self.signalChannelWidget.channel_selection.selected_channels()
         with open(input_config_path) as config_file:
             input_config = json.load(config_file)
 

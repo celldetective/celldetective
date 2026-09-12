@@ -113,29 +113,31 @@ def contour_of_instance_segmentation(
         return np.zeros_like(label)
 
     if sdf is None or voronoi_map is None:
-        # Compute SDF maps
-        # We need SDF = dist_in - dist_out
-        # inside > 0, outside < 0
+        # An outer contour (any part of the range outside the object) needs the
+        # exterior distance transform *and* the Voronoi feature transform to
+        # propagate instance identity into the background. An inner contour
+        # (min_r >= 0) stays inside the objects, where identity is just `label`,
+        # so we can skip both the second EDT and the (costly) feature transform.
+        if min_r < 0:
+            dist_in = distance_transform_edt(label > 0)
+            dist_out, indices = distance_transform_edt(
+                label == 0, return_indices=True
+            )
+            voronoi_map = label[indices[0], indices[1]]
+            sdf = dist_in - dist_out
 
-        # 1. Dist In (Inside object)
+            mask = (sdf >= min_r) & (sdf <= max_r)
+            return voronoi_map * mask
+
+        # Inner-only: interior EDT is enough. dist_in == 0 in the background,
+        # so mask it out explicitly (matters when min_r == 0).
         dist_in = distance_transform_edt(label > 0)
+        mask = (dist_in >= min_r) & (dist_in <= max_r) & (label > 0)
+        return label * mask
 
-        # 2. Dist Out (Outside object) + Voronoi
-        dist_out, indices = distance_transform_edt(label == 0, return_indices=True)
-
-        # Voronoi Map
-        voronoi_map = label[indices[0], indices[1]]
-
-        # Composite SDF
-        sdf = dist_in - dist_out
-
-    # Create Mask
+    # Pre-computed SDF / Voronoi provided by the caller.
     mask = (sdf >= min_r) & (sdf <= max_r)
-
-    # Result
-    border_label = voronoi_map * mask
-
-    return border_label
+    return voronoi_map * mask
 
 
 def create_patch_mask(
@@ -188,10 +190,10 @@ def create_patch_mask(
     Y, X = np.ogrid[:h, :w]
     dist_from_center = np.sqrt((X - center[0]) ** 2 + (Y - center[1]) ** 2)
 
-    if isinstance(radius, int) or isinstance(radius, float):
+    if isinstance(radius, (list, tuple, np.ndarray)):
+        mask = (dist_from_center <= radius[1]) & (dist_from_center >= radius[0])
+    elif isinstance(radius, (int, float, np.integer, np.floating)):
         mask = dist_from_center <= radius
-    elif isinstance(radius, list):
-        mask = (dist_from_center <= radius[1]) * (dist_from_center >= radius[0])
     else:
         logger.error("Please provide a proper format for the radius")
         return None

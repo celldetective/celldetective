@@ -109,31 +109,38 @@ def derivative(
     array([3., 3., 3., 3.])
     """
 
-    # modes = bi, forward, backward
-    dxdt = np.zeros(len(x))
-    dxdt[:] = np.nan
+    dxdt = np.full(len(x), np.nan)
 
     if mode == "bi":
         if window % 2 != 1:
             raise ValueError("Please set an odd window for the bidirectional mode")
         lower_bound = window // 2
         upper_bound = len(x) - window // 2
+        if upper_bound > lower_bound:
+            half_window = window // 2
+            dxdt[lower_bound:upper_bound] = (
+                (x[lower_bound + half_window : upper_bound + half_window] - 
+                 x[lower_bound - half_window : upper_bound - half_window]) /
+                (timeline[lower_bound + half_window : upper_bound + half_window] - 
+                 timeline[lower_bound - half_window : upper_bound - half_window])
+            )
     elif mode == "forward":
         lower_bound = 0
         upper_bound = len(x) - window
+        if upper_bound > lower_bound:
+            dxdt[lower_bound:upper_bound] = (
+                (x[lower_bound + window : upper_bound + window] - x[lower_bound:upper_bound]) /
+                (timeline[lower_bound + window : upper_bound + window] - timeline[lower_bound:upper_bound])
+            )
     elif mode == "backward":
         lower_bound = window
         upper_bound = len(x)
-
-    for t in range(lower_bound, upper_bound):
-        if mode == "bi":
-            dxdt[t] = (x[t + window // 2] - x[t - window // 2]) / (
-                timeline[t + window // 2] - timeline[t - window // 2]
+        if upper_bound > lower_bound:
+            dxdt[lower_bound:upper_bound] = (
+                (x[lower_bound:upper_bound] - x[lower_bound - window : upper_bound - window]) /
+                (timeline[lower_bound:upper_bound] - timeline[lower_bound - window : upper_bound - window])
             )
-        elif mode == "forward":
-            dxdt[t] = (x[t + window] - x[t]) / (timeline[t + window] - timeline[t])
-        elif mode == "backward":
-            dxdt[t] = (x[t] - x[t - window]) / (timeline[t] - timeline[t - window])
+
     return dxdt
 
 
@@ -160,18 +167,32 @@ def differentiate_per_track(
         Tracking data with derivative column.
     """
 
+    new_col = "d/dt." + measurement
+    
+    if len(tracks) == 0:
+        tracks[new_col] = np.array([], dtype=float)
+        return tracks
+
     groupby_cols = ["TRACK_ID"]
     if "position" in list(tracks.columns):
         groupby_cols = ["position"] + groupby_cols
 
     tracks = tracks.sort_values(by=groupby_cols + ["FRAME"], ignore_index=True)
-    tracks = tracks.reset_index(drop=True)
-    for tid, group in tracks.groupby(groupby_cols):
-        indices = group.index
-        timeline = group["FRAME"].values
-        signal = group[measurement].values
-        dsignal = derivative(signal, timeline, window_size, mode=mode)
-        tracks.loc[indices, "d/dt." + measurement] = dsignal
+    dsignal = np.empty(len(tracks))
+    dsignal[:] = np.nan
+
+    # Filled by position rather than through groupby.apply: with a single group,
+    # apply reads the per-group Series as columns and hands back a DataFrame,
+    # which cannot be assigned to one column.
+    for _, group in tracks.groupby(groupby_cols, sort=False):
+        dsignal[group.index] = derivative(
+            group[measurement].values,
+            group["FRAME"].values,
+            window_size,
+            mode=mode,
+        )
+
+    tracks[new_col] = dsignal
     return tracks
 
 
@@ -196,20 +217,26 @@ def velocity_per_track(
         Tracking data with velocity column.
     """
 
+    if len(tracks) == 0:
+        tracks["velocity"] = np.array([], dtype=float)
+        return tracks
+
     groupby_cols = ["TRACK_ID"]
     if "position" in list(tracks.columns):
         groupby_cols = ["position"] + groupby_cols
 
     tracks = tracks.sort_values(by=groupby_cols + ["FRAME"], ignore_index=True)
-    tracks = tracks.reset_index(drop=True)
-    for tid, group in tracks.groupby(groupby_cols):
+    velocity_values = np.empty(len(tracks))
+    velocity_values[:] = np.nan
+    
+    for _, group in tracks.groupby(groupby_cols):
         indices = group.index
-        timeline = group["FRAME"].values
-        x = group["POSITION_X"].values
-        y = group["POSITION_Y"].values
-        v = velocity(x, y, timeline, window=window_size, mode=mode)
+        v = velocity(group["POSITION_X"].values, group["POSITION_Y"].values, 
+                    group["FRAME"].values, window=window_size, mode=mode)
         v_abs = magnitude_velocity(v)
-        tracks.loc[indices, "velocity"] = v_abs
+        velocity_values[indices] = v_abs
+    
+    tracks["velocity"] = velocity_values
     return tracks
 
 
@@ -318,11 +345,7 @@ def magnitude_velocity(v_matrix: np.ndarray) -> np.ndarray:
     array([5., nan, nan])
     """
 
-    magnitude = np.zeros(len(v_matrix))
-    magnitude[:] = np.nan
-    for i in range(len(v_matrix)):
-        if v_matrix[i, 0] == v_matrix[i, 0]:
-            magnitude[i] = np.sqrt(v_matrix[i, 0] ** 2 + v_matrix[i, 1] ** 2)
+    magnitude = np.sqrt(v_matrix[:, 0] ** 2 + v_matrix[:, 1] ** 2)
     return magnitude
 
 
@@ -358,11 +381,7 @@ def orientation(v_matrix: np.ndarray) -> np.ndarray:
     array([0.92729522, nan, nan])
     """
 
-    orientation_array = np.zeros(len(v_matrix))
-    for t in range(len(orientation_array)):
-        if v_matrix[t, 0] == v_matrix[t, 0]:
-            orientation_array[t] = np.arctan2(v_matrix[t, 0], v_matrix[t, 1])
-    return orientation_array
+    return np.arctan2(v_matrix[:, 0], v_matrix[:, 1])
 
 
 def safe_log(array: Union[int, float, List, np.ndarray]) -> Union[float, np.ndarray]:

@@ -358,6 +358,7 @@ def locate_labels(
         )
 
     label_names = [os.path.split(lbl)[-1] for lbl in label_path]
+    name_to_idx = {name: i for i, name in enumerate(label_names)}
 
     if frames is None:
 
@@ -389,10 +390,7 @@ def locate_labels(
     elif isinstance(frames, (int, float, np.int_)):
 
         tzfill = str(int(frames)).zfill(4)
-        try:
-            idx = label_names.index(f"{tzfill}.tif")
-        except ValueError:
-            idx = -1
+        idx = name_to_idx.get(f"{tzfill}.tif", -1)
 
         if idx == -1:
             labels = None
@@ -403,10 +401,7 @@ def locate_labels(
         labels = []
         for f in frames:
             tzfill = str(int(f)).zfill(4)
-            try:
-                idx = label_names.index(f"{tzfill}.tif")
-            except ValueError:
-                idx = -1
+            idx = name_to_idx.get(f"{tzfill}.tif", -1)
 
             if idx == -1:
                 labels.append(None)

@@ -1,6 +1,7 @@
 from ._version import __version__
 import os
 import datetime
+from importlib.resources import files as _files
 
 # Prevent matplotlib circular import issue with partially initialized IPython
 try:
@@ -39,9 +40,37 @@ if _new_session:
 logger = get_logger()
 
 
+def get_package_location() -> str:
+    """
+    Get the celldetective package folder, the one holding the shipped data
+    files (icons, models, help pages, configuration templates).
+
+    Prefer this over `get_software_location`: it points straight at the package
+    instead of its parent, so call sites do not have to append "celldetective"
+    back onto the path.
+
+    Returns
+    -------
+    str
+            Path to the celldetective package folder.
+    """
+
+    try:
+        return str(_files("celldetective"))
+    except Exception:
+        # Frozen bundles and exotic loaders may not expose a Traversable for
+        # the package; fall back to locating this very module on disk.
+        return os.path.dirname(os.path.realpath(__file__))
+
+
 def get_software_location() -> str:
     """
-    Get the installation folder of celldetective.
+    Get the installation folder of celldetective, i.e. the parent of the
+    package folder.
+
+    Call sites append "celldetective" to the returned path to reach the shipped
+    data files; `get_package_location` gets there directly and is preferred for
+    new code.
 
     Returns
     -------
@@ -49,4 +78,4 @@ def get_software_location() -> str:
             Path to the celldetective installation folder.
     """
 
-    return rf"{os.path.split(os.path.dirname(os.path.realpath(__file__)))[0]}"
+    return os.path.dirname(get_package_location())

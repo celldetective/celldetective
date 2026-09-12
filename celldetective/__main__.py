@@ -6,14 +6,66 @@ os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 from PyQt5.QtWidgets import QApplication, QSplashScreen
 from PyQt5.QtGui import QPixmap
-from os import sep
 
 # os.environ['QT_DEBUG_PLUGINS'] = '1'
 
-if __name__ == "__main__":
 
-    splash = True
+def check_update():
+    """
+    Check for software updates on PyPI.
+
+    Fetches the latest version from PyPI and compares it with the current version.
+    Logs a warning if a newer version is available.
+    """
     from celldetective import logger
+
+    try:
+        import requests
+        import re
+        from celldetective import __version__
+
+        package = "celldetective"
+        response = requests.get(f"https://pypi.org/pypi/{package}/json", timeout=5)
+        latest_version = response.json()["info"]["version"]
+
+        latest_version_num = re.sub("[^0-9]", "", latest_version)
+        current_version_num = re.sub("[^0-9]", "", __version__)
+
+        if len(latest_version_num) != len(current_version_num):
+            max_length = max([len(latest_version_num), len(current_version_num)])
+            latest_version_num = int(
+                latest_version_num.zfill(max_length - len(latest_version_num))
+            )
+            current_version_num = int(
+                current_version_num.zfill(max_length - len(current_version_num))
+            )
+
+        if latest_version_num > current_version_num:
+            logger.warning(
+                "Update is available...\nPlease update using `pip install --upgrade celldetective`..."
+            )
+    except Exception as e:
+        logger.error(
+            f"Update check failed... Please check your internet connection: {e}"
+        )
+
+
+def main():
+    """
+    Entry point of the celldetective GUI.
+
+    Starts the Qt application, shows the splash screen while the heavy
+    libraries load, and opens the initial window.
+
+    Returns
+    -------
+    int
+            Qt exit code, suitable for `sys.exit`.
+    """
+
+    show_splash = True
+    from celldetective import logger
+    from celldetective import get_package_location
     from celldetective import get_software_location
 
     logger.info("Loading the libraries...")
@@ -32,69 +84,75 @@ if __name__ == "__main__":
 
     software_location = get_software_location()
 
-    if splash:
+    splash = None
+    if show_splash:
         splash_pix = QPixmap(
-            sep.join([software_location, "celldetective", "icons", "splash.png"])
+            os.path.join(get_package_location(), "icons", "splash.png")
         )
-        splash = QSplashScreen(splash_pix)
-        splash.setMask(splash_pix.mask())
-        splash.show()
+        if splash_pix.isNull():
+            # A null pixmap still yields a real, zero-sized top level window,
+            # so skip the splash entirely rather than show that ghost.
+            logger.warning("Could not load the splash screen image...")
+        else:
+            splash = QSplashScreen(splash_pix, Qt.WindowStaysOnTopHint)
+            splash.setMask(splash_pix.mask())
+            splash.show()
+            App.processEvents()
+
+    def splash_message(message):
+        """
+        Write a status line on the splash screen and repaint it.
+
+        The imports below block the event loop for several seconds; without
+        these pumps the splash is never redrawn and the window manager paints
+        it as an unresponsive white rectangle.
+
+        Parameters
+        ----------
+        message : str
+                Status line to display.
+        """
+
+        if splash is None:
+            return
+        splash.showMessage(
+            message, Qt.AlignBottom | Qt.AlignHCenter, Qt.white
+        )
         App.processEvents()
 
     # Update check in background
-    def check_update():
-        """
-        Check for software updates on PyPI.
-
-        Fetches the latest version from PyPI and compares it with the current version.
-        Logs a warning if a newer version is available.
-        """
-        try:
-            import requests
-            import re
-            from celldetective import __version__
-
-            package = "celldetective"
-            response = requests.get(f"https://pypi.org/pypi/{package}/json", timeout=5)
-            latest_version = response.json()["info"]["version"]
-
-            latest_version_num = re.sub("[^0-9]", "", latest_version)
-            current_version_num = re.sub("[^0-9]", "", __version__)
-
-            if len(latest_version_num) != len(current_version_num):
-                max_length = max([len(latest_version_num), len(current_version_num)])
-                latest_version_num = int(
-                    latest_version_num.zfill(max_length - len(latest_version_num))
-                )
-                current_version_num = int(
-                    current_version_num.zfill(max_length - len(current_version_num))
-                )
-
-            if latest_version_num > current_version_num:
-                logger.warning(
-                    "Update is available...\nPlease update using `pip install --upgrade celldetective`..."
-                )
-        except Exception as e:
-            logger.error(
-                f"Update check failed... Please check your internet connection: {e}"
-            )
-
     import threading
 
     update_thread = threading.Thread(target=check_update)
     update_thread.daemon = True
     update_thread.start()
 
-    from celldetective.gui.InitWindow import AppInitWindow
+    window = None
+    try:
+        splash_message("Loading the libraries...")
+        from celldetective.gui.InitWindow import AppInitWindow
 
-    logger.info("Libraries successfully loaded...")
+        logger.info("Libraries successfully loaded...")
 
-    from celldetective.gui.base.utils import center_window
+        from celldetective.gui.base.utils import center_window
 
-    window = AppInitWindow(App, software_location=software_location)
-    center_window(window)
+        splash_message("Starting celldetective...")
 
-    if splash:
-        splash.finish(window)
+        # AppInitWindow shows itself in its constructor; splash.finish() below
+        # relies on that, as it waits for the window to be displayed.
+        window = AppInitWindow(App, software_location=software_location)
+        center_window(window)
+    finally:
+        if splash is not None:
+            if window is not None:
+                splash.finish(window)
+            else:
+                # Startup blew up: close the splash so it does not sit on top
+                # of the traceback until the interpreter exits.
+                splash.close()
 
-    sys.exit(App.exec())
+    return App.exec()
+
+
+if __name__ == "__main__":
+    sys.exit(main())

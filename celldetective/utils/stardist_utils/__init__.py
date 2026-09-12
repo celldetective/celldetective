@@ -11,6 +11,35 @@ os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 import numpy as np
 
 
+def _stardist_gpu_usable() -> bool:
+    """
+    Return True only if StarDist can actually run its gputools/OpenCL non-maximum
+    suppression on the GPU.
+
+    ``stardist.gputools_available`` only checks that ``gputools`` imports; it does
+    not confirm a working OpenCL device. We additionally probe for a real device
+    (``gputools.get_device`` raises when none is usable) so we can fall back to CPU
+    instead of failing at predict time, mirroring the Cellpose GPU check.
+    """
+    try:
+        from stardist import gputools_available
+    except ImportError:
+        return False
+
+    if not gputools_available():
+        return False
+
+    try:
+        import gputools
+
+        gputools.get_device()
+    except Exception as e:  # no OpenCL platform/device, driver issue, etc.
+        logger.debug(f"gputools imported but no usable OpenCL device: {e}")
+        return False
+
+    return True
+
+
 def _prep_stardist_model(
     model_name: str, path: Union[str, Path], use_gpu: bool = False, scale: float = 1
 ):
@@ -53,6 +82,16 @@ def _prep_stardist_model(
             "StarDist is not installed. Please install it to use this feature.\n"
             "You can install the full package with: pip install celldetective[all]"
         ) from e
+
+    if use_gpu and not _stardist_gpu_usable():
+        # StarDist's config.use_gpu drives the gputools/OpenCL non-maximum
+        # suppression path; enabling it without a usable OpenCL device makes NMS
+        # fail at predict time. Mirror the Cellpose path and fall back to CPU.
+        logger.warning(
+            "GPU requested for StarDist but no usable gputools/OpenCL device was found. "
+            "Falling back to CPU for non-maximum suppression."
+        )
+        use_gpu = False
 
     model = StarDist2D(None, name=model_name, basedir=path)
     model.config.use_gpu = use_gpu

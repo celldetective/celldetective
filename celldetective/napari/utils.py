@@ -31,6 +31,7 @@ from celldetective.utils.experiment import (
     get_experiment_labels,
     get_experiment_metadata,
     extract_experiment_channels,
+    get_spatial_calibration,
 )
 from celldetective.utils.parsing import config_section_to_dict
 from celldetective import get_logger
@@ -1375,15 +1376,30 @@ def launch_segmentation_viewer(
         labels = labels.astype(np.int32)
     viewer.add_labels(labels, name="segmentation", opacity=0.4)
 
+    # A panel that cannot be built must not stop the viewer from opening.
+    try:
+        from celldetective.napari.frame_segmentation import FrameSegmentationPanel
+
+        segment_frame_panel = FrameSegmentationPanel(
+            viewer=viewer, stack=stack, position=position, population=population
+        )
+    except Exception:
+        logger.exception("Could not build the single-frame segmentation panel.")
+        segment_frame_panel = None
+
     button_container = QWidget()
     layout = QVBoxLayout(button_container)
     layout.setSpacing(10)
+    if segment_frame_panel is not None:
+        layout.addWidget(segment_frame_panel)
     layout.addWidget(correction_options.native)
     layout.addWidget(save_widget.native)
     layout.addWidget(export_widget.native)
     viewer.window.add_dock_widget(button_container, area="right")
 
     save_widget.native.setStyleSheet(Styles().button_style_sheet)
+    if segment_frame_panel is not None:
+        segment_frame_panel.run_btn.setStyleSheet(Styles().button_style_sheet)
     export_widget.native.setStyleSheet(Styles().button_style_sheet)
 
     def lock_controls(
