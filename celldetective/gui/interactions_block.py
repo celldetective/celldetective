@@ -24,7 +24,12 @@ from superqt.fonticon import icon
 from typing import Optional
 
 from celldetective import get_software_location
-from celldetective.gui.base.components import QHSeperationLine, HoverButton
+from celldetective.gui.base.components import (
+    QHSeperationLine,
+    HoverButton,
+    POSITION_NEEDED,
+    set_disabled_reason,
+)
 
 from celldetective.gui.base.control_panel_block import ControlPanelBlock
 from celldetective.gui.base.styles import Styles
@@ -228,6 +233,7 @@ class NeighPanel(ControlPanelBlock, Styles):
         self.check_signals_btn.clicked.connect(self.check_signals2)
         self.check_signals_btn.setToolTip("Annotate dynamic cell pairs.")
         self.check_signals_btn.setStyleSheet(self.button_select_all)
+        set_disabled_reason(self.check_signals_btn, POSITION_NEEDED)
         signal_hlayout.addWidget(self.check_signals_btn, 6)
 
         self.config_signal_annotator_btn = QPushButton()
@@ -254,9 +260,7 @@ class NeighPanel(ControlPanelBlock, Styles):
         self.refresh_signal_models()
         # self.to_disable.append(self.cell_models_list)
 
-        self.pair_train_signal_model_btn = HoverButton(
-            "TRAIN", MDI6.redo_variant, "black", "white"
-        )
+        self.pair_train_signal_model_btn = HoverButton("TRAIN", MDI6.redo_variant)
         self.pair_train_signal_model_btn.setToolTip(
             "Train a cell pair event detection model."
         )
@@ -280,6 +284,7 @@ class NeighPanel(ControlPanelBlock, Styles):
         self.view_tab_btn.setToolTip("Explore table")
         self.view_tab_btn.setIcon(icon(MDI6.table, color="#1565c0"))
         self.view_tab_btn.setIconSize(QSize(20, 20))
+        set_disabled_reason(self.view_tab_btn, "Select a position to explore its table.")
         # self.view_tab_btn.setEnabled(False)
         self.grid_contents.addWidget(self.view_tab_btn, 12, 0, 1, 4)
 

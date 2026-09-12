@@ -34,7 +34,7 @@ from PyQt5.QtCore import (
 )
 from PyQt5.QtGui import QPaintEvent, QPainter, QColor, QPen, QShowEvent, QHelpEvent
 from superqt.fonticon import icon
-from celldetective.gui.base.styles import Styles, CELLDETECTIVE_BLUE
+from celldetective.gui.base.styles import Styles, CELLDETECTIVE_BLUE, INK_COLOR
 from celldetective.gui.base.app_style import draw_check_indicator
 from typing import Optional
 
@@ -125,6 +125,98 @@ class CelldetectiveProgressDialog(QProgressDialog, Styles):
         fm = QFontMetrics(self.font())
         width = max(350, fm.horizontalAdvance(window_title) + 120)
         self.setMinimumWidth(width)
+
+
+# Most of the per position actions of the control panel need one, and only one,
+# position to work on: they all say so the same way.
+POSITION_NEEDED = "Select a single position first."
+
+
+class _DisabledReason(QObject):
+    """
+    Tells in the tooltip of a widget why it is disabled, while it is.
+
+    The reason replaces the tooltip of the widget when it is disabled and gives
+    it back when it is enabled again, so that the call sites keep enabling and
+    disabling their buttons the way they always did.
+    """
+
+    def __init__(self, widget: QWidget, reason: str) -> None:
+        """
+        Initialize the filter.
+
+        Parameters
+        ----------
+        widget : QWidget
+            The widget to explain.
+        reason : str
+            Why the widget is disabled.
+        """
+
+        super().__init__(widget)
+
+        self.widget = widget
+        self.reason = reason
+        self.enabled_tooltip = widget.toolTip()
+        self._setting = False
+
+        widget.installEventFilter(self)
+        self._show_the_right_tooltip()
+
+    def _show_the_right_tooltip(self) -> None:
+        """Show the reason while disabled, the usual tooltip otherwise."""
+
+        self._setting = True
+        self.widget.setToolTip(
+            self.enabled_tooltip if self.widget.isEnabled() else self.reason
+        )
+        self._setting = False
+
+    def eventFilter(self, source: QObject, event: QEvent) -> bool:
+        """
+        Follow the enabled state and the tooltip of the widget.
+
+        Parameters
+        ----------
+        source : QObject
+            The event source.
+        event : QEvent
+            The event.
+        """
+
+        if source is self.widget and not self._setting:
+            if event.type() == QEvent.EnabledChange:
+                self._show_the_right_tooltip()
+            elif event.type() == QEvent.ToolTipChange and self.widget.isEnabled():
+                # A call site setting its own tooltip: it is the one to give
+                # back when the widget is enabled again.
+                self.enabled_tooltip = self.widget.toolTip()
+
+        return super().eventFilter(source, event)
+
+
+def set_disabled_reason(widget: QWidget, reason: str) -> _DisabledReason:
+    """
+    Say in the tooltip of a widget why it is disabled, whenever it is.
+
+    A disabled button says nothing about what would make it available again;
+    this puts the answer where the user looks for it, and follows the widget
+    from then on without the call sites having to do anything.
+
+    Parameters
+    ----------
+    widget : QWidget
+        The widget to explain, typically a button.
+    reason : str
+        Why the widget is disabled, as a sentence: "Select a position first."
+
+    Returns
+    -------
+    _DisabledReason
+        The filter, parented to the widget.
+    """
+
+    return _DisabledReason(widget, reason)
 
 
 def generic_message(message: str, msg_type: Optional[str] = "info") -> None:
@@ -667,12 +759,20 @@ class QHSeperationLine(QFrame):
 
 
 class HoverButton(QPushButton):
+    """
+    A button whose icon takes the accent color while the mouse is over it.
+
+    The defaults follow the `chip` button role these buttons wear (the model
+    zoo actions): a dark icon that turns celldetective blue under the mouse,
+    on the light tint the role paints behind it.
+    """
+
     def __init__(
         self,
         text: str,
         icon_enum: str,
-        default_color: Optional[str] = "gray",
-        hover_color: Optional[str] = "white",
+        default_color: Optional[str] = INK_COLOR,
+        hover_color: Optional[str] = CELLDETECTIVE_BLUE,
     ) -> None:
         """
         Initialize the HoverButton.

@@ -152,6 +152,7 @@ from celldetective.utils.io import remove_file_if_exists
 from tifffile import imwrite
 import json
 from celldetective.gui.gui_utils import help_generic
+from celldetective.gui.base.components import POSITION_NEEDED, set_disabled_reason
 from celldetective.gui.base.control_panel_block import ControlPanelBlock
 from celldetective.gui.base.styles import Styles
 from celldetective import get_software_location
@@ -221,6 +222,7 @@ class ProcessPanel(ControlPanelBlock, Styles):
         self.view_tab_btn.setToolTip("Explore table")
         self.view_tab_btn.setIcon(icon(MDI6.table, color="#1565c0"))
         self.view_tab_btn.setIconSize(QSize(20, 20))
+        set_disabled_reason(self.view_tab_btn, "Select a position to explore its table.")
         # self.view_tab_btn.setEnabled(False)
         self.grid_contents.addWidget(self.view_tab_btn, 10, 0, 1, 4)
 
@@ -228,6 +230,7 @@ class ProcessPanel(ControlPanelBlock, Styles):
         self.submit_btn = QPushButton("Submit")
         self.submit_btn.setStyleSheet(self.button_style_sheet)
         self.submit_btn.clicked.connect(self.process_population)
+        set_disabled_reason(self.submit_btn, "Tick an action above to submit.")
         self.grid_contents.addWidget(self.submit_btn, 11, 0, 1, 4)
 
         for action in [
@@ -275,6 +278,7 @@ class ProcessPanel(ControlPanelBlock, Styles):
         self.classify_btn.setToolTip("Classify data.")
         self.classify_btn.setStyleSheet(self.button_select_all)
         self.classify_btn.clicked.connect(self.open_classifier_ui)
+        set_disabled_reason(self.classify_btn, POSITION_NEEDED)
         measure_layout.addWidget(
             self.classify_btn, 5
         )  # 4,2,1,1, alignment=Qt.AlignRight
@@ -285,6 +289,7 @@ class ProcessPanel(ControlPanelBlock, Styles):
         self.check_measurements_btn.setToolTip("Explore measurements in-situ.")
         self.check_measurements_btn.setStyleSheet(self.button_select_all)
         self.check_measurements_btn.clicked.connect(self.check_measurements)
+        set_disabled_reason(self.check_measurements_btn, POSITION_NEEDED)
         measure_layout.addWidget(self.check_measurements_btn, 5)
 
         self.measurements_config_btn = QPushButton()
@@ -324,6 +329,7 @@ class ProcessPanel(ControlPanelBlock, Styles):
         self.check_signals_btn.clicked.connect(self.check_signals)
         self.check_signals_btn.setToolTip("Explore signals in-situ.")
         self.check_signals_btn.setStyleSheet(self.button_select_all)
+        set_disabled_reason(self.check_signals_btn, POSITION_NEEDED)
         signal_hlayout.addWidget(self.check_signals_btn, 6)
 
         self.config_signal_annotator_btn = QPushButton()
@@ -350,9 +356,7 @@ class ProcessPanel(ControlPanelBlock, Styles):
         self.refresh_signal_models()
         # self.to_disable.append(self.cell_models_list)
 
-        self.train_signal_model_btn = HoverButton(
-            "TRAIN", MDI6.redo_variant, "black", "white"
-        )
+        self.train_signal_model_btn = HoverButton("TRAIN", MDI6.redo_variant)
         self.train_signal_model_btn.setToolTip(
             "Train or retrain an event detection model\non newly annotated data."
         )
@@ -422,6 +426,7 @@ class ProcessPanel(ControlPanelBlock, Styles):
         self.check_tracking_result_btn.setStyleSheet(self.button_select_all)
         self.check_tracking_result_btn.clicked.connect(self.open_napari_tracking)
         self.check_tracking_result_btn.setEnabled(False)
+        set_disabled_reason(self.check_tracking_result_btn, POSITION_NEEDED)
         grid_track.addWidget(
             self.check_tracking_result_btn, 6
         )  # 4,3,1,1, alignment=Qt.AlignLeft
@@ -554,6 +559,7 @@ class ProcessPanel(ControlPanelBlock, Styles):
         self.check_seg_btn.clicked.connect(self.check_segmentation)
         self.check_seg_btn.setStyleSheet(self.button_select_all)
         self.check_seg_btn.setToolTip("View segmentation output in napari.")
+        set_disabled_reason(self.check_seg_btn, POSITION_NEEDED)
         grid_segment.addWidget(self.check_seg_btn, 5)
 
         self.help_seg_btn = QPushButton()
@@ -575,7 +581,7 @@ class ProcessPanel(ControlPanelBlock, Styles):
         self.seg_model_list.setGeometry(50, 50, 200, 30)
         self.init_seg_model_list()
 
-        self.upload_model_btn = HoverButton("UPLOAD", MDI6.upload, "black", "white")
+        self.upload_model_btn = HoverButton("UPLOAD", MDI6.upload)
         self.upload_model_btn.setIconSize(QSize(20, 20))
         self.upload_model_btn.setStyleSheet(self.button_style_sheet_3)
         self.upload_model_btn.setToolTip(
@@ -585,7 +591,7 @@ class ProcessPanel(ControlPanelBlock, Styles):
         self.upload_model_btn.clicked.connect(self.upload_segmentation_model)
         # self.to_disable.append(self.upload_tc_model)
 
-        self.train_btn = HoverButton("TRAIN", MDI6.redo_variant, "black", "white")
+        self.train_btn = HoverButton("TRAIN", MDI6.redo_variant)
         self.train_btn.setToolTip(
             "Train or retrain a segmentation model\non newly annotated data."
         )

@@ -20,7 +20,7 @@ from celldetective.gui.base.components import (
 )
 
 from PyQt5.QtCore import Qt, QSize, QThread
-from celldetective.gui.base.components import generic_message
+from celldetective.gui.base.components import generic_message, set_disabled_reason
 from celldetective.gui.base.utils import keep_scrollbar_space
 from celldetective.utils.parsing import (
     config_section_to_dict,
@@ -265,22 +265,25 @@ class ControlPanel(CelldetectiveMainWindow):
         self.view_stack_btn.setIconSize(QSize(20, 20))
         self.view_stack_btn.clicked.connect(self.view_current_stack)
         self.view_stack_btn.setEnabled(False)
+        set_disabled_reason(
+            self.view_stack_btn, "Select a single position to view its stack."
+        )
 
         self.select_all_wells_btn = QPushButton()
         self.select_all_wells_btn.setIcon(icon(MDI6.select_all, color="black"))
         self.select_all_wells_btn.setIconSize(QSize(20, 20))
         self.select_all_wells_btn.setToolTip("Select all wells.")
-        self.select_all_wells_btn.clicked.connect(self.select_all_wells)
+        self.select_all_wells_btn.setCheckable(True)
+        self.select_all_wells_btn.toggled.connect(self.select_all_wells)
         self.select_all_wells_btn.setStyleSheet(self.button_select_all)
-        self.select_all_wells_option = False
 
         self.select_all_pos_btn = QPushButton()
         self.select_all_pos_btn.setIcon(icon(MDI6.select_all, color="black"))
         self.select_all_pos_btn.setIconSize(QSize(20, 20))
         self.select_all_pos_btn.setToolTip("Select all positions.")
-        self.select_all_pos_btn.clicked.connect(self.select_all_positions)
+        self.select_all_pos_btn.setCheckable(True)
+        self.select_all_pos_btn.toggled.connect(self.select_all_positions)
         self.select_all_pos_btn.setStyleSheet(self.button_select_all)
-        self.select_all_pos_option = False
 
         well_lbl = QLabel("Well: ")
         well_lbl.setAlignment(Qt.AlignRight)
@@ -333,43 +336,49 @@ class ControlPanel(CelldetectiveMainWindow):
 
         vbox.addWidget(hsep)
 
-    def select_all_wells(self):
+    @property
+    def select_all_wells_option(self) -> bool:
+        """Whether every well is selected, held by the button itself."""
+
+        return self.select_all_wells_btn.isChecked()
+
+    @property
+    def select_all_pos_option(self) -> bool:
+        """Whether every position is selected, held by the button itself."""
+
+        return self.select_all_pos_btn.isChecked()
+
+    def select_all_wells(self, selected: bool) -> None:
         """
         Select or deselect all wells in the list.
+
+        Parameters
+        ----------
+        selected : bool
+            The new state of the select all button.
         """
 
-        if not self.select_all_wells_option:
+        if selected:
             self.well_list.selectAll()
-            self.select_all_wells_option = True
-            self.select_all_wells_btn.setIcon(
-                icon(MDI6.select_all, color=self.celldetective_blue)
-            )
-            self.select_all_wells_btn.setIconSize(QSize(20, 20))
-            self.display_positions()
         else:
             self.well_list.unselectAll()
-            self.select_all_wells_option = False
-            self.select_all_wells_btn.setIcon(icon(MDI6.select_all, color="black"))
-            self.select_all_wells_btn.setIconSize(QSize(20, 20))
-            self.display_positions()
 
-    def select_all_positions(self):
+        self.display_positions()
+
+    def select_all_positions(self, selected: bool) -> None:
         """
         Select or deselect all positions in the list.
+
+        Parameters
+        ----------
+        selected : bool
+            The new state of the select all button.
         """
 
-        if not self.select_all_pos_option:
+        if selected:
             self.position_list.selectAll()
-            self.select_all_pos_option = True
-            self.select_all_pos_btn.setIcon(
-                icon(MDI6.select_all, color=self.celldetective_blue)
-            )
-            self.select_all_pos_btn.setIconSize(QSize(20, 20))
         else:
             self.position_list.unselectAll()
-            self.select_all_pos_option = False
-            self.select_all_pos_btn.setIcon(icon(MDI6.select_all, color="black"))
-            self.select_all_pos_btn.setIconSize(QSize(20, 20))
 
     def locate_image(self):
         """

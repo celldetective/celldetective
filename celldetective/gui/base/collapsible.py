@@ -163,6 +163,15 @@ class ChevronButton(QAbstractButton):
             painter, chevron, color=self.color.name(), enabled=self.isEnabled()
         )
 
+    def hideEvent(self, event: QEvent) -> None:
+        """Stop turning when the button is hidden, and face the right way."""
+
+        if self._animation.state() == QVariantAnimation.Running:
+            self._animation.stop()
+            self._set_angle(180.0 if self.isChecked() else 0.0)
+
+        super().hideEvent(event)
+
     def event(self, event: QEvent) -> bool:
         """Repaint on hover, so that the highlight follows the mouse."""
 
@@ -509,6 +518,35 @@ class CollapsibleFrame(QFrame):
         # freeze the content at the height it had when it was opened.
         self.content.setMaximumHeight(UNCONSTRAINED)
         self.animation_finished.emit(expanded)
+
+    def settle(self) -> None:
+        """
+        Stop the animation and put the content in its final state.
+
+        A running animation on a widget that is going away is both pointless
+        and a way to touch it after its window is gone, so a hidden or closed
+        block jumps to the state it was heading for.
+        """
+
+        if self.animation is None or self.animation.state() != QPropertyAnimation.Running:
+            return
+
+        self.animation.stop()
+        expanded = self.is_expanded()
+        self.content.setVisible(expanded)
+        self.content.setMaximumHeight(UNCONSTRAINED)
+
+    def hideEvent(self, event: QEvent) -> None:
+        """Settle the animation when the block is hidden."""
+
+        self.settle()
+        super().hideEvent(event)
+
+    def closeEvent(self, event: QEvent) -> None:
+        """Settle the animation when the block is closed."""
+
+        self.settle()
+        super().closeEvent(event)
 
     def paintEvent(self, event: QPaintEvent) -> None:
         """
