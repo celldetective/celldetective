@@ -31,6 +31,42 @@ TOOLTIP_STYLE = f"""
 # Point size of the tooltip text, applied with QToolTip.setFont in __main__.
 TOOLTIP_FONT_SIZE = 8
 
+# Scroll bars, styled application wide (see __main__): a thin handle on an
+# empty track, with no arrow buttons at either end. The width is the one thing
+# the panels depend on, `keep_scrollbar_space` reserving it from the start so
+# that a panel does not shift sideways when a bar appears; it reads it off the
+# size hint of the bar, so the value below is the only place to change it.
+SCROLLBAR_WIDTH = 10
+SCROLLBAR_STYLE = f"""
+    QScrollBar:vertical, QScrollBar:horizontal {{
+        background: transparent;
+        border: none;
+        margin: 0px;
+    }}
+    QScrollBar:vertical {{ width: {SCROLLBAR_WIDTH}px; }}
+    QScrollBar:horizontal {{ height: {SCROLLBAR_WIDTH}px; }}
+
+    QScrollBar::handle:vertical, QScrollBar::handle:horizontal {{
+        background: #C5CDD4;
+        border-radius: {SCROLLBAR_WIDTH // 2 - 1}px;
+        margin: 2px;
+    }}
+    QScrollBar::handle:vertical {{ min-height: 28px; }}
+    QScrollBar::handle:horizontal {{ min-width: 28px; }}
+    QScrollBar::handle:hover {{ background: #AAB4BD; }}
+    QScrollBar::handle:pressed {{ background: #8F9BA5; }}
+
+    /* The arrow buttons and the track on either side of the handle: given no
+       size, they take none, which is what leaves the bar a plain track. */
+    QScrollBar::add-line, QScrollBar::sub-line {{
+        width: 0px;
+        height: 0px;
+    }}
+    QScrollBar::add-page, QScrollBar::sub-page {{
+        background: transparent;
+    }}
+"""
+
 
 # Colors of the buttons. Every role below is built from these, so that a state
 # looks the same wherever it appears: a pressed button darkens the accent, a
@@ -55,17 +91,34 @@ GHOST_PRESSED = "#A8A8A8"
 DISABLED_BG = "#E6E9EC"
 DISABLED_FG = "#A6AFB8"
 
+# The icon buttons closing a row: the cogs, the eyes, the helpers. They rest at
+# full weight, in the ink of the software rather than raw black.
+#
+# Muting them was tried and undone. These are thin outline glyphs: they carry
+# far less weight on the page than their contrast against it suggests, and a
+# greyed one stops looking like something to press -- it reads as a control
+# that is unavailable, which is what DISABLED_FG is for. What keeps the tools
+# from crowding a row is where they sit, not how pale they are: the decorative
+# icons are gone from the labels, and what is left is lined up in the fixed
+# columns of `tool_strip`. The accent they take under the mouse marks them as
+# tools without costing them the look of being clickable.
+TOOL_IDLE_COLOR = INK_COLOR
+TOOL_BUTTON_SIZE = 28
+TOOL_ICON_SIZE = 20
+
 # The roles a button can take. `primary` is the one action a panel is for
 # (Submit), `secondary` an outlined action next to it (Explore table),
 # `secondary_plain` the same with a plain label, `chip` a small discrete action
 # (the model zoo buttons), `ghost` a borderless icon button, `danger` a
-# destructive action and `add` a left aligned entry of a list.
+# destructive action, `tool` one of the round icon buttons closing a row and
+# `add` a left aligned entry of a list.
 BUTTON_ROLES = (
     "primary",
     "secondary",
     "secondary_plain",
     "chip",
     "ghost",
+    "tool",
     "danger",
     "add",
 )
@@ -188,6 +241,25 @@ def button_style(role: str = "primary") -> str:
                 background-color: {ACCENT_SOFT_STRONG};
                 color: {ACCENT_PRESSED};
             }}
+            {focus}
+        """
+
+    if role == "tool":
+        # No frank grey behind the icon here, unlike `ghost`: a tool button
+        # recolors its own icon under the mouse (see ToolButton), which says
+        # enough on its own, and a light disc sits better under a small glyph
+        # than the grey block it would otherwise need.
+        return f"""
+            QPushButton {{
+                background-color: transparent;
+                border: {FOCUS_WIDTH}px solid transparent;
+                border-radius: {TOOL_BUTTON_SIZE // 2}px;
+                padding: 0px;
+            }}
+            QPushButton:hover {{ background-color: {ACCENT_SOFT}; }}
+            QPushButton:pressed {{ background-color: {ACCENT_SOFT_STRONG}; }}
+            QPushButton:checked {{ background-color: {ACCENT_SOFT_STRONG}; }}
+            QPushButton:disabled {{ background-color: transparent; }}
             {focus}
         """
 

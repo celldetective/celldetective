@@ -17,6 +17,7 @@ from celldetective.gui.base.components import (
     CelldetectiveWidget,
     QCheckableComboBox,
     QHSeperationLine,
+    ToolButton,
 )
 
 from PyQt5.QtCore import Qt, QSize, QThread, QTimer
@@ -278,19 +279,11 @@ class ControlPanel(CelldetectiveMainWindow):
 			"""
         )
 
-        self.folder_exp_btn = QPushButton()
-        self.folder_exp_btn.setIcon(icon(MDI6.folder, color="black"))
-        self.folder_exp_btn.setIconSize(QSize(20, 20))
-        self.folder_exp_btn.setToolTip("Experiment folder")
+        self.folder_exp_btn = ToolButton(MDI6.folder, "Experiment folder")
         self.folder_exp_btn.clicked.connect(self.open_experiment_folder)
-        self.folder_exp_btn.setStyleSheet(self.button_select_all)
 
-        self.edit_config_button = QPushButton()
-        self.edit_config_button.setIcon(icon(MDI6.cog_outline, color="black"))
-        self.edit_config_button.setIconSize(QSize(20, 20))
-        self.edit_config_button.setToolTip("Configuration file")
+        self.edit_config_button = ToolButton(MDI6.cog_outline, "Configuration file")
         self.edit_config_button.clicked.connect(self.open_config_editor)
-        self.edit_config_button.setStyleSheet(self.button_select_all)
 
         self.well_list = QCheckableComboBox(obj="well", parent_window=self)
         thresh = 32
@@ -309,32 +302,20 @@ class ControlPanel(CelldetectiveMainWindow):
 
         self.position_list.activated.connect(self.update_position_options)
 
-        self.view_stack_btn = QPushButton()
-        self.view_stack_btn.setStyleSheet(self.button_select_all)
-        self.view_stack_btn.setIcon(icon(MDI6.image_check, color="black"))
-        self.view_stack_btn.setToolTip("View stack.")
-        self.view_stack_btn.setIconSize(QSize(20, 20))
+        self.view_stack_btn = ToolButton(MDI6.image_check, "View stack.")
         self.view_stack_btn.clicked.connect(self.view_current_stack)
         self.view_stack_btn.setEnabled(False)
         set_disabled_reason(
             self.view_stack_btn, "Select a single position to view its stack."
         )
 
-        self.select_all_wells_btn = QPushButton()
-        self.select_all_wells_btn.setIcon(icon(MDI6.select_all, color="black"))
-        self.select_all_wells_btn.setIconSize(QSize(20, 20))
-        self.select_all_wells_btn.setToolTip("Select all wells.")
+        self.select_all_wells_btn = ToolButton(MDI6.select_all, "Select all wells.")
         self.select_all_wells_btn.setCheckable(True)
         self.select_all_wells_btn.toggled.connect(self.select_all_wells)
-        self.select_all_wells_btn.setStyleSheet(self.button_select_all)
 
-        self.select_all_pos_btn = QPushButton()
-        self.select_all_pos_btn.setIcon(icon(MDI6.select_all, color="black"))
-        self.select_all_pos_btn.setIconSize(QSize(20, 20))
-        self.select_all_pos_btn.setToolTip("Select all positions.")
+        self.select_all_pos_btn = ToolButton(MDI6.select_all, "Select all positions.")
         self.select_all_pos_btn.setCheckable(True)
         self.select_all_pos_btn.toggled.connect(self.select_all_positions)
-        self.select_all_pos_btn.setStyleSheet(self.button_select_all)
 
         well_lbl = QLabel("Well: ")
         well_lbl.setAlignment(Qt.AlignRight)
