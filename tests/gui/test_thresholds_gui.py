@@ -76,10 +76,13 @@ def ensure_experiment_test():
                 os.path.join(EXPERIMENT_TEST_DIR, "W1", "100", "movie", "sample.tif"),
             )
 
-        # Create minimal config.ini
+        # Create minimal config.ini. `populations` is the key the software reads
+        # (get_experiment_populations splits it on commas): writing the
+        # populations as one key each leaves the control panel unable to open
+        # the experiment at all.
         config_content = """[MovieSettings]
 pxtoum = 0.3112
-len = 3
+len_movie = 3
 shape_x = 660
 shape_y = 682
 movie_prefix = sample
@@ -91,7 +94,7 @@ dead_nuclei_channel = 2
 live_nuclei_channel = 3
 
 [Populations]
-targets = 1
+populations = targets
 
 [DefaultDisplaySettings]
 cmap = viridis

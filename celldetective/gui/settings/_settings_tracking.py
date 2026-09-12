@@ -102,6 +102,9 @@ class SettingsTracking(CelldetectiveSettingsPanel):
         self._layout.addWidget(self.features_frame)
         self._layout.addWidget(self.config_trackpy_frame)
         self._layout.addWidget(self.post_proc_frame)
+        # The blocks keep the height they ask for: any room left in the window
+        # goes here, rather than being shared out between them.
+        self._layout.addStretch(1)
         self._layout.addWidget(self.submit_btn)
 
     def _create_widgets(self):
@@ -450,7 +453,9 @@ class SettingsTracking(CelldetectiveSettingsPanel):
         self.haralick_digit_btn.setStyleSheet(self.button_select_all)
 
         self.haralick_layout = QVBoxLayout()
-        self.haralick_layout.setContentsMargins(20, 20, 20, 20)
+        # The block itself already pads its content: this only sets the options
+        # apart from the features above them.
+        self.haralick_layout.setContentsMargins(8, 4, 8, 0)
 
         activate_layout = QHBoxLayout()
         activate_layout.addWidget(self.activate_haralick_btn, 80)

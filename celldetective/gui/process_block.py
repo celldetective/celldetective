@@ -207,9 +207,7 @@ class ProcessPanel(ControlPanelBlock, Styles):
         Populate the content frame with processing options.
         """
         self.ContentsFrame = QFrame()
-        self.ContentsFrame.setContentsMargins(5, 5, 5, 5)
         self.grid_contents = QGridLayout(self.ContentsFrame)
-        self.grid_contents.setContentsMargins(0, 0, 0, 0)
         self.generate_segmentation_options()
         self.generate_tracking_options()
         self.generate_measure_options()

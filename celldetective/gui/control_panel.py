@@ -1,6 +1,6 @@
-import time
+﻿import time
 
-from PyQt5.QtGui import QCloseEvent
+from PyQt5.QtGui import QCloseEvent, QShowEvent
 from PyQt5.QtWidgets import (
     QPushButton,
     QHBoxLayout,
@@ -8,20 +8,20 @@ from PyQt5.QtWidgets import (
     QMainWindow,
     QGridLayout,
     QFrame,
-    QTabWidget,
     QVBoxLayout,
     QScrollArea,
 )
 from celldetective.gui.base.components import (
+    CurrentPageTabWidget,
     CelldetectiveMainWindow,
     CelldetectiveWidget,
     QCheckableComboBox,
     QHSeperationLine,
 )
 
-from PyQt5.QtCore import Qt, QSize, QThread
+from PyQt5.QtCore import Qt, QSize, QThread, QTimer
 from celldetective.gui.base.components import generic_message, set_disabled_reason
-from celldetective.gui.base.utils import keep_scrollbar_space
+from celldetective.gui.base.utils import fit_window_to_content, keep_scrollbar_space
 from celldetective.utils.parsing import (
     config_section_to_dict,
     _extract_labels_from_config,
@@ -128,26 +128,35 @@ class ControlPanel(CelldetectiveMainWindow):
         for panel in self.ProcessPopulations:
             grid_process.addWidget(panel)
         grid_process.addWidget(self.NeighPanel)
+        # The blocks are as tall as they ask to be: room left over in the tab
+        # collects here, instead of being shared out as gaps between them.
+        grid_process.addStretch(1)
 
         grid_analyze.addWidget(self.SurvivalBlock)
+        grid_analyze.addStretch(1)
 
         self.scroll = QScrollArea()
         self.scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.scroll.setWidgetResizable(True)
-        self.scroll.setMinimumHeight(550)
+        # Only a floor: the window is given the height its blocks ask for, both
+        # when it opens and whenever one of them is opened or closed.
+        self.scroll.setMinimumHeight(240)
         # The bar appears as soon as a block is opened: its width is reserved
         # from the start, so that the panel does not shift sideways with it.
         keep_scrollbar_space(self.scroll)
         # self.scroll.setMinimumHeight(int(0.4*screen_height))
 
-        tabWidget = QTabWidget()
+        self.tabWidget = tabWidget = CurrentPageTabWidget()
         tab_index_process = tabWidget.addTab(ProcessFrame, "Process")
         tabWidget.setTabIcon(tab_index_process, icon(MDI6.cog_outline, color="black"))
 
         tab_index_analyze = tabWidget.addTab(AnalyzeFrame, "Analyze")
         tabWidget.setTabIcon(tab_index_analyze, icon(MDI6.poll, color="black"))
         tabWidget.setStyleSheet(self.qtab_style)
+        # The tab widget follows the page on show (see CurrentPageTabWidget):
+        # the window is refitted when the user changes tab.
+        tabWidget.currentChanged.connect(self.fit_tabs_to_current_page)
 
         self.grid.addWidget(tabWidget, 7, 0, 1, 3, alignment=Qt.AlignTop)
         self.grid.setSpacing(5)
@@ -174,6 +183,48 @@ class ControlPanel(CelldetectiveMainWindow):
 
         self.bg_loader = BackgroundLoader()
         start_tracked(self.bg_loader)
+
+        self._fitted = False
+
+    def showEvent(self, event: QShowEvent) -> None:
+        """
+        Fit the window to its blocks the first time it is shown.
+
+        Parameters
+        ----------
+        event : QShowEvent
+            The show event.
+        """
+
+        super().showEvent(event)
+
+        if not getattr(self, "_fitted", False):
+            self._fitted = True
+            # Once the layout has settled: the blocks are all collapsed at this
+            # point, and the window has no reason to be taller than they are.
+            QTimer.singleShot(0, self.fit_to_content)
+
+    def fit_tabs_to_current_page(self, index: int) -> None:
+        """
+        Refit the window to the page the user just switched to.
+
+        Parameters
+        ----------
+        index : int
+            The index of the page now shown.
+        """
+
+        if getattr(self, "_fitted", False):
+            QTimer.singleShot(0, self.fit_to_content)
+
+    def fit_to_content(self) -> None:
+        """Give the window the height its blocks ask for, within the screen."""
+
+        try:
+            fit_window_to_content(self, self.scroll)
+        except RuntimeError as e:
+            logger.debug(f"Window resizing failed: {e}")
+
     @property
     def screen_height(self):
         from celldetective.gui.base.utils import get_current_screen_geometry
