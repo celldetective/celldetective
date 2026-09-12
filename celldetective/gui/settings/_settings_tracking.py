@@ -84,9 +84,39 @@ class SettingsTracking(CelldetectiveSettingsPanel):
         self._add_to_layout()
         self._load_previous_instructions()
 
-        self._widget.setMinimumWidth(500)
+        self._widget.setMinimumWidth(self._widest_block_width())
         self._adjust_size()
-        self.resize(600, int(self._screen_height * 0.8))
+        # The window follows the blocks, as the control panel does: it is only
+        # ever as tall as what is open, up to the screen.
+        self._follow_block_states()
+        self.fit_to_content()
+
+    def _widest_block_width(self) -> int:
+        """
+        Return the width the widest block asks for, whether it is open or not.
+
+        A collapsed block hides its content and so asks for nothing: sizing the
+        window on the blocks that happen to be open would leave the ones opened
+        later to be scrolled sideways, while a width fixed by hand leaves the
+        contents floating in a window wider than anything in it.
+        """
+
+        blocks = [
+            self.ContentsConfig,
+            self.ContentsFeatures,
+            self.ContentsConfigTrackpy,
+            self.ContentsPostProc,
+        ]
+        # What a card adds around its content: its own margins and its border.
+        chrome = sum(CollapsibleFrame.content_margins[0::2]) + 2
+        margins = self._layout.contentsMargins()
+
+        return (
+            max(block.sizeHint().width() for block in blocks)
+            + chrome
+            + margins.left()
+            + margins.right()
+        )
 
     def _add_to_layout(self):
         """Add widgets to the layout."""
@@ -145,12 +175,12 @@ class SettingsTracking(CelldetectiveSettingsPanel):
             self.config_frame.show()
             self.features_frame.show()
             self.config_trackpy_frame.hide()
-            # self._adjustSize()
         else:
             self.config_frame.hide()
             self.features_frame.hide()
             self.config_trackpy_frame.show()
-            # self._adjustSize()
+
+        self.fit_to_content()
 
     def populate_post_proc_frame(self):
         """
@@ -898,11 +928,14 @@ class SettingsTracking(CelldetectiveSettingsPanel):
                 features = tracking_instructions["features"]
                 if (features is not None) and len(features) > 0:
                     self.check_features()
-                    self.ContentsFeatures.show()
+                    # The block is opened and closed through the card, never by
+                    # showing or hiding its content behind its back: the header
+                    # would then be left marking the wrong state.
+                    self.features_frame.set_expanded(True, animate=False)
                     self.features_list.list_widget.clear()
                     self.features_list.list_widget.addItems(features)
                 else:
-                    self.ContentsFeatures.hide()
+                    self.features_frame.set_expanded(False, animate=False)
                     self.uncheck_features()
 
                 btrack_option = True
@@ -976,7 +1009,7 @@ class SettingsTracking(CelldetectiveSettingsPanel):
                 ]
                 if post_processing_options is None:
                     self.uncheck_post_proc()
-                    self.ContentsPostProc.hide()
+                    self.post_proc_frame.set_expanded(False, animate=False)
                     for element in [
                         self.remove_not_in_last_checkbox,
                         self.remove_not_in_first_checkbox,
@@ -989,7 +1022,7 @@ class SettingsTracking(CelldetectiveSettingsPanel):
 
                 else:
                     self.check_post_proc()
-                    self.ContentsPostProc.show()
+                    self.post_proc_frame.set_expanded(True, animate=False)
                     if "minimum_tracklength" in post_processing_options:
                         self.min_tracklength_slider.setValue(
                             int(post_processing_options["minimum_tracklength"])
