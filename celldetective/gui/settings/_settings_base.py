@@ -8,16 +8,29 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt
 from celldetective import get_software_location
-from celldetective.gui.base.utils import center_window, flush_layout_events
+from celldetective.gui.base.utils import (
+    center_window,
+    fit_window_to_content,
+    flush_layout_events,
+)
+from celldetective.gui.base.collapsible import CollapsibleFrame
 from celldetective.gui.base.components import (
     CelldetectiveMainWindow,
     CelldetectiveWidget,
 )
+from celldetective import get_logger
 from PyQt5.QtGui import QDoubleValidator, QIntValidator
 from typing import Optional
 
 
+logger = get_logger()
+
+
 class CelldetectiveSettingsPanel(CelldetectiveMainWindow):
+
+    # The largest share of the height of the screen a settings window may take
+    # once its blocks are open; past that the content scrolls instead.
+    screen_fraction = 0.8
 
     def __init__(self, title: Optional[str] = None) -> None:
         """
@@ -65,6 +78,65 @@ class CelldetectiveSettingsPanel(CelldetectiveMainWindow):
         self._widget.adjustSize()
         self._scroll_area.adjustSize()
         self.adjustSize()
+
+    def fit_to_content(self):
+        """
+        Give the window the height its content now asks for, within the screen.
+
+        The counterpart, for a settings window, of what the control panel does
+        when one of its blocks is opened or closed.
+        """
+
+        try:
+            fit_window_to_content(
+                self, self._scroll_area, screen_fraction=self.screen_fraction
+            )
+        except RuntimeError as e:
+            logger.debug(f"Window resizing failed: {e}")
+            return
+
+        # The height is all `fit_window_to_content` follows. A window narrower
+        # than its content is widened to it, chrome of the scroll area included,
+        # so that nothing has to be scrolled sideways; a window the user has
+        # widened by hand is left alone.
+        wanted = (
+            max(self._widget.sizeHint().width(), self._widget.minimumWidth())
+            + self._scroll_area_chrome()
+        )
+        if self.width() < wanted:
+            self.resize(wanted, self.height())
+
+    def _scroll_area_chrome(self) -> int:
+        """
+        Return the width the window needs on top of that of its content.
+
+        Measured from the scroll area rather than from the width the viewport
+        currently has: a viewport is only given its new width once the window
+        has been laid out again, and reading it back right after a resize makes
+        the window ratchet up in width, one call adding the chrome of the last.
+        """
+
+        margins = self.contentsMargins()
+        chrome = margins.left() + margins.right()
+        chrome += 2 * self._scroll_area.frameWidth()
+
+        if self._scroll_area.verticalScrollBarPolicy() != Qt.ScrollBarAlwaysOff:
+            # Room for the scroll bar whether it shows or not: the blocks are
+            # opened and closed, and with them it comes and goes.
+            chrome += self._scroll_area.verticalScrollBar().sizeHint().width()
+
+        return chrome
+
+    def _follow_block_states(self):
+        """
+        Have the window follow its collapsible blocks as they open and close.
+
+        Called once the blocks are in the layout, since it is then that they are
+        children of the window.
+        """
+
+        for frame in self.findChildren(CollapsibleFrame):
+            frame.animation_finished.connect(lambda _expanded: self.fit_to_content())
 
     def _build_layouts(self):
         """Build the layouts."""
