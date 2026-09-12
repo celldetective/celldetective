@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import (
+﻿from PyQt5.QtWidgets import (
     QApplication,
     QWidget,
     QMessageBox,
@@ -14,7 +14,7 @@ from PyQt5.QtWidgets import (
     QMainWindow,
 )
 from PyQt5.QtGui import QIntValidator, QDoubleValidator
-from celldetective.gui.gui_utils import help_generic
+from celldetective.gui.base.help_panel import HelpButton, open_help, open_help_menu
 from celldetective.gui.base.utils import center_window, flush_layout_events
 from celldetective import get_software_location
 import json
@@ -172,12 +172,8 @@ class ConfigNewExperiment(CelldetectiveMainWindow):
         self.number_of_wells = QLabel("Number of wells:")
         self.ms_grid.addWidget(self.number_of_wells, 1, 0, 1, 3)
 
-        self.help_btn = QPushButton()
-        self.help_btn.setIcon(icon(MDI6.help_circle, color=self.help_color))
-        self.help_btn.setIconSize(QSize(20, 20))
+        self.help_btn = HelpButton("Help me structure my experiment")
         self.help_btn.clicked.connect(self.help_structure)
-        self.help_btn.setStyleSheet(self.button_select_all)
-        self.help_btn.setToolTip("Help.")
         self.ms_grid.addWidget(self.help_btn, 1, 0, 1, 3, alignment=Qt.AlignRight)
 
         self.SliderWells = QLabeledSlider(Qt.Horizontal, self)
@@ -194,10 +190,10 @@ class ConfigNewExperiment(CelldetectiveMainWindow):
 
         self.ms_grid.addWidget(self.SliderPos, 4, 0, 1, 3)
 
-        self.ms_grid.addWidget(QLabel("Calibration from pixel to µm:"), 5, 0, 1, 3)
+        self.ms_grid.addWidget(QLabel("Calibration from pixel to Âµm:"), 5, 0, 1, 3)
         self.PxToUm_field = QLineEdit()
         self.PxToUm_field.setValidator(self.onlyFloat)
-        self.PxToUm_field.setPlaceholderText("1 px = XXX µm")
+        self.PxToUm_field.setPlaceholderText("1 px = XXX Âµm")
         self.PxToUm_field.setAlignment(Qt.AlignLeft)
         self.PxToUm_field.setEnabled(True)
         self.PxToUm_field.setFixedWidth(400)
@@ -259,35 +255,15 @@ class ConfigNewExperiment(CelldetectiveMainWindow):
         Helper to choose an experiment structure.
         """
 
-        dict_path = os.sep.join(
-            [
-                get_software_location(),
-                "celldetective",
-                "gui",
-                "help",
-                "exp-structure.json",
-            ]
+        open_help(
+            "exp-structure.json",
+            "Structuring your experiment",
+            docs_url=(
+                "https://celldetective.readthedocs.io/en/latest/"
+                "get-started.html#data-organization"
+            ),
+            parent=self,
         )
-
-        with open(dict_path) as f:
-            d = json.load(f)
-
-        suggestion = help_generic(d)
-        if isinstance(suggestion, str):
-            logger.info(f"{suggestion=}")
-            msgBox = QMessageBox()
-            msgBox = QMessageBox()
-            msgBox.setIcon(QMessageBox.Information)
-            msgBox.setTextFormat(Qt.RichText)
-            msgBox.setText(
-                suggestion
-                + "\nSee <a href='https://celldetective.readthedocs.io/en/latest/get-started.html#data-organization'>the docs</a> for more information."
-            )
-            msgBox.setWindowTitle("Info")
-            msgBox.setStandardButtons(QMessageBox.Ok)
-            returnValue = msgBox.exec()
-            if returnValue == QMessageBox.Ok:
-                return None
 
     def generate_channel_params_box(self):
         """
@@ -309,7 +285,7 @@ class ConfigNewExperiment(CelldetectiveMainWindow):
 
         self.channels = [
             "brightfield",
-            "live nuclei channel\n(Hoechst, NucSpot®)",
+            "live nuclei channel\n(Hoechst, NucSpotÂ®)",
             "dead nuclei channel\n(PI)",
             "effector fluorescence\n(CFSE)",
             "adhesion\n(RICM, IRM)",
@@ -876,3 +852,4 @@ class SetupConditionLabels(CelldetectiveWidget):
         self.parent_window.pharmaceutical_agents = ",".join(pharamaceutical_text)
 
         self.parent_window.concentration_units = self.concentration_units_le.text()
+

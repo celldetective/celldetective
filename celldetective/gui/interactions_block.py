@@ -1,4 +1,4 @@
-import json
+﻿import json
 import os
 from glob import glob
 
@@ -34,7 +34,7 @@ from celldetective.gui.base.components import (
 from celldetective.gui.base.control_panel_block import ControlPanelBlock
 from celldetective.gui.base.styles import Styles
 from celldetective.gui.base.utils import center_window
-from celldetective.gui.gui_utils import help_generic
+from celldetective.gui.base.help_panel import HelpButton, open_help, open_help_menu
 from celldetective.utils.data_loaders import load_experiment_tables
 from celldetective.utils.experiment import extract_position_name
 from celldetective.utils.model_getters import get_pair_signal_models_list
@@ -94,12 +94,8 @@ class NeighPanel(ControlPanelBlock, Styles):
 
         neigh_option_hbox.addWidget(self.neigh_action, 90)
 
-        self.help_neigh_btn = QPushButton()
-        self.help_neigh_btn.setIcon(icon(MDI6.help_circle, color=self.help_color))
-        self.help_neigh_btn.setIconSize(QSize(20, 20))
+        self.help_neigh_btn = HelpButton("Help me choose a neighborhood")
         self.help_neigh_btn.clicked.connect(self.help_neighborhood)
-        self.help_neigh_btn.setStyleSheet(self.button_select_all)
-        self.help_neigh_btn.setToolTip("Help.")
         neigh_option_hbox.addWidget(self.help_neigh_btn, 5, alignment=Qt.AlignRight)
 
         self.grid_contents.addLayout(neigh_option_hbox, 1, 0, 1, 4)
@@ -331,33 +327,15 @@ class NeighPanel(ControlPanelBlock, Styles):
         Helper for neighborhood strategy.
         """
 
-        dict_path = os.sep.join(
-            [
-                get_software_location(),
-                "celldetective",
-                "gui",
-                "help",
-                "neighborhood.json",
-            ]
+        open_help(
+            "neighborhood.json",
+            "Computing a neighborhood",
+            docs_url=(
+                "https://celldetective.readthedocs.io/en/latest/"
+                "interactions.html#neighborhood"
+            ),
+            parent=self,
         )
-
-        with open(dict_path) as f:
-            d = json.load(f)
-
-        suggestion = help_generic(d)
-        if isinstance(suggestion, str):
-            logger.info(f"{suggestion=}")
-            msgBox = QMessageBox()
-            msgBox.setIcon(QMessageBox.Information)
-            msgBox.setTextFormat(Qt.RichText)
-            msgBox.setText(
-                f"{suggestion}\nSee a tutorial <a href='https://celldetective.readthedocs.io/en/latest/interactions.html#neighborhood'>here</a>."
-            )
-            msgBox.setWindowTitle("Info")
-            msgBox.setStandardButtons(QMessageBox.Ok)
-            returnValue = msgBox.exec()
-            if returnValue == QMessageBox.Ok:
-                return None
 
     def load_available_tables(self):
         """
@@ -745,3 +723,4 @@ class NeighPanel(ControlPanelBlock, Styles):
                 msg.setWindowTitle("Warning")
                 msg.exec_()
                 return
+

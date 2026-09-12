@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import (
+﻿from PyQt5.QtWidgets import (
     QDialog,
     QFrame,
     QGridLayout,
@@ -151,7 +151,7 @@ from celldetective.gui.base.utils import center_window
 from celldetective.utils.io import remove_file_if_exists
 from tifffile import imwrite
 import json
-from celldetective.gui.gui_utils import help_generic
+from celldetective.gui.base.help_panel import HelpButton, open_help, open_help_menu
 from celldetective.gui.base.components import POSITION_NEEDED, set_disabled_reason
 from celldetective.gui.base.control_panel_block import ControlPanelBlock
 from celldetective.gui.base.styles import Styles
@@ -439,12 +439,8 @@ class ProcessPanel(ControlPanelBlock, Styles):
             self.track_config_btn, 6
         )  # 4,2,1,1, alignment=Qt.AlignRight
 
-        self.help_track_btn = QPushButton()
-        self.help_track_btn.setIcon(icon(MDI6.help_circle, color=self.help_color))
-        self.help_track_btn.setIconSize(QSize(20, 20))
+        self.help_track_btn = HelpButton("Help me track my cells")
         self.help_track_btn.clicked.connect(self.help_tracking)
-        self.help_track_btn.setStyleSheet(self.button_select_all)
-        self.help_track_btn.setToolTip("Help.")
         grid_track.addWidget(self.help_track_btn, 6)  # 4,2,1,1, alignment=Qt.AlignRight
 
         self.grid_contents.addLayout(grid_track, 4, 0, 1, 4)
@@ -560,12 +556,8 @@ class ProcessPanel(ControlPanelBlock, Styles):
         set_disabled_reason(self.check_seg_btn, POSITION_NEEDED)
         grid_segment.addWidget(self.check_seg_btn, 5)
 
-        self.help_seg_btn = QPushButton()
-        self.help_seg_btn.setIcon(icon(MDI6.help_circle, color=self.help_color))
-        self.help_seg_btn.setIconSize(QSize(20, 20))
+        self.help_seg_btn = HelpButton("Help me segment my cells")
         self.help_seg_btn.clicked.connect(self.help_segmentation)
-        self.help_seg_btn.setStyleSheet(self.button_select_all)
-        self.help_seg_btn.setToolTip("Help.")
         grid_segment.addWidget(self.help_seg_btn, 5)
         self.grid_contents.addLayout(grid_segment, 0, 0, 1, 4)
 
@@ -628,32 +620,20 @@ class ProcessPanel(ControlPanelBlock, Styles):
 
     def help_segmentation(self) -> Optional[None]:
         """
-        Widget with different decision helper decision trees.
+        Offer the two helpers segmentation comes with.
         """
 
-        self.help_w = CelldetectiveWidget()
-        self.help_w.setWindowTitle("Helper")
-        layout = QVBoxLayout()
-        seg_strategy_btn = QPushButton("A guide to choose a segmentation strategy.")
-        seg_strategy_btn.setIcon(icon(MDI6.help_circle, color=self.celldetective_blue))
-        seg_strategy_btn.setIconSize(QSize(40, 40))
-        seg_strategy_btn.setStyleSheet(self.button_style_sheet_5)
-        seg_strategy_btn.clicked.connect(self.help_seg_strategy)
-
-        dl_strategy_btn = QPushButton(
-            "A guide to choose your Deep learning segmentation strategy."
+        open_help_menu(
+            "Segmentation help",
+            [
+                ("Choosing a segmentation strategy", self.help_seg_strategy),
+                (
+                    "Choosing a deep learning strategy",
+                    self.help_seg_dl_strategy,
+                ),
+            ],
+            parent=self,
         )
-        dl_strategy_btn.setIcon(icon(MDI6.help_circle, color=self.celldetective_blue))
-        dl_strategy_btn.setIconSize(QSize(40, 40))
-        dl_strategy_btn.setStyleSheet(self.button_style_sheet_5)
-        dl_strategy_btn.clicked.connect(self.help_seg_dl_strategy)
-
-        layout.addWidget(seg_strategy_btn)
-        layout.addWidget(dl_strategy_btn)
-
-        self.help_w.setLayout(layout)
-        center_window(self.help_w)
-        self.help_w.show()
 
         return None
 
@@ -662,88 +642,38 @@ class ProcessPanel(ControlPanelBlock, Styles):
         Helper for segmentation strategy between threshold-based and Deep learning.
         """
 
-        dict_path = os.sep.join(
-            [
-                get_software_location(),
-                "celldetective",
-                "gui",
-                "help",
-                "Threshold-vs-DL.json",
-            ]
+        open_help(
+            "Threshold-vs-DL.json",
+            "Choosing a segmentation strategy",
+            docs_url="https://celldetective.readthedocs.io/en/latest/segment.html",
+            phrasing="The suggested technique is {suggestion}",
+            parent=self,
         )
-
-        with open(dict_path) as f:
-            d = json.load(f)
-
-        suggestion = help_generic(d)
-        if isinstance(suggestion, str):
-            logger.info(f"{suggestion=}")
-            msgBox = QMessageBox()
-            msgBox.setIcon(QMessageBox.Information)
-            msgBox.setTextFormat(Qt.RichText)
-            msgBox.setText(
-                f"The suggested technique is {suggestion}.\nSee a tutorial <a href='https://celldetective.readthedocs.io/en/latest/segment.html'>here</a>."
-            )
-            msgBox.setWindowTitle("Info")
-            msgBox.setStandardButtons(QMessageBox.Ok)
-            returnValue = msgBox.exec()
-            if returnValue == QMessageBox.Ok:
-                return None
 
     def help_seg_dl_strategy(self) -> Optional[None]:
         """
         Helper for DL segmentation strategy, between pretrained models and custom models.
         """
 
-        dict_path = os.sep.join(
-            [
-                get_software_location(),
-                "celldetective",
-                "gui",
-                "help",
-                "DL-segmentation-strategy.json",
-            ]
+        open_help(
+            "DL-segmentation-strategy.json",
+            "Choosing a deep learning strategy",
+            docs_url="https://celldetective.readthedocs.io/en/latest/segment.html",
+            phrasing="The suggested technique is {suggestion}",
+            parent=self,
         )
-
-        with open(dict_path) as f:
-            d = json.load(f)
-
-        suggestion = help_generic(d)
-        if isinstance(suggestion, str):
-            logger.info(f"{suggestion=}")
-            msgBox = QMessageBox()
-            msgBox.setIcon(QMessageBox.Information)
-            msgBox.setText(f"The suggested technique is {suggestion}.")
-            msgBox.setWindowTitle("Info")
-            msgBox.setStandardButtons(QMessageBox.Ok)
-            returnValue = msgBox.exec()
-            if returnValue == QMessageBox.Ok:
-                return None
 
     def help_tracking(self) -> Optional[None]:
         """
-        Helper for segmentation strategy between threshold-based and Deep learning.
+        Helper for the tracking options.
         """
 
-        dict_path = os.sep.join(
-            [get_software_location(), "celldetective", "gui", "help", "tracking.json"]
+        open_help(
+            "tracking.json",
+            "Tracking your cells",
+            docs_url="https://celldetective.readthedocs.io/en/latest/track.html",
+            parent=self,
         )
-
-        with open(dict_path) as f:
-            d = json.load(f)
-
-        suggestion = help_generic(d)
-        if isinstance(suggestion, str):
-            logger.info(f"{suggestion=}")
-            msgBox = QMessageBox()
-            msgBox.setIcon(QMessageBox.Information)
-            msgBox.setTextFormat(Qt.RichText)
-            msgBox.setText(f"{suggestion}")
-            msgBox.setWindowTitle("Info")
-            msgBox.setStandardButtons(QMessageBox.Ok)
-            returnValue = msgBox.exec()
-            if returnValue == QMessageBox.Ok:
-                return None
 
     def check_segmentation(self) -> Optional[None]:
         """
@@ -1988,7 +1918,7 @@ class ProcessPanel(ControlPanelBlock, Styles):
                     with open(instr_path, "r") as f:
                         instr = json.load(f)
 
-                    # 1. Features — intensity_mean and area are handled by the
+                    # 1. Features â€” intensity_mean and area are handled by the
                     # standard pipeline; other features are not surfaced here.
 
                     # 2. Isotropic measurements
@@ -2111,7 +2041,7 @@ class ProcessPanel(ControlPanelBlock, Styles):
                 msgBox = QMessageBox()
                 msgBox.setIcon(QMessageBox.Warning)
                 msgBox.setText(
-                    "Please set a cell size greater than zero, in µm."
+                    "Please set a cell size greater than zero, in Âµm."
                 )
                 msgBox.setWindowTitle("Invalid cell size")
                 msgBox.setStandardButtons(QMessageBox.Ok)
@@ -2157,3 +2087,4 @@ class ProcessPanel(ControlPanelBlock, Styles):
         self.signalChannelsSet = True
         self.signalChannelWidget.close()
         self.process_population()
+
