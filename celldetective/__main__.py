@@ -76,11 +76,19 @@ def main():
     QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps)
     QApplication.setAttribute(Qt.AA_ShareOpenGLContexts)
     from celldetective.gui.base.app_style import CelldetectiveStyle
-    from celldetective.gui.base.styles import TOOLTIP_STYLE
+    from celldetective.gui.base.styles import TOOLTIP_STYLE, TOOLTIP_FONT_SIZE
 
     App = QApplication(sys.argv)
     App.setStyle(CelldetectiveStyle("Fusion"))
     App.setStyleSheet(TOOLTIP_STYLE)
+
+    # Set with the widget font rather than through the style sheet, so that the
+    # tooltips are laid out with the font they are painted with.
+    from PyQt5.QtWidgets import QToolTip
+
+    tooltip_font = App.font()
+    tooltip_font.setPointSize(TOOLTIP_FONT_SIZE)
+    QToolTip.setFont(tooltip_font)
 
     software_location = get_software_location()
 

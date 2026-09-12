@@ -18,6 +18,8 @@ from PyQt5.QtWidgets import (
     QFrame,
     QStyledItemDelegate,
     QStyleOptionViewItem,
+    QToolTip,
+    QAbstractItemView,
 )
 from PyQt5.QtCore import (
     Qt,
@@ -25,11 +27,12 @@ from PyQt5.QtCore import (
     QEvent,
     QModelIndex,
     QObject,
+    QRect,
     QRectF,
     QPointF,
     QSize,
 )
-from PyQt5.QtGui import QPaintEvent, QPainter, QColor, QPen, QShowEvent
+from PyQt5.QtGui import QPaintEvent, QPainter, QColor, QPen, QShowEvent, QHelpEvent
 from superqt.fonticon import icon
 from celldetective.gui.base.styles import Styles, CELLDETECTIVE_BLUE
 from celldetective.gui.base.app_style import draw_check_indicator
@@ -158,6 +161,9 @@ class CelldetectiveItemDelegate(QStyledItemDelegate):
     Compared to the delegate Qt installs on a combo box popup, it gives the
     rows some air, a rounded accent colored highlight and a thin separator,
     instead of the blocky native rendering.
+
+    Item tooltips are only shown for the rows whose text does not fit, so that
+    hovering a readable row stays quiet.
     """
 
     show_indicator = False
@@ -166,7 +172,7 @@ class CelldetectiveItemDelegate(QStyledItemDelegate):
     left_margin = 9
     text_gap = 9
     right_margin = 9
-    row_padding = 2
+    row_padding = 5
     separator_height = 7
 
     def __init__(
@@ -216,6 +222,11 @@ class CelldetectiveItemDelegate(QStyledItemDelegate):
 
         return self.left_margin + self.box_size + self.text_gap
 
+    def text_rect(self, option: QStyleOptionViewItem) -> QRect:
+        """Return the room left to the text of a row, once the indicator is out."""
+
+        return option.rect.adjusted(self.text_offset(), 0, -self.right_margin, 0)
+
     def sizeHint(self, option: QStyleOptionViewItem, index: QModelIndex) -> QSize:
         """Reserve room for the indicator and give the rows some air."""
 
@@ -223,12 +234,67 @@ class CelldetectiveItemDelegate(QStyledItemDelegate):
             return QSize(super().sizeHint(option, index).width(), self.separator_height)
 
         size = super().sizeHint(option, index)
+
+        # The height is set from the font rather than grown from the hint of the
+        # base class, which already carries the padding the style adds to every
+        # list view row: adding ours on top of it would count it twice.
+        opt = QStyleOptionViewItem(option)
+        self.initStyleOption(opt, index)
         size.setHeight(
-            max(size.height() + self.row_padding, self.box_size + 2 * self.row_padding)
+            max(opt.fontMetrics.height(), self.box_size) + 2 * self.row_padding
         )
         size.setWidth(size.width() + self.text_offset() + self.right_margin)
 
         return size
+
+    def helpEvent(
+        self,
+        event: QHelpEvent,
+        view: QAbstractItemView,
+        option: QStyleOptionViewItem,
+        index: QModelIndex,
+    ) -> bool:
+        """
+        Show the tooltip of a row only when its text is cut.
+
+        A row is cut either because the caller shortened the text itself, the
+        usual case in the software (a long model or column name inserted as
+        ``name[:thresh] + "..."``, with the full name set as tooltip), or
+        because the text does not fit the popup and is elided when painted.
+        Everywhere else the tooltip would only repeat a label that is already
+        fully readable, which is noise, so it is dropped here rather than at
+        every call site setting a tooltip on an item.
+
+        Parameters
+        ----------
+        event : QHelpEvent
+            The help event to handle.
+        view : QAbstractItemView
+            The view the row belongs to.
+        option : QStyleOptionViewItem
+            The style options of the row.
+        index : QModelIndex
+            The index of the row.
+
+        Returns
+        -------
+        bool
+            True if the event was handled.
+        """
+
+        if event is not None and event.type() == QEvent.ToolTip and index.isValid():
+            opt = QStyleOptionViewItem(option)
+            self.initStyleOption(opt, index)
+
+            tooltip = index.data(Qt.ToolTipRole)
+            shortened = tooltip is not None and str(tooltip).strip() != opt.text.strip()
+            elided = opt.fontMetrics.width(opt.text) > self.text_rect(opt).width()
+
+            if not opt.text or not (shortened or elided):
+                QToolTip.hideText()
+                return False
+
+        return super().helpEvent(event, view, option, index)
 
     def paint(
         self, painter: QPainter, option: QStyleOptionViewItem, index: QModelIndex
@@ -290,7 +356,7 @@ class CelldetectiveItemDelegate(QStyledItemDelegate):
             )
 
         # Item text, elided to the room left by the indicator.
-        text_rect = opt.rect.adjusted(self.text_offset(), 0, -self.right_margin, 0)
+        text_rect = self.text_rect(opt)
         if selected:
             text_color = opt.palette.color(QPalette.HighlightedText)
         elif enabled:
