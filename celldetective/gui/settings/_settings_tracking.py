@@ -23,9 +23,7 @@ from PyQt5.QtCore import Qt, QSize
 from matplotlib import pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
-from celldetective.gui.gui_utils import (
-    help_generic,
-)
+from celldetective.gui.base.help_panel import HelpButton, open_help
 from celldetective.gui.base.figure_canvas import FigureCanvas
 from celldetective.gui.base.list_widget import ListWidget
 from celldetective.gui.base.feature_choice import FeatureChoice
@@ -163,12 +161,8 @@ class SettingsTracking(CelldetectiveSettingsPanel):
         self.select_post_proc_btn.clicked.connect(self.activate_post_proc_options)
         self.select_post_proc_btn.setStyleSheet(self.button_select_all)
 
-        self.help_post_btn = QPushButton()
-        self.help_post_btn.setIcon(icon(MDI6.help_circle, color=self.help_color))
-        self.help_post_btn.setIconSize(QSize(20, 20))
+        self.help_post_btn = HelpButton("Help me post-process the tracks")
         self.help_post_btn.clicked.connect(self.help_post)
-        self.help_post_btn.setStyleSheet(self.button_select_all)
-        self.help_post_btn.setToolTip("Help.")
 
         self.post_proc_frame.add_header_widget(self.select_post_proc_btn, leading=True)
         self.post_proc_frame.add_header_widget(self.help_post_btn)
@@ -183,62 +177,24 @@ class SettingsTracking(CelldetectiveSettingsPanel):
         Helper for track post-processing strategy.
         """
 
-        dict_path = os.sep.join(
-            [
-                get_software_location(),
-                "celldetective",
-                "gui",
-                "help",
-                "track-postprocessing.json",
-            ]
+        open_help(
+            "track-postprocessing.json",
+            "Post-processing the tracks",
+            docs_url="https://celldetective.readthedocs.io/en/latest/track.html",
+            parent=self,
         )
-
-        with open(dict_path) as f:
-            d = json.load(f)
-
-        suggestion = help_generic(d)
-        if isinstance(suggestion, str):
-            logger.info(f"{suggestion=}")
-            msg_box = QMessageBox()
-            msg_box.setIcon(QMessageBox.Information)
-            msg_box.setTextFormat(Qt.RichText)
-            msg_box.setText(rf"{suggestion}")
-            msg_box.setWindowTitle("Info")
-            msg_box.setStandardButtons(QMessageBox.Ok)
-            return_value = msg_box.exec()
-            if return_value == QMessageBox.Ok:
-                return None
 
     def help_feature(self):
         """
-        Helper for track post-processing strategy.
+        Helper for the features to track on.
         """
 
-        dict_path = os.sep.join(
-            [
-                get_software_location(),
-                "celldetective",
-                "gui",
-                "help",
-                "feature-btrack.json",
-            ]
+        open_help(
+            "feature-btrack.json",
+            "Choosing the tracking features",
+            docs_url="https://celldetective.readthedocs.io/en/latest/track.html",
+            parent=self,
         )
-
-        with open(dict_path) as f:
-            d = json.load(f)
-
-        suggestion = help_generic(d)
-        if isinstance(suggestion, str):
-            logger.info(f"{suggestion=}")
-            msg_box = QMessageBox()
-            msg_box.setIcon(QMessageBox.Information)
-            msg_box.setTextFormat(Qt.RichText)
-            msg_box.setText(rf"{suggestion}")
-            msg_box.setWindowTitle("Info")
-            msg_box.setStandardButtons(QMessageBox.Ok)
-            return_value = msg_box.exec()
-            if return_value == QMessageBox.Ok:
-                return None
 
     def populate_features_frame(self):
         """
@@ -249,12 +205,8 @@ class SettingsTracking(CelldetectiveSettingsPanel):
         self.select_features_btn.clicked.connect(self.activate_feature_options)
         self.select_features_btn.setStyleSheet(self.button_select_all)
 
-        self.help_feature_btn = QPushButton()
-        self.help_feature_btn.setIcon(icon(MDI6.help_circle, color=self.help_color))
-        self.help_feature_btn.setIconSize(QSize(20, 20))
+        self.help_feature_btn = HelpButton("Help me choose the tracking features")
         self.help_feature_btn.clicked.connect(self.help_feature)
-        self.help_feature_btn.setStyleSheet(self.button_select_all)
-        self.help_feature_btn.setToolTip("Help.")
 
         self.features_frame.add_header_widget(self.select_features_btn, leading=True)
         self.features_frame.add_header_widget(self.help_feature_btn)

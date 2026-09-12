@@ -1,4 +1,4 @@
-import json
+﻿import json
 import os
 from glob import glob
 
@@ -21,7 +21,7 @@ from superqt.fonticon import icon
 from celldetective import get_software_location
 from celldetective.gui.base.control_panel_block import ControlPanelBlock
 from celldetective.gui.base.styles import Styles
-from celldetective.gui.gui_utils import help_generic
+from celldetective.gui.base.help_panel import HelpButton, open_help, open_help_menu
 from celldetective.gui.layouts import (
     BackgroundFitCorrectionLayout,
     BackgroundModelFreeCorrectionLayout,
@@ -86,12 +86,8 @@ class PreprocessingPanel(ControlPanelBlock, Styles):
             list_title="Corrections to apply:",
         )
 
-        self.help_background_btn = QPushButton()
-        self.help_background_btn.setIcon(icon(MDI6.help_circle, color=self.help_color))
-        self.help_background_btn.setIconSize(QSize(20, 20))
+        self.help_background_btn = HelpButton("Help me correct the background")
         self.help_background_btn.clicked.connect(self.help_background)
-        self.help_background_btn.setStyleSheet(self.button_select_all)
-        self.help_background_btn.setToolTip("Help.")
 
         self.protocol_layout.title_layout.addWidget(
             self.help_background_btn, 5, alignment=Qt.AlignRight
@@ -311,31 +307,13 @@ class PreprocessingPanel(ControlPanelBlock, Styles):
 
     def help_background(self):
         """
-        Helper to choose a proper cell population structure.
+        Helper to choose a background correction.
         """
 
-        dict_path = os.sep.join(
-            [
-                get_software_location(),
-                "celldetective",
-                "gui",
-                "help",
-                "preprocessing.json",
-            ]
+        open_help(
+            "preprocessing.json",
+            "Correcting the background",
+            docs_url="https://celldetective.readthedocs.io/en/latest/preprocessing.html",
+            parent=self,
         )
 
-        with open(dict_path) as f:
-            d = json.load(f)
-
-        suggestion = help_generic(d)
-        if isinstance(suggestion, str):
-            logger.info(f"{suggestion=}")
-            msgBox = QMessageBox()
-            msgBox.setIcon(QMessageBox.Information)
-            msgBox.setTextFormat(Qt.RichText)
-            msgBox.setText(suggestion)
-            msgBox.setWindowTitle("Info")
-            msgBox.setStandardButtons(QMessageBox.Ok)
-            returnValue = msgBox.exec()
-            if returnValue == QMessageBox.Ok:
-                return None

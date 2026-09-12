@@ -1,4 +1,4 @@
-import json
+﻿import json
 import os
 from glob import glob
 from typing import Optional
@@ -35,7 +35,8 @@ from celldetective.gui.base.components import (
     CelldetectiveMainWindow,
     CelldetectiveWidget,
 )
-from celldetective.gui.gui_utils import color_from_class, help_generic
+from celldetective.gui.gui_utils import color_from_class
+from celldetective.gui.base.help_panel import HelpButton, open_help
 from celldetective.gui.base.figure_canvas import FigureCanvas
 from celldetective.gui.base.threads import start_tracked, stop_thread
 from celldetective.gui.base.utils import is_alive
@@ -339,34 +340,13 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
         Helper for prefiltering strategy
         """
 
-        dict_path = os.sep.join(
-            [
-                get_software_location(),
-                "celldetective",
-                "gui",
-                "help",
-                "prefilter-for-segmentation.json",
-            ]
+        open_help(
+            "prefilter-for-segmentation.json",
+            "Prefiltering before segmentation",
+            docs_url="https://celldetective.readthedocs.io/en/latest/segment.html",
+            phrasing="The suggested technique is to {suggestion}",
+            parent=self,
         )
-
-        with open(dict_path) as f:
-            d = json.load(f)
-
-        suggestion = help_generic(d)
-        if isinstance(suggestion, str):
-            logger.debug(f"suggestion={suggestion}")
-            message_box = QMessageBox()
-            message_box.setIcon(QMessageBox.Information)
-            message_box.setTextFormat(Qt.RichText)
-            message_box.setText(
-                f"The suggested technique is to {suggestion}.\nSee a tutorial <a "
-                f"href='https://celldetective.readthedocs.io/en/latest/segment.html'>here</a>."
-            )
-            message_box.setWindowTitle("Info")
-            message_box.setStandardButtons(QMessageBox.Ok)
-            return_value = message_box.exec()
-            if return_value == QMessageBox.Ok:
-                return None
 
     def generate_marker_contents(self):
         """Generate marker contents."""
@@ -1034,3 +1014,4 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
                 self.marker_option.click()
             else:
                 self.all_objects_option.click()
+

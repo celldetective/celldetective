@@ -1,4 +1,4 @@
-import os
+﻿import os
 
 from PyQt5.QtWidgets import (
     QGridLayout,
@@ -18,6 +18,7 @@ from PyQt5.QtGui import QDoubleValidator, QIntValidator
 from celldetective.gui.base.list_widget import ListWidget
 from celldetective.gui.base.styles import Styles
 from celldetective.gui.base.components import CelldetectiveWidget
+from celldetective.gui.base.help_panel import HelpButton, open_help
 from superqt.fonticon import icon
 from fonticon_mdi6 import MDI6
 
@@ -116,12 +117,8 @@ class PreprocessingLayout(QVBoxLayout, Styles):
         self.add_filter_btn.setIconSize(QSize(20, 20))
         self.add_filter_btn.clicked.connect(self.list.addItem)
 
-        self.help_prefilter_btn = QPushButton()
-        self.help_prefilter_btn.setIcon(icon(MDI6.help_circle, color=self.help_color))
-        self.help_prefilter_btn.setIconSize(QSize(20, 20))
+        self.help_prefilter_btn = HelpButton("Help me choose a prefilter")
         self.help_prefilter_btn.clicked.connect(self.help_prefilter)
-        self.help_prefilter_btn.setStyleSheet(self.button_select_all)
-        self.help_prefilter_btn.setToolTip("Help.")
 
         if self.apply_btn_option:
             self.apply_btn = QPushButton("Apply")
@@ -135,33 +132,13 @@ class PreprocessingLayout(QVBoxLayout, Styles):
         Helper for prefiltering strategy
         """
 
-        dict_path = os.sep.join(
-            [
-                get_software_location(),
-                "celldetective",
-                "gui",
-                "help",
-                "prefilter-for-segmentation.json",
-            ]
+        open_help(
+            "prefilter-for-segmentation.json",
+            "Prefiltering before segmentation",
+            docs_url="https://celldetective.readthedocs.io/en/latest/segment.html",
+            phrasing="The suggested technique is to {suggestion}",
+            parent=self,
         )
-
-        with open(dict_path) as f:
-            d = json.load(f)
-
-        suggestion = help_generic(d)
-        if isinstance(suggestion, str):
-            logger.debug(f"suggestion={suggestion}")
-            msgBox = QMessageBox()
-            msgBox.setIcon(QMessageBox.Information)
-            msgBox.setTextFormat(Qt.RichText)
-            msgBox.setText(
-                f"The suggested technique is to {suggestion}.\nSee a tutorial <a href='https://celldetective.readthedocs.io/en/latest/segment.html'>here</a>."
-            )
-            msgBox.setWindowTitle("Info")
-            msgBox.setStandardButtons(QMessageBox.Ok)
-            returnValue = msgBox.exec()
-            if returnValue == QMessageBox.Ok:
-                return None
 
 
 class PreprocessingLayout2(PreprocessingLayout):
@@ -1232,96 +1209,3 @@ class ChannelChoice(CelldetectiveWidget):
         self.parent_window.list_widget.addItems([filtername])
         self.close()
 
-
-def help_generic(tree: Dict[str, Any]) -> Any:
-    """
-    Interactively traverse a decision tree to provide user guidance based on a nested dictionary structure.
-
-    This function takes a nested dictionary representing a decision tree and guides the user through
-    it step-by-step by displaying messages for user input using the `generic_msg()` function.
-    At each step, the user selects a key that corresponds to a further step in the tree, until a
-    final suggestion (leaf node) is reached.
-
-    Parameters
-    ----------
-    tree : dict
-            A dictionary where keys represent options and values represent either further steps (as dictionaries)
-            or a final suggestion (leaf nodes).
-
-    Returns
-    -------
-    any
-            The final suggestion or outcome after traversing the decision tree.
-
-    Example
-    -------
-    >>> decision_tree = {
-    ...     'Start': {
-    ...         'Option 1': {
-    ...             'Sub-option 1': 'Final suggestion 1',
-    ...             'Sub-option 2': 'Final suggestion 2'
-    ...         },
-    ...         'Option 2': 'Final suggestion 3'
-    ...     }
-    ... }
-    >>> result = help_generic(decision_tree)
-    # The function prompts the user to choose between "Option 1" or "Option 2",
-    # and then proceeds through the tree based on the user's choices.
-    """
-
-    output = generic_msg(list(tree.keys())[0])
-    while output is not None:
-        tree = tree[list(tree.keys())[0]][output]
-        if isinstance(tree, dict):
-            output = generic_msg(list(tree.keys())[0])
-        else:
-            # return the final suggestion
-            output = None
-    return tree
-
-
-def generic_msg(text: str) -> Optional[str]:
-    """
-    Display a message box with a question and capture the user's response.
-
-    This function creates a message box with a `Yes`, `No`, and `Cancel` option,
-    displaying the provided `text` as the question. It returns the user's selection as a string.
-
-    Parameters
-    ----------
-    text : str
-            The message or question to display in the message box.
-
-    Returns
-    -------
-    str or None
-            The user's response: "yes" if Yes is selected, "no" if No is selected,
-            and `None` if Cancel is selected or the dialog is closed.
-
-    Example
-    -------
-    >>> response = generic_msg("Would you like to continue?")
-    >>> if response == "yes":
-    ...     print("User chose Yes")
-    ... elif response == "no":
-    ...     print("User chose No")
-    ... else:
-    ...     print("User cancelled the action")
-
-    Notes
-    -----
-    - The message box displays a window with three options: Yes, No, and Cancel.
-    """
-
-    msgBox = QMessageBox()
-    msgBox.setIcon(QMessageBox.Question)
-    msgBox.setText(text)
-    msgBox.setWindowTitle("Question")
-    msgBox.setStandardButtons(QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel)
-    returnValue = msgBox.exec()
-    if returnValue == QMessageBox.Yes:
-        return "yes"
-    elif returnValue == QMessageBox.No:
-        return "no"
-    else:
-        return None
