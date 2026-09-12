@@ -10,7 +10,59 @@ from os import sep
 
 # os.environ['QT_DEBUG_PLUGINS'] = '1'
 
-if __name__ == "__main__":
+
+def check_update():
+    """
+    Check for software updates on PyPI.
+
+    Fetches the latest version from PyPI and compares it with the current version.
+    Logs a warning if a newer version is available.
+    """
+    from celldetective import logger
+
+    try:
+        import requests
+        import re
+        from celldetective import __version__
+
+        package = "celldetective"
+        response = requests.get(f"https://pypi.org/pypi/{package}/json", timeout=5)
+        latest_version = response.json()["info"]["version"]
+
+        latest_version_num = re.sub("[^0-9]", "", latest_version)
+        current_version_num = re.sub("[^0-9]", "", __version__)
+
+        if len(latest_version_num) != len(current_version_num):
+            max_length = max([len(latest_version_num), len(current_version_num)])
+            latest_version_num = int(
+                latest_version_num.zfill(max_length - len(latest_version_num))
+            )
+            current_version_num = int(
+                current_version_num.zfill(max_length - len(current_version_num))
+            )
+
+        if latest_version_num > current_version_num:
+            logger.warning(
+                "Update is available...\nPlease update using `pip install --upgrade celldetective`..."
+            )
+    except Exception as e:
+        logger.error(
+            f"Update check failed... Please check your internet connection: {e}"
+        )
+
+
+def main():
+    """
+    Entry point of the celldetective GUI.
+
+    Starts the Qt application, shows the splash screen while the heavy
+    libraries load, and opens the initial window.
+
+    Returns
+    -------
+    int
+            Qt exit code, suitable for `sys.exit`.
+    """
 
     splash = True
     from celldetective import logger
@@ -38,43 +90,6 @@ if __name__ == "__main__":
         App.processEvents()
 
     # Update check in background
-    def check_update():
-        """
-        Check for software updates on PyPI.
-
-        Fetches the latest version from PyPI and compares it with the current version.
-        Logs a warning if a newer version is available.
-        """
-        try:
-            import requests
-            import re
-            from celldetective import __version__
-
-            package = "celldetective"
-            response = requests.get(f"https://pypi.org/pypi/{package}/json", timeout=5)
-            latest_version = response.json()["info"]["version"]
-
-            latest_version_num = re.sub("[^0-9]", "", latest_version)
-            current_version_num = re.sub("[^0-9]", "", __version__)
-
-            if len(latest_version_num) != len(current_version_num):
-                max_length = max([len(latest_version_num), len(current_version_num)])
-                latest_version_num = int(
-                    latest_version_num.zfill(max_length - len(latest_version_num))
-                )
-                current_version_num = int(
-                    current_version_num.zfill(max_length - len(current_version_num))
-                )
-
-            if latest_version_num > current_version_num:
-                logger.warning(
-                    "Update is available...\nPlease update using `pip install --upgrade celldetective`..."
-                )
-        except Exception as e:
-            logger.error(
-                f"Update check failed... Please check your internet connection: {e}"
-            )
-
     import threading
 
     update_thread = threading.Thread(target=check_update)
@@ -93,4 +108,8 @@ if __name__ == "__main__":
     if splash:
         splash.finish(window)
 
-    sys.exit(App.exec())
+    return App.exec()
+
+
+if __name__ == "__main__":
+    sys.exit(main())
