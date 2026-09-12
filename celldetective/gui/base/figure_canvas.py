@@ -17,22 +17,28 @@ _SAFE_CANVAS_CLS = None
 
 def _safe_canvas_class():
     """
-    Return a ``FigureCanvasQTAgg`` subclass whose paint cannot fault the process.
+    Return a ``FigureCanvasQTAgg`` subclass that cannot kill the interpreter.
 
-    matplotlib's ``paintEvent`` opens ``QPainter(self)`` and then, without
-    checking that it actually started, calls ``painter.eraseRect(rect)``.
-    ``QPainter::eraseRect()`` is one of the few QPainter methods that reads
-    ``d->state`` with no active-painter guard, so when ``begin()`` fails the
-    call dereferences a null pointer and the interpreter dies with
-    "Windows fatal exception: access violation" -- no traceback, no failing
-    assertion, the whole process gone.
+    Qt keeps delivering paints and queued idle-draws to a canvas that is on its
+    way out -- a window mid-close, a widget whose C++ half sip has already
+    freed, a layout that has left it zero-sized. matplotlib's handlers assume
+    none of that:
 
-    ``begin()`` fails whenever the widget has no usable paint engine: a zero
-    width or height, a backing store already torn down with the window, or a
-    paint that re-enters while another painter is still open on the widget.
-    Those all happen while a viewer is being closed or resized, and a paint
-    that could not begin would have drawn nothing anyway -- so probe the paint
-    device first and skip the paint instead of faulting on it.
+    * ``paintEvent`` opens ``QPainter(self)`` and then calls
+      ``painter.eraseRect(rect)`` without checking that ``begin()`` succeeded.
+      ``QPainter::eraseRect()`` reads ``d->state`` with no active-painter
+      guard, so a painter that failed to begin is a null dereference and the
+      process dies with "Windows fatal exception: access violation".
+    * both ``paintEvent`` and ``_draw_idle`` -- the latter reached from a
+      ``QTimer.singleShot`` that outlives the widget it was armed for -- touch
+      the C++ object outside any try block. Once sip has freed it that is a
+      ``RuntimeError`` raised inside a Qt handler, and PyQt5 answers an
+      unhandled exception in a virtual with ``abort()``.
+
+    Either way the process dies with no traceback and no failing assertion,
+    taking the whole run's results with it. A paint that cannot begin would
+    have drawn nothing anyway, so check the cheap, side-effect-free conditions
+    up front and swallow the deletion race that is left.
 
     The class is built lazily so importing this module does not pull in the Qt
     backend before a figure is actually needed.
@@ -43,29 +49,39 @@ def _safe_canvas_class():
         return _SAFE_CANVAS_CLS
 
     from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
-    from PyQt5.QtGui import QPainter
+    from PyQt5 import sip
 
     class SafeFigureCanvasQTAgg(FigureCanvasQTAgg):
-        """FigureCanvasQTAgg that no-ops a paint it cannot safely perform."""
+        """FigureCanvasQTAgg that no-ops a draw it cannot safely perform."""
+
+        def _is_paintable(self):
+            """Whether drawing this canvas can touch Qt at all."""
+
+            # Ask sip before Qt: every other call here goes through the
+            # wrapper, and on a freed object that is the RuntimeError we are
+            # trying to avoid rather than an answer.
+            if sip.isdeleted(self):
+                return False
+            return self.isVisible() and self.width() > 0 and self.height() > 0
 
         def paintEvent(self, event):
-            if self.width() <= 0 or self.height() <= 0:
+            if not self._is_paintable():
                 return
+            try:
+                super().paintEvent(event)
+            except RuntimeError as e:
+                # Freed between the check above and the paint itself.
+                logger.debug(f"Skipped paint on a canvas being destroyed: {e}")
 
-            # Ask Qt the same question matplotlib's paintEvent fails to ask.
-            probe = QPainter()
-            if not probe.begin(self):
-                logger.debug(
-                    "Skipping canvas paint: no paint engine available "
-                    "(size=%sx%s, visible=%s).",
-                    self.width(),
-                    self.height(),
-                    self.isVisible(),
-                )
+        def _draw_idle(self):
+            # Armed by QTimer.singleShot(0, self._draw_idle); the widget can be
+            # gone by the time it fires.
+            if sip.isdeleted(self):
                 return
-            probe.end()
-
-            super().paintEvent(event)
+            try:
+                super()._draw_idle()
+            except RuntimeError as e:
+                logger.debug(f"Skipped idle draw on a canvas being destroyed: {e}")
 
     _SAFE_CANVAS_CLS = SafeFigureCanvasQTAgg
     return _SAFE_CANVAS_CLS
