@@ -1,6 +1,12 @@
 import logging
-from PyQt5.QtWidgets import QApplication, QDesktopWidget, QMainWindow, QWidget
-from PyQt5.QtCore import QRect
+from PyQt5.QtWidgets import (
+    QAbstractScrollArea,
+    QApplication,
+    QDesktopWidget,
+    QMainWindow,
+    QWidget,
+)
+from PyQt5.QtCore import QEvent, QObject, QRect
 from typing import Union
 from prettytable import PrettyTable
 
@@ -49,6 +55,146 @@ def center_window(window: Union[QMainWindow, QWidget]) -> None:
     centerPoint = QApplication.desktop().screenGeometry(screen).center()
     frameGm.moveCenter(centerPoint)
     window.move(frameGm.topLeft())
+
+
+class _ScrollBarSpaceKeeper(QObject):
+    """
+    Keeps the width of a scroll area free of its vertical scroll bar.
+
+    A scroll bar that comes and goes takes its width from the viewport when it
+    appears, which shifts the whole content of the area sideways. The filter
+    watches the bar and gives the viewport a right margin of exactly its width
+    whenever it is hidden, so that the content keeps the same width and the
+    same place in both states.
+    """
+
+    def __init__(self, area: QAbstractScrollArea) -> None:
+        """
+        Initialize the filter.
+
+        Parameters
+        ----------
+        area : QAbstractScrollArea
+            The scroll area to keep steady.
+        """
+
+        super().__init__(area)
+
+        self.area = area
+        self.bar = area.verticalScrollBar()
+        self.bar.installEventFilter(self)
+        self.reserve()
+
+    def reserve(self) -> None:
+        """Give the viewport the margin the hidden scroll bar would take."""
+
+        margin = 0 if self.bar.isVisible() else self.bar.sizeHint().width()
+        self.area.setViewportMargins(0, 0, margin, 0)
+
+    def eventFilter(self, source: QObject, event: QEvent) -> bool:
+        """
+        Follow the scroll bar as it appears and disappears.
+
+        Parameters
+        ----------
+        source : QObject
+            The event source.
+        event : QEvent
+            The event.
+        """
+
+        if source is self.bar and event.type() in (QEvent.Show, QEvent.Hide):
+            self.reserve()
+
+        return super().eventFilter(source, event)
+
+
+def keep_scrollbar_space(area: QAbstractScrollArea) -> _ScrollBarSpaceKeeper:
+    """
+    Stop the content of a scroll area from shifting with its scroll bar.
+
+    Parameters
+    ----------
+    area : QAbstractScrollArea
+        The scroll area to keep steady.
+
+    Returns
+    -------
+    _ScrollBarSpaceKeeper
+        The filter, parented to the area.
+    """
+
+    return _ScrollBarSpaceKeeper(area)
+
+
+def keep_window_on_screen(window: Union[QMainWindow, QWidget]) -> None:
+    """
+    Move a window back inside the screen it sits on, if it pokes out of it.
+
+    Only the offending edges are corrected: a window the user has placed
+    somewhere keeps its position as long as it fits.
+
+    Parameters
+    ----------
+    window : QMainWindow or QWidget
+        The window to bring back on screen.
+    """
+
+    screen = get_current_screen_geometry(window)
+    frame = window.frameGeometry()
+
+    x, y = frame.x(), frame.y()
+    if frame.bottom() > screen.bottom():
+        y = max(screen.top(), screen.bottom() - frame.height() + 1)
+    if frame.top() < screen.top():
+        y = screen.top()
+    if frame.right() > screen.right():
+        x = max(screen.left(), screen.right() - frame.width() + 1)
+    if frame.left() < screen.left():
+        x = screen.left()
+
+    if (x, y) != (frame.x(), frame.y()):
+        window.move(x, y)
+
+
+def fit_window_to_content(
+    window: Union[QMainWindow, QWidget],
+    area: QAbstractScrollArea,
+    screen_fraction: float = 0.9,
+) -> None:
+    """
+    Give a window the height its scrolled content asks for, within the screen.
+
+    The window is resized to the height of the widget inside the scroll area,
+    plus whatever chrome sits around it, and never beyond a fraction of the
+    screen: past that the content scrolls instead. The window is then brought
+    back on screen if it now pokes out of it.
+
+    Parameters
+    ----------
+    window : QMainWindow or QWidget
+        The window to resize.
+    area : QAbstractScrollArea
+        The scroll area holding the content of the window.
+    screen_fraction : float, optional
+        The largest share of the height of the screen the window may take.
+    """
+
+    content = area.widget() if hasattr(area, "widget") else None
+    if content is None:
+        return
+
+    screen = get_current_screen_geometry(window)
+    max_height = int(screen_fraction * screen.height())
+    window.setMaximumHeight(max_height)
+
+    # Everything that is not the viewport: title bar aside, the margins of the
+    # window, the frame of the area and its horizontal scroll bar, if any.
+    chrome = window.height() - area.viewport().height()
+    wanted = content.sizeHint().height() + chrome
+
+    window.resize(window.width(), max(window.minimumHeight(), min(wanted, max_height)))
+    keep_window_on_screen(window)
 
 
 def pretty_table(dct: dict):

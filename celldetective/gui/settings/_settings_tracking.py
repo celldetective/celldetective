@@ -11,7 +11,6 @@ from PyQt5.QtWidgets import (
     QFrame,
     QCheckBox,
     QFileDialog,
-    QGridLayout,
     QTextEdit,
     QLineEdit,
     QVBoxLayout,
@@ -31,6 +30,7 @@ from celldetective.gui.base.figure_canvas import FigureCanvas
 from celldetective.gui.base.list_widget import ListWidget
 from celldetective.gui.base.feature_choice import FeatureChoice
 from celldetective.gui.base.components import QHSeperationLine
+from celldetective.gui.base.collapsible import CollapsibleFrame
 from superqt import QLabeledDoubleSlider, QLabeledSlider
 from superqt.fonticon import icon
 from fonticon_mdi6 import MDI6
@@ -120,23 +120,19 @@ class SettingsTracking(CelldetectiveSettingsPanel):
         self.tracker_option_group.addButton(self.btrack_option)
         self.tracker_option_group.addButton(self.trackpy_option)
 
-        self.config_frame = QFrame()
-        self.config_frame.setFrameStyle(QFrame.StyledPanel | QFrame.Raised)
+        self.config_frame = CollapsibleFrame("CONFIGURATION")
         self.populate_config_frame()
 
         # Second collapsable frame FEATURES
-        self.features_frame = QFrame()
-        self.features_frame.setFrameStyle(QFrame.StyledPanel | QFrame.Raised)
+        self.features_frame = CollapsibleFrame("FEATURES")
         self.populate_features_frame()
 
-        self.config_trackpy_frame = QFrame()
-        self.config_trackpy_frame.setFrameStyle(QFrame.StyledPanel | QFrame.Raised)
+        self.config_trackpy_frame = CollapsibleFrame("CONFIGURATION")
         self.populate_config_trackpy_frame()
         self.config_trackpy_frame.hide()
 
         # Third collapsable frame POST-PROCESSING
-        self.post_proc_frame = QFrame()
-        self.post_proc_frame.setFrameStyle(QFrame.StyledPanel | QFrame.Raised)
+        self.post_proc_frame = CollapsibleFrame("POST-PROCESSING")
         self.populate_post_proc_frame()
 
         self.btrack_option.toggled.connect(self.show_tracking_options)
@@ -160,28 +156,9 @@ class SettingsTracking(CelldetectiveSettingsPanel):
         Add widgets and layout in the POST-PROCESSING frame.
         """
 
-        grid = QGridLayout(self.post_proc_frame)
-
         self.select_post_proc_btn = QPushButton()
         self.select_post_proc_btn.clicked.connect(self.activate_post_proc_options)
         self.select_post_proc_btn.setStyleSheet(self.button_select_all)
-
-        self.post_proc_lbl = QLabel("POST-PROCESSING")
-        self.post_proc_lbl.setStyleSheet(
-            """
-			font-weight: bold;
-			padding: 0px;
-			"""
-        )
-        grid.addWidget(self.post_proc_lbl, 0, 0, 1, 4, alignment=Qt.AlignCenter)
-
-        title_hbox = QHBoxLayout()
-
-        self.collapse_post_proc_btn = QPushButton()
-        self.collapse_post_proc_btn.setIcon(icon(MDI6.chevron_down, color="black"))
-        self.collapse_post_proc_btn.setIconSize(QSize(20, 20))
-        self.collapse_post_proc_btn.setStyleSheet(self.button_select_all)
-        # grid.addWidget(self.collapse_post_proc_btn, 0, 0, 1, 4, alignment=Qt.AlignRight)
 
         self.help_post_btn = QPushButton()
         self.help_post_btn.setIcon(icon(MDI6.help_circle, color=self.help_color))
@@ -190,36 +167,13 @@ class SettingsTracking(CelldetectiveSettingsPanel):
         self.help_post_btn.setStyleSheet(self.button_select_all)
         self.help_post_btn.setToolTip("Help.")
 
-        title_hbox.addWidget(self.select_post_proc_btn, 5)
-        title_hbox.addWidget(QLabel(), 85, alignment=Qt.AlignCenter)
-        title_hbox.addWidget(self.help_post_btn, 5)
-        title_hbox.addWidget(self.collapse_post_proc_btn, 5)
-        grid.addLayout(title_hbox, 0, 0, 1, 4)
+        self.post_proc_frame.add_header_widget(self.select_post_proc_btn, leading=True)
+        self.post_proc_frame.add_header_widget(self.help_post_btn)
 
         self.generate_post_proc_panel_contents()
-        grid.addWidget(self.ContentsPostProc, 1, 0, 1, 4, alignment=Qt.AlignTop)
-        self.collapse_post_proc_btn.clicked.connect(
-            lambda: self.ContentsPostProc.setHidden(
-                not self.ContentsPostProc.isHidden()
-            )
-        )
-        self.collapse_post_proc_btn.clicked.connect(self.collapse_post_advanced)
-        self.ContentsPostProc.hide()
+        self.post_proc_frame.set_content(self.ContentsPostProc)
+        self.collapse_post_proc_btn = self.post_proc_frame.collapse_btn
         self.uncheck_post_proc()
-
-    def collapse_post_advanced(self):
-        """Collapse or expand the advanced post-processing settings."""
-        features_open = not self.ContentsFeatures.isHidden()
-        config_open = not self.ContentsConfig.isHidden()
-        post_open = not self.ContentsPostProc.isHidden()
-        is_open = np.array([features_open, config_open, post_open])
-
-        if self.ContentsPostProc.isHidden():
-            self.collapse_post_proc_btn.setIcon(icon(MDI6.chevron_down, color="black"))
-            self.collapse_post_proc_btn.setIconSize(QSize(20, 20))
-        else:
-            self.collapse_post_proc_btn.setIcon(icon(MDI6.chevron_up, color="black"))
-            self.collapse_post_proc_btn.setIconSize(QSize(20, 20))
 
     def help_post(self):
         """
@@ -288,26 +242,9 @@ class SettingsTracking(CelldetectiveSettingsPanel):
         Add widgets and layout in the FEATURES frame.
         """
 
-        grid = QGridLayout(self.features_frame)
-        title_hbox = QHBoxLayout()
-
         self.select_features_btn = QPushButton()
         self.select_features_btn.clicked.connect(self.activate_feature_options)
         self.select_features_btn.setStyleSheet(self.button_select_all)
-
-        self.feature_lbl = QLabel("FEATURES")
-        self.feature_lbl.setStyleSheet(
-            """
-			font-weight: bold;
-			padding: 0px;
-			"""
-        )
-        grid.addWidget(self.feature_lbl, 0, 0, 1, 4, alignment=Qt.AlignCenter)
-
-        self.collapse_features_btn = QPushButton()
-        self.collapse_features_btn.setIcon(icon(MDI6.chevron_down, color="black"))
-        self.collapse_features_btn.setIconSize(QSize(20, 20))
-        self.collapse_features_btn.setStyleSheet(self.button_select_all)
 
         self.help_feature_btn = QPushButton()
         self.help_feature_btn.setIcon(icon(MDI6.help_circle, color=self.help_color))
@@ -316,39 +253,14 @@ class SettingsTracking(CelldetectiveSettingsPanel):
         self.help_feature_btn.setStyleSheet(self.button_select_all)
         self.help_feature_btn.setToolTip("Help.")
 
-        title_hbox.addWidget(self.select_features_btn, 5)
-        title_hbox.addWidget(QLabel(), 85, alignment=Qt.AlignCenter)
-        title_hbox.addWidget(self.help_feature_btn, 5)
-        title_hbox.addWidget(self.collapse_features_btn, 5)
-        grid.addLayout(title_hbox, 0, 0, 1, 4)
+        self.features_frame.add_header_widget(self.select_features_btn, leading=True)
+        self.features_frame.add_header_widget(self.help_feature_btn)
 
         self.generate_feature_panel_contents()
-        grid.addWidget(self.ContentsFeatures, 1, 0, 1, 4, alignment=Qt.AlignTop)
-        self.collapse_features_btn.clicked.connect(
-            lambda: self.ContentsFeatures.setHidden(
-                not self.ContentsFeatures.isHidden()
-            )
-        )
-        self.collapse_features_btn.clicked.connect(self.collapse_features_advanced)
-        # self.ContentsFeatures.hide()
+        self.features_frame.set_content(self.ContentsFeatures)
+        self.features_frame.set_expanded(True, animate=False)
+        self.collapse_features_btn = self.features_frame.collapse_btn
         self.check_features()
-
-    def collapse_features_advanced(self):
-        """
-        Switch the chevron icon and adjust the size for the FEATURES frame.
-        """
-
-        features_open = not self.ContentsFeatures.isHidden()
-        config_open = not self.ContentsConfig.isHidden()
-        post_open = not self.ContentsPostProc.isHidden()
-        is_open = np.array([features_open, config_open, post_open])
-
-        if self.ContentsFeatures.isHidden():
-            self.collapse_features_btn.setIcon(icon(MDI6.chevron_down, color="black"))
-            self.collapse_features_btn.setIconSize(QSize(20, 20))
-        else:
-            self.collapse_features_btn.setIcon(icon(MDI6.chevron_up, color="black"))
-            self.collapse_features_btn.setIconSize(QSize(20, 20))
 
     def generate_post_proc_panel_contents(self):
         """Generate the post-processing panel contents."""
@@ -644,98 +556,19 @@ class SettingsTracking(CelldetectiveSettingsPanel):
 
     def populate_config_frame(self):
         """Populate the configuration frame."""
-        grid = QGridLayout(self.config_frame)
-        panel_title = QLabel(f"CONFIGURATION")
-        panel_title.setStyleSheet(
-            """
-			font-weight: bold;
-			padding: 0px;
-			"""
-        )
-
-        grid.addWidget(panel_title, 0, 0, 1, 4, alignment=Qt.AlignCenter)
-
-        self.collapse_config_btn = QPushButton()
-        self.collapse_config_btn.setIcon(icon(MDI6.chevron_down, color="black"))
-        self.collapse_config_btn.setIconSize(QSize(20, 20))
-        self.collapse_config_btn.setStyleSheet(self.button_select_all)
-        grid.addWidget(self.collapse_config_btn, 0, 0, 1, 4, alignment=Qt.AlignRight)
 
         self.generate_config_panel_contents()
-        grid.addWidget(self.ContentsConfig, 1, 0, 1, 4, alignment=Qt.AlignTop)
-        self.collapse_config_btn.clicked.connect(
-            lambda: self.ContentsConfig.setHidden(not self.ContentsConfig.isHidden())
-        )
-        self.collapse_config_btn.clicked.connect(self.collapse_config_advanced)
-        # self.ContentsConfig.hide()
+        self.config_frame.set_content(self.ContentsConfig)
+        self.config_frame.set_expanded(True, animate=False)
+        self.collapse_config_btn = self.config_frame.collapse_btn
 
     def populate_config_trackpy_frame(self):
         """Populate the trackpy configuration frame."""
-        grid = QGridLayout(self.config_trackpy_frame)
-        panel_title = QLabel(f"CONFIGURATION")
-        panel_title.setStyleSheet(
-            """
-			font-weight: bold;
-			padding: 0px;
-			"""
-        )
 
-        grid.addWidget(panel_title, 0, 0, 1, 4, alignment=Qt.AlignCenter)
-
-        self.collapse_config_trackpy_btn = QPushButton()
-        self.collapse_config_trackpy_btn.setIcon(icon(MDI6.chevron_down, color="black"))
-        self.collapse_config_trackpy_btn.setIconSize(QSize(20, 20))
-        self.collapse_config_trackpy_btn.setStyleSheet(self.button_select_all)
-        grid.addWidget(
-            self.collapse_config_trackpy_btn, 0, 0, 1, 4, alignment=Qt.AlignRight
-        )
         self.generate_config_trackpy_panel_contents()
-        grid.addWidget(self.ContentsConfigTrackpy, 1, 0, 1, 4, alignment=Qt.AlignTop)
-        self.collapse_config_trackpy_btn.clicked.connect(
-            lambda: self.ContentsConfigTrackpy.setHidden(
-                not self.ContentsConfigTrackpy.isHidden()
-            )
-        )
-        self.collapse_config_trackpy_btn.clicked.connect(
-            self.collapse_config_trackpy_advanced
-        )
-        # self.ContentsConfig.hide()
-
-    def collapse_config_advanced(self):
-        """
-        Switch the chevron icon and adjust the size for the CONFIG frame.
-        """
-
-        features_open = not self.ContentsFeatures.isHidden()
-        config_open = not self.ContentsConfig.isHidden()
-        post_open = not self.ContentsPostProc.isHidden()
-        is_open = np.array([features_open, config_open, post_open])
-
-        if self.ContentsConfig.isHidden():
-            self.collapse_config_btn.setIcon(icon(MDI6.chevron_down, color="black"))
-            self.collapse_config_btn.setIconSize(QSize(20, 20))
-        else:
-            self.collapse_config_btn.setIcon(icon(MDI6.chevron_up, color="black"))
-            self.collapse_config_btn.setIconSize(QSize(20, 20))
-
-    def collapse_config_trackpy_advanced(self):
-        """
-        Switch the chevron icon and adjust the size for the CONFIG frame.
-        """
-
-        post_open = not self.ContentsPostProc.isHidden()
-        is_open = np.array([post_open])
-
-        if self.ContentsConfigTrackpy.isHidden():
-            self.collapse_config_trackpy_btn.setIcon(
-                icon(MDI6.chevron_down, color="black")
-            )
-            self.collapse_config_trackpy_btn.setIconSize(QSize(20, 20))
-        else:
-            self.collapse_config_trackpy_btn.setIcon(
-                icon(MDI6.chevron_up, color="black")
-            )
-            self.collapse_config_trackpy_btn.setIconSize(QSize(20, 20))
+        self.config_trackpy_frame.set_content(self.ContentsConfigTrackpy)
+        self.config_trackpy_frame.set_expanded(True, animate=False)
+        self.collapse_config_trackpy_btn = self.config_trackpy_frame.collapse_btn
 
     def generate_config_trackpy_panel_contents(self):
         """Generate the trackpy configuration panel contents."""
