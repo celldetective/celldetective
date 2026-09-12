@@ -36,6 +36,8 @@ setup(
     author_email="remy.torro@inserm.fr",
     license="GPL-3.0",
     packages=setuptools.find_packages(),
+    # importlib.resources.files, used by get_package_location, is 3.9+.
+    python_requires=">=3.9",
     zip_safe=False,
     # setuptools declares these globs in "/" form on every platform and
     # converts them itself, so spell them literally rather than with os.sep.
