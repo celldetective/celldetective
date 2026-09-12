@@ -34,7 +34,10 @@ VERBOSITY_FLAGS = ("-v", "-vv", "-q", "-qq", "--verbose", "--quiet")
 
 
 def main(argv):
-    files = sorted(p for p in GUI_TESTS.glob("test_*.py"))
+    # `rglob`, not `glob`: this replaced `pytest tests/gui/`, which collected
+    # subdirectories too. A plain `glob` would drop e.g. `table_ops/` silently,
+    # leaving those tests unrun on every job with nothing in the log to say so.
+    files = sorted(p for p in GUI_TESTS.rglob("test_*.py"))
     if not files:
         print(f"No GUI test files found under {GUI_TESTS}", file=sys.stderr)
         return 1

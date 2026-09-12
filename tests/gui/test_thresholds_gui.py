@@ -118,6 +118,15 @@ def app_with_project(qtbot, ensure_experiment_test):
         lambda: getattr(test_app, "control_panel", None) is not None, timeout=15000
     )
 
+    # Give the control panel a window tall enough to lay its contents out. The
+    # offscreen platform reports a small screen, so the panel opens at 440x550
+    # and the layout resolves the overflow by squeezing widgets to zero height.
+    # A zero-height button is still `isVisible()`, but its rect has no interior,
+    # so `QTest.mouseClick` on its centre delivers nothing and the signal never
+    # fires -- a click that misses in silence rather than an error.
+    test_app.control_panel.resize(600, 1000)
+    QApplication.processEvents()
+
     yield test_app
 
     # Cleanup - close the app first (triggers thread cleanup in closeEvent)
@@ -162,7 +171,14 @@ def wizard_from_app(qtbot, app_with_project):
     # Open the segmentation model loader (upload_segmentation_model creates
     # panel.seg_model_loader synchronously). Wait for the button to be hittable,
     # then for the attribute to appear, rather than sleeping a fixed amount.
-    qtbot.waitUntil(lambda: panel.upload_model_btn.isVisible(), timeout=5000)
+    # `isVisible()` is not enough to know a click will land: a widget squeezed
+    # to zero height by its layout reports visible while having nothing to hit.
+    # Wait for real geometry instead.
+    qtbot.waitUntil(
+        lambda: panel.upload_model_btn.height() > 0
+        and not panel.upload_model_btn.visibleRegion().isEmpty(),
+        timeout=5000,
+    )
     qtbot.mouseClick(panel.upload_model_btn, QtCore.Qt.LeftButton)
     qtbot.waitUntil(
         lambda: getattr(panel, "seg_model_loader", None) is not None, timeout=5000
