@@ -6,6 +6,17 @@ CELLDETECTIVE_BLUE = "#1565c0"
 
 # Tooltips, styled application wide (see __main__): a light card marked with a
 # celldetective blue edge, in the spirit of the outlined buttons.
+#
+# The padding is kept at nearly zero on purpose. Qt derives the margin of the
+# tooltip label from the *left* padding and border of this rule and applies it
+# to the four edges, so horizontal padding is paid for in height as well: with
+# `padding: 2px 6px` the card was 41px tall for a 13px line of text, against
+# 27px here, the room around the text coming from the derived margin alone.
+#
+# The font is not set here either: a font set through a style sheet is not seen
+# by the label when it computes its size. It is set with ``QToolTip.setFont``
+# instead (see ``TOOLTIP_FONT_SIZE`` and __main__), so that the card is laid out
+# with the font it is painted with.
 TOOLTIP_STYLE = f"""
     QToolTip {{
         background-color: #FBFCFE;
@@ -13,10 +24,12 @@ TOOLTIP_STYLE = f"""
         border: 1px solid #D6E2F2;
         border-left: 3px solid {CELLDETECTIVE_BLUE};
         border-radius: 4px;
-        padding: 2px 6px;
-        font-size: 11px;
+        padding: 0px 1px;
     }}
 """
+
+# Point size of the tooltip text, applied with QToolTip.setFont in __main__.
+TOOLTIP_FONT_SIZE = 8
 
 
 class Styles(object):

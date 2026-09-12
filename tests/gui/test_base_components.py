@@ -10,8 +10,8 @@ Covers:
 import logging
 import pytest
 from unittest.mock import MagicMock, patch
-from PyQt5.QtCore import Qt, QRect
-from PyQt5.QtGui import QPainter, QPixmap
+from PyQt5.QtCore import Qt, QRect, QEvent, QPoint
+from PyQt5.QtGui import QPainter, QPixmap, QHelpEvent
 from PyQt5.QtWidgets import QMainWindow, QStyle, QStyleOptionViewItem
 
 from celldetective.gui.base.components import (
@@ -179,6 +179,30 @@ class TestCheckIndicatorDelegate:
         size = delegate.sizeHint(option, cb.model().index(0, 0))
 
         assert size.height() >= delegate.box_size + 2 * delegate.row_padding
+
+    def test_tooltip_only_when_text_is_cut(self, qtbot):
+        """The tooltip of a row is shown only for a shortened or elided text."""
+        full = "a well label far too long for the box"
+        cb = QCheckableComboBox(obj="well")
+        qtbot.addWidget(cb)
+        # A readable row, a row shortened by the caller (the usual case in the
+        # software), and a row left to the elision of the delegate.
+        cb.addItem("w1", tooltip="w1")
+        cb.addItem(full[:20] + "...", tooltip=full)
+        cb.addItem(full, tooltip=full)
+
+        delegate = cb.view().itemDelegate()
+        option = QStyleOptionViewItem()
+        option.initFrom(cb.view())
+        option.rect = QRect(0, 0, 120, 27)
+        event = QHelpEvent(QEvent.ToolTip, QPoint(5, 5), QPoint(5, 5))
+
+        shown = [
+            delegate.helpEvent(event, cb.view(), option, cb.model().index(row, 0))
+            for row in range(3)
+        ]
+
+        assert shown == [False, True, True]
 
     def test_paints_every_check_state(self, qtbot):
         """Painting checked, unchecked and partially checked items works."""

@@ -273,7 +273,7 @@ class CelldetectiveStyle(QProxyStyle):
     radio_size = 16
     slider_handle = 16
     slider_groove = 5
-    row_padding = 2
+    row_padding = 4
 
     def __init__(
         self, base_style: Optional[str] = "Fusion", accent: Optional[str] = CELLDETECTIVE_BLUE
