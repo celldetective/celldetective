@@ -11,6 +11,7 @@ import pytest
 from PyQt5.QtCore import Qt, QRect, QRectF, QSize
 from PyQt5.QtGui import QColor, QPainter, QPixmap
 from PyQt5.QtWidgets import (
+    QProgressBar,
     QSlider,
     QStyle,
     QStyleOptionButton,
@@ -28,7 +29,7 @@ from celldetective.gui.base.styles import (
     ACCENT_SOFT,
     CARD_BORDER_COLOR,
     CELLDETECTIVE_BLUE,
-    PROGRESSBAR_STYLE,
+    PROGRESSBAR_HEIGHT,
     SCROLLBAR_STYLE,
     TOOLTIP_STYLE,
 )
@@ -297,6 +298,61 @@ class TestCelldetectiveStyle:
 # =============================================================================
 
 
+class TestProgressBarPainting:
+    """The progress bars painted by CelldetectiveStyle."""
+
+    @pytest.fixture
+    def make_bar(self, qtbot):
+        """Build a 200px wide progress bar painted by the celldetective style."""
+        style = CelldetectiveStyle("Fusion")
+
+        def make(value, text=None, minimum=0, maximum=100):
+            bar = QProgressBar()
+            bar.setStyle(style)
+            qtbot.addWidget(bar)
+            bar.setRange(minimum, maximum)
+            bar.setValue(value)
+            if text is None:
+                bar.setTextVisible(False)
+            else:
+                bar.setFormat(text)
+            bar.resize(200, PROGRESSBAR_HEIGHT)
+            return bar
+
+        make.style = style  # keep the style alive as long as the bars
+        return make
+
+    def test_height(self, make_bar):
+        """A horizontal bar asks for the height of the celldetective bars."""
+        assert make_bar(10).sizeHint().height() == PROGRESSBAR_HEIGHT
+
+    def test_chunk_shows_from_the_first_percents(self, make_bar):
+        """A rounded chunk used to stay invisible until wider than its ends."""
+        image = make_bar(3).grab().toImage()
+        pixel = QColor(image.pixel(4, PROGRESSBAR_HEIGHT // 2))
+        assert pixel.name() == QColor(CELLDETECTIVE_BLUE).name()
+
+    def test_label_is_white_over_chunk_and_ink_over_track(self, make_bar):
+        """The label changes color where the chunk ends."""
+        image = make_bar(50, text="MMMMMMMMMMMMMMMM").grab().toImage()
+        rows = range(3, PROGRESSBAR_HEIGHT - 3)
+
+        def pixels(columns):
+            return [QColor(image.pixel(x, y)) for x in columns for y in rows]
+
+        over_chunk = pixels(range(45, 96))
+        over_track = pixels(range(105, 156))
+
+        assert any(c.red() > 220 and c.green() > 220 for c in over_chunk)
+        assert any(c.red() < 90 and c.blue() < 110 for c in over_track)
+        # No ink over the chunk: the darkest pixels there are the accent.
+        assert not any(c.blue() < 110 for c in over_chunk)
+
+    def test_busy_bar_is_left_to_the_base_style(self, make_bar):
+        """A busy bar (minimum == maximum) still paints."""
+        assert not make_bar(0, minimum=0, maximum=0).grab().isNull()
+
+
 class TestMenuPainting:
     """Tests for the menu entries painted by the style."""
 
@@ -416,7 +472,7 @@ class TestMenuPainting:
         them -- the tick and the accent pill above would silently disappear.
         """
 
-        assert "QMenu" not in TOOLTIP_STYLE + SCROLLBAR_STYLE + PROGRESSBAR_STYLE
+        assert "QMenu" not in TOOLTIP_STYLE + SCROLLBAR_STYLE
 
     def test_menu_panel_is_a_light_card(self, qtbot):
         """The frame of a menu is the white card of the software."""

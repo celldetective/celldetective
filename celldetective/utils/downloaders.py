@@ -115,19 +115,26 @@ def _is_retryable(error: Exception) -> bool:
     return isinstance(error, (socket.timeout, ConnectionError, TimeoutError))
 
 
-def download_url_to_file(url: str, dst: str, progress: bool = True) -> None:
-    r"""
-    Download object at the given URL to a local path.
-    Thanks to torch, slightly modified, from Cellpose
+def open_url_with_retries(url: str):
+    """
+    Open a URL, retrying transient failures with a jittered backoff.
 
     Parameters
     ----------
     url : str
         URL of the object to download.
-    dst : str
-        Full path where object will be saved, e.g. `/tmp/temporary_file`.
-    progress : bool, optional
-        Whether to display a progress bar to stderr. Default is True.
+
+    Returns
+    -------
+    tuple
+        (response, file_size), where file_size is None when the server sends
+        no Content-Length.
+
+    Raises
+    ------
+    Exception
+        The last error, once retries are exhausted or the error is not
+        retryable (e.g. a 404).
     """
     import random
     import socket
@@ -135,7 +142,6 @@ def download_url_to_file(url: str, dst: str, progress: bool = True) -> None:
     import time
     from urllib.error import HTTPError, URLError
 
-    file_size = None
     ssl._create_default_https_context = ssl._create_unverified_context
 
     # Retry configuration
@@ -146,6 +152,7 @@ def download_url_to_file(url: str, dst: str, progress: bool = True) -> None:
     for attempt in range(max_retries):
         try:
             u = urlopen(url, timeout=60)
+            file_size = None
             meta = u.info()
             if hasattr(meta, "getheaders"):
                 content_length = meta.getheaders("Content-Length")
@@ -153,7 +160,7 @@ def download_url_to_file(url: str, dst: str, progress: bool = True) -> None:
                 content_length = meta.get_all("Content-Length")
             if content_length is not None and len(content_length) > 0:
                 file_size = int(content_length[0])
-            break  # Success
+            return u, file_size
         except (HTTPError, URLError, socket.timeout, OSError) as e:
             last_attempt = attempt == max_retries - 1
             if last_attempt or not _is_retryable(e):
@@ -176,6 +183,25 @@ def download_url_to_file(url: str, dst: str, progress: bool = True) -> None:
             )
             time.sleep(delay)
             retry_delay = min(retry_delay * 2, max_retry_delay)
+
+
+def download_url_to_file(url: str, dst: str, progress: bool = True) -> None:
+    r"""
+    Download object at the given URL to a local path.
+    Thanks to torch, slightly modified, from Cellpose
+
+    Parameters
+    ----------
+    url : str
+        URL of the object to download.
+    dst : str
+        Full path where object will be saved, e.g. `/tmp/temporary_file`.
+    progress : bool, optional
+        Whether to display a progress bar to stderr. Default is True.
+    """
+    from urllib.error import HTTPError, URLError
+
+    u, file_size = open_url_with_retries(url)
 
     # We deliberately save it in a temp file and move it after
     dst = os.path.expanduser(dst)
