@@ -8,13 +8,14 @@ Covers:
 
 import logging
 import pytest
-from PyQt5.QtCore import Qt, QRect, QRectF
+from PyQt5.QtCore import Qt, QRect, QRectF, QSize
 from PyQt5.QtGui import QColor, QPainter, QPixmap
 from PyQt5.QtWidgets import (
     QSlider,
     QStyle,
     QStyleOptionButton,
     QStyleOptionComboBox,
+    QStyleOptionMenuItem,
     QStyleOptionSlider,
 )
 
@@ -23,7 +24,14 @@ from celldetective.gui.base.app_style import (
     draw_check_indicator,
     draw_radio_indicator,
 )
-from celldetective.gui.base.styles import CELLDETECTIVE_BLUE
+from celldetective.gui.base.styles import (
+    ACCENT_SOFT,
+    CARD_BORDER_COLOR,
+    CELLDETECTIVE_BLUE,
+    PROGRESSBAR_STYLE,
+    SCROLLBAR_STYLE,
+    TOOLTIP_STYLE,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -282,3 +290,146 @@ class TestCelldetectiveStyle:
             ),
             size=(slider.width(), slider.height()),
         )
+
+
+# =============================================================================
+# Menus
+# =============================================================================
+
+
+class TestMenuPainting:
+    """Tests for the menu entries painted by the style."""
+
+    def menu_option(self, text="Entry", width=180, height=26):
+        """Return the style options of a plain, enabled menu entry."""
+
+        option = QStyleOptionMenuItem()
+        option.rect = QRect(0, 0, width, height)
+        option.state = QStyle.State_Enabled
+        option.menuItemType = QStyleOptionMenuItem.Normal
+        option.checkType = QStyleOptionMenuItem.NotCheckable
+        option.text = text
+        option.maxIconWidth = 0
+
+        return option
+
+    def paint_item(self, style, option):
+        """Paint a menu entry on a white pixmap and return the image."""
+
+        return paint_on_pixmap(
+            lambda painter: style.drawControl(
+                QStyle.CE_MenuItem, option, painter, None
+            ),
+            size=(option.rect.width(), option.rect.height()),
+        )
+
+    def test_highlighted_entry_gets_the_accent_pill(self, qtbot):
+        """The entry under the mouse is marked, an idle one is not."""
+        style = CelldetectiveStyle("Fusion")
+
+        idle = self.menu_option()
+        highlighted = self.menu_option()
+        highlighted.state |= QStyle.State_Selected
+
+        assert contains_color(self.paint_item(style, highlighted), ACCENT_SOFT, tolerance=6)
+        assert not contains_color(self.paint_item(style, idle), ACCENT_SOFT, tolerance=6)
+
+    def test_checked_entry_gets_the_celldetective_tick(self, qtbot):
+        """A checkable entry is ticked with the indicator of the software."""
+        style = CelldetectiveStyle("Fusion")
+
+        option = self.menu_option()
+        option.checkType = QStyleOptionMenuItem.NonExclusive
+        option.checked = True
+
+        assert contains_color(self.paint_item(style, option), CELLDETECTIVE_BLUE)
+
+    def test_unchecked_entry_has_no_accent(self, qtbot):
+        """An unticked entry is only an outline, as everywhere else."""
+        style = CelldetectiveStyle("Fusion")
+
+        option = self.menu_option()
+        option.checkType = QStyleOptionMenuItem.NonExclusive
+        option.checked = False
+
+        assert not contains_color(self.paint_item(style, option), CELLDETECTIVE_BLUE)
+
+    def test_exclusive_entry_uses_the_radio_indicator(self, qtbot):
+        """An entry of an action group is marked with a radio button."""
+        style = CelldetectiveStyle("Fusion")
+
+        option = self.menu_option()
+        option.checkType = QStyleOptionMenuItem.Exclusive
+        option.checked = True
+
+        assert contains_color(self.paint_item(style, option), CELLDETECTIVE_BLUE)
+
+    def test_separator_is_a_single_rule(self, qtbot):
+        """A separator paints a rule across its middle and nothing else."""
+        style = CelldetectiveStyle("Fusion")
+
+        option = self.menu_option(text="")
+        option.menuItemType = QStyleOptionMenuItem.Separator
+
+        image = self.paint_item(style, option)
+
+        def row_is_blank(y):
+            return all(
+                QColor(image.pixel(x, y)) == QColor(Qt.white)
+                for x in range(image.width())
+            )
+
+        assert row_is_blank(1)
+        assert row_is_blank(image.height() - 2)
+        assert not row_is_blank(image.height() // 2)
+
+    def test_separator_is_given_its_own_height(self, qtbot):
+        """A separator asks for the thin band it is drawn in."""
+        style = CelldetectiveStyle("Fusion")
+
+        option = self.menu_option()
+        option.menuItemType = QStyleOptionMenuItem.Separator
+
+        size = style.sizeFromContents(
+            QStyle.CT_MenuItem, option, QSize(120, 40), None
+        )
+
+        assert size.height() == style.separator_height
+
+    def test_entries_are_given_room_for_the_gutter(self, qtbot):
+        """A normal entry is widened to fit the icon or tick column."""
+        style = CelldetectiveStyle("Fusion")
+        option = self.menu_option()
+
+        base = QSize(120, 12)
+        size = style.sizeFromContents(QStyle.CT_MenuItem, option, base, None)
+
+        assert size.width() > base.width()
+        assert size.height() >= style.menu_row
+
+    def test_menus_are_not_styled_by_a_style_sheet(self, qtbot):
+        """
+        The application style sheet must leave QMenu alone.
+
+        A style sheet matching a menu hands the whole widget to the style sheet
+        style, which paints the entries itself and never asks this style for
+        them -- the tick and the accent pill above would silently disappear.
+        """
+
+        assert "QMenu" not in TOOLTIP_STYLE + SCROLLBAR_STYLE + PROGRESSBAR_STYLE
+
+    def test_menu_panel_is_a_light_card(self, qtbot):
+        """The frame of a menu is the white card of the software."""
+        style = CelldetectiveStyle("Fusion")
+        option = QStyleOptionMenuItem()
+        option.rect = QRect(0, 0, 80, 40)
+        option.state = QStyle.State_Enabled
+
+        image = paint_on_pixmap(
+            lambda painter: style.drawPrimitive(
+                QStyle.PE_PanelMenu, option, painter, None
+            ),
+            size=(80, 40),
+        )
+
+        assert contains_color(image, CARD_BORDER_COLOR, tolerance=6)
