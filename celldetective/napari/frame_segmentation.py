@@ -273,6 +273,17 @@ class _SegmentationWorker(QThread):
         """Whether cancellation was requested."""
         return self._cancelled
 
+    def _needs_download(self) -> bool:
+        """Whether preparing the model will have to fetch it first."""
+        model_name = self._prepare_kwargs.get("model_name")
+        if not model_name:
+            return False
+        try:
+            return locate_segmentation_model(model_name, download=False) is None
+        except Exception as e:
+            logger.debug(f"Could not tell whether '{model_name}' is on disk: {e}")
+            return False
+
     def run(self) -> None:
         """Read the frame, prepare the model if needed, then segment."""
 
@@ -287,7 +298,16 @@ class _SegmentationWorker(QThread):
 
             prepared = self._prepared
             if prepared is None:
-                self.stage.emit("Loading the model…")
+                # A model still in the repository is fetched as part of being
+                # prepared, which takes minutes rather than seconds. Saying so
+                # is the difference between waiting and thinking it has hung --
+                # the download's own progress bar cannot be shown from here,
+                # since a worker thread may not touch widgets.
+                self.stage.emit(
+                    "Downloading the model…"
+                    if self._needs_download()
+                    else "Loading the model…"
+                )
                 if self._cancelled:
                     return
                 prepared = prepare_segmentation_model(**self._prepare_kwargs)
@@ -328,13 +348,32 @@ class FrameSegmentationPanel(QWidget):
     stack : ndarray
         The image stack being displayed (TYXC), used as the pixel source so the
         panel does not depend on how the image layers happen to be named.
-    position : str
+    position : str or None
         The position directory, used to locate the experiment configuration.
+        None when the frame on screen does not come from a position at all --
+        a standalone annotation image, say -- in which case `channels` and
+        `spatial_calibration` have to be given instead.
     population : str
         The population being segmented, selecting the model family to offer.
+    channels : list of str, optional
+        The channel names of `stack`, in order, overriding those read from the
+        experiment. Required when `position` is None, since there is then no
+        configuration to read them from.
+    spatial_calibration : float, optional
+        Microns per pixel, overriding the experiment's. Required when `position`
+        is None for a model that has to be rescaled.
     """
 
-    def __init__(self, viewer, stack, position: str, population: str, parent=None):
+    def __init__(
+        self,
+        viewer,
+        stack,
+        position: Optional[str] = None,
+        population: str = "targets",
+        parent=None,
+        channels: Optional[List[str]] = None,
+        spatial_calibration: Optional[float] = None,
+    ):
         super().__init__(parent)
 
         self.viewer = viewer
@@ -358,16 +397,36 @@ class FrameSegmentationPanel(QWidget):
         self._closing = False
         self._watched_window: Optional[QWidget] = None
 
-        self.experiment = extract_experiment_from_position(position)
-        try:
-            self.exp_channels = list(extract_experiment_channels(self.experiment)[0])
-        except Exception as e:
-            logger.warning(f"Could not read the experiment channels: {e}")
+        # A caller that already knows the channels and the calibration -- because
+        # the image was exported with them in a sidecar, rather than being read
+        # from a position -- passes them straight in; only then is there no
+        # experiment to fall back on.
+        self.experiment = (
+            extract_experiment_from_position(position) if position else None
+        )
+
+        if channels is not None:
+            self.exp_channels = list(channels)
+        elif self.experiment is not None:
+            try:
+                self.exp_channels = list(
+                    extract_experiment_channels(self.experiment)[0]
+                )
+            except Exception as e:
+                logger.warning(f"Could not read the experiment channels: {e}")
+                self.exp_channels = []
+        else:
             self.exp_channels = []
-        try:
-            self.spatial_calibration = get_spatial_calibration(self.experiment)
-        except Exception as e:
-            logger.warning(f"Could not read the spatial calibration: {e}")
+
+        if spatial_calibration is not None:
+            self.spatial_calibration = spatial_calibration
+        elif self.experiment is not None:
+            try:
+                self.spatial_calibration = get_spatial_calibration(self.experiment)
+            except Exception as e:
+                logger.warning(f"Could not read the spatial calibration: {e}")
+                self.spatial_calibration = None
+        else:
             self.spatial_calibration = None
 
         self.channel_selection: Optional[ModelChannelSelection] = None
