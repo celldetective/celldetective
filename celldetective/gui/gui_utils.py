@@ -13,10 +13,10 @@ from PyQt5.QtWidgets import (
     QFileDialog,
 )
 from PyQt5.QtCore import Qt, QSize, QAbstractTableModel
-from PyQt5.QtGui import QDoubleValidator, QIntValidator
+from PyQt5.QtGui import QBrush, QColor, QDoubleValidator, QIntValidator
 
 from celldetective.gui.base.list_widget import ListWidget
-from celldetective.gui.base.styles import Styles
+from celldetective.gui.base.styles import DISABLED_FG, Styles
 from celldetective.gui.base.components import CelldetectiveWidget
 from celldetective.gui.base.help_panel import HelpButton, open_help
 from superqt.fonticon import icon
@@ -214,6 +214,52 @@ class PandasModel(QAbstractTableModel):
         QAbstractTableModel.__init__(self)
         self._data = data
         self.colors = dict()
+        # Read once: the model is replaced whenever the columns of the table
+        # change, and asking pandas for the dtypes on every paint is slow.
+        self._numeric = [
+            pd.api.types.is_numeric_dtype(dtype)
+            and not pd.api.types.is_bool_dtype(dtype)
+            for dtype in data.dtypes
+        ]
+
+    @staticmethod
+    def format_value(value: Any) -> str:
+        """
+        Write a cell for display.
+
+        Floats are written with six significant digits: the full precision of
+        a measurement (``318.48084366072715``) made every column several times
+        wider than its values need. The full value stays available as the
+        tooltip of the cell and is what a copy puts on the clipboard.
+
+        Parameters
+        ----------
+        value : Any
+            The value of the cell.
+
+        Returns
+        -------
+        str
+            The text shown in the cell.
+        """
+
+        if isinstance(value, (float, np.floating)):
+            if value != value:
+                return "nan"
+            return f"{value:.6g}"
+
+        return str(value)
+
+    @staticmethod
+    def is_missing(value: Any) -> bool:
+        """Tell whether a cell holds no value (NaN, None, NaT)."""
+
+        if np.ndim(value) != 0:
+            return False
+        try:
+            return bool(pd.isna(value))
+        except (TypeError, ValueError):
+            return False
 
     def rowCount(self, parent: Any = None) -> int:
         """
@@ -263,13 +309,31 @@ class PandasModel(QAbstractTableModel):
         Any
             The data for the item.
         """
-        if index.isValid():
-            if role == Qt.DisplayRole:
-                return str(self._data.iloc[index.row(), index.column()])
-            if role == Qt.BackgroundRole:
-                color = self.colors.get((index.row(), index.column()))
-                if color is not None:
-                    return color
+        if not index.isValid():
+            return None
+
+        row, column = index.row(), index.column()
+
+        if role == Qt.DisplayRole:
+            return self.format_value(self._data.iloc[row, column])
+        if role in (Qt.EditRole, Qt.ToolTipRole):
+            return str(self._data.iloc[row, column])
+        if role == Qt.BackgroundRole:
+            return self.colors.get((row, column))
+        if role == Qt.TextAlignmentRole:
+            numeric = column < len(self._numeric) and self._numeric[column]
+            return int((Qt.AlignRight if numeric else Qt.AlignLeft) | Qt.AlignVCenter)
+        if role == Qt.ForegroundRole:
+            color = self.colors.get((row, column))
+            if color is not None:
+                # Text written on a colored cell (the p-value and effect size
+                # tables) turns white on the dark shades to stay readable.
+                shade = QColor(color.color() if isinstance(color, QBrush) else color)
+                if shade.lightnessF() < 0.5:
+                    return QBrush(QColor(Qt.white))
+                return None
+            if self.is_missing(self._data.iloc[row, column]):
+                return QBrush(QColor(DISABLED_FG))
         return None
 
     def headerData(self, rowcol: int, orientation: int, role: int) -> Any:
@@ -290,7 +354,8 @@ class PandasModel(QAbstractTableModel):
         Any
             The header data.
         """
-        if orientation == Qt.Horizontal and role == Qt.DisplayRole:
+        if orientation == Qt.Horizontal and role in (Qt.DisplayRole, Qt.ToolTipRole):
+            # The tooltip gives back a name cut by a narrow column.
             return self._data.columns[rowcol]
         if orientation == Qt.Vertical and role == Qt.DisplayRole:
             return self._data.index[rowcol]
