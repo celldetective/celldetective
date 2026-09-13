@@ -10,12 +10,13 @@ checkable combo boxes, so a tick looks identical wherever it is drawn.
 
 import logging
 from PyQt5.QtCore import Qt, QRectF, QPointF
-from PyQt5.QtGui import QColor, QPainter, QPainterPath, QPen
+from PyQt5.QtGui import QColor, QIcon, QPainter, QPainterPath, QPen
 from PyQt5.QtWidgets import (
     QListView,
     QProxyStyle,
     QStyle,
     QStyleOptionComboBox,
+    QStyleOptionMenuItem,
     QStyleOptionSlider,
     QWidget,
     QStyleOption,
@@ -23,7 +24,14 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import QSize
 from typing import Optional
 
-from celldetective.gui.base.styles import CELLDETECTIVE_BLUE
+from celldetective.gui.base.styles import (
+    ACCENT_SOFT,
+    CARD_BORDER_COLOR,
+    CARD_COLOR,
+    CELLDETECTIVE_BLUE,
+    INK_COLOR,
+    SURFACE_BORDER,
+)
 
 logger = logging.getLogger("celldetective")
 
@@ -35,6 +43,9 @@ GROOVE_COLOR = "#D8DCE0"
 HOVER_COLOR = "#ECEFF1"
 CHEVRON_COLOR = "#757575"
 CHEVRON_SIZE = 11
+# The muted grey the shortcut of a menu entry is written in: it is a reminder,
+# not a second label competing with the one it belongs to.
+SHORTCUT_COLOR = "#8A949D"
 
 
 def _indicator_colors(
@@ -300,6 +311,16 @@ class CelldetectiveStyle(QProxyStyle):
     slider_groove = 5
     row_padding = 4
 
+    # Menu entries: the height of a row, the column on its left holding the
+    # icon or the tick, the room left on either side of the label and the band
+    # a separator is drawn in.
+    menu_row = 26
+    menu_gutter = 26
+    menu_padding = 10
+    separator_height = 9
+    menu_radius = 5
+    menu_margin = 4
+
     def __init__(
         self, base_style: Optional[str] = "Fusion", accent: Optional[str] = CELLDETECTIVE_BLUE
     ) -> None:
@@ -334,6 +355,12 @@ class CelldetectiveStyle(QProxyStyle):
             return self.radio_size
         if metric == QStyle.PM_SliderLength:
             return self.slider_handle
+        if metric == QStyle.PM_MenuPanelWidth:
+            return 1
+        if metric == QStyle.PM_MenuHMargin:
+            return self.menu_margin
+        if metric == QStyle.PM_MenuVMargin:
+            return self.menu_margin
 
         return super().pixelMetric(metric, option, widget)
 
@@ -351,6 +378,19 @@ class CelldetectiveStyle(QProxyStyle):
         if content_type == QStyle.CT_ItemViewItem and isinstance(widget, QListView):
             size.setHeight(size.height() + self.row_padding)
 
+        if content_type == QStyle.CT_MenuItem and isinstance(
+            option, QStyleOptionMenuItem
+        ):
+            if option.menuItemType == QStyleOptionMenuItem.Separator:
+                size.setHeight(self.separator_height)
+            else:
+                # The entries are laid out by :meth:`_draw_menu_item` with a
+                # gutter and a padding of their own, wider than the ones Fusion
+                # measured this size with: without the room asked for here, a
+                # label would run into the shortcut on its right.
+                size.setHeight(max(size.height() + self.row_padding, self.menu_row))
+                size.setWidth(size.width() + self.menu_gutter)
+
         return size
 
     def drawPrimitive(
@@ -361,6 +401,18 @@ class CelldetectiveStyle(QProxyStyle):
         widget: Optional[QWidget] = None,
     ) -> None:
         """Draw the celldetective indicators, delegate everything else."""
+
+        if element in (QStyle.PE_PanelMenu, QStyle.PE_FrameMenu):
+            # A plain white card with a light edge, like the popup of a combo
+            # box. The corners are left square on purpose: a menu is a window
+            # of its own, and rounding the frame painted inside it would only
+            # leave white nubs where the window itself is not rounded.
+            painter.save()
+            painter.setBrush(QColor(CARD_COLOR))
+            painter.setPen(QPen(QColor(CARD_BORDER_COLOR), 1.0))
+            painter.drawRect(QRectF(option.rect).adjusted(0.5, 0.5, -0.5, -0.5))
+            painter.restore()
+            return
 
         if element == QStyle.PE_PanelItemViewItem and isinstance(widget, QListView):
             selected = bool(option.state & QStyle.State_Selected)
@@ -418,6 +470,249 @@ class CelldetectiveStyle(QProxyStyle):
             return
 
         super().drawPrimitive(element, option, painter, widget)
+
+    def drawControl(
+        self,
+        element: int,
+        option: QStyleOption,
+        painter: QPainter,
+        widget: Optional[QWidget] = None,
+    ) -> None:
+        """Draw the celldetective menu entries, delegate everything else."""
+
+        if isinstance(option, QStyleOptionMenuItem):
+            if element == QStyle.CE_MenuItem:
+                self._draw_menu_item(option, painter, widget)
+                return
+            if element == QStyle.CE_MenuBarItem:
+                self._draw_menu_bar_item(option, painter, widget)
+                return
+
+        super().drawControl(element, option, painter, widget)
+
+    def _highlight(
+        self, painter: QPainter, rect: QRectF, radius: Optional[float] = None
+    ) -> None:
+        """
+        Paint the rounded accent pill marking the entry under the mouse.
+
+        Parameters
+        ----------
+        painter : QPainter
+            The painter to draw with.
+        rect : QRectF
+            The rectangle of the entry.
+        radius : float, optional
+            The radius of the pill, :attr:`menu_radius` by default.
+        """
+
+        radius = self.menu_radius if radius is None else radius
+
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(QColor(ACCENT_SOFT))
+        painter.drawRoundedRect(rect.adjusted(2.0, 1.0, -2.0, -1.0), radius, radius)
+
+    def _draw_menu_bar_item(
+        self,
+        option: QStyleOptionMenuItem,
+        painter: QPainter,
+        widget: Optional[QWidget] = None,
+    ) -> None:
+        """
+        Paint an entry of the menu bar: a label, on a pill when it is open.
+
+        Parameters
+        ----------
+        option : QStyleOptionMenuItem
+            The style options of the entry.
+        painter : QPainter
+            The painter to draw with.
+        widget : QWidget, optional
+            The menu bar being painted.
+        """
+
+        enabled = bool(option.state & QStyle.State_Enabled)
+        active = enabled and bool(
+            option.state & (QStyle.State_Selected | QStyle.State_Sunken)
+        )
+        rect = QRectF(option.rect)
+
+        painter.save()
+        painter.setRenderHint(QPainter.Antialiasing, True)
+
+        if active:
+            self._highlight(painter, rect)
+
+        if not enabled:
+            color = QColor(DISABLED_COLOR)
+        elif active:
+            color = QColor(self.accent)
+        else:
+            color = QColor(INK_COLOR)
+
+        painter.setPen(color)
+        painter.drawText(
+            option.rect,
+            int(Qt.AlignCenter | Qt.TextSingleLine | Qt.TextShowMnemonic),
+            option.text,
+        )
+        painter.restore()
+
+    def _draw_menu_item(
+        self,
+        option: QStyleOptionMenuItem,
+        painter: QPainter,
+        widget: Optional[QWidget] = None,
+    ) -> None:
+        """
+        Paint an entry of a menu.
+
+        The entry is laid out in three parts: a gutter on the left carrying the
+        icon or the tick of a checkable entry, the label, and the shortcut or
+        the chevron of a sub-menu on the right.
+
+        Parameters
+        ----------
+        option : QStyleOptionMenuItem
+            The style options of the entry.
+        painter : QPainter
+            The painter to draw with.
+        widget : QWidget, optional
+            The menu being painted.
+        """
+
+        rect = QRectF(option.rect)
+
+        painter.save()
+        painter.setRenderHint(QPainter.Antialiasing, True)
+
+        if option.menuItemType == QStyleOptionMenuItem.Separator:
+            painter.setPen(QPen(QColor(SURFACE_BORDER), 1.0))
+            painter.drawLine(
+                QPointF(rect.left() + self.menu_padding, rect.center().y()),
+                QPointF(rect.right() - self.menu_padding, rect.center().y()),
+            )
+            painter.restore()
+            return
+
+        enabled = bool(option.state & QStyle.State_Enabled)
+        active = enabled and bool(option.state & QStyle.State_Selected)
+
+        if active:
+            self._highlight(painter, rect)
+
+        gutter = QRectF(
+            rect.left() + 3, rect.top(), self.menu_gutter - 3, rect.height()
+        )
+
+        if option.checkType != QStyleOptionMenuItem.NotCheckable:
+            side = min(self.check_size, gutter.width(), gutter.height())
+            box = QRectF(
+                gutter.center().x() - side / 2.0,
+                gutter.center().y() - side / 2.0,
+                side,
+                side,
+            )
+            checked = bool(option.checked or (option.state & QStyle.State_On))
+
+            if option.checkType == QStyleOptionMenuItem.Exclusive:
+                draw_radio_indicator(
+                    painter,
+                    box,
+                    checked=checked,
+                    enabled=enabled,
+                    hovered=active,
+                    accent=self.accent,
+                )
+            else:
+                draw_check_indicator(
+                    painter,
+                    box,
+                    check_state=Qt.Checked if checked else Qt.Unchecked,
+                    enabled=enabled,
+                    hovered=active,
+                    accent=self.accent,
+                )
+        elif not option.icon.isNull():
+            side = int(min(option.maxIconWidth or self.check_size, gutter.height()))
+            pixmap = option.icon.pixmap(
+                side, side, QIcon.Normal if enabled else QIcon.Disabled
+            )
+            if not pixmap.isNull():
+                ratio = pixmap.devicePixelRatio() or 1.0
+                painter.drawPixmap(
+                    QPointF(
+                        gutter.center().x() - pixmap.width() / (2.0 * ratio),
+                        gutter.center().y() - pixmap.height() / (2.0 * ratio),
+                    ),
+                    pixmap,
+                )
+
+        if not enabled:
+            color = QColor(DISABLED_COLOR)
+        elif active:
+            color = QColor(self.accent)
+        else:
+            color = QColor(INK_COLOR)
+
+        text = QRectF(
+            rect.left() + self.menu_gutter,
+            rect.top(),
+            rect.width() - self.menu_gutter - self.menu_padding,
+            rect.height(),
+        )
+
+        if option.menuItemType == QStyleOptionMenuItem.SubMenu:
+            arrow = QRectF(
+                text.right() - CHEVRON_SIZE, text.top(), CHEVRON_SIZE, text.height()
+            )
+            self._draw_submenu_arrow(painter, arrow, color)
+            text.setRight(arrow.left() - 2)
+
+        label, _, shortcut = option.text.partition("\t")
+
+        if shortcut:
+            painter.setPen(QColor(DISABLED_COLOR) if not enabled else QColor(SHORTCUT_COLOR))
+            painter.drawText(
+                text.toRect(),
+                int(Qt.AlignRight | Qt.AlignVCenter | Qt.TextSingleLine),
+                shortcut,
+            )
+            metrics = painter.fontMetrics()
+            text.setRight(text.right() - metrics.width(shortcut) - self.menu_padding)
+
+        painter.setPen(color)
+        painter.drawText(
+            text.toRect(),
+            int(Qt.AlignLeft | Qt.AlignVCenter | Qt.TextSingleLine | Qt.TextShowMnemonic),
+            label,
+        )
+        painter.restore()
+
+    def _draw_submenu_arrow(
+        self, painter: QPainter, rect: QRectF, color: QColor
+    ) -> None:
+        """
+        Draw the chevron pointing at the sub-menu of an entry.
+
+        Parameters
+        ----------
+        painter : QPainter
+            The painter to draw with.
+        rect : QRectF
+            The rectangle the chevron is centered in.
+        color : QColor
+            The color of the chevron, the one of the label it follows.
+        """
+
+        # The same glyph as everywhere else in the software, turned a quarter
+        # turn onto its side so that it points at what it opens.
+        painter.save()
+        painter.translate(rect.center())
+        painter.rotate(-90.0)
+        painter.translate(-rect.center())
+        draw_chevron(painter, rect, color=color.name())
+        painter.restore()
 
     def drawComplexControl(
         self,

@@ -529,11 +529,16 @@ class CollapsibleFrame(QFrame):
             self.animation_finished.emit(expanded)
             return
 
+        # Pinned for the whole animation, in both directions: the card is what
+        # grows and shrinks, and a content left free to follow it is squeezed
+        # into a band a few pixels tall on the way down, which reads as a line
+        # flashing across the card just before it closes.
+        self.content.setMinimumHeight(self._content_height())
+
         if expanded:
             # Shown right away, at its full size, so that the content is live
             # from the first frame and only revealed by the growing card.
             self.content.show()
-            self.content.setMinimumHeight(self._content_height())
             self.animation.setStartValue(self._folded_height())
             self.animation.setEndValue(self._unfolded_height())
         else:
