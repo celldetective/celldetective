@@ -125,6 +125,60 @@ PROGRESSBAR_FONT_SIZE = 10
 PROGRESSBAR_DISABLED_BORDER = "#EDF0F3"
 PROGRESSBAR_DISABLED_CHUNK = "#D3D9DF"
 
+# Secondary text: counts, hints, the index of a table. Darker than the grey of
+# a disabled control, so that it reads as information rather than as something
+# unavailable.
+MUTED_INK = "#66737D"
+
+# Data tables (see ``DataTableView``). The grid is barely there and the header
+# is the surface grey of the chips: the numbers are what the eye should land
+# on. A selection takes the soft accent tint rather than the solid accent, which
+# turned a selected column into a block of white on blue that could not be read.
+TABLE_GRID_COLOR = "#EEF1F4"
+TABLE_STYLE = f"""
+    QTableView {{
+        background-color: {CARD_COLOR};
+        color: {INK_COLOR};
+        border: 1px solid {CARD_BORDER_COLOR};
+        gridline-color: {TABLE_GRID_COLOR};
+        selection-background-color: {ACCENT_SOFT_STRONG};
+        selection-color: {INK_COLOR};
+        outline: 0;
+    }}
+    QHeaderView {{
+        background-color: {SURFACE_COLOR};
+        border: none;
+    }}
+    QHeaderView::section {{
+        background-color: {SURFACE_COLOR};
+        color: {INK_COLOR};
+        border: none;
+        border-right: 1px solid {SURFACE_BORDER};
+        border-bottom: 1px solid {SURFACE_BORDER};
+        padding: 5px 8px;
+        font-weight: bold;
+    }}
+    QHeaderView::section:vertical {{
+        color: {MUTED_INK};
+        font-weight: normal;
+        padding: 0px 8px;
+    }}
+    QHeaderView::section:checked {{
+        background-color: {ACCENT_SOFT_STRONG};
+        color: {ACCENT_PRESSED};
+    }}
+    QTableCornerButton::section {{
+        background-color: {SURFACE_COLOR};
+        border: none;
+        border-right: 1px solid {SURFACE_BORDER};
+        border-bottom: 1px solid {SURFACE_BORDER};
+    }}
+    QTableView QAbstractScrollArea::corner, QAbstractScrollArea::corner {{
+        background: transparent;
+        border: none;
+    }}
+"""
+
 # The menus are deliberately *not* styled here, unlike the tooltips and the
 # scroll bars: the moment a style sheet matches a QMenu, Qt hands the whole
 # widget to the style sheet style, which paints the entries itself and never
