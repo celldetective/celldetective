@@ -88,7 +88,6 @@ class DynamicProgressDialog(QDialog, Styles):
         # Progress Bar
         self.progress_bar = QProgressBar()
         self.progress_bar.setRange(minimum, maximum)
-        self.progress_bar.setStyleSheet(self.progress_bar_style)
         layout.addWidget(self.progress_bar)
 
         # Plot Canvas

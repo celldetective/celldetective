@@ -112,37 +112,18 @@ TOOL_ICON_SIZE = 20
 CARD_COLOR = "#FFFFFF"
 CARD_BORDER_COLOR = "#E3E7EB"
 
-# Progress bars, styled application wide (see __main__). They used to be styled
-# one at a time, wherever someone remembered to, which left the bars of the
-# worker windows with the raw Fusion look while the ones next to them were
-# blue. The track is the surface grey of the chips and the chunk the accent, in
-# one continuous bar: the `width` of the old rule cut the chunk into segments,
-# which reads as a progress bar from another decade.
+# Progress bars, painted application wide by CelldetectiveStyle (see
+# ``_draw_progress_bar``): the track is the surface grey of the chips and the
+# chunk the accent, in one continuous bar. They are deliberately *not* styled
+# with a style sheet. A style sheet cannot write the label in two colors (white
+# over the chunk, ink over the track), and a chunk given a border-radius is not
+# drawn at all until it is wider than its two rounded ends, so the bar sat
+# empty for the first few percent and then jumped.
 PROGRESSBAR_HEIGHT = 18
 PROGRESSBAR_RADIUS = 6
-PROGRESSBAR_STYLE = f"""
-    QProgressBar {{
-        background-color: {SURFACE_COLOR};
-        border: 1px solid {SURFACE_BORDER};
-        border-radius: {PROGRESSBAR_RADIUS}px;
-        min-height: {PROGRESSBAR_HEIGHT}px;
-        max-height: {PROGRESSBAR_HEIGHT}px;
-        text-align: center;
-        color: {INK_COLOR};
-        font-size: 10px;
-        font-weight: bold;
-    }}
-    QProgressBar::chunk {{
-        background-color: {CELLDETECTIVE_BLUE};
-        border-radius: {PROGRESSBAR_RADIUS - 1}px;
-        margin: 0px;
-    }}
-    QProgressBar:disabled {{
-        color: {DISABLED_FG};
-        border-color: #EDF0F3;
-    }}
-    QProgressBar::chunk:disabled {{ background-color: #D3D9DF; }}
-"""
+PROGRESSBAR_FONT_SIZE = 10
+PROGRESSBAR_DISABLED_BORDER = "#EDF0F3"
+PROGRESSBAR_DISABLED_CHUNK = "#D3D9DF"
 
 # The menus are deliberately *not* styled here, unlike the tooltips and the
 # scroll bars: the moment a style sheet matches a QMenu, Qt hands the whole
@@ -369,10 +350,6 @@ class Styles(object):
 			padding-left: 10px;
 			"""
 
-        # Kept as an attribute because the panels set it by hand in a few
-        # places; it is the application wide rule, so a bar that sets it and a
-        # bar that does not look the same.
-        self.progress_bar_style = PROGRESSBAR_STYLE
 
     def init_button_styles(self):
         """

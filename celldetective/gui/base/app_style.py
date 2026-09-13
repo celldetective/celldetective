@@ -10,13 +10,14 @@ checkable combo boxes, so a tick looks identical wherever it is drawn.
 
 import logging
 from PyQt5.QtCore import Qt, QRectF, QPointF
-from PyQt5.QtGui import QColor, QIcon, QPainter, QPainterPath, QPen
+from PyQt5.QtGui import QColor, QFont, QIcon, QPainter, QPainterPath, QPen
 from PyQt5.QtWidgets import (
     QListView,
     QProxyStyle,
     QStyle,
     QStyleOptionComboBox,
     QStyleOptionMenuItem,
+    QStyleOptionProgressBar,
     QStyleOptionSlider,
     QWidget,
     QStyleOption,
@@ -29,8 +30,15 @@ from celldetective.gui.base.styles import (
     CARD_BORDER_COLOR,
     CARD_COLOR,
     CELLDETECTIVE_BLUE,
+    DISABLED_FG,
     INK_COLOR,
+    PROGRESSBAR_DISABLED_BORDER,
+    PROGRESSBAR_DISABLED_CHUNK,
+    PROGRESSBAR_FONT_SIZE,
+    PROGRESSBAR_HEIGHT,
+    PROGRESSBAR_RADIUS,
     SURFACE_BORDER,
+    SURFACE_COLOR,
 )
 
 logger = logging.getLogger("celldetective")
@@ -391,6 +399,12 @@ class CelldetectiveStyle(QProxyStyle):
                 size.setHeight(max(size.height() + self.row_padding, self.menu_row))
                 size.setWidth(size.width() + self.menu_gutter)
 
+        if content_type == QStyle.CT_ProgressBar and isinstance(
+            option, QStyleOptionProgressBar
+        ):
+            if option.state & QStyle.State_Horizontal:
+                size.setHeight(PROGRESSBAR_HEIGHT)
+
         return size
 
     def drawPrimitive(
@@ -478,7 +492,7 @@ class CelldetectiveStyle(QProxyStyle):
         painter: QPainter,
         widget: Optional[QWidget] = None,
     ) -> None:
-        """Draw the celldetective menu entries, delegate everything else."""
+        """Draw the celldetective menu entries and progress bars, delegate everything else."""
 
         if isinstance(option, QStyleOptionMenuItem):
             if element == QStyle.CE_MenuItem:
@@ -488,7 +502,97 @@ class CelldetectiveStyle(QProxyStyle):
                 self._draw_menu_bar_item(option, painter, widget)
                 return
 
+        if (
+            element == QStyle.CE_ProgressBar
+            and isinstance(option, QStyleOptionProgressBar)
+            and option.state & QStyle.State_Horizontal
+            # A busy bar (minimum == maximum) is animated by the base style.
+            and option.maximum > option.minimum
+        ):
+            self._draw_progress_bar(option, painter, widget)
+            return
+
         super().drawControl(element, option, painter, widget)
+
+    def _draw_progress_bar(
+        self,
+        option: QStyleOptionProgressBar,
+        painter: QPainter,
+        widget: Optional[QWidget] = None,
+    ) -> None:
+        """
+        Paint a horizontal progress bar: a rounded track, the accent chunk and
+        a label written white over the chunk and in ink over the track.
+
+        Parameters
+        ----------
+        option : QStyleOptionProgressBar
+            The style options of the progress bar.
+        painter : QPainter
+            The painter to draw with.
+        widget : QWidget, optional
+            The progress bar being painted.
+        """
+
+        enabled = bool(option.state & QStyle.State_Enabled)
+        rect = QRectF(option.rect).adjusted(0.5, 0.5, -0.5, -0.5)
+        radius = min(float(PROGRESSBAR_RADIUS), rect.height() / 2.0)
+
+        span = option.maximum - option.minimum
+        fraction = min(max((option.progress - option.minimum) / span, 0.0), 1.0)
+        width = rect.width() * fraction
+
+        filled = QRectF(rect)
+        empty = QRectF(rect)
+        if option.invertedAppearance:
+            filled.setLeft(rect.right() - width)
+            empty.setRight(filled.left())
+        else:
+            filled.setRight(rect.left() + width)
+            empty.setLeft(filled.right())
+
+        track = QPainterPath()
+        track.addRoundedRect(rect, radius, radius)
+
+        painter.save()
+        painter.setRenderHint(QPainter.Antialiasing, True)
+
+        painter.setPen(
+            QPen(QColor(SURFACE_BORDER if enabled else PROGRESSBAR_DISABLED_BORDER), 1.0)
+        )
+        painter.setBrush(QColor(SURFACE_COLOR))
+        painter.drawPath(track)
+
+        # The chunk is the track cut at the progress, not a rounded rectangle
+        # of its own: it shows from the first pixel and keeps the rounded ends
+        # of the track rather than growing a rounded right edge of its own.
+        if width > 0:
+            cut = QPainterPath()
+            cut.addRect(filled)
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(
+                QColor(self.accent if enabled else PROGRESSBAR_DISABLED_CHUNK)
+            )
+            painter.drawPath(track.intersected(cut))
+
+        if option.textVisible and option.text:
+            font = QFont(painter.font())
+            font.setPixelSize(PROGRESSBAR_FONT_SIZE)
+            font.setBold(True)
+            painter.setFont(font)
+            flags = int(Qt.AlignCenter | Qt.TextSingleLine)
+
+            for clip, color in (
+                (empty, INK_COLOR if enabled else DISABLED_FG),
+                (filled, "#FFFFFF"),
+            ):
+                if clip.width() <= 0:
+                    continue
+                painter.setClipRect(clip)
+                painter.setPen(QColor(color))
+                painter.drawText(option.rect, flags, option.text)
+
+        painter.restore()
 
     def _highlight(
         self, painter: QPainter, rect: QRectF, radius: Optional[float] = None
