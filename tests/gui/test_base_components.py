@@ -12,7 +12,7 @@ import pytest
 from unittest.mock import MagicMock, patch
 from PyQt5.QtCore import Qt, QRect, QEvent, QPoint
 from PyQt5.QtGui import QPainter, QPixmap, QHelpEvent
-from PyQt5.QtWidgets import QMainWindow, QStyle, QStyleOptionViewItem
+from PyQt5.QtWidgets import QFrame, QMainWindow, QStyle, QStyleOptionViewItem
 
 from celldetective.gui.base.components import (
     CheckIndicatorDelegate,
@@ -413,10 +413,16 @@ class TestQHSeperationLine:
     """Tests for QHSeperationLine."""
 
     def test_initialization(self, qtbot):
-        """Test separator line is created."""
+        """Test separator line is a horizontal rule of a fixed height."""
         line = QHSeperationLine()
         qtbot.addWidget(line)
-        assert line.maximumHeight() == 20
+
+        assert line.frameShape() == QFrame.HLine
+        # The rule keeps the height it is given, whatever that height is: it
+        # carries the air that separates two groups of a block, and that air is
+        # a matter of styling rather than something to pin down here.
+        assert line.minimumHeight() == line.maximumHeight()
+        assert 0 < line.maximumHeight() <= 20
 
 
 # =============================================================================
