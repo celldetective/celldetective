@@ -186,10 +186,12 @@ class RegistrationOptionsLayout(QVBoxLayout, Styles):
         alpha = self.alpha_le.get_threshold()
         upsample = self.upsample_le.get_threshold()
         downscale = self.downscale_le.get_threshold()
-        radius_text = self.radius_le.text().strip().replace(",", ".")
-        radius = float(radius_text) if radius_text else None
-
         if alpha is None or upsample is None or downscale is None:
+            return False
+        try:
+            radius = self._parse_radius()
+        except ValueError:
+            self._warn("The radius must be a number, or empty for the full frame.")
             return False
         if downscale < 1:
             self._warn("The downscaling factor must be at least 1.")
@@ -230,7 +232,10 @@ class RegistrationOptionsLayout(QVBoxLayout, Styles):
                 exp_config, [self.channels_cb.currentText()]
             )[0]
 
-        radius_text = self.radius_le.text().strip().replace(",", ".")
+        try:
+            initial_radius = self._parse_radius()
+        except ValueError:
+            initial_radius = None
         alpha = self.alpha_le.get_threshold(show_warning=False)
 
         self.viewer = RegistrationROIViewer(
@@ -241,10 +246,28 @@ class RegistrationOptionsLayout(QVBoxLayout, Styles):
             channel_cb=True,
             target_channel=target_channel,
             window_title="Registration ROI",
-            initial_radius=float(radius_text) if radius_text else None,
+            initial_radius=initial_radius,
             tukey_alpha=0.25 if alpha is None else alpha,
         )
         self.viewer.show()
+
+    def _parse_radius(self):
+        """
+        Read the radius field.
+
+        Returns
+        -------
+        float or None
+            The radius, or None when the field is empty (full frame).
+
+        Raises
+        ------
+        ValueError
+            If the field holds text that is not a number, e.g. an intermediate input such as
+            ``"1e"`` that the validator lets through.
+        """
+        radius_text = self.radius_le.text().strip().replace(",", ".")
+        return float(radius_text) if radius_text else None
 
     @staticmethod
     def _warn(text: str):

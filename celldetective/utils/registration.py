@@ -131,6 +131,11 @@ def prepare_for_correlation(frame: np.ndarray, window: np.ndarray) -> np.ndarray
     return centred * window
 
 
+def has_signal(frame: np.ndarray) -> bool:
+    """Return True if ``frame`` has finite values that are not all equal."""
+    return bool(np.any(np.isfinite(frame))) and np.nanmax(frame) != np.nanmin(frame)
+
+
 def estimate_shift(
     reference: np.ndarray,
     moving: np.ndarray,
@@ -160,7 +165,7 @@ def estimate_shift(
 
     from skimage.registration import phase_cross_correlation
 
-    if not np.any(np.isfinite(moving)) or np.nanmax(moving) == np.nanmin(moving):
+    if not has_signal(reference) or not has_signal(moving):
         # Empty or uniform frame: no signal to correlate.
         return np.zeros(2)
 
@@ -204,24 +209,33 @@ def estimate_drift(
     -------
     numpy.ndarray
         Array of shape ``(T, 2)`` with the ``(dy, dx)`` shift that aligns each frame onto the
-        first one. The first row is zero.
+        first frame with signal. Frames up to that one get a zero shift.
+
+    Notes
+    -----
+    Empty or uniform frames (e.g. a dropped acquisition) are never used as reference: they keep
+    the shift of the frame before them, and the next frame is correlated with the last frame
+    that had signal, so the drift across the gap is not lost.
     """
 
     if reference not in REFERENCE_MODES:
         raise ValueError(f"reference must be one of {REFERENCE_MODES}, got {reference!r}.")
 
     shifts = []
-    first = previous = None
+    # Last frame with signal (reference="previous") or first one (reference="first").
+    anchor = None
     for k, frame in enumerate(frames):
-        if k == 0:
-            first = previous = frame
-            shifts.append(np.zeros(2))
+        if not has_signal(frame):
+            shifts.append(shifts[-1] if shifts else np.zeros(2))
+        elif anchor is None:
+            anchor = frame
+            shifts.append(shifts[-1] if shifts else np.zeros(2))
         elif reference == "first":
-            shifts.append(estimate_shift(first, frame, window, upsample_factor))
+            shifts.append(estimate_shift(anchor, frame, window, upsample_factor))
         else:
-            step = estimate_shift(previous, frame, window, upsample_factor)
+            step = estimate_shift(anchor, frame, window, upsample_factor)
             shifts.append(shifts[-1] + step)
-            previous = frame
+            anchor = frame
         if progress_callback:
             progress_callback(iter=k)
 

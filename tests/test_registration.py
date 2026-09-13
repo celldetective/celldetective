@@ -58,6 +58,30 @@ def test_estimate_drift_recovers_known_translation(reference):
     np.testing.assert_allclose(shifts, np.array(DRIFTS, dtype=float), atol=0.3)
 
 
+@pytest.mark.parametrize("reference", ["previous", "first"])
+def test_estimate_drift_bridges_blank_frame(reference):
+    frames = [f.copy() for f in _drifting_crops(DRIFTS)]
+    frames[2] = np.zeros_like(frames[2])
+    window = tukey_window((FIELD, FIELD), alpha=0.25)
+    shifts = estimate_drift(frames, window, reference=reference, upsample_factor=10)
+    expected = np.array(DRIFTS, dtype=float)
+    # The blank frame keeps the shift before it; later frames keep the full drift.
+    expected[2] = expected[1]
+    np.testing.assert_allclose(shifts, expected, atol=0.3)
+
+
+@pytest.mark.parametrize("reference", ["previous", "first"])
+def test_estimate_drift_skips_blank_first_frame(reference):
+    frames = [f.copy() for f in _drifting_crops(DRIFTS)]
+    frames[0] = np.zeros_like(frames[0])
+    window = tukey_window((FIELD, FIELD), alpha=0.25)
+    shifts = estimate_drift(frames, window, reference=reference, upsample_factor=10)
+    # Shifts are relative to the first frame with signal.
+    expected = np.array(DRIFTS, dtype=float) - np.array(DRIFTS[1], dtype=float)
+    expected[0] = 0.0
+    np.testing.assert_allclose(shifts, expected, atol=0.3)
+
+
 def test_radius_ignores_static_edge_artefact():
     reference, moving = _drifting_crops([(0, 0), (6, -4)], seed=1)
     reference, moving = reference.copy(), moving.copy()
@@ -170,3 +194,20 @@ def test_register_stacks_exports_corrected_movie(tmp_path):
     assert exported.exists()
     assert tifffile.imread(exported).shape == (len(DRIFTS), 2, FIELD, FIELD)
     assert (tmp_path / "Experiment" / "W1" / "100" / "log_preprocessing.txt").exists()
+
+
+def test_register_stacks_skips_position_without_movie(tmp_path):
+    exp_dir, movie_dir = _write_experiment(tmp_path)
+    # A position listed before the valid one, with no movie matching the prefix.
+    (tmp_path / "Experiment" / "W1" / "099" / "movie").mkdir(parents=True)
+    register_stacks(
+        exp_dir,
+        well_option="*",
+        position_option="*",
+        target_channel="Channel1",
+        radius=50,
+        export=True,
+        show_progress_per_well=False,
+        show_progress_per_pos=False,
+    )
+    assert (movie_dir / "Corrected_sample.tif").exists()

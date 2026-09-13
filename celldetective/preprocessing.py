@@ -1983,6 +1983,10 @@ def register_stacks(
                 logger.info(f"  Processing position {pidx+1}/{total_pos}...")
 
             stack_path = get_position_movie_path(pos_path, prefix=movie_prefix)
+            if stack_path is None:
+                logger.warning(f"No stack could be found in {pos_path}... Skip...")
+                continue
+
             logger.info(
                 f"Registering position {extract_position_name(pos_path)} on channel {target_channel}..."
             )
