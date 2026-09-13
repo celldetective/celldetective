@@ -1516,7 +1516,7 @@ def _annotation_metadata(filename: str) -> Tuple[Optional[List[str]], Optional[f
         Microns per pixel, or None when unknown.
     """
 
-    info_name = filename.replace(".tif", ".json")
+    info_name = os.path.splitext(filename)[0] + ".json"
     if not os.path.exists(info_name):
         logger.debug(f"No annotation sidecar next to {filename}.")
         return None, None
