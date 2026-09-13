@@ -45,8 +45,15 @@ jobs:
         shell: bash
         run: |
           echo "dir=$(python -c 'import celldetective, os; print(os.path.dirname(os.path.realpath(celldetective.__file__)))')" >> "$GITHUB_OUTPUT"
-      - name: Cache Zenodo models and datasets
-        uses: actions/cache@v4
+      # Restore and save are split so the save runs even when the tests fail.
+      # `actions/cache` only saves on success, so a job that loses one download
+      # to a Zenodo 5xx threw away every model it did fetch, and the next run
+      # started from nothing again. Push runs can only read caches from their
+      # own branch and the default branch, so a new branch has nothing to fall
+      # back on until one of its own runs saves.
+      - name: Restore Zenodo models and datasets
+        id: zenodo-cache
+        uses: actions/cache/restore@v4
         with:
           path: |
             ${{ steps.pkg.outputs.dir }}/models/segmentation_targets
@@ -65,6 +72,19 @@ jobs:
       - name: Test GUI
         run: |
           python tests/run_gui_tests.py
+      - name: Save Zenodo models and datasets
+        if: always() && steps.zenodo-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ${{ steps.pkg.outputs.dir }}/models/segmentation_targets
+            ${{ steps.pkg.outputs.dir }}/models/segmentation_effectors
+            ${{ steps.pkg.outputs.dir }}/models/segmentation_generic
+            ${{ steps.pkg.outputs.dir }}/models/segmentation_oocyst
+            ${{ steps.pkg.outputs.dir }}/models/signal_detection
+            ${{ steps.pkg.outputs.dir }}/models/pair_signal_detection
+            ${{ steps.pkg.outputs.dir }}/datasets
+          key: celldetective-zenodo-${{ runner.os }}-py${{ matrix.python-version }}-${{ hashFiles('tests/**/*.py') }}
 
   Linux-Minimal:
     name: Linux Minimal
@@ -150,8 +170,15 @@ jobs:
         shell: bash
         run: |
           echo "dir=$(python -c 'import celldetective, os; print(os.path.dirname(os.path.realpath(celldetective.__file__)))')" >> "$GITHUB_OUTPUT"
-      - name: Cache Zenodo models and datasets
-        uses: actions/cache@v4
+      # Restore and save are split so the save runs even when the tests fail.
+      # `actions/cache` only saves on success, so a job that loses one download
+      # to a Zenodo 5xx threw away every model it did fetch, and the next run
+      # started from nothing again. Push runs can only read caches from their
+      # own branch and the default branch, so a new branch has nothing to fall
+      # back on until one of its own runs saves.
+      - name: Restore Zenodo models and datasets
+        id: zenodo-cache
+        uses: actions/cache/restore@v4
         with:
           path: |
             ${{ steps.pkg.outputs.dir }}/models/segmentation_targets
@@ -170,6 +197,19 @@ jobs:
       - name: Test GUI
         run: |
           python tests/run_gui_tests.py
+      - name: Save Zenodo models and datasets
+        if: always() && steps.zenodo-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ${{ steps.pkg.outputs.dir }}/models/segmentation_targets
+            ${{ steps.pkg.outputs.dir }}/models/segmentation_effectors
+            ${{ steps.pkg.outputs.dir }}/models/segmentation_generic
+            ${{ steps.pkg.outputs.dir }}/models/segmentation_oocyst
+            ${{ steps.pkg.outputs.dir }}/models/signal_detection
+            ${{ steps.pkg.outputs.dir }}/models/pair_signal_detection
+            ${{ steps.pkg.outputs.dir }}/datasets
+          key: celldetective-zenodo-${{ runner.os }}-py${{ matrix.python-version }}-${{ hashFiles('tests/**/*.py') }}
 
   Windows-Minimal:
     name: Test Windows Minimal
