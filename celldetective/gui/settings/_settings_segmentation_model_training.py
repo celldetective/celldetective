@@ -17,7 +17,7 @@ from PyQt5.QtWidgets import (
     QMainWindow,
 )
 from PyQt5.QtCore import Qt, QSize, QThreadPool, QThread
-from celldetective.gui.base.components import generic_message
+from celldetective.gui.base.components import BrowseButton, generic_message
 from celldetective.gui.base.channel_norm_generator import ChannelNormGenerator
 import multiprocessing
 from celldetective.gui.workers import Runner
@@ -254,7 +254,9 @@ class SettingsSegmentationModelTraining(CelldetectiveSettingsPanel):
 
         train_data_layout = QHBoxLayout()
         train_data_layout.addWidget(QLabel("Training data: "), 30)
-        self.select_data_folder_btn = QPushButton("Choose folder")
+        self.select_data_folder_btn = BrowseButton(
+            "Choose folder", tooltip="Locate the training set."
+        )
         self.select_data_folder_btn.clicked.connect(self.showDialog_dataset)
         self.data_folder_label = QLabel("No folder chosen")
         train_data_layout.addWidget(self.select_data_folder_btn, 35)
@@ -335,7 +337,9 @@ class SettingsSegmentationModelTraining(CelldetectiveSettingsPanel):
         pretrained_layout.setContentsMargins(0, 0, 0, 0)
         pretrained_layout.addWidget(QLabel("Pretrained model: "), 30)
 
-        self.browse_pretrained_btn = QPushButton("Choose folder")
+        self.browse_pretrained_btn = BrowseButton(
+            "Choose folder", tooltip="Locate the pretrained model."
+        )
         self.browse_pretrained_btn.clicked.connect(self.showDialog_pretrained)
         pretrained_layout.addWidget(self.browse_pretrained_btn, 35)
 
