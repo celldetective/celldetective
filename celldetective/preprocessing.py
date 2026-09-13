@@ -1868,3 +1868,346 @@ def correct_channel_offset_single_stack(
         return np.array(corrected_stack)
     else:
         return None
+
+
+def register_stacks(
+    experiment: str,
+    well_option: Union[str, int, List[Union[str, int]]] = "*",
+    position_option: Union[str, int, List[Union[str, int]]] = "*",
+    target_channel: str = "channel_name",
+    radius: Optional[float] = None,
+    tukey_alpha: float = 0.25,
+    upsample_factor: int = 10,
+    reference: Literal["previous", "first"] = "previous",
+    downscale: int = 1,
+    show_progress_per_well: bool = True,
+    show_progress_per_pos: bool = True,
+    export: bool = False,
+    return_stacks: bool = False,
+    movie_prefix: Optional[str] = None,
+    export_prefix: str = "Corrected",
+    progress_callback: Optional[Callable] = None,
+    **kwargs: Any,
+) -> Optional[List[np.ndarray]]:
+    """
+    Register the stacks of an experiment against their own drift.
+
+    For each selected position, the drift is estimated on ``target_channel`` by Fourier phase
+    cross-correlation of Tukey-windowed frames (see :mod:`celldetective.utils.registration`),
+    then the same shift is applied to every channel of the frame. The shifts are written next to
+    the stack as ``registration_shifts.csv``.
+
+    Parameters
+    ----------
+    experiment : str
+            The path to the experiment directory.
+    well_option : str, int, or list of int, optional
+            The option to select specific wells. '*' indicates all wells. Defaults to '*'.
+    position_option : str, int, or list of int, optional
+            The option to select specific positions. '*' indicates all positions. Defaults to '*'.
+    target_channel : str, optional
+            The registration channel, on which the drift is estimated.
+    radius : float, optional
+            Radius in pixels of the disk centred on the image inside which the correlation is
+            computed. Structures outside are ignored. If None (default), the full frame is used.
+    tukey_alpha : float, optional
+            Fraction of the correlation region covered by the Tukey cosine taper (default 0.25).
+    upsample_factor : int, optional
+            Sub-pixel precision factor of the phase correlation (default 10).
+    reference : {"previous", "first"}, optional
+            Correlate each frame with the previous frame and accumulate the shifts (default), or
+            with the first frame.
+    downscale : int, optional
+            Estimate the drift on the registration channel reduced by this factor, then apply
+            the rescaled shifts at full resolution. 1 (default) disables downscaling.
+    show_progress_per_well : bool, optional
+            Whether to show progress for each well (default is True).
+    show_progress_per_pos : bool, optional
+            Whether to show progress for each position (default is True).
+    export : bool, optional
+            Whether to export the registered stacks (default is False).
+    return_stacks : bool, optional
+            Whether to return the registered stacks (default is False).
+    movie_prefix : str, optional
+            The prefix for the movie files (default is None).
+    export_prefix : str, optional
+            The prefix for exported stacks (default is 'Corrected'). If None, the source stack is
+            overwritten.
+    progress_callback : callable, optional
+            A callback function to be called at each step of the process (default is None).
+    **kwargs : Any
+            Additional keyword arguments.
+
+    Returns
+    -------
+    list of numpy.ndarray or None
+            A list of registered stacks if `return_stacks` is True, otherwise None.
+    """
+
+    config = get_config(experiment)
+    wells = get_experiment_wells(experiment)
+    len_movie = float(config_section_to_dict(config, "MovieSettings")["len_movie"])
+    if movie_prefix is None:
+        movie_prefix = config_section_to_dict(config, "MovieSettings")["movie_prefix"]
+
+    well_indices, position_indices = interpret_wells_and_positions(
+        experiment, well_option, position_option
+    )
+    channel_indices = _extract_channel_indices_from_config(config, [target_channel])
+    nbr_channels = _extract_nbr_channels_from_config(config)
+
+    stacks = []
+
+    total_wells = len(well_indices)
+    for k, well_path in enumerate(wells[well_indices]):
+        if progress_callback:
+            progress_callback(level="well", iter=k, total=total_wells)
+        elif show_progress_per_well:
+            logger.info(f"Processing well {k+1}/{total_wells}...")
+
+        positions = get_positions_in_well(well_path)
+        selection = positions[position_indices]
+        if isinstance(selection[0], np.ndarray):
+            selection = selection[0]
+
+        total_pos = len(selection)
+        for pidx, pos_path in enumerate(selection):
+            if progress_callback:
+                progress_callback(
+                    level="position",
+                    iter=pidx,
+                    total=total_pos,
+                    stage=f"Pos {extract_position_name(pos_path)}",
+                )
+            elif show_progress_per_pos:
+                logger.info(f"  Processing position {pidx+1}/{total_pos}...")
+
+            stack_path = get_position_movie_path(pos_path, prefix=movie_prefix)
+            logger.info(
+                f"Registering position {extract_position_name(pos_path)} on channel {target_channel}..."
+            )
+
+            registered_stack = register_single_stack(
+                stack_path,
+                registration_channel_index=channel_indices[0],
+                nbr_channels=nbr_channels,
+                stack_length=len_movie,
+                radius=radius,
+                tukey_alpha=tukey_alpha,
+                upsample_factor=upsample_factor,
+                reference=reference,
+                downscale=downscale,
+                export=export,
+                prefix=export_prefix,
+                return_stacks=return_stacks,
+                progress_callback=progress_callback,
+            )
+
+            logger.info("Registration successful.")
+            _log_preprocessing_step(
+                pos_path,
+                "registration",
+                {
+                    "target_channel": target_channel,
+                    "radius": radius,
+                    "tukey_alpha": tukey_alpha,
+                    "upsample_factor": upsample_factor,
+                    "reference": reference,
+                    "downscale": downscale,
+                    "movie_prefix": movie_prefix,
+                    "export_prefix": export_prefix,
+                },
+            )
+            if return_stacks:
+                stacks.append(registered_stack)
+            else:
+                del registered_stack
+            collect()
+
+    if return_stacks:
+        return stacks
+
+
+def _shift_frame(img: np.ndarray, shift_yx: np.ndarray) -> np.ndarray:
+    """
+    Translate a 2D frame by a sub-pixel shift, preserving NaN regions.
+
+    Pixels brought in from outside the field are set to 0, like the channel offset correction.
+    """
+
+    from scipy.ndimage import shift
+
+    if np.allclose(shift_yx, 0.0) or not np.any(np.nan_to_num(img)):
+        return img
+    nan_mask = ~np.isfinite(img)
+    if not np.any(nan_mask):
+        return shift(img, shift_yx, order=1, mode="constant", cval=0.0)
+
+    shifted = shift(interpolate_nan(img), shift_yx, order=1, mode="constant", cval=0.0)
+    shifted_mask = shift(nan_mask.astype(float), shift_yx, order=1, mode="constant", cval=0.0)
+    shifted[shifted_mask > 0.5] = np.nan
+    return shifted
+
+
+def register_single_stack(
+    stack_path: str,
+    registration_channel_index: int = 0,
+    nbr_channels: int = 1,
+    stack_length: Optional[int] = None,
+    radius: Optional[float] = None,
+    tukey_alpha: float = 0.25,
+    upsample_factor: int = 10,
+    reference: Literal["previous", "first"] = "previous",
+    downscale: int = 1,
+    export: bool = False,
+    prefix: Optional[str] = "Corrected",
+    return_stacks: bool = True,
+    progress_callback: Optional[Callable] = None,
+) -> Optional[np.ndarray]:
+    """
+    Register a single multichannel stack by phase cross-correlation on one channel.
+
+    The drift is estimated in a first pass that only loads the registration channel. A second
+    pass loads each frame, shifts all of its channels and writes or collects the result, so a
+    single frame is held in memory at a time when exporting.
+
+    Parameters
+    ----------
+    stack_path : str
+            The path to the image stack.
+    registration_channel_index : int, optional
+            Index of the channel on which the drift is estimated (default is 0).
+    nbr_channels : int, optional
+            The number of channels in the image stack (default is 1).
+    stack_length : int, optional
+            The number of frames, used if it cannot be read from the file.
+    radius : float, optional
+            Radius in full-scale pixels of the centred correlation disk. None uses the full frame.
+    tukey_alpha : float, optional
+            Fraction of the correlation region covered by the Tukey taper (default 0.25).
+    upsample_factor : int, optional
+            Sub-pixel precision factor, in full-scale pixels (default 10).
+    reference : {"previous", "first"}, optional
+            Reference frame for the correlation (default "previous").
+    downscale : int, optional
+            Block-averaging factor applied to the registration channel before the correlation.
+            The shifts are multiplied back by it and applied to the full-resolution stack.
+            1 (default) disables downscaling.
+    export : bool, optional
+            Whether to export the registered stack (default is False).
+    prefix : str, optional
+            Prefix for the exported file name (default 'Corrected'). If None, the source stack is
+            overwritten.
+    return_stacks : bool, optional
+            Whether to return the registered stack (default is True).
+    progress_callback : callable, optional
+            A callback function to be called at each step of the process (default is None).
+
+    Returns
+    -------
+    numpy.ndarray or None
+            The registered stack of shape (T, Y, X, C) if `return_stacks` is True, otherwise None.
+    """
+
+    if not os.path.exists(stack_path):
+        raise FileNotFoundError(f"The stack {stack_path} does not exist... Abort.")
+
+    import tifffile.tifffile as tiff
+    from celldetective.utils.registration import (
+        downscale_frame,
+        estimate_drift,
+        tukey_window,
+    )
+
+    downscale = int(downscale)
+    if downscale < 1:
+        raise ValueError(f"The downscaling factor must be at least 1, got {downscale}.")
+
+    stack_length_auto = auto_load_number_of_frames(stack_path)
+    if stack_length_auto is None and stack_length is None:
+        logger.error("Stack length not provided...")
+        return None
+    if stack_length_auto is not None:
+        stack_length = stack_length_auto
+    stack_length = int(stack_length)
+
+    def registration_frames():
+        for t in range(stack_length):
+            frame = load_frames(
+                [t * nbr_channels + registration_channel_index],
+                stack_path,
+                normalize_input=False,
+            )[:, :, 0].astype(float)
+            yield downscale_frame(frame, downscale)
+
+    first_frame = next(registration_frames())
+    window = tukey_window(
+        first_frame.shape,
+        alpha=tukey_alpha,
+        radius=None if radius is None else radius / downscale,
+    )
+
+    def drift_progress(iter):
+        if progress_callback:
+            progress_callback(level="frame", iter=iter, total=2 * stack_length)
+
+    shifts = estimate_drift(
+        registration_frames(),
+        window,
+        reference=reference,
+        # keep the requested precision in full-scale pixels
+        upsample_factor=upsample_factor * downscale,
+        progress_callback=drift_progress,
+    ) * downscale
+    logger.info(
+        f"Estimated drift: max |dy|={np.abs(shifts[:, 0]).max():.2f} px, max |dx|={np.abs(shifts[:, 1]).max():.2f} px"
+    )
+
+    path, file = os.path.split(stack_path)
+    shifts_path = os.sep.join([path, "registration_shifts.csv"])
+    np.savetxt(
+        shifts_path,
+        np.column_stack([np.arange(stack_length), shifts]),
+        delimiter=",",
+        header="FRAME,SHIFT_Y,SHIFT_X",
+        comments="",
+        fmt=["%d", "%.4f", "%.4f"],
+    )
+
+    def registered_frames():
+        for t in range(stack_length):
+            if progress_callback:
+                progress_callback(
+                    level="frame", iter=stack_length + t, total=2 * stack_length
+                )
+            i = t * nbr_channels
+            frames = load_frames(
+                list(np.arange(i, i + nbr_channels)),
+                stack_path,
+                normalize_input=False,
+            ).astype(float)
+            for c in range(frames.shape[-1]):
+                frames[:, :, c] = _shift_frame(frames[:, :, c], shifts[t])
+            yield frames
+
+    registered_stack = []
+    if export:
+        newfile = "temp_" + file if prefix is None else "_".join([prefix, file])
+        with tiff.TiffWriter(
+            os.sep.join([path, newfile]), bigtiff=True, imagej=True
+        ) as tif:
+            for frames in registered_frames():
+                if return_stacks:
+                    registered_stack.append(frames)
+                tif.write(
+                    np.moveaxis(frames, -1, 0).astype(np.dtype("f")),
+                    contiguous=True,
+                )
+        if prefix is None:
+            os.replace(os.sep.join([path, newfile]), os.sep.join([path, file]))
+    elif return_stacks:
+        registered_stack = list(registered_frames())
+
+    if return_stacks:
+        return np.array(registered_stack)
+    return None

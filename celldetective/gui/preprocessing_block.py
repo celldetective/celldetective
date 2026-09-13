@@ -27,6 +27,7 @@ from celldetective.gui.layouts import (
     BackgroundModelFreeCorrectionLayout,
     ChannelOffsetOptionsLayout,
     ProtocolDesignerLayout,
+    RegistrationOptionsLayout,
 )
 from celldetective.utils.experiment import extract_experiment_channels
 from celldetective import get_logger
@@ -201,6 +202,23 @@ class PreprocessingPanel(QFrame, Styles):
             self.channel_offset_correction_layout
         )
 
+        self.registration_layout = QVBoxLayout()
+        self.registration_lbl = QLabel("STACK REGISTRATION")
+        self.registration_lbl.setStyleSheet(
+            """
+			font-weight: bold;
+			padding: 0px;
+			"""
+        )
+        self.registration_layout.addWidget(
+            self.registration_lbl, alignment=Qt.AlignCenter
+        )
+        self.registration_options_layout = RegistrationOptionsLayout(self)
+        self.registration_layout.addLayout(self.registration_options_layout)
+
+        self.protocol_layout.correction_layout.addWidget(QLabel(""))
+        self.protocol_layout.correction_layout.addLayout(self.registration_layout)
+
         self.grid_contents.addLayout(self.protocol_layout, 0, 0, 1, 4)
 
         self.submit_preprocessing_btn = QPushButton("Submit")
@@ -363,6 +381,37 @@ class PreprocessingPanel(QFrame, Styles):
                 result = self.job.exec_()
                 if result == QDialog.Rejected:
                     logger.info("Correction cancelled.")
+                    return None
+            elif correction_protocol["correction_type"] == "registration":
+                logger.info(
+                    f"Registration; {movie_prefix=} {export_prefix=} {correction_protocol=}"
+                )
+                from celldetective.gui.workers import ProgressWindow
+                from celldetective.processes.background_correction import (
+                    BackgroundCorrectionProcess,
+                )
+
+                process_args = {
+                    "exp_dir": self.exp_dir,
+                    "well_option": well_option,
+                    "position_option": position_option,
+                    "movie_prefix": movie_prefix,
+                    "export_prefix": export_prefix,
+                    "export": True,
+                    "return_stacks": False,
+                }
+                process_args.update(correction_protocol)
+
+                self.job = ProgressWindow(
+                    BackgroundCorrectionProcess,
+                    parent_window=None,
+                    title="Stack Registration",
+                    position_info=False,
+                    process_args=process_args,
+                )
+                result = self.job.exec_()
+                if result == QDialog.Rejected:
+                    logger.info("Registration cancelled.")
                     return None
         logger.info("Done.")
 
