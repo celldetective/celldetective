@@ -24,10 +24,9 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
     QProgressDialog,
 )
-from fonticon_mdi6 import MDI6
 from psutil import cpu_count
-from superqt.fonticon import icon
 from celldetective.gui.base.components import (
+    BrowseButton,
     CelldetectiveWidget,
     CelldetectiveMainWindow,
     generic_message,
@@ -204,10 +203,10 @@ class AppInitWindow(CelldetectiveMainWindow):
         self.experiment_path_selection.setPlaceholderText("/path/to/experiment/folder/")
         self.locate_exp_layout.addWidget(self.experiment_path_selection, 90)
 
-        self.browse_button = QPushButton("Browse...")
+        self.browse_button = BrowseButton(
+            "Browse...", tooltip="Locate the experiment folder."
+        )
         self.browse_button.clicked.connect(self.browse_experiment_folder)
-        self.browse_button.setStyleSheet(self.button_style_sheet)
-        self.browse_button.setIcon(icon(MDI6.folder, color="white"))
         self.locate_exp_layout.addWidget(self.browse_button, 10)
         self.vertical_layout.addLayout(self.locate_exp_layout)
 

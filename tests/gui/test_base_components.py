@@ -15,11 +15,13 @@ from PyQt5.QtGui import QPainter, QPixmap, QHelpEvent
 from PyQt5.QtWidgets import QFrame, QMainWindow, QStyle, QStyleOptionViewItem
 
 from celldetective.gui.base.components import (
+    BrowseButton,
     CheckIndicatorDelegate,
     QCheckableComboBox,
     QHSeperationLine,
     HoverButton,
 )
+from celldetective.gui.base.styles import button_style
 from celldetective.gui.base.list_widget import ListWidget
 from celldetective.gui.base.feature_choice import FeatureChoice
 
@@ -440,3 +442,69 @@ class TestHoverButton:
         btn = HoverButton(text="Test", icon_enum=MDI6.plus)
         qtbot.addWidget(btn)
         assert btn.text() == "Test"
+
+
+# =============================================================================
+# BrowseButton Tests
+# =============================================================================
+
+
+class TestBrowseButton:
+    """Tests for the button opening a file or folder browser."""
+
+    def test_initialization(self, qtbot):
+        """The button carries its label, a folder icon and its tooltip."""
+        btn = BrowseButton("Browse...", tooltip="Locate the experiment folder.")
+        qtbot.addWidget(btn)
+
+        assert btn.text() == "Browse..."
+        assert not btn.icon().isNull()
+        assert btn.toolTip() == "Locate the experiment folder."
+
+    def test_uses_the_outlined_role(self, qtbot):
+        """
+        Browsing for a path is the outlined role, not the solid one.
+
+        The solid blue belongs to the Submit or Upload button the browse
+        button sits above, and the two must not read as the same weight.
+        """
+
+        btn = BrowseButton()
+        qtbot.addWidget(btn)
+
+        assert btn.styleSheet() == button_style("secondary")
+
+    def test_icon_follows_the_enabled_state(self, qtbot):
+        """A disabled button fades rather than keeping the accent."""
+        btn = BrowseButton()
+        qtbot.addWidget(btn)
+
+        enabled = btn.icon().pixmap(18, 18).toImage()
+        btn.setEnabled(False)
+        disabled = btn.icon().pixmap(18, 18).toImage()
+
+        assert enabled != disabled
+
+    @pytest.mark.parametrize(
+        "module, attribute",
+        [
+            ("celldetective.gui.InitWindow", "browse_button"),
+            ("celldetective.gui.configure_new_exp", "browse_button"),
+            ("celldetective.gui.seg_model_loader", "open_dialog_button"),
+        ],
+    )
+    def test_panels_build_their_browse_button_from_it(self, module, attribute):
+        """
+        Every panel pointing at a path goes through the same button.
+
+        They used to be styled one at a time -- two of them solid blue, the
+        others with no style at all -- so the same action looked like a
+        different control in every panel.
+        """
+
+        import inspect
+        import importlib
+
+        source = inspect.getsource(importlib.import_module(module))
+
+        assert f"self.{attribute} = BrowseButton(" in source

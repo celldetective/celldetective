@@ -37,6 +37,7 @@ from PyQt5.QtCore import (
 )
 from PyQt5.QtGui import QPaintEvent, QPainter, QColor, QPen, QShowEvent, QHelpEvent
 from superqt.fonticon import icon
+from fonticon_mdi6 import MDI6
 from celldetective.gui.base.styles import (
     Styles,
     button_style,
@@ -1011,6 +1012,73 @@ class ToolButton(QPushButton):
                 # The mouse cannot leave a disabled button, so a button
                 # disabled under the cursor would stay painted as hovered.
                 self._hovered = False
+            self._paint_icon()
+
+        super().changeEvent(event)
+
+
+class BrowseButton(QPushButton):
+    """
+    The button opening a file or a folder browser.
+
+    There is one of these next to every path the user has to point at: the
+    experiment folder, a training set, a pretrained model, a model to upload.
+    They were styled one at a time -- two of them a solid blue, the other four
+    left with no style at all -- so the same action looked like a different
+    control in every panel.
+
+    It is the outlined role rather than the solid one on purpose: browsing for
+    a path is a step on the way, not the action a panel is for. The solid blue
+    is left to the Submit or Upload button it sits above.
+    """
+
+    def __init__(
+        self,
+        text: Optional[str] = "Browse...",
+        tooltip: Optional[str] = "",
+        icon_enum: Optional[str] = MDI6.folder_open,
+        parent: Optional[QWidget] = None,
+    ) -> None:
+        """
+        Initialize the button.
+
+        Parameters
+        ----------
+        text : str, optional
+            The label of the button.
+        tooltip : str, optional
+            What the button opens, as a sentence.
+        icon_enum : str, optional
+            Icon name from MDI6, the open folder by default.
+        parent : QWidget, optional
+            The parent widget.
+        """
+
+        super().__init__(text, parent)
+
+        self.icon_enum = icon_enum
+
+        if tooltip:
+            self.setToolTip(tooltip)
+
+        self.setStyleSheet(button_style("secondary"))
+        self.setIconSize(QSize(18, 18))
+        self._paint_icon()
+
+    def _paint_icon(self) -> None:
+        """Draw the folder in the color the current state calls for."""
+
+        self.setIcon(
+            icon(
+                self.icon_enum,
+                color=CELLDETECTIVE_BLUE if self.isEnabled() else DISABLED_FG,
+            )
+        )
+
+    def changeEvent(self, event: QEvent) -> None:
+        """Follow the enabled state in the color of the icon."""
+
+        if event.type() == QEvent.EnabledChange:
             self._paint_icon()
 
         super().changeEvent(event)

@@ -29,6 +29,7 @@ from functools import partial
 import logging
 import numpy as np
 from celldetective.gui.base.components import (
+    BrowseButton,
     CelldetectiveMainWindow,
     CelldetectiveWidget,
 )
@@ -76,9 +77,9 @@ class ConfigNewExperiment(CelldetectiveMainWindow):
         self.supFolder.setEnabled(True)
         self.supFolder.setText(self.newExpFolder)
 
-        self.browse_button = QPushButton("Browse...")
-        self.browse_button.setIcon(icon(MDI6.folder, color="white"))
-        self.browse_button.setStyleSheet(self.button_style_sheet)
+        self.browse_button = BrowseButton(
+            "Browse...", tooltip="Locate the folder the experiment goes in."
+        )
 
         self.expName = QLineEdit()
         self.expName.setPlaceholderText("folder_name_for_the_experiment")
