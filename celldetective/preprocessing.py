@@ -1895,7 +1895,8 @@ def register_stacks(
     For each selected position, the drift is estimated on ``target_channel`` by Fourier phase
     cross-correlation of Tukey-windowed frames (see :mod:`celldetective.utils.registration`),
     then the same shift is applied to every channel of the frame. The shifts are written next to
-    the stack as ``registration_shifts.csv``.
+    the stack as ``<export_prefix>_<movie>_registration_shifts.csv`` (``<movie>_registration_shifts.csv``
+    if the source stack is overwritten).
 
     Parameters
     ----------
@@ -2168,7 +2169,11 @@ def register_single_stack(
     )
 
     path, file = os.path.split(stack_path)
-    shifts_path = os.sep.join([path, "registration_shifts.csv"])
+    # Named after the output movie, so registrations with different prefixes keep their shifts.
+    output_file = file if prefix is None else "_".join([prefix, file])
+    shifts_path = os.sep.join(
+        [path, os.path.splitext(output_file)[0] + "_registration_shifts.csv"]
+    )
     np.savetxt(
         shifts_path,
         np.column_stack([np.arange(stack_length), shifts]),

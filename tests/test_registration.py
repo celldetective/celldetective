@@ -147,7 +147,9 @@ def test_register_single_stack_aligns_all_channels(tmp_path):
                 registered[t, inner, inner, c], registered[0, inner, inner, c], rtol=0.05
             )
 
-    shifts = np.loadtxt(movie_dir / "registration_shifts.csv", delimiter=",", skiprows=1)
+    shifts = np.loadtxt(
+        movie_dir / "Corrected_sample_registration_shifts.csv", delimiter=",", skiprows=1
+    )
     np.testing.assert_allclose(shifts[:, 1:], np.array(DRIFTS, dtype=float), atol=0.3)
 
 
@@ -174,7 +176,9 @@ def test_downscaled_registration_applies_full_scale_shifts(tmp_path, downscale):
     )
     assert registered.shape == (len(DRIFTS), FIELD, FIELD, 2)
 
-    shifts = np.loadtxt(movie_dir / "registration_shifts.csv", delimiter=",", skiprows=1)
+    shifts = np.loadtxt(
+        movie_dir / "Corrected_sample_registration_shifts.csv", delimiter=",", skiprows=1
+    )
     np.testing.assert_allclose(shifts[:, 1:], np.array(DRIFTS, dtype=float), atol=0.5)
 
 
