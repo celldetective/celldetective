@@ -88,8 +88,8 @@ SURFACE_PRESSED = "#DDE3E8"
 # mouse: light tints read as nothing at all behind a small icon.
 GHOST_HOVER = "#BDBDBD"
 GHOST_PRESSED = "#A8A8A8"
-DISABLED_BG = "#E6E9EC"
-DISABLED_FG = "#A6AFB8"
+DISABLED_BG = "#a8b3bd"
+DISABLED_FG = "#ffffff"
 
 # The icon buttons closing a row: the cogs, the eyes, the helpers. They rest at
 # full weight, in the ink of the software rather than raw black.
