@@ -17,7 +17,7 @@ import configparser
 from fonticon_mdi6 import MDI6
 from superqt.fonticon import icon
 
-from celldetective.gui.base.components import CelldetectiveWidget
+from celldetective.gui.base.components import CelldetectiveWidget, ToolButton
 
 
 class ConfigEditor(CelldetectiveWidget):
@@ -45,11 +45,7 @@ class ConfigEditor(CelldetectiveWidget):
         self.layout = QVBoxLayout()
 
         # Create a scroll area to contain the main layout
-        self.edit_config_btn = QPushButton("")
-        self.edit_config_btn.setStyleSheet(self.button_select_all)
-        self.edit_config_btn.setIcon(icon(MDI6.file_cog, color="black"))
-        self.edit_config_btn.setToolTip("Advanced edition.")
-        self.edit_config_btn.setIconSize(QSize(20, 20))
+        self.edit_config_btn = ToolButton(MDI6.file_cog, "Advanced edition.")
 
         self.layout.addWidget(self.edit_config_btn, alignment=Qt.AlignRight)
 
