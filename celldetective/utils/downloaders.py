@@ -211,10 +211,16 @@ def download_url_to_file(url: str, dst: str, progress: bool = True) -> None:
     # GUI Check
     try:
         from PyQt5.QtWidgets import QApplication, QProgressDialog
-        from PyQt5.QtCore import Qt
+        from PyQt5.QtCore import Qt, QThread
 
         app = QApplication.instance()
-        use_gui = app is not None
+        # Widgets may only be built, and the event loop only pumped, from the
+        # thread the application lives on. A download started from a worker --
+        # the napari single-frame panel fetches a model that way -- would
+        # otherwise put a QProgressDialog and a `processEvents` on a non-GUI
+        # thread, which hangs the whole interface rather than raising. Off the
+        # GUI thread we fall through to the console bar instead.
+        use_gui = app is not None and QThread.currentThread() is app.thread()
     except ImportError:
         use_gui = False
 
@@ -299,9 +305,16 @@ def download_zenodo_file(file: str, output_dir: str) -> None:
     # GUI Check
     try:
         from PyQt5.QtWidgets import QApplication, QDialog
+        from PyQt5.QtCore import QThread
 
         app = QApplication.instance()
-        use_gui = app is not None
+        # Only from the thread the application lives on. The progress window is
+        # a widget run with a modal `exec_()`, and both are GUI-thread-only: a
+        # download started from a worker -- the napari single-frame panel
+        # fetches a model that way -- would hang the interface rather than
+        # raise. Off the GUI thread the console implementation below runs
+        # instead, and the caller reports progress its own way.
+        use_gui = app is not None and QThread.currentThread() is app.thread()
     except ImportError:
         use_gui = False
 
