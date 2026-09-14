@@ -1,4 +1,4 @@
-﻿from PyQt5.QtWidgets import (
+from PyQt5.QtWidgets import (
     QDialog,
     QFrame,
     QGridLayout,
@@ -1900,7 +1900,7 @@ class ProcessPanel(ControlPanelBlock, Styles):
                     with open(instr_path, "r") as f:
                         instr = json.load(f)
 
-                    # 1. Features â€” intensity_mean and area are handled by the
+                    # 1. Features — intensity_mean and area are handled by the
                     # standard pipeline; other features are not surfaced here.
 
                     # 2. Isotropic measurements
@@ -2023,7 +2023,7 @@ class ProcessPanel(ControlPanelBlock, Styles):
                 msgBox = QMessageBox()
                 msgBox.setIcon(QMessageBox.Warning)
                 msgBox.setText(
-                    "Please set a cell size greater than zero, in Âµm."
+                    "Please set a cell size greater than zero, in µm."
                 )
                 msgBox.setWindowTitle("Invalid cell size")
                 msgBox.setStandardButtons(QMessageBox.Ok)

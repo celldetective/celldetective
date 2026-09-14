@@ -1,4 +1,4 @@
-﻿from PyQt5.QtWidgets import (
+from PyQt5.QtWidgets import (
     QApplication,
     QWidget,
     QMessageBox,
@@ -191,10 +191,10 @@ class ConfigNewExperiment(CelldetectiveMainWindow):
 
         self.ms_grid.addWidget(self.SliderPos, 4, 0, 1, 3)
 
-        self.ms_grid.addWidget(QLabel("Calibration from pixel to Âµm:"), 5, 0, 1, 3)
+        self.ms_grid.addWidget(QLabel("Calibration from pixel to µm:"), 5, 0, 1, 3)
         self.PxToUm_field = QLineEdit()
         self.PxToUm_field.setValidator(self.onlyFloat)
-        self.PxToUm_field.setPlaceholderText("1 px = XXX Âµm")
+        self.PxToUm_field.setPlaceholderText("1 px = XXX µm")
         self.PxToUm_field.setAlignment(Qt.AlignLeft)
         self.PxToUm_field.setEnabled(True)
         self.PxToUm_field.setFixedWidth(400)
@@ -286,7 +286,7 @@ class ConfigNewExperiment(CelldetectiveMainWindow):
 
         self.channels = [
             "brightfield",
-            "live nuclei channel\n(Hoechst, NucSpotÂ®)",
+            "live nuclei channel\n(Hoechst, NucSpot®)",
             "dead nuclei channel\n(PI)",
             "effector fluorescence\n(CFSE)",
             "adhesion\n(RICM, IRM)",
