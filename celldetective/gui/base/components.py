@@ -919,7 +919,8 @@ class ToolButton(QPushButton):
     its tools (the delete button of the tracking row does).
     """
 
-    size = TOOL_BUTTON_SIZE
+    # Not `size`: that would hide QWidget.size().
+    button_size = TOOL_BUTTON_SIZE
     icon_size = TOOL_ICON_SIZE
 
     def __init__(
@@ -952,7 +953,7 @@ class ToolButton(QPushButton):
         self._hovered = False
 
         self.setToolTip(tooltip)
-        self.setFixedSize(self.size, self.size)
+        self.setFixedSize(self.button_size, self.button_size)
         self.setIconSize(QSize(self.icon_size, self.icon_size))
         self.setStyleSheet(button_style("tool"))
 
