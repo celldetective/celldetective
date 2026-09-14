@@ -404,7 +404,9 @@ class TestMenuPainting:
         """An unticked entry is only an outline, as everywhere else."""
         style = CelldetectiveStyle("Fusion")
 
-        option = self.menu_option()
+        # No label: ClearType fringes of the ink text come close to the accent
+        # on Windows, only the indicator is under test here.
+        option = self.menu_option(text="")
         option.checkType = QStyleOptionMenuItem.NonExclusive
         option.checked = False
 
