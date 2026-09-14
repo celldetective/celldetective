@@ -1,4 +1,4 @@
-﻿import time
+import time
 
 from PyQt5.QtGui import QCloseEvent, QShowEvent
 from PyQt5.QtWidgets import (
