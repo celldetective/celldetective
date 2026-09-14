@@ -16,6 +16,7 @@ from PyQt5.QtWidgets import (
     QProgressDialog,
     QPushButton,
     QFrame,
+    QItemDelegate,
     QStyledItemDelegate,
     QStyleOptionViewItem,
     QTabWidget,
@@ -508,7 +509,9 @@ def style_comboboxes(root: QWidget) -> None:
     """
 
     for combo in root.findChildren(QComboBox):
-        if not isinstance(combo.itemDelegate(), CelldetectiveItemDelegate):
+        # Only the stock delegate Qt installs is replaced: a combo box drawing
+        # its own items (the colormap previews of superqt) keeps its delegate.
+        if type(combo.itemDelegate()) in (QItemDelegate, QStyledItemDelegate):
             combo.setItemDelegate(CelldetectiveItemDelegate(parent=combo))
 
 
