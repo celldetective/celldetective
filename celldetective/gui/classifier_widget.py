@@ -336,7 +336,13 @@ class ClassifierWidget(CelldetectiveWidget):
             [], [], color="k", alpha=self.currentAlpha
         )
         self.propscanvas.canvas.draw_idle()
-        self.propscanvas.canvas.setMinimumHeight(self.screen_height // 5)
+        # 4:3 rather than a fifth of the screen tall: as wide as the window, the
+        # latter squashed the feature on the y axis.
+        self.propscanvas.keep_aspect(
+            3 / 4,
+            min_height=self.screen_height // 5,
+            max_height=int(0.45 * self.screen_height),
+        )
 
     def closeEvent(self, event: QCloseEvent) -> None:
         """

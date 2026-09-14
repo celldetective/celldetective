@@ -189,6 +189,9 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
         self.generate_signal_choices()
         self.create_cell_signal_canvas()
         self.cell_fcanvas.setMinimumHeight(int(0.2 * self.screen_height))
+        # The plot takes the height the left panel has left, but no more than
+        # a little under its width: a tall window made it a narrow strip.
+        self.cell_fcanvas.limit_aspect(0.85)
 
         self.outliers_check = QCheckBox("Show outliers")
         self.outliers_check.toggled.connect(self.show_outliers)
@@ -274,18 +277,22 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
         self.left_panel.setSpacing(3)
 
         self.init_class_selection_block()
-        self.left_panel.addLayout(self.class_hbox, 5)
-        self.left_panel.addWidget(self.cell_info, 10)
+        # The rows keep their natural height (stretch 0): only the plot takes
+        # the room left, instead of it opening gaps between the rows.
+        self.left_panel.addLayout(self.class_hbox)
+        self.left_panel.addWidget(self.cell_info)
 
         self.init_options_block()
         self.init_correction_block()
-        self.left_panel.addLayout(self.options_hbox, 5)
-        self.left_panel.addLayout(self.action_hbox, 5)
+        self.left_panel.addLayout(self.options_hbox)
+        self.left_panel.addLayout(self.action_hbox)
 
-        self.left_panel.addWidget(self.cell_fcanvas, 45)
+        # Outweighs the stretch above the save button: the plot takes the room
+        # until its height is capped, and only the rest goes there.
+        self.left_panel.addWidget(self.cell_fcanvas, 100)
 
         self.init_plot_buttons_block()
-        self.left_panel.addLayout(self.plot_buttons_hbox, 5)
+        self.left_panel.addLayout(self.plot_buttons_hbox)
 
         signal_choice_vbox = QVBoxLayout()
         signal_choice_vbox.setContentsMargins(30, 0, 30, 0)
@@ -297,8 +304,12 @@ class BaseAnnotator(CelldetectiveMainWindow, Styles):
 
         self.left_panel.addLayout(signal_choice_vbox, 15)
 
+        # Room the capped plot does not take collects above the save button,
+        # rather than between the rows.
+        self.left_panel.addStretch(1)
+
         self.init_save_btn_block()
-        self.left_panel.addLayout(self.btn_hbox, 5)
+        self.left_panel.addLayout(self.btn_hbox)
 
         # Right panel
         self.right_panel = QVBoxLayout()
