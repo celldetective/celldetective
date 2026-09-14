@@ -206,6 +206,15 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         self.looped_animation()
         self.create_cell_signal_canvas()
 
+        # Widget settings. Before populate_widget, which sizes the window from
+        # the screen: set after it, the annotator failed to open.
+        self.screen_height = (
+            self.parent_window.parent_window.parent_window.screen_height
+        )
+        self.screen_width = self.parent_window.parent_window.parent_window.screen_width
+        self.setMinimumWidth(800)
+        self.setMinimumHeight(600)
+
         self.populate_widget()
         self.fill_signal_choices()
 
@@ -218,15 +227,9 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         self.give_neighbor_cell_information()
         self.give_pair_information()
 
-        # Widget settings
-        self.screen_height = (
-            self.parent_window.parent_window.parent_window.screen_height
-        )
-        self.screen_width = self.parent_window.parent_window.parent_window.screen_width
-        self.setMinimumWidth(800)
-        self.setMinimumHeight(600)
-
-        # self.cell_fcanvas.setMinimumHeight(int(0.3*self.screen_height))
+        # The plot takes the height the left panel has left, but no more than
+        # a little under its width, as in the other annotators.
+        self.cell_fcanvas.limit_aspect(0.85)
 
     def resizeEvent(self, event: QResizeEvent) -> None:
         """
@@ -424,7 +427,9 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         self.no_event_shortcut.setEnabled(False)
 
         # Cell signals
-        self.left_panel.addWidget(self.cell_fcanvas)
+        # Outweighs the stretch above the save button: the plot takes the room
+        # until its height is capped, and only the rest goes there.
+        self.left_panel.addWidget(self.cell_fcanvas, 100)
 
         plot_buttons_hbox = QHBoxLayout()
         plot_buttons_hbox.setContentsMargins(0, 0, 0, 0)
@@ -438,17 +443,26 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         # self.normalize_features_btn.setShortcut(QKeySequence('n'))
         self.normalize_features_btn.clicked.connect(self.normalize_features)
 
-        plot_buttons_hbox.addWidget(QLabel(""), 90)
-        plot_buttons_hbox.addWidget(self.normalize_features_btn, 5)
         self.normalized_signals = False
 
         self.log_btn = QPushButton()
         self.log_btn.setIcon(icon(MDI6.math_log, color="black"))
         self.log_btn.setStyleSheet(self.button_select_all)
         self.log_btn.clicked.connect(self.switch_to_log)
-        plot_buttons_hbox.addWidget(self.log_btn, 5)
 
-        self.left_panel.addLayout(plot_buttons_hbox)
+        # In the toolbar of the plot rather than on a row of their own, as in
+        # the phenotype annotator: the row cost the plot its height in a short
+        # window.
+        toolbar = getattr(self.cell_fcanvas, "toolbar", None)
+        if toolbar is not None:
+            toolbar.addSeparator()
+            toolbar.addWidget(self.normalize_features_btn)
+            toolbar.addWidget(self.log_btn)
+        else:
+            plot_buttons_hbox.addStretch(1)
+            plot_buttons_hbox.addWidget(self.normalize_features_btn)
+            plot_buttons_hbox.addWidget(self.log_btn)
+            self.left_panel.addLayout(plot_buttons_hbox)
 
         signal_choice_grid = QVBoxLayout()
         signal_choice_grid.setContentsMargins(30, 0, 70, 5)
@@ -491,6 +505,9 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         self.export_btn.setIcon(icon(MDI6.export, color="black"))
         self.export_btn.setIconSize(QSize(25, 25))
         btn_hbox.addWidget(self.export_btn, 10)
+        # Room the capped plot does not take collects above the save button,
+        # rather than between the rows.
+        self.left_panel.addStretch(1)
         self.left_panel.addLayout(btn_hbox)
 
         # Animation
@@ -1395,16 +1412,11 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         )
 
         if not os.path.exists(self.relative_trajectories_path):
-
-            msgBox = QMessageBox()
-            msgBox.setIcon(QMessageBox.Warning)
-            msgBox.setText(
+            # Raised rather than closing the window: __init__ carried on after
+            # the message and crashed on the missing table. The caller shows it.
+            raise ValueError(
                 "The pair measurements cannot be detected... Please measure the pairs first."
             )
-            msgBox.setWindowTitle("Warning")
-            msgBox.setStandardButtons(QMessageBox.Ok)
-            returnValue = msgBox.exec()
-            self.close()
         else:
             # Load and prep tracks
             self.df_relative = pd.read_csv(self.relative_trajectories_path)

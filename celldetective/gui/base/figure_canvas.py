@@ -184,8 +184,92 @@ class FigureCanvas(CelldetectiveWidget):
             self.layout.addWidget(self.toolbar)
 
         self.manual_layout = False
+        # Height over width kept by the plot as its width changes, see
+        # `keep_aspect`. None leaves the height to the layout.
+        self.aspect = None
+        self.aspect_min_height = 0
+        self.aspect_max_height = None
+        # Largest height over width, see `limit_aspect`.
+        self.max_aspect = None
         # center_window(self)
         self.setAttribute(Qt.WA_DeleteOnClose)
+
+    def limit_aspect(self, max_ratio: float) -> None:
+        """
+        Never let the plot grow taller than `max_ratio` times its width.
+
+        For a plot sharing a panel whose height is set by something else (the
+        image of an annotator): it takes the room it is given, which may be
+        little, but stops before turning into a tall narrow strip. Unlike
+        `keep_aspect`, it only ever caps the height, so it cannot push the plot
+        over the widgets below it.
+
+        Parameters
+        ----------
+        max_ratio : float
+            The largest height over width, e.g. 0.85.
+        """
+
+        self.max_aspect = max_ratio
+        self._fit_aspect()
+
+    def keep_aspect(
+        self,
+        ratio: float,
+        min_height: Optional[int] = 0,
+        max_height: Optional[int] = None,
+    ) -> None:
+        """
+        Keep the plot about `ratio` times as tall as it is wide.
+
+        A plot given a height from the screen alone ends up a flat band once
+        its panel is wide. The height follows the width instead, the toolbar
+        aside, within bounds so that a very narrow or very wide panel neither
+        crushes the plot nor pushes the rest of the window off the screen.
+
+        Parameters
+        ----------
+        ratio : float
+            Height over width, e.g. 3/4.
+        min_height : int, optional
+            The plot never gets shorter than this.
+        max_height : int, optional
+            The plot never gets taller than this.
+        """
+
+        self.aspect = ratio
+        self.aspect_min_height = min_height or 0
+        self.aspect_max_height = max_height
+        self._fit_aspect()
+
+    def _fit_aspect(self) -> None:
+        """Give the plot the height its width calls for."""
+
+        # Only the width drives both: the new height comes back as a resize of
+        # the same width, which leaves the bounds as they are.
+        if self.aspect is not None:
+            height = int(self.canvas.width() * self.aspect)
+            if self.aspect_max_height is not None:
+                height = min(height, self.aspect_max_height)
+            height = max(height, self.aspect_min_height)
+
+            if self.canvas.minimumHeight() != height:
+                self.canvas.setMinimumHeight(height)
+
+        if self.max_aspect is not None:
+            cap = int(self.canvas.width() * self.max_aspect)
+            # The frame is capped too, toolbar included, so that the room left
+            # goes to the rest of the panel rather than into a gap in here.
+            margins = self.layout.contentsMargins()
+            chrome = margins.top() + margins.bottom()
+            if getattr(self, "toolbar", None) is not None:
+                chrome += self.toolbar.sizeHint().height() + self.layout.spacing()
+            frame_cap = max(cap + chrome, self.minimumHeight())
+
+            if self.canvas.maximumHeight() != frame_cap - chrome:
+                self.canvas.setMaximumHeight(frame_cap - chrome)
+            if self.maximumHeight() != frame_cap:
+                self.setMaximumHeight(frame_cap)
 
     def resizeEvent(self, event: QResizeEvent) -> None:
         """
@@ -197,6 +281,7 @@ class FigureCanvas(CelldetectiveWidget):
             The resize event.
         """
         super().resizeEvent(event)
+        self._fit_aspect()
         try:
             manual_layout = getattr(self, "manual_layout", False)
 
