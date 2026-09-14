@@ -16,7 +16,7 @@ from PyQt5.QtCore import Qt, QSize, QAbstractTableModel
 from PyQt5.QtGui import QBrush, QColor, QDoubleValidator, QIntValidator
 
 from celldetective.gui.base.list_widget import ListWidget
-from celldetective.gui.base.styles import DISABLED_FG, Styles
+from celldetective.gui.base.styles import DISABLED_INK, Styles
 from celldetective.gui.base.components import CelldetectiveWidget
 from celldetective.gui.base.help_panel import HelpButton, open_help
 from superqt.fonticon import icon
@@ -333,7 +333,7 @@ class PandasModel(QAbstractTableModel):
                     return QBrush(QColor(Qt.white))
                 return None
             if self.is_missing(self._data.iloc[row, column]):
-                return QBrush(QColor(DISABLED_FG))
+                return QBrush(QColor(DISABLED_INK))
         return None
 
     def headerData(self, rowcol: int, orientation: int, role: int) -> Any:
