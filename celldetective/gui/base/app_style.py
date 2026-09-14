@@ -30,7 +30,7 @@ from celldetective.gui.base.styles import (
     CARD_BORDER_COLOR,
     CARD_COLOR,
     CELLDETECTIVE_BLUE,
-    DISABLED_FG,
+    DISABLED_INK,
     INK_COLOR,
     PROGRESSBAR_DISABLED_BORDER,
     PROGRESSBAR_DISABLED_CHUNK,
@@ -583,7 +583,7 @@ class CelldetectiveStyle(QProxyStyle):
             flags = int(Qt.AlignCenter | Qt.TextSingleLine)
 
             for clip, color in (
-                (empty, INK_COLOR if enabled else DISABLED_FG),
+                (empty, INK_COLOR if enabled else DISABLED_INK),
                 (filled, "#FFFFFF"),
             ):
                 if clip.width() <= 0:

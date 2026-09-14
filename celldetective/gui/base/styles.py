@@ -89,7 +89,11 @@ SURFACE_PRESSED = "#DDE3E8"
 GHOST_HOVER = "#BDBDBD"
 GHOST_PRESSED = "#A8A8A8"
 DISABLED_BG = "#a8b3bd"
+# White is only for text on DISABLED_BG, i.e. a filled button.
 DISABLED_FG = "#ffffff"
+# A disabled glyph or label drawn straight on a light surface: an icon, an
+# outlined button, a missing value. White there is invisible.
+DISABLED_INK = "#98A3AD"
 
 # The icon buttons closing a row: the cogs, the eyes, the helpers. They rest at
 # full weight, in the ink of the software rather than raw black.
@@ -97,7 +101,7 @@ DISABLED_FG = "#ffffff"
 # Muting them was tried and undone. These are thin outline glyphs: they carry
 # far less weight on the page than their contrast against it suggests, and a
 # greyed one stops looking like something to press -- it reads as a control
-# that is unavailable, which is what DISABLED_FG is for. What keeps the tools
+# that is unavailable, which is what DISABLED_INK is for. What keeps the tools
 # from crowding a row is where they sit, not how pale they are: the decorative
 # icons are gone from the labels, and what is left is lined up in the fixed
 # columns of `tool_strip`. The accent they take under the mouse marks them as
@@ -274,7 +278,7 @@ def button_style(role: str = "primary") -> str:
             }}
             QPushButton:disabled {{
                 border-color: {DISABLED_BG};
-                color: {DISABLED_FG};
+                color: {DISABLED_INK};
             }}
             QPushButton:focus {{
                 border-color: {ACCENT_PRESSED};
@@ -299,7 +303,7 @@ def button_style(role: str = "primary") -> str:
             QPushButton:pressed {{ background-color: {SURFACE_PRESSED}; }}
             QPushButton:disabled {{
                 background-color: #F5F7F9;
-                color: {DISABLED_FG};
+                color: {DISABLED_INK};
                 border-color: #EDF0F3;
             }}
             {focus}
@@ -358,7 +362,7 @@ def button_style(role: str = "primary") -> str:
             QPushButton:pressed {{ background-color: {DANGER_SOFT_STRONG}; }}
             QPushButton:disabled {{
                 border-color: {DISABLED_BG};
-                color: {DISABLED_FG};
+                color: {DISABLED_INK};
             }}
             QPushButton:focus {{
                 border-color: {DANGER_COLOR};

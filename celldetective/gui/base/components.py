@@ -43,7 +43,7 @@ from celldetective.gui.base.styles import (
     button_style,
     CELLDETECTIVE_BLUE,
     DANGER_COLOR,
-    DISABLED_FG,
+    DISABLED_INK,
     INK_COLOR,
     TOOL_BUTTON_SIZE,
     TOOL_ICON_SIZE,
@@ -968,7 +968,7 @@ class ToolButton(QPushButton):
         """Draw the icon in the color the current state calls for."""
 
         if not self.isEnabled():
-            color = DISABLED_FG
+            color = DISABLED_INK
         elif self._hovered or self.isChecked():
             # A checked button stays lit: it is the only thing marking a tool
             # that is currently on, the disc behind it being a faint tint.
@@ -1072,7 +1072,7 @@ class BrowseButton(QPushButton):
         self.setIcon(
             icon(
                 self.icon_enum,
-                color=CELLDETECTIVE_BLUE if self.isEnabled() else DISABLED_FG,
+                color=CELLDETECTIVE_BLUE if self.isEnabled() else DISABLED_INK,
             )
         )
 
