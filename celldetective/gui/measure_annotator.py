@@ -18,7 +18,7 @@ import numpy as np
 import pandas as pd
 import os
 from matplotlib.cm import tab10
-from superqt import QLabeledDoubleSlider
+from celldetective.gui.base.sliders import QLabeledDoubleSlider
 from superqt.fonticon import icon
 from fonticon_mdi6 import MDI6
 

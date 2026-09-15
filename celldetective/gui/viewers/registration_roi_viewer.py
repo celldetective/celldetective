@@ -1,7 +1,7 @@
 from typing import Any, Optional
 
 import numpy as np
-from superqt import QLabeledDoubleSlider
+from celldetective.gui.base.sliders import QLabeledDoubleSlider
 
 from celldetective.gui.gui_utils import QuickSliderLayout
 from celldetective.gui.viewers.size_viewer import CellSizeViewer
@@ -14,8 +14,8 @@ class RegistrationROIViewer(CellSizeViewer):
 
     A :class:`CellSizeViewer` whose slider sets a radius, with the circle fixed at the image
     centre as in :func:`celldetective.utils.registration.tukey_window`. It adds a dashed circle
-    at the start of the Tukey taper, a shading of the pixels by how little they weigh in the correlation (fully
-    shaded pixels are ignored) and a Tukey α slider.
+    at the start of the Tukey taper, a shading of the pixels by how little they weigh in the
+    correlation (fully shaded pixels are ignored) and a Tukey α slider.
 
     Parameters
     ----------

@@ -21,7 +21,8 @@ from celldetective.gui.tableUI import TableUI
 from celldetective.utils.experiment import collect_experiment_metadata
 
 from superqt.fonticon import icon
-from superqt import QLabeledSlider, QLabeledDoubleSlider
+from superqt import QLabeledSlider
+from celldetective.gui.base.sliders import QLabeledDoubleSlider
 from fonticon_mdi6 import MDI6
 import numpy as np
 import json

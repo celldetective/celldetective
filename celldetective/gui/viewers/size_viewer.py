@@ -5,7 +5,7 @@ import numpy as np
 from PyQt5.QtCore import QSize
 from PyQt5.QtWidgets import QLineEdit, QListWidget, QHBoxLayout, QPushButton, QLabel
 from fonticon_mdi6 import MDI6
-from superqt import QLabeledDoubleSlider
+from celldetective.gui.base.sliders import QLabeledDoubleSlider
 from superqt.fonticon import icon
 
 from celldetective.gui.gui_utils import QuickSliderLayout

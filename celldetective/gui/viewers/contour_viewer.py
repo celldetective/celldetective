@@ -15,7 +15,8 @@ from PyQt5.QtWidgets import (
 )
 from fonticon_mdi6 import MDI6
 from natsort import natsorted
-from superqt import QLabeledDoubleSlider, QLabeledRangeSlider
+from superqt import QLabeledRangeSlider
+from celldetective.gui.base.sliders import QLabeledDoubleSlider
 from superqt.fonticon import icon
 from collections import OrderedDict
 

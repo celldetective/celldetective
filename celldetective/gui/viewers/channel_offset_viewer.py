@@ -12,10 +12,12 @@ from PyQt5.QtWidgets import (
     QShortcut,
     QMainWindow,
 )
-from superqt import QLabeledDoubleSlider, QLabeledDoubleRangeSlider
+from celldetective.gui.base.sliders import (
+    QLabeledDoubleSlider,
+    QLabeledDoubleRangeSlider,
+)
 
 from celldetective.gui.base.components import QHSeperationLine
-from celldetective.gui.base.utils import safe_slider_range
 from celldetective.gui.gui_utils import QuickSliderLayout, ThresholdLineEdit
 from celldetective.gui.viewers.base_viewer import StackVisualizer
 from celldetective.utils.image_loaders import (
@@ -142,7 +144,7 @@ class ChannelOffsetViewer(StackVisualizer):
                 np.nanpercentile(self.overlay_init_frame, 0.1),
                 np.nanpercentile(self.overlay_init_frame, 99.99),
             ],
-            slider_range=safe_slider_range(
+            slider_range=(
                 np.nanmin(self.overlay_init_frame),
                 np.nanmax(self.overlay_init_frame),
             ),
@@ -268,10 +270,8 @@ class ChannelOffsetViewer(StackVisualizer):
             self.im_overlay.autoscale()
             I_min, I_max = self.im_overlay.get_clim()
             self.overlay_contrast_slider.setRange(
-                *safe_slider_range(
-                    np.nanmin([self.overlay_init_frame, self.overlay_last_frame]),
-                    np.nanmax([self.overlay_init_frame, self.overlay_last_frame]),
-                )
+                np.nanmin([self.overlay_init_frame, self.overlay_last_frame]),
+                np.nanmax([self.overlay_init_frame, self.overlay_last_frame]),
             )
             self.overlay_contrast_slider.setValue((I_min, I_max))
 

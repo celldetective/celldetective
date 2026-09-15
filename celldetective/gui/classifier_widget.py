@@ -13,7 +13,8 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, QSize
 from PyQt5.QtGui import QCloseEvent
-from superqt import QLabeledSlider, QLabeledDoubleSlider, QSearchableComboBox
+from superqt import QLabeledSlider, QSearchableComboBox
+from celldetective.gui.base.sliders import QLabeledDoubleSlider
 from superqt.fonticon import icon
 from fonticon_mdi6 import MDI6
 
@@ -761,4 +762,3 @@ class ClassifierWidget(CelldetectiveWidget):
         self.propscanvas.canvas.draw_idle()
 
         logger.info("Log scale toggle done.")
-

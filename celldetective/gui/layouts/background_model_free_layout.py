@@ -18,7 +18,8 @@ from PyQt5.QtWidgets import (
     QMainWindow,
 )
 from fonticon_mdi6 import MDI6
-from superqt import QLabeledRangeSlider, QLabeledSlider, QLabeledDoubleRangeSlider
+from superqt import QLabeledRangeSlider, QLabeledSlider
+from celldetective.gui.base.sliders import QLabeledDoubleRangeSlider
 from superqt.fonticon import icon
 from tifffile import imread
 

@@ -26,7 +26,8 @@ from PyQt5.QtWidgets import (
 )
 from fonticon_mdi6 import MDI6
 
-from superqt import QLabeledSlider, QLabeledDoubleRangeSlider
+from superqt import QLabeledSlider
+from celldetective.gui.base.sliders import QLabeledDoubleRangeSlider
 from superqt.fonticon import icon
 
 from celldetective.gui.gui_utils import PreprocessingLayout
@@ -39,7 +40,7 @@ from celldetective.gui.gui_utils import color_from_class
 from celldetective.gui.base.help_panel import HelpButton, open_help
 from celldetective.gui.base.figure_canvas import FigureCanvas
 from celldetective.gui.base.threads import start_tracked, stop_thread
-from celldetective.gui.base.utils import is_alive, safe_slider_range
+from celldetective.gui.base.utils import is_alive
 from celldetective.gui.viewers.threshold_viewer import ThresholdedStackVisualizer
 from celldetective.utils.image_loaders import load_frames
 
@@ -293,10 +294,8 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
         self.threshold_slider.setOrientation(Qt.Horizontal)
         self.threshold_slider.setDecimals(5)
         self.threshold_slider.setRange(
-            *safe_slider_range(
-                np.amin(self.img[self.img == self.img]),
-                np.amax(self.img[self.img == self.img]),
-            )
+            np.amin(self.img[self.img == self.img]),
+            np.amax(self.img[self.img == self.img]),
         )
         self.threshold_slider.setValue(
             [np.percentile(self.img.ravel(), 90), np.amax(self.img)]
@@ -565,10 +564,8 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
         self.ax_hist.set_ylim(0, self.hist_y.max())
 
         self.threshold_slider.setRange(
-            *safe_slider_range(
-                np.amin(self.img[self.img == self.img]),
-                np.amax(self.img[self.img == self.img]),
-            )
+            np.amin(self.img[self.img == self.img]),
+            np.amax(self.img[self.img == self.img]),
         )
         self.threshold_slider.setValue(
             [np.nanpercentile(self.img.ravel(), 90), np.amax(self.img)]
@@ -603,10 +600,8 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
         self.canvas_hist.canvas.draw()
 
         self.threshold_slider.setRange(
-            *safe_slider_range(
-                np.amin(self.img[self.img == self.img]),
-                np.amax(self.img[self.img == self.img]),
-            )
+            np.amin(self.img[self.img == self.img]),
+            np.amax(self.img[self.img == self.img]),
         )
         self.threshold_slider.setValue(
             [np.nanpercentile(self.img.ravel(), 90), np.amax(self.img)]

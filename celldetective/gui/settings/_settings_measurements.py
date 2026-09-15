@@ -17,7 +17,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, QSize, QTimer
 
-from celldetective.gui.base.utils import center_window, safe_slider_range
+from celldetective.gui.base.utils import center_window
 from celldetective.gui.gui_utils import (
     GeometryChoice,
     OperationChoice,
@@ -25,7 +25,7 @@ from celldetective.gui.gui_utils import (
 from celldetective.gui.base.list_widget import ListWidget
 from celldetective.gui.base.feature_choice import FeatureChoice
 from celldetective.gui.base.components import QHSeperationLine
-from superqt import QLabeledDoubleSlider
+from celldetective.gui.base.sliders import QLabeledDoubleSlider
 from superqt.fonticon import icon
 from fonticon_mdi6 import MDI6
 
@@ -1024,10 +1024,7 @@ class SettingsMeasurements(CelldetectiveSettingsPanel):
             vmax=np.percentile(self.test_frame[:, :, value].flatten(), 99.99),
         )
         self.contrast_slider_contour.setRange(
-            *safe_slider_range(
-                np.amin(self.test_frame[:, :, value]),
-                np.amax(self.test_frame[:, :, value]),
-            )
+            np.amin(self.test_frame[:, :, value]), np.amax(self.test_frame[:, :, value])
         )
         self.contrast_slider_contour.setValue(
             [

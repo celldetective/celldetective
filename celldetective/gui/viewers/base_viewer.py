@@ -10,14 +10,15 @@ from PyQt5.QtWidgets import (
     QComboBox,
 )
 from fonticon_mdi6 import MDI6
-from superqt import QLabeledDoubleRangeSlider, QLabeledSlider
+from superqt import QLabeledSlider
+from celldetective.gui.base.sliders import QLabeledDoubleRangeSlider
 from superqt.fonticon import icon
 import matplotlib.gridspec as gridspec
 import matplotlib.backend_bases
 
 from celldetective.gui.base.components import CelldetectiveWidget
 from celldetective.gui.base.threads import start_tracked, stop_thread
-from celldetective.gui.base.utils import center_window, safe_slider_range
+from celldetective.gui.base.utils import center_window
 from celldetective.utils.image_loaders import (
     auto_load_number_of_frames,
     _get_img_num_per_channel,
@@ -852,7 +853,7 @@ class StackVisualizer(CelldetectiveWidget):
             min_val = np.nanmin(self.init_frame)
             max_val = np.nanmax(self.init_frame)
 
-        self.contrast_slider.setRange(*safe_slider_range(min_val, max_val))
+        self.contrast_slider.setRange(min_val, max_val)
 
         # Set initial value to percentiles to avoid outliers
         if np.all(np.isnan(self.init_frame)):
