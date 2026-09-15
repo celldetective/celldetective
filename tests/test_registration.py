@@ -237,7 +237,7 @@ def test_register_stacks_exports_corrected_movie(tmp_path):
 def test_register_stacks_skips_position_without_movie(tmp_path):
     exp_dir, movie_dir = _write_experiment(tmp_path)
     # A position listed before the valid one, with no movie matching the prefix.
-    (tmp_path / "Experiment" / "W1" / "099" / "movie").mkdir(parents=True)
+    (tmp_path / "Experiment" / "W1" / "10" / "movie").mkdir(parents=True)
     register_stacks(
         exp_dir,
         well_option="*",

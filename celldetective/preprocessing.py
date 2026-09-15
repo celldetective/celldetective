@@ -91,6 +91,152 @@ def _log_preprocessing_step(pos_path: str, correction_type: str, params: Dict[st
         logger.warning(f"Could not write preprocessing log for {pos_path}: {e}")
 
 
+def _correction_inputs(
+    experiment: str, target_channel: str, movie_prefix: Optional[str]
+):
+    """
+    Read the experiment settings shared by the per-position corrections.
+
+    Returns
+    -------
+    tuple
+        ``(len_movie, movie_prefix, channel_index, nbr_channels)``: the configured movie length,
+        the movie prefix (``movie_prefix`` if given, else the configured one), the index of
+        ``target_channel`` and the number of channels.
+    """
+    config = get_config(experiment)
+    movie_settings = config_section_to_dict(config, "MovieSettings")
+    if movie_prefix is None:
+        movie_prefix = movie_settings["movie_prefix"]
+    channel_index = _extract_channel_indices_from_config(config, [target_channel])[0]
+    return (
+        float(movie_settings["len_movie"]),
+        movie_prefix,
+        channel_index,
+        _extract_nbr_channels_from_config(config),
+    )
+
+
+def _iter_wells(
+    experiment: str,
+    well_option,
+    position_option,
+    progress_callback: Optional[Callable] = None,
+    show_progress: bool = True,
+):
+    """
+    Yield ``(well_index, well_path, positions)`` for each selected well of an experiment.
+
+    ``positions`` are the selected positions of the well. The well progress is reported before
+    and after each well, including when the caller skips the rest of a well with ``continue``.
+    """
+    wells = get_experiment_wells(experiment)
+    well_indices, position_indices = interpret_wells_and_positions(
+        experiment, well_option, position_option
+    )
+    total = len(well_indices)
+    for k, well_path in enumerate(tqdm(wells[well_indices], disable=not show_progress)):
+        if progress_callback:
+            progress_callback(level="well", iter=k, total=total)
+        positions = get_positions_in_well(well_path)[position_indices]
+        if isinstance(positions[0], np.ndarray):
+            positions = positions[0]
+        yield well_indices[k], well_path, positions
+        if progress_callback:
+            progress_callback(level="well", iter=k + 1, total=total)
+
+
+def _iter_movies(
+    positions,
+    movie_prefix: Optional[str],
+    len_movie: float,
+    progress_callback: Optional[Callable] = None,
+    show_progress: bool = True,
+):
+    """
+    Yield ``(pos_path, stack_path, stack_length)`` for each position that holds a movie.
+
+    ``stack_length`` is read from the movie, or ``len_movie`` if it cannot be. Positions without
+    a movie are skipped with a warning. The position progress is reported once each position is
+    done.
+    """
+    total = len(positions)
+    for pidx, pos_path in enumerate(tqdm(positions, disable=not show_progress)):
+        stack_path = get_position_movie_path(pos_path, prefix=movie_prefix)
+        if stack_path is None:
+            logger.warning(f"No stack could be found in {pos_path}... Skip...")
+        else:
+            stack_length = auto_load_number_of_frames(stack_path)
+            yield pos_path, stack_path, (
+                len_movie if stack_length is None else stack_length
+            )
+        if progress_callback:
+            progress_callback(
+                level="position", iter=pidx, total=total, stage="correcting"
+            )
+
+
+def _write_frames(
+    frames,
+    n_frames: int,
+    stack_path: str,
+    prefix: Optional[str],
+    export: bool,
+    return_stacks: bool,
+) -> Optional[np.ndarray]:
+    """
+    Export and/or collect the corrected frames of a stack, one frame in memory at a time.
+
+    Parameters
+    ----------
+    frames : iterable of numpy.ndarray
+        Corrected ``(Y, X, C)`` frames, in temporal order.
+    n_frames : int
+        Number of frames in ``frames``.
+    stack_path : str
+        Source stack. The frames are written next to it as ``<prefix>_<file>``, or over it
+        through a temporary file if ``prefix`` is None.
+    prefix : str or None
+        Prefix of the exported file.
+    export : bool
+        Whether to write the frames to disk.
+    return_stacks : bool
+        Whether to collect and return the frames.
+
+    Returns
+    -------
+    numpy.ndarray or None
+        The ``(T, Y, X, C)`` float32 stack if ``return_stacks`` is True, otherwise None.
+    """
+    import tifffile.tifffile as tiff
+
+    path, file = os.path.split(stack_path)
+    output_path = os.sep.join(
+        [path, file if prefix is None else "_".join([prefix, file])]
+    )
+    write_path = os.sep.join([path, "temp_" + file]) if prefix is None else output_path
+    writer = (
+        tiff.TiffWriter(write_path, bigtiff=True, imagej=True)
+        if export
+        else nullcontext()
+    )
+    stack = None
+    with writer as tif:
+        for t, frame in enumerate(frames):
+            if return_stacks:
+                if stack is None:
+                    stack = np.empty((n_frames,) + frame.shape, dtype=np.float32)
+                stack[t] = frame
+            if export:
+                tif.write(
+                    np.moveaxis(frame, -1, 0).astype(np.float32, copy=False),
+                    contiguous=True,
+                )
+    if export and prefix is None:
+        os.replace(write_path, output_path)
+    return stack
+
+
 def estimate_background_per_condition(
     experiment: str,
     threshold_on_std: float = 1,
@@ -274,12 +420,10 @@ def estimate_background_per_condition(
                         new_frames.append(f.copy())
 
                     frame = np.nanmedian(new_frames, axis=0)
+                frame_mean_per_position.append(frame)
             else:
+                # Left out of the median: an empty entry would make it fail for the whole well.
                 logger.warning(f"Stack not found for position {pos_path}...")
-                frame = []
-
-            # store
-            frame_mean_per_position.append(frame)
 
             if progress_callback:
                 progress_callback(
@@ -404,31 +548,18 @@ def correct_background_model_free(
 
     """
 
-    config = get_config(experiment)
-    wells = get_experiment_wells(experiment)
-    len_movie = float(config_section_to_dict(config, "MovieSettings")["len_movie"])
-    if movie_prefix is None:
-        movie_prefix = config_section_to_dict(config, "MovieSettings")["movie_prefix"]
-
-    well_indices, position_indices = interpret_wells_and_positions(
-        experiment, well_option, position_option
+    len_movie, movie_prefix, channel_index, nbr_channels = _correction_inputs(
+        experiment, target_channel, movie_prefix
     )
-    channel_indices = _extract_channel_indices_from_config(config, [target_channel])
-    nbr_channels = _extract_nbr_channels_from_config(config)
-    img_num_channels = _get_img_num_per_channel(
-        channel_indices, int(len_movie), nbr_channels
-    )
-
     stacks = []
 
-    total_wells = len(wells[well_indices])
-
-    for k, well_path in enumerate(
-        tqdm(wells[well_indices], disable=not show_progress_per_well)
+    for well_index, well_path, positions in _iter_wells(
+        experiment,
+        well_option,
+        position_option,
+        progress_callback=progress_callback,
+        show_progress=show_progress_per_well,
     ):
-        if progress_callback:
-            progress_callback(level="well", iter=k, total=total_wells)
-
         well_name, _ = extract_well_name_and_number(well_path)
 
         if progress_callback:
@@ -439,7 +570,7 @@ def correct_background_model_free(
             background = estimate_background_per_condition(
                 experiment,
                 threshold_on_std=threshold_on_std,
-                well_option=int(well_indices[k]),
+                well_option=int(well_index),
                 target_channel=target_channel,
                 frame_range=frame_range,
                 mode=mode,
@@ -450,16 +581,11 @@ def correct_background_model_free(
                 fix_nan=fix_nan,
                 progress_callback=progress_callback,
             )
-            background = background[0]
-            background = background["bg"]
+            background = background[0]["bg"]
         except Exception as e:
             logger.error(
                 f'Background could not be estimated due to error "{e}"... Skipping well {well_name}...'
             )
-            if progress_callback:
-                progress_callback(level="well", iter=k + 1, total=total_wells)
-            if progress_callback:
-                progress_callback(level="well", iter=k + 1, total=total_wells)
             continue
 
         if progress_callback:
@@ -467,87 +593,61 @@ def correct_background_model_free(
                 level="position", iter=-1, total=1, status="Applying background..."
             )
 
-        positions = get_positions_in_well(well_path)
-        selection = positions[position_indices]
-        if isinstance(selection[0], np.ndarray):
-            selection = selection[0]
-
-        total_pos_in_well = len(selection)
-
-        for pidx, pos_path in enumerate(
-            tqdm(selection, disable=not show_progress_per_pos)
+        for pos_path, stack_path, stack_length in _iter_movies(
+            positions,
+            movie_prefix,
+            len_movie,
+            progress_callback=progress_callback,
+            show_progress=show_progress_per_pos,
         ):
-
-            stack_path = get_position_movie_path(pos_path, prefix=movie_prefix)
             logger.info(
                 f"Applying the correction to position {extract_position_name(pos_path)}..."
             )
-            if stack_path is not None:
-                len_movie_auto = auto_load_number_of_frames(stack_path)
-                if len_movie_auto is not None:
-                    len_movie = len_movie_auto
-                img_num_channels = _get_img_num_per_channel(
-                    channel_indices, int(len_movie), nbr_channels
-                )
-
-                corrected_stack = apply_background_to_stack(
-                    stack_path,
-                    background,
-                    target_channel_index=channel_indices[0],
-                    nbr_channels=nbr_channels,
-                    stack_length=len_movie,
-                    threshold_on_std=threshold_on_std,
-                    optimize_option=optimize_option,
-                    opt_coef_range=opt_coef_range,
-                    opt_coef_nbr=opt_coef_nbr,
-                    operation=operation,
-                    clip=clip,
-                    offset=offset,
-                    export=export,
-                    fix_nan=fix_nan,
-                    activation_protocol=activation_protocol,
-                    prefix=export_prefix,
-                    progress_callback=progress_callback,
-                )
-                logger.info("Correction successful.")
-                _log_preprocessing_step(
-                    pos_path,
-                    "model-free",
-                    {
-                        "target_channel": target_channel,
-                        "mode": mode,
-                        "operation": operation,
-                        "clip": clip,
-                        "threshold_on_std": threshold_on_std,
-                        "offset": offset,
-                        "frame_range": frame_range,
-                        "optimize_option": optimize_option,
-                        "opt_coef_range": opt_coef_range,
-                        "opt_coef_nbr": opt_coef_nbr,
-                        "fix_nan": fix_nan,
-                        "activation_protocol": activation_protocol,
-                        "movie_prefix": movie_prefix,
-                        "export_prefix": export_prefix,
-                    },
-                )
-                if return_stacks:
-                    stacks.append(corrected_stack)
-                else:
-                    del corrected_stack
-                collect()
+            corrected_stack = apply_background_to_stack(
+                stack_path,
+                background,
+                target_channel_index=channel_index,
+                nbr_channels=nbr_channels,
+                stack_length=stack_length,
+                threshold_on_std=threshold_on_std,
+                optimize_option=optimize_option,
+                opt_coef_range=opt_coef_range,
+                opt_coef_nbr=opt_coef_nbr,
+                operation=operation,
+                clip=clip,
+                offset=offset,
+                export=export,
+                fix_nan=fix_nan,
+                activation_protocol=activation_protocol,
+                prefix=export_prefix,
+                progress_callback=progress_callback,
+            )
+            logger.info("Correction successful.")
+            _log_preprocessing_step(
+                pos_path,
+                "model-free",
+                {
+                    "target_channel": target_channel,
+                    "mode": mode,
+                    "operation": operation,
+                    "clip": clip,
+                    "threshold_on_std": threshold_on_std,
+                    "offset": offset,
+                    "frame_range": frame_range,
+                    "optimize_option": optimize_option,
+                    "opt_coef_range": opt_coef_range,
+                    "opt_coef_nbr": opt_coef_nbr,
+                    "fix_nan": fix_nan,
+                    "activation_protocol": activation_protocol,
+                    "movie_prefix": movie_prefix,
+                    "export_prefix": export_prefix,
+                },
+            )
+            if return_stacks:
+                stacks.append(corrected_stack)
             else:
-                stacks.append(None)
-
-            if progress_callback:
-                progress_callback(
-                    level="position",
-                    iter=pidx,
-                    total=total_pos_in_well,
-                    stage="correcting",
-                )
-
-        if progress_callback:
-            progress_callback(level="well", iter=k + 1, total=total_wells)
+                del corrected_stack
+            collect()
 
     if return_stacks:
         return stacks
@@ -1106,63 +1206,34 @@ def correct_background_model(
     fit_and_apply_model_background_to_stack : Function to fit and apply background correction to an image stack.
     """
 
-    config = get_config(experiment)
-    wells = get_experiment_wells(experiment)
-    len_movie = float(config_section_to_dict(config, "MovieSettings")["len_movie"])
-    if movie_prefix is None:
-        movie_prefix = config_section_to_dict(config, "MovieSettings")["movie_prefix"]
-
-    well_indices, position_indices = interpret_wells_and_positions(
-        experiment, well_option, position_option
+    len_movie, movie_prefix, channel_index, nbr_channels = _correction_inputs(
+        experiment, target_channel, movie_prefix
     )
-    channel_indices = _extract_channel_indices_from_config(config, [target_channel])
-    nbr_channels = _extract_nbr_channels_from_config(config)
-    img_num_channels = _get_img_num_per_channel(
-        channel_indices, int(len_movie), nbr_channels
-    )
-
     stacks = []
 
-    total_wells = len(wells[well_indices])
-    for k, well_path in enumerate(
-        tqdm(wells[well_indices], disable=not show_progress_per_well)
+    for _, _, positions in _iter_wells(
+        experiment,
+        well_option,
+        position_option,
+        progress_callback=progress_callback,
+        show_progress=show_progress_per_well,
     ):
-        if progress_callback:
-            progress_callback(level="well", iter=k, total=total_wells)
-
-        well_name, _ = extract_well_name_and_number(well_path)
-        positions = get_positions_in_well(well_path)
-        selection = positions[position_indices]
-        if isinstance(selection[0], np.ndarray):
-            selection = selection[0]
-
-        total_pos_in_well = len(selection)
-
-        for pidx, pos_path in enumerate(
-            tqdm(selection, disable=not show_progress_per_pos)
+        for pos_path, stack_path, stack_length in _iter_movies(
+            positions,
+            movie_prefix,
+            len_movie,
+            progress_callback=progress_callback,
+            show_progress=show_progress_per_pos,
         ):
-
-            stack_path = get_position_movie_path(pos_path, prefix=movie_prefix)
-            if stack_path is None:
-                logger.warning(f"No stack could be found in {pos_path}... Skip...")
-                continue
-
             logger.info(
                 f"Applying the correction to position {extract_position_name(pos_path)}..."
             )
-            len_movie_auto = auto_load_number_of_frames(stack_path)
-            if len_movie_auto is not None:
-                len_movie = len_movie_auto
-                img_num_channels = _get_img_num_per_channel(
-                    channel_indices, int(len_movie), nbr_channels
-                )
-
             corrected_stack = fit_and_apply_model_background_to_stack(
                 stack_path,
-                target_channel_index=channel_indices[0],
+                target_channel_index=channel_index,
                 model=model,
                 nbr_channels=nbr_channels,
-                stack_length=len_movie,
+                stack_length=stack_length,
                 threshold_on_std=threshold_on_std,
                 operation=operation,
                 clip=clip,
@@ -1194,17 +1265,6 @@ def correct_background_model(
             else:
                 del corrected_stack
             collect()
-
-            if progress_callback:
-                progress_callback(
-                    level="position",
-                    iter=pidx,
-                    total=total_pos_in_well,
-                    stage="correcting",
-                )
-
-        if progress_callback:
-            progress_callback(level="well", iter=k + 1, total=total_wells)
 
     if return_stacks:
         return stacks
@@ -1294,82 +1354,21 @@ def fit_and_apply_model_background_to_stack(
     if stack_length_auto is not None:
         stack_length = stack_length_auto
 
-    corrected_stack = []
-
-    if export:
-        path, file = os.path.split(stack_path)
-        if prefix is None:
-            newfile = "temp_" + file
-        else:
-            newfile = "_".join([prefix, file])
-
-        import tifffile.tifffile as tiff
-
-        with tiff.TiffWriter(
-            os.sep.join([path, newfile]), imagej=True, bigtiff=True
-        ) as tif:
-
-            for i in tqdm(range(0, int(stack_length * nbr_channels), nbr_channels)):
-
-                frames = load_frames(
-                    list(np.arange(i, (i + nbr_channels))),
-                    stack_path,
-                    normalize_input=False,
-                ).astype(float)
-                target_img = frames[:, :, target_channel_index].copy()
-
-                correction = field_correction(
-                    target_img,
-                    threshold=threshold_on_std,
-                    operation=operation,
-                    model=model,
-                    clip=clip,
-                    activation_protocol=activation_protocol,
-                    downsample=downsample,
-                )
-                frames[:, :, target_channel_index] = correction.copy()
-
-                if return_stacks:
-                    corrected_stack.append(frames)
-
-                if export:
-                    tif.write(
-                        np.moveaxis(frames, -1, 0).astype(np.dtype("f")),
-                        contiguous=True,
-                    )
-                del frames
-                del target_img
-                del correction
-                collect()
-
-                if progress_callback:
-                    progress_callback(
-                        level="frame",
-                        iter=int(i // nbr_channels),
-                        total=stack_length,
-                        stage="correcting",
-                    )
-
-        if prefix is None:
-            os.replace(os.sep.join([path, newfile]), os.sep.join([path, file]))
+    # A subset of frames is only corrected for a preview, never exported.
+    if subset_indices is None or export:
+        frame_indices = range(0, int(stack_length * nbr_channels), nbr_channels)
     else:
+        frame_indices = subset_indices
 
-        if subset_indices is None:
-            iterator = range(0, int(stack_length * nbr_channels), nbr_channels)
-        else:
-            iterator = subset_indices
-
-        for i in tqdm(iterator):
-
+    def corrected_frames():
+        for i in tqdm(frame_indices):
             frames = load_frames(
                 list(np.arange(i, (i + nbr_channels))),
                 stack_path,
                 normalize_input=False,
             ).astype(float)
-            target_img = frames[:, :, target_channel_index].copy()
-
-            correction = field_correction(
-                target_img,
+            frames[:, :, target_channel_index] = field_correction(
+                frames[:, :, target_channel_index].copy(),
                 threshold=threshold_on_std,
                 operation=operation,
                 model=model,
@@ -1377,14 +1376,7 @@ def fit_and_apply_model_background_to_stack(
                 activation_protocol=activation_protocol,
                 downsample=downsample,
             )
-            frames[:, :, target_channel_index] = correction.copy()
-
-            corrected_stack.append(frames)
-
-            del frames
-            del target_img
-            del correction
-            collect()
+            yield frames
 
             if progress_callback:
                 progress_callback(
@@ -1394,10 +1386,14 @@ def fit_and_apply_model_background_to_stack(
                     stage="correcting",
                 )
 
-    if return_stacks:
-        return np.array(corrected_stack)
-    else:
-        return None
+    return _write_frames(
+        corrected_frames(),
+        len(frame_indices),
+        stack_path,
+        prefix,
+        export,
+        return_stacks,
+    )
 
 
 def field_correction(
@@ -1612,65 +1608,33 @@ def correct_channel_offset(
             A list of corrected stacks if `return_stacks` is True, otherwise None.
     """
 
-    config = get_config(experiment)
-    wells = get_experiment_wells(experiment)
-    len_movie = float(config_section_to_dict(config, "MovieSettings")["len_movie"])
-    if movie_prefix is None:
-        movie_prefix = config_section_to_dict(config, "MovieSettings")["movie_prefix"]
-
-    well_indices, position_indices = interpret_wells_and_positions(
-        experiment, well_option, position_option
+    len_movie, movie_prefix, channel_index, nbr_channels = _correction_inputs(
+        experiment, target_channel, movie_prefix
     )
-    channel_indices = _extract_channel_indices_from_config(config, [target_channel])
-    nbr_channels = _extract_nbr_channels_from_config(config)
-    img_num_channels = _get_img_num_per_channel(
-        channel_indices, int(len_movie), nbr_channels
-    )
-
     stacks = []
 
-    # Well loop with progress reporting
-    total_wells = len(well_indices)
-    for k, well_path in enumerate(wells[well_indices]):
-        if progress_callback:
-            progress_callback(level="well", iter=k, total=total_wells)
-        elif show_progress_per_well:
-            logger.info(f"Processing well {k+1}/{total_wells}...")
-
-        well_name, _ = extract_well_name_and_number(well_path)
-        positions = get_positions_in_well(well_path)
-        selection = positions[position_indices]
-        if isinstance(selection[0], np.ndarray):
-            selection = selection[0]
-
-        total_pos = len(selection)
-        for pidx, pos_path in enumerate(selection):
-            if progress_callback:
-                progress_callback(
-                    level="position",
-                    iter=pidx,
-                    total=total_pos,
-                    stage=f"Pos {extract_position_name(pos_path)}",
-                )
-            elif show_progress_per_pos:
-                logger.info(f"  Processing position {pidx+1}/{total_pos}...")
-
-            stack_path = get_position_movie_path(pos_path, prefix=movie_prefix)
+    for _, _, positions in _iter_wells(
+        experiment,
+        well_option,
+        position_option,
+        progress_callback=progress_callback,
+        show_progress=show_progress_per_well,
+    ):
+        for pos_path, stack_path, stack_length in _iter_movies(
+            positions,
+            movie_prefix,
+            len_movie,
+            progress_callback=progress_callback,
+            show_progress=show_progress_per_pos,
+        ):
             logger.info(
                 f"Applying the correction to position {extract_position_name(pos_path)}..."
             )
-            len_movie_auto = auto_load_number_of_frames(stack_path)
-            if len_movie_auto is not None:
-                len_movie = len_movie_auto
-                img_num_channels = _get_img_num_per_channel(
-                    channel_indices, int(len_movie), nbr_channels
-                )
-
             corrected_stack = correct_channel_offset_single_stack(
                 stack_path,
-                target_channel_index=channel_indices[0],
+                target_channel_index=channel_index,
                 nbr_channels=nbr_channels,
-                stack_length=len_movie,
+                stack_length=stack_length,
                 correction_vertical=correction_vertical,
                 correction_horizontal=correction_horizontal,
                 export=export,
@@ -1749,7 +1713,6 @@ def correct_channel_offset_single_stack(
         raise FileNotFoundError(f"The stack {stack_path} does not exist... Abort.")
 
     from tqdm import tqdm
-    import tifffile.tifffile as tiff
     from scipy.ndimage import shift
 
     stack_length_auto = auto_load_number_of_frames(stack_path)
@@ -1759,76 +1722,13 @@ def correct_channel_offset_single_stack(
     if stack_length_auto is not None:
         stack_length = stack_length_auto
 
-    corrected_stack = []
+    frame_indices = range(0, int(stack_length * nbr_channels), nbr_channels)
+    shift_yx = [correction_vertical, correction_horizontal]
 
-    if export:
-        path, file = os.path.split(stack_path)
-        if prefix is None:
-            newfile = "temp_" + file
-        else:
-            newfile = "_".join([prefix, file])
-
-        with tiff.TiffWriter(
-            os.sep.join([path, newfile]), bigtiff=True, imagej=True
-        ) as tif:
-            frames_indices = range(0, int(stack_length * nbr_channels), nbr_channels)
-            total_frames = len(frames_indices)
-            for k, i in enumerate(tqdm(frames_indices)):
-                if progress_callback:
-                    progress_callback(level="frame", iter=k, total=total_frames)
-
-                frames = load_frames(
-                    list(np.arange(i, (i + nbr_channels))),
-                    stack_path,
-                    normalize_input=False,
-                ).astype(float)
-                target_img = frames[:, :, target_channel_index].copy()
-
-                if np.percentile(target_img.flatten(), 99.9) == 0.0:
-                    correction = target_img
-                elif np.any(target_img.flatten() != target_img.flatten()):
-                    # Routine to interpolate NaN for the spline filter then mask it again
-                    target_interp = interpolate_nan(target_img)
-                    from scipy.ndimage import shift
-
-                    correction = shift(
-                        target_interp, [correction_vertical, correction_horizontal]
-                    )
-                    correction_nan = shift(
-                        target_img,
-                        [correction_vertical, correction_horizontal],
-                        prefilter=False,
-                    )
-                    nan_i, nan_j = np.where(correction_nan != correction_nan)
-                    correction[nan_i, nan_j] = np.nan
-                else:
-                    correction = shift(
-                        target_img, [correction_vertical, correction_horizontal]
-                    )
-
-                frames[:, :, target_channel_index] = correction.copy()
-
-                if return_stacks:
-                    corrected_stack.append(frames)
-
-                if export:
-                    tif.write(
-                        np.moveaxis(frames, -1, 0).astype(np.dtype("f")),
-                        contiguous=True,
-                    )
-                del frames
-                del target_img
-                del correction
-                collect()
-
-        if prefix is None:
-            os.replace(os.sep.join([path, newfile]), os.sep.join([path, file]))
-    else:
-        frames_indices = range(0, int(stack_length * nbr_channels), nbr_channels)
-        total_frames = len(frames_indices)
-        for k, i in enumerate(tqdm(frames_indices)):
+    def corrected_frames():
+        for k, i in enumerate(tqdm(frame_indices)):
             if progress_callback:
-                progress_callback(level="frame", iter=k, total=total_frames)
+                progress_callback(level="frame", iter=k, total=len(frame_indices))
 
             frames = load_frames(
                 list(np.arange(i, (i + nbr_channels))),
@@ -1841,35 +1741,23 @@ def correct_channel_offset_single_stack(
                 correction = target_img
             elif np.any(target_img.flatten() != target_img.flatten()):
                 # Routine to interpolate NaN for the spline filter then mask it again
-                target_interp = interpolate_nan(target_img)
-                correction = shift(
-                    target_interp, [correction_vertical, correction_horizontal]
-                )
-                correction_nan = shift(
-                    target_img,
-                    [correction_vertical, correction_horizontal],
-                    prefilter=False,
-                )
-                nan_i, nan_j = np.where(correction_nan != correction_nan)
-                correction[nan_i, nan_j] = np.nan
+                correction = shift(interpolate_nan(target_img), shift_yx)
+                correction_nan = shift(target_img, shift_yx, prefilter=False)
+                correction[correction_nan != correction_nan] = np.nan
             else:
-                correction = shift(
-                    target_img, [correction_vertical, correction_horizontal]
-                )
+                correction = shift(target_img, shift_yx)
 
-            frames[:, :, target_channel_index] = correction.copy()
+            frames[:, :, target_channel_index] = correction
+            yield frames
 
-            corrected_stack.append(frames)
-
-            del frames
-            del target_img
-            del correction
-            collect()
-
-    if return_stacks:
-        return np.array(corrected_stack)
-    else:
-        return None
+    return _write_frames(
+        corrected_frames(),
+        len(frame_indices),
+        stack_path,
+        prefix,
+        export,
+        return_stacks,
+    )
 
 
 def register_stacks(
@@ -1944,59 +1832,33 @@ def register_stacks(
             A list of registered stacks if `return_stacks` is True, otherwise None.
     """
 
-    config = get_config(experiment)
-    wells = get_experiment_wells(experiment)
-    movie_settings = config_section_to_dict(config, "MovieSettings")
-    len_movie = float(movie_settings["len_movie"])
-    if movie_prefix is None:
-        movie_prefix = movie_settings["movie_prefix"]
-
-    well_indices, position_indices = interpret_wells_and_positions(
-        experiment, well_option, position_option
+    len_movie, movie_prefix, channel_index, nbr_channels = _correction_inputs(
+        experiment, target_channel, movie_prefix
     )
-    channel_indices = _extract_channel_indices_from_config(config, [target_channel])
-    nbr_channels = _extract_nbr_channels_from_config(config)
-
     stacks = []
 
-    total_wells = len(well_indices)
-    for k, well_path in enumerate(wells[well_indices]):
-        if progress_callback:
-            progress_callback(level="well", iter=k, total=total_wells)
-        elif show_progress_per_well:
-            logger.info(f"Processing well {k+1}/{total_wells}...")
-
-        positions = get_positions_in_well(well_path)
-        selection = positions[position_indices]
-        if isinstance(selection[0], np.ndarray):
-            selection = selection[0]
-
-        total_pos = len(selection)
-        for pidx, pos_path in enumerate(selection):
-            if progress_callback:
-                progress_callback(
-                    level="position",
-                    iter=pidx,
-                    total=total_pos,
-                    stage=f"Pos {extract_position_name(pos_path)}",
-                )
-            elif show_progress_per_pos:
-                logger.info(f"  Processing position {pidx+1}/{total_pos}...")
-
-            stack_path = get_position_movie_path(pos_path, prefix=movie_prefix)
-            if stack_path is None:
-                logger.warning(f"No stack could be found in {pos_path}... Skip...")
-                continue
-
+    for _, _, positions in _iter_wells(
+        experiment,
+        well_option,
+        position_option,
+        progress_callback=progress_callback,
+        show_progress=show_progress_per_well,
+    ):
+        for pos_path, stack_path, stack_length in _iter_movies(
+            positions,
+            movie_prefix,
+            len_movie,
+            progress_callback=progress_callback,
+            show_progress=show_progress_per_pos,
+        ):
             logger.info(
                 f"Registering position {extract_position_name(pos_path)} on channel {target_channel}..."
             )
-
             registered_stack = register_single_stack(
                 stack_path,
-                registration_channel_index=channel_indices[0],
+                registration_channel_index=channel_index,
                 nbr_channels=nbr_channels,
-                stack_length=len_movie,
+                stack_length=stack_length,
                 radius=radius,
                 tukey_alpha=tukey_alpha,
                 upsample_factor=upsample_factor,
@@ -2117,7 +1979,6 @@ def register_single_stack(
     if not os.path.exists(stack_path):
         raise FileNotFoundError(f"The stack {stack_path} does not exist... Abort.")
 
-    import tifffile.tifffile as tiff
     from celldetective.utils.registration import (
         downscale_frame,
         estimate_drift,
@@ -2202,26 +2063,8 @@ def register_single_stack(
             ).astype(np.float32)
             for c in range(frames.shape[-1]):
                 frames[:, :, c] = _shift_frame(frames[:, :, c], shifts[t])
-            yield t, frames
+            yield frames
 
-    write_path = os.sep.join([path, "temp_" + file]) if prefix is None else output_path
-    writer = (
-        tiff.TiffWriter(write_path, bigtiff=True, imagej=True)
-        if export
-        else nullcontext()
+    return _write_frames(
+        registered_frames(), stack_length, stack_path, prefix, export, return_stacks
     )
-    registered_stack = None
-    with writer as tif:
-        for t, frames in registered_frames():
-            if return_stacks:
-                if registered_stack is None:
-                    registered_stack = np.empty(
-                        (stack_length,) + frames.shape, dtype=np.float32
-                    )
-                registered_stack[t] = frames
-            if export:
-                tif.write(np.moveaxis(frames, -1, 0), contiguous=True)
-    if export and prefix is None:
-        os.replace(write_path, output_path)
-
-    return registered_stack
