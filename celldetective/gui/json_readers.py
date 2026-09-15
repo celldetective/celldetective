@@ -63,11 +63,17 @@ class ConfigEditor(CelldetectiveWidget):
         self.sections = {}
 
         # Set the main layout
-        self.scroll_layout.addStretch()
         self.layout.addWidget(scroll)
         self.setLayout(self.layout)
 
         self.load_config()
+        # The stretch goes after the fields so it pads the bottom, not the top.
+        self.scroll_layout.addStretch()
+
+        # Otherwise the window hands the initial focus to the first button,
+        # which then shows its focus ring on opening.
+        if self.edit_boxes:
+            self.edit_boxes[0].setFocus()
 
         self.edit_config_btn.clicked.connect(self.edit_in_text_editor)
 
