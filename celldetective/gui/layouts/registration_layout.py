@@ -193,6 +193,9 @@ class RegistrationOptionsLayout(QVBoxLayout, Styles):
         except ValueError:
             self._warn("The radius must be a number, or empty for the full frame.")
             return False
+        if upsample < 1:
+            self._warn("The upsampling factor must be at least 1.")
+            return False
         if downscale < 1:
             self._warn("The downscaling factor must be at least 1.")
             return False

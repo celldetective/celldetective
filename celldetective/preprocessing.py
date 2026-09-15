@@ -2127,6 +2127,10 @@ def register_single_stack(
     downscale = int(downscale)
     if downscale < 1:
         raise ValueError(f"The downscaling factor must be at least 1, got {downscale}.")
+    if upsample_factor < 1:
+        raise ValueError(
+            f"The upsampling factor must be at least 1, got {upsample_factor}."
+        )
 
     stack_length_auto = auto_load_number_of_frames(stack_path)
     if stack_length_auto is None and stack_length is None:

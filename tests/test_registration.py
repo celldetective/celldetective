@@ -175,6 +175,18 @@ def test_register_single_stack_bridges_blank_frame_read_from_disk(tmp_path):
     np.testing.assert_allclose(shifts[:, 1:], expected, atol=0.3)
 
 
+@pytest.mark.parametrize("parameter", ["upsample_factor", "downscale"])
+def test_register_single_stack_rejects_factor_below_one(tmp_path, parameter):
+    _, movie_dir = _write_experiment(tmp_path)
+    with pytest.raises(ValueError, match="at least 1"):
+        register_single_stack(
+            str(movie_dir / "sample.tif"),
+            registration_channel_index=0,
+            nbr_channels=2,
+            **{parameter: 0},
+        )
+
+
 def test_downscale_frame_block_average():
     frame = np.arange(7 * 9, dtype=float).reshape(7, 9)
     reduced = downscale_frame(frame, 2)

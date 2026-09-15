@@ -142,7 +142,7 @@ class ChannelOffsetViewer(StackVisualizer):
                 np.nanpercentile(self.overlay_init_frame, 0.1),
                 np.nanpercentile(self.overlay_init_frame, 99.99),
             ],
-            slider_range=(
+            slider_range=safe_slider_range(
                 np.nanmin(self.overlay_init_frame),
                 np.nanmax(self.overlay_init_frame),
             ),
