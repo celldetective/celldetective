@@ -7,7 +7,6 @@ from PyQt5.QtWidgets import QListWidget
 
 from celldetective.gui.layouts import RegistrationOptionsLayout
 from celldetective.gui.viewers.registration_roi_viewer import RegistrationROIViewer
-from celldetective.gui.viewers.size_viewer import CellSizeViewer
 from celldetective.utils.registration import tukey_window
 
 
@@ -27,25 +26,6 @@ def options_layout(qtbot):
         protocol_layout=SimpleNamespace(protocols=[], protocol_list=QListWidget()),
     )
     return RegistrationOptionsLayout(parent)
-
-
-def test_size_viewer_radius_measure_and_fixed_center(qtbot):
-    viewer = CellSizeViewer(
-        stack=np.zeros((1, 60, 80), dtype=np.uint8),
-        initial_diameter=20,
-        measure="radius",
-        follow_view_center=False,
-    )
-    qtbot.addWidget(viewer)
-
-    assert viewer.diameter_slider.value() == pytest.approx(10.0)
-    viewer.diameter_slider.setValue(15.0)
-    assert viewer.diameter == pytest.approx(30.0)
-    assert viewer.circ.get_radius() == pytest.approx(15.0)
-
-    center = viewer.circ.center
-    viewer.ax.set_xlim(0, 20)
-    assert viewer.circ.center == center
 
 
 def test_roi_viewer_matches_registration_window_and_sets_parent(

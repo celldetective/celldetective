@@ -91,10 +91,20 @@ def tukey_window(
     if radius <= 0:
         raise ValueError(f"The correlation radius must be positive, got {radius}.")
 
-    yy, xx = np.mgrid[:ny, :nx]
-    r = np.hypot(yy - (ny - 1) / 2.0, xx - (nx - 1) / 2.0)
+    return disk_taper(radial_distance(shape), alpha, radius)
 
-    window = np.zeros(shape, dtype=float)
+
+def radial_distance(shape: Tuple[int, int]) -> np.ndarray:
+    """Distance in pixels of every pixel to the exact image centre."""
+    ny, nx = shape
+    return np.hypot(
+        np.arange(ny)[:, None] - (ny - 1) / 2.0, np.arange(nx)[None, :] - (nx - 1) / 2.0
+    )
+
+
+def disk_taper(r: np.ndarray, alpha: float, radius: float) -> np.ndarray:
+    """Tukey weights of a disk of ``radius`` over the distance map ``r`` from :func:`radial_distance`."""
+    window = np.zeros(r.shape, dtype=float)
     plateau = radius * (1.0 - alpha)
     window[r <= plateau] = 1.0
     taper = (r > plateau) & (r < radius)
@@ -123,11 +133,12 @@ def prepare_for_correlation(frame: np.ndarray, window: np.ndarray) -> np.ndarray
     """
 
     frame = np.asarray(frame, dtype=float)
-    valid = np.isfinite(frame) & (window > 0)
+    finite = np.isfinite(frame)
+    valid = finite & (window > 0)
     if not np.any(valid):
         return np.zeros_like(frame)
     mean = np.average(frame[valid], weights=window[valid])
-    centred = np.where(np.isfinite(frame), frame - mean, 0.0)
+    centred = np.where(finite, frame - mean, 0.0)
     return centred * window
 
 
@@ -163,15 +174,29 @@ def estimate_shift(
         :func:`scipy.ndimage.shift`) to align it with ``reference``.
     """
 
-    from skimage.registration import phase_cross_correlation
-
     if not has_signal(reference) or not has_signal(moving):
         # Empty or uniform frame: no signal to correlate.
         return np.zeros(2)
 
+    return _shift_between_spectra(
+        _spectrum(reference, window), _spectrum(moving, window), upsample_factor
+    )
+
+
+def _spectrum(frame: np.ndarray, window: np.ndarray) -> np.ndarray:
+    """Fourier transform of the prepared frame, computed once per frame."""
+    return np.fft.fft2(prepare_for_correlation(frame, window))
+
+
+def _shift_between_spectra(
+    reference: np.ndarray, moving: np.ndarray, upsample_factor: int
+) -> np.ndarray:
+    from skimage.registration import phase_cross_correlation
+
     shift, _, _ = phase_cross_correlation(
-        prepare_for_correlation(reference, window),
-        prepare_for_correlation(moving, window),
+        reference,
+        moving,
+        space="fourier",
         upsample_factor=upsample_factor,
         normalization=None,
     )
@@ -222,20 +247,24 @@ def estimate_drift(
         raise ValueError(f"reference must be one of {REFERENCE_MODES}, got {reference!r}.")
 
     shifts = []
-    # Last frame with signal (reference="previous") or first one (reference="first").
+    # Spectrum of the last frame with signal (reference="previous") or of the first one
+    # (reference="first"), so each frame is transformed only once.
     anchor = None
     for k, frame in enumerate(frames):
         if not has_signal(frame):
             shifts.append(shifts[-1] if shifts else np.zeros(2))
         elif anchor is None:
-            anchor = frame
-            shifts.append(shifts[-1] if shifts else np.zeros(2))
-        elif reference == "first":
-            shifts.append(estimate_shift(anchor, frame, window, upsample_factor))
+            # Every frame before the first one with signal has a zero shift.
+            anchor = _spectrum(frame, window)
+            shifts.append(np.zeros(2))
         else:
-            step = estimate_shift(anchor, frame, window, upsample_factor)
-            shifts.append(shifts[-1] + step)
-            anchor = frame
+            spectrum = _spectrum(frame, window)
+            step = _shift_between_spectra(anchor, spectrum, upsample_factor)
+            if reference == "first":
+                shifts.append(step)
+            else:
+                shifts.append(shifts[-1] + step)
+                anchor = spectrum
         if progress_callback:
             progress_callback(iter=k)
 

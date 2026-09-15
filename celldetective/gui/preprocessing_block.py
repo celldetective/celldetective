@@ -34,6 +34,14 @@ from celldetective import get_logger
 
 logger = get_logger(__name__)
 
+# Window title of each correction type launched from the protocol list.
+CORRECTION_TITLES = {
+    "model-free": "Model-Free Background Correction",
+    "fit": "Fit Background Correction",
+    "offset": "Offset Correction",
+    "registration": "Stack Registration",
+}
+
 
 class PreprocessingPanel(ControlPanelBlock, Styles):
 
@@ -201,133 +209,41 @@ class PreprocessingPanel(ControlPanelBlock, Styles):
                 movie_prefix = "Corrected"
                 export_prefix = None
 
-            if correction_protocol["correction_type"] == "model-free":
-                logger.info(f"Model-free correction; movie_prefix={movie_prefix} export_prefix={export_prefix}")
-                from celldetective.gui.workers import ProgressWindow
-                from celldetective.processes.background_correction import (
-                    BackgroundCorrectionProcess,
-                )
+            correction_type = correction_protocol["correction_type"]
+            if correction_type not in CORRECTION_TITLES:
+                continue
+            logger.info(
+                f"{CORRECTION_TITLES[correction_type]}; {movie_prefix=} {export_prefix=} {correction_protocol=}"
+            )
+            from celldetective.gui.workers import ProgressWindow
+            from celldetective.processes.background_correction import (
+                BackgroundCorrectionProcess,
+            )
 
-                process_args = {
-                    "exp_dir": self.exp_dir,
-                    "well_option": well_option,
-                    "position_option": position_option,
-                    "movie_prefix": movie_prefix,
-                    "export_prefix": export_prefix,
-                    "export": True,
-                    "return_stacks": False,
-                    "activation_protocol": [["gauss", 2], ["std", 4]],
-                    "correction_type": "model-free",  # Explicitly set type
-                }
-                process_args.update(correction_protocol)
+            process_args = {
+                "exp_dir": self.exp_dir,
+                "well_option": well_option,
+                "position_option": position_option,
+                "movie_prefix": movie_prefix,
+                "export_prefix": export_prefix,
+                "export": True,
+                "return_stacks": False,
+            }
+            if correction_type in ("model-free", "fit"):
+                process_args["activation_protocol"] = [["gauss", 2], ["std", 4]]
+            process_args.update(correction_protocol)
 
-                self.job = ProgressWindow(
-                    BackgroundCorrectionProcess,
-                    parent_window=None,
-                    title="Model-Free Background Correction",
-                    position_info=False,
-                    process_args=process_args,
-                )
-                result = self.job.exec_()
-                if result == QDialog.Rejected:
-                    logger.info("Background correction cancelled.")
-                    return None
-
-            elif correction_protocol["correction_type"] == "fit":
-                logger.info(
-                    f"Fit correction; movie_prefix={movie_prefix} export_prefix={export_prefix} correction_protocol={correction_protocol}"
-                )
-                from celldetective.gui.workers import ProgressWindow
-                from celldetective.processes.background_correction import (
-                    BackgroundCorrectionProcess,
-                )
-
-                process_args = {
-                    "exp_dir": self.exp_dir,
-                    "well_option": well_option,
-                    "position_option": position_option,
-                    "movie_prefix": movie_prefix,
-                    "export_prefix": export_prefix,
-                    "export": True,
-                    "return_stacks": False,
-                    "activation_protocol": [["gauss", 2], ["std", 4]],
-                }
-                process_args.update(correction_protocol)
-
-                self.job = ProgressWindow(
-                    BackgroundCorrectionProcess,
-                    parent_window=None,
-                    title="Fit Background Correction",
-                    position_info=False,
-                    process_args=process_args,
-                )
-                result = self.job.exec_()
-                if result == QDialog.Rejected:
-                    logger.info("Background correction cancelled.")
-                    return None
-            elif correction_protocol["correction_type"] == "offset":
-                logger.info(
-                    f"Offset correction; {movie_prefix=} {export_prefix=} {correction_protocol=}"
-                )
-                from celldetective.gui.workers import ProgressWindow
-                from celldetective.processes.background_correction import (
-                    BackgroundCorrectionProcess,
-                )
-
-                process_args = {
-                    "exp_dir": self.exp_dir,
-                    "well_option": well_option,
-                    "position_option": position_option,
-                    "movie_prefix": movie_prefix,
-                    "export_prefix": export_prefix,
-                    "export": True,
-                    "return_stacks": False,
-                    # Offset specific args if any, otherwise they are in correction_protocol
-                }
-                process_args.update(correction_protocol)
-
-                self.job = ProgressWindow(
-                    BackgroundCorrectionProcess,
-                    parent_window=None,
-                    title="Offset Correction",
-                    position_info=False,
-                    process_args=process_args,
-                )
-                result = self.job.exec_()
-                if result == QDialog.Rejected:
-                    logger.info("Correction cancelled.")
-                    return None
-            elif correction_protocol["correction_type"] == "registration":
-                logger.info(
-                    f"Registration; {movie_prefix=} {export_prefix=} {correction_protocol=}"
-                )
-                from celldetective.gui.workers import ProgressWindow
-                from celldetective.processes.background_correction import (
-                    BackgroundCorrectionProcess,
-                )
-
-                process_args = {
-                    "exp_dir": self.exp_dir,
-                    "well_option": well_option,
-                    "position_option": position_option,
-                    "movie_prefix": movie_prefix,
-                    "export_prefix": export_prefix,
-                    "export": True,
-                    "return_stacks": False,
-                }
-                process_args.update(correction_protocol)
-
-                self.job = ProgressWindow(
-                    BackgroundCorrectionProcess,
-                    parent_window=None,
-                    title="Stack Registration",
-                    position_info=False,
-                    process_args=process_args,
-                )
-                result = self.job.exec_()
-                if result == QDialog.Rejected:
-                    logger.info("Registration cancelled.")
-                    return None
+            self.job = ProgressWindow(
+                BackgroundCorrectionProcess,
+                parent_window=None,
+                title=CORRECTION_TITLES[correction_type],
+                position_info=False,
+                process_args=process_args,
+            )
+            result = self.job.exec_()
+            if result == QDialog.Rejected:
+                logger.info(f"{CORRECTION_TITLES[correction_type]} cancelled.")
+                return None
         logger.info("Done.")
 
     def locate_image(self):

@@ -51,7 +51,9 @@ from celldetective.utils.parsing import (
     _extract_channel_indices_from_config,
     _extract_nbr_channels_from_config,
 )
+from contextlib import nullcontext
 from gc import collect
+from itertools import chain
 from tqdm import tqdm
 from celldetective import get_logger
 from celldetective.log_manager import positionlogger
@@ -1887,7 +1889,6 @@ def register_stacks(
     movie_prefix: Optional[str] = None,
     export_prefix: str = "Corrected",
     progress_callback: Optional[Callable] = None,
-    **kwargs: Any,
 ) -> Optional[List[np.ndarray]]:
     """
     Register the stacks of an experiment against their own drift.
@@ -1936,8 +1937,6 @@ def register_stacks(
             overwritten.
     progress_callback : callable, optional
             A callback function to be called at each step of the process (default is None).
-    **kwargs : Any
-            Additional keyword arguments.
 
     Returns
     -------
@@ -1947,9 +1946,10 @@ def register_stacks(
 
     config = get_config(experiment)
     wells = get_experiment_wells(experiment)
-    len_movie = float(config_section_to_dict(config, "MovieSettings")["len_movie"])
+    movie_settings = config_section_to_dict(config, "MovieSettings")
+    len_movie = float(movie_settings["len_movie"])
     if movie_prefix is None:
-        movie_prefix = config_section_to_dict(config, "MovieSettings")["movie_prefix"]
+        movie_prefix = movie_settings["movie_prefix"]
 
     well_indices, position_indices = interpret_wells_and_positions(
         experiment, well_option, position_option
@@ -2042,9 +2042,9 @@ def _shift_frame(img: np.ndarray, shift_yx: np.ndarray) -> np.ndarray:
 
     from scipy.ndimage import shift
 
-    if np.allclose(shift_yx, 0.0) or not np.any(np.nan_to_num(img)):
-        return img
     nan_mask = ~np.isfinite(img)
+    if np.allclose(shift_yx, 0.0) or not np.any(img, where=~nan_mask):
+        return img
     if not np.any(nan_mask):
         return shift(img, shift_yx, order=1, mode="constant", cval=0.0)
 
@@ -2149,7 +2149,9 @@ def register_single_stack(
             )[:, :, 0].astype(float)
             yield downscale_frame(frame, downscale)
 
-    first_frame = next(registration_frames())
+    # The first frame gives the window shape, then goes back in front of the drift pass.
+    frames_iter = registration_frames()
+    first_frame = next(frames_iter)
     window = tukey_window(
         first_frame.shape,
         alpha=tukey_alpha,
@@ -2161,7 +2163,7 @@ def register_single_stack(
             progress_callback(level="frame", iter=iter, total=2 * stack_length)
 
     shifts = estimate_drift(
-        registration_frames(),
+        chain([first_frame], frames_iter),
         window,
         reference=reference,
         # keep the requested precision in full-scale pixels
@@ -2175,9 +2177,8 @@ def register_single_stack(
     path, file = os.path.split(stack_path)
     # Named after the output movie, so registrations with different prefixes keep their shifts.
     output_file = file if prefix is None else "_".join([prefix, file])
-    shifts_path = os.sep.join(
-        [path, os.path.splitext(output_file)[0] + "_registration_shifts.csv"]
-    )
+    output_path = os.sep.join([path, output_file])
+    shifts_path = os.path.splitext(output_path)[0] + "_registration_shifts.csv"
     np.savetxt(
         shifts_path,
         np.column_stack([np.arange(stack_length), shifts]),
@@ -2198,29 +2199,29 @@ def register_single_stack(
                 list(np.arange(i, i + nbr_channels)),
                 stack_path,
                 normalize_input=False,
-            ).astype(float)
+            ).astype(np.float32)
             for c in range(frames.shape[-1]):
                 frames[:, :, c] = _shift_frame(frames[:, :, c], shifts[t])
-            yield frames
+            yield t, frames
 
-    registered_stack = []
-    if export:
-        newfile = "temp_" + file if prefix is None else "_".join([prefix, file])
-        with tiff.TiffWriter(
-            os.sep.join([path, newfile]), bigtiff=True, imagej=True
-        ) as tif:
-            for frames in registered_frames():
-                if return_stacks:
-                    registered_stack.append(frames)
-                tif.write(
-                    np.moveaxis(frames, -1, 0).astype(np.dtype("f")),
-                    contiguous=True,
-                )
-        if prefix is None:
-            os.replace(os.sep.join([path, newfile]), os.sep.join([path, file]))
-    elif return_stacks:
-        registered_stack = list(registered_frames())
+    write_path = os.sep.join([path, "temp_" + file]) if prefix is None else output_path
+    writer = (
+        tiff.TiffWriter(write_path, bigtiff=True, imagej=True)
+        if export
+        else nullcontext()
+    )
+    registered_stack = None
+    with writer as tif:
+        for t, frames in registered_frames():
+            if return_stacks:
+                if registered_stack is None:
+                    registered_stack = np.empty(
+                        (stack_length,) + frames.shape, dtype=np.float32
+                    )
+                registered_stack[t] = frames
+            if export:
+                tif.write(np.moveaxis(frames, -1, 0), contiguous=True)
+    if export and prefix is None:
+        os.replace(write_path, output_path)
 
-    if return_stacks:
-        return np.array(registered_stack)
-    return None
+    return registered_stack

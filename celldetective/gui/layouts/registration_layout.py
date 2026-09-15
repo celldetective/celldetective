@@ -10,11 +10,11 @@ from PyQt5.QtWidgets import (
     QPushButton,
     QHBoxLayout,
     QMainWindow,
-    QMessageBox,
 )
 from fonticon_mdi6 import MDI6
 from superqt.fonticon import icon
 
+from celldetective.gui.base.components import generic_message
 from celldetective.gui.base.styles import Styles
 from celldetective.gui.gui_utils import ThresholdLineEdit
 from celldetective.utils.parsing import _extract_channel_indices_from_config
@@ -191,19 +191,22 @@ class RegistrationOptionsLayout(QVBoxLayout, Styles):
         try:
             radius = self._parse_radius()
         except ValueError:
-            self._warn("The radius must be a number, or empty for the full frame.")
+            generic_message("The radius must be a number, or empty for the full frame.", "warning")
             return False
         if upsample < 1:
-            self._warn("The upsampling factor must be at least 1.")
+            generic_message("The upsampling factor must be at least 1.", "warning")
             return False
         if downscale < 1:
-            self._warn("The downscaling factor must be at least 1.")
+            generic_message("The downscaling factor must be at least 1.", "warning")
             return False
         if alpha > 1.0:
-            self._warn("The Tukey α must be between 0 and 1.")
+            generic_message("The Tukey α must be between 0 and 1.", "warning")
             return False
         if radius is not None and radius <= 0:
-            self._warn("The radius must be strictly positive, or empty for the full frame.")
+            generic_message(
+                "The radius must be strictly positive, or empty for the full frame.",
+                "warning",
+            )
             return False
 
         self.instructions = {
@@ -271,12 +274,3 @@ class RegistrationOptionsLayout(QVBoxLayout, Styles):
         """
         radius_text = self.radius_le.text().strip().replace(",", ".")
         return float(radius_text) if radius_text else None
-
-    @staticmethod
-    def _warn(text: str):
-        msgBox = QMessageBox()
-        msgBox.setIcon(QMessageBox.Warning)
-        msgBox.setText(text)
-        msgBox.setWindowTitle("Warning")
-        msgBox.setStandardButtons(QMessageBox.Ok)
-        msgBox.exec()

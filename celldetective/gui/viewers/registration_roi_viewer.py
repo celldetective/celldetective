@@ -5,16 +5,16 @@ from superqt import QLabeledDoubleSlider
 
 from celldetective.gui.gui_utils import QuickSliderLayout
 from celldetective.gui.viewers.size_viewer import CellSizeViewer
-from celldetective.utils.registration import tukey_window
+from celldetective.utils.registration import disk_taper, radial_distance
 
 
 class RegistrationROIViewer(CellSizeViewer):
     """
     Tune the correlation disk of the stack registration on a real frame.
 
-    A :class:`CellSizeViewer` measuring a radius, with the circle fixed at the image centre as in
-    :func:`celldetective.utils.registration.tukey_window`. It adds a dashed circle at the start of
-    the Tukey taper, a shading of the pixels by how little they weigh in the correlation (fully
+    A :class:`CellSizeViewer` whose slider sets a radius, with the circle fixed at the image
+    centre as in :func:`celldetective.utils.registration.tukey_window`. It adds a dashed circle
+    at the start of the Tukey taper, a shading of the pixels by how little they weigh in the correlation (fully
     shaded pixels are ignored) and a Tukey α slider.
 
     Parameters
@@ -39,37 +39,62 @@ class RegistrationROIViewer(CellSizeViewer):
     ) -> None:
 
         self.parent_layout = parent_layout
+        self.initial_radius = initial_radius
         self.alpha = float(np.clip(tukey_alpha, 0.0, 1.0))
         super().__init__(
             *args,
-            initial_diameter=1.0,  # set from the frame shape below
             parent_le=parent_layout.radius_le,
-            follow_view_center=False,
-            measure="radius",
             PxToUm=1.0,
             **kwargs,
         )
 
-        ny, nx = self.init_frame.shape[:2]
-        max_radius = float(np.hypot(ny, nx) / 2.0)
-        if initial_radius is None:
-            initial_radius = 0.9 * min(ny, nx) / 2.0
-        radius = float(np.clip(initial_radius, 1.0, max_radius))
-
         self.generate_weight_overlay()
         self.generate_alpha_slider()
-        self.diameter_slider.setRange(1.0, max_radius)
-        self.diameter_slider.setValue(radius)
-        self.change_diameter(radius)
+        self.update_circle()
 
     def circle_center(self):
         """Exact image centre, the convention of the registration window."""
         ny, nx = self.init_frame.shape[:2]
         return ((nx - 1) / 2.0, (ny - 1) / 2.0)
 
+    def on_xlims_or_ylims_change(self, event_ax):
+        """Keep the disk on the image centre when zooming."""
+
+    def generate_diameter_slider(self):
+        """Generate the radius slider, bounded by the frame half-diagonal."""
+
+        ny, nx = self.init_frame.shape[:2]
+        max_radius = float(np.hypot(ny, nx) / 2.0)
+        radius = self.initial_radius
+        if radius is None:
+            radius = 0.9 * min(ny, nx) / 2.0
+        radius = float(np.clip(radius, 1.0, max_radius))
+        self.diameter = 2.0 * radius
+
+        self.diameter_slider = QLabeledDoubleSlider()
+        radius_layout = QuickSliderLayout(
+            label="Radius: ",
+            slider=self.diameter_slider,
+            slider_initial_value=radius,
+            slider_range=(1.0, max_radius),
+            decimal_option=True,
+            precision=5,
+        )
+        radius_layout.setContentsMargins(15, 0, 15, 0)
+        self.diameter_slider.valueChanged.connect(self.change_diameter)
+        self.canvas.layout.addLayout(radius_layout)
+
+    def change_diameter(self, value: float) -> None:
+        """Update the disk from the radius slider."""
+        self.diameter = 2.0 * value
+        self.update_circle()
+
     def generate_weight_overlay(self):
         """Add the taper circle and the weight shading to the image axes."""
         import matplotlib.pyplot as plt
+
+        # Distance map cached once, so a slider tick only re-evaluates the taper.
+        self.radial_distance = radial_distance(self.init_frame.shape[:2])
 
         self.im_weight = self.ax.imshow(
             np.ones(self.init_frame.shape[:2], dtype=np.float32),
@@ -104,17 +129,14 @@ class RegistrationROIViewer(CellSizeViewer):
 
     def roi_weights(self) -> np.ndarray:
         """Weights of the correlation for the current radius and α."""
-        return tukey_window(
-            self.init_frame.shape[:2], alpha=self.alpha, radius=self.circle_radius()
-        )
+        return disk_taper(self.radial_distance, self.alpha, self.circle_radius())
 
     def update_circle(self):
         """Redraw the circles and the weight shading."""
         radius = self.circle_radius()
-        if hasattr(self, "circ_taper"):
-            self.circ_taper.set_radius(radius * (1.0 - self.alpha))
-            self.circ_taper.set_visible(0.0 < self.alpha < 1.0)
-            self.im_weight.set_alpha(0.6 * (1.0 - self.roi_weights()))
+        self.circ_taper.set_radius(radius * (1.0 - self.alpha))
+        self.circ_taper.set_visible(0.0 < self.alpha < 1.0)
+        self.im_weight.set_alpha(0.6 * (1.0 - self.roi_weights()))
         super().update_circle()
 
     def change_alpha(self, value: float) -> None:

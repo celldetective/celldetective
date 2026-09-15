@@ -247,11 +247,6 @@ class BackgroundCorrectionProcess(Process):
                     well_option=self.well_option,
                     position_option=self.position_option,
                     target_channel=self.target_channel,
-                    radius=getattr(self, "radius", None),
-                    tukey_alpha=getattr(self, "tukey_alpha", 0.25),
-                    upsample_factor=getattr(self, "upsample_factor", 10),
-                    reference=getattr(self, "reference", "previous"),
-                    downscale=getattr(self, "downscale", 1),
                     export=export,
                     return_stacks=return_stacks,
                     show_progress_per_well=False,
@@ -259,6 +254,18 @@ class BackgroundCorrectionProcess(Process):
                     movie_prefix=movie_prefix,
                     export_prefix=export_prefix,
                     progress_callback=progress_callback,
+                    # register_stacks owns the defaults of the options left out.
+                    **{
+                        key: getattr(self, key)
+                        for key in (
+                            "radius",
+                            "tukey_alpha",
+                            "upsample_factor",
+                            "reference",
+                            "downscale",
+                        )
+                        if hasattr(self, key)
+                    },
                 )
             else:
                 from celldetective.preprocessing import correct_background_model
