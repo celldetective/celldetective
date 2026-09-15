@@ -88,7 +88,6 @@ class DynamicProgressDialog(QDialog, Styles):
         # Progress Bar
         self.progress_bar = QProgressBar()
         self.progress_bar.setRange(minimum, maximum)
-        self.progress_bar.setStyleSheet(self.progress_bar_style)
         layout.addWidget(self.progress_bar)
 
         # Plot Canvas
@@ -119,7 +118,6 @@ class DynamicProgressDialog(QDialog, Styles):
         # Metric Selector
         self.metric_label = QLabel("Metric: ")
         self.metric_combo = QComboBox()
-        # self.metric_combo.setStyleSheet(self.combo_style)
         self.metric_combo.currentIndexChanged.connect(self.force_update_plot)
 
         controls_layout.addWidget(self.metric_label, 10)

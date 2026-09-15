@@ -23,7 +23,8 @@ import matplotlib.pyplot as plt
 import json
 
 from celldetective.exceptions import EmptyQueryError, MissingColumnsError, QueryError
-from celldetective.gui.gui_utils import color_from_status, help_generic
+from celldetective.gui.gui_utils import color_from_status
+from celldetective.gui.base.help_panel import HelpButton, open_help
 from celldetective.gui.base.figure_canvas import FigureCanvas
 from celldetective.gui.base.components import CelldetectiveWidget
 import logging
@@ -168,12 +169,8 @@ class ClassifierWidget(CelldetectiveWidget):
         time_prop_hbox = QHBoxLayout()
         time_prop_hbox.addWidget(self.time_corr, alignment=Qt.AlignCenter)
 
-        self.help_propagate_btn = QPushButton()
-        self.help_propagate_btn.setIcon(icon(MDI6.help_circle, color=self.help_color))
-        self.help_propagate_btn.setIconSize(QSize(20, 20))
+        self.help_propagate_btn = HelpButton("Help me propagate a classification")
         self.help_propagate_btn.clicked.connect(self.help_propagate)
-        self.help_propagate_btn.setStyleSheet(self.button_select_all)
-        self.help_propagate_btn.setToolTip("Help.")
         time_prop_hbox.addWidget(self.help_propagate_btn, 5, alignment=Qt.AlignRight)
 
         layout.addLayout(time_prop_hbox)
@@ -339,7 +336,13 @@ class ClassifierWidget(CelldetectiveWidget):
             [], [], color="k", alpha=self.currentAlpha
         )
         self.propscanvas.canvas.draw_idle()
-        self.propscanvas.canvas.setMinimumHeight(self.screen_height // 5)
+        # 4:3 rather than a fifth of the screen tall: as wide as the window, the
+        # latter squashed the feature on the y axis.
+        self.propscanvas.keep_aspect(
+            3 / 4,
+            min_height=self.screen_height // 5,
+            max_height=int(0.45 * self.screen_height),
+        )
 
     def closeEvent(self, event: QCloseEvent) -> None:
         """
@@ -698,31 +701,12 @@ class ClassifierWidget(CelldetectiveWidget):
         Helper for segmentation strategy between threshold-based and Deep learning.
         """
 
-        dict_path = os.sep.join(
-            [
-                get_software_location(),
-                "celldetective",
-                "gui",
-                "help",
-                "propagate-classification.json",
-            ]
+        open_help(
+            "propagate-classification.json",
+            "Propagating a classification",
+            docs_url="https://celldetective.readthedocs.io/en/latest/classify.html",
+            parent=self,
         )
-
-        with open(dict_path) as f:
-            d = json.load(f)
-
-        suggestion = help_generic(d)
-        if isinstance(suggestion, str):
-            logger.debug(f"suggestion={suggestion}")
-            msgBox = QMessageBox()
-            msgBox.setIcon(QMessageBox.Information)
-            msgBox.setTextFormat(Qt.RichText)
-            msgBox.setText(rf"{suggestion}")
-            msgBox.setWindowTitle("Info")
-            msgBox.setStandardButtons(QMessageBox.Ok)
-            returnValue = msgBox.exec()
-            if returnValue == QMessageBox.Ok:
-                return None
 
     def switch_to_log(self, i: int) -> None:
         """
@@ -777,3 +761,4 @@ class ClassifierWidget(CelldetectiveWidget):
         self.propscanvas.canvas.draw_idle()
 
         logger.info("Log scale toggle done.")
+

@@ -458,16 +458,18 @@ class MeasureAnnotator(BaseAnnotator):
 
         # Class selection
         self.init_class_selection_block()
-        self.left_panel.addLayout(self.class_hbox, 5)
-        self.left_panel.addWidget(self.cell_info, 5)
+        # The rows keep their natural height (stretch 0): only the tabs holding
+        # the plot take the room left, instead of it opening gaps between rows.
+        self.left_panel.addLayout(self.class_hbox)
+        self.left_panel.addWidget(self.cell_info)
 
         # Options & correction buttons
         self.init_options_block()
         self.populate_options_layout()
         self.update_widgets()
         self.init_correction_block()
-        self.left_panel.addLayout(self.options_hbox, 5)
-        self.left_panel.addLayout(self.action_hbox, 5)
+        self.left_panel.addLayout(self.options_hbox)
+        self.left_panel.addLayout(self.action_hbox)
 
         self.annotation_btns_to_hide = [
             self.time_of_interest_label,
@@ -545,7 +547,11 @@ class MeasureAnnotator(BaseAnnotator):
             row.addWidget(self.signal_choice_cb[i], 80)
             sig_layout.addLayout(row)
 
-        sig_layout.addWidget(self.cell_fcanvas, 1)
+        # The plot outweighs the stretch below it: it takes the room until its
+        # height is capped, and only what it leaves collects under it, rather
+        # than spreading the signal rows above apart.
+        sig_layout.addWidget(self.cell_fcanvas, 100)
+        sig_layout.addStretch(1)
 
         # Customise the signals matplotlib toolbar
         if hasattr(self.cell_fcanvas, "toolbar"):

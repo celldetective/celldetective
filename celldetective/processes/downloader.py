@@ -1,6 +1,5 @@
 import logging
 import os
-import ssl
 from tqdm import tqdm
 from multiprocessing import Process, Queue
 
@@ -8,7 +7,6 @@ logger = logging.getLogger("celldetective")
 from typing import Optional, Dict, Any
 from glob import glob
 import shutil
-from urllib.request import urlopen
 import zipfile
 import tempfile
 import time
@@ -66,7 +64,7 @@ class DownloadProcess(Process):
         self.sum_done = 0
         self.t0 = time.time()
 
-    def download_url_to_file(self, url: str, dst: str) -> Optional[None]:
+    def download_url_to_file(self, url: str, dst: str) -> None:
         """
         Download a file from a URL.
 
@@ -76,59 +74,78 @@ class DownloadProcess(Process):
             The URL to download from.
         dst : str
             The destination file path.
-        """
-        try:
-            file_size = None
-            ssl._create_default_https_context = ssl._create_unverified_context
-            u = urlopen(url)
-            meta = u.info()
-            if hasattr(meta, "getheaders"):
-                content_length = meta.getheaders("Content-Length")
-            else:
-                content_length = meta.get_all("Content-Length")
-            if content_length is not None and len(content_length) > 0:
-                file_size = int(content_length[0])
-            # We deliberately save it in a temp file and move it after
-            dst = os.path.expanduser(dst)
-            dst_dir = os.path.dirname(dst)
-            f = tempfile.NamedTemporaryFile(delete=False, dir=dst_dir)
 
-            try:
-                with tqdm(
-                    total=file_size,
-                    disable=not self.progress,
-                    unit="B",
-                    unit_scale=True,
-                    unit_divisor=1024,
-                ) as pbar:
-                    while True:
-                        buffer = u.read(8192)  # 8192
-                        if len(buffer) == 0:
-                            break
-                        f.write(buffer)
-                        pbar.update(len(buffer))
-                        if file_size:
-                            self.sum_done += len(buffer) / file_size * 100
-                            mean_exec_per_step = (time.time() - self.t0) / (
-                                self.sum_done * file_size / 100 + 1
-                            )
-                            pred_time = (
-                                file_size - (self.sum_done * file_size / 100 + 1)
-                            ) * mean_exec_per_step
-                            self.queue.put([self.sum_done, pred_time])
-                f.close()
-                shutil.move(f.name, dst)
-            finally:
-                u.close()
-                f.close()
-                if os.path.exists(f.name):
-                    os.remove(f.name)
-        except Exception as e:
-            logger.error(f"No internet connection: {e}")
-            return None
+        Raises
+        ------
+        Exception
+            If the download fails once transient errors have been retried.
+        """
+        from celldetective.utils.downloaders import open_url_with_retries
+
+        self.queue.put({"status": "Contacting Zenodo..."})
+        u, file_size = open_url_with_retries(url)
+        self.queue.put({"status": "Downloading..."})
+
+        # We deliberately save it in a temp file and move it after
+        dst = os.path.expanduser(dst)
+        dst_dir = os.path.dirname(dst)
+        f = tempfile.NamedTemporaryFile(delete=False, dir=dst_dir)
+
+        try:
+            with tqdm(
+                total=file_size,
+                disable=not self.progress,
+                unit="B",
+                unit_scale=True,
+                unit_divisor=1024,
+            ) as pbar:
+                while True:
+                    buffer = u.read(8192)  # 8192
+                    if len(buffer) == 0:
+                        break
+                    f.write(buffer)
+                    pbar.update(len(buffer))
+                    if file_size:
+                        self.sum_done += len(buffer) / file_size * 100
+                        mean_exec_per_step = (time.time() - self.t0) / (
+                            self.sum_done * file_size / 100 + 1
+                        )
+                        pred_time = (
+                            file_size - (self.sum_done * file_size / 100 + 1)
+                        ) * mean_exec_per_step
+                        self.queue.put([self.sum_done, pred_time])
+            f.close()
+            shutil.move(f.name, dst)
+        finally:
+            u.close()
+            f.close()
+            if os.path.exists(f.name):
+                os.remove(f.name)
 
     def run(self):
         """Run the download process."""
+
+        try:
+            self._download_and_extract()
+        except Exception as e:
+            logger.error(f"Download of {self.file} failed: {e}")
+            if os.path.exists(self.path_to_zip_file):
+                os.remove(self.path_to_zip_file)
+            self.queue.put(
+                {
+                    "status": "error",
+                    "message": f"Could not download {self.file} from Zenodo: {e}",
+                }
+            )
+            self.queue.close()
+            return
+
+        # Send end signal
+        self.queue.put("finished")
+        self.queue.close()
+
+    def _download_and_extract(self):
+        """Download the zip archive, extract it and tidy up the model folder."""
 
         self.download_url_to_file(rf"{self.zip_url}", self.path_to_zip_file)
         with zipfile.ZipFile(self.path_to_zip_file, "r") as zip_ref:
@@ -155,10 +172,6 @@ class DownloadProcess(Process):
         os.remove(self.path_to_zip_file)
         self.queue.put([100, 0])
         time.sleep(0.5)
-
-        # Send end signal
-        self.queue.put("finished")
-        self.queue.close()
 
     def end_process(self):
         """End the process."""
