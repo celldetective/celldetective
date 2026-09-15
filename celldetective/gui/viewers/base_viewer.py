@@ -856,6 +856,9 @@ class StackVisualizer(CelldetectiveWidget):
             min_val = 0
         if np.isnan(max_val):
             max_val = 1
+        if max_val <= min_val:
+            # Uniform frame: superqt cannot draw a slider with an empty range.
+            max_val = min_val + 1
 
         self.contrast_slider.setRange(min_val, max_val)
 
