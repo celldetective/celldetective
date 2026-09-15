@@ -1,7 +1,8 @@
 import logging
+import math
 from PyQt5.QtWidgets import QApplication, QDesktopWidget, QMainWindow, QWidget
 from PyQt5.QtCore import QRect
-from typing import Union
+from typing import Tuple, Union
 from prettytable import PrettyTable
 
 logger = logging.getLogger("celldetective")
@@ -49,6 +50,37 @@ def center_window(window: Union[QMainWindow, QWidget]) -> None:
     centerPoint = QApplication.desktop().screenGeometry(screen).center()
     frameGm.moveCenter(centerPoint)
     window.move(frameGm.topLeft())
+
+
+def safe_slider_range(lower: float, upper: float) -> Tuple[float, float]:
+    """
+    Return a range that a superqt slider can be set to.
+
+    superqt range sliders crash the whole process when given an empty range
+    (``lower == upper``), which is what the intensity range of a uniform image,
+    such as a blank frame, gives.
+
+    Parameters
+    ----------
+    lower : float
+        Lower bound, e.g. the minimum intensity of an image.
+    upper : float
+        Upper bound, e.g. the maximum intensity of an image.
+
+    Returns
+    -------
+    tuple of float
+        ``(lower, upper)``, with a non-finite ``lower`` replaced by 0 and ``upper``
+        raised to ``lower + 1`` if it is non-finite or not above ``lower``.
+    """
+
+    lower = float(lower)
+    upper = float(upper)
+    if not math.isfinite(lower):
+        lower = 0.0
+    if not math.isfinite(upper) or upper <= lower:
+        upper = lower + 1.0
+    return lower, upper
 
 
 def pretty_table(dct: dict):

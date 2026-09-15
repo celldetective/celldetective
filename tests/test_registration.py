@@ -105,13 +105,15 @@ def test_estimate_shift_handles_nan_and_empty_frames():
     )
 
 
-def _write_experiment(tmp_path, nbr_channels=2):
+def _write_experiment(tmp_path, nbr_channels=2, blank_frames=()):
     exp_dir = tmp_path / "Experiment"
     movie_dir = exp_dir / "W1" / "100" / "movie"
     movie_dir.mkdir(parents=True)
     (exp_dir / "W1" / "100" / "output" / "tables").mkdir(parents=True)
 
     registration = np.stack(_drifting_crops(DRIFTS, seed=3))
+    for t in blank_frames:
+        registration[t] = 0.0
     other = np.stack(_drifting_crops(DRIFTS, seed=4))
     stack = np.stack([registration, other][:nbr_channels], axis=1).astype(np.float32)
     tifffile.imwrite(
@@ -151,6 +153,26 @@ def test_register_single_stack_aligns_all_channels(tmp_path):
         movie_dir / "Corrected_sample_registration_shifts.csv", delimiter=",", skiprows=1
     )
     np.testing.assert_allclose(shifts[:, 1:], np.array(DRIFTS, dtype=float), atol=0.3)
+
+
+def test_register_single_stack_bridges_blank_frame_read_from_disk(tmp_path):
+    # A dropped acquisition stored as zeros must be recognised as blank once read back
+    # from the movie, not correlated as if it had signal.
+    _, movie_dir = _write_experiment(tmp_path, blank_frames=(2,))
+    register_single_stack(
+        str(movie_dir / "sample.tif"),
+        registration_channel_index=0,
+        nbr_channels=2,
+        radius=50,
+        return_stacks=True,
+    )
+
+    shifts = np.loadtxt(
+        movie_dir / "Corrected_sample_registration_shifts.csv", delimiter=",", skiprows=1
+    )
+    expected = np.array(DRIFTS, dtype=float)
+    expected[2] = expected[1]
+    np.testing.assert_allclose(shifts[:, 1:], expected, atol=0.3)
 
 
 def test_downscale_frame_block_average():

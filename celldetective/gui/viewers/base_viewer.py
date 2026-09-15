@@ -17,7 +17,7 @@ import matplotlib.backend_bases
 
 from celldetective.gui.base.components import CelldetectiveWidget
 from celldetective.gui.base.threads import start_tracked, stop_thread
-from celldetective.gui.base.utils import center_window
+from celldetective.gui.base.utils import center_window, safe_slider_range
 from celldetective.utils.image_loaders import (
     auto_load_number_of_frames,
     _get_img_num_per_channel,
@@ -852,15 +852,7 @@ class StackVisualizer(CelldetectiveWidget):
             min_val = np.nanmin(self.init_frame)
             max_val = np.nanmax(self.init_frame)
 
-        if np.isnan(min_val):
-            min_val = 0
-        if np.isnan(max_val):
-            max_val = 1
-        if max_val <= min_val:
-            # Uniform frame: superqt cannot draw a slider with an empty range.
-            max_val = min_val + 1
-
-        self.contrast_slider.setRange(min_val, max_val)
+        self.contrast_slider.setRange(*safe_slider_range(min_val, max_val))
 
         # Set initial value to percentiles to avoid outliers
         if np.all(np.isnan(self.init_frame)):

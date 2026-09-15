@@ -9,7 +9,7 @@ from superqt import QLabeledDoubleSlider
 from celldetective.gui.gui_utils import QuickSliderLayout
 from celldetective.gui.viewers.base_viewer import StackVisualizer
 from celldetective import get_logger
-from celldetective.gui.base.utils import is_alive
+from celldetective.gui.base.utils import is_alive, safe_slider_range
 
 logger = get_logger(__name__)
 
@@ -398,7 +398,9 @@ class ThresholdedStackVisualizer(StackVisualizer):
         vmin = np.nanpercentile(self.processed_image, 1.0)
         vmax = np.nanpercentile(self.processed_image, 99.99)
         self.contrast_slider.setRange(
-            np.nanmin(self.processed_image), np.nanmax(self.processed_image)
+            *safe_slider_range(
+                np.nanmin(self.processed_image), np.nanmax(self.processed_image)
+            )
         )
         self.contrast_slider.setValue((vmin, vmax))
         self.im.set_clim(vmin, vmax)

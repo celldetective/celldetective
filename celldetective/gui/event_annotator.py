@@ -45,7 +45,7 @@ from celldetective.gui.base_annotator import BaseAnnotator
 import logging
 from celldetective.log_manager import positionlogger
 from celldetective.gui.base.threads import start_tracked
-from celldetective.gui.base.utils import flush_layout_events
+from celldetective.gui.base.utils import flush_layout_events, safe_slider_range
 
 logger = logging.getLogger("celldetective")
 
@@ -404,7 +404,9 @@ class EventAnnotator(BaseAnnotator):
             self._stack_p_high = np.nanpercentile(self.stack, 99.999)
             self._stack_p1 = np.nanpercentile(self.stack, 1)
             self._stack_p99 = np.nanpercentile(self.stack, 99.99)
-            self.contrast_slider.setRange(self._stack_p_low, self._stack_p_high)
+            self.contrast_slider.setRange(
+                *safe_slider_range(self._stack_p_low, self._stack_p_high)
+            )
             self.contrast_slider.setValue([self._stack_p1, self._stack_p99])
             self.contrast_slider.valueChanged.connect(self.contrast_slider_action)
             contrast_hbox.addWidget(QLabel("contrast: "))

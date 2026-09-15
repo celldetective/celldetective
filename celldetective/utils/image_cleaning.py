@@ -27,18 +27,26 @@ def _fix_no_contrast(frames: np.ndarray, value: Union[float, int] = 1):
     -------
     ndarray
             The modified `frames` array, where frames with no contrast have been adjusted.
+            Integer inputs are returned as float so the added value cannot overflow.
 
     Notes
     -----
-    - A frame is determined to have "no contrast" if all its pixel values are identical.
+    - A frame is determined to have "no contrast" if all its finite pixel values are identical.
+      Frames that are entirely NaN are left untouched.
     - Only the first pixel (`[0, 0, k]`) of a no-contrast frame is modified, leaving the rest
       of the frame unchanged.
+    - This is meant for consumers that cannot handle uniform input, such as deep-learning
+      segmentation models. Do not apply it to data that is measured or written to disk.
     """
 
+    if not np.issubdtype(frames.dtype, np.floating):
+        frames = frames.astype(float)
     for k in range(frames.shape[2]):
-        unique_values = np.unique(frames[:, :, k])
-        if len(unique_values) == 1:
-            frames[0, 0, k] += value
+        channel = frames[:, :, k]
+        if not np.any(np.isfinite(channel)):
+            continue
+        if np.nanmin(channel) == np.nanmax(channel):
+            frames[0, 0, k] = np.nanmin(channel) + value
     return frames
 
 
