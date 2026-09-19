@@ -7,6 +7,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Integer sliders showed at most 99 whatever their value (e.g. 300 epochs, a
+  max signal length of 128, the time slider of the viewers on movies of more
+  than 100 frames): superqt never passed the slider's range to its label. All
+  integer sliders now come from `celldetective.gui.base.sliders`, whose label
+  follows the range.
+- The value labels of the decimal sliders lost their first digit (`).500`,
+  `0000` for a threshold of `2.0000`): they are now sized for the decimals
+  they show.
+- Typing a decimal value with a comma in a slider label no longer raises an
+  error.
+- The **Min %** / **Max %** fields of the channel normalization (model upload
+  and training windows) were too narrow to show `99.99`.
+- The viewer opened from the **Fit** background correction listed the channels
+  as "Channel 0, 1…" and did not select the channel on display: it now shows
+  the channel names, on the displayed channel.
+- The **Local** background correction showed a *Downsample* field that it
+  ignores; the field is now hidden there.
+- The registration ROI viewer showed black images, and the napari frame
+  segmentation panel was too large.
+
+### Documentation
+- New annotated figures, captured from the current interface on the demo
+  projects: background correction (local and fit), mask-based, contour,
+  texture and position-based measurements, spot detection, the threshold
+  configuration wizard, model upload, tracking settings, segmentation and
+  event model training, conditional classification, event annotator settings,
+  survival and synchronized signal plots. They replace the screenshots of
+  earlier versions (some taken on macOS) and illustrate how-to guides that had
+  none.
+- How-to guides corrected against the code: buttons are named by their icon
+  and label (e.g. the settings button of the **MEASURE** row, not a "Measure
+  tab"; **Save**, not **Set**), the local correction changes the intensity
+  columns instead of adding suffixed ones, contour bands are set in the **Set
+  distances** window, *Recompile* reinitializes the weights of a pretrained
+  event model, the event annotator's playback speed is set in the viewer, and
+  the threshold wizard's filters are removed with the delete button.
+- The figure capture scripts (`docs/figures/capture`) also run on Linux/X11,
+  rendering each window with an Ubuntu title bar, and record the rectangles
+  of the widgets a figure points at.
+
 ## [1.6.3] - 2026-09-19
 
 ### Fixed

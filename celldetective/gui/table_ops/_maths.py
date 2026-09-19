@@ -16,7 +16,7 @@ from PyQt5.QtWidgets import (
     QLineEdit,
     QMainWindow,
 )
-from superqt import QLabeledSlider
+from celldetective.gui.base.sliders import QLabeledSlider
 
 from celldetective.gui.base.components import CelldetectiveWidget
 from celldetective.gui.base.utils import center_window

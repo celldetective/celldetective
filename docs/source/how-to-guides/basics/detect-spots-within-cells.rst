@@ -15,6 +15,16 @@ Reference keys: :term:`single-cell measurement`
 
 #. Press the :icon:`image-check,black` icon on the right side to set up spot detection visually.
 
+   .. figure:: ../../_static/figures/spot-detection.svg
+       :width: 100%
+       :target: ../../_static/figures/spot-detection.svg
+       :align: center
+       :alt: The spot detection block of the measurement settings and its viewer
+
+       **Spot detection.** The SPOT DETECTION block of the measurement settings and the viewer it opens, here on the dead nuclei channel of the ADCC demo.
+
+   The block holds the option (1), the channel and preprocessing (2), the diameter and threshold (3) and the viewer button (4). In the viewer, the filters (5) and the two **Set** buttons (6) drive the detection shown in red, and :icon:`plus,#1565c0` :blue:`Add measurement` (7) copies the values back to the block, saved with :blue:`Save` (8).
+
 #. Set up the channel interest using the controls on the **Right Panel**. You can change the displayed frame and adjust contrast to see the spots clearly.
     
     .. note::
@@ -48,9 +58,9 @@ Reference keys: :term:`single-cell measurement`
    - If spots are not detected even at threshold 0, try adjusting the diameter or checking your preprocessing.
    - **Note**: The detection uses the preprocessed image if filters are listed, regardless of whether the "Preview" checkbox is ticked.
 
-#. Once the detection is satisfactory, press :icon:`plus,black` Add measurement.
+#. Once the detection is satisfactory, press :icon:`plus,#1565c0` :blue:`Add measurement`.
 
-#. Save the new measurement settings.
+#. Scroll down and press :blue:`Save` in the measurement settings.
 
 #. Check the MEASURE option and press *Submit* to measure.
 

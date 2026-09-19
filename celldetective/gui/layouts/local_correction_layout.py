@@ -55,6 +55,9 @@ class LocalCorrectionLayout(BackgroundFitCorrectionLayout):
         self.threshold_viewer_btn.clicked.connect(self.set_distance_graphically)
 
         self.corrected_stack_viewer.hide()
+        # Local correction does not fit a model: no downsampling.
+        self.downsample_lbl.hide()
+        self.downsample_le.hide()
 
     def check_mask_existence(self, population: str) -> bool:
         """Check if masks exist for the given population."""

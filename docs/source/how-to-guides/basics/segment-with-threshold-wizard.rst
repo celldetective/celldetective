@@ -19,11 +19,17 @@ Open the Threshold Configuration Wizard
 
 #. Click the **Threshold Config Wizard** button to open the interface.
 
-.. image:: ../../_static/tcw.png
-    :align: center
-    :alt: threshold_config_wizard
+The wizard opens on the first frame of the current position, with the image on the right and the pipeline on the left, from top to bottom.
 
-*The Threshold Configuration Wizard interface showing preprocessing, thresholding, and object detection controls.*
+.. figure:: ../../_static/figures/threshold-wizard.svg
+    :width: 100%
+    :target: ../../_static/figures/threshold-wizard.svg
+    :align: center
+    :alt: The Threshold Configuration Wizard with a preprocessing pipeline and a threshold
+
+    **Preprocessing and threshold.** The wizard on the live nuclei of the ADCC demo, with the pipeline of the demo's own configuration: a Gaussian and a LoG filter, then a threshold.
+
+The filters (1) are applied to the image with **Apply** (2). The buttons of the **Threshold** section (3) fill the holes of the binary mask, switch the histogram to a log scale and match the histogram of each frame to a reference frame. The threshold is the range of the slider under the histogram (4); the channel is chosen under the image (5).
 
 
 Step 1: Preprocessing
@@ -31,9 +37,10 @@ Step 1: Preprocessing
 
 Enhance the image to make objects easier to detect.
 
-*   **Add Filter:** Select a filter (e.g., ``gauss``, ``median``, ``std``) and kernel size, then click **Add**.
-*   **Remove Filter:** Double-click a filter in the list to remove it.
+*   **Add Filter:** Click :icon:`filter-plus,black`, select a filter (e.g., ``gauss``, ``median``, ``std``) and its kernel size, then click **Add**.
+*   **Remove Filter:** Select a filter in the list and click :icon:`delete,black`.
 *   **Apply:** Click **Apply** to see the effect on the image.
+*   **Help:** :icon:`help-circle,black` asks a few questions about your images and suggests filters.
 
 
 Step 2: Thresholding
@@ -41,9 +48,10 @@ Step 2: Thresholding
 
 Binarize the image to separate foreground (cells) from background.
 
-*   **Slider:** Adjust the min/max sliders to define the intensity range of fit.
-*   **Histogram:** Use the histogram to identify intensity peaks. Toggle **Log scale** for better visibility of low-intensity pixels.
-*   **Fill Holes:** Keep this checked to automatically fill holes inside detected objects.
+*   **Slider:** Adjust the min/max handles to define the intensity range kept as foreground.
+*   **Histogram:** Use the histogram of the filtered image to identify intensity peaks. Toggle :icon:`math-log,black` for better visibility of rare values.
+*   **Fill Holes:** :icon:`format-color-fill,black`, on by default, fills the holes inside detected objects.
+*   **Histogram matching:** :icon:`equalizer,black` matches the histogram of every frame to the current one before thresholding, for movies whose intensity drifts.
 
 
 Step 3: Object Detection (Split / Merge)
@@ -51,11 +59,21 @@ Step 3: Object Detection (Split / Merge)
 
 Convert the binary mask into individual objects.
 
+.. figure:: ../../_static/figures/threshold-wizard-objects.svg
+    :width: 100%
+    :target: ../../_static/figures/threshold-wizard-objects.svg
+    :align: center
+    :alt: The object and property sections of the Threshold Configuration Wizard
+
+    **Objects and property filter.** The lower part of the wizard: markers, watershed, and the filter on the properties of the objects.
+
+The object options (1) set how the mask is split; **Run** (2) detects the markers and **Watershed** (3) grows them into objects. The scatter plot and its two feature selectors (4) show the properties of the objects, the query (5) removes those that match it, and **Save** (6) writes the configuration.
+
 **Option A: Markers (Watershed)**
 Best for touching cells or nuclei.
 
 *   **Footprint:** Adjust the size of the local region used to find distinct peaks. Larger values merge peaks; smaller values split them.
-*   **Min Distance:** Set the minimum allowed distance between two object centers.
+*   **Min distance:** Set the minimum allowed distance between two object centers.
 *   **Run:** Click **Run** to detect markers (shown as red dots).
 *   **Watershed:** Click **Watershed** to expand markers into object boundaries.
 
@@ -71,18 +89,17 @@ Step 4: Property Filtering
 
 Remove false positives based on morphology or intensity.
 
-*   **Visualize:** Use the dropdowns to plot two properties (e.g., ``area`` vs ``solidity``) on the scatter plot.
-*   **Select:** Click points on the scatter plot to highlight the corresponding object in the viewer.
-*   **Query:** Enter a filtering query in the text box (e.g., ``area > 100`` or ``solidity > 0.9``).
-*   **Filter:** Click **Submit Query** to remove objects that don't match the criteria.
+*   **Visualize:** Use the **feature 0** and **feature 1** dropdowns to plot two properties (e.g., ``area`` vs ``solidity``) on the scatter plot.
+*   **Query:** In the **remove** field, enter a query matching the objects to remove (e.g., ``area < 100`` or ``solidity < 0.9``).
+*   **Filter:** Click **Submit...**: the matching objects turn red in the scatter plot and are removed from the segmentation.
 
 
 Save and apply the pipeline
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-#. Click **Save**. The configuration is saved as a ``.json`` file in your experiment's ``configs/`` folder.
+#. Click **Save** and choose where to write the ``.json`` configuration (by default ``configs/threshold_config_<population>.json`` in your experiment).
 
-#. The wizard closes, and the config file path is automatically loaded into the **Upload Model** window.
+#. The wizard closes, and the configuration file is loaded into the **Upload model** window.
 
 #. Click **Upload** to confirm.
 

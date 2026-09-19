@@ -26,8 +26,7 @@ from PyQt5.QtWidgets import (
 )
 from fonticon_mdi6 import MDI6
 
-from superqt import QLabeledSlider
-from celldetective.gui.base.sliders import QLabeledDoubleRangeSlider
+from celldetective.gui.base.sliders import QLabeledSlider, QLabeledDoubleRangeSlider
 from superqt.fonticon import icon
 
 from celldetective.gui.gui_utils import PreprocessingLayout

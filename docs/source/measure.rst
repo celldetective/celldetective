@@ -25,19 +25,31 @@ Celldetective offers a range of single-cell measurement tools, from mask-based i
 Background correction
 ~~~~~~~~~~~~~~~~~~~~~
 
-Background correction removes uneven illumination before measuring intensities. Two strategies are available:
+Background correction removes uneven illumination before measuring intensities. It is set in the **BACKGROUND CORRECTION** block at the top of the measurement settings (:icon:`cog-outline,black` next to **MEASURE**), with two tabs:
 
-*   **Local** — each cell is corrected individually using the surrounding background intensity. The estimation distance is adjustable and the background can be either divided or subtracted.
+*   **Local** — each cell is corrected individually using the intensity of a band around its mask. The band distance is adjustable, the background is estimated as its mean or median and either divided or subtracted.
 
-*   **Field** — the entire field of view is fitted by a 2D surface (plane or paraboloid) after excluding cells by a threshold on the standard deviation. The extracted background is then divided or subtracted.
+*   **Fit** — the entire field of view is fitted by a 2D surface (paraboloid or plane) after excluding cells by a threshold on the standard-deviation-filtered image. The extracted background is then divided or subtracted.
 
-.. figure:: _static/local_correction.png
+.. figure:: _static/figures/background-correction-local.svg
+    :width: 100%
+    :target: _static/figures/background-correction-local.svg
     :align: center
-    :alt: local_correction
+    :alt: The Local tab of the background correction and the viewer that sets the band distance
 
-.. figure:: _static/field_correction.png
+    **Local background correction.** The Local tab of the measurement settings and the viewer that sets the distance of the background band around each cell.
+
+In the **Local** tab (1), set the channel and the band distance (2), or press :icon:`image-check,black` to open a viewer where the **Edge** slider shows the band around each mask (3) and **Set** writes the distance back (4). Choose how the background is estimated, ``mean`` or ``median`` (5), and whether it is subtracted or divided, with or without clipping negative values (6). :icon:`plus,#1565c0` :blue:`Add correction` (7) appends the correction to the list of corrections to apply (8).
+
+.. figure:: _static/figures/background-correction-fit.svg
+    :width: 100%
+    :target: _static/figures/background-correction-fit.svg
     :align: center
-    :alt: field_correction
+    :alt: The Fit tab of the background correction and the viewer that sets the exclusion threshold
+
+    **Fit background correction.** The Fit tab of the measurement settings and the viewer that sets the threshold excluding the cells from the fit.
+
+In the **Fit** tab (1), the threshold (2) excludes the cells from the fit; the :icon:`image-check,black` button opens a viewer where the **Threshold** slider shows the excluded pixels in purple (3) and **Apply** writes the value back (4). Pick the 2D model and the downsampling factor used to fit it faster (5), the operation (6), preview the corrected image with :icon:`eye-outline,black` (7), then :icon:`plus,#1565c0` :blue:`Add correction` (8) to append it to the list (9).
 
 .. seealso::
     :doc:`how-to-guides/basics/measure-locally-corrected-intensity-measurements` for a step-by-step guide on local correction.
@@ -67,9 +79,15 @@ Position-based measurements rely solely on centroid coordinates and are independ
 
 *   **Isotropic measurements** — intensities within circular or ring-shaped ROIs centered on the cell, with configurable radii and statistical operations (mean, std, sum, median, min, max).
 
-.. figure:: _static/iso-measure.png
+.. figure:: _static/figures/position-measurements.svg
+    :width: 50%
+    :target: _static/figures/position-measurements.svg
     :align: center
-    :alt: iso_measurements
+    :alt: The position-based measurements block of the measurement settings
+
+    **Position-based measurements.** The radii and the operations of the isotropic measurements.
+
+Add (:icon:`plus,black`) or remove (:icon:`delete,black`) radii (1) in the list of radii (2): a single value is a disk, ``10-30`` a ring between 10 and 30 pixels from the center. The operations (3) listed below (4) are computed on each of them, for every channel.
 
 
 Spot detection
@@ -80,9 +98,15 @@ Detect and count intracellular spots (e.g., FISH probes, vesicles) using Laplaci
 .. seealso::
     :doc:`how-to-guides/basics/detect-spots-within-cells` for a step-by-step guide.
 
-.. figure:: _static/spot_detection.png
+.. figure:: _static/figures/spot-detection.svg
+    :width: 100%
+    :target: _static/figures/spot-detection.svg
     :align: center
-    :alt: spot_detection
+    :alt: The spot detection block of the measurement settings and its viewer
+
+    **Spot detection.** The SPOT DETECTION block of the measurement settings and the viewer that tunes the detection on the dead nuclei channel of the ADCC demo.
+
+Tick *Perform spot detection* (1), pick the channel and optional preprocessing filters (2), then the spot diameter and detection threshold (3). The :icon:`image-check,black` button (4) opens a viewer with the same filters (5); each **Set** runs the detection on the current frame and circles the spots in red (6). :icon:`plus,#1565c0` :blue:`Add measurement` (7) writes the values back to the settings, which are kept with :blue:`Save` (8).
 
 
 Static classification

@@ -7,10 +7,11 @@ import celldetective
 from celldetective.gui.base.sliders import (
     QLabeledDoubleRangeSlider,
     QLabeledDoubleSlider,
+    QLabeledSlider,
 )
 
 GUI_DIR = Path(celldetective.__file__).parent / "gui"
-FLOAT_SLIDERS = {"QLabeledDoubleSlider", "QLabeledDoubleRangeSlider"}
+FLOAT_SLIDERS = {"QLabeledDoubleSlider", "QLabeledDoubleRangeSlider", "QLabeledSlider"}
 
 
 @pytest.mark.parametrize("slider_class", [QLabeledDoubleSlider, QLabeledDoubleRangeSlider])
@@ -31,6 +32,32 @@ def test_float_sliders_survive_invalid_ranges(qtbot, slider_class, bounds, expec
     slider.setRange(*bounds)
     slider.show()
     assert (slider.minimum(), slider.maximum()) == pytest.approx(expected)
+
+
+def test_float_slider_label_fits_its_decimals(qtbot):
+    # superqt sized the label for "1.0": "0.500" lost its first digit.
+    slider = QLabeledDoubleSlider()
+    qtbot.addWidget(slider)
+    slider.setDecimals(3)
+    slider.setRange(0, 1)
+    slider.setValue(0.5)
+    slider.show()
+    label = slider._label
+    assert label.text() == "0.500"
+    # the text plus the line edit's inner margins and the cursor
+    assert label.width() >= label.fontMetrics().horizontalAdvance("0.500") + 8
+
+
+def test_int_slider_label_follows_range(qtbot):
+    # superqt kept the label at the slider's initial range (0-99): 300 epochs showed 99.
+    slider = QLabeledSlider()
+    qtbot.addWidget(slider)
+    slider.setRange(1, 3000)
+    slider.setValue(300)
+    assert slider._label.text() == "300"
+    slider.setRange(0, 50)
+    assert slider.value() == 50
+    assert slider._label.text() == "50"
 
 
 def test_gui_imports_float_sliders_from_celldetective():

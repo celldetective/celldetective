@@ -11,36 +11,39 @@ Reference keys: :term:`texture features`, :term:`single-cell measurement`
 Enable **Haralick Texture Features**
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-#. Open the **Measure** tab for your population of interest.
+#. In the block of your population of interest, click the :icon:`cog-outline,black` button of the **MEASURE** row to open the measurement settings.
 
-#. In the measurement settings, check the **Haralick** option.
+#. In the **MASK-BASED MEASUREMENTS** section, tick **Measure Haralick texture features**.
 
 
 Configure the parameters
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
-#. **Channel**: Select the channel to analyze (e.g., a DNA/DAPI channel for chromatin texture).
-
-#. **Distance**: Set the pixel distance for the gray-level co-occurrence matrix computation (default: ``1``). Larger values capture coarser texture patterns.
-
-#. **Gray levels**: Set the number of quantized gray-level bins (default: ``256``). Lowering this value (e.g., ``64``) significantly speeds up computation at the cost of intensity resolution.
-
-#. **Scale**: Set a downscaling factor between ``0`` and ``1`` to reduce cell crop size before GLCM computation. Useful for large cells.
-
-#. **Normalization**: Choose how to normalize intensities before quantization:
-
-   *   **Percentile mode**: clip intensities between a min and max percentile (e.g., 0.01% – 99.9%).
-   *   **Absolute mode**: clip between fixed pixel intensity values.
-
-.. figure:: ../../_static/texture-measurements.png
+.. figure:: ../../_static/figures/texture-measurements.svg
+    :width: 100%
+    :target: ../../_static/figures/texture-measurements.svg
     :align: center
-    :alt: texture_options
+    :alt: The texture options of the measurement settings
+
+    **Texture options.** The Haralick texture options of the measurement settings.
+
+Once the option is ticked (1), the two buttons on its right (2) help choose the parameters on the current position: :icon:`poll,black` plots the intensity histogram of the target channel, to check which values the normalization clips, and :icon:`image-check,black` shows the image digitized to the chosen number of gray levels.
+
+#. **Target channel**: select the channel to analyze (3), e.g. a DNA channel for chromatin texture.
+
+#. **Distance**, **# gray levels** and **Scale** (4):
+
+   *   **Distance**: the pixel distance for the gray-level co-occurrence matrix computation (default: ``1``). Larger values capture coarser texture patterns.
+   *   **# gray levels**: the number of quantized gray-level bins (default: ``256``). Lowering this value (e.g., ``64``) significantly speeds up computation at the cost of intensity resolution.
+   *   **Scale**: a downscaling factor between ``0`` and ``1`` to reduce the image size before the computation. Useful for large cells.
+
+#. **Normalization** (5): intensities are clipped before quantization, between a **Min percentile** and a **Max percentile** (e.g., 0.01% – 99.9%). The :icon:`percent-circle,black` button (6) switches to absolute mode, where you set a **Min value** and a **Max value** in intensity units.
 
 
 Run the measurements
 ~~~~~~~~~~~~~~~~~~~~
 
-#. Click **Set** to save the configuration.
+#. Scroll down and click :blue:`Save` to save the configuration.
 
 #. In the control panel, check the **MEASURE** box and click **Submit**.
 

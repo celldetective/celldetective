@@ -11,22 +11,35 @@ Reference keys: :term:`event`, :term:`event class`, :term:`event time`
 Prepare the viewer
 ~~~~~~~~~~~~~~~~~~
 
+.. figure:: ../../_static/figures/signal-annotator-settings.svg
+    :width: 100%
+    :target: ../../_static/figures/signal-annotator-settings.svg
+    :align: center
+    :alt: The Configure signal annotator window
+
+    **Event annotator settings.** The display settings of the event annotator, opened from the DETECT EVENTS row.
+
 #. Go to the DETECT EVENTS section for the cell population of interest. Click on the :icon:`cog-outline,black` button to set up the viewer.
 
-#. Set the modality to "grayscale".
+#. Set the modality to "grayscale" (1), or "RGB" to overlay up to three channels.
 
-#. Set the channel of interest.
+#. Set the channel of interest (3) and its display range, in intensity values by default; :icon:`percent-circle-outline,black` switches to percentiles and :icon:`math-log,black` to a log scale (2).
 
-#. Adapt the fraction value to your data (e.g. 0.25). At a fraction of 1, you will see the original image (but the viewer will take longer to open and may be slow).
+#. Adapt the **fraction** value to your data (e.g. 0.25) (4): the images are downscaled by this factor when the viewer loads the movie. At a fraction of 1, you will see the original image (but the viewer will take longer to open and may be slow).
 
-#. Set a time interval between frames (e.g. 100 ms).
-
-#. Save and exit.
+#. Press :blue:`Save` (5) and close the window.
 
 Annotate in the viewer
 ~~~~~~~~~~~~~~~~~~~~~~
 
-#. Press the :icon:`eye-check,black` button of the DETECT EVENT section to open the event viewer.
+#. Press the :icon:`eye-check-outline,black` button of the DETECT EVENTS section to open the event viewer. Adjust the playback speed with the **Framerate** slider (in frames per second) and press :kbd:`Space` to play or pause the movie.
+
+   .. figure:: ../../_static/signal-annotator.gif
+       :width: 100%
+       :align: center
+       :alt: The event annotator in use
+
+       **The event annotator.** The movie shows the cell centroids marked by their current event status; clicking a cell reveals its signal trace (ADCC demo).
 
 #. Adjust the image contrast.
 

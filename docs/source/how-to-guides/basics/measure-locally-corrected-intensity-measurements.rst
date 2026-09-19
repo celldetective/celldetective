@@ -11,45 +11,49 @@ Reference keys: **local correction**, :term:`single-cell measurement`
 Enable local background correction
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-#. Open the **Measure** tab for your population of interest.
+#. In the block of your population of interest, click the :icon:`cog-outline,black` button of the **MEASURE** row to open the measurement settings.
 
-#. In the measurement settings, locate the **Background correction** section.
-
-#. Select the **Local** mode.
+#. In the **BACKGROUND CORRECTION** section at the top, select the **Local** tab.
 
 
 Configure the correction
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
-#. **Channel**: Select the intensity channel to correct.
+.. figure:: ../../_static/figures/background-correction-local.svg
+    :width: 100%
+    :target: ../../_static/figures/background-correction-local.svg
+    :align: center
+    :alt: The Local tab of the background correction and the viewer that sets the band distance
 
-#. **Distance**: Set the distance (in pixels) from the cell mask edge to define the background ROI. The background is sampled in a ring around each cell at this distance.
+    **Local background correction.** The Local tab of the measurement settings (ADCC demo) and the viewer that sets the distance of the background band around each cell.
 
-#. **Estimation method**: Choose how to estimate the background intensity within the ROI:
+#. **Channel**: select the intensity channel to correct.
 
-   *   **Mean**: average intensity in the background ring.
-   *   **Median**: median intensity (more robust to outliers).
+#. **Distance**: set the distance (in pixels) from the edge of the mask over which the background is estimated (2). The background is sampled in a band outside each cell, up to this distance.
 
-#. **Correction method**: Choose how to apply the correction:
+#. (Optional) Click :icon:`image-check,black` next to the distance to set it visually: the viewer draws the band around the cells of the current position; move the **Edge** slider (3) until the band covers background only, then press :blue:`Set` (4) to write the distance back.
 
-   *   **Subtract**: subtract the estimated background from the cell intensity.
+#. **Model**: choose how to estimate the background intensity in the band (5):
+
+   *   ``mean``: average intensity in the band.
+   *   ``median``: median intensity (more robust to neighbouring cells).
+
+#. **Operation**: choose how to apply the correction (6):
+
+   *   **Subtract**: subtract the estimated background from the cell intensity. **Clip** sets the negative values to zero.
    *   **Divide**: divide the cell intensity by the estimated background.
 
-#. (Optional) Click the **eye icon** to open the background ROI visualizer and verify the ring placement around your cells.
-
-.. figure:: ../../_static/local_correction.png
-    :align: center
-    :alt: local_correction
+#. Press :icon:`plus,#1565c0` :blue:`Add correction` (7). The correction appears in the **Corrections to apply** list (8); remove a selected one with :icon:`delete,black`.
 
 
 Run the measurements
 ~~~~~~~~~~~~~~~~~~~~
 
-#. Click **Set** to save the configuration.
+#. Scroll down and click :blue:`Save` to save the configuration.
 
 #. In the control panel, check the **MEASURE** box and click **Submit**.
 
-The corrected intensity values will be appended to your measurement table with a suffix indicating the correction method and distance.
+The correction is applied to the image of each frame before the measurements: the intensity columns of the table (e.g. ``effector_fluo_channel_mean``) are then measured on the corrected channel.
 
 .. tip::
-    Use the ROI visualizer to ensure the background ring does not overlap with neighboring cells. Increase the distance if cells are densely packed.
+    Use the viewer to ensure the background band does not overlap with neighboring cells. Decrease the distance if cells are densely packed.

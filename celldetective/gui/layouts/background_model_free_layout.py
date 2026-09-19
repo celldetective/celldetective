@@ -18,8 +18,8 @@ from PyQt5.QtWidgets import (
     QMainWindow,
 )
 from fonticon_mdi6 import MDI6
-from superqt import QLabeledRangeSlider, QLabeledSlider
-from celldetective.gui.base.sliders import QLabeledDoubleRangeSlider
+from superqt import QLabeledRangeSlider
+from celldetective.gui.base.sliders import QLabeledSlider, QLabeledDoubleRangeSlider
 from superqt.fonticon import icon
 from tifffile import imread
 
@@ -331,6 +331,7 @@ class BackgroundModelFreeCorrectionLayout(QGridLayout, Styles):
                 preprocessing=[["gauss", 2], ["std", 4]],
                 stack_path=self.attr_parent.current_stack,
                 n_channels=len(self.channel_names),
+                channel_names=self.channel_names,
                 target_channel=self.target_channel,
                 window_title="Set the exclusion threshold",
             )

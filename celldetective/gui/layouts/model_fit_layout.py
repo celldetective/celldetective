@@ -217,6 +217,7 @@ class BackgroundFitCorrectionLayout(QGridLayout, Styles):
                 preprocessing=[["gauss", 2], ["std", 4]],
                 stack_path=self.attr_parent.current_stack,
                 n_channels=len(self.channel_names),
+                channel_names=self.channel_names,
                 target_channel=self.target_channel,
                 window_title="Set the exclusion threshold",
             )

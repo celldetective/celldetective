@@ -27,6 +27,15 @@ build_figures.py  one function per figure: layout and annotations
 
    The napari capture runs the `lymphocytes_ricm` model on one frame.
 
+   The fluorescence figures (`capture_measurements.py`, `capture_process.py`)
+   run on a copy of the `demo_adcc` demo, set in `CELLDETECTIVE_DOCS_ADCC`.
+
+   On Linux (X11), the windows are rendered by Qt, not grabbed from the screen,
+   so a locked or busy screen does not matter; the Ubuntu title bar is drawn
+   from `capture/titlebar_ubuntu.png`. Captures that pass `marks=` to `grab()`
+   also write the rectangles of the widgets a figure points at to
+   `screenshots/<name>.json`, which `build_figures.py` reads with `marks()`.
+
 2. Rebuild the SVGs. The documents are built with the
    [CLI-Anything Inkscape harness](https://github.com/HKUDS/CLI-Anything/tree/main/inkscape/agent-harness):
 

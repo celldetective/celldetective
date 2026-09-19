@@ -18,8 +18,8 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QSize, QThread
 from celldetective.gui.base.channel_norm_generator import ChannelNormGenerator
 from celldetective.gui.base.components import BrowseButton
-from superqt import QLabeledSlider, QSearchableComboBox
-from celldetective.gui.base.sliders import QLabeledDoubleSlider
+from superqt import QSearchableComboBox
+from celldetective.gui.base.sliders import QLabeledSlider, QLabeledDoubleSlider
 from superqt.fonticon import icon
 from fonticon_mdi6 import MDI6
 import numpy as np
