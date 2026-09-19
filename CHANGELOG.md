@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.2] - 2026-09-19
+
+### Fixed
+- The documentation build on Read the Docs failed with Sphinx 9, which
+  `sphinx-hoverxref` does not support: the docs build now installs
+  `docs/requirements.txt`, which pins Sphinx below 8 without affecting the
+  package's own dependencies.
+
 ## [1.6.1] - 2026-09-19
 
 ### Fixed
@@ -348,6 +356,7 @@ documentation and test overhaul.
 - Resolved Windows access-violation, hanging, and stalling test issues; build
   the package on tag and fix the PyPI workflow.
 
+[1.6.2]: https://github.com/celldetective/celldetective/compare/v1.6.1...v1.6.2
 [1.6.1]: https://github.com/celldetective/celldetective/compare/v1.6.0...v1.6.1
 [1.6.0]: https://github.com/celldetective/celldetective/compare/v1.5.3...v1.6.0
 [1.5.3]: https://github.com/celldetective/celldetective/compare/v1.5.2...v1.5.3
