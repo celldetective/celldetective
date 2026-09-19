@@ -94,6 +94,9 @@ class ModelChannelSelection(CelldetectiveWidget):
 
             combo = QComboBox()
             combo.addItems(self.options)
+            # A long channel name must not set the minimum width of the panel.
+            combo.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
+            combo.setMinimumContentsLength(10)
             combo.setToolTip(f"Feeds the model's '{slot}' input.")
             combo.setCurrentIndex(
                 self._default_index(combo, slot, selected_channels, k)

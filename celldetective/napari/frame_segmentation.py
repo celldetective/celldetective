@@ -520,6 +520,13 @@ class FrameSegmentationPanel(QWidget):
         model_row.addWidget(QLabel("model:"), 30)
         self.model_cb = QComboBox()
         self.model_cb.addItems(available_segmentation_models(self.population))
+        # Size the dropdown on a few characters rather than on its longest entry:
+        # one long model name would otherwise set the minimum width of the whole
+        # dock, and napari cannot shrink it below that.
+        self.model_cb.setSizeAdjustPolicy(
+            QComboBox.AdjustToMinimumContentsLengthWithIcon
+        )
+        self.model_cb.setMinimumContentsLength(12)
         self.model_cb.setToolTip(
             "Segmentation model to run on the frame currently displayed."
         )

@@ -78,7 +78,7 @@ class RegistrationROIViewer(CellSizeViewer):
             slider_initial_value=radius,
             slider_range=(1.0, max_radius),
             decimal_option=True,
-            precision=5,
+            precision=1,
         )
         radius_layout.setContentsMargins(15, 0, 15, 0)
         self.diameter_slider.valueChanged.connect(self.change_diameter)
@@ -96,14 +96,17 @@ class RegistrationROIViewer(CellSizeViewer):
         # Distance map cached once, so a slider tick only re-evaluates the taper.
         self.radial_distance = radial_distance(self.init_frame.shape[:2])
 
+        # An explicit RGBA image: matplotlib does not honour a per-pixel alpha array
+        # passed to `set_alpha` with interpolation="none", and the overlay then
+        # hides the whole frame behind opaque black.
+        self.weight_rgba = np.zeros(self.init_frame.shape[:2] + (4,), dtype=np.float32)
         self.im_weight = self.ax.imshow(
-            np.ones(self.init_frame.shape[:2], dtype=np.float32),
-            cmap="Greys",
-            vmin=0,
-            vmax=1,
+            self.weight_rgba,
             interpolation="none",
             zorder=2,
         )
+        # Leave the cursor readout to the frame underneath.
+        self.im_weight.set_mouseover(False)
         self.circ.set_zorder(3)
         self.circ_taper = plt.Circle(
             self.circle_center(), 1.0, ec="tab:red", fill=False, ls="--", zorder=3
@@ -120,7 +123,7 @@ class RegistrationROIViewer(CellSizeViewer):
             slider_initial_value=self.alpha,
             slider_range=(0.0, 1.0),
             decimal_option=True,
-            precision=5,
+            precision=2,
         )
         alpha_layout.setContentsMargins(15, 0, 15, 0)
         self.alpha_slider.valueChanged.connect(self.change_alpha)
@@ -136,7 +139,8 @@ class RegistrationROIViewer(CellSizeViewer):
         radius = self.circle_radius()
         self.circ_taper.set_radius(radius * (1.0 - self.alpha))
         self.circ_taper.set_visible(0.0 < self.alpha < 1.0)
-        self.im_weight.set_alpha(0.6 * (1.0 - self.roi_weights()))
+        self.weight_rgba[..., 3] = 0.6 * (1.0 - self.roi_weights())
+        self.im_weight.set_data(self.weight_rgba)
         super().update_circle()
 
     def change_alpha(self, value: float) -> None:

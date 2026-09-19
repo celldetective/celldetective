@@ -45,7 +45,7 @@ def test_roi_viewer_matches_registration_window_and_sets_parent(
     assert viewer.circ.center == pytest.approx((39.5, 29.5))
     assert viewer.circ.get_radius() == pytest.approx(20.0)
     np.testing.assert_allclose(
-        viewer.im_weight.get_alpha(),
+        viewer.im_weight.get_array()[..., 3],
         0.6 * (1 - tukey_window((60, 80), alpha=0.3, radius=20)),
         atol=1e-6,
     )
