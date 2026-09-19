@@ -46,6 +46,7 @@ from celldetective.utils.image_loaders import (
 from celldetective.utils.mask_cleaning import _check_label_dims, auto_correct_masks
 from celldetective.utils.image_cleaning import (
     _fix_no_contrast,
+    interpolate_nan,
     interpolate_nan_multichannel,
 )
 
