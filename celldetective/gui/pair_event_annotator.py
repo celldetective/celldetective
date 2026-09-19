@@ -30,8 +30,12 @@ from celldetective.gui.base.components import (
     CelldetectiveMainWindow,
     CelldetectiveWidget,
 )
-from celldetective.gui.base.utils import center_window, flush_layout_events
-from superqt import QLabeledDoubleRangeSlider, QSearchableComboBox, QLabeledSlider
+from celldetective.gui.base.utils import (
+    center_window,
+    flush_layout_events,
+)
+from superqt import QSearchableComboBox, QLabeledSlider
+from celldetective.gui.base.sliders import QLabeledDoubleRangeSlider
 from celldetective import (
     get_software_location,
 )
@@ -602,10 +606,8 @@ class PairEventAnnotator(CelldetectiveMainWindow):
             self.contrast_slider.setOrientation(Qt.Horizontal)
             logger.debug(f"Contrast range: {[np.nanpercentile(self.stack.flatten(), 0.001), np.nanpercentile(self.stack.flatten(), 99.999)]}")
             self.contrast_slider.setRange(
-                *[
-                    np.nanpercentile(self.stack, 0.001),
-                    np.nanpercentile(self.stack, 99.999),
-                ]
+                np.nanpercentile(self.stack, 0.001),
+                np.nanpercentile(self.stack, 99.999),
             )
             self.contrast_slider.setValue(
                 [np.nanpercentile(self.stack, 1), np.nanpercentile(self.stack, 99.99)]

@@ -239,6 +239,34 @@ class BackgroundCorrectionProcess(Process):
                     correction_vertical=getattr(self, "correction_vertical", 0),
                     **self.kwargs if hasattr(self, "kwargs") else {},
                 )
+            elif correction_type == "registration":
+                from celldetective.preprocessing import register_stacks
+
+                corrected_stacks = register_stacks(
+                    self.exp_dir,
+                    well_option=self.well_option,
+                    position_option=self.position_option,
+                    target_channel=self.target_channel,
+                    export=export,
+                    return_stacks=return_stacks,
+                    show_progress_per_well=False,
+                    show_progress_per_pos=False,
+                    movie_prefix=movie_prefix,
+                    export_prefix=export_prefix,
+                    progress_callback=progress_callback,
+                    # register_stacks owns the defaults of the options left out.
+                    **{
+                        key: getattr(self, key)
+                        for key in (
+                            "radius",
+                            "tukey_alpha",
+                            "upsample_factor",
+                            "reference",
+                            "downscale",
+                        )
+                        if hasattr(self, key)
+                    },
+                )
             else:
                 from celldetective.preprocessing import correct_background_model
 

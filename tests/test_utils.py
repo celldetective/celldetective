@@ -14,11 +14,62 @@ from celldetective.utils.image_transforms import (
 from celldetective.utils.image_loaders import (
     _get_img_num_per_channel,
     _extract_channel_indices,
+    load_frames,
 )
+from celldetective.utils.image_cleaning import _fix_no_contrast
 from celldetective.utils.data_cleaning import remove_redundant_features
 from celldetective.utils.experiment import extract_experiment_channels
 from celldetective.utils.model_loaders import freeze_model_encoder
 from celldetective.utils.io import make_json_safe
+
+
+class TestLoadFramesKeepsUniformFrames(unittest.TestCase):
+    """load_frames must return the pixels on disk, even for a blank frame."""
+
+    def test_blank_frame_is_returned_unchanged(self):
+        import tempfile
+
+        import tifffile
+
+        stack = np.zeros((2, 32, 32), dtype=np.uint16)
+        stack[0, 10:20, 10:20] = 500
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "stack.tif")
+            tifffile.imwrite(path, stack, imagej=True)
+            blank = load_frames([1], path, normalize_input=False)
+            textured = load_frames([0], path, normalize_input=False)
+
+        self.assertTrue(np.all(blank == 0))
+        np.testing.assert_array_equal(textured[:, :, 0], stack[0])
+
+
+class TestFixNoContrast(unittest.TestCase):
+
+    def test_uniform_channel_gets_one_brighter_pixel(self):
+        frames = np.full((8, 8, 2), 3.0)
+        frames[2, 2, 1] = 7.0
+        fixed = _fix_no_contrast(frames)
+        self.assertEqual(fixed[0, 0, 0], 4.0)
+        self.assertEqual(np.count_nonzero(fixed[:, :, 0] != 3.0), 1)
+        self.assertEqual(fixed[0, 0, 1], 3.0)
+
+    def test_saturated_integer_frame_does_not_overflow(self):
+        frames = np.full((8, 8, 1), 255, dtype=np.uint8)
+        fixed = _fix_no_contrast(frames)
+        self.assertTrue(np.issubdtype(fixed.dtype, np.floating))
+        self.assertEqual(fixed[0, 0, 0], 256.0)
+        self.assertGreater(fixed.max(), fixed.min())
+
+    def test_all_nan_channel_is_left_alone(self):
+        frames = np.full((8, 8, 1), np.nan)
+        fixed = _fix_no_contrast(frames)
+        self.assertTrue(np.all(np.isnan(fixed)))
+
+    def test_uniform_channel_with_nan_is_fixed(self):
+        frames = np.full((8, 8, 1), 2.0)
+        frames[4, 4, 0] = np.nan
+        fixed = _fix_no_contrast(frames)
+        self.assertGreater(np.nanmax(fixed), np.nanmin(fixed))
 
 
 class TestPatchMask(unittest.TestCase):

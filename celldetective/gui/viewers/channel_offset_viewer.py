@@ -12,7 +12,10 @@ from PyQt5.QtWidgets import (
     QShortcut,
     QMainWindow,
 )
-from superqt import QLabeledDoubleSlider, QLabeledDoubleRangeSlider
+from celldetective.gui.base.sliders import (
+    QLabeledDoubleSlider,
+    QLabeledDoubleRangeSlider,
+)
 
 from celldetective.gui.base.components import QHSeperationLine
 from celldetective.gui.gui_utils import QuickSliderLayout, ThresholdLineEdit

@@ -14,11 +14,8 @@ from celldetective.gui.interactive_timeseries_viewer import InteractiveEventView
 from PyQt5.QtCore import Qt, QSize, QThread, pyqtSignal
 from PyQt5.QtGui import QKeySequence, QCloseEvent
 
-from superqt import (
-    QLabeledDoubleRangeSlider,
-    QSearchableComboBox,
-    QLabeledSlider,
-)
+from superqt import QSearchableComboBox, QLabeledSlider
+from celldetective.gui.base.sliders import QLabeledDoubleRangeSlider
 from celldetective.utils.image_loaders import (
     load_frames,
     _get_img_num_per_channel,
