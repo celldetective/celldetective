@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-09-19
+
 ### Added
 - **Stack registration** in the Preprocessing module: the drift of each
   position is estimated on one channel by Fourier phase cross-correlation of
@@ -52,8 +54,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `segment()` gained `selected_channels`, `target_cell_size` and `diameter`
   arguments, which override what the model configuration stores, and
   `use_stored_mapping`, which opts into what it stores.
+- Training a StarDist model pads images smaller than the patch size instead of
+  failing, and deepens the U-Net (up to three levels) when the median object is
+  larger than the network's field of view.
 
 ### Changed
+- **Python 3.9 or newer is required** (`python_requires=">=3.9"`), and btrack
+  is pinned to `>=0.7,<0.8`.
+- The *spatially* selection mode of the plotting windows is only offered when
+  the experiment metadata holds stage coordinates for the positions shown.
 - New visual style across the interface: buttons, checkboxes, collapsible
   blocks, menus, progress bars, tooltips (only shown on items too long to be
   read) and matplotlib figures.
@@ -79,6 +88,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   creating its device context until the first prediction.
 
 ### Fixed
+- StarDist segmentation no longer hangs at 0 % on large or elongated frames:
+  frames up to 12 MP are predicted in a single pass, and larger ones get their
+  tile overlap computed analytically instead of by StarDist's receptive-field
+  probe. Transfer learning from a large-grid model no longer hangs either.
+  Inference now rescales then normalizes, like training.
+- The installed `celldetective` command failed with `AttributeError`; only
+  `python -m celldetective` worked. Package data is now located through
+  `importlib.resources`.
+- Closing a window while one of its loaders was still running could crash the
+  software with an access violation: running threads are now kept alive and
+  stopped cleanly on every teardown path.
+- An error on one reference cell no longer discards every pair measurement of
+  the position.
+- The model parameter dialog refuses a negative cell size, and a non-positive
+  target size saved by an earlier build is ignored with a warning instead of
+  mirroring or failing the run.
 - `Calibrate...` in the Table Explorer no longer takes the `Ctrl+C` shortcut,
   which made the cells of the table impossible to copy.
 - The "Read the tutorial" links of the classification and experiment-structure
@@ -317,6 +342,7 @@ documentation and test overhaul.
 - Resolved Windows access-violation, hanging, and stalling test issues; build
   the package on tag and fix the PyPI workflow.
 
+[1.6.0]: https://github.com/celldetective/celldetective/compare/v1.5.3...v1.6.0
 [1.5.3]: https://github.com/celldetective/celldetective/compare/v1.5.2...v1.5.3
 [1.5.2]: https://github.com/celldetective/celldetective/compare/v1.5.1...v1.5.2
 [1.5.1]: https://github.com/celldetective/celldetective/compare/v1.5.0...v1.5.1
