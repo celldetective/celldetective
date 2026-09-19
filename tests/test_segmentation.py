@@ -89,6 +89,17 @@ class TestThresholdMCF7Segmentation(unittest.TestCase):
 
 		self.assertGreater(score,0.7)
 
+	def test_threshold_segmentation_with_nan_pixels(self):
+
+		# NaN pixels (e.g. left by a background correction) go through interpolate_nan
+		frame = np.moveaxis(self.img,0,-1).astype(float)
+		frame[:10,:10,3] = np.nan
+		label = segment_frame_from_thresholds(frame, target_channel=3, thresholds=[8000,1.0E10], equalize_reference=None,
+								  filters=[['variance',4],['gauss',2]], marker_min_distance=13, marker_footprint_size=34, marker_footprint=None, feature_queries=["area < 80"], channel_names=None)
+
+		self.assertEqual(label.shape, frame.shape[:2])
+		self.assertGreater(label.max(), 0)
+
 
 if __name__=="__main__":
 	unittest.main()
