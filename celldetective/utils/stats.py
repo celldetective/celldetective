@@ -47,7 +47,12 @@ def test_2samp_generic(
     - The function compares all unique pairwise combinations of the groups based on `groupby_cols`.
     - For the "ks_2samp" method, the test compares the distributions using the Kolmogorov-Smirnov test.
     - For the "cliffs_delta" method, the function calculates the effect size between two distributions.
-    - The results are returned in a symmetric pivot table where each cell represents the test result for the corresponding group pair.
+    - The results are returned in a pivot table where each cell compares the row group (``cdt1``) to the
+      column group (``cdt2``). The table is not symmetric: the direction matters.
+    - "ks_2samp" is one-sided (``alternative="less"``): a small p-value means the row group's CDF lies below
+      the column group's, i.e. the row group has significantly larger values.
+    - "cliffs_delta" gives P(row > column) - P(row < column): -1 when every row value is smaller than every
+      column value, +1 when every row value is larger. Mirror cells have opposite signs.
 
     """
 

@@ -150,6 +150,14 @@ class PivotTableUI(CelldetectiveWidget):
         self.legend_layout.addWidget(self.information_label)
         self.legend_layout.addStretch(1)
 
+        # How a cell relates its row to its column, which the matrix alone does
+        # not say and which differs between the tests.
+        self.reading_label = QLabel("")
+        self.reading_label.setStyleSheet(CAPTION_STYLE)
+        self.reading_label.setWordWrap(True)
+        self.reading_label.setTextFormat(Qt.RichText)
+        self.reading_label.hide()
+
         self.export_btn = QPushButton("Export")
         self.export_btn.setStyleSheet(button_style("secondary"))
         self.export_btn.setIcon(icon(MDI6.export, color=CELLDETECTIVE_BLUE))
@@ -163,6 +171,7 @@ class PivotTableUI(CelldetectiveWidget):
 
         self.v_layout.addWidget(self.title_label)
         self.v_layout.addLayout(self.legend_layout)
+        self.v_layout.addWidget(self.reading_label)
         self.v_layout.addWidget(self.table, 1)
         self.v_layout.addLayout(export_layout)
         self.setLayout(self.v_layout)
@@ -206,6 +215,19 @@ class PivotTableUI(CelldetectiveWidget):
         for label, color in entries:
             self.legend_layout.insertWidget(position, legend_entry(label, color))
             position += 1
+
+    def set_reading_guide(self, text: str) -> None:
+        """
+        Explain, under the legend, how a cell relates its row to its column.
+
+        Parameters
+        ----------
+        text : str
+            The explanation, as Qt rich text.
+        """
+
+        self.reading_label.setText(text)
+        self.reading_label.show()
 
     def export_data(self) -> None:
         """
@@ -279,8 +301,14 @@ class PivotTableUI(CelldetectiveWidget):
         new_width = min(content_width, max_width)
         new_height = min(content_height, max_height)
 
-        # Ensure minimum size
-        new_width = max(new_width, 300)
+        # Ensure minimum size; wider when there is a reading guide to wrap.
+        new_width = max(new_width, 300 if self.reading_label.isHidden() else 460)
+        if not self.reading_label.isHidden():
+            margins = self.v_layout.contentsMargins()
+            new_height += self.reading_label.heightForWidth(
+                new_width - margins.left() - margins.right()
+            ) + self.v_layout.spacing()
+            new_height = min(new_height, max_height)
         new_height = max(new_height, 200)
 
         self.resize(new_width, new_height)
@@ -336,6 +364,13 @@ class PivotTableUI(CelldetectiveWidget):
                 ("large", color_codes["large"]),
             ],
         )
+        self.set_reading_guide(
+            "<b>How to read:</b> each cell compares the <b>row</b> condition to the "
+            "<b>column</b> condition, δ = P(row &gt; column) − P(row &lt; column).<br>"
+            "δ = −1: every row value is smaller than every column value; "
+            "δ = +1: every row value is larger; δ ≈ 0: neither tends to be larger. "
+            "Mirror cells have opposite signs."
+        )
 
     def color_cells_pvalue(self) -> None:
         """
@@ -373,6 +408,14 @@ class PivotTableUI(CelldetectiveWidget):
                 ("*** ≤ 0.001", color_codes["***"]),
                 ("**** ≤ 0.0001", color_codes["****"]),
             ],
+        )
+        self.set_reading_guide(
+            "<b>How to read:</b> each cell tests whether the <b>row</b> condition "
+            "has <b>larger</b> values than the <b>column</b> condition (one-sided "
+            "KS test: the row's cumulative distribution lies <i>below</i> the "
+            "column's).<br>"
+            "A small p-value means the row is significantly shifted towards larger "
+            "values. The mirror cell (column vs row) tests the opposite direction."
         )
 
 
