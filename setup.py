@@ -1,6 +1,5 @@
 from setuptools import setup
 import setuptools
-import os
 from pathlib import Path
 
 this_directory = Path(__file__).parent
@@ -37,24 +36,30 @@ setup(
     author_email="remy.torro@inserm.fr",
     license="GPL-3.0",
     packages=setuptools.find_packages(),
+    # importlib.resources.files, used by get_package_location, is 3.9+.
+    python_requires=">=3.9",
     zip_safe=False,
+    # setuptools declares these globs in "/" form on every platform and
+    # converts them itself, so spell them literally rather than with os.sep.
+    # (The os.sep form happened to produce identical wheels -- "/" on POSIX,
+    # and Windows globbing tolerates "\" -- so this is clarity, not a fix.)
     package_data={
         "celldetective": [
             "*",
-            os.sep.join(["scripts", "*"]),
-            os.sep.join(["gui", "*"]),
-            os.sep.join(["gui", "icons", "plots", "*"]),
-            os.sep.join(["gui", "icons", "stats", "*"]),
-            os.sep.join(["regionprops", "*"]),
-            os.sep.join(["gui", "processes", "*"]),
-            os.sep.join(["gui", "help", "*"]),
-            os.sep.join(["models", "*", "*", "*"]),
-            os.sep.join(["models", "*"]),
-            os.sep.join(["models", "*", "*"]),
-            os.sep.join(["icons", "*"]),
-            os.sep.join(["links", "*"]),
-            os.sep.join(["datasets", "*"]),
-            os.sep.join(["datasets", "*", "*"]),
+            "scripts/*",
+            "gui/*",
+            "gui/icons/plots/*",
+            "gui/icons/stats/*",
+            "regionprops/*",
+            "gui/processes/*",
+            "gui/help/*",
+            "models/*/*/*",
+            "models/*",
+            "models/*/*",
+            "icons/*",
+            "links/*",
+            "datasets/*",
+            "datasets/*/*",
         ]
     },
     entry_points={

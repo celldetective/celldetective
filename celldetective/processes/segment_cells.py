@@ -1,7 +1,6 @@
 from multiprocessing import Process, Queue
 from typing import Optional, Dict, Any, List
 import time
-import datetime
 import os
 import json
 from pathlib import Path, PurePath
@@ -13,7 +12,7 @@ import gc
 from art import tprint
 import concurrent.futures
 
-from celldetective.log_manager import get_logger
+from celldetective.log_manager import get_logger, positionlogger
 from celldetective.utils.experiment import (
     extract_position_name,
     extract_experiment_channels,
@@ -24,10 +23,13 @@ from celldetective.utils.image_loaders import (
     _load_frames_to_segment,
     load_frames,
 )
-from celldetective.utils.image_transforms import _estimate_scale_factor
+from celldetective.utils.image_transforms import _combined_scale_factor
 from celldetective.utils.mask_cleaning import _check_label_dims
 from celldetective.utils.mask_transforms import _rescale_labels
-from celldetective.utils.model_loaders import locate_segmentation_model
+from celldetective.utils.model_loaders import (
+    locate_segmentation_model,
+    trained_cell_size_um,
+)
 from celldetective.utils.parsing import (
     config_section_to_dict,
     _extract_nbr_channels_from_config,
@@ -264,11 +266,10 @@ class SegmentCellDLProcess(BaseSegmentProcess):
 
         super().__init__(*args, **kwargs)
 
-        self.check_gpu()
-
-        # Model
+        # Model (must come before check_gpu so model_type is known)
         self.locate_model_path()
         self.extract_model_input_parameters()
+        self.check_gpu()
         self.detect_rescaling()
 
         self.sum_done = 0
@@ -294,13 +295,28 @@ class SegmentCellDLProcess(BaseSegmentProcess):
         if "selected_channels" in self.input_config:
             self.required_channels = self.input_config["selected_channels"]
 
+        # Through the same helper the library and the napari panel use, so a
+        # cell size set in the main window means the same thing everywhere. A
+        # generalist Cellpose model states its trained size in pixels rather
+        # than as `cell_size_um`; gating on that key alone made the model
+        # parameter dialog offer a cell size that this run then ignored, while
+        # `segment()` and the single-frame panel applied it.
         self.target_cell_size = None
-        if (
-            "target_cell_size_um" in self.input_config
-            and "cell_size_um" in self.input_config
-        ):
-            self.target_cell_size = self.input_config["target_cell_size_um"]
-            self.cell_size = self.input_config["cell_size_um"]
+        self.cell_size = trained_cell_size_um(self.input_config)
+        if self.cell_size is not None:
+            target = self.input_config.get("target_cell_size_um")
+            if target is not None and target <= 0:
+                # `segment()` rejects the same value outright, and the dialog no
+                # longer writes one, so this only catches a configuration saved by
+                # an earlier build. Dividing by it was the worse option: zero
+                # raised ZeroDivisionError once the run started, and a negative
+                # flipped the scale and segmented a mirrored frame.
+                logger.warning(
+                    f"Ignoring target_cell_size_um={target}: it must be strictly "
+                    "positive. Rescaling on spatial calibration alone."
+                )
+            else:
+                self.target_cell_size = target
 
         self.normalize_kwargs = _get_normalize_kwargs_from_config(self.input_config)
 
@@ -316,12 +332,27 @@ class SegmentCellDLProcess(BaseSegmentProcess):
             self.flow_threshold = self.input_config["flow_threshold"]
 
     def write_log(self):
-        """Write the logo to the log file."""
+        """Write the segmentation parameters to the log file."""
 
-        log = f"segmentation model: {self.model_name}\n"
-        with open(self.pos + f"log_{self.mode}.txt", "a") as f:
-            f.write(f"{datetime.datetime.now()} SEGMENT \n")
-            f.write(log)
+        log_lines = [
+            f"segmentation model: {self.model_name}",
+            f"model_type: {self.model_type}",
+            f"required_channels: {self.required_channels}",
+            f"spatial_calibration: {self.required_spatial_calibration}",
+            f"normalize_kwargs: {self.normalize_kwargs}",
+        ]
+        if self.target_cell_size is not None:
+            log_lines.append(f"target_cell_size_um: {self.target_cell_size}")
+            log_lines.append(f"cell_size_um: {self.cell_size}")
+        if self.model_type == "cellpose":
+            log_lines.append(f"diameter: {self.diameter}")
+            log_lines.append(f"cellprob_threshold: {self.cellprob_threshold}")
+            log_lines.append(f"flow_threshold: {self.flow_threshold}")
+
+        with positionlogger(self.pos, filename=f"log_{self.mode}.txt"):
+            logger.info("SEGMENT")
+            for line in log_lines:
+                logger.info(line)
 
     def detect_channels(self):
         """Detect the channels required for the model."""
@@ -332,6 +363,11 @@ class SegmentCellDLProcess(BaseSegmentProcess):
         logger.info(
             f"Required channels: {self.required_channels} located at channel indices {self.channel_indices}."
         )
+        if self.channel_indices is None:
+            raise ValueError(
+                f"Could not resolve channel indices for required channels {self.required_channels}. "
+                "Check that the model's required channels match the channels configured for this position."
+            )
         self.img_num_channels = _get_img_num_per_channel(
             self.channel_indices, int(self.len_movie), self.nbr_channels
         )
@@ -339,16 +375,16 @@ class SegmentCellDLProcess(BaseSegmentProcess):
     def detect_rescaling(self):
         """Detect the rescheduling factor for the images."""
 
-        self.scale = _estimate_scale_factor(
-            self.spatial_calibration, self.required_spatial_calibration
+        # One factor from both corrections. Estimating the calibration ratio
+        # on its own first and multiplying afterwards dropped it whenever it sat
+        # within 5% of 1 -- the "not worth resampling" shortcut, which stops
+        # being true once a cell-size correction is resampling the frame anyway.
+        self.scale = _combined_scale_factor(
+            self.spatial_calibration,
+            self.required_spatial_calibration,
+            self.cell_size,
+            self.target_cell_size,
         )
-        logger.info(f"Scale: {self.scale} [None = 1]...")
-
-        if self.target_cell_size is not None and self.scale is not None:
-            self.scale *= self.cell_size / self.target_cell_size
-        elif self.target_cell_size is not None:
-            if self.target_cell_size != self.cell_size:
-                self.scale = self.cell_size / self.target_cell_size
 
         logger.info(
             f"Scale accounting for expected cell size: {self.scale} [None = 1]..."
@@ -374,10 +410,25 @@ class SegmentCellDLProcess(BaseSegmentProcess):
             self.input_config = json.load(config_file)
 
     def check_gpu(self):
-        """Check if GPU is available and set the environment variable."""
+        """Check if GPU is available and compatible, falling back to CPU if not."""
 
         if not self.use_gpu:
             os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+            return
+
+        if getattr(self, "model_type", None) == "cellpose":
+            try:
+                import torch
+                if not torch.cuda.is_available():
+                    raise RuntimeError("CUDA is not available.")
+                # Verify the GPU is actually usable with this PyTorch build
+                torch.zeros(1, device="cuda")
+            except Exception as e:
+                logger.warning(
+                    f"GPU requested but could not be used ({e}). Falling back to CPU."
+                )
+                self.use_gpu = False
+                os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
     def process_position(
         self, model: Optional[Any] = None, scale_model: Optional[Any] = None
@@ -586,11 +637,11 @@ class SegmentCellDLProcess(BaseSegmentProcess):
                 )
 
         except Exception as e:
-            logger.error(e)
+            logger.error(f"{e}")
 
         try:
             del model
-        except:
+        except NameError:
             pass
 
         gc.collect()
@@ -669,12 +720,19 @@ class SegmentCellThresholdProcess(BaseSegmentProcess):
                 self.equalize_time.append(equalize_time)
 
     def write_log(self):
-        """Write the logo to the log file."""
+        """Write the threshold segmentation parameters to the log file."""
 
-        log = f"Threshold segmentation: {self.threshold_instructions}\n"
-        with open(self.pos + f"log_{self.mode}.txt", "a") as f:
-            f.write(f"{datetime.datetime.now()} SEGMENT \n")
-            f.write(log)
+        log_lines = [f"Threshold segmentation: {self.threshold_instructions}"]
+        for i, instructions in enumerate(self.instructions):
+            log_lines.append(f"threshold_instructions[{i}]: {instructions}")
+        if self.equalize:
+            log_lines.append(f"equalize: {self.equalize}")
+            log_lines.append(f"equalize_time: {self.equalize_time}")
+
+        with positionlogger(self.pos, filename=f"log_{self.mode}.txt"):
+            logger.info("SEGMENT")
+            for line in log_lines:
+                logger.info(line)
 
     def detect_channels(self):
         """Detect the channels required for the thresholding."""
@@ -779,7 +837,7 @@ class SegmentCellThresholdProcess(BaseSegmentProcess):
                 gc.collect()
 
         except Exception as e:
-            logger.error(e)
+            logger.error(f"{e}")
 
         return
 
@@ -807,15 +865,15 @@ class SegmentCellThresholdProcess(BaseSegmentProcess):
         with concurrent.futures.ThreadPoolExecutor(
             max_workers=self.n_threads
         ) as executor:
-            results = results = executor.map(
+            results = executor.map(
                 self.parallel_job, chunks
             )  # list(map(lambda x: executor.submit(self.parallel_job, x), chunks))
             try:
                 for i, return_value in enumerate(results):
                     pass
             except Exception as e:
-                logger.error("Exception: ", e)
-                raise e
+                logger.error(f"Exception: {e}")
+                raise
 
     def run(self):
         """Run the segmentation process."""

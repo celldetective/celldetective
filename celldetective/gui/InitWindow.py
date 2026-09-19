@@ -4,6 +4,7 @@ import os
 import threading
 import time
 from glob import glob
+import subprocess
 from subprocess import Popen, check_output
 
 from PyQt5.QtCore import QUrl, Qt, QThread
@@ -23,17 +24,17 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
     QProgressDialog,
 )
-from fonticon_mdi6 import MDI6
 from psutil import cpu_count
-from superqt.fonticon import icon
 from celldetective.gui.base.components import (
+    BrowseButton,
     CelldetectiveWidget,
     CelldetectiveMainWindow,
     generic_message,
 )
-from celldetective.gui.base.utils import center_window, pretty_table
+from celldetective.gui.base.utils import center_window, get_current_screen_geometry, pretty_table
 from celldetective.log_manager import get_logger
 from typing import Optional
+from celldetective.gui.base.threads import start_tracked
 
 logger = get_logger("celldetective")
 
@@ -42,30 +43,43 @@ class BackgroundLoader(QThread):
     def run(self) -> None:
         """
         Load background packages and modules.
+
+        Note: napari is intentionally excluded — importing Qt-based packages
+        (napari, vispy) from a background thread on Windows triggers heap
+        corruption and access violations when paired with the main thread's
+        event loop. Napari is imported lazily at point-of-use instead.
         """
         logger.info("Loading background packages...")
         try:
+            if self.isInterruptionRequested():
+                return
             from celldetective.gui.control_panel import ControlPanel
 
             self.ControlPanel = ControlPanel
+            if self.isInterruptionRequested():
+                return
             from celldetective.gui.about import AboutWidget
 
             self.AboutWidget = AboutWidget
+            if self.isInterruptionRequested():
+                return
             from celldetective.processes.downloader import DownloadProcess
 
             self.DownloadProcess = DownloadProcess
+            if self.isInterruptionRequested():
+                return
             from celldetective.gui.configure_new_exp import ConfigNewExperiment
 
             self.ConfigNewExperiment = ConfigNewExperiment
+            if self.isInterruptionRequested():
+                return
             import pandas
             import matplotlib.pyplot
             import scipy.ndimage
             import tifffile
             import numpy
-            import napari
-            from celldetective.napari.utils import launch_napari_viewer
-        except Exception:
-            logger.error("Background packages not loaded...")
+        except Exception as e:
+            logger.error(f"Background packages not loaded: {e}")
         logger.info("Background packages loaded...")
 
 
@@ -107,10 +121,9 @@ class AppInitWindow(CelldetectiveMainWindow):
         self._create_actions()
         self._create_menu_bar()
 
-        app = QApplication.instance()
-        self.screen = app.primaryScreen()
-        self.geometry = self.screen.availableGeometry()
-        self.screen_width, self.screen_height = self.geometry.getRect()[-2:]
+        screen_geo = get_current_screen_geometry()
+        self.screen_width = screen_geo.width()
+        self.screen_height = screen_geo.height()
 
         central_widget = CelldetectiveWidget()
         self.vertical_layout = QVBoxLayout(central_widget)
@@ -121,11 +134,11 @@ class AppInitWindow(CelldetectiveMainWindow):
         self.setCentralWidget(central_widget)
         self.reload_previous_gpu_threads()
         self.adjustSize()
-        self.setFixedSize(self.size())
+        self.setMinimumSize(self.sizeHint())
         self.show()
 
         self.bg_loader = BackgroundLoader()
-        self.bg_loader.start()
+        start_tracked(self.bg_loader)
 
     def closeEvent(self, event: QCloseEvent) -> None:
         """
@@ -139,6 +152,7 @@ class AppInitWindow(CelldetectiveMainWindow):
 
         # Stop background loader thread
         if hasattr(self, "bg_loader") and self.bg_loader.isRunning():
+            self.bg_loader.requestInterruption()
             self.bg_loader.quit()
             self.bg_loader.wait(3000)
 
@@ -189,10 +203,10 @@ class AppInitWindow(CelldetectiveMainWindow):
         self.experiment_path_selection.setPlaceholderText("/path/to/experiment/folder/")
         self.locate_exp_layout.addWidget(self.experiment_path_selection, 90)
 
-        self.browse_button = QPushButton("Browse...")
+        self.browse_button = BrowseButton(
+            "Browse...", tooltip="Locate the experiment folder."
+        )
         self.browse_button.clicked.connect(self.browse_experiment_folder)
-        self.browse_button.setStyleSheet(self.button_style_sheet)
-        self.browse_button.setIcon(icon(MDI6.folder, color="white"))
         self.locate_exp_layout.addWidget(self.browse_button, 10)
         self.vertical_layout.addLayout(self.locate_exp_layout)
 
@@ -505,11 +519,11 @@ class AppInitWindow(CelldetectiveMainWindow):
 
         path = os.sep.join([self.soft_path, "celldetective", "models", os.sep])
         try:
-            Popen(f"explorer {os.path.realpath(path)}")
+            Popen(["explorer", os.path.realpath(path)])
         except Exception as e:
             logger.warning(f"{e}")
             try:
-                os.system('xdg-open "%s"' % path)
+                subprocess.run(["xdg-open", path], check=False)
             except Exception as e:
                 logger.error(f"Error {e}...")
                 return None
@@ -639,14 +653,21 @@ class AppInitWindow(CelldetectiveMainWindow):
             try:
                 self.control_panel = ControlPanel(self, self.exp_dir)
                 self.control_panel.adjustSize()
-                self.control_panel.setFixedSize(self.control_panel.size())
+                # Cap height at 90% of the *current* screen (where cursor is)
+                # to keep buttons accessible on multi-monitor / high-DPI setups
+                cur_screen = get_current_screen_geometry()
+                max_h = int(0.9 * cur_screen.height())
+                if self.control_panel.height() > max_h:
+                    self.control_panel.resize(
+                        self.control_panel.width(), max_h
+                    )
                 self.control_panel.show()
                 center_window(self.control_panel)
             except (AssertionError, FileNotFoundError) as e:
                 QMessageBox.critical(
                     self,
                     "Error Loading Experiment",
-                    f"Could not load experiment configuration.\n\nError: {str(e)}\n\nPlease ensure 'config.ini' exists in the selected folder.",
+                    f"Could not load experiment configuration.\n\nError: {e}\n\nPlease ensure 'config.ini' exists in the selected folder.",
                 )
                 return
 

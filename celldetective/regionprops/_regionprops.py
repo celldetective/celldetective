@@ -4,8 +4,11 @@ from skimage.measure._regionprops import (
     _infer_number_of_required_args,
 )
 from typing import Optional, List, Dict, Any, Tuple
+import logging
 import numpy as np
 import inspect
+
+logger = logging.getLogger("celldetective")
 import json
 import os
 from scipy.ndimage import find_objects
@@ -109,6 +112,16 @@ class CustomRegionProps(RegionProperties):
             self.channel_names = list(self.channel_names)
         super().__init__(*args, **kwargs)
 
+        # Pre-compute channel name to index mapping for O(1) lookups
+        self._channel_name_to_idx = (
+            {name: idx for idx, name in enumerate(self.channel_names)}
+            if self.channel_names is not None
+            else None
+        )
+        
+        # Cache signature information for extra properties
+        self._signature_cache = {}
+
     def __getattr__(self, attr: str) -> Any:
         """
         Get attribute.
@@ -124,10 +137,13 @@ class CustomRegionProps(RegionProperties):
             Attribute value.
         """
 
+        # Checked here rather than in __init__: a mismatched `channel_names` is
+        # only a problem for the extra properties that actually consume it, and
+        # measuring standard properties (area, centroid, ...) with a channel
+        # subset has always been allowed.
         if self.channel_names is not None and self._multichannel:
-            assert (
-                len(self.channel_names) == self._intensity_image.shape[-1]
-            ), "Mismatch between provided channel names and the number of channels in the image..."
+            if len(self.channel_names) != self._intensity_image.shape[-1]:
+                raise ValueError("Mismatch between provided channel names and the number of channels in the image...")
 
         if attr == "__setstate__":
             return self.__getattribute__(attr)
@@ -144,20 +160,27 @@ class CustomRegionProps(RegionProperties):
             if n_args == 2:
                 if self._intensity_image is not None:
                     if self._multichannel:
-                        arg_dict = dict(inspect.signature(func).parameters)
+                        # Cache signature inspection for performance
+                        if func not in self._signature_cache:
+                            self._signature_cache[func] = dict(inspect.signature(func).parameters)
+                        arg_dict = self._signature_cache[func]
+                        
                         if (
-                            self.channel_names is not None
+                            self._channel_name_to_idx is not None
                             and "target_channel" in arg_dict
                         ):
-                            multichannel_list = [
-                                np.nan for i in range(self.image_intensity.shape[-1])
-                            ]
+                            # Channel-specific function: read the DEFAULT value of
+                            # `target_channel` via inspect.signature to find which
+                            # channel to run on.  The function is called once for
+                            # that channel only; all other slots stay NaN.
+                            n_channels = self._intensity_image.shape[-1]
+                            multichannel_list = [np.nan for i in range(n_channels)]
                             len_output = 1
                             default_channel = arg_dict["target_channel"]._default
 
-                            if default_channel in self.channel_names:
-
-                                idx = self.channel_names.index(default_channel)
+                            # O(1) lookup instead of O(n) list.index()
+                            idx = self._channel_name_to_idx.get(default_channel, -1)
+                            if idx >= 0:
                                 res = func(self.image, self.image_intensity[..., idx])
                                 if isinstance(res, tuple):
                                     len_output = len(res)
@@ -167,25 +190,23 @@ class CustomRegionProps(RegionProperties):
                                 if len_output > 1:
                                     multichannel_list = [
                                         [np.nan] * len_output
-                                        for c in range(len(self.channel_names))
+                                        for c in range(n_channels)
                                     ]
                                     multichannel_list[idx] = res
                                 else:
-                                    multichannel_list = [
-                                        np.nan for c in range(len(self.channel_names))
-                                    ]
+                                    multichannel_list = [np.nan for c in range(n_channels)]
                                     multichannel_list[idx] = res
 
                             else:
-                                print(
-                                    f"Warning... Channel required by custom measurement ({default_channel}) could not be found in your data..."
+                                logger.warning(
+                                    f"Channel required by custom measurement ({default_channel}) could not be found in your data..."
                                 )
 
                             return np.stack(multichannel_list, axis=-1)
                         else:
                             multichannel_list = [
                                 func(self.image, self.image_intensity[..., i])
-                                for i in range(self.image_intensity.shape[-1])
+                                for i in range(self._intensity_image.shape[-1])
                             ]
                             return np.stack(multichannel_list, axis=-1)
                     else:

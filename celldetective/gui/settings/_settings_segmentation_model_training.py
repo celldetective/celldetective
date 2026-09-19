@@ -1,5 +1,5 @@
 from typing import Optional
-from time import time
+import time
 
 from PyQt5.QtGui import QCloseEvent
 from PyQt5.QtWidgets import (
@@ -17,12 +17,13 @@ from PyQt5.QtWidgets import (
     QMainWindow,
 )
 from PyQt5.QtCore import Qt, QSize, QThreadPool, QThread
-from celldetective.gui.base.components import generic_message
+from celldetective.gui.base.components import BrowseButton, generic_message
 from celldetective.gui.base.channel_norm_generator import ChannelNormGenerator
 import multiprocessing
 from celldetective.gui.workers import Runner
 from celldetective.gui.dynamic_progress import DynamicProgressDialog
-from superqt import QLabeledDoubleSlider, QLabeledSlider
+from superqt import QLabeledSlider
+from celldetective.gui.base.sliders import QLabeledDoubleSlider
 from superqt.fonticon import icon
 from fonticon_mdi6 import MDI6
 from celldetective.utils.model_getters import (
@@ -38,6 +39,7 @@ from glob import glob
 from datetime import datetime
 from celldetective.gui.settings._settings_base import CelldetectiveSettingsPanel
 from celldetective import get_logger
+from celldetective.gui.base.threads import start_tracked
 
 logger = get_logger(__name__)
 
@@ -96,7 +98,7 @@ class SettingsSegmentationModelTraining(CelldetectiveSettingsPanel):
         self.resize(int(self.width()), int(self._screen_height * 0.8))
 
         self.bg_loader = BackgroundLoader()
-        self.bg_loader.start()
+        start_tracked(self.bg_loader)
 
     def closeEvent(self, event: QCloseEvent) -> None:
         """
@@ -109,6 +111,8 @@ class SettingsSegmentationModelTraining(CelldetectiveSettingsPanel):
         """
         if self.bg_loader.isRunning():
             logger.info("Waiting for background loader to finish...")
+            self.bg_loader.requestInterruption()
+            self.bg_loader.quit()
             self.bg_loader.wait(3000)
         super().closeEvent(event)
 
@@ -251,7 +255,9 @@ class SettingsSegmentationModelTraining(CelldetectiveSettingsPanel):
 
         train_data_layout = QHBoxLayout()
         train_data_layout.addWidget(QLabel("Training data: "), 30)
-        self.select_data_folder_btn = QPushButton("Choose folder")
+        self.select_data_folder_btn = BrowseButton(
+            "Choose folder", tooltip="Locate the training set."
+        )
         self.select_data_folder_btn.clicked.connect(self.showDialog_dataset)
         self.data_folder_label = QLabel("No folder chosen")
         train_data_layout.addWidget(self.select_data_folder_btn, 35)
@@ -332,7 +338,9 @@ class SettingsSegmentationModelTraining(CelldetectiveSettingsPanel):
         pretrained_layout.setContentsMargins(0, 0, 0, 0)
         pretrained_layout.addWidget(QLabel("Pretrained model: "), 30)
 
-        self.browse_pretrained_btn = QPushButton("Choose folder")
+        self.browse_pretrained_btn = BrowseButton(
+            "Choose folder", tooltip="Locate the pretrained model."
+        )
         self.browse_pretrained_btn.clicked.connect(self.showDialog_pretrained)
         pretrained_layout.addWidget(self.browse_pretrained_btn, 35)
 
@@ -499,7 +507,7 @@ class SettingsSegmentationModelTraining(CelldetectiveSettingsPanel):
 
             subfiles = glob(self.dataset_folder + os.sep + "*.tif")
             if len(subfiles) > 0:
-                print(f"found {len(subfiles)} files in folder")
+                logger.debug(f"found {len(subfiles)} files in folder")
                 self.data_folder_label.setText(self.dataset_folder[:16] + "...")
                 self.data_folder_label.setToolTip(self.dataset_folder)
                 self.cancel_dataset.setVisible(True)
@@ -550,8 +558,8 @@ class SettingsSegmentationModelTraining(CelldetectiveSettingsPanel):
 
     def load_pretrained_config(self):
         """Load configuration from the pretrained model."""
-        f = open(os.sep.join([self.pretrained_model, "config_input.json"]))
-        data = json.load(f)
+        with open(os.sep.join([self.pretrained_model, "config_input.json"])) as f:
+            data = json.load(f)
         channels = data["channels"]
         self.seg_folder = self.pretrained_model.split("/")[-2]
         self.model_name = self.pretrained_model.split("/")[-1]
@@ -690,7 +698,7 @@ class SettingsSegmentationModelTraining(CelldetectiveSettingsPanel):
 
         try:
             lr = float(self.lr_le.text().replace(",", "."))
-        except:
+        except ValueError:
             generic_message("Invalid value encountered for the learning rate.")
             return None
 
@@ -716,7 +724,7 @@ class SettingsSegmentationModelTraining(CelldetectiveSettingsPanel):
         }
 
         model_folder = os.sep.join([self.software_models_dir, model_name, ""])
-        print(model_folder)
+        logger.debug(f"model_folder={model_folder}")
         if not os.path.exists(model_folder):
             os.mkdir(model_folder)
 
@@ -724,7 +732,7 @@ class SettingsSegmentationModelTraining(CelldetectiveSettingsPanel):
             {"target_directory": self.software_models_dir}
         )
 
-        print(f"Set of instructions: {self.training_instructions}")
+        logger.debug(f"Set of instructions: {self.training_instructions}")
 
         self.instructions = model_folder + "training_instructions.json"
 
@@ -818,7 +826,7 @@ class SettingsSegmentationModelTraining(CelldetectiveSettingsPanel):
             import shutil
 
             model_path = os.path.join(
-                self.parent_window.seg_models_dir, self.modelname_le.text()
+                self.software_models_dir, self.modelname_le.text()
             )
             if os.path.exists(model_path):
                 # Wait briefly for process to release file locks

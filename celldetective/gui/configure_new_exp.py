@@ -14,8 +14,8 @@ from PyQt5.QtWidgets import (
     QMainWindow,
 )
 from PyQt5.QtGui import QIntValidator, QDoubleValidator
-from celldetective.gui.gui_utils import help_generic
-from celldetective.gui.base.utils import center_window
+from celldetective.gui.base.help_panel import HelpButton, open_help, open_help_menu
+from celldetective.gui.base.utils import center_window, flush_layout_events
 from celldetective import get_software_location
 import json
 
@@ -29,6 +29,7 @@ from functools import partial
 import logging
 import numpy as np
 from celldetective.gui.base.components import (
+    BrowseButton,
     CelldetectiveMainWindow,
     CelldetectiveWidget,
 )
@@ -61,7 +62,7 @@ class ConfigNewExperiment(CelldetectiveMainWindow):
         self.init_widgets()
         self.add_to_layout()
         self.connect_signals()
-        QApplication.processEvents()
+        flush_layout_events(self)
         self.adjustScrollArea()
 
     def init_widgets(self):
@@ -76,9 +77,9 @@ class ConfigNewExperiment(CelldetectiveMainWindow):
         self.supFolder.setEnabled(True)
         self.supFolder.setText(self.newExpFolder)
 
-        self.browse_button = QPushButton("Browse...")
-        self.browse_button.setIcon(icon(MDI6.folder, color="white"))
-        self.browse_button.setStyleSheet(self.button_style_sheet)
+        self.browse_button = BrowseButton(
+            "Browse...", tooltip="Locate the folder the experiment goes in."
+        )
 
         self.expName = QLineEdit()
         self.expName.setPlaceholderText("folder_name_for_the_experiment")
@@ -172,12 +173,8 @@ class ConfigNewExperiment(CelldetectiveMainWindow):
         self.number_of_wells = QLabel("Number of wells:")
         self.ms_grid.addWidget(self.number_of_wells, 1, 0, 1, 3)
 
-        self.help_btn = QPushButton()
-        self.help_btn.setIcon(icon(MDI6.help_circle, color=self.help_color))
-        self.help_btn.setIconSize(QSize(20, 20))
+        self.help_btn = HelpButton("Help me structure my experiment")
         self.help_btn.clicked.connect(self.help_structure)
-        self.help_btn.setStyleSheet(self.button_select_all)
-        self.help_btn.setToolTip("Help.")
         self.ms_grid.addWidget(self.help_btn, 1, 0, 1, 3, alignment=Qt.AlignRight)
 
         self.SliderWells = QLabeledSlider(Qt.Horizontal, self)
@@ -259,35 +256,15 @@ class ConfigNewExperiment(CelldetectiveMainWindow):
         Helper to choose an experiment structure.
         """
 
-        dict_path = os.sep.join(
-            [
-                get_software_location(),
-                "celldetective",
-                "gui",
-                "help",
-                "exp-structure.json",
-            ]
+        open_help(
+            "exp-structure.json",
+            "Structuring your experiment",
+            docs_url=(
+                "https://celldetective.readthedocs.io/en/latest/"
+                "concepts/data-organization.html"
+            ),
+            parent=self,
         )
-
-        with open(dict_path) as f:
-            d = json.load(f)
-
-        suggestion = help_generic(d)
-        if isinstance(suggestion, str):
-            logger.info(f"{suggestion=}")
-            msgBox = QMessageBox()
-            msgBox = QMessageBox()
-            msgBox.setIcon(QMessageBox.Information)
-            msgBox.setTextFormat(Qt.RichText)
-            msgBox.setText(
-                suggestion
-                + "\nSee <a href='https://celldetective.readthedocs.io/en/latest/get-started.html#data-organization'>the docs</a> for more information."
-            )
-            msgBox.setWindowTitle("Info")
-            msgBox.setStandardButtons(QMessageBox.Ok)
-            returnValue = msgBox.exec()
-            if returnValue == QMessageBox.Ok:
-                return None
 
     def generate_channel_params_box(self):
         """
@@ -779,8 +756,8 @@ class SetupConditionLabels(CelldetectiveWidget):
         btn_hbox.addWidget(self.submit_btn)
 
         self.outer_layout.addLayout(btn_hbox)  # outside scroll
-        self.setMinimumWidth(int(0.6 * self.parent_window.parent_window.screen_width))
-
+        self.setMinimumWidth(500)
+        self.resize(int(0.6 * self.parent_window.parent_window.screen_width), self.height())
         center_window(self)
 
     def populate(self):
@@ -876,3 +853,4 @@ class SetupConditionLabels(CelldetectiveWidget):
         self.parent_window.pharmaceutical_agents = ",".join(pharamaceutical_text)
 
         self.parent_window.concentration_units = self.concentration_units_le.text()
+

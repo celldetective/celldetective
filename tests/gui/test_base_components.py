@@ -10,14 +10,18 @@ Covers:
 import logging
 import pytest
 from unittest.mock import MagicMock, patch
-from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QMainWindow
+from PyQt5.QtCore import Qt, QRect, QEvent, QPoint
+from PyQt5.QtGui import QPainter, QPixmap, QHelpEvent
+from PyQt5.QtWidgets import QFrame, QMainWindow, QStyle, QStyleOptionViewItem
 
 from celldetective.gui.base.components import (
+    BrowseButton,
+    CheckIndicatorDelegate,
     QCheckableComboBox,
     QHSeperationLine,
     HoverButton,
 )
+from celldetective.gui.base.styles import button_style
 from celldetective.gui.base.list_widget import ListWidget
 from celldetective.gui.base.feature_choice import FeatureChoice
 
@@ -150,6 +154,83 @@ class TestQCheckableComboBox:
 
 
 # =============================================================================
+# CheckIndicatorDelegate Tests
+# =============================================================================
+
+
+class TestCheckIndicatorDelegate:
+    """Tests for the custom check indicator of checkable combo boxes."""
+
+    def test_delegate_installed_on_popup(self, qtbot):
+        """The popup of a QCheckableComboBox uses the custom indicator."""
+        cb = QCheckableComboBox(obj="well")
+        qtbot.addWidget(cb)
+        cb.addItems(["well1", "well2"])
+
+        assert isinstance(cb.view().itemDelegate(), CheckIndicatorDelegate)
+
+    def test_rows_leave_room_for_the_indicator(self, qtbot):
+        """Rows are tall and wide enough for the rounded indicator."""
+        cb = QCheckableComboBox(obj="well")
+        qtbot.addWidget(cb)
+        cb.addItems(["well1", "well2"])
+
+        delegate = cb.view().itemDelegate()
+        option = QStyleOptionViewItem()
+        option.initFrom(cb.view())
+        size = delegate.sizeHint(option, cb.model().index(0, 0))
+
+        assert size.height() >= delegate.box_size + 2 * delegate.row_padding
+
+    def test_tooltip_only_when_text_is_cut(self, qtbot):
+        """The tooltip of a row is shown only for a shortened or elided text."""
+        full = "a well label far too long for the box"
+        cb = QCheckableComboBox(obj="well")
+        qtbot.addWidget(cb)
+        # A readable row, a row shortened by the caller (the usual case in the
+        # software), and a row left to the elision of the delegate.
+        cb.addItem("w1", tooltip="w1")
+        cb.addItem(full[:20] + "...", tooltip=full)
+        cb.addItem(full, tooltip=full)
+
+        delegate = cb.view().itemDelegate()
+        option = QStyleOptionViewItem()
+        option.initFrom(cb.view())
+        option.rect = QRect(0, 0, 120, 27)
+        event = QHelpEvent(QEvent.ToolTip, QPoint(5, 5), QPoint(5, 5))
+
+        shown = [
+            delegate.helpEvent(event, cb.view(), option, cb.model().index(row, 0))
+            for row in range(3)
+        ]
+
+        assert shown == [False, True, True]
+
+    def test_paints_every_check_state(self, qtbot):
+        """Painting checked, unchecked and partially checked items works."""
+        cb = QCheckableComboBox(obj="well")
+        qtbot.addWidget(cb)
+        cb.addItems(["well1", "well2", "well3"])
+        cb.setCurrentIndex(0)
+        cb.model().item(2, 0).setCheckState(Qt.PartiallyChecked)
+
+        pixmap = QPixmap(200, 3 * 27)
+        pixmap.fill(Qt.white)
+        painter = QPainter(pixmap)
+        delegate = cb.view().itemDelegate()
+        try:
+            for row in range(3):
+                option = QStyleOptionViewItem()
+                option.initFrom(cb.view())
+                option.rect = QRect(0, row * 27, 200, 27)
+                if row == 0:
+                    option.state |= QStyle.State_Selected
+                delegate.paint(painter, option, cb.model().index(row, 0))
+        finally:
+            painter.end()
+
+
+# =============================================================================
 # ListWidget Tests
 # =============================================================================
 
@@ -257,6 +338,14 @@ class TestListWidget:
 class TestFeatureChoice:
     """Tests for FeatureChoice."""
 
+    @pytest.fixture(autouse=True)
+    def restore_cache(self):
+        """Restore the module-level cache after each test so other tests are not polluted."""
+        import celldetective.gui.base.feature_choice as fc
+        original = fc.CACHED_EXTRA_PROPERTIES
+        yield
+        fc.CACHED_EXTRA_PROPERTIES = original
+
     @patch("celldetective.gui.base.feature_choice.get_extra_properties_functions")
     def test_initialization(self, mock_extras, qtbot):
         """Test FeatureChoice populates standard measurements."""
@@ -326,10 +415,16 @@ class TestQHSeperationLine:
     """Tests for QHSeperationLine."""
 
     def test_initialization(self, qtbot):
-        """Test separator line is created."""
+        """Test separator line is a horizontal rule of a fixed height."""
         line = QHSeperationLine()
         qtbot.addWidget(line)
-        assert line.maximumHeight() == 20
+
+        assert line.frameShape() == QFrame.HLine
+        # The rule keeps the height it is given, whatever that height is: it
+        # carries the air that separates two groups of a block, and that air is
+        # a matter of styling rather than something to pin down here.
+        assert line.minimumHeight() == line.maximumHeight()
+        assert 0 < line.maximumHeight() <= 20
 
 
 # =============================================================================
@@ -347,3 +442,69 @@ class TestHoverButton:
         btn = HoverButton(text="Test", icon_enum=MDI6.plus)
         qtbot.addWidget(btn)
         assert btn.text() == "Test"
+
+
+# =============================================================================
+# BrowseButton Tests
+# =============================================================================
+
+
+class TestBrowseButton:
+    """Tests for the button opening a file or folder browser."""
+
+    def test_initialization(self, qtbot):
+        """The button carries its label, a folder icon and its tooltip."""
+        btn = BrowseButton("Browse...", tooltip="Locate the experiment folder.")
+        qtbot.addWidget(btn)
+
+        assert btn.text() == "Browse..."
+        assert not btn.icon().isNull()
+        assert btn.toolTip() == "Locate the experiment folder."
+
+    def test_uses_the_outlined_role(self, qtbot):
+        """
+        Browsing for a path is the outlined role, not the solid one.
+
+        The solid blue belongs to the Submit or Upload button the browse
+        button sits above, and the two must not read as the same weight.
+        """
+
+        btn = BrowseButton()
+        qtbot.addWidget(btn)
+
+        assert btn.styleSheet() == button_style("secondary")
+
+    def test_icon_follows_the_enabled_state(self, qtbot):
+        """A disabled button fades rather than keeping the accent."""
+        btn = BrowseButton()
+        qtbot.addWidget(btn)
+
+        enabled = btn.icon().pixmap(18, 18).toImage()
+        btn.setEnabled(False)
+        disabled = btn.icon().pixmap(18, 18).toImage()
+
+        assert enabled != disabled
+
+    @pytest.mark.parametrize(
+        "module, attribute",
+        [
+            ("celldetective.gui.InitWindow", "browse_button"),
+            ("celldetective.gui.configure_new_exp", "browse_button"),
+            ("celldetective.gui.seg_model_loader", "open_dialog_button"),
+        ],
+    )
+    def test_panels_build_their_browse_button_from_it(self, module, attribute):
+        """
+        Every panel pointing at a path goes through the same button.
+
+        They used to be styled one at a time -- two of them solid blue, the
+        others with no style at all -- so the same action looked like a
+        different control in every panel.
+        """
+
+        import inspect
+        import importlib
+
+        source = inspect.getsource(importlib.import_module(module))
+
+        assert f"self.{attribute} = BrowseButton(" in source

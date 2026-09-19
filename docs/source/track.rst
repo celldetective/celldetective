@@ -17,7 +17,7 @@ Available trackers
 
 Celldetective integrates two tracking algorithms:
 
-*   :term:`bTrack` [#]_ (default) — a Bayesian tracker that uses Kalman filters and cell features to predict motion. It handles complex behaviors such as division and apoptosis, and is the recommended choice for crowded scenes.
+*   **bTrack** [#]_ (default) — a Bayesian tracker that uses Kalman filters and cell features to predict motion. It handles complex behaviors such as division and apoptosis, and is the recommended choice for crowded scenes.
 *   **trackpy** — a Crocker–Grier particle tracker well-suited for simple Brownian motion.
 
 Both trackers produce a table of cell positions, identities, and (optionally) morphological or intensity features per frame. Results are saved as a CSV file (``trajectories_<population>.csv``) in the ``output/tables`` folder of each position.
@@ -31,6 +31,10 @@ After tracking, optional post-processing can be applied to clean up results:
 *   Filter out short tracks.
 *   Interpolate gaps (missing detections within a track).
 *   Extrapolate positions backwards or forwards to the movie boundaries.
+
+Interpolated and extrapolated rows have a position but no mask: their ``class_id``, the label of the cell's mask in the segmentation, is left empty rather than interpolated, so that no mask is invented for them.
+
+These options are configured in the tracking settings and applied automatically after tracking. The same options can also be tuned interactively in the napari track-correction viewer (pre-filled from your tracking configuration) and applied on export, letting you preview their effect on the tracks before committing -- see :doc:`How to correct a single-cell track <how-to-guides/basics/correct-a-track>`.
 
 For a full list of post-processing and tracker parameters, see the :ref:`Tracking Settings Reference <ref_tracking_settings>`.
 

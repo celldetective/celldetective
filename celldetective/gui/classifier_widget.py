@@ -13,7 +13,8 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, QSize
 from PyQt5.QtGui import QCloseEvent
-from superqt import QLabeledSlider, QLabeledDoubleSlider, QSearchableComboBox
+from superqt import QLabeledSlider, QSearchableComboBox
+from celldetective.gui.base.sliders import QLabeledDoubleSlider
 from superqt.fonticon import icon
 from fonticon_mdi6 import MDI6
 
@@ -23,14 +24,21 @@ import matplotlib.pyplot as plt
 import json
 
 from celldetective.exceptions import EmptyQueryError, MissingColumnsError, QueryError
-from celldetective.gui.gui_utils import color_from_status, help_generic
+from celldetective.gui.gui_utils import color_from_status
+from celldetective.gui.base.help_panel import HelpButton, open_help
 from celldetective.gui.base.figure_canvas import FigureCanvas
 from celldetective.gui.base.components import CelldetectiveWidget
+import logging
 from celldetective import get_software_location
 from celldetective.measure import (
     classify_cells_from_query,
     interpret_track_classification,
 )
+
+from celldetective.log_manager import positionlogger
+from celldetective.utils.data_cleaning import extract_identity_col
+
+logger = logging.getLogger("celldetective")
 
 
 class ClassifierWidget(CelldetectiveWidget):
@@ -162,12 +170,8 @@ class ClassifierWidget(CelldetectiveWidget):
         time_prop_hbox = QHBoxLayout()
         time_prop_hbox.addWidget(self.time_corr, alignment=Qt.AlignCenter)
 
-        self.help_propagate_btn = QPushButton()
-        self.help_propagate_btn.setIcon(icon(MDI6.help_circle, color=self.help_color))
-        self.help_propagate_btn.setIconSize(QSize(20, 20))
+        self.help_propagate_btn = HelpButton("Help me propagate a classification")
         self.help_propagate_btn.clicked.connect(self.help_propagate)
-        self.help_propagate_btn.setStyleSheet(self.button_select_all)
-        self.help_propagate_btn.setToolTip("Help.")
         time_prop_hbox.addWidget(self.help_propagate_btn, 5, alignment=Qt.AlignRight)
 
         layout.addLayout(time_prop_hbox)
@@ -333,7 +337,13 @@ class ClassifierWidget(CelldetectiveWidget):
             [], [], color="k", alpha=self.currentAlpha
         )
         self.propscanvas.canvas.draw_idle()
-        self.propscanvas.canvas.setMinimumHeight(self.screen_height // 5)
+        # 4:3 rather than a fifth of the screen tall: as wide as the window, the
+        # latter squashed the feature on the y axis.
+        self.propscanvas.keep_aspect(
+            3 / 4,
+            min_height=self.screen_height // 5,
+            max_height=int(0.45 * self.screen_height),
+        )
 
     def closeEvent(self, event: QCloseEvent) -> None:
         """
@@ -374,7 +384,7 @@ class ClassifierWidget(CelldetectiveWidget):
             else:
                 self.log_btns[1].setEnabled(True)
         except Exception as e:
-            print(e)
+            logger.warning(f"Failed to update log scale button: {e}")
 
         class_name = self.class_name
 
@@ -418,10 +428,10 @@ class ClassifierWidget(CelldetectiveWidget):
 
                 feat_x = self.features_cb[1].currentText()
                 feat_y = self.features_cb[0].currentText()
-                min_x = self.df.dropna(subset=feat_x)[feat_x].min()
-                max_x = self.df.dropna(subset=feat_x)[feat_x].max()
-                min_y = self.df.dropna(subset=feat_y)[feat_y].min()
-                max_y = self.df.dropna(subset=feat_y)[feat_y].max()
+                min_x = self.df.dropna(subset=[feat_x])[feat_x].min()
+                max_x = self.df.dropna(subset=[feat_x])[feat_x].max()
+                min_y = self.df.dropna(subset=[feat_y])[feat_y].min()
+                max_y = self.df.dropna(subset=[feat_y])[feat_y].max()
 
                 x_padding = (max_x - min_x) * 0.05
                 y_padding = (max_y - min_y) * 0.05
@@ -446,7 +456,7 @@ class ClassifierWidget(CelldetectiveWidget):
             self.propscanvas.canvas.draw_idle()
 
         except Exception as e:
-            print("Exception L355 ", e)
+            logger.warning(f"Failed to update properties plot: {e}")
 
     def show_warning(self, message: str):
         """
@@ -561,7 +571,7 @@ class ClassifierWidget(CelldetectiveWidget):
 
         if self.time_corr.isChecked():
             self.class_name_user = "class_" + self.name_le.text()
-            print(f"User defined class name: {self.class_name_user}...")
+            logger.info(f"User defined class name: {self.class_name_user}...")
             if self.class_name_user in self.df.columns:
 
                 msgBox = QMessageBox()
@@ -603,7 +613,7 @@ class ClassifierWidget(CelldetectiveWidget):
 
         else:
             self.group_name_user = "group_" + self.name_le.text()
-            print(f"User defined characteristic group name: {self.group_name_user}.")
+            logger.info(f"User defined characteristic group name: {self.group_name_user}.")
             if self.group_name_user in self.df.columns:
 
                 msgBox = QMessageBox()
@@ -624,12 +634,33 @@ class ClassifierWidget(CelldetectiveWidget):
             self.df = self.df.drop(
                 list(set(name_map.values()) & set(self.df.columns)), axis=1
             ).rename(columns=name_map)
-            print(self.df.columns)
+            logger.debug(f"DataFrame columns after rename: {list(self.df.columns)}")
             # self.df[self.group_name_user] = self.df[self.group_name_user].replace({0: 1, 1: 0})
             self.df.reset_index(inplace=True, drop=True)
 
         if "custom" in list(self.df.columns):
             self.df = self.df.drop(["custom"], axis=1)
+
+        # Build a provenance record of the classification applied to the tables
+        if self.time_corr.isChecked():
+            classified_col = self.class_name_user
+            classification_log = [
+                f"class_name: {self.class_name_user}",
+                f"mode: {self.mode}",
+                f"property_query: {self.property_query_le.text()}",
+                f"irreversible_event: {self.irreversible_event_btn.isChecked()}",
+                f"unique_state: {self.unique_state_btn.isChecked()}",
+                f"transient_event: {self.transient_event_btn.isChecked()}",
+                f"r2_threshold: {self.r2_slider.value()}",
+                f"pre_event: {pre_event}",
+            ]
+        else:
+            classified_col = self.group_name_user
+            classification_log = [
+                f"group_name: {self.group_name_user}",
+                f"mode: {self.mode}",
+                f"property_query: {self.property_query_le.text()}",
+            ]
 
         self.fig_props.set_size_inches(4, 3)
         self.fig_props.suptitle(self.property_query_le.text(), fontsize=10)
@@ -645,6 +676,23 @@ class ClassifierWidget(CelldetectiveWidget):
                 + os.sep.join(["output", "tables", f"trajectories_{self.mode}.csv"]),
                 index=False,
             )
+            with positionlogger(str(pos), filename=f"log_{self.mode}.txt"):
+                logger.info("THRESHOLD CLASSIFICATION")
+                for line in classification_log:
+                    logger.info(line)
+                # Summarise the effect on this position: how many cells per resulting value
+                try:
+                    if classified_col in pos_group.columns:
+                        id_col = extract_identity_col(pos_group)
+                        if id_col is not None:
+                            per_cell = pos_group.groupby(id_col)[classified_col].first()
+                            counts = per_cell.value_counts(dropna=False).sort_index()
+                            logger.info(
+                                f"cells per {classified_col}: {counts.to_dict()}"
+                            )
+                            logger.info(f"total cells classified: {len(per_cell)}")
+                except Exception as e:
+                    logger.warning(f"Could not summarise classification counts: {e}")
 
         self.parent_window.parent_window.update_position_options()
         self.close()
@@ -654,31 +702,15 @@ class ClassifierWidget(CelldetectiveWidget):
         Helper for segmentation strategy between threshold-based and Deep learning.
         """
 
-        dict_path = os.sep.join(
-            [
-                get_software_location(),
-                "celldetective",
-                "gui",
-                "help",
-                "propagate-classification.json",
-            ]
+        open_help(
+            "propagate-classification.json",
+            "Propagating a classification",
+            docs_url=(
+                "https://celldetective.readthedocs.io/en/latest/how-to-guides/"
+                "basics/perform-conditional-cell-classification.html"
+            ),
+            parent=self,
         )
-
-        with open(dict_path) as f:
-            d = json.load(f)
-
-        suggestion = help_generic(d)
-        if isinstance(suggestion, str):
-            print(f"{suggestion=}")
-            msgBox = QMessageBox()
-            msgBox.setIcon(QMessageBox.Information)
-            msgBox.setTextFormat(Qt.RichText)
-            msgBox.setText(rf"{suggestion}")
-            msgBox.setWindowTitle("Info")
-            msgBox.setStandardButtons(QMessageBox.Ok)
-            returnValue = msgBox.exec()
-            if returnValue == QMessageBox.Ok:
-                return None
 
     def switch_to_log(self, i: int) -> None:
         """
@@ -693,8 +725,8 @@ class ClassifierWidget(CelldetectiveWidget):
         if i == 1:
             try:
                 feat_x = self.features_cb[1].currentText()
-                min_x = self.df.dropna(subset=feat_x)[feat_x].min()
-                max_x = self.df.dropna(subset=feat_x)[feat_x].max()
+                min_x = self.df.dropna(subset=[feat_x])[feat_x].min()
+                max_x = self.df.dropna(subset=[feat_x])[feat_x].max()
                 x_padding = (max_x - min_x) * 0.05
                 if x_padding == 0:
                     x_padding = 0.05
@@ -708,12 +740,12 @@ class ClassifierWidget(CelldetectiveWidget):
                     self.ax_props.set_xlim(min_x - x_padding, max_x + x_padding)
                     self.log_btns[i].setIcon(icon(MDI6.math_log, color="black"))
             except Exception as e:
-                print(e)
+                logger.warning(f"Failed to toggle log scale: {e}")
         elif i == 0:
             try:
                 feat_y = self.features_cb[0].currentText()
-                min_y = self.df.dropna(subset=feat_y)[feat_y].min()
-                max_y = self.df.dropna(subset=feat_y)[feat_y].max()
+                min_y = self.df.dropna(subset=[feat_y])[feat_y].min()
+                max_y = self.df.dropna(subset=[feat_y])[feat_y].max()
                 y_padding = (max_y - min_y) * 0.05
                 if y_padding == 0:
                     y_padding = 0.05
@@ -727,9 +759,9 @@ class ClassifierWidget(CelldetectiveWidget):
                     self.ax_props.set_ylim(min_y - y_padding, max_y + y_padding)
                     self.log_btns[i].setIcon(icon(MDI6.math_log, color="black"))
             except Exception as e:
-                print(e)
+                logger.warning(f"Failed to toggle log scale: {e}")
 
         self.ax_props.autoscale()
         self.propscanvas.canvas.draw_idle()
 
-        print("Done.")
+        logger.info("Log scale toggle done.")

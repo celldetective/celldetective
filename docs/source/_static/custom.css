@@ -15,11 +15,17 @@
 }
 
 .sd-card:hover {
-    border-color: #1565c0 !important;
-    box-shadow: 0 4px 8px 0 rgba(21, 101, 192, 0.2) !important;
+  border-color: #1565c0 !important;
+  box-shadow: 0 4px 8px 0 rgba(21, 101, 192, 0.2) !important;
 }
 
 .sd-card-header {
-    background-color: transparent !important;
-    border-bottom: none !important;
+  background-color: transparent !important;
+  border-bottom: none !important;
+}
+
+/* Make documentation occupy the full width and decrease right margin/padding */
+.wy-nav-content {
+  max-width: 75% !important;
+  padding-right: 1.5rem !important;
 }

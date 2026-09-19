@@ -1,7 +1,10 @@
 import os
+import logging
 from pathlib import Path
 from typing import Union, Any
 import numpy as np
+
+logger = logging.getLogger("celldetective")
 
 from celldetective.utils.image_transforms import (
     axes_check_and_normalize,
@@ -28,7 +31,7 @@ def remove_file_if_exists(file: Union[str, Path]):
         try:
             os.remove(file)
         except Exception as e:
-            print(e)
+            logger.warning(f"Failed to remove file {file}: {e}")
 
 
 def save_tiff_imagej_compatible(
@@ -73,3 +76,26 @@ def save_tiff_imagej_compatible(
 
     imsave_kwargs["imagej"] = True
     imsave(file, img, **imsave_kwargs)
+
+
+def make_json_safe(obj: Any) -> Any:
+    """
+    Convert object to JSON-serializable format.
+
+    Parameters
+    ----------
+    obj : Any
+        Input object.
+
+    Returns
+    -------
+    Any
+        JSON-serializable object.
+    """
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+    if isinstance(obj, (np.int64, np.int32, np.integer)):
+        return int(obj)
+    if isinstance(obj, (np.float32, np.float64, np.floating)):
+        return float(obj)
+    return str(obj)

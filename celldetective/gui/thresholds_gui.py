@@ -26,7 +26,8 @@ from PyQt5.QtWidgets import (
 )
 from fonticon_mdi6 import MDI6
 
-from superqt import QLabeledSlider, QLabeledDoubleRangeSlider
+from superqt import QLabeledSlider
+from celldetective.gui.base.sliders import QLabeledDoubleRangeSlider
 from superqt.fonticon import icon
 
 from celldetective.gui.gui_utils import PreprocessingLayout
@@ -35,8 +36,11 @@ from celldetective.gui.base.components import (
     CelldetectiveMainWindow,
     CelldetectiveWidget,
 )
-from celldetective.gui.gui_utils import color_from_class, help_generic
+from celldetective.gui.gui_utils import color_from_class
+from celldetective.gui.base.help_panel import HelpButton, open_help
 from celldetective.gui.base.figure_canvas import FigureCanvas
+from celldetective.gui.base.threads import start_tracked, stop_thread
+from celldetective.gui.base.utils import is_alive
 from celldetective.gui.viewers.threshold_viewer import ThresholdedStackVisualizer
 from celldetective.utils.image_loaders import load_frames
 
@@ -62,9 +66,9 @@ class BackgroundLoader(QThread):
             from scipy.ndimage._measurements import label
             import pandas as pd
             from celldetective.regionprops._regionprops import regionprops_table
+            logger.info("Background packages loaded...")
         except Exception:
             logger.error("Background packages not loaded...")
-        logger.info("Background packages loaded...")
 
 
 class ThresholdConfigWizard(CelldetectiveMainWindow):
@@ -92,8 +96,8 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
         self.screen_width = (
             self.parent_window.parent_window.parent_window.parent_window.screen_width
         )
-        self.setMinimumWidth(int(0.8 * self.screen_width))
-        self.setMinimumHeight(int(0.8 * self.screen_height))
+        self.setMinimumWidth(800)
+        self.setMinimumHeight(600)
         self.setWindowTitle("Threshold configuration wizard")
 
         self._createActions()
@@ -134,7 +138,14 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
             self.setAttribute(Qt.WA_DeleteOnClose)
 
         self.bg_loader = BackgroundLoader()
-        self.bg_loader.start()
+        # Tracked: this loader imports tensorflow-sized modules, so it easily
+        # outlives a wizard that is closed straight after opening -- and the
+        # window carries `WA_DeleteOnClose`, so the widget is deleted the moment
+        # it closes. Finalizing the thread there would abort the process.
+        start_tracked(self.bg_loader)
+        self.destroyed.connect(
+            lambda _=None, t=self.bg_loader: stop_thread(t, timeout=2000)
+        )
 
     def closeEvent(self, event: QCloseEvent) -> None:
         """
@@ -150,15 +161,16 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
         if hasattr(self, "viewer") and self.viewer is not None:
             # viewer.closeEvent handles signal disconnect + thread stop + wait
             try:
+                self.viewer.closeEvent(event)
                 self.viewer.close()
-            except RuntimeError:
-                pass
+            except RuntimeError as e:
+                logger.debug(f"Viewer already closed during cleanup: {e}")
             # Drain any queued signals that were already in the event loop
             QApplication.processEvents()
 
-        if hasattr(self, "bg_loader") and self.bg_loader.isRunning():
-            self.bg_loader.quit()
-            self.bg_loader.wait(3000)
+        # `run()` is a series of imports with no loop to interrupt, so this
+        # waits it out rather than trying to cut it short.
+        stop_thread(getattr(self, "bg_loader", None), timeout=3000)
         # Clear large arrays
         for attr in ["img", "labels", "edt_map", "props", "coords"]:
             if hasattr(self, attr):
@@ -217,8 +229,15 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
 
         self.setCentralWidget(self.button_widget)
         self.show()
-
-        QApplication.processEvents()
+        self.resize(int(0.8 * self.screen_width), int(0.8 * self.screen_height))
+        # No `processEvents()` here. It only forced an early repaint, but calling
+        # it from inside a constructor re-enters the event loop with this window
+        # half-built and dispatches whatever is queued -- including the
+        # `DeferredDelete` of any window closed earlier. Qt frees those C++
+        # objects while events still queued behind the deletion are addressed to
+        # them, and delivering one of those is an access violation, blamed on
+        # whatever happens to be on the stack. The window paints on the next turn
+        # of the real event loop instead.
 
     def populate_left_panel(self):
         """Populate the left panel."""
@@ -322,34 +341,13 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
         Helper for prefiltering strategy
         """
 
-        dict_path = os.sep.join(
-            [
-                get_software_location(),
-                "celldetective",
-                "gui",
-                "help",
-                "prefilter-for-segmentation.json",
-            ]
+        open_help(
+            "prefilter-for-segmentation.json",
+            "Prefiltering before segmentation",
+            docs_url="https://celldetective.readthedocs.io/en/latest/segment.html",
+            phrasing="The suggested technique is to {suggestion}",
+            parent=self,
         )
-
-        with open(dict_path) as f:
-            d = json.load(f)
-
-        suggestion = help_generic(d)
-        if isinstance(suggestion, str):
-            print(f"{suggestion=}")
-            message_box = QMessageBox()
-            message_box.setIcon(QMessageBox.Information)
-            message_box.setTextFormat(Qt.RichText)
-            message_box.setText(
-                f"The suggested technique is to {suggestion}.\nSee a tutorial <a "
-                f"href='https://celldetective.readthedocs.io/en/latest/segment.html'>here</a>."
-            )
-            message_box.setWindowTitle("Info")
-            message_box.setStandardButtons(QMessageBox.Ok)
-            return_value = message_box.exec()
-            if return_value == QMessageBox.Ok:
-                return None
 
     def generate_marker_contents(self):
         """Generate marker contents."""
@@ -882,6 +880,12 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
 
         self.property_query_le.setText("")
 
+        # The viewer is a separate window the user may already have closed;
+        # `WA_DeleteOnClose` means this attribute then refers to a deleted
+        # object, and driving it from a slider signal is an access violation.
+        if not is_alive(self.viewer):
+            return
+
         self.viewer.change_threshold(self.threshold_slider.value())
         self.viewer.scat_markers.set_color("tab:red")
         self.viewer.scat_markers.set_visible(False)
@@ -1011,3 +1015,4 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
                 self.marker_option.click()
             else:
                 self.all_objects_option.click()
+

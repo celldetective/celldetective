@@ -1,0 +1,96 @@
+import numpy as np
+import pytest
+import tifffile
+from scipy.ndimage import shift
+
+from celldetective.preprocessing import (
+    correct_background_model,
+    correct_background_model_free,
+    correct_channel_offset,
+    register_stacks,
+)
+from tests.test_registration import DRIFTS, FIELD, _write_experiment
+
+QUIET = dict(show_progress_per_well=False, show_progress_per_pos=False)
+
+
+@pytest.fixture
+def experiment(tmp_path):
+    exp_dir, movie_dir = _write_experiment(tmp_path)
+    # A position without a movie, listed before the valid one: every correction skips it.
+    (tmp_path / "Experiment" / "W1" / "10" / "movie").mkdir(parents=True)
+    source = tifffile.imread(movie_dir / "sample.tif").astype(float)
+    return exp_dir, movie_dir, source
+
+
+def test_channel_offset_shifts_target_channel_only(experiment):
+    exp_dir, movie_dir, source = experiment
+    stacks = correct_channel_offset(
+        exp_dir,
+        target_channel="Channel2",
+        correction_vertical=-2,
+        correction_horizontal=3,
+        export=True,
+        return_stacks=True,
+        **QUIET,
+    )
+
+    (corrected,) = stacks
+    assert corrected.shape == (len(DRIFTS), FIELD, FIELD, 2)
+    np.testing.assert_allclose(corrected[..., 0], source[:, 0], rtol=1e-6)
+    np.testing.assert_allclose(
+        corrected[2, ..., 1], shift(source[2, 1], [-2, 3]), rtol=1e-5
+    )
+    exported = tifffile.imread(movie_dir / "Corrected_sample.tif")
+    np.testing.assert_allclose(exported, np.moveaxis(corrected, -1, 1))
+
+
+@pytest.mark.parametrize(
+    "correct",
+    [
+        lambda exp, **kw: correct_background_model(
+            exp, target_channel="Channel1", model="plane", operation="subtract", **kw
+        ),
+        lambda exp, **kw: correct_background_model_free(
+            exp, target_channel="Channel1", mode="tiles", operation="subtract", **kw
+        ),
+        lambda exp, **kw: correct_channel_offset(
+            exp, target_channel="Channel1", correction_horizontal=1, **kw
+        ),
+        lambda exp, **kw: register_stacks(
+            exp, target_channel="Channel1", radius=50, **kw
+        ),
+    ],
+    ids=["fit", "model-free", "offset", "registration"],
+)
+def test_overwriting_correction_replaces_source_without_leftovers(experiment, correct):
+    exp_dir, movie_dir, source = experiment
+    correct(exp_dir, export=True, export_prefix=None, **QUIET)
+
+    assert not list(movie_dir.glob("temp_*"))
+    assert not list(movie_dir.glob("Corrected_*"))
+    overwritten = tifffile.imread(movie_dir / "sample.tif")
+    assert overwritten.shape == source.shape
+    assert overwritten.dtype == np.float32
+    # The other channel of the first frame is left untouched (registration has no shift there).
+    np.testing.assert_allclose(overwritten[0, 1], source[0, 1], rtol=1e-5)
+    assert (movie_dir.parent / "log_preprocessing.txt").exists()
+
+
+def test_corrections_report_well_and_position_progress(experiment):
+    exp_dir, _, _ = experiment
+    calls = []
+    correct_channel_offset(
+        exp_dir,
+        target_channel="Channel2",
+        correction_horizontal=1,
+        progress_callback=lambda **kw: calls.append(kw),
+        **QUIET,
+    )
+
+    wells = [c["iter"] for c in calls if c.get("level") == "well"]
+    positions = [c for c in calls if c.get("level") == "position"]
+    assert wells == [0, 1]
+    # Reported once each position is done, including the one skipped for lack of a movie.
+    assert [c["iter"] for c in positions] == [0, 1]
+    assert all(c["total"] == 2 for c in positions)

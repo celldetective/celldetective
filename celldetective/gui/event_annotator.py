@@ -14,11 +14,8 @@ from celldetective.gui.interactive_timeseries_viewer import InteractiveEventView
 from PyQt5.QtCore import Qt, QSize, QThread, pyqtSignal
 from PyQt5.QtGui import QKeySequence, QCloseEvent
 
-from superqt import (
-    QLabeledDoubleRangeSlider,
-    QSearchableComboBox,
-    QLabeledSlider,
-)
+from superqt import QSearchableComboBox, QLabeledSlider
+from celldetective.gui.base.sliders import QLabeledDoubleRangeSlider
 from celldetective.utils.image_loaders import (
     load_frames,
     _get_img_num_per_channel,
@@ -42,6 +39,12 @@ from matplotlib.animation import FuncAnimation
 from matplotlib.cm import tab10
 from typing import Optional, Tuple, Any
 from celldetective.gui.base_annotator import BaseAnnotator
+import logging
+from celldetective.log_manager import positionlogger
+from celldetective.gui.base.threads import start_tracked
+from celldetective.gui.base.utils import flush_layout_events
+
+logger = logging.getLogger("celldetective")
 
 
 class StackLoaderThread(QThread):
@@ -97,7 +100,7 @@ class StackLoaderThread(QThread):
             if not self._is_cancelled:
                 self.finished.emit()
         except Exception as e:
-            print(f"Error in loader thread: {e}")
+            logger.error(f"Error in loader thread: {e}")
             self.finished.emit()
 
 
@@ -161,7 +164,7 @@ class EventAnnotator(BaseAnnotator):
         self._loader_thread.finished.connect(self._on_load_finished)
         self._progress_dialog.canceled.connect(self._on_load_canceled)
 
-        self._loader_thread.start()
+        start_tracked(self._loader_thread)
 
     def _on_load_progress(self, value: int) -> None:
         """
@@ -408,7 +411,7 @@ class EventAnnotator(BaseAnnotator):
         if self.class_choice_cb.currentText() != "":
             self.compute_status_and_colors(0)
 
-        QApplication.processEvents()
+        flush_layout_events(self)
 
         # Add Menu for Interactive Plotter
         menubar = self.menuBar()
@@ -482,24 +485,12 @@ class EventAnnotator(BaseAnnotator):
 
         cols = list(self.df_tracks.columns)
 
-        if (
-            self.time_name in cols
-            and self.class_name in cols
-            and not self.status_name in cols
-        ):
-            # only create the status column if it does not exist to not erase static classification results
-            self.make_status_column()
-        elif (
-            self.time_name in cols
-            and self.class_name in cols
-            and self.df_tracks[self.status_name].isnull().all()
-        ):
-            self.make_status_column()
-        elif self.time_name in cols and self.class_name in cols:
-            # all good, do nothing
-            pass
+        if self.time_name in cols and self.class_name in cols:
+            # Create/refill status column when missing or entirely null
+            if self.status_name not in cols or self.df_tracks[self.status_name].isnull().all():
+                self.make_status_column()
         else:
-            if not self.status_name in self.df_tracks.columns:
+            if self.status_name not in self.df_tracks.columns:
                 self.df_tracks[self.status_name] = 0
                 self.df_tracks["status_color"] = color_from_status(0)
                 self.df_tracks["class_color"] = color_from_class(1)
@@ -532,7 +523,7 @@ class EventAnnotator(BaseAnnotator):
             for k, (t, idx) in enumerate(zip(self.loc_t, self.loc_idx)):
                 self.colors[t][idx, 1] = self.previous_color[k][1]
         except Exception as e:
-            pass
+            logger.debug(f"Could not revert colors on cancel: {e}")
 
     def hide_annotation_buttons(self):
         """Hide annotation buttons."""
@@ -608,12 +599,23 @@ class EventAnnotator(BaseAnnotator):
         elif self.suppr_btn.isChecked():
             cclass = 42
 
-        self.df_tracks.loc[
-            self.df_tracks["TRACK_ID"] == self.track_of_interest, self.class_name
-        ] = cclass
-        self.df_tracks.loc[
-            self.df_tracks["TRACK_ID"] == self.track_of_interest, self.time_name
-        ] = t0
+        track_mask = self.df_tracks["TRACK_ID"] == self.track_of_interest
+
+        # Record the previous class/time so the log shows what actually changed
+        old_class = self.df_tracks.loc[track_mask, self.class_name].to_numpy()
+        old_class = old_class[0] if len(old_class) else None
+        old_t0 = self.df_tracks.loc[track_mask, self.time_name].to_numpy()
+        old_t0 = old_t0[0] if len(old_t0) else None
+
+        self.df_tracks.loc[track_mask, self.class_name] = cclass
+        self.df_tracks.loc[track_mask, self.time_name] = t0
+
+        if not hasattr(self, "annotation_log"):
+            self.annotation_log = []
+        self.annotation_log.append(
+            f"TRACK_ID {self.track_of_interest}: {self.class_name} {old_class}->{cclass}, "
+            f"{self.time_name} {old_t0}->{t0}"
+        )
 
         indices = self.df_tracks.loc[
             self.df_tracks["TRACK_ID"] == self.track_of_interest, self.class_name
@@ -630,12 +632,7 @@ class EventAnnotator(BaseAnnotator):
             status[:] = 42
 
         status_color = [color_from_status(s, recently_modified=True) for s in status]
-        class_color = [
-            color_from_class(cclass, recently_modified=True) for i in range(len(status))
-        ]
-
-        # self.df_tracks['status_color'] = [color_from_status(i) for i in self.df_tracks[self.status_name].to_numpy()]
-        # self.df_tracks['class_color'] = [color_from_class(i) for i in self.df_tracks[self.class_name].to_numpy()]
+        class_color = [color_from_class(cclass, recently_modified=True)] * len(status)
 
         self.df_tracks.loc[indices, self.status_name] = status
         self.df_tracks.loc[indices, "status_color"] = status_color
@@ -663,9 +660,7 @@ class EventAnnotator(BaseAnnotator):
     def make_status_column(self):
         """Create the status column based on class and time."""
 
-        print(
-            f"Generating status information for class `{self.class_name}` and time `{self.time_name}`..."
-        )
+        logger.info(f"Generating status information for class `{self.class_name}` and time `{self.time_name}`...")
         for tid, group in self.df_tracks.groupby("TRACK_ID"):
 
             indices = group.index
@@ -682,7 +677,7 @@ class EventAnnotator(BaseAnnotator):
                 status[:] = 42
 
             status_color = [color_from_status(s) for s in status]
-            class_color = [color_from_class(cclass) for i in range(len(status))]
+            class_color = [color_from_class(cclass)] * len(status)
 
             self.df_tracks.loc[indices, self.status_name] = status
             self.df_tracks.loc[indices, "status_color"] = status_color
@@ -691,11 +686,10 @@ class EventAnnotator(BaseAnnotator):
     def generate_signal_choices(self):
         """Generate signal choice combos."""
 
-        self.signal_choice_cb = [QSearchableComboBox() for i in range(self.n_signals)]
+        self.signal_choice_cb = [QSearchableComboBox() for _ in range(self.n_signals)]
         self.signal_choice_label = [
             QLabel(f"signal {i + 1}: ") for i in range(self.n_signals)
         ]
-        # self.log_btns = [QPushButton() for i in range(self.n_signals)]
 
         signals = list(self.df_tracks.columns)
 
@@ -728,22 +722,20 @@ class EventAnnotator(BaseAnnotator):
 
         meta = get_experiment_metadata(self.exp_dir)
         if meta is not None:
-            keys = list(meta.keys())
-            to_remove.extend(keys)
+            to_remove.extend(meta.keys())
 
         labels = get_experiment_labels(self.exp_dir)
         if labels is not None:
-            keys = list(labels.keys())
-            to_remove.extend(labels)
+            to_remove.extend(labels.keys())
 
         for c in to_remove:
             if c in signals:
                 signals.remove(c)
 
-        for i in range(len(self.signal_choice_cb)):
-            self.signal_choice_cb[i].addItems(["--"] + signals)
-            self.signal_choice_cb[i].setCurrentIndex(i + 1)
-            self.signal_choice_cb[i].currentIndexChanged.connect(self.plot_signals)
+        for i, cb in enumerate(self.signal_choice_cb):
+            cb.addItems(["--"] + signals)
+            cb.setCurrentIndex(i + 1)
+            cb.currentIndexChanged.connect(self.plot_signals)
 
     def plot_signals(self):
         """Plot the selected signals."""
@@ -752,18 +744,18 @@ class EventAnnotator(BaseAnnotator):
 
         try:
             yvalues = []
-            for i in range(len(self.signal_choice_cb)):
+            for i, (cb, line) in enumerate(zip(self.signal_choice_cb, self.lines)):
 
-                signal_choice = self.signal_choice_cb[i].currentText()
+                signal_choice = cb.currentText()
                 lbl = signal_choice
                 n_cut = 35
                 if len(lbl) > n_cut:
                     lbl = lbl[: (n_cut - 3)] + "..."
-                self.lines[i].set_label(lbl)
+                line.set_label(lbl)
 
                 if signal_choice == "--":
-                    self.lines[i].set_xdata([])
-                    self.lines[i].set_ydata([])
+                    line.set_xdata([])
+                    line.set_ydata([])
                 else:
                     xdata = self.df_tracks.loc[
                         self.df_tracks["TRACK_ID"] == self.track_of_interest, "FRAME"
@@ -779,9 +771,9 @@ class EventAnnotator(BaseAnnotator):
                     ydata = ydata[ydata == ydata]
 
                     yvalues.extend(ydata)
-                    self.lines[i].set_xdata(xdata)
-                    self.lines[i].set_ydata(ydata)
-                    self.lines[i].set_color(tab10(i / 3.0))
+                    line.set_xdata(xdata)
+                    line.set_ydata(ydata)
+                    line.set_color(tab10(i / 3.0))
 
             self.configure_ylims()
 
@@ -795,16 +787,13 @@ class EventAnnotator(BaseAnnotator):
             self.cell_ax.legend(fontsize=8)
             self.cell_fcanvas.canvas.draw()
         except Exception as e:
-            print(e)
-            pass
+            logger.warning(f"Failed to update cell plot: {e}")
 
         if len(range_values) > 0:
             range_values = np.array(range_values)
-            if len(range_values[range_values == range_values]) > 0:
-                if len(range_values[range_values > 0]) > 0:
-                    self.value_magnitude = np.nanpercentile(range_values, 1)
-                else:
-                    self.value_magnitude = 1
+            finite = range_values[~np.isnan(range_values)]
+            if len(finite) > 0:
+                self.value_magnitude = np.nanpercentile(range_values, 1) if np.any(range_values > 0) else 1
                 self.non_log_ymin = 0.98 * np.nanmin(range_values)
                 self.non_log_ymax = np.nanmax(range_values) * 1.02
                 if self.cell_ax.get_yscale() == "linear":
@@ -929,31 +918,60 @@ class EventAnnotator(BaseAnnotator):
         event : QCloseEvent
             The close event.
         """
+        # If the stack is still loading in the background, stop and join the
+        # loader thread before tearing anything down. Otherwise it keeps running
+        # prepare_stack against this (being-destroyed) widget — racing on
+        # self.stack with the `del` below and firing finished -> finalize_init on
+        # a dead window.
+        loader = getattr(self, "_loader_thread", None)
+        if loader is not None:
+            try:
+                loader.progress.disconnect()
+                loader.status_update.disconnect()
+                loader.finished.disconnect()
+            except (TypeError, RuntimeError):
+                pass  # no connections / already deleted
+            try:
+                if loader.isRunning():
+                    loader.stop()
+                    loader.wait(5000)
+            except RuntimeError:
+                pass  # underlying C++ thread already gone
+            self._loader_thread = None
+
+        dlg = getattr(self, "_progress_dialog", None)
+        if dlg is not None:
+            try:
+                dlg.close()
+            except (RuntimeError, AttributeError) as e:
+                logger.debug(f"Could not close loading dialog: {e}")
+            self._progress_dialog = None
+
         try:
             self.stop()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Could not stop annotator cleanly: {e}")
 
         # Stop and delete animation to break reference cycles
         if hasattr(self, "anim") and self.anim:
             try:
                 self.anim.event_source.stop()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Could not stop animation event source: {e}")
             del self.anim
 
         # Close matplotlib figures
         if hasattr(self, "fig"):
             try:
                 plt.close(self.fig)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Could not close fig: {e}")
 
         if hasattr(self, "cell_fig"):
             try:
                 plt.close(self.cell_fig)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Could not close cell_fig: {e}")
 
         # Delete large objects
         if hasattr(self, "stack"):
@@ -1045,7 +1063,7 @@ class EventAnnotator(BaseAnnotator):
         self.no_event_shortcut.setEnabled(True)
 
         self.track_of_interest = self.tracks[timepoint][index]
-        print(f"You selected cell #{self.track_of_interest}...")
+        logger.info(f"You selected cell #{self.track_of_interest}...")
         self.give_cell_information()
         self.plot_signals()
 
@@ -1075,44 +1093,33 @@ class EventAnnotator(BaseAnnotator):
             min_values = []
             max_values = []
             feats = []
-            for i in range(len(self.signal_choice_cb)):
-                signal = self.signal_choice_cb[i].currentText()
+            for cb in self.signal_choice_cb:
+                signal = cb.currentText()
                 if signal == "--":
                     continue
-                else:
-                    maxx = np.nanpercentile(
-                        self.df_tracks.loc[:, signal].to_numpy().flatten(), 99
-                    )
-                    minn = np.nanpercentile(
-                        self.df_tracks.loc[:, signal].to_numpy().flatten(), 1
-                    )
-                    min_values.append(minn)
-                    max_values.append(maxx)
-                    feats.append(signal)
-
-            smallest_value = np.amin(min_values)
-            feat_smallest_value = feats[np.argmin(min_values)]
-            min_feat = self.df_tracks[feat_smallest_value].min()
-            max_feat = self.df_tracks[feat_smallest_value].max()
-            pad_small = (max_feat - min_feat) * 0.05
-            if pad_small == 0:
-                pad_small = 0.05
-
-            largest_value = np.amax(max_values)
-            feat_largest_value = feats[np.argmax(max_values)]
-            min_feat = self.df_tracks[feat_largest_value].min()
-            max_feat = self.df_tracks[feat_largest_value].max()
-            pad_large = (max_feat - min_feat) * 0.05
-            if pad_large == 0:
-                pad_large = 0.05
+                vals = self.df_tracks[signal].to_numpy()
+                min_values.append(np.nanpercentile(vals, 1))
+                max_values.append(np.nanpercentile(vals, 99))
+                feats.append(signal)
 
             if len(min_values) > 0:
+                smallest_value = np.amin(min_values)
+                feat_smallest_value = feats[np.argmin(min_values)]
+                min_feat = self.df_tracks[feat_smallest_value].min()
+                max_feat = self.df_tracks[feat_smallest_value].max()
+                pad_small = (max_feat - min_feat) * 0.05 or 0.05
+
+                largest_value = np.amax(max_values)
+                feat_largest_value = feats[np.argmax(max_values)]
+                min_feat = self.df_tracks[feat_largest_value].min()
+                max_feat = self.df_tracks[feat_largest_value].max()
+                pad_large = (max_feat - min_feat) * 0.05 or 0.05
+
                 self.cell_ax.set_ylim(
                     smallest_value - pad_small, largest_value + pad_large
                 )
         except Exception as e:
-            print(f"L1170 {e=}")
-            pass
+            logger.warning(f"Failed to update cell plot y-limits: {e}")
 
     def draw_frame(self, framedata: int) -> Tuple[Any, ...]:
         """
@@ -1195,56 +1202,28 @@ class EventAnnotator(BaseAnnotator):
         # FPS = 1000 / interval_ms => interval_ms = 1000 / FPS
         val = int(1000 / max(1, fps))
         self.anim_interval = val
-        print(
-            f"DEBUG: Speed slider moved. FPS: {fps} -> Interval: {val} ms. Recreating animation object."
-        )
+        logger.debug(f"Speed slider moved. FPS: {fps} -> Interval: {val} ms. Updating animation interval.")
 
-        # Check if animation is allowed to run (Pause button is visible means we are Playing)
-        should_play = self.stop_btn.isVisible()
-
-        if hasattr(self, "anim") and self.anim:
+        if hasattr(self, "anim") and self.anim and hasattr(self.anim, "event_source") and self.anim.event_source:
             try:
-                self.anim.event_source.stop()
+                self.anim._interval = self.anim_interval
+                self.anim.event_source.interval = self.anim_interval
+                if self.stop_btn.isVisible():  # if currently playing
+                    self.anim.event_source.stop()
+                    self.anim.event_source.start()
             except Exception as e:
-                print(f"DEBUG: Error stopping animation: {e}")
-
-        # Recreate animation with new interval
-        try:
-            # Disconnect the old pick event to avoid accumulating connections
-            if hasattr(self, "_pick_cid"):
-                try:
-                    self.fig.canvas.mpl_disconnect(self._pick_cid)
-                except Exception:
-                    pass
-
-            self.anim = FuncAnimation(
-                self.fig,
-                self.draw_frame,
-                frames=self.animation_generator,
-                interval=self.anim_interval,
-                blit=True,
-                cache_frame_data=False,
-            )
-
-            # Reconnect pick event and store cid
-            self._pick_cid = self.fig.canvas.mpl_connect(
-                "pick_event", self.on_scatter_pick
-            )
-
-            # If we were NOT playing (i.e. Paused), pause the new animation immediately
-            if not should_play:
-                self.anim.event_source.stop()
-
-        except Exception as e:
-            print(f"DEBUG: Error recreating animation: {e}")
+                logger.debug(f"Error updating animation interval: {e}")
 
     def give_cell_information(self):
         """Display cell information."""
 
-        cell_selected = f"cell: {self.track_of_interest}\n"
-        cell_class = f"class: {self.df_tracks.loc[self.df_tracks['TRACK_ID'] == self.track_of_interest, self.class_name].to_numpy()[0]}\n"
-        cell_time = f"time of interest: {self.df_tracks.loc[self.df_tracks['TRACK_ID'] == self.track_of_interest, self.time_name].to_numpy()[0]}\n"
-        self.cell_info.setText(cell_selected + cell_class + cell_time)
+        row = self.df_tracks.loc[self.df_tracks["TRACK_ID"] == self.track_of_interest].iloc[0]
+        cell_info = (
+            f"cell: {self.track_of_interest}\n"
+            f"class: {row[self.class_name]}\n"
+            f"time of interest: {row[self.time_name]}\n"
+        )
+        self.cell_info.setText(cell_info)
 
     def save_trajectories(self):
         """Save trajectories to file."""
@@ -1258,7 +1237,13 @@ class EventAnnotator(BaseAnnotator):
             self.df_tracks[self.df_tracks[self.class_name] > 2].index
         )
         self.df_tracks.to_csv(self.trajectories_path, index=False)
-        print("Table successfully exported...")
+        logger.info("Table successfully exported...")
+        with positionlogger(self.pos, filename=f"log_{self.mode}.txt"):
+            logger.info("EVENT ANNOTATION (manual)")
+            logger.info(f"class_name: {self.class_name}")
+            for entry in getattr(self, "annotation_log", []):
+                logger.info(f"modified {entry}")
+        self.annotation_log = []
         if self.class_choice_cb.currentText() != "":
             self.compute_status_and_colors(0)
         self.extract_scatter_from_trajectories()
@@ -1274,9 +1259,7 @@ class EventAnnotator(BaseAnnotator):
         """Set to the last frame."""
         self.stop()
         self.framedata = len(self.stack) - 1
-        while len(np.where(self.stack[self.framedata].flatten() == 0)[0]) > 0.99 * len(
-            self.stack[self.framedata].flatten()
-        ):
+        while np.count_nonzero(self.stack[self.framedata]) < 0.01 * self.stack[self.framedata].size:
             self.framedata -= 1
             if self.framedata < 0:
                 self.framedata = 0

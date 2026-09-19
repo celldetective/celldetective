@@ -1,6 +1,5 @@
 from multiprocessing import Process
 import time
-import datetime
 import os
 import json
 from pathlib import Path, PurePath
@@ -15,6 +14,7 @@ from celldetective.utils.experiment import extract_experiment_channels
 from celldetective.utils.parsing import config_section_to_dict
 from celldetective.utils.data_cleaning import (
     _extract_coordinates_from_features,
+    _remove_invalid_cols,
     remove_trajectory_measurements,
 )
 from glob import glob
@@ -35,7 +35,8 @@ from celldetective.measure import (
 import pandas as pd
 from celldetective.utils.image_loaders import locate_labels
 
-from celldetective.log_manager import get_logger
+from celldetective.log_manager import get_logger, positionlogger
+from celldetective.utils import COLUMN_LABELS
 
 logger = get_logger(__name__)
 
@@ -72,12 +73,7 @@ class MeasurementProcess(Process):
             for key, value in process_args.items():
                 setattr(self, key, value)
 
-        self.column_labels = {
-            "track": "TRACK_ID",
-            "time": "FRAME",
-            "x": "POSITION_X",
-            "y": "POSITION_Y",
-        }
+        self.column_labels = COLUMN_LABELS.copy()
 
         self.sum_done = 0
         self.t0 = time.time()
@@ -192,21 +188,20 @@ class MeasurementProcess(Process):
         intensity_measurement_radii_log = (
             f"intensity_measurement_radii: {self.intensity_measurement_radii}"
         )
-        isotropic_options_log = f"isotropic_operations: {self.isotropic_operations} \n"
-        log = "\n".join(
-            [
-                features_log,
-                border_distances_log,
-                haralick_options_log,
-                background_correction_log,
-                spot_detection_log,
-                intensity_measurement_radii_log,
-                isotropic_options_log,
-            ]
-        )
-        with open(self.pos + f"log_{self.mode}.txt", "a") as f:
-            f.write(f"{datetime.datetime.now()} MEASURE \n")
-            f.write(log + "\n")
+        isotropic_options_log = f"isotropic_operations: {self.isotropic_operations}"
+        log_list = [
+            features_log,
+            border_distances_log,
+            haralick_options_log,
+            background_correction_log,
+            spot_detection_log,
+            intensity_measurement_radii_log,
+            isotropic_options_log,
+        ]
+        with positionlogger(self.pos, filename=f"log_{self.mode}.txt"):
+            logger.info("MEASURE")
+            for line in log_list:
+                logger.info(line)
 
     def prepare_folders(self):
         """Prepare folder names and table names based on the mode."""
@@ -572,8 +567,8 @@ class MeasurementProcess(Process):
                         logger.info(f"Thread {i} completed...")
                         self.timestep_dataframes.extend(return_value)
                 except Exception as e:
-                    logger.error("Exception: ", e)
-                    raise e
+                    logger.error(f"Exception: {e}")
+                    raise
         else:
             try:
                 # Avoid thread pool overhead for single thread
@@ -582,8 +577,8 @@ class MeasurementProcess(Process):
                     logger.info(f"Job {i} completed...")
                     self.timestep_dataframes.extend(return_value)
             except Exception as e:
-                logger.error("Exception: ", e)
-                raise e
+                logger.error(f"Exception: {e}")
+                raise
 
         logger.info("Measurements successfully performed...")
 
@@ -601,8 +596,7 @@ class MeasurementProcess(Process):
                 df = df.sort_values(by=[self.column_labels["time"], "ID"])
 
             df = df.reset_index(drop=True)
-            # df = _remove_invalid_cols(df)
-            logger.info(f"Final columns before export: {df.columns.tolist()}")
+            df = _remove_invalid_cols(df)
             df = df.replace([np.inf, -np.inf], np.nan)
 
             df.to_csv(

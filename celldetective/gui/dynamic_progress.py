@@ -88,7 +88,6 @@ class DynamicProgressDialog(QDialog, Styles):
         # Progress Bar
         self.progress_bar = QProgressBar()
         self.progress_bar.setRange(minimum, maximum)
-        self.progress_bar.setStyleSheet(self.progress_bar_style)
         layout.addWidget(self.progress_bar)
 
         # Plot Canvas
@@ -119,7 +118,6 @@ class DynamicProgressDialog(QDialog, Styles):
         # Metric Selector
         self.metric_label = QLabel("Metric: ")
         self.metric_combo = QComboBox()
-        # self.metric_combo.setStyleSheet(self.combo_style)
         self.metric_combo.currentIndexChanged.connect(self.force_update_plot)
 
         controls_layout.addWidget(self.metric_label, 10)
@@ -158,12 +156,11 @@ class DynamicProgressDialog(QDialog, Styles):
 
     def _get_screen_height(self):
         """
-        Get the screen dimensions.
+        Get the screen dimensions for the monitor where the cursor is.
         """
-        app = QApplication.instance()
-        screen = app.primaryScreen()
-        geometry = screen.availableGeometry()
-        self._screen_width, self._screen_height = geometry.getRect()[-2:]
+        from celldetective.gui.base.utils import get_current_screen_geometry
+        geometry = get_current_screen_geometry()
+        self._screen_width, self._screen_height = geometry.width(), geometry.height()
 
     def on_skip(self):
         """Handle skip button click."""
@@ -284,16 +281,16 @@ class DynamicProgressDialog(QDialog, Styles):
                 QTimer.singleShot(
                     100, lambda: self.resize(self.width() - 1, self.height() - 1)
                 )
-            except:
-                pass
+            except Exception as e:
+                logger.debug(f"Window resize trigger failed: {e}")
         else:
             self.btn_log.setIcon(icon(MDI6.math_log, color="white"))
             try:
                 QTimer.singleShot(
                     100, lambda: self.resize(self.width() + 1, self.height() + 1)
                 )
-            except:
-                pass
+            except Exception as e:
+                logger.debug(f"Window resize trigger failed: {e}")
 
     def auto_scale(self):
         """Auto scale the plot."""
@@ -491,15 +488,15 @@ class DynamicProgressDialog(QDialog, Styles):
                 QTimer.singleShot(
                     100, lambda: self.resize(self.width() + 1, self.height() + 1)
                 )
-            except:
-                pass
+            except Exception as e:
+                logger.debug(f"Window resize trigger failed: {e}")
         else:
             try:
                 QTimer.singleShot(
                     100, lambda: self.resize(self.width() - 1, self.height() - 1)
                 )
-            except:
-                pass
+            except Exception as e:
+                logger.debug(f"Window resize trigger failed: {e}")
 
     def update_status(self, text: str) -> None:
         """
@@ -516,5 +513,5 @@ class DynamicProgressDialog(QDialog, Styles):
                 QTimer.singleShot(
                     100, lambda: self.status_label.setText("Training model...")
                 )
-            except:
-                pass
+            except Exception as e:
+                logger.debug(f"Status label update trigger failed: {e}")

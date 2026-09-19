@@ -1,8 +1,9 @@
 from multiprocessing import Queue
-from PyQt5.QtWidgets import QPushButton, QVBoxLayout, QHBoxLayout, QLabel, QProgressBar
+from PyQt5.QtWidgets import QPushButton, QVBoxLayout, QHBoxLayout, QLabel, QProgressBar, QApplication
 from PyQt5.QtCore import QRunnable, QObject, pyqtSignal, QThreadPool, QSize, Qt
 from PyQt5.QtGui import QPixmap, QImage
 from typing import Optional, Any, Dict
+import logging
 import math
 import numpy as np
 
@@ -163,8 +164,14 @@ class ProgressWindow(CelldetectiveDialog):
         evnt : QCloseEvent
             The close event.
         """
-        evnt.ignore()
-        self.setWindowState(Qt.WindowMinimized)
+        if QApplication.closingDown():
+            # App is shutting down — stop the job and allow the close.
+            self.__runner.close()
+            evnt.accept()
+        else:
+            # Accidental X-button press while job is running — minimize instead.
+            evnt.ignore()
+            self.setWindowState(Qt.WindowMinimized)
 
     def __run_net(self) -> None:
         """Start the runner."""
@@ -298,6 +305,7 @@ class Runner(QRunnable):
         self.__queue = Queue()
         self.__process = process(self.__queue, process_args=process_args)
         self.signals = RunnerSignal()
+        self.__closed = False
 
     def run(self) -> None:
         """Run the process."""
@@ -305,70 +313,139 @@ class Runner(QRunnable):
         self.__process.start()
         while True:
             try:
-                data = self.__queue.get()
-
-                # Handle dictionary for triple progress
-                if isinstance(data, dict):
-                    if "well_progress" in data:
-                        self.signals.update_well.emit(int(data["well_progress"]))
-                    if "well_time" in data:
-                        self.signals.update_well_time.emit(data["well_time"])
-
-                    if "pos_progress" in data:
-                        self.signals.update_pos.emit(int(data["pos_progress"]))
-                    if "pos_time" in data:
-                        self.signals.update_pos_time.emit(data["pos_time"])
-
-                    if "frame_progress" in data:
-                        self.signals.update_frame.emit(int(data["frame_progress"]))
-                    if "frame_time" in data:
-                        self.signals.update_frame_time.emit(data["frame_time"])
-
-                    if "image_preview" in data:
-                        self.signals.update_image.emit(data["image_preview"])
-                    elif "bg_image" in data:  # Backward compatibility
-                        self.signals.update_image.emit(data["bg_image"])
-
-                    if "plot_data" in data:
-                        self.signals.update_plot.emit(data["plot_data"])
-
-                    if "training_result" in data:
-                        self.signals.training_result.emit(data["training_result"])
-
-                    if "result" in data:
-                        self.signals.result.emit(data["result"])
-
-                    if "status" in data:  # Moved this block out of frame_time check
-                        logger.info(
-                            f"Runner received status: {data['status']}"
-                        )  # New log as per instruction
-                        if data["status"] == "finished":
-                            self.signals.finished.emit()
-                            break
-                        elif data["status"] == "error":
-                            msg = data.get("message", "Unknown error")
-                            logger.error(f"Runner received error: {msg}")
-                            self.signals.error.emit(str(msg))
-                        else:
-                            self.signals.update_status.emit(data["status"])
-
-                # Simple fallback for legacy list [progress, time] -> map to POS progress
-                elif isinstance(data, list) and len(data) == 2:
-                    progress, time = data
-                    self.signals.update_pos.emit(math.ceil(progress))
-
-                elif data == "finished":
-                    self.signals.finished.emit()
+                data = self.__queue.get(timeout=2)
+            except Exception:
+                if self.__closed:
                     break
-                elif data == "error":
-                    self.signals.error.emit("Unknown error")
+                # Timeout. If the child has exited, it may have done so right
+                # after putting its final messages but before the queue feeder
+                # thread flushed them to the pipe. Drain and dispatch whatever is
+                # still buffered; only if no terminal "finished" turns up do we
+                # treat it as an unexpected death.
+                if not self.__process.is_alive():
+                    if self.__drain():
+                        break
+                    logger.error("Subprocess exited without sending a status message.")
+                    self.signals.error.emit("Process exited unexpectedly.")
+                    break
+                continue
+            if self.__closed:
+                break
+            if self.__dispatch(data):
+                break
 
-            except Exception as e:
-                logger.error(e)
-                pass
+    def __drain(self) -> bool:
+        """
+        Dispatch every message still buffered in the queue.
+
+        Returns
+        -------
+        bool
+            True if a terminal "finished" message was seen while draining.
+        """
+        saw_finished = False
+        while True:
+            try:
+                data = self.__queue.get_nowait()
+            except Exception:
+                break
+            if self.__dispatch(data):
+                saw_finished = True
+        return saw_finished
+
+    def __dispatch(self, data: Any) -> bool:
+        """
+        Translate one queue message into Qt signals.
+
+        Parameters
+        ----------
+        data : Any
+            A message from the worker process.
+
+        Returns
+        -------
+        bool
+            True if this was a terminal "finished" or "error" message (the run
+            loop should stop).
+        """
+        try:
+            # Handle dictionary for triple progress
+            if isinstance(data, dict):
+                # Re-emit logs forwarded from the worker child process so cellpose /
+                # stardist / btrack / celldetective output surfaces in the parent
+                # (console + global log file) during SEGMENT/TRACK/MEASURE.
+                if "log_record" in data:
+                    rec = data["log_record"]
+                    logging.getLogger(rec["name"]).log(
+                        rec["levelno"], rec["msg"]
+                    )
+                    return False
+
+                if "well_progress" in data:
+                    self.signals.update_well.emit(int(data["well_progress"]))
+                if "well_time" in data:
+                    self.signals.update_well_time.emit(data["well_time"])
+
+                if "pos_progress" in data:
+                    self.signals.update_pos.emit(int(data["pos_progress"]))
+                if "pos_time" in data:
+                    self.signals.update_pos_time.emit(data["pos_time"])
+
+                if "frame_progress" in data:
+                    self.signals.update_frame.emit(int(data["frame_progress"]))
+                if "frame_time" in data:
+                    self.signals.update_frame_time.emit(data["frame_time"])
+
+                if "image_preview" in data:
+                    self.signals.update_image.emit(data["image_preview"])
+                elif "bg_image" in data:  # Backward compatibility
+                    self.signals.update_image.emit(data["bg_image"])
+
+                if "plot_data" in data:
+                    self.signals.update_plot.emit(data["plot_data"])
+
+                if "training_result" in data:
+                    self.signals.training_result.emit(data["training_result"])
+
+                if "result" in data:
+                    self.signals.result.emit(data["result"])
+
+                if "status" in data:
+                    logger.info(f"Runner received status: {data['status']}")
+                    if data["status"] == "finished":
+                        self.signals.finished.emit()
+                        return True
+                    elif data["status"] == "error":
+                        msg = data.get("message", "Unknown error")
+                        logger.error(f"Runner received error: {msg}")
+                        self.signals.error.emit(str(msg))
+                        # Terminal: a process reporting an error stops there. Left
+                        # polling, the loop would find it dead and raise a second,
+                        # misleading "exited unexpectedly" error.
+                        return True
+                    else:
+                        self.signals.update_status.emit(data["status"])
+
+            # Simple fallback for legacy list [progress, time] -> map to POS progress
+            elif isinstance(data, list) and len(data) == 2:
+                progress, time = data
+                self.signals.update_pos.emit(math.ceil(progress))
+
+            elif data == "finished":
+                self.signals.finished.emit()
+                return True
+            elif data == "error":
+                self.signals.error.emit("Unknown error")
+                return True
+
+        except Exception as e:
+            logger.exception(f"Error while dispatching worker message: {e}")
+
+        return False
 
     def close(self) -> None:
         """Close the process."""
+        self.__closed = True
         self.__process.end_process()
 
 
@@ -478,8 +555,14 @@ class GenericProgressWindow(CelldetectiveDialog):
         evnt : QCloseEvent
             The close event.
         """
-        evnt.ignore()
-        self.setWindowState(Qt.WindowMinimized)
+        if QApplication.closingDown():
+            # App is shutting down — stop the job and allow the close.
+            self.__runner.close()
+            evnt.accept()
+        else:
+            # Accidental X-button press while job is running — minimize instead.
+            evnt.ignore()
+            self.setWindowState(Qt.WindowMinimized)
 
     def __run_net(self) -> None:
         """Start the runner."""

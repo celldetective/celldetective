@@ -1,6 +1,9 @@
+import logging
 from typing import List
 
 import numpy as np
+
+logger = logging.getLogger("celldetective")
 from PyQt5.QtCore import Qt, QSize
 from PyQt5.QtWidgets import (
     QComboBox,
@@ -132,14 +135,14 @@ class MergeGroupWidget(CelldetectiveWidget):
         ]
         name = self.name_le.text()
         if " " in name:
-            name.replace(" ", "_")
+            name = name.replace(" ", "_")
         if name == "":
             name = "multilabel"
         if not name.startswith("group_"):
             name = "group_" + name
 
         if len(cols_to_merge) > 1:
-            print(
+            logger.info(
                 "Computing a multi-label classification from the classification feature sources..."
             )
             bases = [int(self.parent_window.data[c].max()) + 1 for c in cols_to_merge]
@@ -155,6 +158,6 @@ class MergeGroupWidget(CelldetectiveWidget):
             self.parent_window.table_view.setModel(self.parent_window.model)
             self.close()
         elif len(cols_to_merge) == 1:
-            print("Only one classification feature was selected, nothing to merge...")
+            logger.warning("Only one classification feature was selected, nothing to merge...")
         else:
-            print("No classification feature was selected...")
+            logger.warning("No classification feature was selected...")

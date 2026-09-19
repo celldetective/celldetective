@@ -56,36 +56,127 @@ Deep learning segmentation
 Models
 ~~~~~~
 
-Celldetective ships with Deep-learning segmentation models trained with the :term:`StarDist` [#]_ or :term:`Cellpose` [#]_ [#]_ algorithm. They are split in two families: 
+Celldetective ships with Deep-learning segmentation models trained with the **StarDist** [#stardist]_ or **Cellpose** [#cellpose]_ [#cellpose2]_ algorithm. They are split in two families: 
 
 #. **Generalist models** — models published in the literature that have been trained on thousands of images with one or two channels, on general tasks such as segmenting all nuclei visible on the images. In some cases, more than one modality was passed in the channel slots during training to force the model to generalize and be less sensitive to the modality. 
 #. **Population-specific models** — models that we trained from scratch on brand new multimodal data to achieve more specific tasks such as detecting the nuclei of a population in the presence of another. In this configuration, accurate segmentation often requires to look at multiple channels at once, *i.e.* performing a multimodal interpretation.
 
 
-.. figure:: _static/table-generalist-models.png
-    :align: center
-    :alt: table_generalist
-    
-    **Generalist models.** This table lists the different generalist models (:term:`Cellpose` or :term:`StarDist`) which can be called natively in Celldetective. The images have been sampled from their respective datasets, cropped to ( 200 × 200 ) px and rescaled homogeneously to fit in the table.
+**Generalist models.** This table lists the different generalist models (**Cellpose** or **StarDist**) which can be called natively in Celldetective. The images have been sampled from their respective datasets, cropped to ( 200 × 200 ) px and rescaled homogeneously to fit in the table.
+
+.. list-table::
+   :widths: 20 20 15 30 15
+   :header-rows: 1
+
+   * - Name
+     - Modalities
+     - # channels
+     - Dataset
+     - Sample Image
+   * - ``CP_cyto3``
+     - cytoplasm, nucleus
+     - 2
+     - Cellpose [#cellpose]_ & user-submitted images
+     - |cellpose-sample|
+   * - ``CP_livecell``
+     - cytoplasm (BF), black
+     - 2
+     - LiveCell [#livecell]_
+     - |livecell-sample|
+   * - ``CP_tissuenet``
+     - cytoplasm, nucleus
+     - 2
+     - TissueNet [#tissuenet]_
+     - /
+   * - ``CP_nuclei``
+     - nucleus, black
+     - 2
+     - ?
+     - /
+   * - ``SD_versatile_fluo``
+     - nucleus
+     - 1
+     - subset of DSB 2018 [#dsb2018]_
+     - |dsb2018|
+   * - ``SD_versatile_he``
+     - H&E RGB
+     - 1
+     - MonoNuSeg 2018 [#mononuseg]_, TNBC 2018 [#tnbc]_
+     - |mononuseg|
 
 
-.. figure:: _static/target-models.png
-    :align: center
-    :alt: table_target_models
-    
-    **Target models.** MCF-7 nuclei segmentation models that we developed for our application. The models have been trained on the ``db_mcf7_nuclei_w_primary_NK`` dataset available in Zenodo.
+**Target models.** MCF-7 nuclei segmentation models that we developed for our application. The models have been trained on the ``db_mcf7_nuclei_w_primary_NK`` dataset available in Zenodo.
 
-.. figure:: _static/effector-models.png
-    :align: center
-    :alt: table_effector_models
-    
-    **Effector models.** Primary NK segmentation models that we developed for our application. The models have been trained on the ``db_primary_NK_w_mcf7`` dataset available in Zenodo.
+.. list-table::
+   :widths: 25 25 15 15 10 10
+   :header-rows: 1
+
+   * - Name
+     - Channels
+     - Type
+     - Pretrained
+     - Spatial calib. (μm)
+     - Sample Image
+   * - ``mcf7_nuc_multimodal``
+     - Hoechst, Brightfield, CFSE, PI
+     - StarDist
+     - None
+     - 0.3112
+     - |4chan|
+   * - ``mcf7_nuc_stardist_transfer``
+     - Hoechst
+     - StarDist
+     - ``SD_versatile_fluo``
+     - 0.3112
+     - |nuchcan|
+
+
+**Effector models.** Primary NK segmentation models that we developed for our application. The models have been trained on the ``db_primary_NK_w_mcf7`` dataset available in Zenodo.
+
+.. list-table::
+   :widths: 25 25 15 15 10 10
+   :header-rows: 1
+
+   * - Name
+     - Channels
+     - Type
+     - Pretrained
+     - Spatial calib. (μm)
+     - Sample Image
+   * - ``primNK_multimodal``
+     - brightfield, CFSE, Hoechst
+     - Cellpose
+     - None
+     - 0.2178
+     - |bf-cfse-h|
+   * - ``primNK_cfse``
+     - CFSE, None
+     - Cellpose
+     - ``CP_cyto2``
+     - 0.2178
+     - |cfse|
+   * - ``lymphocytes_ricm``
+     - RICM
+     - Cellpose
+     - None
+     - 0.2
+     - |ricm|
 
 
 Importing and applying models
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Models are imported via the :icon:`upload,black` button in the Segmentation panel. This creates a configuration file that maps your experiment's channels to the model's expected inputs, including spatial calibration and normalization.
+
+When you set the channels for a model, the dialog also asks for the **cell size**
+in microns whenever the model has a trained size to be rescaled against: the
+frame is resized until its objects reach the size the network was trained to see.
+Models built through celldetective record that size as ``cell_size_um``; a
+generalist Cellpose model records it in pixels instead, as the diameter it was
+trained on at its own calibration, so it is asked for those too. The dialog
+reopens on the size you last set, and a model with no trained size is never given
+one behind your back. The :icon:`restore,black` button next to the field puts back
+the size the model was trained on.
 
 For a detailed list of all import parameters, see the :ref:`Segmentation Data Import Reference <ref_segmentation_settings>`.
 
@@ -101,7 +192,15 @@ Once a position is segmented, the results can be visualized in **napari** by cli
 With napari, segmentation mistakes can be corrected using the brush, eraser, and fill tools. Celldetective provides two plugins:
 
 #. **Save the modified labels** — overwrite the masks in place.
-#. **Export a training sample** — create an annotated pair (image + mask) to train a Deep Learning model on your data.
+#. **Export the annotation of the current frame** — create an annotated pair (image + mask) to train a Deep Learning model on your data.
+
+Above these buttons, a set of options controls the automatic fixes applied to the masks when they are saved or exported:
+
+*   **Split merged labels** — separate objects that mistakenly share a single label value (detected when an object's bounding box is much larger than the object itself). Enabled by default.
+*   **Remove small objects** — discard objects smaller than the **Min object area (px²)** threshold (default ``9``, i.e. 3×3 pixels). Enabled by default. Uncheck it (or set the area to ``0``) to keep every object regardless of size.
+*   **Fill holes in masks** — fill holes inside cell masks. Disabled by default.
+
+The labels are always re-numbered consecutively from ``1`` on save to avoid encoding errors, regardless of these options.
 
 For a step-by-step annotation workflow, see :doc:`How to annotate for segmentation <how-to-guides/basics/annotate-for-segmentation>`.
 To train a model on your annotations, see :doc:`How to train a segmentation model <how-to-guides/advanced/train-a-segmentation-model-from-scratch>`.
@@ -114,15 +213,125 @@ To train a model on your annotations, see :doc:`How to train a segmentation mode
     **napari**. napari provides the basic requirements of image manipulation software, namely a brush, rubber, bucket and pipette, to work on the segmentation layer. In this RICM image of spreading NK cells, two couples of cells have been mistakenly segmented as one object and must be separated. On the right panel, two plugins specific to Celldetective allow 1) the export of the modified masks directly in the position folder, and 2) to create automatically an annotation consisting of the current multichannel frame, the modified mask and a configuration file specifying the modality content of the image and its spatial calibration.
 
 
+.. _segment_single_frame_napari:
+
+Segmenting a single frame from napari
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The top of the same right-hand panel can run a segmentation model on the frame
+currently on screen, without leaving the viewer or launching a run over the whole
+position. It is the quickest way to try a model, a channel mapping or a threshold
+on one frame and look at the result straight away.
+
+.. figure:: _static/figures/napari-frame-segmentation.svg
+    :width: 100%
+    :target: _static/figures/napari-frame-segmentation.svg
+    :align: center
+    :alt: segmenting a single frame from napari
+
+    **Segmenting the frame on screen.** The ``lymphocytes_ricm`` model was run on frame 20 of the RICM demo: the labels of that frame were replaced by the model's output, in the ``segmentation`` layer.
+
+Pick a model for this population (1): one that has not been downloaded yet is fetched on first use. Map the channels with one dropdown per input of the model (2), and leave the parameters blank to use the model's own values (3). **Replace the labels on this frame** chooses between segmenting the frame afresh and only filling the background (4). **Segment this frame** runs in the background (5), and the new labels land in the ``segmentation`` layer, where :kbd:`Ctrl+Z` undoes them (6).
+
+*   **model** — any model available for this population, plus the generic ones.
+    A model that has not been downloaded yet is offered too; it is fetched on the
+    first run.
+*   **channels** — the same rows as the channel dialog of the main window: one
+    dropdown per input slot of the chosen model, seeded from the mapping already
+    saved there. Set a slot to ``None`` to leave it blank. The same experiment
+    channel may feed several slots.
+*   **parameters** — the values that model type actually takes: **cell
+    probability** and **flow threshold** for Cellpose models, and **cell size**
+    for every model whose trained object size can be worked out. Leave a field
+    blank to use the model's own value.
+
+    **Cell size** is the typical object size in *these* images, in microns, and
+    it is what drives the rescaling: the frame is resized until objects reach the
+    size the network was trained to see, which is where a model does its best
+    work. A model built through celldetective records that size as
+    ``cell_size_um``; a generic Cellpose model records it in pixels instead, as
+    the diameter it was trained on at its own calibration, so the row is offered
+    for those too. The trained size itself — Cellpose's 30 px, say — is not a
+    setting and is never asked for: a network trained to see 30 px objects should
+    go on being asked for 30 px ones, and it is the image that moves.
+*   **Replace the labels on this frame** — ticked, the frame is segmented afresh.
+    Unticked, the existing labels are kept and the new ones only fill the
+    background, so manual corrections on that frame survive.
+
+The run happens on a background thread, so the viewer stays usable; the button
+turns into **Cancel** while it works. Inference itself cannot be interrupted, so
+cancelling during a forward pass returns the interface to normal and discards the
+result when it lands, while cancelling during model loading stops before any
+inference happens.
+
+The result is written into the ``segmentation`` layer and can be undone with
+:kbd:`Ctrl+Z` like any other edit. Nothing reaches disk until **Save the modified
+labels** is used, and the settings chosen here stay local to the napari session:
+they are never written back into the model configuration, so trying something out
+cannot change what the next full-position run does.
+
+The same panel is offered when correcting a training annotation, from **Plugins >
+Correct a segmentation annotation** in the start window. An annotation is the image
+exported with **Export the annotation of the current frame**, next to its mask (``_labelled.tif``) and
+a ``.json`` file recording its channels and spatial calibration. The panel reads the
+channels from that file, so an annotation can be started from a model's output and
+corrected by hand rather than drawn from nothing. **Save the modified labels**
+overwrites the ``_labelled.tif`` mask.
+
+.. note::
+
+    Segmentation here runs on the CPU, leaving the GPU to the viewer's renderer.
+    A single frame is quick, but expect it to be slower than the same model
+    running over a position in the main window.
+
+
 References
 ----------
 
-.. [#] Florian KROMP, Eva BOZSAKY, Fikret RIFATBEGOVIC, Lukas FISCHER, Magdalena AMBROS, Maria BERNEDER, Tamara WEISS, Daria LAZIC, Wolfgang DÖRR, Allan HANBURY, Klaus BEISKE et al. « An Annotated Fluorescence Image Dataset for Training Nuclear Segmentation Methods ». In : Scientific Data 7.1 (1 11 août 2020), p. 262. ISSN : 2052-4463. DOI : 10.1038/s41597-020-00608-w . URL : https://www.nature.com/articles/s41597-020-00608-w.
+.. [#kromp] Florian KROMP, Eva BOZSAKY, Fikret RIFATBEGOVIC, Lukas FISCHER, Magdalena AMBROS, Maria BERNEDER, Tamara WEISS, Daria LAZIC, Wolfgang DÖRR, Allan HANBURY, Klaus BEISKE et al. « An Annotated Fluorescence Image Dataset for Training Nuclear Segmentation Methods ». In : Scientific Data 7.1 (1 11 août 2020), p. 262. ISSN : 2052-4463. DOI : 10.1038/s41597-020-00608-w . URL : https://www.nature.com/articles/s41597-020-00608-w.
 
-.. [#] Ahlers, J. et al. napari: a multi-dimensional image viewer for Python. Zenodo https://doi.org/10.5281/zenodo.8115575 (2023).
+.. [#napari] Ahlers, J. et al. napari: a multi-dimensional image viewer for Python. Zenodo https://doi.org/10.5281/zenodo.8115575 (2023).
 
-.. [#] Schmidt, U., Weigert, M., Broaddus, C. & Myers, G. Cell Detection with Star-Convex Polygons. in Medical Image Computing and Computer Assisted Intervention – MICCAI 2018 (eds. Frangi, A. F., Schnabel, J. A., Davatzikos, C., Alberola-López, C. & Fichtinger, G.) 265–273 (Springer International Publishing, Cham, 2018). doi:10.1007/978-3-030-00934-2_30.
+.. [#stardist] Schmidt, U., Weigert, M., Broaddus, C. & Myers, G. Cell Detection with Star-Convex Polygons. in Medical Image Computing and Computer Assisted Intervention – MICCAI 2018 (eds. Frangi, A. F., Schnabel, J. A., Davatzikos, C., Alberola-López, C. & Fichtinger, G.) 265–273 (Springer International Publishing, Cham, 2018). doi:10.1007/978-3-030-00934-2_30.
 
-.. [#] Stringer, C., Wang, T., Michaelos, M. & Pachitariu, M. Cellpose: a generalist algorithm for cellular segmentation. Nat Methods 18, 100–106 (2021).
+.. [#cellpose] Stringer, C., Wang, T., Michaelos, M. & Pachitariu, M. Cellpose: a generalist algorithm for cellular segmentation. Nat Methods 18, 100–106 (2021).
 
-.. [#] Pachitariu, M. & Stringer, C. Cellpose 2.0: how to train your own model. Nat Methods 19, 1634–1641 (2022).
+.. [#cellpose2] Pachitariu, M. & Stringer, C. Cellpose 2.0: how to train your own model. Nat Methods 19, 1634–1641 (2022).
+
+.. [#livecell] Edlund, C. et al. LIVECell—A Large-Scale Dataset for Label-Free Live Cell Segmentation. Nat Methods 18, 1038–1045 (2021). doi:10.1038/s41592-021-01249-6.
+
+.. [#tissuenet] Barshir, R. et al. The TissueNet Database of Human Tissue Protein--Protein Interactions. Nucleic Acids Research 41, D841-D844 (2013). doi:10.1093/nar/gks1198.
+
+.. [#dsb2018] Caicedo, J. C. et al. Nucleus Segmentation across Imaging Experiments: The 2018 Data Science Bowl. Nat Methods 16, 1247–1253 (2019). doi:10.1038/s41592-019-0612-7.
+
+.. [#mononuseg] Kumar, N. et al. A Multi-Organ Nucleus Segmentation Challenge. IEEE Trans Med Imaging 39, 1380–1391 (2020). doi:10.1109/TMI.2019.2947628.
+
+.. [#tnbc] Naylor, P., Lae, M., Reyal, F. & Walter, T. Segmentation of Nuclei in Histopathology Images by Deep Regression of the Distance Map. IEEE Trans Med Imaging 38, 448–459 (2019). doi:10.1109/TMI.2018.2865709.
+
+
+.. |cellpose-sample| image:: _static/cellpose-sample.png
+   :width: 100px
+
+.. |livecell-sample| image:: _static/livecell-sample.png
+   :width: 100px
+
+.. |dsb2018| image:: _static/dsb2018.png
+   :width: 100px
+
+.. |mononuseg| image:: _static/mononuseg.png
+   :width: 100px
+
+.. |ricm| image:: _static/ricm.png
+   :width: 100px
+
+.. |4chan| image:: _static/4chan.png
+   :width: 100px
+
+.. |nuchcan| image:: _static/nuchcan.png
+   :width: 100px
+
+.. |bf-cfse-h| image:: _static/bf-cfse-h.png
+   :width: 100px
+
+.. |cfse| image:: _static/cfse.png
+   :width: 100px

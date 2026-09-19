@@ -48,11 +48,11 @@ Mask-based measurements
 
 The segmentation mask defines the ROI over which single-cell measurements are performed at each time point.
 
-*   **Basic features** — morphological (``area``, ``perimeter``, ``eccentricity``, ``solidity``, etc.) and intensity properties (``intensity_mean``, ``intensity_max``, ``intensity_min``) from ``scikit-image.regionprops``. Only explicitly selected features are included in the output.
+*   **Basic features** — morphological (``area``, ``perimeter``, ``eccentricity``, ``solidity``, etc.) and intensity properties (``{channel}_mean``, ``{channel}_max``, ``{channel}_min``) from ``scikit-image.regionprops``. Only explicitly selected features are included in the output.
 
 *   **Contour measurements** — intensity features within specific bands relative to the cell boundary. Positive distances measure inside (erosion); negative distances measure outside (dilation). A range ``(min, max)`` defines a ring band.
 
-*   **:term:`Haralick Texture Features`** — texture analysis via gray-level co-occurrence matrices (:term:`GLCM`). Computationally expensive; optional.
+*   **Haralick Texture Features** — texture analysis via gray-level co-occurrence matrices (**GLCM**). Computationally expensive; optional.
 
 .. seealso::
     :doc:`how-to-guides/basics/measure-peripheral-intensity` |

@@ -4,11 +4,12 @@ import numpy as np
 from PyQt5.QtWidgets import QLineEdit, QHBoxLayout, QPushButton, QLabel
 from PyQt5.QtCore import QEvent
 from typing import Optional, Union, List, Any
-from superqt import QLabeledDoubleSlider
+from celldetective.gui.base.sliders import QLabeledDoubleSlider
 
 from celldetective.gui.gui_utils import QuickSliderLayout
 from celldetective.gui.viewers.base_viewer import StackVisualizer
 from celldetective import get_logger
+from celldetective.gui.base.utils import is_alive
 
 logger = get_logger(__name__)
 
@@ -235,7 +236,11 @@ class ThresholdedStackVisualizer(StackVisualizer):
 
         # Sync slider if value came from external source (like Wizard)
         # to prevent slider from being "stale" and overwriting with old value later
-        if hasattr(self, "threshold_slider"):
+        # `is_alive`, not just `hasattr`: the attribute survives the C++ slider,
+        # and superqt's labeled slider reaches into its own internal label on
+        # setValue -- if that has been freed, the write is an access violation
+        # rather than the RuntimeError the `except` below could absorb.
+        if is_alive(getattr(self, "threshold_slider", None)):
             display_val = value
             if isinstance(value, (list, tuple, np.ndarray)):
                 display_val = value[0]
@@ -247,8 +252,8 @@ class ThresholdedStackVisualizer(StackVisualizer):
                     self.threshold_slider.blockSignals(True)
                     self.threshold_slider.setValue(float(display_val))
                     self.threshold_slider.blockSignals(False)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Could not update threshold slider: {e}")
 
         if self.thresh is not None:
             self.compute_mask(self.thresh)
@@ -342,7 +347,8 @@ class ThresholdedStackVisualizer(StackVisualizer):
 
         # Compute
         if self.preprocessing is not None:
-            assert isinstance(self.preprocessing, list)
+            if not isinstance(self.preprocessing, list):
+                raise TypeError("preprocessing must be a list.")
             from celldetective.filters import filter_image
 
             self.processed_image = filter_image(

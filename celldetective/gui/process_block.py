@@ -25,6 +25,7 @@ from celldetective.utils.data_loaders import load_experiment_tables
 from celldetective.utils.model_loaders import (
     locate_signal_model,
     locate_segmentation_model,
+    _resolve_signal_model_paths,
 )
 from celldetective.utils.image_loaders import fix_missing_labels
 
@@ -32,12 +33,15 @@ from celldetective.gui.base.components import (
     CelldetectiveWidget,
     CelldetectiveProgressDialog,
     QHSeperationLine,
-    HoverButton,
+    ToolButton,
+    tool_strip,
 )
 
 import numpy as np
 from glob import glob
 from celldetective import get_logger
+from celldetective.measure import _get_border_suffix
+from celldetective.gui.base.threads import start_tracked
 
 logger = get_logger("celldetective")
 
@@ -47,7 +51,14 @@ class NapariLoaderThread(QThread):
     status = pyqtSignal(str)
     finished_with_result = pyqtSignal(object)
 
-    def __init__(self, pos: str, prefix: str, population: str, threads: int) -> None:
+    def __init__(
+        self,
+        pos: str,
+        prefix: str,
+        population: str,
+        threads: int,
+        task: str = "tracking",
+    ) -> None:
         """
         Initialize the NapariLoaderThread.
 
@@ -61,12 +72,16 @@ class NapariLoaderThread(QThread):
             The cell population.
         threads : int
             Number of threads to use.
+        task : str, optional
+            Which viewer to prepare data for: "tracking" (default) or
+            "segmentation".
         """
         super().__init__()
         self.pos = pos
         self.prefix = prefix
         self.population = population
         self.threads = threads
+        self.task = task
         self._is_cancelled = False
 
     def stop(self) -> None:
@@ -75,9 +90,8 @@ class NapariLoaderThread(QThread):
 
     def run(self) -> None:
         """
-        Run the thread to load tracks into Napari.
+        Run the thread to load data into Napari (tracks or segmentation).
         """
-        from celldetective.napari.utils import control_tracks
 
         def callback(p: int) -> bool:
             """
@@ -98,15 +112,34 @@ class NapariLoaderThread(QThread):
             self.progress.emit(p)
             return True
 
+        def status_cb(msg: str) -> None:
+            """Forward a phase message to the progress dialog label."""
+            self.status.emit(msg)
+
         try:
-            res = control_tracks(
-                self.pos,
-                prefix=self.prefix,
-                population=self.population,
-                threads=self.threads,
-                progress_callback=callback,
-                prepare_only=True,
-            )
+            if self.task == "segmentation":
+                from celldetective.napari.utils import control_segmentation_napari
+
+                res = control_segmentation_napari(
+                    self.pos,
+                    prefix=self.prefix,
+                    population=self.population,
+                    threads=self.threads,
+                    progress_callback=callback,
+                    status_callback=status_cb,
+                    prepare_only=True,
+                )
+            else:
+                from celldetective.napari.utils import control_tracks
+
+                res = control_tracks(
+                    self.pos,
+                    prefix=self.prefix,
+                    population=self.population,
+                    threads=self.threads,
+                    progress_callback=callback,
+                    prepare_only=True,
+                )
             self.finished_with_result.emit(res)
         except Exception as e:
             self.finished_with_result.emit(e)
@@ -119,17 +152,15 @@ from celldetective.gui.base.utils import center_window
 from celldetective.utils.io import remove_file_if_exists
 from tifffile import imwrite
 import json
-from celldetective.gui.gui_utils import help_generic
-from celldetective.gui.base.styles import Styles
+from celldetective.gui.base.help_panel import HelpButton, open_help, open_help_menu
+from celldetective.gui.base.components import POSITION_NEEDED, set_disabled_reason
+from celldetective.gui.base.control_panel_block import ControlPanelBlock
+from celldetective.gui.base.styles import Styles, DANGER_COLOR
 from celldetective import get_software_location
 import pandas as pd
 
-import logging
 
-logger = logging.getLogger("celldetective")
-
-
-class ProcessPanel(QFrame, Styles):
+class ProcessPanel(ControlPanelBlock, Styles):
 
     def __init__(self, parent_window: Any, mode: str) -> None:
         """
@@ -143,8 +174,7 @@ class ProcessPanel(QFrame, Styles):
             The processing mode (e.g., 'targets', 'effectors').
         """
 
-        super().__init__()
-        self.parent_window = parent_window
+        super().__init__(f"PROCESS {mode.upper()}", parent_window)
         self.mode = mode
         self.exp_channels = self.parent_window.exp_channels
         self.exp_dir = self.parent_window.exp_dir
@@ -163,106 +193,22 @@ class ProcessPanel(QFrame, Styles):
         self.use_gpu = self.parent_window.parent_window.use_gpu
         self.n_threads = self.parent_window.parent_window.n_threads
 
-        self.setFrameStyle(QFrame.StyledPanel | QFrame.Raised)
-        self.grid = QGridLayout(self)
-        self.grid.setContentsMargins(5, 5, 5, 5)
         self.generate_header()
 
     def generate_header(self) -> None:
         """
-        Read the mode and prepare a collapsable block to process a specific cell population.
-
+        Prepare the collapsable block processing a specific cell population.
         """
 
-        panel_title = QLabel(f"PROCESS {self.mode.upper()}   ")
-        panel_title.setStyleSheet(
-            """
-			font-weight: bold;
-			padding: 0px;
-			"""
-        )
-
-        title_hbox = QHBoxLayout()
-        self.grid.addWidget(panel_title, 0, 0, 1, 4, alignment=Qt.AlignCenter)
-
-        # self.help_pop_btn = QPushButton()
-        # self.help_pop_btn.setIcon(icon(MDI6.help_circle, color=self.help_color))
-        # self.help_pop_btn.setIconSize(QSize(20, 20))
-        # self.help_pop_btn.clicked.connect(self.help_population)
-        # self.help_pop_btn.setStyleSheet(self.button_select_all)
-        # self.help_pop_btn.setToolTip("Help.")
-        # self.grid.addWidget(self.help_pop_btn, 0, 0, 1, 3, alignment=Qt.AlignRight)
-
-        # self.select_all_btn = QPushButton()
-        # self.select_all_btn.setIcon(icon(MDI6.checkbox_blank_outline,color="black"))
-        # self.select_all_btn.setIconSize(QSize(20, 20))
-        # self.all_ticked = False
-        # self.select_all_btn.clicked.connect(self.tick_all_actions)
-        # self.select_all_btn.setStyleSheet(self.button_select_all)
-        # self.grid.addWidget(self.select_all_btn, 0, 0, 1, 4, alignment=Qt.AlignLeft)
-        # self.to_disable.append(self.all_tc_actions)
-
-        self.collapse_btn = QPushButton()
-        self.collapse_btn.setIcon(icon(MDI6.chevron_down, color="black"))
-        self.collapse_btn.setIconSize(QSize(25, 25))
-        self.collapse_btn.setStyleSheet(self.button_select_all)
-        # self.grid.addWidget(self.collapse_btn, 0, 0, 1, 4, alignment=Qt.AlignRight)
-
-        title_hbox.addWidget(QLabel(), 5)  # self.select_all_btn
-        title_hbox.addWidget(QLabel(), 85, alignment=Qt.AlignCenter)
-        # title_hbox.addWidget(self.help_pop_btn, 5)
-        title_hbox.addWidget(self.collapse_btn, 5)
-
-        self.grid.addLayout(title_hbox, 0, 0, 1, 4)
         self.populate_contents()
-
-        self.grid.addWidget(self.ContentsFrame, 1, 0, 1, 4, alignment=Qt.AlignTop)
-        self.collapse_btn.clicked.connect(
-            lambda: self.ContentsFrame.setHidden(not self.ContentsFrame.isHidden())
-        )
-        self.collapse_btn.clicked.connect(self.collapse_advanced)
-        self.ContentsFrame.hide()
-
-    def collapse_advanced(self) -> None:
-        """
-        Toggle the visibility of the advanced options block.
-        """
-
-        panels_open = [
-            not p.ContentsFrame.isHidden()
-            for p in self.parent_window.ProcessPopulations
-        ]
-        interactions_open = not self.parent_window.NeighPanel.ContentsFrame.isHidden()
-        preprocessing_open = (
-            not self.parent_window.PreprocessingPanel.ContentsFrame.isHidden()
-        )
-        is_open = np.array(panels_open + [interactions_open, preprocessing_open])
-
-        if self.ContentsFrame.isHidden():
-            self.collapse_btn.setIcon(icon(MDI6.chevron_down, color="black"))
-            self.collapse_btn.setIconSize(QSize(20, 20))
-            if len(is_open[is_open]) == 0:
-                self.parent_window.scroll.setMinimumHeight(int(550))
-                self.parent_window.adjustSize()
-        else:
-            self.collapse_btn.setIcon(icon(MDI6.chevron_up, color="black"))
-            self.collapse_btn.setIconSize(QSize(20, 20))
-            self.parent_window.scroll.setMinimumHeight(
-                min(int(930), int(0.9 * self.parent_window.screen_height))
-            )
-            try:
-                QTimer.singleShot(10, lambda: center_window(self.window()))
-            except:
-                pass
+        self.set_content(self.ContentsFrame)
 
     def populate_contents(self) -> None:
         """
         Populate the content frame with processing options.
         """
         self.ContentsFrame = QFrame()
-        self.ContentsFrame.setContentsMargins(5, 5, 5, 5)
         self.grid_contents = QGridLayout(self.ContentsFrame)
-        self.grid_contents.setContentsMargins(0, 0, 0, 0)
         self.generate_segmentation_options()
         self.generate_tracking_options()
         self.generate_measure_options()
@@ -275,6 +221,7 @@ class ProcessPanel(QFrame, Styles):
         self.view_tab_btn.setToolTip("Explore table")
         self.view_tab_btn.setIcon(icon(MDI6.table, color="#1565c0"))
         self.view_tab_btn.setIconSize(QSize(20, 20))
+        set_disabled_reason(self.view_tab_btn, "Select a position to explore its table.")
         # self.view_tab_btn.setEnabled(False)
         self.grid_contents.addWidget(self.view_tab_btn, 10, 0, 1, 4)
 
@@ -282,6 +229,7 @@ class ProcessPanel(QFrame, Styles):
         self.submit_btn = QPushButton("Submit")
         self.submit_btn.setStyleSheet(self.button_style_sheet)
         self.submit_btn.clicked.connect(self.process_population)
+        set_disabled_reason(self.submit_btn, "Tick an action above to submit.")
         self.grid_contents.addWidget(self.submit_btn, 11, 0, 1, 4)
 
         for action in [
@@ -316,42 +264,36 @@ class ProcessPanel(QFrame, Styles):
 
         self.measure_action = QCheckBox("MEASURE")
         self.measure_action.setStyleSheet(self.menu_check_style)
-
-        self.measure_action.setIcon(icon(MDI6.eyedropper, color="black"))
-        self.measure_action.setIconSize(QSize(20, 20))
         self.measure_action.setToolTip("Measure.")
-        measure_layout.addWidget(self.measure_action, 90)
+        measure_layout.addWidget(self.measure_action)
+        measure_layout.addStretch(1)
         # self.to_disable.append(self.measure_action_tc)
 
-        self.classify_btn = QPushButton()
-        self.classify_btn.setIcon(icon(MDI6.scatter_plot, color="black"))
-        self.classify_btn.setIconSize(QSize(20, 20))
-        self.classify_btn.setToolTip("Classify data.")
-        self.classify_btn.setStyleSheet(self.button_select_all)
+        self.classify_btn = ToolButton(MDI6.scatter_plot, "Classify data.")
         self.classify_btn.clicked.connect(self.open_classifier_ui)
-        measure_layout.addWidget(
-            self.classify_btn, 5
-        )  # 4,2,1,1, alignment=Qt.AlignRight
+        set_disabled_reason(self.classify_btn, POSITION_NEEDED)
 
-        self.check_measurements_btn = QPushButton()
-        self.check_measurements_btn.setIcon(icon(MDI6.eye_check_outline, color="black"))
-        self.check_measurements_btn.setIconSize(QSize(20, 20))
-        self.check_measurements_btn.setToolTip("Explore measurements in-situ.")
-        self.check_measurements_btn.setStyleSheet(self.button_select_all)
+        self.check_measurements_btn = ToolButton(
+            MDI6.eye_check_outline, "Explore measurements in-situ."
+        )
         self.check_measurements_btn.clicked.connect(self.check_measurements)
-        measure_layout.addWidget(self.check_measurements_btn, 5)
+        set_disabled_reason(self.check_measurements_btn, POSITION_NEEDED)
 
-        self.measurements_config_btn = QPushButton()
-        self.measurements_config_btn.setIcon(icon(MDI6.cog_outline, color="black"))
-        self.measurements_config_btn.setIconSize(QSize(20, 20))
-        self.measurements_config_btn.setToolTip("Configure measurements.")
-        self.measurements_config_btn.setStyleSheet(self.button_select_all)
+        self.measurements_config_btn = ToolButton(
+            MDI6.cog_outline, "Configure measurements."
+        )
         self.measurements_config_btn.clicked.connect(
             self.open_measurement_configuration_ui
         )
-        measure_layout.addWidget(
-            self.measurements_config_btn, 5
-        )  # 4,2,1,1, alignment=Qt.AlignRight
+
+        measure_layout.addLayout(
+            tool_strip(
+                self.classify_btn,
+                self.check_measurements_btn,
+                self.measurements_config_btn,
+                None,
+            )
+        )
 
         self.grid_contents.addLayout(measure_layout, 5, 0, 1, 4)
 
@@ -364,31 +306,32 @@ class ProcessPanel(QFrame, Styles):
         signal_hlayout = QHBoxLayout()
         self.signal_analysis_action = QCheckBox("DETECT EVENTS")
         self.signal_analysis_action.setStyleSheet(self.menu_check_style)
-        self.signal_analysis_action.setIcon(
-            icon(MDI6.chart_bell_curve_cumulative, color="black")
-        )
-        self.signal_analysis_action.setIconSize(QSize(20, 20))
         self.signal_analysis_action.setToolTip("Detect events in single-cell signals.")
         self.signal_analysis_action.toggled.connect(self.enable_signal_model_list)
-        signal_hlayout.addWidget(self.signal_analysis_action, 90)
+        signal_hlayout.addWidget(self.signal_analysis_action)
+        signal_hlayout.addStretch(1)
 
-        self.check_signals_btn = QPushButton()
-        self.check_signals_btn.setIcon(icon(MDI6.eye_check_outline, color="black"))
-        self.check_signals_btn.setIconSize(QSize(20, 20))
+        self.check_signals_btn = ToolButton(
+            MDI6.eye_check_outline, "Explore signals in-situ."
+        )
         self.check_signals_btn.clicked.connect(self.check_signals)
-        self.check_signals_btn.setToolTip("Explore signals in-situ.")
-        self.check_signals_btn.setStyleSheet(self.button_select_all)
-        signal_hlayout.addWidget(self.check_signals_btn, 6)
+        set_disabled_reason(self.check_signals_btn, POSITION_NEEDED)
 
-        self.config_signal_annotator_btn = QPushButton()
-        self.config_signal_annotator_btn.setIcon(icon(MDI6.cog_outline, color="black"))
-        self.config_signal_annotator_btn.setIconSize(QSize(20, 20))
-        self.config_signal_annotator_btn.setToolTip("Configure the dynamic visualizer.")
-        self.config_signal_annotator_btn.setStyleSheet(self.button_select_all)
+        self.config_signal_annotator_btn = ToolButton(
+            MDI6.cog_outline, "Configure the dynamic visualizer."
+        )
         self.config_signal_annotator_btn.clicked.connect(
             self.open_signal_annotator_configuration_ui
         )
-        signal_hlayout.addWidget(self.config_signal_annotator_btn, 6)
+
+        signal_hlayout.addLayout(
+            tool_strip(
+                None,
+                self.check_signals_btn,
+                self.config_signal_annotator_btn,
+                None,
+            )
+        )
 
         # self.to_disable.append(self.measure_action_tc)
         signal_layout.addLayout(signal_hlayout)
@@ -397,26 +340,23 @@ class ProcessPanel(QFrame, Styles):
         signal_model_vbox.setContentsMargins(25, 0, 25, 0)
 
         model_zoo_layout = QHBoxLayout()
-        model_zoo_layout.addWidget(QLabel("Model zoo:"), 90)
+        model_zoo_layout.setSpacing(4)
+        model_zoo_layout.addWidget(QLabel("Model zoo:"))
 
         self.signal_models_list = QComboBox()
         self.signal_models_list.setEnabled(False)
         self.refresh_signal_models()
         # self.to_disable.append(self.cell_models_list)
+        model_zoo_layout.addWidget(self.signal_models_list, 1)
 
-        self.train_signal_model_btn = HoverButton(
-            "TRAIN", MDI6.redo_variant, "black", "white"
+        self.train_signal_model_btn = ToolButton(
+            MDI6.redo_variant,
+            "Train or retrain an event detection model\non newly annotated data.",
         )
-        self.train_signal_model_btn.setToolTip(
-            "Train or retrain an event detection model\non newly annotated data."
-        )
-        self.train_signal_model_btn.setIconSize(QSize(20, 20))
-        self.train_signal_model_btn.setStyleSheet(self.button_style_sheet_3)
-        model_zoo_layout.addWidget(self.train_signal_model_btn, 5)
+        model_zoo_layout.addWidget(self.train_signal_model_btn)
         self.train_signal_model_btn.clicked.connect(self.open_signal_model_config_ui)
 
         signal_model_vbox.addLayout(model_zoo_layout)
-        signal_model_vbox.addWidget(self.signal_models_list)
 
         signal_layout.addLayout(signal_model_vbox)
 
@@ -450,53 +390,40 @@ class ProcessPanel(QFrame, Styles):
 
         self.track_action = QCheckBox("TRACK")
         self.track_action.setStyleSheet(self.menu_check_style)
-        self.track_action.setIcon(icon(MDI6.chart_timeline_variant, color="black"))
-        self.track_action.setIconSize(QSize(20, 20))
         self.track_action.setToolTip(f"Track the {self.mode[:-1]} cells.")
-        grid_track.addWidget(self.track_action, 75)
+        grid_track.addWidget(self.track_action)
+        grid_track.addStretch(1)
 
-        self.delete_tracks_btn = QPushButton()
-        self.delete_tracks_btn.setIcon(icon(MDI6.trash_can, color="black"))
-        self.delete_tracks_btn.setIconSize(QSize(20, 20))
-        self.delete_tracks_btn.setToolTip("Delete existing tracks.")
-        self.delete_tracks_btn.setStyleSheet(self.button_select_all)
+        # The one destructive action of the panel, so the only icon that turns
+        # red rather than blue under the mouse.
+        self.delete_tracks_btn = ToolButton(
+            MDI6.trash_can, "Delete existing tracks.", hover_color=DANGER_COLOR
+        )
         self.delete_tracks_btn.clicked.connect(self.delete_tracks)
         self.delete_tracks_btn.setEnabled(True)
         self.delete_tracks_btn.hide()
-        grid_track.addWidget(
-            self.delete_tracks_btn, 6
-        )  # 4,3,1,1, alignment=Qt.AlignLeft
 
-        self.check_tracking_result_btn = QPushButton()
-        self.check_tracking_result_btn.setIcon(
-            icon(MDI6.eye_check_outline, color="black")
+        self.check_tracking_result_btn = ToolButton(
+            MDI6.eye_check_outline, "View tracking output in napari."
         )
-        self.check_tracking_result_btn.setIconSize(QSize(20, 20))
-        self.check_tracking_result_btn.setToolTip("View tracking output in napari.")
-        self.check_tracking_result_btn.setStyleSheet(self.button_select_all)
         self.check_tracking_result_btn.clicked.connect(self.open_napari_tracking)
         self.check_tracking_result_btn.setEnabled(False)
-        grid_track.addWidget(
-            self.check_tracking_result_btn, 6
-        )  # 4,3,1,1, alignment=Qt.AlignLeft
+        set_disabled_reason(self.check_tracking_result_btn, POSITION_NEEDED)
 
-        self.track_config_btn = QPushButton()
-        self.track_config_btn.setIcon(icon(MDI6.cog_outline, color="black"))
-        self.track_config_btn.setIconSize(QSize(20, 20))
-        self.track_config_btn.setToolTip("Configure tracking.")
-        self.track_config_btn.setStyleSheet(self.button_select_all)
+        self.track_config_btn = ToolButton(MDI6.cog_outline, "Configure tracking.")
         self.track_config_btn.clicked.connect(self.open_tracking_configuration_ui)
-        grid_track.addWidget(
-            self.track_config_btn, 6
-        )  # 4,2,1,1, alignment=Qt.AlignRight
 
-        self.help_track_btn = QPushButton()
-        self.help_track_btn.setIcon(icon(MDI6.help_circle, color=self.help_color))
-        self.help_track_btn.setIconSize(QSize(20, 20))
+        self.help_track_btn = HelpButton("Help me track my cells")
         self.help_track_btn.clicked.connect(self.help_tracking)
-        self.help_track_btn.setStyleSheet(self.button_select_all)
-        self.help_track_btn.setToolTip("Help.")
-        grid_track.addWidget(self.help_track_btn, 6)  # 4,2,1,1, alignment=Qt.AlignRight
+
+        grid_track.addLayout(
+            tool_strip(
+                self.delete_tracks_btn,
+                self.check_tracking_result_btn,
+                self.track_config_btn,
+                self.help_track_btn,
+            )
+        )
 
         self.grid_contents.addLayout(grid_track, 4, 0, 1, 4)
 
@@ -560,8 +487,8 @@ class ProcessPanel(QFrame, Styles):
                 QTimer.singleShot(
                     100, lambda: self.parent_window.update_position_options()
                 )
-            except Exception as _:
-                pass
+            except Exception as e:
+                logger.debug(f"Position options update trigger failed: {e}")
         else:
             return None
 
@@ -574,84 +501,81 @@ class ProcessPanel(QFrame, Styles):
         grid_segment.setContentsMargins(0, 0, 0, 0)
         grid_segment.setSpacing(0)
 
+        # No icon on the label: the row says SEGMENT in words, and a glyph
+        # there would only compete with the check indicator next to it.
         self.segment_action = QCheckBox("SEGMENT")
         self.segment_action.setStyleSheet(self.menu_check_style)
-        self.segment_action.setIcon(icon(MDI6.bacteria, color="black"))
         self.segment_action.setToolTip(
             f"Segment the {self.mode[:-1]} cells on the images."
         )
         self.segment_action.toggled.connect(self.enable_segmentation_model_list)
         # self.to_disable.append(self.segment_action)
-        grid_segment.addWidget(self.segment_action, 90)
+        grid_segment.addWidget(self.segment_action)
+        grid_segment.addStretch(1)
 
-        # self.flip_segment_btn = QPushButton()
-        # self.flip_segment_btn.setIcon(icon(MDI6.camera_flip_outline,color="black"))
-        # self.flip_segment_btn.setIconSize(QSize(20, 20))
-        # self.flip_segment_btn.clicked.connect(self.flip_segmentation)
-        # self.flip_segment_btn.setStyleSheet(self.button_select_all)
-        # self.flip_segment_btn.setToolTip("Flip the order of the frames for segmentation.")
-        # grid_segment.addWidget(self.flip_segment_btn, 5)
-
-        self.segmentation_config_btn = QPushButton()
-        self.segmentation_config_btn.setIcon(icon(MDI6.cog_outline, color="black"))
-        self.segmentation_config_btn.setIconSize(QSize(20, 20))
-        self.segmentation_config_btn.setToolTip("Configure segmentation.")
-        self.segmentation_config_btn.setStyleSheet(self.button_select_all)
+        self.segmentation_config_btn = ToolButton(
+            MDI6.cog_outline, "Configure segmentation."
+        )
         self.segmentation_config_btn.clicked.connect(
             self.open_segmentation_configuration_ui
         )
-        grid_segment.addWidget(self.segmentation_config_btn, 5)
 
-        self.check_seg_btn = QPushButton()
-        self.check_seg_btn.setIcon(icon(MDI6.eye_check_outline, color="black"))
-        self.check_seg_btn.setIconSize(QSize(20, 20))
+        self.check_seg_btn = ToolButton(
+            MDI6.eye_check_outline, "View segmentation output in napari."
+        )
         self.check_seg_btn.clicked.connect(self.check_segmentation)
-        self.check_seg_btn.setStyleSheet(self.button_select_all)
-        self.check_seg_btn.setToolTip("View segmentation output in napari.")
-        grid_segment.addWidget(self.check_seg_btn, 5)
+        set_disabled_reason(self.check_seg_btn, POSITION_NEEDED)
 
-        self.help_seg_btn = QPushButton()
-        self.help_seg_btn.setIcon(icon(MDI6.help_circle, color=self.help_color))
-        self.help_seg_btn.setIconSize(QSize(20, 20))
+        self.help_seg_btn = HelpButton("Help me segment my cells")
         self.help_seg_btn.clicked.connect(self.help_segmentation)
-        self.help_seg_btn.setStyleSheet(self.button_select_all)
-        self.help_seg_btn.setToolTip("Help.")
-        grid_segment.addWidget(self.help_seg_btn, 5)
+
+        # Slots: extra action, view, configure, help. Segmentation has no extra
+        # action, so that slot is left empty rather than closed up.
+        grid_segment.addLayout(
+            tool_strip(
+                None,
+                self.check_seg_btn,
+                self.segmentation_config_btn,
+                self.help_seg_btn,
+            )
+        )
         self.grid_contents.addLayout(grid_segment, 0, 0, 1, 4)
 
         seg_option_vbox = QVBoxLayout()
         seg_option_vbox.setContentsMargins(25, 0, 25, 0)
+
+        # The zoo on a single row: its name, the list, and the two actions on
+        # it as icons. Spelling UPLOAD and TRAIN out cost a line of its own for
+        # two buttons that are pressed once in a while.
         model_zoo_layout = QHBoxLayout()
-        model_zoo_layout.addWidget(QLabel("Model zoo:"), 90)
+        model_zoo_layout.setSpacing(4)
+        model_zoo_layout.addWidget(QLabel("Model zoo:"))
+
         self.seg_model_list = QComboBox()
         self.seg_model_list.currentIndexChanged.connect(self.reset_generalist_setup)
         # self.to_disable.append(self.tc_seg_model_list)
         self.seg_model_list.setGeometry(50, 50, 200, 30)
         self.init_seg_model_list()
+        model_zoo_layout.addWidget(self.seg_model_list, 1)
 
-        self.upload_model_btn = HoverButton("UPLOAD", MDI6.upload, "black", "white")
-        self.upload_model_btn.setIconSize(QSize(20, 20))
-        self.upload_model_btn.setStyleSheet(self.button_style_sheet_3)
-        self.upload_model_btn.setToolTip(
-            "Upload a new segmentation model\n(Deep learning or threshold-based)."
+        self.upload_model_btn = ToolButton(
+            MDI6.upload,
+            "Upload a new segmentation model\n(Deep learning or threshold-based).",
         )
-        model_zoo_layout.addWidget(self.upload_model_btn, 5)
+        model_zoo_layout.addWidget(self.upload_model_btn)
         self.upload_model_btn.clicked.connect(self.upload_segmentation_model)
         # self.to_disable.append(self.upload_tc_model)
 
-        self.train_btn = HoverButton("TRAIN", MDI6.redo_variant, "black", "white")
-        self.train_btn.setToolTip(
-            "Train or retrain a segmentation model\non newly annotated data."
+        self.train_btn = ToolButton(
+            MDI6.redo_variant,
+            "Train or retrain a segmentation model\non newly annotated data.",
         )
-        self.train_btn.setIconSize(QSize(20, 20))
-        self.train_btn.setStyleSheet(self.button_style_sheet_3)
         self.train_btn.clicked.connect(self.open_segmentation_model_config_ui)
-        model_zoo_layout.addWidget(self.train_btn, 5)
+        model_zoo_layout.addWidget(self.train_btn)
         # self.train_button_tc.clicked.connect(self.train_stardist_model_tc)
         # self.to_disable.append(self.train_button_tc)
 
         seg_option_vbox.addLayout(model_zoo_layout)
-        seg_option_vbox.addWidget(self.seg_model_list)
         self.seg_model_list.setEnabled(False)
         self.grid_contents.addLayout(seg_option_vbox, 2, 0, 1, 4)
 
@@ -678,32 +602,20 @@ class ProcessPanel(QFrame, Styles):
 
     def help_segmentation(self) -> Optional[None]:
         """
-        Widget with different decision helper decision trees.
+        Offer the two helpers segmentation comes with.
         """
 
-        self.help_w = CelldetectiveWidget()
-        self.help_w.setWindowTitle("Helper")
-        layout = QVBoxLayout()
-        seg_strategy_btn = QPushButton("A guide to choose a segmentation strategy.")
-        seg_strategy_btn.setIcon(icon(MDI6.help_circle, color=self.celldetective_blue))
-        seg_strategy_btn.setIconSize(QSize(40, 40))
-        seg_strategy_btn.setStyleSheet(self.button_style_sheet_5)
-        seg_strategy_btn.clicked.connect(self.help_seg_strategy)
-
-        dl_strategy_btn = QPushButton(
-            "A guide to choose your Deep learning segmentation strategy."
+        open_help_menu(
+            "Segmentation help",
+            [
+                ("Choosing a segmentation strategy", self.help_seg_strategy),
+                (
+                    "Choosing a deep learning strategy",
+                    self.help_seg_dl_strategy,
+                ),
+            ],
+            parent=self,
         )
-        dl_strategy_btn.setIcon(icon(MDI6.help_circle, color=self.celldetective_blue))
-        dl_strategy_btn.setIconSize(QSize(40, 40))
-        dl_strategy_btn.setStyleSheet(self.button_style_sheet_5)
-        dl_strategy_btn.clicked.connect(self.help_seg_dl_strategy)
-
-        layout.addWidget(seg_strategy_btn)
-        layout.addWidget(dl_strategy_btn)
-
-        self.help_w.setLayout(layout)
-        center_window(self.help_w)
-        self.help_w.show()
 
         return None
 
@@ -712,88 +624,38 @@ class ProcessPanel(QFrame, Styles):
         Helper for segmentation strategy between threshold-based and Deep learning.
         """
 
-        dict_path = os.sep.join(
-            [
-                get_software_location(),
-                "celldetective",
-                "gui",
-                "help",
-                "Threshold-vs-DL.json",
-            ]
+        open_help(
+            "Threshold-vs-DL.json",
+            "Choosing a segmentation strategy",
+            docs_url="https://celldetective.readthedocs.io/en/latest/segment.html",
+            phrasing="The suggested technique is {suggestion}",
+            parent=self,
         )
-
-        with open(dict_path) as f:
-            d = json.load(f)
-
-        suggestion = help_generic(d)
-        if isinstance(suggestion, str):
-            logger.info(f"{suggestion=}")
-            msgBox = QMessageBox()
-            msgBox.setIcon(QMessageBox.Information)
-            msgBox.setTextFormat(Qt.RichText)
-            msgBox.setText(
-                f"The suggested technique is {suggestion}.\nSee a tutorial <a href='https://celldetective.readthedocs.io/en/latest/segment.html'>here</a>."
-            )
-            msgBox.setWindowTitle("Info")
-            msgBox.setStandardButtons(QMessageBox.Ok)
-            returnValue = msgBox.exec()
-            if returnValue == QMessageBox.Ok:
-                return None
 
     def help_seg_dl_strategy(self) -> Optional[None]:
         """
         Helper for DL segmentation strategy, between pretrained models and custom models.
         """
 
-        dict_path = os.sep.join(
-            [
-                get_software_location(),
-                "celldetective",
-                "gui",
-                "help",
-                "DL-segmentation-strategy.json",
-            ]
+        open_help(
+            "DL-segmentation-strategy.json",
+            "Choosing a deep learning strategy",
+            docs_url="https://celldetective.readthedocs.io/en/latest/segment.html",
+            phrasing="The suggested technique is {suggestion}",
+            parent=self,
         )
-
-        with open(dict_path) as f:
-            d = json.load(f)
-
-        suggestion = help_generic(d)
-        if isinstance(suggestion, str):
-            logger.info(f"{suggestion=}")
-            msgBox = QMessageBox()
-            msgBox.setIcon(QMessageBox.Information)
-            msgBox.setText(f"The suggested technique is {suggestion}.")
-            msgBox.setWindowTitle("Info")
-            msgBox.setStandardButtons(QMessageBox.Ok)
-            returnValue = msgBox.exec()
-            if returnValue == QMessageBox.Ok:
-                return None
 
     def help_tracking(self) -> Optional[None]:
         """
-        Helper for segmentation strategy between threshold-based and Deep learning.
+        Helper for the tracking options.
         """
 
-        dict_path = os.sep.join(
-            [get_software_location(), "celldetective", "gui", "help", "tracking.json"]
+        open_help(
+            "tracking.json",
+            "Tracking your cells",
+            docs_url="https://celldetective.readthedocs.io/en/latest/track.html",
+            parent=self,
         )
-
-        with open(dict_path) as f:
-            d = json.load(f)
-
-        suggestion = help_generic(d)
-        if isinstance(suggestion, str):
-            logger.info(f"{suggestion=}")
-            msgBox = QMessageBox()
-            msgBox.setIcon(QMessageBox.Information)
-            msgBox.setTextFormat(Qt.RichText)
-            msgBox.setText(f"{suggestion}")
-            msgBox.setWindowTitle("Info")
-            msgBox.setStandardButtons(QMessageBox.Ok)
-            returnValue = msgBox.exec()
-            if returnValue == QMessageBox.Ok:
-                return None
 
     def check_segmentation(self) -> Optional[None]:
         """
@@ -802,7 +664,6 @@ class ProcessPanel(QFrame, Styles):
         If labels are missing, the user is asked if they want to create a new label directory.
         If labels exist, they are loaded into Napari for inspection.
         """
-        from celldetective.napari.utils import control_segmentation_napari
 
         if not os.path.exists(
             os.sep.join([self.parent_window.pos, f"labels_{self.mode}", os.sep])
@@ -834,36 +695,93 @@ class ProcessPanel(QFrame, Styles):
                         lbl,
                     )
 
-        # self.freeze()
-        # QApplication.setOverrideCursor(Qt.WaitCursor)
         test = self.parent_window.locate_selected_position()
         if test:
-            # print('Memory use: ', dict(psutil.virtual_memory()._asdict()))
-            logger.info(f"Loading images and labels into napari...")
-            try:
-                control_segmentation_napari(
-                    self.parent_window.pos,
-                    prefix=self.parent_window.movie_prefix,
-                    population=self.mode,
-                    flush_memory=True,
-                )
-            except FileNotFoundError as e:
-                msgBox = QMessageBox()
-                msgBox.setIcon(QMessageBox.Warning)
-                msgBox.setText(str(e))
-                msgBox.setWindowTitle("Warning")
-                msgBox.setStandardButtons(QMessageBox.Ok)
-                _ = msgBox.exec()
-                return
-            except Exception as e:
-                logger.error(f"Task unsuccessful... Exception {e}...")
-                msgBox = QMessageBox()
-                msgBox.setIcon(QMessageBox.Warning)
-                msgBox.setText(str(e))
-                msgBox.setWindowTitle("Warning")
-                msgBox.setStandardButtons(QMessageBox.Ok)
-                _ = msgBox.exec()
+            logger.info("Loading images and labels into napari...")
+            self._launch_segmentation_viewer_async()
 
+    def _launch_segmentation_viewer_async(self, allow_fix: bool = True) -> None:
+        """
+        Load the segmentation stack and labels off the GUI thread behind a
+        progress dialog, then open the napari segmentation viewer on the main
+        thread when loading completes.
+
+        Parameters
+        ----------
+        allow_fix : bool, optional
+            If True, offer to pad missing labels when loading fails because of a
+            stack/label count mismatch, then retry once. The default is True.
+        """
+
+        loader = NapariLoaderThread(
+            self.parent_window.pos,
+            self.parent_window.movie_prefix,
+            self.mode,
+            self.parent_window.parent_window.n_threads,
+            task="segmentation",
+        )
+
+        progress = CelldetectiveProgressDialog(
+            "Preparing the napari viewer...",
+            "Loading images and labels...",
+            0,
+            100,
+            self,
+            window_title="Preparing the napari viewer...",
+        )
+        progress.setAutoClose(False)
+        progress.setAutoReset(False)
+        # Free the dialog on close so it isn't retained as a child of the panel
+        # across repeated viewer-open cycles. Deletion only happens via the
+        # explicit close() calls below (after the loader thread has finished and
+        # its signals are blocked), so no slot can fire on a deleted dialog.
+        progress.setAttribute(Qt.WA_DeleteOnClose)
+        progress.setValue(0)
+        loader.progress.connect(progress.setValue)
+        loader.status.connect(progress.setLabelText)
+        progress.canceled.connect(loader.stop)
+
+        # Keep a strong reference to every in-flight loader so that launching the
+        # viewer several times in a row does not let an earlier QThread be
+        # garbage-collected mid-run; drop it once the thread has finished.
+        if not hasattr(self, "_seg_loaders"):
+            self._seg_loaders = set()
+        self._seg_loaders.add(loader)
+        loader.finished.connect(lambda: self._seg_loaders.discard(loader))
+
+        def on_finished(result: Union[Dict, Exception, None]) -> None:
+            """
+            Handle completion of the segmentation loading thread.
+
+            Bound to the specific ``loader``/``progress`` instances for this
+            launch (not ``self.*`` attributes, which get overwritten by later
+            launches) so a cancelled load never opens a viewer.
+
+            Parameters
+            ----------
+            result : dict or Exception or None
+                The prepared data dict, an exception, or None.
+            """
+            from celldetective.napari.utils import launch_segmentation_viewer
+
+            progress.blockSignals(True)
+
+            if loader._is_cancelled:
+                logger.info("Segmentation viewer loading was cancelled.")
+                progress.close()
+                return
+
+            if isinstance(result, FileNotFoundError):
+                progress.close()
+                QMessageBox.warning(self, "Warning", str(result))
+                return
+
+            if isinstance(result, Exception):
+                progress.close()
+                logger.error(f"napari loading error: {result}")
+                QMessageBox.warning(self, "Warning", str(result))
+                if not allow_fix:
+                    return
                 msgBox = QMessageBox()
                 msgBox.setIcon(QMessageBox.Question)
                 msgBox.setText(
@@ -873,28 +791,52 @@ class ProcessPanel(QFrame, Styles):
                 msgBox.setStandardButtons(
                     QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel
                 )
-                returnValue = msgBox.exec()
-                if returnValue == QMessageBox.Yes:
+                if msgBox.exec() == QMessageBox.Yes:
                     logger.info("Fixing the missing labels...")
                     fix_missing_labels(
                         self.parent_window.pos,
                         prefix=self.parent_window.movie_prefix,
                         population=self.mode,
                     )
-                    try:
-                        control_segmentation_napari(
-                            self.parent_window.pos,
-                            prefix=self.parent_window.movie_prefix,
-                            population=self.mode,
-                            flush_memory=True,
-                        )
-                    except Exception as e:
-                        logger.error(f"Error {e}")
-                        return None
-                else:
-                    return None
+                    # Retry once, without offering the fix again.
+                    self._launch_segmentation_viewer_async(allow_fix=False)
+                return
 
-            gc.collect()
+            if result:
+                logger.info("Launching the napari segmentation viewer...")
+                progress.setLabelText("Initializing napari viewer...")
+                progress.setRange(0, 0)
+                QApplication.processEvents()
+
+                def progress_cb(msg: str) -> None:
+                    """Forward viewer-init status to the dialog label."""
+                    if isinstance(msg, str):
+                        progress.setLabelText(msg)
+                    QApplication.processEvents()
+
+                if "flush_memory" in result:
+                    result.pop("flush_memory")
+
+                try:
+                    launch_segmentation_viewer(
+                        **result,
+                        block=False,
+                        flush_memory=False,
+                        progress_callback=progress_cb,
+                    )
+                    logger.info("napari segmentation viewer launched...")
+                except Exception as e:
+                    logger.error(f"Failed to launch napari: {e}")
+                    QMessageBox.warning(self, "Error", f"Failed to launch napari: {e}")
+                finally:
+                    progress.close()
+                gc.collect()
+            else:
+                progress.close()
+                logger.warning("napari loading returned None (no labels found).")
+
+        loader.finished_with_result.connect(on_finished)
+        start_tracked(loader)
 
     def check_signals(self) -> None:
         """
@@ -969,15 +911,15 @@ class ProcessPanel(QFrame, Styles):
                                         self.event_annotator.height() + 1,
                                     ),
                                 )
-                            except:
-                                pass
+                            except Exception as e:
+                                logger.debug(f"Annotator resize trigger failed: {e}")
                         except Exception as e:
-                            print(f"Error finalizing annotator: {e}")
+                            logger.error(f"Error finalizing annotator: {e}")
                     else:
                         self.event_annotator.close()
 
                 self.signal_loader.finished.connect(on_finished)
-                self.signal_loader.start()
+                start_tracked(self.signal_loader)
         else:
             # Multi position explorer: redirect to TableUI with progress bar
             self.view_table_ui()
@@ -1195,12 +1137,12 @@ class ProcessPanel(QFrame, Styles):
                     try:
                         wdg.resize(wdg.width() + 1, wdg.height() + 1)
                         center_window(wdg)
-                    except Exception as _:
-                        pass
+                    except Exception as e:
+                        logger.debug(f"Widget resize/centering failed: {e}")
 
                 QTimer.singleShot(100, lambda: post_widget(self.classifier_widget))
-            except Exception as _:
-                pass
+            except Exception as e:
+                logger.debug(f"Classifier widget post-show trigger failed: {e}")
 
     def open_signal_annotator_configuration_ui(self) -> None:
         """
@@ -1216,8 +1158,8 @@ class ProcessPanel(QFrame, Styles):
             QTimer.singleShot(
                 100, lambda: center_window(self.settings_signal_annotator)
             )
-        except Exception as _:
-            pass
+        except Exception as e:
+            logger.debug(f"Signal annotator centering trigger failed: {e}")
 
     def reset_generalist_setup(self, index: int) -> None:
         """
@@ -1301,8 +1243,8 @@ class ProcessPanel(QFrame, Styles):
                     remove_file_if_exists(t.replace(".csv", ".pkl"))
                     try:
                         os.remove(t)
-                    except:
-                        pass
+                    except OSError as e:
+                        logger.debug(f"Could not remove table file {t}: {e}")
 
         if self.seg_model_list.currentIndex() > self.n_specific_seg_models:
             self.model_name = self.seg_models[self.seg_model_list.currentIndex() - 1]
@@ -1347,10 +1289,15 @@ class ProcessPanel(QFrame, Styles):
                 SegModelParamsWidget,
             )
 
-            self.segChannelWidget = SegModelParamsWidget(
-                self, model_name=self.model_name
-            )
-            self.segChannelWidget.show()
+            try:
+                self.segChannelWidget = SegModelParamsWidget(
+                    self, model_name=self.model_name
+                )
+                self.segChannelWidget.show()
+            except Exception as e:
+                logger.exception(
+                    f"Failed to load segmentation model settings widget: {e}"
+                )
 
             return None
 
@@ -1362,10 +1309,15 @@ class ProcessPanel(QFrame, Styles):
             self.signal_model_name = self.signal_models[
                 self.signal_models_list.currentIndex()
             ]
-            self.signalChannelWidget = SignalModelParamsWidget(
-                self, model_name=self.signal_model_name
-            )
-            self.signalChannelWidget.show()
+            try:
+                self.signalChannelWidget = SignalModelParamsWidget(
+                    self, model_name=self.signal_model_name
+                )
+                self.signalChannelWidget.show()
+            except Exception as e:
+                logger.exception(
+                    f"Failed to load signal model settings widget: {e}"
+                )
 
             return None
 
@@ -1556,10 +1508,7 @@ class ProcessPanel(QFrame, Styles):
                     self.signal_models_list.currentIndex()
                 ]
 
-                model_complete_path = locate_signal_model(self.signal_model_name)
-                input_config_path = os.path.join(
-                    model_complete_path, "config_input.json"
-                )
+                model_complete_path, input_config_path = _resolve_signal_model_paths(self.signal_model_name)
                 with open(input_config_path) as config_file:
                     input_config = json.load(config_file)
 
@@ -1630,19 +1579,13 @@ class ProcessPanel(QFrame, Styles):
                         signal_name = None
                         try:
                             if hasattr(self, "signal_model_name"):
-                                model_complete_path = locate_signal_model(
-                                    self.signal_model_name
-                                )
-                                input_config_path = os.path.join(
-                                    model_complete_path, "config_input.json"
-                                )
-                                if os.path.exists(input_config_path):
-                                    with open(input_config_path) as f:
-                                        conf = json.load(f)
-                                    event_label = conf.get("label", None)
-                                    channels = conf.get("channels", [])
-                                    if channels:
-                                        signal_name = channels[0]
+                                _, input_config_path = _resolve_signal_model_paths(self.signal_model_name)
+                                with open(input_config_path) as f:
+                                    conf = json.load(f)
+                                event_label = conf.get("label", None)
+                                channels = conf.get("channels", [])
+                                if channels:
+                                    signal_name = channels[0]
                         except Exception as e:
                             logger.warning(f"Could not determine event label: {e}")
 
@@ -1682,14 +1625,14 @@ class ProcessPanel(QFrame, Styles):
             f"View the tracks before post-processing for position {self.parent_window.pos} in napari..."
         )
 
-        self.napari_loader = NapariLoaderThread(
+        loader = NapariLoaderThread(
             self.parent_window.pos,
             self.parent_window.movie_prefix,
             self.mode,
             self.parent_window.parent_window.n_threads,
         )
 
-        self.napari_progress = CelldetectiveProgressDialog(
+        progress = CelldetectiveProgressDialog(
             "Loading images, tracks and relabeling masks...",
             "Cancel",
             0,
@@ -1698,17 +1641,35 @@ class ProcessPanel(QFrame, Styles):
             window_title="Preparing the napari viewer...",
         )
 
-        self.napari_progress.setAutoClose(False)
-        self.napari_progress.setAutoReset(False)
+        progress.setAutoClose(False)
+        progress.setAutoReset(False)
+        # Free the dialog on close so it isn't retained as a child of the panel
+        # across repeated viewer-open cycles. Deletion only happens via the
+        # explicit close() calls below (after the loader thread has finished and
+        # its signals are blocked), so no slot can fire on a deleted dialog.
+        progress.setAttribute(Qt.WA_DeleteOnClose)
 
-        self.napari_progress.setValue(0)
-        self.napari_loader.progress.connect(self.napari_progress.setValue)
-        self.napari_loader.status.connect(self.napari_progress.setLabelText)
-        self.napari_progress.canceled.connect(self.napari_loader.stop)
+        progress.setValue(0)
+        loader.progress.connect(progress.setValue)
+        loader.status.connect(progress.setLabelText)
+        progress.canceled.connect(loader.stop)
+
+        # Keep a strong reference to every in-flight loader so launching the
+        # viewer several times in a row does not let an earlier QThread be
+        # garbage-collected mid-run; drop it once the thread has finished.
+        if not hasattr(self, "_track_loaders"):
+            self._track_loaders = set()
+        self._track_loaders.add(loader)
+        loader.finished.connect(lambda: self._track_loaders.discard(loader))
 
         def on_finished(result: Union[Dict, Exception, None]) -> None:
             """
             Handle completion of Napari loading.
+
+            Bound to the specific ``loader``/``progress`` instances for this
+            launch (not ``self.*`` attributes, which get overwritten by later
+            launches) so a cancelled load never opens a viewer and the correct
+            dialog is closed.
 
             Parameters
             ----------
@@ -1717,16 +1678,15 @@ class ProcessPanel(QFrame, Styles):
             """
             from celldetective.napari.utils import launch_napari_viewer
 
-            self.napari_progress.blockSignals(True)
-            # self.napari_progress.close()
-            if self.napari_loader._is_cancelled:
+            progress.blockSignals(True)
+            if loader._is_cancelled:
                 logger.info("Task was cancelled...")
-                self.napari_progress.close()
+                progress.close()
                 return
 
             if isinstance(result, Exception):
                 logger.error(f"napari loading error: {result}")
-                self.napari_progress.close()
+                progress.close()
                 msgBox = QMessageBox()
                 msgBox.setIcon(QMessageBox.Warning)
                 msgBox.setText(str(result))
@@ -1737,8 +1697,8 @@ class ProcessPanel(QFrame, Styles):
 
             if result:
                 logger.info("Launching the napari viewer with tracks...")
-                self.napari_progress.setLabelText("Initializing Napari viewer...")
-                self.napari_progress.setRange(0, 0)
+                progress.setLabelText("Initializing Napari viewer...")
+                progress.setRange(0, 0)
                 QApplication.processEvents()
 
                 def progress_cb(msg: str) -> None:
@@ -1751,7 +1711,7 @@ class ProcessPanel(QFrame, Styles):
                         Progress message.
                     """
                     if isinstance(msg, str):
-                        self.napari_progress.setLabelText(msg)
+                        progress.setLabelText(msg)
                     QApplication.processEvents()
 
                 if "flush_memory" in result:
@@ -1769,9 +1729,9 @@ class ProcessPanel(QFrame, Styles):
                     logger.error(f"Failed to launch Napari: {e}")
                     QMessageBox.warning(self, "Error", f"Failed to launch Napari: {e}")
                 finally:
-                    self.napari_progress.close()
+                    progress.close()
             else:
-                self.napari_progress.close()
+                progress.close()
                 logger.warning(
                     "napari loading returned None (likely no trajectories found)."
                 )
@@ -1781,8 +1741,8 @@ class ProcessPanel(QFrame, Styles):
                     "Could not load tracks. Please ensure trajectories are computed.",
                 )
 
-        self.napari_loader.finished_with_result.connect(on_finished)
-        self.napari_loader.start()
+        loader.finished_with_result.connect(on_finished)
+        start_tracked(loader)
 
     def view_table_ui(self) -> None:
         """
@@ -1940,20 +1900,8 @@ class ProcessPanel(QFrame, Styles):
                     with open(instr_path, "r") as f:
                         instr = json.load(f)
 
-                    # 1. Features
-                    features = instr.get("features", [])
-                    if features:
-                        for f_name in features:
-                            if f_name == "intensity_mean":
-                                continue  # handled by standard
-                            if f_name == "area":
-                                continue
-
-                            # For other features, skimage/celldetective might suffix them.
-                            # If it's a generic feature, skimage usually keeps the name.
-                            # If it's multichannel, it might need channel names.
-                            # For now, let's keep it simple as requested for intensity_mean and area.
-                            pass
+                    # 1. Features — intensity_mean and area are handled by the
+                    # standard pipeline; other features are not surfaced here.
 
                     # 2. Isotropic measurements
                     radii = instr.get("intensity_measurement_radii", [])
@@ -1975,19 +1923,7 @@ class ProcessPanel(QFrame, Styles):
                     borders = instr.get("border_distances", [])
                     if borders:
                         for b in borders if isinstance(borders, list) else [borders]:
-                            # Logic from measure.py for suffix
-                            b_str = (
-                                str(b)
-                                .replace("(", "")
-                                .replace(")", "")
-                                .replace(", ", "_")
-                                .replace(",", "_")
-                            )
-                            suffix = (
-                                f"_slice_{b_str.replace('-', 'm')}px"
-                                if ("-" in str(b) or "," in str(b))
-                                else f"_edge_{b_str}px"
-                            )
+                            suffix = _get_border_suffix(b)
                             for ch in channel_names:
                                 # In measure_features, it's {ch}_mean{suffix}
                                 self.signals.append(f"{ch}_mean{suffix}")
@@ -2074,13 +2010,26 @@ class ProcessPanel(QFrame, Styles):
 
         model_complete_path = locate_segmentation_model(self.model_name)
         input_config_path = model_complete_path + "config_input.json"
-        new_channels = [
-            self.segChannelWidget.channel_cbs[i].currentText()
-            for i in range(len(self.segChannelWidget.channel_cbs))
-        ]
+        new_channels = self.segChannelWidget.channel_selection.selected_channels()
         target_cell_size = None
         if hasattr(self.segChannelWidget, "diameter_le"):
-            target_cell_size = float(self.segChannelWidget.diameter_le.get_threshold())
+            # The field's bottom turns a negative away, but a blank field and a
+            # bare zero both get past it, and both reached the configuration: a
+            # blank raised TypeError on the conversion below, a zero divided by
+            # zero once the run started. Refuse them here so nothing downstream
+            # has to read a size that cannot be one.
+            entered = self.segChannelWidget.diameter_le.get_threshold(show_warning=False)
+            if entered is None or entered <= 0:
+                msgBox = QMessageBox()
+                msgBox.setIcon(QMessageBox.Warning)
+                msgBox.setText(
+                    "Please set a cell size greater than zero, in µm."
+                )
+                msgBox.setWindowTitle("Invalid cell size")
+                msgBox.setStandardButtons(QMessageBox.Ok)
+                msgBox.exec()
+                return None
+            target_cell_size = float(entered)
 
         with open(input_config_path) as config_file:
             input_config = json.load(config_file)
@@ -2106,12 +2055,8 @@ class ProcessPanel(QFrame, Styles):
         self.signal_model_name = self.signal_models[
             self.signal_models_list.currentIndex()
         ]
-        model_complete_path = locate_signal_model(self.signal_model_name)
-        input_config_path = model_complete_path + "config_input.json"
-        new_channels = [
-            self.signalChannelWidget.channel_cbs[i].currentText()
-            for i in range(len(self.signalChannelWidget.channel_cbs))
-        ]
+        _, input_config_path = _resolve_signal_model_paths(self.signal_model_name)
+        new_channels = self.signalChannelWidget.channel_selection.selected_channels()
         with open(input_config_path) as config_file:
             input_config = json.load(config_file)
 
@@ -2124,3 +2069,4 @@ class ProcessPanel(QFrame, Styles):
         self.signalChannelsSet = True
         self.signalChannelWidget.close()
         self.process_population()
+

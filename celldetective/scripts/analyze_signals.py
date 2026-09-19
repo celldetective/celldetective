@@ -3,11 +3,16 @@ Copyright © 2022 Laboratoire Adhesion et Inflammation, Authored by Remy Torro.
 """
 
 import argparse
-import datetime
 import os
+import sys
 from art import tprint
 from celldetective.signals import analyze_signals
+from celldetective.utils import COLUMN_LABELS
 import pandas as pd
+import logging
+
+logger = logging.getLogger("celldetective")
+from celldetective.log_manager import positionlogger
 
 tprint("Signals")
 
@@ -29,7 +34,7 @@ if use_gpu=='True' or use_gpu=='true' or use_gpu=='1':
 else:
 	use_gpu = False
 
-column_labels = {'track': "TRACK_ID", 'time': 'FRAME', 'x': 'POSITION_X', 'y': 'POSITION_Y'}
+column_labels = COLUMN_LABELS.copy()
 
 if mode.lower()=="target" or mode.lower()=="targets":
 	table_name = "trajectories_targets.csv"
@@ -45,14 +50,12 @@ trajectories = pos+os.sep.join(['output','tables', table_name])
 if os.path.exists(trajectories):
 	trajectories = pd.read_csv(trajectories)
 else:
-	print('The trajectories table could not be found. Abort.')
-	os.abort()
+	logger.error("The trajectories table could not be found. Abort.")
+	sys.exit(1)
 
-log=f'segmentation model: {model} \n'
-
-with open(pos+f'log_{mode}.json', 'a') as f:
-	f.write(f'{datetime.datetime.now()} SIGNAL ANALYSIS \n')
-	f.write(log)
+with positionlogger(pos, filename=f'log_{mode}.txt'):
+	logger.info("SIGNAL ANALYSIS")
+	logger.info(f"signal model: {model}")
 
 trajectories = analyze_signals(trajectories.copy(), model, interpolate_na=True, selected_signals=None, column_labels = column_labels, plot_outcome=True,output_dir=pos+'output/')
 trajectories = trajectories.sort_values(by=[column_labels['track'], column_labels['time']])

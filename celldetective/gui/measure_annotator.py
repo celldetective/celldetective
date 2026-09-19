@@ -18,7 +18,7 @@ import numpy as np
 import pandas as pd
 import os
 from matplotlib.cm import tab10
-from superqt import QLabeledDoubleSlider
+from celldetective.gui.base.sliders import QLabeledDoubleSlider
 from superqt.fonticon import icon
 from fonticon_mdi6 import MDI6
 
@@ -29,8 +29,10 @@ from celldetective.gui.base.components import CelldetectiveWidget
 from celldetective.gui.base.figure_canvas import FigureCanvas
 from celldetective.gui.gui_utils import color_from_state, ExportPlotBtn
 from celldetective.utils.image_loaders import locate_labels
+from celldetective.utils.data_cleaning import extract_identity_col
 from celldetective.gui.base.utils import center_window
 from celldetective import get_logger
+from celldetective.log_manager import positionlogger
 
 logger = get_logger(__name__)
 
@@ -200,17 +202,14 @@ class MeasureAnnotator(BaseAnnotator):
             msgBox.setText("The trajectories cannot be detected.")
             msgBox.setWindowTitle("Warning")
             msgBox.setStandardButtons(QMessageBox.Ok)
-            returnValue = msgBox.exec()
-            if returnValue == QMessageBox.Yes:
-                self.close()
+            msgBox.exec()
+            self.close()
         else:
 
             # Load and prep tracks
             self.df_tracks = pd.read_csv(self.trajectories_path)
-            if "TRACK_ID" in self.df_tracks.columns:
-                self.df_tracks = self.df_tracks.sort_values(by=["TRACK_ID", "FRAME"])
-            else:
-                self.df_tracks = self.df_tracks.sort_values(by=["ID", "FRAME"])
+            id_col = extract_identity_col(self.df_tracks)
+            self.df_tracks = self.df_tracks.sort_values(by=[id_col, "FRAME"])
 
             cols = np.array(self.df_tracks.columns)
             self.class_cols = np.array(
@@ -231,11 +230,7 @@ class MeasureAnnotator(BaseAnnotator):
                 "status_color",
                 "status_id",
             ]
-            for col in to_remove:
-                try:
-                    self.class_cols.remove(col)
-                except:
-                    pass
+            self.class_cols = [c for c in self.class_cols if c not in to_remove]
 
             # Generate missing status columns from class columns
             for c in self.class_cols:
@@ -270,12 +265,7 @@ class MeasureAnnotator(BaseAnnotator):
                     for c in list(self.df_tracks.columns)
                 ]
             )
-            self.class_cols = list(cols[self.class_cols])
-            for col in to_remove:
-                try:
-                    self.class_cols.remove(col)
-                except:
-                    pass
+            self.class_cols = [c for c in list(cols[self.class_cols]) if c not in to_remove]
 
             if len(self.class_cols) > 0:
                 if self.status_name not in self.class_cols:
@@ -304,12 +294,7 @@ class MeasureAnnotator(BaseAnnotator):
             self.df_tracks["y_anim"] = self.df_tracks["y_anim"].astype(int)
 
             self.extract_scatter_from_trajectories()
-            if "TRACK_ID" in self.df_tracks.columns:
-                self.track_of_interest = self.df_tracks.dropna(subset="TRACK_ID")[
-                    "TRACK_ID"
-                ].min()
-            else:
-                self.track_of_interest = self.df_tracks.dropna(subset="ID")["ID"].min()
+            self.track_of_interest = self.df_tracks.dropna(subset=id_col)[id_col].min()
 
             self.loc_t = []
             self.loc_idx = []
@@ -366,19 +351,13 @@ class MeasureAnnotator(BaseAnnotator):
 
             meta = get_experiment_metadata(self.exp_dir)
             if meta is not None:
-                keys = list(meta.keys())
-                cols_to_remove.extend(keys)
+                cols_to_remove.extend(meta.keys())
 
             labels = get_experiment_labels(self.exp_dir)
             if labels is not None:
-                keys = list(labels.keys())
-                cols_to_remove.extend(labels)
+                cols_to_remove.extend(labels.keys())
 
-            for tr in cols_to_remove:
-                try:
-                    self.columns_to_rescale.remove(tr)
-                except:
-                    pass
+            self.columns_to_rescale = [c for c in self.columns_to_rescale if c not in cols_to_remove]
 
             x = self.df_tracks[self.columns_to_rescale].values
             self.MinMaxScaler.fit(x)
@@ -479,16 +458,18 @@ class MeasureAnnotator(BaseAnnotator):
 
         # Class selection
         self.init_class_selection_block()
-        self.left_panel.addLayout(self.class_hbox, 5)
-        self.left_panel.addWidget(self.cell_info, 5)
+        # The rows keep their natural height (stretch 0): only the tabs holding
+        # the plot take the room left, instead of it opening gaps between rows.
+        self.left_panel.addLayout(self.class_hbox)
+        self.left_panel.addWidget(self.cell_info)
 
         # Options & correction buttons
         self.init_options_block()
         self.populate_options_layout()
         self.update_widgets()
         self.init_correction_block()
-        self.left_panel.addLayout(self.options_hbox, 5)
-        self.left_panel.addLayout(self.action_hbox, 5)
+        self.left_panel.addLayout(self.options_hbox)
+        self.left_panel.addLayout(self.action_hbox)
 
         self.annotation_btns_to_hide = [
             self.time_of_interest_label,
@@ -566,7 +547,11 @@ class MeasureAnnotator(BaseAnnotator):
             row.addWidget(self.signal_choice_cb[i], 80)
             sig_layout.addLayout(row)
 
-        sig_layout.addWidget(self.cell_fcanvas, 1)
+        # The plot outweighs the stretch below it: it takes the room until its
+        # height is capped, and only what it leaves collects under it, rather
+        # than spreading the signal rows above apart.
+        sig_layout.addWidget(self.cell_fcanvas, 100)
+        sig_layout.addStretch(1)
 
         # Customise the signals matplotlib toolbar
         if hasattr(self.cell_fcanvas, "toolbar"):
@@ -764,16 +749,11 @@ class MeasureAnnotator(BaseAnnotator):
 
     def _label_id_for_track(self, track_id, frame: int) -> Optional[int]:
         """Return the segmentation label id for *track_id* at *frame*."""
-        if "TRACK_ID" in self.df_tracks.columns:
-            rows = self.df_tracks.loc[
-                (self.df_tracks["TRACK_ID"] == track_id)
-                & (self.df_tracks["FRAME"] == frame)
-            ]
-        else:
-            rows = self.df_tracks.loc[
-                (self.df_tracks["ID"] == track_id)
-                & (self.df_tracks["FRAME"] == frame)
-            ]
+        id_col = extract_identity_col(self.df_tracks)
+        rows = self.df_tracks.loc[
+            (self.df_tracks[id_col] == track_id)
+            & (self.df_tracks["FRAME"] == frame)
+        ]
         if rows.empty:
             return None
         if "class_id" in rows.columns:
@@ -859,7 +839,7 @@ class MeasureAnnotator(BaseAnnotator):
             try:
                 self.cell_ax.boxplot(all_yvalues, showfliers=self.show_fliers)
             except Exception as e:
-                logger.error(f"{e=}")
+                logger.error(f"{e}")
 
             x_pos = np.arange(len(all_yvalues)) + 1
             for index, feature in enumerate(current_yvalues):
@@ -929,21 +909,15 @@ class MeasureAnnotator(BaseAnnotator):
         """
         yvalues = []
         current_frame = self.current_frame
+        id_col = extract_identity_col(self.df_tracks)
         for i in range(len(self.signal_choice_cb)):
             signal_choice = self.signal_choice_cb[i].currentText()
             if signal_choice != "--":
-                if "TRACK_ID" in self.df_tracks.columns:
-                    ydata = self.df_tracks.loc[
-                        (self.df_tracks["TRACK_ID"] == self.track_of_interest)
-                        & (self.df_tracks["FRAME"] == current_frame),
-                        signal_choice,
-                    ].to_numpy()
-                else:
-                    ydata = self.df_tracks.loc[
-                        (self.df_tracks["ID"] == self.track_of_interest)
-                        & (self.df_tracks["FRAME"] == current_frame),
-                        signal_choice,
-                    ].to_numpy()
+                ydata = self.df_tracks.loc[
+                    (self.df_tracks[id_col] == self.track_of_interest)
+                    & (self.df_tracks["FRAME"] == current_frame),
+                    signal_choice,
+                ].to_numpy()
                 ydata = ydata[ydata == ydata]  # remove nan
                 yvalues.extend(ydata)
         x_pos = np.arange(len(yvalues)) + 1
@@ -1162,28 +1136,26 @@ class MeasureAnnotator(BaseAnnotator):
         logger.info(
             f"User interactions: Reclassifying cell #{self.track_of_interest} at frame {self.current_frame} to status {status}"
         )
-        if "TRACK_ID" in self.df_tracks.columns:
-            self.df_tracks.loc[
-                (self.df_tracks["TRACK_ID"] == self.track_of_interest)
-                & (self.df_tracks["FRAME"] == self.current_frame),
-                self.status_name,
-            ] = status
-
-            indices = self.df_tracks.index[
-                (self.df_tracks["TRACK_ID"] == self.track_of_interest)
-                & (self.df_tracks["FRAME"] == self.current_frame)
-            ]
-        else:
-            self.df_tracks.loc[
-                (self.df_tracks["ID"] == self.track_of_interest)
-                & (self.df_tracks["FRAME"] == self.current_frame),
-                self.status_name,
-            ] = status
-
-            indices = self.df_tracks.index[
-                (self.df_tracks["ID"] == self.track_of_interest)
-                & (self.df_tracks["FRAME"] == self.current_frame)
-            ]
+        # Record the previous group/status (df still holds the old value here) so the log
+        # shows which cells actually changed and how
+        id_col = extract_identity_col(self.df_tracks)
+        old_status = self.df_tracks.loc[
+            (self.df_tracks[id_col] == self.track_of_interest)
+            & (self.df_tracks["FRAME"] == self.current_frame),
+            self.status_name,
+        ].to_numpy()
+        old_status = old_status[0] if len(old_status) else None
+        if not hasattr(self, "annotation_log"):
+            self.annotation_log = []
+        self.annotation_log.append(
+            f"cell {self.track_of_interest} @ FRAME {self.current_frame}: "
+            f"{self.status_name} {old_status}->{status}"
+        )
+        mask = (self.df_tracks[id_col] == self.track_of_interest) & (
+            self.df_tracks["FRAME"] == self.current_frame
+        )
+        self.df_tracks.loc[mask, self.status_name] = status
+        indices = self.df_tracks.index[mask]
 
         self.df_tracks.loc[indices, self.status_name] = status
         all_states = self.df_tracks.loc[:, self.status_name].tolist()
@@ -1306,9 +1278,7 @@ class MeasureAnnotator(BaseAnnotator):
 
     def make_status_column(self) -> None:
         """Create the status column."""
-        if self.status_name == "state_firstdetection":
-            pass
-        else:
+        if self.status_name != "state_firstdetection":
             self.df_tracks.loc[:, self.status_name] = 0
             all_states = self.df_tracks.loc[:, self.status_name].tolist()
             all_states = np.array(all_states)
@@ -1324,6 +1294,7 @@ class MeasureAnnotator(BaseAnnotator):
         self.colors = []
         self.tracks = []
 
+        id_col = extract_identity_col(self.df_tracks)
         for t in np.arange(self.len_movie):
             self.positions.append(
                 self.df_tracks.loc[
@@ -1335,16 +1306,9 @@ class MeasureAnnotator(BaseAnnotator):
                 .to_numpy()
                 .copy()
             )
-            if "TRACK_ID" in self.df_tracks.columns:
-                self.tracks.append(
-                    self.df_tracks.loc[
-                        self.df_tracks["FRAME"] == t, "TRACK_ID"
-                    ].to_numpy()
-                )
-            else:
-                self.tracks.append(
-                    self.df_tracks.loc[self.df_tracks["FRAME"] == t, "ID"].to_numpy()
-                )
+            self.tracks.append(
+                self.df_tracks.loc[self.df_tracks["FRAME"] == t, id_col].to_numpy()
+            )
 
     def compute_status_and_colors(self, index: Optional[int] = None) -> None:
         """
@@ -1370,10 +1334,7 @@ class MeasureAnnotator(BaseAnnotator):
         Logic to execute when frame changes.
         """
         # Auto-switch track of interest if ID mode
-        if "TRACK_ID" in list(self.df_tracks.columns):
-            pass
-        elif "ID" in list(self.df_tracks.columns):
-            # print("ID in cols... change class of interest... ")
+        if "TRACK_ID" not in list(self.df_tracks.columns) and "ID" in list(self.df_tracks.columns):
             candidates = self.df_tracks[self.df_tracks["FRAME"] == self.current_frame][
                 "ID"
             ]
@@ -1403,25 +1364,16 @@ class MeasureAnnotator(BaseAnnotator):
         #     self.df_tracks[self.df_tracks[self.status_name] == 99].index
         # )
 
-        try:
-            self.df_tracks.drop(columns="", inplace=True)
-        except:
-            pass
-        try:
-            self.df_tracks.drop(columns="group_color", inplace=True)
-        except:
-            pass
-        try:
-            self.df_tracks.drop(columns="x_anim", inplace=True)
-        except:
-            pass
-        try:
-            self.df_tracks.drop(columns="y_anim", inplace=True)
-        except:
-            pass
+        self.df_tracks.drop(columns=["", "group_color", "x_anim", "y_anim"], errors="ignore", inplace=True)
 
         self.df_tracks.to_csv(self.trajectories_path, index=False)
         logger.info("Table successfully exported...")
+        with positionlogger(self.pos, filename=f"log_{self.mode}.txt"):
+            logger.info("MEASUREMENT ANNOTATION (manual)")
+            logger.info(f"group: {self.status_name}")
+            for entry in getattr(self, "annotation_log", []):
+                logger.info(f"modified {entry}")
+        self.annotation_log = []
 
         self.locate_tracks()
         self.changed_class()

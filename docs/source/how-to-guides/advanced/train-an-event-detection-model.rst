@@ -16,7 +16,7 @@ You can use the signal annotator UI to control and correct single-cell classific
 Train a model in the GUI
 ------------------------
 
-Click on the ``TRAIN`` button in the signal analysis module. Set a name for the model and describe in one word the event (*e.g.* lysis, division, death...). You can start from a previously trained model or from scratch. Set the channels (*i.e.* single-cell signals of interest), define the normalization procedure. You must set the max signal length: the standardized length of the signals when they enter the model (take a value higher than your highest movie duration, in frames). 
+Click on the ``TRAIN`` button in the signal analysis module. Set a name for the model and describe in one word the event (*e.g.* lysis, division, death...). You can start from a previously trained model or from scratch. Set the channels (*i.e.* single-cell signals of interest), define the normalization procedure. You must set the max signal length: the standardized length of the signals when they enter the model, in frames. Preferably take a value higher than your longest movie. A longer annotated signal is cut to this length for training, and an event annotated past the cut is treated as "no event". At inference, a track longer than the model is scanned with overlapping windows of this length, so the event is still found anywhere along the track.
 
 For the training data, locate the folder where you stored the ``npy`` annotations for the event of interest. You can include datasets among the ones we developed in Zenodo to detect lysis events characterised by a sigmoidal-like increase of the dead nuclei intensity signal ``db-si-NucPI``, or nucleus shrinking characterized by a decreasing nuclear area signal ``db-si-NucCondensation``. 
 

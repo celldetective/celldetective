@@ -1,8 +1,11 @@
 import threading
+import logging
 from pathlib import Path
 from typing import Union, Optional, Any, List, Dict, Tuple, Callable
 
 import numpy as np
+
+logger = logging.getLogger("celldetective")
 import pandas as pd
 from skimage.measure import regionprops_table, label
 from skimage.transform import resize
@@ -32,7 +35,6 @@ def fill_label_holes(lbl_img: np.ndarray, **kwargs: Any) -> np.ndarray:
         Label image with filled holes.
     """
 
-    # TODO: refactor 'fill_label_holes' and 'edt_prob' to share code
     def grow(
         sl: Tuple[slice, ...], interior: List[Tuple[bool, bool]]
     ) -> Tuple[slice, ...]:
@@ -119,6 +121,7 @@ def auto_correct_masks(
     bbox_factor: float = 1.75,
     min_area: int = 9,
     fill_labels: bool = False,
+    correct_anomalies: bool = True,
 ) -> np.ndarray:
     """
     Correct segmentation masks to ensure consistency and remove anomalies.
@@ -145,6 +148,10 @@ def auto_correct_masks(
             Discard cells that have an area smaller than this minimum area (px²). The default is `9` (3x3 pixels).
     fill_labels : bool, optional
             Fill holes within cell masks automatically. The default is `False`.
+    correct_anomalies : bool, optional
+            Split objects sharing a single label when their bounding box area is
+            disproportionately larger than the object area (see ``bbox_factor``).
+            The default is `True`.
 
     Returns
     -------
@@ -161,63 +168,65 @@ def auto_correct_masks(
 
     Examples
     --------
-    >>> masks = np.array([[0, 0, 1, 1], [0, 2, 2, 1], [0, 2, 0, 0]])
-    >>> corrected_masks = auto_correct_masks(masks)
-    >>> corrected_masks
+    Surviving labels are renumbered consecutively -- 3 and 7 below become 1
+    and 2, which is what keeps downstream label encodings dense:
+
+    >>> masks = np.array([[0, 0, 3, 3],
+    ...                   [0, 7, 7, 3],
+    ...                   [0, 7, 0, 0]])
+    >>> auto_correct_masks(masks, min_area=3)
     array([[0, 0, 1, 1],
-               [0, 2, 2, 1],
-               [0, 2, 0, 0]])
+           [0, 2, 2, 1],
+           [0, 2, 0, 0]])
+
+    Note the explicit ``min_area``: both objects are 3 px, so the default of 9
+    treats them as noise and discards them.
+
+    >>> auto_correct_masks(masks)
+    array([[0, 0, 0, 0],
+           [0, 0, 0, 0],
+           [0, 0, 0, 0]])
     """
 
-    assert masks.ndim == 2, "`masks` should be a 2D numpy array..."
+    if masks.ndim != 2:
+        raise ValueError("`masks` should be a 2D numpy array...")
 
-    # Avoid negative mask values
-    masks[masks < 0] = np.abs(masks[masks < 0])
+    # Avoid negative mask values. np.abs returns a fresh array, so the caller's
+    # input is never mutated in place.
+    masks = np.abs(masks)
 
-    props = pd.DataFrame(
-        regionprops_table(masks, properties=("label", "area", "area_bbox"))
-    )
-    max_lbl = props["label"].max()
     corrected_lbl = masks.copy()  # .astype(int)
 
-    for cell in props["label"].unique():
+    if correct_anomalies:
+        props = pd.DataFrame(
+            regionprops_table(masks, properties=("label", "area", "area_bbox"))
+        )
+        max_lbl = int(props["label"].max()) if len(props) else 0
 
-        bbox_area = props.loc[props["label"] == cell, "area_bbox"].values
-        area = props.loc[props["label"] == cell, "area"].values
+        for row in props.itertuples(index=False):
 
-        if bbox_area > bbox_factor * area:  # condition for anomaly
+            if row.area_bbox > bbox_factor * row.area:  # condition for anomaly
 
-            lbl = masks == cell
-            lbl = lbl.astype(int)
+                lbl = masks == row.label
+                relabelled = label(lbl, connectivity=2)
+                relabelled[lbl] += max_lbl
+                corrected_lbl[lbl] = relabelled[lbl]
+                max_lbl = int(corrected_lbl.max())
 
-            relabelled = label(lbl, connectivity=2)
-            relabelled += max_lbl
-            relabelled[np.where(lbl == 0)] = 0
-
-            corrected_lbl[np.where(relabelled != 0)] = relabelled[
-                np.where(relabelled != 0)
-            ]
-
-        max_lbl = np.amax(corrected_lbl)
-
-    # Second routine to eliminate objects too small
-    props2 = pd.DataFrame(
-        regionprops_table(corrected_lbl, properties=("label", "area", "area_bbox"))
-    )
-    for cell in props2["label"].unique():
-        area = props2.loc[props2["label"] == cell, "area"].values
-        lbl = corrected_lbl == cell
-        if area < min_area:
-            corrected_lbl[lbl] = 0
-
-    # Additionnal routine to reorder labels from 1 to number of cells
-    label_ids = np.unique(corrected_lbl)[1:]
-    clean_labels = corrected_lbl.copy()
-
-    for k, lbl in enumerate(label_ids):
-        clean_labels[corrected_lbl == lbl] = k + 1
-
-    clean_labels = clean_labels.astype(int)
+    # Second routine: drop objects that are too small and renumber the
+    # survivors to consecutive labels (1..N) in a single vectorized pass.
+    counts = np.bincount(corrected_lbl.ravel())
+    # `counts > 0` as well as the area test: `np.bincount` reports a zero count
+    # for every integer below the maximum label, so a `min_area` of 0 or less
+    # would otherwise "keep" label values that are absent from the image, make
+    # the lookup table an identity, and skip the renumbering entirely. Callers
+    # do pass `min_area=0` -- that is what unticking "Remove small objects" sends.
+    keep = (counts >= min_area) & (counts > 0)
+    keep[0] = False  # background
+    kept_labels = np.nonzero(keep)[0]
+    lut = np.zeros(counts.size, dtype=int)
+    lut[kept_labels] = np.arange(1, kept_labels.size + 1)
+    clean_labels = lut[corrected_lbl].astype(int)
 
     if fill_labels:
         clean_labels = fill_label_holes(clean_labels)
@@ -311,14 +320,23 @@ def relabel_segmentation(
     n_threads = threads
     df = df.sort_values(by=[column_labels["track"], column_labels["frame"]])
     if exclude_nans:
-        df = df.dropna(subset=column_labels["label"])
+        df = df.dropna(subset=[column_labels["label"]])
 
     new_labels = np.zeros_like(labels)
     shared_data = {"s": 0}
+    label_lock = threading.Lock()  # shared lock guarding `shared_data["s"]`
+
+    # Pre-group the trajectory table by frame once, so the worker loop does a
+    # dict lookup per frame instead of a full-DataFrame scan.
+    frame_col = column_labels["frame"]
+    cells_by_frame = {
+        int(f): g[[column_labels["track"], column_labels["label"]]].to_numpy()
+        for f, g in df.dropna(subset=[frame_col]).groupby(frame_col)
+    }
 
     # Progress tracking
     shared_progress = {"val": 0, "lock": threading.Lock()}
-    total_frames = len(df[column_labels["frame"]].dropna().unique())
+    total_frames = len(cells_by_frame)
 
     def rewrite_labels(indices: List[int]) -> None:
         """
@@ -331,6 +349,7 @@ def relabel_segmentation(
         """
 
         all_track_ids = df[column_labels["track"]].dropna().unique()
+        max_track_id = max(all_track_ids) if len(all_track_ids) else 0
 
         # Check for cancellation
         if progress_callback:
@@ -357,10 +376,7 @@ def relabel_segmentation(
                     return
 
             f = int(t)
-            cells = df.loc[
-                df[column_labels["frame"]] == f,
-                [column_labels["track"], column_labels["label"]],
-            ].to_numpy()
+            cells = cells_by_frame.get(f, np.empty((0, 2)))
             tracks_at_t = list(cells[:, 0])
             identities = list(cells[:, 1])
 
@@ -369,28 +385,30 @@ def relabel_segmentation(
                 labels_at_t.remove(0)
             labels_not_in_df = [lbl for lbl in labels_at_t if lbl not in identities]
             for lbl in labels_not_in_df:
-                with threading.Lock():  # Synchronize access to `shared_data["s"]`
-                    track_id = max(all_track_ids) + shared_data["s"]
+                with label_lock:  # Synchronize access to `shared_data["s"]`
+                    track_id = max_track_id + shared_data["s"]
                     shared_data["s"] += 1
                 tracks_at_t.append(track_id)
                 identities.append(lbl)
 
-            # exclude NaN
+            # Drop NaN identities/tracks, then rewrite the whole frame in a
+            # single lookup-table pass (label value -> track id).
             tracks_at_t = np.array(tracks_at_t)
             identities = np.array(identities)
+            valid = (identities == identities) & (tracks_at_t == tracks_at_t)
+            identities = identities[valid]
+            tracks_at_t = tracks_at_t[valid]
 
-            tracks_at_t = tracks_at_t[identities == identities]
-            identities = identities[identities == identities]
-
-            for k in range(len(identities)):
-
-                # need routine to check values from labels not in class_id of this frame and add new track id
-
-                loc_i, loc_j = np.where(labels[f] == identities[k])
-                track_id = tracks_at_t[k]
-
-                if track_id == track_id:
-                    new_labels[f, loc_i, loc_j] = round(track_id)
+            if identities.size:
+                frame = labels[f]
+                max_lbl = int(frame.max())
+                ids_int = identities.astype(np.int64)
+                in_range = (ids_int >= 0) & (ids_int <= max_lbl)
+                lut = np.zeros(max_lbl + 1, dtype=new_labels.dtype)
+                lut[ids_int[in_range]] = np.round(tracks_at_t[in_range]).astype(
+                    new_labels.dtype
+                )
+                new_labels[f] = lut[frame]
 
     # Multithreading
     indices = list(df[column_labels["frame"]].dropna().unique())
@@ -406,12 +424,12 @@ def relabel_segmentation(
                 # print(f"Thread {i} output check: ", return_value)
                 pass
         except Exception as e:
-            print("Exception: ", e)
+            logger.error(f"Thread exception in relabeling: {e}")
 
     if shared_progress.get("cancelled", False):
-        print("Relabeling cancelled.")
+        logger.info("Relabeling cancelled.")
         return None
 
-    print("\nDone.")
+    logger.info("Relabeling done.")
 
     return new_labels

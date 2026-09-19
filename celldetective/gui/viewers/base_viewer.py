@@ -10,12 +10,14 @@ from PyQt5.QtWidgets import (
     QComboBox,
 )
 from fonticon_mdi6 import MDI6
-from superqt import QLabeledDoubleRangeSlider, QLabeledSlider
+from superqt import QLabeledSlider
+from celldetective.gui.base.sliders import QLabeledDoubleRangeSlider
 from superqt.fonticon import icon
 import matplotlib.gridspec as gridspec
 import matplotlib.backend_bases
 
 from celldetective.gui.base.components import CelldetectiveWidget
+from celldetective.gui.base.threads import start_tracked, stop_thread
 from celldetective.gui.base.utils import center_window
 from celldetective.utils.image_loaders import (
     auto_load_number_of_frames,
@@ -227,7 +229,7 @@ class StackVisualizer(CelldetectiveWidget):
         window_title: str = "StackVisualizer",
         PxToUm: float = 1.0,
         background_color: str = "white",
-        imshow_kwargs: Dict[str, Any] = {"cmap": "gray"},
+        imshow_kwargs: Optional[Dict[str, Any]] = None,
         *args: Any,
         **kwargs: Any,
     ) -> None:
@@ -265,7 +267,7 @@ class StackVisualizer(CelldetectiveWidget):
 
         # Default mutable argument handling
         if imshow_kwargs is None:
-            imshow_kwargs = {}
+            imshow_kwargs = {"cmap": "gray"}
 
         # self.setWindowTitle(window_title)
         self.window_title = window_title
@@ -625,13 +627,12 @@ class StackVisualizer(CelldetectiveWidget):
             current_ylim = self.ax_profile.get_ylim()
 
         # Plot profile
+        # ax_profile.clear() already removes every artist on the axes,
+        # including any previous profile_line. Calling profile_line.remove()
+        # afterwards raises NotImplementedError ("cannot remove artist") because
+        # the artist is already detached, so we rely on clear() alone here.
         self.ax_profile.clear()
         self.ax_profile.set_facecolor("none")
-        if hasattr(self, "profile_line") and self.profile_line:
-            try:
-                self.profile_line.remove()
-            except ValueError:
-                pass  # Already removed
 
         (self.profile_line,) = self.ax_profile.plot(
             dist_axis, profile, color="black", linestyle="-"
@@ -713,8 +714,10 @@ class StackVisualizer(CelldetectiveWidget):
             self.last_frame = self.stack[-1, :, :, self.target_channel]
         else:
             self.mode = "virtual"
-            assert isinstance(self.stack_path, str)
-            assert self.stack_path.endswith(".tif")
+            if not isinstance(self.stack_path, str):
+                raise TypeError("stack_path must be a string.")
+            if not self.stack_path.endswith(".tif"):
+                raise ValueError("stack_path must point to a .tif file.")
             self.locate_image_virtual()
 
     def locate_image_virtual(self):
@@ -733,7 +736,16 @@ class StackVisualizer(CelldetectiveWidget):
             self.stack_path, self.img_num_per_channel, self.n_channels
         )
         self.loader_thread.frame_loaded.connect(self.on_frame_loaded)
-        self.loader_thread.start()
+        # Tracked, not just started: the thread is unparented and this attribute
+        # is its only other reference, so a widget that goes away without
+        # `closeEvent` finishing would otherwise let it be finalized mid-run --
+        # which aborts the process rather than raising.
+        start_tracked(self.loader_thread)
+        # `closeEvent` is the tidy path, but it does not run for a widget that is
+        # dropped or deleted by Qt. `destroyed` always does, and this handler
+        # holds only the thread, never `self`.
+        loader = self.loader_thread
+        self.destroyed.connect(lambda _=None, t=loader: stop_thread(t, timeout=2000))
 
         self.init_frame = load_frames(
             self.img_num_per_channel[self.target_channel, self.current_time_index],
@@ -760,10 +772,17 @@ class StackVisualizer(CelldetectiveWidget):
         if np.isnan(p99):
             p99 = 1
 
-        import matplotlib.pyplot as plt
+        from matplotlib.figure import Figure
         from celldetective.gui.base.figure_canvas import FigureCanvas
 
-        self.fig, self.ax = plt.subplots(figsize=(5, 5))
+        # Use a standalone Figure rather than plt.subplots(): pyplot registers
+        # every figure it creates in a process-global manager (Gcf) and never
+        # releases it, so each embedded viewer would leak its figure + Qt canvas
+        # for the lifetime of the process. Across a test session that exhausts
+        # Windows GDI/handles and corrupts the heap (access violation). A plain
+        # Figure is owned only by this widget and is freed when it is destroyed.
+        self.fig = Figure(figsize=(5, 5))
+        self.ax = self.fig.add_subplot(111)
 
         self.fig.subplots_adjust(top=1, bottom=0, right=1, left=0, hspace=0, wspace=0)
         self.ax.margins(0)
@@ -833,11 +852,6 @@ class StackVisualizer(CelldetectiveWidget):
         else:
             min_val = np.nanmin(self.init_frame)
             max_val = np.nanmax(self.init_frame)
-
-        if np.isnan(min_val):
-            min_val = 0
-        if np.isnan(max_val):
-            max_val = 1
 
         self.contrast_slider.setRange(min_val, max_val)
 
@@ -993,6 +1007,9 @@ class StackVisualizer(CelldetectiveWidget):
                 if len(self.frame_cache) > self.max_cache_size:
                     self.frame_cache.popitem(last=False)  # Remove oldest
 
+        if not hasattr(self, "im") or self.im is None:
+            return
+
         self.im.set_data(self.init_frame)
         rescale_contrast = False
 
@@ -1059,26 +1076,29 @@ class StackVisualizer(CelldetectiveWidget):
         """
         from PyQt5.QtWidgets import QApplication
 
+        # Disconnect matplotlib event handlers if line mode is still active.
+        if getattr(self, "line_mode", False):
+            if hasattr(self, "cid_press"):
+                try:
+                    self.fig.canvas.mpl_disconnect(self.cid_press)
+                    self.fig.canvas.mpl_disconnect(self.cid_move)
+                    self.fig.canvas.mpl_disconnect(self.cid_release)
+                except Exception as e:
+                    logger.debug(f"Could not disconnect matplotlib events: {e}")
+
         if self.loader_thread:
-            # Step 1: Disconnect signals FIRST to prevent any in-flight
-            # queued signal from dispatching after the widget is destroyed.
-            try:
-                self.loader_thread.frame_loaded.disconnect()
-            except Exception:
-                pass
+            # Disconnect first so an in-flight queued emission cannot be
+            # dispatched to a widget that is being torn down, then stop and
+            # join. `stop_thread` never calls terminate(): on Windows that
+            # leaves the thread's mutexes locked and aborts the process.
+            stop_thread(
+                self.loader_thread,
+                timeout=5000,
+                signals=(self.loader_thread.frame_loaded,),
+            )
 
-            # Step 2: Signal the thread to stop (non-blocking).
-            self.loader_thread.stop()
-
-            # Step 3: Flush the Qt event queue to drain any already-queued
-            # frame_loaded signals before the C++ objects are torn down.
+            # Drain anything that was already queued before the C++ objects go.
             QApplication.processEvents()
-
-            # Step 4: Wait for the thread to finish (up to 5 s).
-            # NOTE: Do NOT call terminate() on Windows — it triggers an SEH
-            # access violation. The thread's condition.wait() uses 100 ms
-            # intervals so it will exit within one cycle after stop() wakes it.
-            self.loader_thread.wait(5000)
 
             self.loader_thread = None
 
@@ -1086,5 +1106,6 @@ class StackVisualizer(CelldetectiveWidget):
             self.frame_cache.clear()
         try:
             self.canvas.close()
-        except RuntimeError:
-            pass
+        except RuntimeError as e:
+            logger.debug(f"Canvas already closed during cleanup: {e}")
+        super().closeEvent(event)

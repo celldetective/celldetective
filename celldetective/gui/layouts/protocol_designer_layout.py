@@ -60,7 +60,8 @@ class ProtocolDesignerLayout(QVBoxLayout, Styles):
         self.tab_names = tab_names
         self.list_title = list_title
         self.protocols = []
-        assert len(self.tab_layouts) == len(self.tab_names)
+        if len(self.tab_layouts) != len(self.tab_names):
+            raise ValueError("tab_layouts and tab_names must have the same length.")
 
         self.generate_widgets()
         self.generate_layout()

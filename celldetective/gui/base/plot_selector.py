@@ -6,6 +6,7 @@ from PyQt5.QtWidgets import (
     QFrame,
     QLayout,
     QSizePolicy,
+    QStyle,
 )
 from PyQt5.QtCore import Qt, pyqtSignal, QSize, QRect, QPoint
 from PyQt5.QtGui import QPixmap
@@ -71,6 +72,24 @@ class FlowLayout(QLayout):
         )
         return size
 
+    def horizontalGap(self, widget):
+        """Horizontal space left between two items, as used when laying them out."""
+        return self.spacing() + widget.style().layoutSpacing(
+            QSizePolicy.PushButton, QSizePolicy.PushButton, Qt.Horizontal
+        )
+
+    def widthForColumns(self, n_columns):
+        """Smallest width at which the first `n_columns` items fit on one row."""
+        items = self.itemList[:n_columns]
+        if not items:
+            return 0
+        margins = self.contentsMargins()
+        width = sum(item.sizeHint().width() for item in items)
+        width += sum(self.horizontalGap(item.widget()) for item in items[:-1])
+        # `doLayout` wraps once an item's right edge passes `rect.right()`,
+        # which is one pixel short of the width.
+        return width + margins.left() + margins.right() + 1
+
     def doLayout(self, rect, testOnly):
         x = rect.x()
         y = rect.y()
@@ -78,9 +97,7 @@ class FlowLayout(QLayout):
 
         for item in self.itemList:
             wid = item.widget()
-            spaceX = self.spacing() + wid.style().layoutSpacing(
-                QSizePolicy.PushButton, QSizePolicy.PushButton, Qt.Horizontal
-            )
+            spaceX = self.horizontalGap(wid)
             spaceY = self.spacing() + wid.style().layoutSpacing(
                 QSizePolicy.PushButton, QSizePolicy.PushButton, Qt.Vertical
             )
@@ -183,9 +200,11 @@ class SelectableCard(QFrame):
 class VisualSelectorWidget(QWidget):
     selectionChanged = pyqtSignal(list)
 
-    def __init__(self, items, parent=None):
+    def __init__(self, items, parent=None, min_columns=2):
         """
         items: list of tuples (name, icon_path)
+        min_columns: number of cards the selector is wide enough to show side
+            by side before it wraps them onto the next row
         """
         super().__init__(parent)
 
@@ -213,6 +232,14 @@ class VisualSelectorWidget(QWidget):
 
         scroll.setWidget(container)
         main_layout.addWidget(scroll)
+
+        # The cards only wrap, so without a floor the window opens one card wide
+        # and every choice has to be scrolled to. The vertical scroll bar comes
+        # out of the same width, so it is reserved as well.
+        scroll.setMinimumWidth(
+            self.flow_layout.widthForColumns(min_columns)
+            + scroll.style().pixelMetric(QStyle.PM_ScrollBarExtent)
+        )
 
     def _on_card_toggled(self, checked, name):
         if checked:

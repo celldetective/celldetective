@@ -1,19 +1,15 @@
 import json
+import logging
 import os
 from typing import Optional
 
-from PyQt5.QtCore import Qt
+logger = logging.getLogger("celldetective")
+
 from PyQt5.QtGui import QDoubleValidator
-from PyQt5.QtWidgets import (
-    QVBoxLayout,
-    QComboBox,
-    QHBoxLayout,
-    QLabel,
-    QPushButton,
-    QMainWindow,
-)
+from PyQt5.QtWidgets import QVBoxLayout, QPushButton, QMainWindow
 
 from celldetective.gui.base.components import CelldetectiveWidget
+from celldetective.gui.base.model_channel_selection import ModelChannelSelection
 from celldetective.gui.base.utils import center_window
 from celldetective.utils.model_loaders import locate_signal_model
 
@@ -72,7 +68,7 @@ class SignalModelParamsWidget(CelldetectiveWidget):
         if self.model_complete_path is None:
             raise ValueError(f"Model {self.model_name} could not be found.")
         else:
-            print(f"Model path: {self.model_complete_path}...")
+            logger.info(f"Model path: {self.model_complete_path}...")
 
         config_path = os.path.join(self.model_complete_path, "config_input.json")
         if not os.path.exists(config_path):
@@ -85,34 +81,19 @@ class SignalModelParamsWidget(CelldetectiveWidget):
 
     def populate_widgets(self):
         """Populate the widgets."""
-        self.n_channels = len(self.required_channels)
-        self.channel_cbs = [QComboBox() for i in range(self.n_channels)]
-
         self.parent_window.load_available_tables()
-        available_channels = list(self.parent_window.signals) + ["None"]
-        # Populate the comboboxes with available channels from the experiment
-        for k in range(self.n_channels):
-            hbox_channel = QHBoxLayout()
-            hbox_channel.addWidget(QLabel(f"channel {k+1}: "), 33)
 
-            ch_vbox = QVBoxLayout()
-            ch_vbox.addWidget(
-                QLabel(f"Req: {self.required_channels[k]}"), alignment=Qt.AlignLeft
-            )
-            ch_vbox.addWidget(self.channel_cbs[k])
-
-            self.channel_cbs[k].addItems(
-                available_channels
-            )  # Give none option for more than one channel input
-            idx = self.channel_cbs[k].findText(self.required_channels[k])
-
-            if idx >= 0:
-                self.channel_cbs[k].setCurrentIndex(idx)
-            else:
-                self.channel_cbs[k].setCurrentIndex(len(available_channels) - 1)
-
-            hbox_channel.addLayout(ch_vbox, 66)
-            self.layout.addLayout(hbox_channel)
+        # The same rows as the segmentation channel dialog, over the measured
+        # signals rather than the experiment's channels: a signal model maps its
+        # inputs exactly the way a segmentation model does.
+        self.channel_selection = ModelChannelSelection(
+            required_channels=self.required_channels,
+            available_channels=list(self.parent_window.signals),
+            selected_channels=self.input_config.get("selected_channels"),
+        )
+        self.channel_cbs = self.channel_selection.channel_cbs
+        self.n_channels = len(self.channel_cbs)
+        self.layout.addWidget(self.channel_selection)
 
         # Button to apply the StarDist settings
         self.set_btn = QPushButton("set")

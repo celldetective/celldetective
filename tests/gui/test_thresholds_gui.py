@@ -76,10 +76,13 @@ def ensure_experiment_test():
                 os.path.join(EXPERIMENT_TEST_DIR, "W1", "100", "movie", "sample.tif"),
             )
 
-        # Create minimal config.ini
+        # Create minimal config.ini. `populations` is the key the software reads
+        # (get_experiment_populations splits it on commas): writing the
+        # populations as one key each leaves the control panel unable to open
+        # the experiment at all.
         config_content = """[MovieSettings]
 pxtoum = 0.3112
-len = 3
+len_movie = 3
 shape_x = 660
 shape_y = 682
 movie_prefix = sample
@@ -91,7 +94,7 @@ dead_nuclei_channel = 2
 live_nuclei_channel = 3
 
 [Populations]
-targets = 1
+populations = targets
 
 [DefaultDisplaySettings]
 cmap = viridis
@@ -112,7 +115,20 @@ def app_with_project(qtbot, ensure_experiment_test):
     # Load the ExperimentTest project
     test_app.experiment_path_selection.setText(ensure_experiment_test)
     qtbot.mouseClick(test_app.validate_button, QtCore.Qt.LeftButton)
-    qtbot.wait(INTERACTION_TIME * 5)
+    # The control panel is built via the background loader thread, so wait for it
+    # to actually exist instead of sleeping a fixed amount (which races under load).
+    qtbot.waitUntil(
+        lambda: getattr(test_app, "control_panel", None) is not None, timeout=15000
+    )
+
+    # Give the control panel a window tall enough to lay its contents out. The
+    # offscreen platform reports a small screen, so the panel opens at 440x550
+    # and the layout resolves the overflow by squeezing widgets to zero height.
+    # A zero-height button is still `isVisible()`, but its rect has no interior,
+    # so `QTest.mouseClick` on its centre delivers nothing and the signal never
+    # fires -- a click that misses in silence rather than an error.
+    test_app.control_panel.resize(600, 1000)
+    QApplication.processEvents()
 
     yield test_app
 
@@ -144,29 +160,43 @@ def app_with_project(qtbot, ensure_experiment_test):
 def wizard_from_app(qtbot, app_with_project):
     """Launch ThresholdConfigWizard from the application."""
     app = app_with_project
+    panel = app.control_panel.ProcessPopulations[0]
 
-    # Expand the process panel for targets population
-    qtbot.mouseClick(
-        app.control_panel.ProcessPopulations[0].collapse_btn, QtCore.Qt.LeftButton
+    # Drive the process panel to a known *expanded* state. collapse_btn is a
+    # toggle and the panel's initial state can vary (screen-size-dependent
+    # auto-collapse), so blindly clicking it can collapse an already-open panel
+    # and hide upload_model_btn — making the next click silently miss and leaving
+    # seg_model_loader uncreated (the source of the flaky AttributeError).
+    if panel.ContentsFrame.isHidden():
+        qtbot.mouseClick(panel.collapse_btn, QtCore.Qt.LeftButton)
+    qtbot.waitUntil(lambda: not panel.ContentsFrame.isHidden(), timeout=5000)
+
+    # Open the segmentation model loader (upload_segmentation_model creates
+    # panel.seg_model_loader synchronously). Wait for the button to be hittable,
+    # then for the attribute to appear, rather than sleeping a fixed amount.
+    # `isVisible()` is not enough to know a click will land: a widget squeezed
+    # to zero height by its layout reports visible while having nothing to hit.
+    # Wait for real geometry instead.
+    qtbot.waitUntil(
+        lambda: panel.upload_model_btn.height() > 0
+        and not panel.upload_model_btn.visibleRegion().isEmpty(),
+        timeout=5000,
     )
-    qtbot.wait(INTERACTION_TIME)
-
-    # Open the segmentation model loader
-    qtbot.mouseClick(
-        app.control_panel.ProcessPopulations[0].upload_model_btn, QtCore.Qt.LeftButton
+    qtbot.mouseClick(panel.upload_model_btn, QtCore.Qt.LeftButton)
+    qtbot.waitUntil(
+        lambda: getattr(panel, "seg_model_loader", None) is not None, timeout=5000
     )
-    qtbot.wait(INTERACTION_TIME * 2)
 
-    # Launch the threshold configuration wizard
+    # Launch the threshold configuration wizard (creates seg_model_loader.thresh_wizard).
     qtbot.mouseClick(
-        app.control_panel.ProcessPopulations[
-            0
-        ].seg_model_loader.threshold_config_button,
-        QtCore.Qt.LeftButton,
+        panel.seg_model_loader.threshold_config_button, QtCore.Qt.LeftButton
     )
-    qtbot.wait(INTERACTION_TIME * 3)
+    qtbot.waitUntil(
+        lambda: getattr(panel.seg_model_loader, "thresh_wizard", None) is not None,
+        timeout=10000,
+    )
 
-    wizard = app.control_panel.ProcessPopulations[0].seg_model_loader.thresh_wizard
+    wizard = panel.seg_model_loader.thresh_wizard
 
     yield wizard
 

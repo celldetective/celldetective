@@ -1,24 +1,32 @@
 import gc
 import json
 import os
+from concurrent.futures import ThreadPoolExecutor
 from glob import glob
-from typing import Optional, List, Union, Tuple, Dict, Any
+from typing import Callable, Optional, List, Union, Tuple, Dict, Any
 
 import numpy as np
 from celldetective.utils.io import save_tiff_imagej_compatible
 from imageio import v2 as imageio
 from natsort import natsorted
-from tifffile import imread, TiffFile
+from tifffile import imread, memmap, TiffFile
 
-from celldetective.utils.image_cleaning import (
-    _fix_no_contrast,
-    interpolate_nan_multichannel,
-)
+from celldetective.utils.image_cleaning import interpolate_nan_multichannel
 from celldetective.utils.normalization import normalize_multichannel
 from celldetective import get_logger
 
 import logging
+import threading
 import warnings
+
+# Serializes the native image-decode path of :func:`load_frames`. ``imageio``/
+# ``tifffile`` decoding and ``warnings.catch_warnings`` both mutate process-global
+# state and are not thread-safe; without this lock a background prefetch thread
+# (e.g. the viewer's StackLoader) decoding the same stack concurrently with the
+# main thread corrupts the heap and triggers a Windows access violation
+# (0xC0000005). The lock is process-local, so multiprocessing workers are
+# unaffected, and decoding is not a threaded hot path, so contention is negligible.
+_DECODE_LOCK = threading.Lock()
 
 logger = get_logger(__name__)
 
@@ -131,14 +139,40 @@ def _load_stack_from_series(file_path: str) -> Optional[np.ndarray]:
 
         stack = series.asarray()
 
-        # heuristic to fix missing T axis
-        if "T" not in axes:
-            if "C" in axes and stack.shape[axes.index("C")] > 5:
-                # C is likely T
-                axes = axes.replace("C", "T")
-            elif "Z" in axes and stack.shape[axes.index("Z")] > 5:
-                # Z is likely T
-                axes = axes.replace("Z", "T")
+    return _reshape_series_to_tyxc(stack, axes)
+
+
+def _reshape_series_to_tyxc(stack: Any, axes: str) -> Any:
+    """
+    Reshape an array given in ``axes`` order to ``(T, Y, X, C)``.
+
+    Works on both NumPy and dask arrays (every operation used here dispatches
+    through NumPy's protocol), so the eager and lazy loaders share identical
+    reshape logic.
+
+    Parameters
+    ----------
+    stack : ndarray or dask.array.Array
+        The raw array in ``axes`` order.
+    axes : str
+        Axis labels, e.g. ``'TCYX'``, ``'YX'``, ``'TYX'``.
+
+    Returns
+    -------
+    ndarray or dask.array.Array
+        Stack reshaped to ``(T, Y, X, C)``.
+    """
+
+    axes = axes.upper()
+
+    # heuristic to fix missing T axis
+    if "T" not in axes:
+        if "C" in axes and stack.shape[axes.index("C")] > 5:
+            # C is likely T
+            axes = axes.replace("C", "T")
+        elif "Z" in axes and stack.shape[axes.index("Z")] > 5:
+            # Z is likely T
+            axes = axes.replace("Z", "T")
 
     # Build target axis order: move whatever we have into (T, Y, X, C)
     # Add missing axes as singletons first
@@ -176,10 +210,76 @@ def _load_stack_from_series(file_path: str) -> Optional[np.ndarray]:
     return stack
 
 
+def locate_stack_lazy(position: str, prefix: str = "Aligned") -> Optional[Any]:
+    """
+    Lazily load the movie as a dask array shaped ``(T, Y, X, C)``.
+
+    Backed by a memory-mapped TIFF wrapped in a dask array, so only the frames
+    actually displayed are read from disk — dramatically reducing the time and
+    memory needed to open the viewer on large movies. Reuses
+    :func:`_reshape_series_to_tyxc`, so the axis handling is identical to the
+    eager loader.
+
+    Memory-mapping only works for uncompressed, contiguously stored TIFFs; for
+    anything else (or if dask is unavailable) this returns ``None`` and the
+    caller falls back to the eager :func:`locate_stack`.
+
+    Parameters
+    ----------
+    position : str
+        The position folder containing the ``movie`` subdirectory.
+    prefix : str, optional
+        The movie filename prefix. Default is ``'Aligned'``.
+
+    Returns
+    -------
+    dask.array.Array or None
+        The lazy stack, or ``None`` if lazy loading is unavailable or fails
+        (the caller should fall back to :func:`locate_stack`).
+    """
+
+    if not position.endswith(os.sep):
+        position += os.sep
+
+    stack_path = glob(position + os.sep.join(["movie", f"{prefix}*.tif"]))
+    if not stack_path:
+        return None
+    file_path = stack_path[0].replace("\\", "/")
+
+    try:
+        import dask.array as da
+
+        with TiffFile(file_path) as tif:
+            if not tif.series:
+                return None
+            axes = tif.series[0].axes.upper()
+            if "Y" not in axes or "X" not in axes:
+                return None
+
+        # memmap raises for compressed/non-contiguous TIFFs -> caught below.
+        mm = memmap(file_path)
+        if mm.ndim != len(axes):
+            # Unexpected layout; bail out to the eager path.
+            return None
+
+        # One chunk per leading-axis slice keeps per-frame reads lazy.
+        chunks = (1,) + tuple(mm.shape[1:]) if mm.ndim > 1 else mm.shape
+        arr = da.from_array(mm, chunks=chunks)
+        stack = _reshape_series_to_tyxc(arr, axes)
+        if stack.ndim != 4:
+            return None
+        return stack
+    except Exception as e:
+        logger.debug(f"Lazy stack loading unavailable, falling back to eager: {e}")
+        return None
+
+
 def locate_labels(
     position: str,
     population: str = "target",
     frames: Optional[Union[int, List[int], np.ndarray]] = None,
+    threads: int = 4,
+    progress_callback: Optional[Callable[[int], None]] = None,
 ) -> Union[np.ndarray, List[Optional[np.ndarray]], None]:
     """
     Locate and load label images for a given position and population in an experiment.
@@ -200,6 +300,13 @@ def locate_labels(
             - `None`: Load all frames (default).
             - `int`: Load a single frame, identified by its index.
             - `list` or `numpy.ndarray`: Load multiple specific frames.
+    threads : int, optional
+            Number of worker threads used to read all frames in parallel when
+            ``frames is None``. Values ``> 1`` enable concurrent I/O. The default
+            is `4`. Output ordering is preserved regardless of thread count.
+    progress_callback : callable, optional
+            Called with an int percentage (0-100) after each frame is read when
+            ``frames is None``. The default is None.
 
     Returns
     -------
@@ -248,18 +355,39 @@ def locate_labels(
         )
 
     label_names = [os.path.split(lbl)[-1] for lbl in label_path]
+    name_to_idx = {name: i for i, name in enumerate(label_names)}
 
     if frames is None:
 
-        labels = np.array([imread(i.replace("\\", "/")) for i in label_path])
+        def _read_label(path: str) -> np.ndarray:
+            return imread(path.replace("\\", "/"))
+
+        n = len(label_path)
+        if n == 0:
+            labels = np.array([])
+        elif threads and threads > 1 and n > 1:
+            # Parallel I/O: tifffile decompression releases the GIL, so reading
+            # the per-frame masks concurrently is much faster than serially.
+            results: List[Optional[np.ndarray]] = []
+            with ThreadPoolExecutor(max_workers=threads) as ex:
+                for idx, arr in enumerate(ex.map(_read_label, label_path)):
+                    results.append(arr)
+                    # A False return signals cancellation: stop consuming results.
+                    if progress_callback and progress_callback(int((idx + 1) / n * 100)) is False:
+                        return None
+            labels = np.array(results)
+        else:
+            results = []
+            for idx, path in enumerate(label_path):
+                results.append(_read_label(path))
+                if progress_callback and progress_callback(int((idx + 1) / n * 100)) is False:
+                    return None
+            labels = np.array(results)
 
     elif isinstance(frames, (int, float, np.int_)):
 
         tzfill = str(int(frames)).zfill(4)
-        try:
-            idx = label_names.index(f"{tzfill}.tif")
-        except:
-            idx = -1
+        idx = name_to_idx.get(f"{tzfill}.tif", -1)
 
         if idx == -1:
             labels = None
@@ -270,17 +398,15 @@ def locate_labels(
         labels = []
         for f in frames:
             tzfill = str(int(f)).zfill(4)
-            try:
-                idx = label_names.index(f"{tzfill}.tif")
-            except:
-                idx = -1
+            idx = name_to_idx.get(f"{tzfill}.tif", -1)
 
             if idx == -1:
                 labels.append(None)
             else:
                 labels.append(np.array(imread(label_path[idx].replace("\\", "/"))))
     else:
-        print("Frames argument must be None, int or list...")
+        logger.warning("Frames argument must be None, int or list.")
+        labels = None
 
     return labels
 
@@ -332,9 +458,8 @@ def locate_stack_and_labels(
     if len(labels) < len(stack):
         fix_missing_labels(position, population=population, prefix=prefix)
         labels = locate_labels(position, population=population)
-    assert len(stack) == len(
-        labels
-    ), f"The shape of the stack {stack.shape} does not match with the shape of the labels {labels.shape}"
+    if len(stack) != len(labels):
+        raise ValueError(f"The shape of the stack {stack.shape} does not match with the shape of the labels {labels.shape}")
 
     return stack, labels
 
@@ -414,11 +539,12 @@ def auto_load_number_of_frames(stack_path: str) -> Optional[int]:
                         len_movie = shape[axes.index("C")]
                     else:
                         len_movie = 1
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Strategy 1 (series metadata) failed, falling back: {e}")
 
         # --- Strategy 2: ImageJ tag parsing (existing logic) ---
         if len_movie is None:
+            attr = []
             try:
                 tif_tags = {}
                 for tag in tif.pages[0].tags.values():
@@ -431,8 +557,8 @@ def auto_load_number_of_frames(stack_path: str) -> Optional[int]:
                         "="
                     )[-1]
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Could not parse channel count from ImageJ tags: {e}")
             try:
                 nslices = int(
                     attr[np.argmax([s.startswith("frames") for s in attr])].split("=")[
@@ -442,7 +568,7 @@ def auto_load_number_of_frames(stack_path: str) -> Optional[int]:
                 if nslices > 1:
                     len_movie = nslices
                 else:
-                    break_the_code()
+                    raise ValueError("nslices <= 1, falling back to next strategy")
             except Exception:
                 try:
                     frames = int(
@@ -451,8 +577,8 @@ def auto_load_number_of_frames(stack_path: str) -> Optional[int]:
                         )[-1]
                     )
                     len_movie = frames
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Strategy 2 (ImageJ tag parsing) failed, falling back: {e}")
 
     # --- Strategy 3: shape inference fallback ---
     if len_movie is None:
@@ -580,8 +706,8 @@ def load_frames(
     -----
     - The function uses scikit-image for reading frames and supports multi-frame TIFF stacks.
     - Normalization and scaling are optional and can be customized through function parameters.
-    - A workaround is implemented for frames with uniform pixel values to prevent normalization errors by
-      adding a 'fake' pixel.
+    - Uniform frames are returned unchanged. Callers that need contrast (e.g. deep-learning
+      segmentation) should apply `_fix_no_contrast` themselves.
 
     Examples
     --------
@@ -592,16 +718,19 @@ def load_frames(
     """
 
     try:
-        import warnings
-
-        with warnings.catch_warnings():
-            warnings.filterwarnings(
-                "ignore", message=".*MMStack series is missing files.*"
-            )
-            frames = imageio.imread(stack_path, key=img_nums)
+        # Serialize the global-state-mutating, non-thread-safe decode path so a
+        # background prefetch thread and the main thread never decode concurrently.
+        with _DECODE_LOCK:
+            with warnings.catch_warnings():
+                warnings.filterwarnings(
+                    "ignore", message=".*MMStack series is missing files.*"
+                )
+                if isinstance(img_nums, np.ndarray):
+                    img_nums = img_nums.tolist()
+                frames = imageio.imread(stack_path, key=img_nums)
     except Exception as e:
-        print(
-            f"Error in loading the frame {img_nums} {e}. Please check that the experiment channel information is consistent with the movie being read."
+        logger.error(
+            f"Error in loading the frame {img_nums}: {e}. Please check that the experiment channel information is consistent with the movie being read."
         )
         return None
     try:
@@ -609,19 +738,23 @@ def load_frames(
             frames = frames.astype(float)
             frames[np.isinf(frames)] = np.nan
     except Exception as e:
-        print(e)
+        logger.warning(f"inf check failed: {e}")
 
     frames = _rearrange_multichannel_frame(frames)
+
+    # Order matters and must match training: load_image_dataset rescales (zoom) to
+    # the model's spatial calibration FIRST, then normalize_multichannel is applied.
+    # Doing it in this order keeps the intensity statistics the model was trained on
+    # consistent at inference whenever a calibration mismatch triggers rescaling.
+    if scale is not None:
+        frames = zoom_multiframes(frames.astype(float), scale)
 
     if normalize_input:
         frames = normalize_multichannel(frames.astype(float), **normalize_kwargs)
 
-    if scale is not None:
-        frames = zoom_multiframes(frames.astype(float), scale)
-
-    # add a fake pixel to prevent auto normalization errors on images that are uniform
-    frames = _fix_no_contrast(frames)
-
+    # Return the pixels as they are on disk. Consumers that cannot handle a uniform
+    # frame (segmentation models, contrast sliders) guard for it themselves; faking
+    # contrast here would leak into exported movies, measurements and blank-frame checks.
     return frames  # .astype(dtype)
 
 
@@ -919,10 +1052,12 @@ def _extract_channel_indices(
     """
 
     channel_indices = []
+    channels_lower = [ch.lower() for ch in channels] if channels is not None else None
     for c in required_channels:
         if c != "None" and c is not None:
             try:
-                ch_idx = channels.index(c)
+                c_lower = c.lower()
+                ch_idx = channels_lower.index(c_lower)
                 channel_indices.append(ch_idx)
             except Exception as e:
                 channel_indices.append(None)
@@ -992,21 +1127,22 @@ def load_image_dataset(
     if isinstance(channels, str):
         channels = [channels]
 
-    assert isinstance(channels, list), "Please provide a list of channels. Abort."
+    if not isinstance(channels, list):
+        raise TypeError("Please provide a list of channels. Abort.")
 
     X = []
     Y = []
     files = []
 
     for ds in datasets:
-        print(f"Loading data from dataset {ds}...")
+        logger.info(f"Loading data from dataset {ds}...")
         if not ds.endswith(os.sep):
             ds += os.sep
         img_paths = list(
             set(glob(ds + "*.tif")) - set(glob(ds + f"*_{mask_suffix}.tif"))
         )
         for im in img_paths:
-            print(f"{im=}")
+            logger.debug(f"Processing image: {im}")
             mask_path = os.sep.join(
                 [
                     os.path.split(im)[0],
@@ -1019,7 +1155,7 @@ def load_image_dataset(
                 if image.ndim == 2:
                     image = image[np.newaxis]
                 if image.ndim > 3:
-                    print("Invalid image shape, skipping")
+                    logger.warning("Invalid image shape, skipping")
                     continue
                 mask = imread(mask_path)
                 config_path = im.replace(".tif", ".json")
@@ -1029,25 +1165,31 @@ def load_image_dataset(
                         config = json.load(f)
 
                     existing_channels = config["channels"]
+                    channels_lower = [ch.lower() for ch in channels]
+                    existing_channels_lower = [ch.lower() for ch in existing_channels]
                     intersection = list(
-                        set(list(channels)) & set(list(existing_channels))
+                        set(channels_lower) & set(existing_channels_lower)
                     )
-                    print(f"{existing_channels=} {intersection=}")
+                    logger.debug(f"existing_channels={existing_channels}, intersection={intersection}")
                     if len(intersection) == 0:
-                        print(
+                        logger.warning(
                             "Channels could not be found in the config... Skipping image."
                         )
                         continue
                     else:
                         ch_idx = []
                         for c in channels:
-                            if c in existing_channels:
-                                idx = existing_channels.index(c)
+                            c_lower = c.lower()
+                            if c_lower in existing_channels_lower:
+                                idx = existing_channels_lower.index(c_lower)
                                 ch_idx.append(idx)
                             else:
                                 # For None or missing channel pass black frame
                                 ch_idx.append(np.nan)
                         im_calib = config["spatial_calibration"]
+                else:
+                    logger.warning(f"No config file found for {im}, skipping.")
+                    continue
 
                 ch_idx = np.array(ch_idx)
                 ch_idx_safe = np.copy(ch_idx)
@@ -1058,9 +1200,8 @@ def load_image_dataset(
                 image[np.where(ch_idx != ch_idx)[0], :, :] = 0
 
                 image = np.moveaxis(image, 0, -1)
-                assert (
-                    image.ndim == 3
-                ), "The image has a wrong number of dimensions. Abort."
+                if image.ndim != 3:
+                    raise ValueError("The image has a wrong number of dimensions. Abort.")
 
                 if im_calib != train_spatial_calibration:
                     factor = im_calib / train_spatial_calibration
@@ -1091,7 +1232,6 @@ def load_image_dataset(
 
             files.append(im)
 
-    assert len(X) == len(
-        Y
-    ), "The number of images does not match with the number of masks... Abort."
+    if len(X) != len(Y):
+        raise ValueError("The number of images does not match with the number of masks... Abort.")
     return X, Y, files

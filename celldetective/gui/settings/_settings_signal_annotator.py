@@ -15,7 +15,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, QSize
 from celldetective.gui.base.components import QHSeperationLine
-from superqt import QLabeledDoubleSlider
+from celldetective.gui.base.sliders import QLabeledDoubleSlider
 from celldetective.utils.experiment import extract_experiment_channels
 import json
 import numpy as np
@@ -23,6 +23,9 @@ from superqt.fonticon import icon
 from fonticon_mdi6 import MDI6
 import os
 from celldetective.gui.settings._settings_base import CelldetectiveSettingsPanel
+import logging
+
+logger = logging.getLogger("celldetective")
 
 
 class SettingsSignalAnnotator(CelldetectiveSettingsPanel):
@@ -266,11 +269,11 @@ class SettingsSignalAnnotator(CelldetectiveSettingsPanel):
             )
         instructions.update({"channels": channels})
 
-        print("Instructions: ", instructions)
+        logger.debug("Instructions: %s", instructions)
         file_name = self.instructions_path
         with open(file_name, "w") as f:
             json.dump(instructions, f, indent=4)
-        print("Done.")
+        logger.debug("Done.")
         self.close()
 
     def _load_previous_instructions(self):
@@ -279,11 +282,11 @@ class SettingsSignalAnnotator(CelldetectiveSettingsPanel):
 
         """
 
-        print("Reading instructions..")
+        logger.debug("Reading instructions..")
         if os.path.exists(self.instructions_path):
             with open(self.instructions_path, "r") as f:
                 instructions = json.load(f)
-                print(instructions)
+                logger.debug(instructions)
 
                 if "rgb_mode" in instructions:
                     rgb_mode = instructions["rgb_mode"]

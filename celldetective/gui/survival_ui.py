@@ -179,8 +179,8 @@ class ConfigSurvival(CelldetectiveWidget):
             if hasattr(matplotlib.cm, str(cm).lower()):
                 try:
                     self.cbs[-1].addColormap(cm.lower())
-                except Exception as _:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Could not add colormap '{cm}' to selector: {e}")
 
         main_layout.addLayout(choice_layout)
 
@@ -426,13 +426,16 @@ class ConfigSurvival(CelldetectiveWidget):
 
         if self.population == "pairs":
             self.df = expand_pair_table(self.df)
-            self.df = extract_neighborhood_in_pair_table(
-                self.df,
-                reference_population=self.population_reference,
-                neighbor_population=self.population_neigh,
-                neighborhood_key=self.neighborhood_keys[0],
-                contact_only=True,
-            )
+            if not self.neighborhood_keys:
+                logger.warning("No neighborhood key found for this pair population; skipping neighborhood extraction.")
+            else:
+                self.df = extract_neighborhood_in_pair_table(
+                    self.df,
+                    reference_population=self.population_reference,
+                    neighbor_population=self.population_neigh,
+                    neighborhood_key=self.neighborhood_keys[0],
+                    contact_only=True,
+                )
 
     def compute_survival_functions(self):
         """

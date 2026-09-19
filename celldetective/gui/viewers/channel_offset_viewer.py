@@ -12,7 +12,10 @@ from PyQt5.QtWidgets import (
     QShortcut,
     QMainWindow,
 )
-from superqt import QLabeledDoubleSlider, QLabeledDoubleRangeSlider
+from celldetective.gui.base.sliders import (
+    QLabeledDoubleSlider,
+    QLabeledDoubleRangeSlider,
+)
 
 from celldetective.gui.base.components import QHSeperationLine
 from celldetective.gui.gui_utils import QuickSliderLayout, ThresholdLineEdit
@@ -185,8 +188,10 @@ class ChannelOffsetViewer(StackVisualizer):
     def generate_overlay_channel_cb(self):
         """Generate the overlay channel combobox."""
 
-        assert self.channel_names is not None
-        assert len(self.channel_names) == self.n_channels
+        if self.channel_names is None:
+            raise ValueError("channel_names must be set before generating the overlay channel combobox.")
+        if len(self.channel_names) != self.n_channels:
+            raise ValueError("channel_names length does not match n_channels.")
 
         channel_layout = QHBoxLayout()
         channel_layout.setContentsMargins(15, 0, 15, 0)

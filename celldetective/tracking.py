@@ -34,16 +34,135 @@ from btrack import BayesianTracker
 
 from celldetective.measure import measure_features
 from celldetective.utils.maths import velocity_per_track
+from celldetective.log_manager import get_logger
+
+logger = get_logger(__name__)
 from celldetective.utils.data_cleaning import rename_intensity_column
 from celldetective.utils.data_loaders import interpret_tracking_configuration
 
 import os
 import subprocess
+import sys
 import trackpy as tp
 
 abs_path = os.sep.join(
     [os.path.split(os.path.dirname(os.path.realpath(__file__)))[0], "celldetective"]
 )
+
+
+def _run_btrack_core(
+    new_btrack_objects: list,
+    configuration,
+    columns: list,
+    volume: Tuple[int, int],
+    track_kwargs: dict,
+    optimizer_options: dict,
+) -> Tuple[np.ndarray, dict, dict]:
+    """Run BayesianTracker and return (data, properties, graph).
+
+    Parameters
+    ----------
+    new_btrack_objects : list
+        Localizations converted to bTrack objects.
+    configuration : btrack Configuration
+        Tracker configuration.
+    columns : list of str
+        Feature column names used for visual updates (empty list → motion only).
+    volume : tuple of int
+        (height, width) frame dimensions in pixels.
+    track_kwargs : dict
+        Extra keyword arguments forwarded to ``tracker.track()``.
+    optimizer_options : dict
+        Options forwarded to ``tracker.optimize()``.
+
+    Returns
+    -------
+    data : ndarray
+    properties : dict
+    graph : dict
+    """
+    with BayesianTracker() as tracker:
+        tracker.configure(configuration)
+        if columns:
+            tracking_updates = ["motion", "visual"]
+            tracker.features = columns
+        else:
+            tracking_updates = ["motion"]
+        tracker.append(new_btrack_objects)
+        tracker.volume = ((0, volume[0]), (0, volume[1]), (-1e5, 1e5))
+        tracker.track(tracking_updates=tracking_updates, **track_kwargs)
+        tracker.optimize(options=optimizer_options)
+        data, properties, graph = tracker.to_napari()
+        logger.debug(f"tracker.to_napari() returned data shape: {data.shape}")
+        logger.debug(
+            f"tracker.to_napari() returned properties keys: "
+            f"{list(properties.keys()) if properties else 'None'}"
+        )
+    return data, properties, graph
+
+
+def _run_trackpy_tracking(
+    objects: pd.DataFrame,
+    search_range,
+    memory: int,
+    column_labels: dict,
+) -> Tuple[pd.DataFrame, np.ndarray]:
+    """Link objects with trackpy and return (df, data_array).
+
+    Parameters
+    ----------
+    objects : DataFrame
+        Per-frame object measurements with columns 't', 'x', 'y'.
+    search_range : float or tuple
+        Maximum displacement between frames.
+    memory : int
+        Number of frames an object may disappear and still be linked.
+    column_labels : dict
+        Mapping from logical names to column names in the output DataFrame.
+
+    Returns
+    -------
+    df : DataFrame
+        Trajectory table with bTrack-compatible dummy columns added.
+    data_array : ndarray
+        Array of shape (N, 5) with track/time/z/y/x columns.
+
+    Raises
+    ------
+    ValueError
+        If *search_range* or *memory* is None.
+    """
+    if search_range is None or memory is None:
+        raise ValueError("Please provide a valid search range and memory value for trackpy.")
+    objects = objects.rename(columns={"t": "frame"})
+    logger.debug(f"trackpy objects: {objects.shape}, columns: {list(objects.columns)}")
+    data = tp.link(objects, search_range, memory=memory, link_strategy="auto")
+    data["particle"] = data["particle"] + 1  # force track id to start at 1
+    df = data.rename(
+        columns={
+            "frame": column_labels["time"],
+            "x": column_labels["x"],
+            "y": column_labels["y"],
+            "particle": column_labels["track"],
+        }
+    )
+    df["state"] = 5.0
+    df["generation"] = 0.0
+    df["root"] = 1.0
+    df["parent"] = 1.0
+    df["dummy"] = False
+    df["z"] = 0.0
+    data_array = df[
+        [
+            column_labels["track"],
+            column_labels["time"],
+            "z",
+            column_labels["y"],
+            column_labels["x"],
+        ]
+    ].to_numpy()
+    logger.debug(f"trackpy result shape: {df.shape}")
+    return df, data_array
 
 
 def track(
@@ -136,20 +255,22 @@ def track(
     Examples
     --------
 
-    >>> labels = np.array([[1, 1, 2, 2, 0, 0],
-                                               [1, 1, 1, 2, 2, 0],
-                                               [0, 0, 1, 2, 0, 0]])
-    >>> configuration = cell_config()
-    >>> stack = np.random.rand(3, 6)
-    >>> df = track(labels, configuration, stack=stack, spatial_calibration=0.5)
-    >>> df.head()
+    .. code-block:: python
 
-       TRACK_ID  FRAME  POSITION_Y  POSITION_X
-    0         0      0         0.0         0.0
-    1         0      1         0.0         0.0
-    2         0      2         0.0         0.0
-    3         1      0         0.5         0.5
-    4         1      1         0.5         0.5
+        import numpy as np
+        from celldetective.tracking import track
+
+        labels = np.array([[1, 1, 2, 2, 0, 0],
+                           [1, 1, 1, 2, 2, 0],
+                           [0, 0, 1, 2, 0, 0]])
+        df = track(labels, spatial_calibration=0.5)
+        print(df.head())
+        #    TRACK_ID  FRAME  POSITION_Y  POSITION_X
+        # 0         0      0         0.0         0.0
+        # 1         0      1         0.0         0.0
+        # 2         0      2         0.0         0.0
+        # 3         1      0         0.5         0.5
+        # 4         1      1         0.5         0.5
 
     """
 
@@ -178,8 +299,8 @@ def track(
         for tr in to_remove:
             try:
                 columns.remove(tr)
-            except:
-                print(f"column {tr} could not be found...")
+            except ValueError:
+                logger.debug(f"Column {tr!r} not found in objects, skipping.")
 
         scaler = StandardScaler()
         if columns:
@@ -188,10 +309,13 @@ def track(
             df_temp = pd.DataFrame(x_scaled, columns=columns, index=objects.index)
             objects[columns] = df_temp
         else:
-            print("Warning: no features were passed to bTrack...")
+            logger.warning("No features were passed to bTrack.")
 
         # 2) track the objects
         new_btrack_objects = localizations_to_objects(objects)
+        data, properties, graph = _run_btrack_core(
+            new_btrack_objects, configuration, columns, volume, track_kwargs, optimizer_options
+        )
 
         with BayesianTracker() as tracker:
 
@@ -212,7 +336,7 @@ def track(
             )  # (-1e5, 1e5)
             # print(tracker.volume)
             tracker.track(tracking_updates=tracking_updates, **track_kwargs)
-            tracker.optimize(options=optimizer_options)
+            tracker.optimise(options=optimizer_options)
 
             data, properties, graph = tracker.to_napari()  # ndim=2
             print(f"DEBUG: tracker.to_napari() returned data shape: {data.shape}")
@@ -248,38 +372,11 @@ def track(
     else:
         properties = None
         graph = {}
-        print(f"{objects=} {objects.columns=}")
-        objects = objects.rename(columns={"t": "frame"})
-        if search_range is not None and memory is not None:
-            data = tp.link(objects, search_range, memory=memory, link_strategy="auto")
-        else:
-            print("Please provide a valid search range and memory value...")
+        try:
+            df, data = _run_trackpy_tracking(objects, search_range, memory, column_labels)
+        except ValueError as e:
+            logger.error(f"{e}")
             return None
-        data["particle"] = data["particle"] + 1  # force track id to start at 1
-        df = data.rename(
-            columns={
-                "frame": column_labels["time"],
-                "x": column_labels["x"],
-                "y": column_labels["y"],
-                "particle": column_labels["track"],
-            }
-        )
-        df["state"] = 5.0
-        df["generation"] = 0.0
-        df["root"] = 1.0
-        df["parent"] = 1.0
-        df["dummy"] = False
-        df["z"] = 0.0
-        data = df[
-            [
-                column_labels["track"],
-                column_labels["time"],
-                "z",
-                column_labels["y"],
-                column_labels["x"],
-            ]
-        ].to_numpy()
-        print(f"{df=}")
 
     if btrack_option:
         df = df.merge(pd.DataFrame(properties), left_index=True, right_index=True)
@@ -301,12 +398,9 @@ def track(
     df = write_first_detection_class(df, img_shape=volume, column_labels=column_labels)
 
     if clean_trajectories_kwargs is not None:
-        print(
-            f"DEBUG: Calling clean_trajectories with kwargs: {clean_trajectories_kwargs}"
-        )
-        print(f"DEBUG: df shape before clean: {df.shape}")
+        logger.debug(f"Calling clean_trajectories with kwargs: {clean_trajectories_kwargs}, df shape before: {df.shape}")
         df = clean_trajectories(df.copy(), **clean_trajectories_kwargs)
-        print(f"DEBUG: df shape after clean: {df.shape}")
+        logger.debug(f"df shape after clean_trajectories: {df.shape}")
 
     df.loc[df["status_firstdetection"].isna(), "status_firstdetection"] = 0
     df["ID"] = np.arange(len(df)).astype(int)
@@ -612,7 +706,14 @@ def interpolate_per_track(group_df: pd.DataFrame) -> pd.DataFrame:
 
     """
 
+    # class_id is a mask label, not a continuous quantity: interpolating it would
+    # invent a mask for positions that have none and (with limit_direction="both")
+    # back-fill leading NaNs, making a cell look detected before its first real
+    # mask. It must stay NaN wherever there is no mask.
+    never_interpolate = {"class_id"}
     for c in list(group_df.columns):
+        if c in never_interpolate:
+            continue
         group_df_new_dtype = group_df[c].infer_objects(copy=False)
         if group_df_new_dtype.dtype != "O":
             group_df[c] = group_df_new_dtype.interpolate(
@@ -1317,13 +1418,19 @@ def track_at_position(
 
     pos = pos.replace("\\", "/")
     pos = rf"{pos}"
-    assert os.path.exists(pos), f"Position {pos} is not a valid path."
+    if not os.path.exists(pos):
+        raise FileNotFoundError(f"Position {pos} is not a valid path.")
     if not pos.endswith("/"):
         pos += "/"
 
     script_path = os.sep.join([abs_path, "scripts", "track_cells.py"])
-    cmd = f'python "{script_path}" --pos "{pos}" --mode "{mode}" --threads "{threads}"'
-    subprocess.call(cmd, shell=True)
+    result = subprocess.run(
+        [sys.executable, script_path, "--pos", pos, "--mode", mode, "--threads", str(threads)],
+        check=False,
+    )
+    if result.returncode != 0:
+        logger.error(f"Tracking script exited with code {result.returncode} for position {pos}.")
+        raise RuntimeError(f"Tracking failed for position {pos} (exit code {result.returncode}).")
 
     track_table = pos + os.sep.join(["output", "tables", f"trajectories_{mode}.csv"])
     if return_tracks:
@@ -1359,23 +1466,21 @@ def write_first_detection_class(
     edge_threshold : int, optional
         The distance in pixels from the image edge to consider a detection as near the edge. Default is 20.
     column_labels : dict, optional
-        A dictionary mapping logical column names to actual column names in `df`. Keys include:
-
-        - `'track'`: The column indicating the track ID (default: `"TRACK_ID"`).
-        - `'time'`: The column indicating the frame/time (default: `"FRAME"`).
-        - `'x'`: The column indicating the X-coordinate (default: `"POSITION_X"`).
-        - `'y'`: The column indicating the Y-coordinate (default: `"POSITION_Y"`).
+        A dictionary mapping logical column names to actual column names in `df`.
+        Keys include: `'track'` (default: `"TRACK_ID"`), `'time'` (default: `"FRAME"`),
+        `'x'` (default: `"POSITION_X"`), and `'y'` (default: `"POSITION_Y"`).
 
     Returns
     -------
     pandas.DataFrame
         The input DataFrame `df` with two additional columns:
-        - `'class_firstdetection'`: A class assigned based on detection status:
-            - `0`: Valid detection not near the edge and not at the initial frame.
-            - `2`: Detection near the edge, at the initial frame, or no detection available.
-        - `'t_firstdetection'`: The adjusted first detection time (in frame units):
-            - `-1`: Indicates no valid detection or detection near the edge.
-            - A float value representing the adjusted first detection time otherwise.
+
+        *   `'class_firstdetection'`: A class assigned based on detection status:
+            *   `0`: Valid detection not near the edge and not at the initial frame.
+            *   `2`: Detection near the edge, at the initial frame, or no detection available.
+        *   `'t_firstdetection'`: The adjusted first detection time (in frame units):
+            *   `-1`: Indicates no valid detection or detection near the edge.
+            *   A float value representing the adjusted first detection time otherwise.
 
     Notes
     -----

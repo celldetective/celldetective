@@ -114,7 +114,13 @@ class TestChannelOffsetViewer:
             parent_window=mock_parent_window,
         )
         qtbot.addWidget(viewer)
-        viewer.show()
+        # Deliberately not shown. These assertions only read state the
+        # constructor set, so showing adds no coverage -- but it puts a real
+        # top-level window in front of pytest-qt's forced processEvents(), and
+        # on the Windows CI runner that combination faults inside Qt's own
+        # event dispatch (access violation, no Python frame, first test of the
+        # file). test_base_viewer.py still exercises show() on this same base
+        # class on the same runners.
 
         assert viewer.n_channels == 2
         assert viewer.channel_names == ["Ch1", "Ch2"]
@@ -190,7 +196,13 @@ class TestContourViewer:
             stack=dummy_labels_3d, labels=dummy_labels_3d, initial_edge=5
         )
         qtbot.addWidget(viewer)
-        viewer.show()
+        # Deliberately not shown. These assertions only read state the
+        # constructor set, so showing adds no coverage -- but it puts a real
+        # top-level window in front of pytest-qt's forced processEvents(), and
+        # on the Windows CI runner that combination faults inside Qt's own
+        # event dispatch (access violation, no Python frame, first test of the
+        # file). test_base_viewer.py still exercises show() on this same base
+        # class on the same runners.
 
         assert viewer.edge_size == 5
         assert hasattr(viewer, "im_mask")
@@ -242,17 +254,24 @@ class TestSizeViewer:
 
     def test_initialization(self, qtbot):
         """Test initialization (no stack needed strictly, but base needs it)."""
-        # Base viewer needs at least something.
-        # StackVisualizer __init__ calls load_stack which handles None?
-        # Actually StackVisualizer expects data.
-        dummy_stack = np.zeros((1, 100, 100), dtype=np.uint8)
+        # Use a rectangular stack (height=150, width=100)
+        dummy_stack = np.zeros((1, 150, 100), dtype=np.uint8)
 
         viewer = CellSizeViewer(stack=dummy_stack, initial_diameter=20)
         qtbot.addWidget(viewer)
-        viewer.show()
+        # Deliberately not shown. These assertions only read state the
+        # constructor set, so showing adds no coverage -- but it puts a real
+        # top-level window in front of pytest-qt's forced processEvents(), and
+        # on the Windows CI runner that combination faults inside Qt's own
+        # event dispatch (access violation, no Python frame, first test of the
+        # file). test_base_viewer.py still exercises show() on this same base
+        # class on the same runners.
 
         assert viewer.diameter == 20
         assert hasattr(viewer, "circ")
+        # The center should be (width // 2, height // 2) which is (50, 75)
+        # and not (75, 50).
+        assert viewer.circ.center == (50.0, 75.0)
 
     def test_diameter_change(self, qtbot):
         """Test changing diameter slider."""
@@ -300,7 +319,13 @@ class TestThresholdViewer:
             stack=dummy_stack_4d, initial_threshold=10.0
         )
         qtbot.addWidget(viewer)
-        viewer.show()
+        # Deliberately not shown. These assertions only read state the
+        # constructor set, so showing adds no coverage -- but it puts a real
+        # top-level window in front of pytest-qt's forced processEvents(), and
+        # on the Windows CI runner that combination faults inside Qt's own
+        # event dispatch (access violation, no Python frame, first test of the
+        # file). test_base_viewer.py still exercises show() on this same base
+        # class on the same runners.
 
         assert viewer.thresh == 10.0
         assert hasattr(viewer, "mask")

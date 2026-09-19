@@ -1,7 +1,10 @@
 import collections
+import logging
 from typing import Optional, Union, Tuple, List, Any, Iterable, Dict
 
 import numpy as np
+
+logger = logging.getLogger("celldetective")
 
 
 def consume(iterator: Iterable[Any]) -> None:
@@ -38,7 +41,8 @@ def axes_check_and_normalize(
         Whether to return the allowed axes string. Default is False.
     """
     allowed = "STCZYX"
-    assert axes is not None, ValueError("axis cannot be None.")
+    if axes is None:
+        raise ValueError("axis cannot be None.")
     axes = str(axes).upper()
     consume(a in allowed for a in axes)
     disallowed is None or consume(a not in disallowed for a in axes)
@@ -312,11 +316,91 @@ def _estimate_scale_factor(
     epsilon = 0.05
     if scale is not None:
         if not np.all([scale >= (1 - epsilon), scale <= (1 + epsilon)]):
-            print(
+            logger.info(
                 f"Each frame will be rescaled by a factor {scale} to match with the model training data..."
             )
         else:
             scale = None
+    return scale
+
+
+#: Fraction by which a frame may differ from the model's sampling before it is
+#: worth resampling at all. Shared by :func:`_estimate_scale_factor` and
+#: :func:`_combined_scale_factor` so "close enough to 1" means one thing.
+_SCALE_EPSILON = 0.05
+
+
+def _combined_scale_factor(
+    spatial_calibration: Optional[float],
+    required_spatial_calibration: Optional[float],
+    cell_size: Optional[float] = None,
+    target_cell_size: Optional[float] = None,
+) -> Optional[float]:
+    """
+    The single factor a frame must be resized by before it reaches a network.
+
+    Two corrections decide it: the pixel sizes have to match (`spatial_calibration`
+    against `required_spatial_calibration`), and the objects have to arrive at the
+    size the network was trained on (`cell_size` against `target_cell_size`). They
+    multiply.
+
+    Applying :func:`_estimate_scale_factor` first and multiplying afterwards is
+    what this replaces, and it was wrong in one corner: that function collapses a
+    ratio within 5% of 1 to None, meaning "not worth resampling for". That
+    judgement is only true of the calibration correction *on its own*. Once a
+    cell-size correction is also being applied the frame is being resampled
+    regardless, and dropping the calibration factor silently biases the result by
+    up to 5% -- entirely depending on how close the model's own calibration
+    happens to sit to the images'. The two ratios are combined here first, and the
+    "close enough to 1" test is applied once, to the number actually used.
+
+    Parameters
+    ----------
+    spatial_calibration : float or None
+            The images' pixel size. None when unknown, which leaves the
+            calibration correction out.
+    required_spatial_calibration : float or None
+            The pixel size the model was trained at.
+    cell_size : float or None, optional
+            The object size the model was trained on, in microns.
+    target_cell_size : float or None, optional
+            The object size in these images, in microns. Both sizes are needed
+            for the correction; either one missing leaves it out.
+
+    Returns
+    -------
+    float or None
+            The factor to resize by, or None when the frame is already close
+            enough to what the model expects to leave alone.
+
+    Examples
+    --------
+    >>> _combined_scale_factor(0.5, 0.25)
+    2.0
+    >>> _combined_scale_factor(0.2, 0.2075, 6.225, 20.0) is None
+    False
+    """
+
+    scale = 1.0
+    corrected = False
+
+    if spatial_calibration is not None and required_spatial_calibration is not None:
+        scale *= spatial_calibration / required_spatial_calibration
+        corrected = True
+
+    if cell_size is not None and target_cell_size is not None:
+        scale *= cell_size / target_cell_size
+        corrected = True
+
+    if not corrected:
+        return None
+
+    if (1 - _SCALE_EPSILON) <= scale <= (1 + _SCALE_EPSILON):
+        return None
+
+    logger.info(
+        f"Each frame will be rescaled by a factor {scale} to match with the model training data..."
+    )
     return scale
 
 
@@ -379,3 +463,101 @@ def threshold_image(
     if fill_holes:
         binary = ndi.binary_fill_holes(binary.astype(int))
     return binary
+
+
+def pad_to_patch_size(
+    x: np.ndarray, y: Optional[np.ndarray] = None, patch_h: int = 256, patch_w: int = 256
+) -> Tuple[np.ndarray, Optional[np.ndarray], bool, Tuple[int, int]]:
+    """
+    Pad image x and optionally label y to match patch_h and patch_w if they are smaller.
+
+    Parameters
+    ----------
+    x : ndarray
+        Input image.
+    y : ndarray, optional
+        Input label mask.
+    patch_h : int
+        Target patch height.
+    patch_w : int
+        Target patch width.
+
+    Returns
+    -------
+    x_padded : ndarray
+        Padded image.
+    y_padded : ndarray or None
+        Padded label mask (if y was provided).
+    padded : bool
+        True if padding was applied, False otherwise.
+    offsets : tuple of int
+        ``(pad_h_top, pad_w_left)``, the top/left offset of the original image
+        within the padded array. ``(0, 0)`` when no padding was applied. Use
+        these to crop a result back to the original size instead of recomputing
+        the centering math at the call site.
+    """
+    h, w = x.shape[:2]
+    if h < patch_h or w < patch_w:
+        pad_h = max(0, patch_h - h)
+        pad_w = max(0, patch_w - w)
+        pad_h_top = pad_h // 2
+        pad_h_bottom = pad_h - pad_h_top
+        pad_w_left = pad_w // 2
+        pad_w_right = pad_w - pad_w_left
+
+        pad_width_x = [(pad_h_top, pad_h_bottom), (pad_w_left, pad_w_right)]
+        if x.ndim > 2:
+            pad_width_x += [(0, 0)] * (x.ndim - 2)
+
+        x = np.pad(
+            x,
+            pad_width_x,
+            mode="constant",
+            constant_values=0.0,
+        )
+        if y is not None:
+            y = np.pad(
+                y,
+                ((pad_h_top, pad_h_bottom), (pad_w_left, pad_w_right)),
+                mode="constant",
+                constant_values=0,
+            )
+        return x, y, True, (pad_h_top, pad_w_left)
+    return x, y, False, (0, 0)
+
+
+def pad_dataset_to_patch_size(
+    X: List[np.ndarray], Y: List[np.ndarray], patch_h: int, patch_w: int
+) -> Tuple[List[np.ndarray], List[np.ndarray], int]:
+    """
+    Pad a dataset of images X and label masks Y to match patch_h and patch_w if they are smaller.
+
+    Parameters
+    ----------
+    X : List[ndarray]
+        List of input images.
+    Y : List[ndarray]
+        List of label masks.
+    patch_h : int
+        Target patch height.
+    patch_w : int
+        Target patch width.
+
+    Returns
+    -------
+    X_padded : List[ndarray]
+        Padded images.
+    Y_padded : List[ndarray]
+        Padded label masks.
+    padded_count : int
+        Number of images/labels padded.
+    """
+    X_padded, Y_padded = [], []
+    padded_count = 0
+    for x, y in zip(X, Y):
+        xp, yp, padded, _ = pad_to_patch_size(x, y, patch_h, patch_w)
+        X_padded.append(xp)
+        Y_padded.append(yp)
+        if padded:
+            padded_count += 1
+    return X_padded, Y_padded, padded_count

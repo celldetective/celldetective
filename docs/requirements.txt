@@ -1,0 +1,5 @@
+# Read the Docs build environment: the package requirements, plus the pins the
+# docs build needs. sphinx-hoverxref breaks on Sphinx 9 (config values are no
+# longer tuples), and the docs are verified with Sphinx 7.4.
+-r ../requirements.txt
+sphinx>=7.4,<8

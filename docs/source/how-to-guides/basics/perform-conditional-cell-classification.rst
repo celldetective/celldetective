@@ -11,7 +11,7 @@ This guide shows you how classify cells from their features using conditional ex
 
 2. Expand the block associated with your :term:`cell population` of interest. Click on the triple dots icon in the *MEASURE* section to launch the classifier utility.
 
-3. Name the classification to create. For **dynamic data** this becomes the name of the event. For **static** data, it is the name of the :term:`group`.
+3. Name the classification to create. For **dynamic data** this becomes the name of the event. For **static** data, it is the name of the :term:`characteristic group`.
 
 4. Select two features that can clusterize the cells (e.g. area and adhesion channel intensity in a spreading classification).
 
@@ -40,7 +40,7 @@ This guide shows you how classify cells from their features using conditional ex
 9. **Apply (Static vs. Time-Correlated):**
 
     - **Static Group (Default):**
-      If **Time correlated** is unchecked, clicking **Apply** creates a standard :term:`group` or status column. This is a frame-by-frame classification.
+      If **Time correlated** is unchecked, clicking **Apply** creates a standard **group** or status column. This is a frame-by-frame classification.
 
     - **Time Correlated Event (For Tracked Data):**
       If your data is tracked (contains ``TRACK_ID``), you can check **Time correlated**. This fits a sigmoid to the binary signal of each track to detect *when* an event happens (e.g., cell death, specific state entry).

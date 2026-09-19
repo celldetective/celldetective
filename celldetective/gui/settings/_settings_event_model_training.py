@@ -1,6 +1,6 @@
 from pathlib import Path
 from typing import Optional
-from time import time
+import time
 from PyQt5.QtWidgets import (
     QMessageBox,
     QComboBox,
@@ -12,11 +12,14 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
     QLabel,
     QHBoxLayout,
-    QPushButton, QMainWindow,
+    QPushButton,
+    QMainWindow,
 )
 from PyQt5.QtCore import Qt, QSize, QThread
 from celldetective.gui.base.channel_norm_generator import ChannelNormGenerator
-from superqt import QLabeledDoubleSlider, QLabeledSlider, QSearchableComboBox
+from celldetective.gui.base.components import BrowseButton
+from superqt import QLabeledSlider, QSearchableComboBox
+from celldetective.gui.base.sliders import QLabeledDoubleSlider
 from superqt.fonticon import icon
 from fonticon_mdi6 import MDI6
 import numpy as np
@@ -34,6 +37,7 @@ from celldetective.utils.model_getters import get_signal_datasets_list
 from celldetective.utils.model_loaders import locate_signal_dataset
 from celldetective import get_logger
 import multiprocessing
+from celldetective.gui.base.threads import start_tracked
 
 logger = get_logger()
 
@@ -48,9 +52,9 @@ class BackgroundLoader(QThread):
             )
 
             self.TrainSignalModelProcess = TrainSignalModelProcess
+            logger.info("Librairies loaded...")
         except Exception:
             logger.error("Librairies not loaded...")
-        logger.info("Librairies loaded...")
 
 
 class SettingsEventDetectionModelTraining(CelldetectiveSettingsPanel):
@@ -110,7 +114,15 @@ class SettingsEventDetectionModelTraining(CelldetectiveSettingsPanel):
         self.setMinimumWidth(new_width)
 
         self.bg_loader = BackgroundLoader()
-        self.bg_loader.start()
+        start_tracked(self.bg_loader)
+
+    def closeEvent(self, event) -> None:
+        """Stop background loader on close."""
+        if self.bg_loader.isRunning():
+            self.bg_loader.requestInterruption()
+            self.bg_loader.quit()
+            self.bg_loader.wait(3000)
+        super().closeEvent(event)
 
     def _add_to_layout(self):
         """Add widgets to the layout."""
@@ -250,7 +262,9 @@ class SettingsEventDetectionModelTraining(CelldetectiveSettingsPanel):
 
         train_data_layout = QHBoxLayout()
         train_data_layout.addWidget(QLabel("Training data: "), 30)
-        self.select_data_folder_btn = QPushButton("Choose folder")
+        self.select_data_folder_btn = BrowseButton(
+            "Choose folder", tooltip="Locate the training set."
+        )
         self.select_data_folder_btn.clicked.connect(self.show_dialog_dataset)
         self.data_folder_label = QLabel("No folder chosen")
         train_data_layout.addWidget(self.select_data_folder_btn, 35)
@@ -338,7 +352,9 @@ class SettingsEventDetectionModelTraining(CelldetectiveSettingsPanel):
         pretrained_layout.setContentsMargins(0, 0, 0, 0)
         pretrained_layout.addWidget(QLabel("Pretrained model: "), 30)
 
-        self.browse_pretrained_btn = QPushButton("Choose folder")
+        self.browse_pretrained_btn = BrowseButton(
+            "Choose folder", tooltip="Locate the pretrained model."
+        )
         self.browse_pretrained_btn.clicked.connect(self.show_dialog_pretrained)
         pretrained_layout.addWidget(self.browse_pretrained_btn, 35)
 
@@ -556,15 +572,17 @@ class SettingsEventDetectionModelTraining(CelldetectiveSettingsPanel):
     def load_pretrained_config(self):
         """Load configuration from the pretrained model."""
 
-        f = open(os.sep.join([self.pretrained_model, "config_input.json"]))
-        data = json.load(f)
+        with open(os.sep.join([self.pretrained_model, "config_input.json"])) as f:
+            data = json.load(f)
         channels = data["channels"]
         signal_length = data["model_signal_length"]
         try:
             label = data["label"]
             self.class_name_le.setText(label)
-        except:
-            pass
+        except KeyError:
+            logger.debug(
+                "Model config has no 'label' field; class name not pre-filled."
+            )
         self.model_length_slider.setValue(int(signal_length))
         self.model_length_slider.setEnabled(False)
 
@@ -668,7 +686,7 @@ class SettingsEventDetectionModelTraining(CelldetectiveSettingsPanel):
 
         try:
             lr = float(self.lr_le.text().replace(",", "."))
-        except:
+        except ValueError:
             msg_box = QMessageBox()
             msg_box.setIcon(QMessageBox.Warning)
             msg_box.setText("Invalid value encountered for the learning rate.")

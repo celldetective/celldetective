@@ -177,14 +177,14 @@ def train_test_split(
             y2_val = data_class[chunks[1]]
 
         if data_class is not None:
-            print(
+            logger.info(
                 f"classes in train set: {np.sort(np.argmax(np.unique(y2_train,axis=0),axis=1))}; classes in validation set: {np.sort(np.argmax(np.unique(y2_val,axis=0),axis=1))}"
             )
             same_class_test = np.array_equal(
                 np.sort(np.argmax(np.unique(y2_train, axis=0), axis=1)),
                 np.sort(np.argmax(np.unique(y2_val, axis=0), axis=1)),
             )
-            print(f"Check that classes are found in all sets: {same_class_test}...")
+            logger.info(f"Check that classes are found in all sets: {same_class_test}...")
         else:
             same_class_test = True
 
@@ -210,6 +210,6 @@ def train_test_split(
         else:
             continue
 
-    raise Exception(
+    raise ValueError(
         "Some classes are missing from the train or validation set... Abort."
     )

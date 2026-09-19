@@ -31,6 +31,7 @@ import math
 import numpy as np
 import os
 import subprocess
+import sys
 from math import ceil
 from functools import reduce
 from inspect import getmembers, isfunction
@@ -162,13 +163,11 @@ def measure(
     do_features = True
 
     # Check that conditions are satisfied to perform measurements
-    assert (labels is not None) or (
-        stack is not None
-    ), "Please pass a stack and/or labels... Abort."
-    if (labels is not None) * (stack is not None):
-        assert (
-            labels.shape == stack.shape[:-1]
-        ), f"Shape mismatch between the stack of shape {stack.shape} and the segmentation {labels.shape}..."
+    if (labels is None) and (stack is None):
+        raise ValueError("Please pass a stack and/or labels... Abort.")
+    if (labels is not None) and (stack is not None):
+        if labels.shape != stack.shape[:-1]:
+            raise ValueError(f"Shape mismatch between the stack of shape {stack.shape} and the segmentation {labels.shape}...")
 
     # Condition to compute features
     if labels is None:
@@ -216,6 +215,14 @@ def measure(
     if trajectories is None:
         do_features = True
         features += ["centroid"]
+        # When measuring without a trajectory table, cells get a temporary per-frame
+        # integer ID instead of a persistent TRACK_ID.
+        column_labels = {
+            "track": "ID",
+            "time": column_labels["time"],
+            "x": column_labels["x"],
+            "y": column_labels["y"],
+        }
     else:
         if clear_previous:
             trajectories = remove_trajectory_measurements(trajectories, column_labels)
@@ -263,30 +270,6 @@ def measure(
                     inplace=True,
                 )
                 positions_at_t["FRAME"] = int(t)
-                column_labels = {
-                    "track": "ID",
-                    "time": column_labels["time"],
-                    "x": column_labels["x"],
-                    "y": column_labels["y"],
-                }
-
-        center_of_mass_x_cols = [
-            c for c in list(positions_at_t.columns) if c.endswith("centre_of_mass_x")
-        ]
-        center_of_mass_y_cols = [
-            c for c in list(positions_at_t.columns) if c.endswith("centre_of_mass_y")
-        ]
-        for c in center_of_mass_x_cols:
-            positions_at_t.loc[:, c.replace("_x", "_POSITION_X")] = (
-                positions_at_t[c] + positions_at_t["POSITION_X"]
-            )
-        for c in center_of_mass_y_cols:
-            positions_at_t.loc[:, c.replace("_y", "_POSITION_Y")] = (
-                positions_at_t[c] + positions_at_t["POSITION_Y"]
-            )
-        positions_at_t = positions_at_t.drop(
-            columns=center_of_mass_x_cols + center_of_mass_y_cols
-        )
 
         # Isotropic measurements (circle, ring)
         if do_iso_intensities:
@@ -300,26 +283,23 @@ def measure(
                 verbose=False,
             )
 
-        if do_iso_intensities * do_features:
+        if do_iso_intensities and do_features:
             measurements_at_t = iso_table.merge(
                 feature_table, how="outer", on="class_id"
             )
-        elif do_iso_intensities * (not do_features):
+        elif do_iso_intensities and not do_features:
             measurements_at_t = iso_table
-        elif do_features * (trajectories is not None):
+        elif do_features and trajectories is not None:
             measurements_at_t = positions_at_t.merge(
                 feature_table, how="outer", on="class_id"
             )
-        elif do_features * (trajectories is None):
+        elif do_features and trajectories is None:
             measurements_at_t = positions_at_t
 
-        try:
-            measurements_at_t["radial_distance"] = np.sqrt(
-                (measurements_at_t[column_labels["x"]] - img.shape[0] / 2) ** 2
-                + (measurements_at_t[column_labels["y"]] - img.shape[1] / 2) ** 2
-            )
-        except Exception as e:
-            logger.error(f"{e=}")
+        measurements_at_t = center_of_mass_to_abs_coordinates(measurements_at_t)
+        measurements_at_t = measure_radial_distance_to_center(
+            measurements_at_t, volume=img.shape if img is not None else None, column_labels=column_labels
+        )
 
         timestep_dataframes.append(measurements_at_t)
 
@@ -328,7 +308,11 @@ def measure(
         measurements = measurements.sort_values(
             by=[column_labels["track"], column_labels["time"]]
         )
+        n_before = len(measurements)
         measurements = measurements.dropna(subset=[column_labels["track"]])
+        n_dropped = n_before - len(measurements)
+        if n_dropped > 0:
+            logger.warning(f"Dropped {n_dropped} row(s) with NaN {column_labels['track']} after measurement.")
     else:
         measurements["ID"] = np.arange(len(measurements))
 
@@ -370,8 +354,8 @@ def write_first_detection_class(
             indices = track_group.index
             area = track_group["area"].values
             timeline = track_group[column_labels["time"]].values
-            if np.any(area == area):
-                t_first = timeline[area == area][0]
+            if np.any(~np.isnan(area)):
+                t_first = timeline[~np.isnan(area)][0]
                 cclass = 1
                 if t_first == 0:
                     t_first = 0
@@ -410,6 +394,124 @@ def drop_tonal_features(features: List[str]) -> List[str]:
         if "intensity" in f:
             feat2.remove(f)
     return feat2
+
+
+def _run_spot_detection(
+    img: np.ndarray,
+    label: np.ndarray,
+    spot_detection: dict,
+    channels,
+) -> Optional[pd.DataFrame]:
+    """Run blob detection for a single spot-detection configuration.
+
+    Parameters
+    ----------
+    img : ndarray
+        Multichannel image (H, W, C).
+    label : ndarray
+        Segmentation label image.
+    spot_detection : dict
+        Spot detection settings including 'channel', 'diameter', 'threshold',
+        and optionally 'image_preprocessing'.
+    channels : list or array-like
+        Channel names matching the last axis of *img*.
+
+    Returns
+    -------
+    DataFrame or None
+        Spot properties per labelled cell, or None when the target channel is
+        not found in *channels*.
+    """
+    detection_channel = spot_detection.get("channel")
+    channels_list = list(channels) if not isinstance(channels, list) else channels
+    if detection_channel not in channels_list:
+        logger.warning(
+            f"Spot detection channel '{detection_channel}' not found in channels."
+        )
+        return None
+    ind = channels_list.index(detection_channel)
+    if "image_preprocessing" not in spot_detection:
+        spot_detection.update({"image_preprocessing": None})
+    return blob_detection(
+        img,
+        label,
+        diameter=spot_detection["diameter"],
+        threshold=spot_detection["threshold"],
+        channel_name=detection_channel,
+        target_channel=ind,
+        image_preprocessing=spot_detection["image_preprocessing"],
+    )
+
+
+def _apply_image_normalization(
+    img: np.ndarray,
+    label: np.ndarray,
+    normalisation_list: list,
+    channels,
+) -> None:
+    """Apply per-channel background correction in-place.
+
+    Parameters
+    ----------
+    img : ndarray
+        Multichannel image (H, W, C) modified in-place.
+    label : ndarray
+        Segmentation label image (used for local normalization).
+    normalisation_list : list of dict
+        Each entry describes a normalization operation with keys
+        'target_channel', 'correction_type', and model/distance/clip params.
+    channels : list or array-like
+        Channel names matching the last axis of *img*.
+    """
+    channels_list = list(channels) if not isinstance(channels, list) else channels
+    for norm in normalisation_list:
+        target = norm.get("target_channel")
+        if target not in channels_list:
+            logger.warning(f"Normalization target '{target}' not found in channels.")
+            continue
+        ind = channels_list.index(target)
+        if norm["correction_type"] == "local":
+            img[:, :, ind] = normalise_by_cell(
+                img[:, :, ind].copy(),
+                label,
+                distance=int(norm["distance"]),
+                model=norm["model"],
+                operation=norm["operation"],
+                clip=norm["clip"],
+            )
+        else:
+            img[:, :, ind] = field_correction(
+                img[:, :, ind].copy(),
+                threshold=norm["threshold_on_std"],
+                operation=norm["operation"],
+                model=norm["model"],
+                clip=norm["clip"],
+            )
+
+
+def _get_border_suffix(d) -> str:
+    """Return the column-name suffix for a border-distance measurement.
+
+    Parameters
+    ----------
+    d : int, float, or str
+        Distance specification (scalar or range string such as '10-20').
+
+    Returns
+    -------
+    str
+        Suffix of the form ``_edge_<d>px`` or ``_slice_<d>px``.
+    """
+    d_str = str(d)
+    d_clean = (
+        d_str.replace("(", "")
+        .replace(")", "")
+        .replace(", ", "_")
+        .replace(",", "_")
+    )
+    if "-" in d_str or "," in d_str:
+        return f"_slice_{d_clean.replace('-', 'm')}px"
+    return f"_edge_{d_clean}px"
 
 
 def measure_features(
@@ -487,67 +589,14 @@ def measure_features(
             channels = [f"intensity-{k}" for k in range(img.shape[-1])]
 
         if img.ndim == 3 and channels is not None:
-            assert (
-                len(channels) == img.shape[-1]
-            ), "Mismatch between the provided channel names and the shape of the image"
+            if len(channels) != img.shape[-1]:
+                raise ValueError("Mismatch between the provided channel names and the shape of the image")
 
         if spot_detection is not None:
-            detection_channel = spot_detection.get("channel")
-            channels_list = (
-                list(channels) if not isinstance(channels, list) else channels
-            )
-            if detection_channel in channels_list:
-                ind = channels_list.index(detection_channel)
-                if "image_preprocessing" not in spot_detection:
-                    spot_detection.update({"image_preprocessing": None})
-
-                df_spots = blob_detection(
-                    img,
-                    label,
-                    diameter=spot_detection["diameter"],
-                    threshold=spot_detection["threshold"],
-                    channel_name=detection_channel,
-                    target_channel=ind,
-                    image_preprocessing=spot_detection["image_preprocessing"],
-                )
-            else:
-                logger.warning(
-                    f"Spot detection channel '{detection_channel}' not found in channels."
-                )
-                df_spots = None
+            df_spots = _run_spot_detection(img, label, spot_detection, channels)
 
         if normalisation_list:
-            for norm in normalisation_list:
-                target = norm.get("target_channel")
-                channels_list = (
-                    list(channels) if not isinstance(channels, list) else channels
-                )
-                if target in channels_list:
-                    ind = channels_list.index(target)
-
-                    if norm["correction_type"] == "local":
-                        normalised_image = normalise_by_cell(
-                            img[:, :, ind].copy(),
-                            label,
-                            distance=int(norm["distance"]),
-                            model=norm["model"],
-                            operation=norm["operation"],
-                            clip=norm["clip"],
-                        )
-                        img[:, :, ind] = normalised_image
-                    else:
-                        corrected_image = field_correction(
-                            img[:, :, ind].copy(),
-                            threshold=norm["threshold_on_std"],
-                            operation=norm["operation"],
-                            model=norm["model"],
-                            clip=norm["clip"],
-                        )
-                        img[:, :, ind] = corrected_image
-                else:
-                    logger.warning(
-                        f"Normalization target '{target}' not found in channels."
-                    )
+            _apply_image_normalization(img, label, normalisation_list, channels)
 
     # Initialize extra properties list and name check list
     extra = []  # Ensure 'extra' is defined regardless of import success
@@ -596,6 +645,12 @@ def measure_features(
 
     df_props = pd.DataFrame(props)
 
+    if spot_detection is not None and df_spots is None:
+        logger.warning(
+            "Spot detection was configured but returned no results (channel not found or detection failed). "
+            "Spot columns will be absent from the output."
+        )
+
     if spot_detection is not None and df_spots is not None:
         df_props = df_props.merge(
             df_spots, how="outer", on="label", suffixes=("_delme", "")
@@ -641,33 +696,6 @@ def measure_features(
         # Always include label for merging
         clean_intensity_features.append("label")
 
-        # Helper to format suffix
-        def get_suffix(d: Union[int, float, str]) -> str:
-            """
-            Formats the suffix for column names based on distance.
-
-            Parameters
-            ----------
-            d : int or float or str
-                The distance value.
-
-            Returns
-            -------
-            str
-                The formatted suffix string.
-            """
-            d_str = str(d)
-            d_clean = (
-                d_str.replace("(", "")
-                .replace(")", "")
-                .replace(", ", "_")
-                .replace(",", "_")
-            )
-            if "-" in d_str or "," in d_str:
-                return f"_slice_{d_clean.replace('-', 'm')}px"
-            else:
-                return f"_edge_{d_clean}px"
-
         # Ensure border_dist is a list for uniform processing
         dist_list = (
             [border_dist] if isinstance(border_dist, (int, float, str)) else border_dist
@@ -690,7 +718,7 @@ def measure_features(
             rename_dict = {}
             for c in df_props_border_d.columns:
                 if "intensity" in c:
-                    rename_dict[c] = c + get_suffix(d)
+                    rename_dict[c] = c + _get_border_suffix(d)
 
             df_props_border_d = df_props_border_d.rename(columns=rename_dict)
             df_props_border_list.append(df_props_border_d)
@@ -717,7 +745,6 @@ def measure_features(
                 ]
         except Exception as e:
             logger.error(f"Haralick computation failed: {e}")
-            pass
 
     if channels is not None:
         df_props = rename_intensity_column(df_props, channels)
@@ -808,12 +835,10 @@ def compute_haralick_features(
 
     """
 
-    assert (img.ndim == 2) | (
-        img.ndim == 3
-    ), f"Invalid image shape to compute the Haralick features. Expected YXC, got {img.shape}..."
-    assert (
-        img.shape[:2] == labels.shape
-    ), f"Mismatch between image shape {img.shape} and labels shape {labels.shape}"
+    if img.ndim not in (2, 3):
+        raise ValueError(f"Invalid image shape to compute the Haralick features. Expected YXC, got {img.shape}...")
+    if img.shape[:2] != labels.shape:
+        raise ValueError(f"Mismatch between image shape {img.shape} and labels shape {labels.shape}")
 
     if img.ndim == 2:
         img = img[:, :, np.newaxis]
@@ -826,9 +851,8 @@ def compute_haralick_features(
             logger.error("Channel name unrecognized...")
             modality = ""
     elif img.ndim == 3:
-        assert (
-            target_channel is not None
-        ), "The image is multichannel. Please provide a target channel to compute the Haralick features. Abort."
+        if target_channel is None:
+            raise ValueError("The image is multichannel. Please provide a target channel to compute the Haralick features. Abort.")
         modality = channels[target_channel]
 
     haralick_labels = [
@@ -910,13 +934,12 @@ def compute_haralick_features(
         )
 
         dictionary = {"cell_id": cell}
-        for k in range(len(features)):
-            dictionary.update({haralick_labels[k]: features[k]})
+        for label, value in zip(haralick_labels, features):
+            dictionary.update({label: value})
         haralick_properties.append(dictionary)
 
-    assert len(haralick_properties) == (
-        len(np.unique(labels)) - 1
-    ), "Some cells have not been measured..."
+    if len(haralick_properties) != (len(np.unique(labels)) - 1):
+        raise RuntimeError("Some cells have not been measured...")
 
     return pd.DataFrame(haralick_properties)
 
@@ -999,9 +1022,8 @@ def measure_isotropic_intensity(
     """
 
     epsilon = -10000
-    assert (img.ndim == 2) | (
-        img.ndim == 3
-    ), f"Invalid image shape to compute the Haralick features. Expected YXC, got {img.shape}..."
+    if img.ndim not in (2, 3):
+        raise ValueError(f"Invalid image shape to compute the Haralick features. Expected YXC, got {img.shape}...")
 
     if img.ndim == 2:
         img = img[:, :, np.newaxis]
@@ -1009,12 +1031,11 @@ def measure_isotropic_intensity(
             channels = [channels]
         else:
             if verbose:
-                print("Channel name unrecognized...")
+                logger.warning("Channel name unrecognized.")
             channels = ["intensity"]
     elif img.ndim == 3:
-        assert (
-            channels is not None
-        ), "The image is multichannel. Please provide the list of channel names. Abort."
+        if channels is None:
+            raise ValueError("The image is multichannel. Please provide the list of channel names. Abort.")
 
     if isinstance(intensity_measurement_radii, int) or isinstance(
         intensity_measurement_radii, float
@@ -1056,9 +1077,8 @@ def measure_isotropic_intensity(
                 ymin = int(y)
                 ymax = int(y) + 2 * pad_value_x - 1
 
-                assert (
-                    frame_padded[ymin:ymax, xmin:xmax, 0].shape == mask.shape
-                ), "Shape mismatch between the measurement kernel and the image..."
+                if frame_padded[ymin:ymax, xmin:xmax, 0].shape != mask.shape:
+                    raise ValueError("Shape mismatch between the measurement kernel and the image...")
 
                 expanded_mask = np.expand_dims(mask, axis=-1)  # shape: (X, Y, 1)
                 crop = frame_padded[ymin:ymax, xmin:xmax]
@@ -1105,9 +1125,8 @@ def measure_isotropic_intensity(
             ymin = int(y)
             ymax = int(y) + 2 * pad_value_x - 1
 
-            assert (
-                frame_padded[ymin:ymax, xmin:xmax, 0].shape == mask.shape
-            ), "Shape mismatch between the measurement kernel and the image..."
+            if frame_padded[ymin:ymax, xmin:xmax, 0].shape != mask.shape:
+                raise ValueError("Shape mismatch between the measurement kernel and the image...")
 
             expanded_mask = np.expand_dims(mask, axis=-1)  # shape: (X, Y, 1)
             crop = frame_padded[ymin:ymax, xmin:xmax]
@@ -1162,12 +1181,18 @@ def measure_at_position(
 
     pos = pos.replace("\\", "/")
     pos = rf"{pos}"
-    assert os.path.exists(pos), f"Position {pos} is not a valid path."
+    if not os.path.exists(pos):
+        raise FileNotFoundError(f"Position {pos} is not a valid path.")
     if not pos.endswith("/"):
         pos += "/"
     script_path = os.sep.join([abs_path, "scripts", "measure_cells.py"])
-    cmd = f'python "{script_path}" --pos "{pos}" --mode "{mode}" --threads "{threads}"'
-    subprocess.call(cmd, shell=True)
+    result = subprocess.run(
+        [sys.executable, script_path, "--pos", pos, "--mode", mode, "--threads", str(threads)],
+        check=False,
+    )
+    if result.returncode != 0:
+        logger.error(f"Measurement script exited with code {result.returncode} for position {pos}.")
+        raise RuntimeError(f"Measurement failed for position {pos} (exit code {result.returncode}).")
 
     table = pos + os.sep.join(["output", "tables", f"trajectories_{mode}.csv"])
     if return_measurements:
@@ -1264,7 +1289,7 @@ def normalise_by_cell(
 
         extraprops = True
     except Exception as e:
-        print(f"The module extra_properties seems corrupted: {e}... Skip...")
+        logger.warning(f"The module extra_properties seems corrupted: {e}. Skip.")
         extraprops = False
 
     border = contour_of_instance_segmentation(label=labels, distance=distance * (-1))
@@ -1519,7 +1544,8 @@ def estimate_time(
     """
 
     cols = list(df.columns)
-    assert "TRACK_ID" in cols, "Please provide tracked data..."
+    if "TRACK_ID" not in cols:
+        raise KeyError("Please provide tracked data...")
     if "position" in cols:
         sort_cols = ["position", "TRACK_ID"]
     else:
@@ -1534,7 +1560,7 @@ def estimate_time(
         indices = group.index
         status_col = class_attr.replace("class", "status")
 
-        group_clean = group.dropna(subset=status_col)
+        group_clean = group.dropna(subset=[status_col])
         status_signal = group_clean[status_col].values
         if np.all(np.array(status_signal) == 1):
             continue
@@ -1645,7 +1671,8 @@ def interpret_track_classification(
 
     cols = list(df.columns)
 
-    assert "TRACK_ID" in cols, "Please provide tracked data..."
+    if "TRACK_ID" not in cols:
+        raise KeyError("Please provide tracked data...")
     if "position" in cols:
         sort_cols = ["position", "TRACK_ID"]
     else:
@@ -1702,7 +1729,8 @@ def classify_transient_events(
     cols = list(df.columns)
 
     # Control input
-    assert "TRACK_ID" in cols, "Please provide tracked data..."
+    if "TRACK_ID" not in cols:
+        raise KeyError("Please provide tracked data...")
     if "position" in cols:
         sort_cols = ["position", "TRACK_ID"]
         df = df.sort_values(by=sort_cols + ["FRAME"])
@@ -1710,12 +1738,10 @@ def classify_transient_events(
         sort_cols = ["TRACK_ID"]
         df = df.sort_values(by=sort_cols + ["FRAME"])
     if pre_event is not None:
-        assert (
-            "t_" + pre_event in cols
-        ), "Pre-event time does not seem to be a valid column in the DataFrame..."
-        assert (
-            "class_" + pre_event in cols
-        ), "Pre-event class does not seem to be a valid column in the DataFrame..."
+        if "t_" + pre_event not in cols:
+            raise KeyError("Pre-event time does not seem to be a valid column in the DataFrame...")
+        if "class_" + pre_event not in cols:
+            raise KeyError("Pre-event class does not seem to be a valid column in the DataFrame...")
 
     stat_col = class_attr.replace("class", "status")
     continuous_stat_col = stat_col.replace("status_", "smooth_status_")
@@ -1792,7 +1818,7 @@ def classify_transient_events(
         df = df.drop(columns=["inst_" + stat_col])
     df = df.rename(columns={stat_col: "inst_" + stat_col})
     df = df.rename(columns={continuous_stat_col: stat_col})
-    print("Classes: ", df.loc[df["FRAME"] == 0, class_attr].value_counts())
+    logger.info("Classes:\n%s", df.loc[df["FRAME"] == 0, class_attr].value_counts())
 
     return df
 
@@ -1850,18 +1876,17 @@ def classify_irreversible_events(
     cols = list(df.columns)
 
     # Control input
-    assert "TRACK_ID" in cols, "Please provide tracked data..."
+    if "TRACK_ID" not in cols:
+        raise KeyError("Please provide tracked data...")
     if "position" in cols:
         sort_cols = ["position", "TRACK_ID"]
     else:
         sort_cols = ["TRACK_ID"]
     if pre_event is not None:
-        assert (
-            "t_" + pre_event in cols
-        ), "Pre-event time does not seem to be a valid column in the DataFrame..."
-        assert (
-            "class_" + pre_event in cols
-        ), "Pre-event class does not seem to be a valid column in the DataFrame..."
+        if "t_" + pre_event not in cols:
+            raise KeyError("Pre-event time does not seem to be a valid column in the DataFrame...")
+        if "class_" + pre_event not in cols:
+            raise KeyError("Pre-event class does not seem to be a valid column in the DataFrame...")
 
     stat_col = class_attr.replace("class", "status")
 
@@ -1892,7 +1917,7 @@ def classify_irreversible_events(
             df.loc[indices_pre_detection, stat_col] = 0.0
 
         # The non-NaN part of track (post pre-event)
-        track_valid = track.dropna(subset=stat_col, inplace=False)
+        track_valid = track.dropna(subset=[stat_col], inplace=False)
         status_values = track_valid[stat_col].to_numpy()
 
         if np.all([s == 0 for s in status_values]):
@@ -1905,8 +1930,8 @@ def classify_irreversible_events(
             # ambiguity, possible transition, use `unique_state` technique after
             df.loc[indices, class_attr] = 2
 
-    print("Number of cells per class after the initial pass: ")
-    pretty_table(df.loc[df["FRAME"] == 0, class_attr].value_counts().to_dict())
+    logger.info("Number of cells per class after the initial pass: %s",
+                df.loc[df["FRAME"] == 0, class_attr].value_counts().to_dict())
 
     df.loc[df[class_attr] != 2, class_attr.replace("class", "t")] = -1
     # Try to fit time on class 2 cells (ambiguous)
@@ -1918,15 +1943,15 @@ def classify_irreversible_events(
         r2_threshold=r2_threshold,
     )
 
-    print("Number of cells per class after conditional signal fit: ")
-    pretty_table(df.loc[df["FRAME"] == 0, class_attr].value_counts().to_dict())
+    logger.info("Number of cells per class after conditional signal fit: %s",
+                df.loc[df["FRAME"] == 0, class_attr].value_counts().to_dict())
 
     # Revisit class 2 cells to classify as neg/pos with percentile tolerance
     df.loc[df[class_attr] == 2, :] = classify_unique_states(
         df.loc[df[class_attr] == 2, :].copy(), class_attr, percentile_recovery
     )
-    print("Number of cells per class after recovery pass (median state): ")
-    pretty_table(df.loc[df["FRAME"] == 0, class_attr].value_counts().to_dict())
+    logger.info("Number of cells per class after recovery pass (median state): %s",
+                df.loc[df["FRAME"] == 0, class_attr].value_counts().to_dict())
 
     return df
 
@@ -1976,19 +2001,18 @@ def classify_unique_states(
     """
 
     cols = list(df.columns)
-    assert "TRACK_ID" in cols, "Please provide tracked data..."
+    if "TRACK_ID" not in cols:
+        raise KeyError("Please provide tracked data...")
     if "position" in cols:
         sort_cols = ["position", "TRACK_ID"]
     else:
         sort_cols = ["TRACK_ID"]
 
     if pre_event is not None:
-        assert (
-            "t_" + pre_event in cols
-        ), "Pre-event time does not seem to be a valid column in the DataFrame..."
-        assert (
-            "class_" + pre_event in cols
-        ), "Pre-event class does not seem to be a valid column in the DataFrame..."
+        if "t_" + pre_event not in cols:
+            raise KeyError("Pre-event time does not seem to be a valid column in the DataFrame...")
+        if "class_" + pre_event not in cols:
+            raise KeyError("Pre-event class does not seem to be a valid column in the DataFrame...")
 
     stat_col = class_attr.replace("class", "status")
 
@@ -2009,7 +2033,7 @@ def classify_unique_states(
                 track.loc[track["FRAME"] <= t_pre_event, stat_col] = np.nan
 
         # Post pre-event track
-        track_valid = track.dropna(subset=stat_col, inplace=False)
+        track_valid = track.dropna(subset=[stat_col], inplace=False)
         status_values = track_valid[stat_col].to_numpy()
         frames = track_valid["FRAME"].to_numpy()
         t_first = track["t_firstdetection"].to_numpy()[0]
@@ -2089,9 +2113,7 @@ def classify_cells_from_query(
     df[status_attr] = df[status_attr].astype(float)
 
     cols = extract_cols_from_query(query)
-    print(
-        f"The following DataFrame measurements were identified in the query: {cols=}..."
-    )
+    logger.debug("The following DataFrame measurements were identified in the query: %s", cols)
 
     if query.strip() == "":
         raise EmptyQueryError("The provided query is empty.")
@@ -2208,7 +2230,7 @@ def measure_radial_distance_to_center(
             + (df[column_labels["y"]] - volume[1] / 2) ** 2
         )
     except Exception as e:
-        print(f"{e=}")
+        logger.warning(f"Could not compute radial distance: {e}")
 
     return df
 
@@ -2229,15 +2251,15 @@ def center_of_mass_to_abs_coordinates(df: pd.DataFrame) -> pd.DataFrame:
     """
 
     center_of_mass_x_cols = [
-        c for c in list(df.columns) if c.endswith("centre_of_mass_x")
+        c for c in list(df.columns) if c.endswith("center_of_mass_dx")
     ]
     center_of_mass_y_cols = [
-        c for c in list(df.columns) if c.endswith("centre_of_mass_y")
+        c for c in list(df.columns) if c.endswith("center_of_mass_dy")
     ]
     for c in center_of_mass_x_cols:
-        df.loc[:, c.replace("_x", "_POSITION_X")] = df[c] + df["POSITION_X"]
+        df.loc[:, c.replace("_dx", "_POSITION_X")] = df[c] + df["POSITION_X"]
     for c in center_of_mass_y_cols:
-        df.loc[:, c.replace("_y", "_POSITION_Y")] = df[c] + df["POSITION_Y"]
+        df.loc[:, c.replace("_dy", "_POSITION_Y")] = df[c] + df["POSITION_Y"]
     df = df.drop(columns=center_of_mass_x_cols + center_of_mass_y_cols)
 
     return df

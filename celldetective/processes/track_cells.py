@@ -8,7 +8,6 @@ from tqdm import tqdm
 import numpy as np
 import gc
 import concurrent.futures
-import datetime
 import os
 import json
 from celldetective.measure import drop_tonal_features, measure_features
@@ -16,8 +15,7 @@ from celldetective.tracking import track
 import pandas as pd
 from natsort import natsorted
 from art import tprint
-from celldetective.log_manager import get_logger
-import traceback
+from celldetective.log_manager import get_logger, positionlogger
 
 from celldetective.utils.data_cleaning import _mask_intensity_measurements
 from celldetective.utils.data_loaders import interpret_tracking_configuration
@@ -154,11 +152,11 @@ class TrackingProcess(Process):
             haralick_option_log,
             post_processing_option_log,
         ]
-        log = "\n".join(log_list)
 
-        with open(self.pos + f"log_{self.mode}.txt", "a") as f:
-            f.write(f"{datetime.datetime.now()} TRACK \n")
-            f.write(log + "\n")
+        with positionlogger(self.pos, filename=f"log_{self.mode}.txt"):
+            logger.info("TRACK")
+            for line in log_list:
+                logger.info(line)
 
     def prepare_folders(self):
         """Create the folders for the tracking output."""
@@ -338,8 +336,7 @@ class TrackingProcess(Process):
                 self.queue.put(data)
 
         except Exception as e:
-            logger.error(e)
-            traceback.print_exc()
+            logger.error(f"{e}", exc_info=True)
 
         return props
 
@@ -384,7 +381,7 @@ class TrackingProcess(Process):
                     logger.info(f"Thread {i} completed...")
                     self.timestep_dataframes.extend(return_value)
             except Exception as e:
-                logger.error("Exception: ", e)
+                logger.error(f"Exception: {e}")
 
         logger.info("Features successfully measured...")
 
@@ -427,7 +424,7 @@ class TrackingProcess(Process):
                 memory=self.memory,
             )
             logger.info(
-                f"Tracking output: Trajectories shape: {trajectories.shape} if trajectories is not None else 'None'"
+                f"Tracking output: Trajectories shape: {trajectories.shape if trajectories is not None else 'None'}"
             )
         except Exception as e:
             logger.error(f"Tracking failed: {e}")
@@ -436,7 +433,7 @@ class TrackingProcess(Process):
                     "Suggestion: Try reducing the 'search_range' (maxdisp) in your tracking configuration. Skipping tracking for this position."
                 )
                 return
-            raise e
+            raise
 
         logger.info("Tracking successfully performed...")
 

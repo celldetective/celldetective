@@ -299,17 +299,19 @@ class SpotDetectionVisualizer(StackVisualizer):
             if isinstance(self.labels, list):
                 self.labels = np.array(self.labels)
 
-            assert (
-                self.labels.ndim == 3
-            ), "Wrong dimensions for the provided labels, expect TXY"
-            assert len(self.labels) == self.stack_length
+            if self.labels.ndim != 3:
+                raise ValueError("Wrong dimensions for the provided labels, expect TXY")
+            if len(self.labels) != self.stack_length:
+                raise ValueError("Labels length does not match stack length.")
 
             self.mode = "direct"
             self.init_label = self.labels[self.mid_time, :, :]
         else:
             self.mode = "virtual"
-            assert isinstance(self.stack_path, str)
-            assert self.stack_path.endswith(".tif")
+            if not isinstance(self.stack_path, str):
+                raise TypeError("stack_path must be a string.")
+            if not self.stack_path.endswith(".tif"):
+                raise ValueError("stack_path must point to a .tif file.")
             self.locate_labels_virtual()
 
     def locate_labels_virtual(self):
@@ -339,8 +341,10 @@ class SpotDetectionVisualizer(StackVisualizer):
     def generate_detection_channel(self):
         """Generate the detection channel selection widget."""
 
-        assert self.channel_names is not None
-        assert len(self.channel_names) == self.n_channels
+        if self.channel_names is None:
+            raise ValueError("channel_names must be set before generating the detection channel widget.")
+        if len(self.channel_names) != self.n_channels:
+            raise ValueError("channel_names length does not match n_channels.")
 
         channel_layout = QHBoxLayout()
         channel_layout.setContentsMargins(0, 0, 0, 0)

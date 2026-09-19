@@ -30,6 +30,7 @@ from celldetective.measure import (
     center_of_mass_to_abs_coordinates,
     measure_radial_distance_to_center,
 )
+from celldetective.utils import COLUMN_LABELS
 from pathlib import Path, PurePath
 from glob import glob
 from tqdm import tqdm
@@ -37,7 +38,10 @@ import numpy as np
 import pandas as pd
 from natsort import natsorted
 from art import tprint
-import datetime
+import logging
+
+logger = logging.getLogger("celldetective")
+from celldetective.log_manager import positionlogger
 
 tprint("Measure")
 
@@ -60,36 +64,33 @@ pos = str(process_arguments["position"])
 mode = str(process_arguments["mode"])
 n_threads = int(process_arguments["threads"])
 
-column_labels = {
-    "track": "TRACK_ID",
-    "time": "FRAME",
-    "x": "POSITION_X",
-    "y": "POSITION_Y",
-}
+column_labels = COLUMN_LABELS.copy()
 
-if mode.lower() == "target" or mode.lower() == "targets":
+if mode.lower() in ("target", "targets"):
     label_folder = "labels_targets"
     table_name = "trajectories_targets.csv"
     instruction_file = os.sep.join(["configs", "measurement_instructions_targets.json"])
-
-elif mode.lower() == "effector" or mode.lower() == "effectors":
+elif mode.lower() in ("effector", "effectors"):
     label_folder = "labels_effectors"
     table_name = "trajectories_effectors.csv"
     instruction_file = os.sep.join(
         ["configs", "measurement_instructions_effectors.json"]
     )
+else:
+    label_folder = f"labels_{mode}"
+    table_name = f"trajectories_{mode}.csv"
+    instruction_file = os.sep.join(["configs", f"measurement_instructions_{mode}.json"])
 
 # Locate experiment config
 parent1 = Path(pos).parent
 expfolder = parent1.parent
 config = PurePath(expfolder, Path("config.ini"))
-assert os.path.exists(
-    config
-), "The configuration file for the experiment could not be located. Abort."
+if not os.path.exists(config):
+    raise FileNotFoundError("The configuration file for the experiment could not be located. Abort.")
 
-print(f"Position: {extract_position_name(pos)}...")
-print("Configuration file: ", config)
-print(f"Population: {mode}...")
+logger.info(f"Position: {extract_position_name(pos)}...")
+logger.info(f"Configuration file: {config}")
+logger.info(f"Population: {mode}...")
 
 # from exp config fetch spatial calib, channel names
 movie_prefix = config_section_to_dict(config, "MovieSettings")["movie_prefix"]
@@ -101,14 +102,14 @@ nbr_channels = len(channel_names)
 
 # from tracking instructions, fetch btrack config, features, haralick, clean_traj, idea: fetch custom timeline?
 instr_path = PurePath(expfolder, Path(f"{instruction_file}"))
-print("Looking for measurement instruction file...")
+logger.info("Looking for measurement instruction file...")
 
 if os.path.exists(instr_path):
 
     with open(instr_path, "r") as f:
         instructions = json.load(f)
-        print(f"Measurement instruction file successfully loaded...")
-        print(f"Instructions: {instructions}...")
+        logger.info("Measurement instruction file successfully loaded...")
+        logger.debug(f"Instructions: {instructions}...")
 
     if "background_correction" in instructions:
         background_correction = instructions["background_correction"]
@@ -151,7 +152,7 @@ if os.path.exists(instr_path):
         clear_previous = True
 
 else:
-    print("No measurement instructions found. Use default measurements.")
+    logger.warning("No measurement instructions found. Use default measurements.")
     features = ["area", "intensity_mean"]
     border_distances = None
     haralick_options = None
@@ -167,11 +168,9 @@ if features is None:
 # from pos fetch labels
 label_path = natsorted(glob(os.sep.join([pos, label_folder, "*.tif"])))
 if len(label_path) > 0:
-    print(f"Found {len(label_path)} segmented frames...")
+    logger.info(f"Found {len(label_path)} segmented frames...")
 else:
-    print(
-        f"No segmented frames have been found. Please run segmentation first, skipping... Features cannot be computed."
-    )
+    logger.warning("No segmented frames have been found. Please run segmentation first, skipping... Features cannot be computed.")
     features = None
     haralick_options = None
     border_distances = None
@@ -181,9 +180,7 @@ else:
 try:
     file = glob(pos + os.sep.join(["movie", f"{movie_prefix}*.tif"]))[0]
 except IndexError:
-    print(
-        "Movie could not be found. Check the prefix. If you intended to measure texture or tone, this will not be performed."
-    )
+    logger.warning("Movie could not be found. Check the prefix. If you intended to measure texture or tone, this will not be performed.")
     file = None
     haralick_option = None
     features = drop_tonal_features(features)
@@ -191,13 +188,13 @@ except IndexError:
 # Load trajectories, add centroid if not in trajectory
 trajectories = pos + os.sep.join(["output", "tables", table_name])
 if os.path.exists(trajectories):
-    print("A trajectory table was found...")
+    logger.info("A trajectory table was found...")
     trajectories = pd.read_csv(trajectories)
     if "TRACK_ID" not in list(trajectories.columns):
         do_iso_intensities = False
         intensity_measurement_radii = None
         if clear_previous:
-            print("No TRACK_ID... Clear previous measurements...")
+            logger.info("No TRACK_ID... Clear previous measurements...")
             trajectories = (
                 None  # remove_trajectory_measurements(trajectories, column_labels)
             )
@@ -205,13 +202,21 @@ if os.path.exists(trajectories):
             features += ["centroid"]
     else:
         if clear_previous:
-            print("TRACK_ID found... Clear previous measurements...")
+            logger.info("TRACK_ID found... Clear previous measurements...")
             trajectories = remove_trajectory_measurements(trajectories, column_labels)
 else:
     trajectories = None
     do_features = True
     features += ["centroid"]
     do_iso_intensities = False
+
+if trajectories is None:
+    column_labels = {
+        "track": "ID",
+        "time": column_labels["time"],
+        "x": column_labels["x"],
+        "y": column_labels["y"],
+    }
 
 
 len_movie_auto = auto_load_number_of_frames(file)
@@ -230,15 +235,13 @@ img_num_channels = _get_img_num_per_channel(channel_indices, len_movie, nbr_chan
 # Test what to do
 if (file is None) or (intensity_measurement_radii is None):
     do_iso_intensities = False
-    print(
-        "Either no image, no positions or no radii were provided... Isotropic intensities will not be computed..."
-    )
+    logger.warning("Either no image, no positions or no radii were provided... Isotropic intensities will not be computed...")
 else:
     do_iso_intensities = True
 
 if label_path is None:
     do_features = False
-    print("No labels were provided... Features will not be computed...")
+    logger.warning("No labels were provided... Features will not be computed...")
 else:
     do_features = True
 
@@ -249,7 +252,7 @@ else:
 
 timestep_dataframes = []
 if trajectories is None:
-    print("Use features as a substitute for the trajectory table.")
+    logger.info("Use features as a substitute for the trajectory table.")
     if "label" not in features:
         features.append("label")
 
@@ -265,21 +268,20 @@ spot_detection_log = f"spot_detection: {spot_detection}"
 intensity_measurement_radii_log = (
     f"intensity_measurement_radii: {intensity_measurement_radii}"
 )
-isotropic_options_log = f"isotropic_operations: {isotropic_operations} \n"
-log = "\n".join(
-    [
-        features_log,
-        border_distances_log,
-        haralick_options_log,
-        background_correction_log,
-        spot_detection_log,
-        intensity_measurement_radii_log,
-        isotropic_options_log,
-    ]
-)
-with open(pos + f"log_{mode}.json", "a") as f:
-    f.write(f"{datetime.datetime.now()} MEASURE \n")
-    f.write(log + "\n")
+isotropic_options_log = f"isotropic_operations: {isotropic_operations}"
+log_list = [
+    features_log,
+    border_distances_log,
+    haralick_options_log,
+    background_correction_log,
+    spot_detection_log,
+    intensity_measurement_radii_log,
+    isotropic_options_log,
+]
+with positionlogger(pos, filename=f"log_{mode}.txt"):
+    logger.info("MEASURE")
+    for line in log_list:
+        logger.info(line)
 
 
 def measure_index(indices: List[int]) -> None:
@@ -333,12 +335,6 @@ def measure_index(indices: List[int]) -> None:
                 positions_at_t = _extract_coordinates_from_features(
                     feature_table, timepoint=t
                 )
-                column_labels = {
-                    "track": "ID",
-                    "time": column_labels["time"],
-                    "x": column_labels["x"],
-                    "y": column_labels["y"],
-                }
             feature_table.rename(
                 columns={"centroid-1": "POSITION_X", "centroid-0": "POSITION_Y"},
                 inplace=True,
@@ -384,7 +380,7 @@ def measure_index(indices: List[int]) -> None:
     return
 
 
-print(f"Starting the measurements with {n_threads} thread(s)...")
+logger.info(f"Starting the measurements with {n_threads} thread(s)...")
 
 import concurrent.futures
 
@@ -396,11 +392,11 @@ with concurrent.futures.ThreadPoolExecutor() as executor:
     results = executor.map(measure_index, chunks)
     try:
         for i, return_value in enumerate(results):
-            print(f"Thread {i} output check: ", return_value)
+            logger.debug(f"Thread {i} output check: {return_value}")
     except Exception as e:
-        print("Exception: ", e)
+        logger.error(f"Exception: {e}")
 
-print("Done.")
+logger.info("Done.")
 
 
 if len(timestep_dataframes) > 0:
@@ -418,10 +414,8 @@ if len(timestep_dataframes) > 0:
     df = _remove_invalid_cols(df)
 
     df.to_csv(pos + os.sep.join(["output", "tables", table_name]), index=False)
-    print(
-        f'Measurement table successfully exported in  {os.sep.join(["output", "tables"])}...'
-    )
-    print("Done.")
+    logger.info(f'Measurement table successfully exported in {os.sep.join(["output", "tables"])}...')
+    logger.info("Done.")
 else:
-    print("No measurement could be performed. Check your inputs.")
-    print("Done.")
+    logger.warning("No measurement could be performed. Check your inputs.")
+    logger.info("Done.")

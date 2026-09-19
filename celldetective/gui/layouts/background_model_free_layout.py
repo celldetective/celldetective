@@ -18,7 +18,8 @@ from PyQt5.QtWidgets import (
     QMainWindow,
 )
 from fonticon_mdi6 import MDI6
-from superqt import QLabeledRangeSlider, QLabeledSlider, QLabeledDoubleRangeSlider
+from superqt import QLabeledRangeSlider, QLabeledSlider
+from celldetective.gui.base.sliders import QLabeledDoubleRangeSlider
 from superqt.fonticon import icon
 from tifffile import imread
 
@@ -29,6 +30,7 @@ from celldetective.gui.layouts.operation_layout import OperationLayout
 from celldetective.processes.background_correction import BackgroundCorrectionProcess
 from celldetective.utils.parsing import _extract_channel_indices_from_config
 from celldetective import get_logger
+from celldetective.gui.base.threads import start_tracked
 
 logger = get_logger(__name__)
 
@@ -428,9 +430,9 @@ class BackgroundModelFreeCorrectionLayout(QGridLayout, Styles):
                 )
                 self.viewer.show()
             else:
-                print("Corrected stack could not be generated... No stack available...")
+                logger.warning("Corrected stack could not be generated... No stack available...")
         else:
-            print("Background correction cancelled.")
+            logger.info("Background correction cancelled.")
 
     def activate_time_range(self):
         """Enable or disable time range options based on acquisition mode."""
@@ -515,8 +517,7 @@ class BackgroundModelFreeCorrectionLayout(QGridLayout, Styles):
         self.bg_worker.finished_with_result.connect(on_finished)
         self.bg_progress.canceled.connect(self.bg_worker.stop)
 
-        self.bg_worker.start()
-
+        start_tracked(self.bg_worker)
 
 class BackgroundEstimatorThread(QThread):
     progress = pyqtSignal(int)
@@ -604,5 +605,5 @@ class BackgroundEstimatorThread(QThread):
             else:
                 self.finished_with_result.emit(None)
         except Exception as e:
-            print(f"Error in background estimation thread: {e}")
+            logger.error(f"Error in background estimation thread: {e}")
             self.finished_with_result.emit(None)

@@ -10,7 +10,7 @@ Correction protocol
 
 #. Launch the software. Open a project.
 
-#. Expand the **PROCESSING** block. In the **BACKGROUND CORRECTION** section, click on the Fit tab.
+#. Expand the **PREPROCESSING** block. In the **BACKGROUND CORRECTION** section, click on the Fit tab.
 
 #. Set the fluorescence channel to correct.
 

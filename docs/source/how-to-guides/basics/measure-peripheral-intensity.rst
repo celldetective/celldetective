@@ -3,7 +3,7 @@ How to measure edge intensity
 
 This guide shows you how to measure intensity features within specific contour bands relative to the cell boundary (e.g., peripheral or peri-cellular intensity).
 
-Reference keys: :term:`contour`, :term:`single-cell measurement`
+Reference keys: :term:`contour measurements`, :term:`single-cell measurement`
 
 **Prerequisite:** You must have segmented the cells. Tracking is recommended but not required.
 
@@ -38,7 +38,7 @@ Run the measurements
 
 #. In the control panel, check the **MEASURE** box and click **Submit**.
 
-The contour intensity features (e.g., ``intensity_mean``, ``intensity_max``) for the selected band will be appended to your measurement table with a suffix indicating the contour distance.
+The contour intensity features will be appended to your measurement table as ``{channel}_mean_edge_{d}px`` (single distance) or ``{channel}_mean_slice_{d}px`` (range). For example, measuring the mean intensity at distance 3 on a channel named ``GFP`` yields a column ``GFP_mean_edge_3px``.
 
 .. tip::
     Combine a positive and negative distance to measure both inside and outside the cell boundary, which is useful for quantifying membrane-associated signals.
