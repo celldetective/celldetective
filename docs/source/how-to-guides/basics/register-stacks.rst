@@ -18,7 +18,9 @@ The drift is estimated on one channel, the registration channel, by Fourier phas
     :align: center
     :alt: stack registration in the preprocessing module
 
-    **Stack registration.** The options sit at the bottom of the **PREPROCESSING** block (1). The :icon:`image-check,black` button opens a frame of the current position to set the correlation disk (2): the correlation is computed inside the solid circle, and the image is smoothly faded to zero between the dashed and the solid circle, so that the field edges do not drive the result. The correction is added to the list of corrections (3), which are applied to the selected positions on **Submit** (4).
+    **Stack registration.** The correlation is computed inside the solid circle, and the image is smoothly faded to zero between the dashed and the solid circle, so that the field edges do not drive the result.
+
+The registration options sit at the bottom of the **PREPROCESSING** block (1). The :icon:`image-check,black` button opens a frame of the current position to set the correlation disk (2). The correction is then added to the list of corrections (3), which **Submit** applies to the selected positions (4).
 
 
 Set up the registration

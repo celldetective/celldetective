@@ -181,13 +181,6 @@ class Figure:
             layer=self.marks,
         )
 
-    def legend(self, items, x, y, step=30, size=16, r=12):
-        """Numbered lines explaining the badges, one per item."""
-        for n, s in items:
-            self.badge(n, x + r, y - size * 0.35, r=r)
-            self.label(s, x + 2 * r + 10, y, size=size)
-            y += step
-
     def leader(self, x0, y0, x1, y1, color=INK, width=1.6):
         """A thin straight line with a dot, from a label to what it names."""
         shapes.add_line(self.project, x1=x0, y1=y0, x2=x1, y2=y1,

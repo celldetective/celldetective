@@ -79,7 +79,9 @@ Embed as:
     :align: center
     :alt: <what it shows>
 
-    **<Title>.** <caption explaining the numbered badges (1), (2)…>
+    **<Title>.** <what the figure shows, without badge numbers>
+
+<A normal paragraph that refers to the badges inline: … (1), then … (2).>
 ```
 
 ## Phase 5 — Release notes and verification

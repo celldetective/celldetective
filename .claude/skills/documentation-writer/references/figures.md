@@ -5,7 +5,7 @@ Everything lives in `docs/figures` (see its README):
 ```
 capture/harness.py     starts the app like celldetective/__main__.py, grab() helpers
 capture/capture_*.py   one script per group of windows → screenshots/*.png
-annotate.py            Figure class: shot(), arrow(), box(), badge(), legend(),
+annotate.py            Figure class: shot(), arrow(), box(), badge(), callout(),
                        label(), leader(), render()
 build_figures.py       one function per figure; FIGURES list; CLI filter by name
 ```
@@ -18,9 +18,17 @@ Taken from the older hand-made figures (`maingui.png`,
 - whole windows **with their title bar**, on a transparent background, with a
   soft shadow; several windows may overlap like on a desktop;
 - **thick black curved arrows** (`arrow`, width 5) for "this opens that";
-- **numbered callouts** (`callout`) + a `legend` in free space when there are
-  more than ~2 things to point at — clearer than many leader lines; thin
+- **numbered callouts** (`callout`) when there are more than ~2 things to
+  point at — clearer than many leader lines; thin
   `leader` lines with a dot for a few isolated labels.
+
+### No legend inside a figure
+
+The numbers are explained by a **plain paragraph of the page, right after the
+figure**, that refers to them inline: "The options sit at the bottom of the
+**PREPROCESSING** block (1). The … button opens … (2)." Not in the SVG, not in
+the caption, not as a list. The caption keeps a bold title and what the
+figure shows, without numbers.
 
 ### Callouts (the maintainer's preferred annotation, from their own edit of
 `config-editor.svg` — the reference figure to imitate)
@@ -60,7 +68,7 @@ f.callout(6, bx + 325, by + 490, 303, 30, frame=False)    # Save button
    another app, scrolled away, status bar overwritten, private paths visible.
 3. **Lay out** in `build_figures.py`: `f.shot(file, x, y)` returns the origin;
    write annotation coordinates as `ox + x_in_screenshot`, reading pixel
-   positions off the capture. Leave margins for labels and legends.
+   positions off the capture. Leave margins for labels.
 4. **Build**: `python build_figures.py <name>` → SVG + `preview/<name>.png`.
 5. **Look at the preview** and fix: labels over UI text, lines crossing
    labels (label from the right when fanning leaders over a toolbar), badges

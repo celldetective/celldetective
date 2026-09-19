@@ -33,16 +33,6 @@ def registration():
     # The ROI button opens the viewer on a frame of the current position.
     f.badge(2, ox + 362, oy + 437)
     f.arrow(ox + 385, oy + 470, vx - 4, vy + 250, bend=-0.3)
-
-    f.legend(
-        [
-            (1, "pick the registration channel and the options"),
-            (2, "tune the correlation disk on a frame"),
-            (3, "add the correction to the protocol list"),
-            (4, "register the selected positions"),
-        ],
-        vx + 10, vy + 670, step=30, size=16,
-    )
     return f.render()
 
 
@@ -59,18 +49,6 @@ def config_editor():
     f.callout(4, bx + 551, by + 111, 73, 28, rounded=False)  # metadata tools
     f.callout(5, bx + 22, by + 204, 597, 32)  # the new entry
     f.callout(6, bx + 325, by + 490, 303, 30, frame=False)  # Save
-
-    f.legend(
-        [
-            (1, "add, rename or remove a label"),
-            (2, "one row per well"),
-            (3, "edit config.ini as plain text"),
-            (4, "add or remove a metadata entry"),
-            (5, "a value shared by every well"),
-            (6, "write the changes to config.ini"),
-        ],
-        ax + 4, ay + 590, step=36, size=16,
-    )
     return f.render()
 
 
@@ -130,42 +108,30 @@ def help_panel():
     sx, sy = 500, 570
     f.shot("help_suggestion.png", sx, sy)
 
-    # The help buttons of SEGMENT and TRACK.
-    f.box(cx + 364, cy + 325, 26, 26)
-    f.box(cx + 364, cy + 393, 26, 26)
-    f.arrow(cx + 392, cy + 330, mx - 4, my + 90, bend=-0.2)
-    f.arrow(cx + 392, cy + 410, qx - 4, qy + 120, bend=0.15)
+    # The help buttons of SEGMENT and TRACK, each opening its helper.
+    f.callout(1, cx + 364, cy + 325, 26, 26, side="right", rounded=False)
+    f.callout(3, cx + 364, cy + 393, 26, 26, side="right", rounded=False)
+    f.arrow(cx + 422, cy + 326, mx - 4, my + 90, bend=-0.2)
+    f.arrow(cx + 422, cy + 410, qx - 4, qy + 120, bend=0.15)
+
+    f.callout(2, mx + 16, my + 74, 350, 82, side="right")  # the two helpers
+    f.callout(4, qx + 18, qy + 114, 606, 68)  # the question
     f.arrow(qx + 600, qy + 222, sx + 600, sy - 4, bend=-0.35)
     f.label("yes, yes", qx + 585, qy + 268, size=15, anchor="end")
-    f.label("opens the matching page of this documentation", sx + 461, sy + 282 + 30,
-            size=15, anchor="middle")
-    f.leader(sx + 461, sy + 282 + 14, sx + 461, sy + 262)
+
+    f.callout(5, sx + 16, sy + 93, 386, 20, side="right")  # answers so far
+    f.callout(6, sx + 16, sy + 230, 60, 38, side="right", rounded=False)  # Back
+    f.callout(7, sx + 383, sy + 233, 159, 33, frame=False)  # Read the tutorial
     return f.render()
 
 
 def napari_frame_segmentation():
-    f = Figure("napari-frame-segmentation", 1607, 1070)
+    f = Figure("napari-frame-segmentation", 1607, 937)
     nx, ny = 20, 20
     f.shot("napari_frame_segmentation.png", nx, ny)
     for n, y in [(1, 100), (2, 157), (3, 255), (4, 324), (5, 356)]:
         f.badge(n, nx + 1268, ny + y, r=16)
     f.badge(6, nx + 1062, ny + 398, r=16)
-    f.legend(
-        [
-            (1, "a model for this population, fetched on first use"),
-            (2, "one dropdown per input of the model"),
-            (3, "left blank, the model's own values are used"),
-        ],
-        nx + 10, ny + 892 + 60, step=42, size=21, r=16,
-    )
-    f.legend(
-        [
-            (4, "replace the labels, or only fill the background"),
-            (5, "segment the frame on screen, in the background"),
-            (6, "the new labels: undo with Ctrl+Z, save when right"),
-        ],
-        nx + 800, ny + 892 + 60, step=42, size=21, r=16,
-    )
     return f.render()
 
 

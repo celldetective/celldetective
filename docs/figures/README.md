@@ -9,7 +9,7 @@ interface changes.
 ```
 capture/          scripts that launch celldetective and capture its windows
 screenshots/      the captured windows, as PNG
-annotate.py       the house style: shadowed windows, curved arrows, badges, legends
+annotate.py       the house style: shadowed windows, curved arrows, badges, callouts
 build_figures.py  one function per figure: layout and annotations
 ```
 
@@ -47,8 +47,8 @@ screenshot they point at.
 ## Style
 
 Point at things with numbered callouts (`Figure.callout`): a tight frame
-around the target, its badge centred just outside one side, and a legend
-explaining the numbers. `config-editor.svg` is the reference.
+around the target, its badge centred just outside one side. No legend in the
+figure: the page explains the numbers in a paragraph right after it. `config-editor.svg` is the reference.
 
 ## Editing an SVG by hand
 

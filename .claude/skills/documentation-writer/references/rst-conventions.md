@@ -47,7 +47,9 @@
   `../../_static/...` from `how-to-guides/*/`.
 - New figures are SVGs in `_static/figures/`, with `:width: 100%`, a
   `:target:` to the same file (click to open full size) and a caption whose
-  bold first sentence is the title; the caption explains each numbered badge.
+  bold first sentence is the title, without badge numbers. The numbered
+  badges are explained by a normal paragraph right after the figure, which
+  refers to them inline: "… (1), then … (2)."
 
 ## Tone
 

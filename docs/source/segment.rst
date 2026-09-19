@@ -231,6 +231,8 @@ on one frame and look at the result straight away.
 
     **Segmenting the frame on screen.** The ``lymphocytes_ricm`` model was run on frame 20 of the RICM demo: the labels of that frame were replaced by the model's output, in the ``segmentation`` layer.
 
+Pick a model for this population (1): one that has not been downloaded yet is fetched on first use. Map the channels with one dropdown per input of the model (2), and leave the parameters blank to use the model's own values (3). **Replace the labels on this frame** chooses between segmenting the frame afresh and only filling the background (4). **Segment this frame** runs in the background (5), and the new labels land in the ``segmentation`` layer, where :kbd:`Ctrl+Z` undoes them (6).
+
 *   **model** — any model available for this population, plus the generic ones.
     A model that has not been downloaded yet is offered too; it is fetched on the
     first run.

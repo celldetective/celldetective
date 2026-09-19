@@ -13,7 +13,9 @@ The metadata live in the experiment configuration file, ``config.ini`` (see :ref
     :align: center
     :alt: the configuration editor
 
-    **The configuration editor.** The *Well labels* tab holds one row per well and one column per label (1, 2). The *Metadata* tab holds the values shared by the whole experiment (4, 5). The :icon:`file-cog,black` button opens the file in a text editor instead (3). Nothing is written before **Save** (6).
+    **The configuration editor.** The *Well labels* tab holds one row per well and one column per label; the *Metadata* tab holds the values shared by the whole experiment.
+
+In the *Well labels* tab, the tools of the header add, rename or remove a label (1), and each label is a column holding one value per well (2). In the *Metadata* tab, the tools add or remove an entry (4), and each entry holds a value shared by every well (5). The :icon:`file-cog,black` button opens ``config.ini`` in a text editor instead (3). Nothing is written to the file before **Save** (6).
 
 **Step-by-step:**
 
