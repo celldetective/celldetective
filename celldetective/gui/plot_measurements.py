@@ -515,11 +515,15 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
             # self.select_btn_group.buttonClicked[int].connect(self.switch_selection_mode)
             # self.plotvbox.addLayout(select_hbox)
 
+            # A metadata file is not enough: it may hold no stage coordinates,
+            # or none for the positions shown here, which left an empty plot.
             self.look_for_metadata()
             if self.metadata_found:
+                self.load_coordinates()
+            self.spatial_available = self.metadata_found and self.has_coordinates()
+            if self.spatial_available:
                 self.fig_scatter, self.ax_scatter = plt.subplots(1, 1, figsize=(4, 3))
                 self.position_scatter = FigureCanvas(self.fig_scatter)
-                self.load_coordinates()
                 self.plot_spatial_location()
                 # self.plot_positions()
                 self.ax_scatter.spines["top"].set_visible(False)
@@ -1340,11 +1344,11 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
             if self.select_option[i].isChecked():
                 self.selection_mode = self.select_label[i]
         if self.selection_mode == "name":
-            if len(self.metafiles) > 0:
+            if self.spatial_available:
                 self.position_scatter.hide()
             self.line_choice_widget.show()
         else:
-            if len(self.metafiles) > 0:
+            if self.spatial_available:
                 self.position_scatter.show()
             self.line_choice_widget.hide()
 
@@ -1496,7 +1500,7 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
                 self.compute_signal_functions()
                 self.plot_survivals(0)
 
-        if len(self.metafiles) > 0:
+        if self.spatial_available:
             self.sc.set_color(self.select_color(self.df_pos_info["select"].values))
             self.position_scatter.canvas.draw_idle()
 
@@ -1518,6 +1522,21 @@ class ConfigMeasurementsPlot(CelldetectiveWidget):
         """
         colors = [tab10(0) if s else tab10(0.1) for s in selection]
         return colors
+
+    def has_coordinates(self) -> bool:
+        """
+        Whether at least one position shown here got stage coordinates.
+
+        Returns
+        -------
+        bool
+            True when `load_coordinates` placed at least one position, so that
+            there is something to show on the spatial plot.
+        """
+
+        if not {"x", "y"}.issubset(self.df_pos_info.columns):
+            return False
+        return bool(self.df_pos_info[["x", "y"]].notna().all(axis=1).any())
 
     def plot_spatial_location(self) -> None:
         """
