@@ -159,11 +159,31 @@ class SegModelParamsWidget(CelldetectiveWidget):
                 bottom=0.0,
             )
 
-            # Layout for diameter input and button
+            # The field reopens on the size last saved, so once it has been
+            # changed the trained size is otherwise nowhere to be seen.
+            self.restore_size_btn = QPushButton()
+            self.restore_size_btn.setStyleSheet(self.button_select_all)
+            self.restore_size_btn.setIcon(icon(MDI6.restore, color="black"))
+            self.restore_size_btn.setToolTip(
+                f"Restore the cell size the model was trained on ({trained:.4g} µm)."
+            )
+            self.restore_size_btn.setIconSize(QSize(20, 20))
+            self.restore_size_btn.clicked.connect(
+                lambda: self.diameter_le.set_threshold(trained)
+            )
+
+            # Same 33/66 split as the channel rows, so the field and its buttons
+            # line up under the dropdowns instead of overhanging them.
+            size_controls = QHBoxLayout()
+            size_controls.setSpacing(2)
+            size_controls.addWidget(self.diameter_le, 1)
+            size_controls.addWidget(self.restore_size_btn)
+            size_controls.addWidget(self.view_diameter_btn)
+
             hbox = QHBoxLayout()
             hbox.addWidget(QLabel("cell size [µm]: "), 33)
-            hbox.addWidget(self.diameter_le, 61)
-            hbox.addWidget(self.view_diameter_btn)
+            hbox.addLayout(size_controls, 66)
+            self.layout.addSpacing(6)
             self.layout.addLayout(hbox)
 
             # Reopen on the size last saved for this model, as the channel rows
