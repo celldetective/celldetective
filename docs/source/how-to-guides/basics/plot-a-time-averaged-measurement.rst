@@ -18,7 +18,7 @@ This guide explains how to aggregate single-cell track data (e.g., computing the
 
 Transform the data from "one row per timepoint" to "one row per track".
 
-1.  Press ``Ctrl+G`` or select **File > Collapse tracks...**.
+1.  Press ``Ctrl+G`` or select **Table > Collapse tracks...** (also the :icon:`arrow-collapse-vertical,black` button above the table).
 2.  In the dialog:
     *   **Operation**: Select ``mean`` (for time-average), ``max``, or another statistic.
 3.  Click **OK**.
@@ -26,20 +26,17 @@ Transform the data from "one row per timepoint" to "one row per track".
 
 **Step 3: Plot by Condition**
 
-1.  Select the **Condition Column** first (Categorical, e.g., ``well_name``).
-2.  Hold ``Ctrl`` and select the **Measurement Column** (Numerical, e.g., ``mean_mean_intensity``).
-    *   *Note*: The order of selection often determines X and Y axes. Condition (X) vs Measurement (Y).
-3.  Press ``Ctrl+P`` or select **File > Plot...**.
+1.  Press ``Ctrl+I`` or select **Plot > Distributions and statistics...** (also the :icon:`chart-bell-curve,black` button above the table). The **Set 1D plot parameters** window opens.
+2.  Set **x** to the condition column (categorical, e.g., ``well_name``) and **y** to the measurement column (numerical, e.g., ``mean_mean_intensity``).
+3.  (Optional) Use the **hue** dropdown to subdivide the plot by another category (e.g., ``replicate``).
 
 **Step 4: Configure the Visualization**
 
-1.  The plotting window opens.
-2.  In the **Plot Type** dropdown, select **Box Plot**.
-3.  To show individual data points, check the **Stripplot** option (or select **Strip Plot** to view it alone).
-4.  (Optional) Use the **Hue** dropdown to subdivide the boxplots by another category (e.g., ``replicate``).
-5.  Check **Show stats** if you wish to display statistical comparisons (e.g., p-values between boxes).
+1.  Under **Representations**, click the **boxplot** card. Click the **strip** card as well to show the individual data points on top of the boxes. Cards can be combined.
+2.  (Optional) Under **Statistical Tests**, click the cards of the tests to compute between the groups: the KS test p-value and the Cliff's Delta effect size. Each opens a table of pairwise comparisons (see :ref:`table_exploration`).
+3.  Press **set**.
 
 **Step 5: Export**
 
 *   Click the **Save Icon** in the plot window to export the figure.
-*   Or press ``Ctrl+S`` in the Table Explorer to save the collapsed data table to CSV.
+*   Or press ``Ctrl+S`` (**File > Save as...**) in the Table Explorer to save the collapsed data table to CSV.

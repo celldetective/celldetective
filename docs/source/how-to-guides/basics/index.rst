@@ -5,6 +5,7 @@ Basics
    :maxdepth: 1
 
    create-an-experiment
+   register-stacks
    register-stacks-with-fiji
    correct-a-fluo-background
    perform-model-free-background-correction

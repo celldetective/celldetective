@@ -10,7 +10,7 @@ Correction protocol
 
 #. Launch the software. Open a project.
 
-#. Expand the **PROCESSING** block. In the **BACKGROUND CORRECTION** section, click on the Model-free tab.
+#. Expand the **PREPROCESSING** block. In the **BACKGROUND CORRECTION** section, click on the Model-free tab.
 
 #. Set the channel to correct.
 

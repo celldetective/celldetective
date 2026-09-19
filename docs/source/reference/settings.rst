@@ -419,6 +419,17 @@ Accessible via the **Preprocessing** module.
 *   **Shift (h)/(v)**: Pixel shift (horizontal and vertical) to align the target channel with the reference.
 *   **Viewer**: Use the :icon:`image-check,black` button to open the *Offset Viewer*. Use arrow keys to visually align the channels.
 
+**Stack Registration**
+
+The drift is estimated on one channel by Fourier phase cross-correlation and the same shift is applied to every channel. The shifts of each frame are saved next to the registered stack, in ``<stack>_registration_shifts.csv``. See :doc:`/how-to-guides/basics/register-stacks`.
+
+*   **Channel**: The registration channel, on which the drift is estimated.
+*   **Radius**: Radius (in pixels) of the disk, centred on the image, inside which the correlation is computed. Structures outside are ignored. Leave empty to use the full frame. Use the :icon:`image-check,black` button to set it on a frame of the current position.
+*   **Tukey α**: Fraction of the disk smoothly faded to zero at its edge, between ``0`` (no taper) and ``1`` (Hann window). Default ``0.25``.
+*   **Upsampling**: Sub-pixel precision factor: shifts are measured to 1/upsampling of a pixel (default ``10``).
+*   **Downscale**: Block-averaging factor applied to the registration channel before the correlation; the rescaled shift is applied at full resolution (default ``1``, no downscaling).
+*   **Reference**: ``previous`` correlates each frame with the previous one and accumulates the shifts (default); ``first`` correlates each frame with the first frame.
+
 .. _ref_signal_settings:
 
 Signal Analysis

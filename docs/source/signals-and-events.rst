@@ -20,6 +20,8 @@ Deep-learning signal analysis
 
 Celldetective provides a zoo of deep-learning models that take single-cell signal traces as input and predict an event class and time of event for each cell. These models work similarly to segmentation models — select one, map your measurement columns to the model's expected inputs, and submit.
 
+A model reads signals of a fixed length, set when it was trained. A track longer than that is scanned with overlapping windows (50 % overlap): the event is looked for in each window, and the earliest detection is reported, at its time in the whole movie. A model trained on short movies can therefore be applied to longer ones.
+
 For a detailed list of signal mapping parameters, see the :ref:`Signal Analysis Reference <ref_signal_settings>`.
 
 

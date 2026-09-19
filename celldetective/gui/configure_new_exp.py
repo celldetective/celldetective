@@ -261,7 +261,7 @@ class ConfigNewExperiment(CelldetectiveMainWindow):
             "Structuring your experiment",
             docs_url=(
                 "https://celldetective.readthedocs.io/en/latest/"
-                "get-started.html#data-organization"
+                "concepts/data-organization.html"
             ),
             parent=self,
         )

@@ -31,7 +31,7 @@ Reference keys: *event duration*
     - Go to **Edit > Rename...**.
     - Enter a new name, for example ``hovering duration``.
 
-7. (For tracked data) Go to **File > Collapse tracks...**:
+7. (For tracked data) Go to **Table > Collapse tracks...** (or press ``Ctrl+G``):
 
     - In the dialog, keep **global operation** selected.
     - Choose **mean** (or **first**) as the operation to ensure one value per track.
@@ -39,7 +39,7 @@ Reference keys: *event duration*
 
     A **new table window** will open with the collapsed data (one row per track). Continue the next steps in this new window.
 
-8. In the new window, go to **File > Plot...** (or press ``Ctrl+p``).
+8. In the new window, go to **Plot > Distributions and statistics...** (or press ``Ctrl+I``).
 
 9. In the **Set 1D plot parameters** dialog:
 

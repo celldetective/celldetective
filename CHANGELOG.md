@@ -8,6 +8,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Stack registration** in the Preprocessing module: the drift of each
+  position is estimated on one channel by Fourier phase cross-correlation of
+  Tukey-windowed frames (sub-pixel, optional downscaling, against the previous
+  or the first frame) and applied to every channel. A viewer sets the
+  correlation disk and taper on a frame of the current position. The shifts of
+  each frame are saved next to the registered stack
+  (`<stack>_registration_shifts.csv`) and the step is logged in
+  `log_preprocessing.txt`.
+- **Configuration editor** rebuilt around the content of `config.ini`: a
+  *Settings* tab (one form per section), a *Well labels* table (one row per
+  well, labels can be added, renamed and removed, blocks pasted from a
+  spreadsheet) and a *Metadata* table. Saving reloads the configuration in the
+  control panel.
+- **Help panels**: the help buttons open a single window that asks its
+  questions in turn, keeps the answers in view, can go back, and ends on a
+  suggestion with a link to the matching page of the documentation.
+- **Table Explorer**: a header with the size of the table and a strip of tools
+  (plot, distributions and statistics, collapse tracks, query, copy, delete,
+  save), a line describing the selection, a right-click menu on the column
+  headers, copying cells with `Ctrl+C`, and the actions regrouped in *Edit*,
+  *Table*, *Math* and *Plot* menus.
+- The p-value and effect-size tables explain how to read them: each cell
+  compares its row to its column, and mirror cells test the opposite direction.
+- Event detection models scan tracks longer than their input with overlapping
+  windows and report the earliest detection, instead of failing. Training cuts
+  longer annotated signals to the model length.
+- A button restores the cell size a segmentation model was trained on in the
+  model parameter dialog.
+- The napari annotation corrector (*Plugins > Correct a segmentation
+  annotation*) offers the single-frame segmentation panel too, reading the
+  channels from the annotation's sidecar.
 - Segment a single frame straight from the napari correction viewer: a
   `FrameSegmentationPanel` docked on the right offers model selection, one
   dropdown per model input slot, and the inference parameters that model type
@@ -23,6 +54,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `use_stored_mapping`, which opts into what it stores.
 
 ### Changed
+- New visual style across the interface: buttons, checkboxes, collapsible
+  blocks, menus, progress bars, tooltips (only shown on items too long to be
+  read) and matplotlib figures.
+- The splash screen reports what is loading and closes if the start-up fails.
+- `class_id` (the mask label) is never interpolated by the track
+  post-processing, so no mask is invented for interpolated positions.
+- Tracks left without any mask are dropped when the napari track viewer opens
+  and on export.
 - **`segment()` can now honour two settings it used to ignore**, matching what
   `SegmentCellDLProcess` has always done, so the library and the pipeline return
   the same masks for the same model: the `selected_channels` mapping stored in
@@ -40,6 +79,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   creating its device context until the first prediction.
 
 ### Fixed
+- `Calibrate...` in the Table Explorer no longer takes the `Ctrl+C` shortcut,
+  which made the cells of the table impossible to copy.
+- The "Read the tutorial" links of the classification and experiment-structure
+  helpers pointed to pages that do not exist.
 - Cellpose models could not be loaded at all on Windows: the model name was
   derived from the model path with `split("/")[-2]`, which raises `IndexError`
   on an `os.sep`-joined path.
@@ -83,6 +126,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   signal, including the worker's own cleanup, so a run still in flight kept its
   thread, the image stack and the loaded network alive for the rest of the
   session.
+
+### Documentation
+- New guide to register stacks in the software; the Preprocessing page presents
+  both in-software and Fiji registration.
+- Guides updated for the configuration editor, the Table Explorer menus and
+  tools, the reading of the statistical tables, the napari single-frame
+  segmentation and annotation corrector, the help panels and sliding-window
+  event detection.
+- The annotated figures are now SVG files built from scripted captures of the
+  software (`docs/figures`), so they can be rebuilt when the interface changes.
 
 ## [1.5.3] - 2026-06-04
 

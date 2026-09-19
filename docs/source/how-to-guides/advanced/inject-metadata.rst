@@ -5,31 +5,42 @@ This guide shows you how to inject per-well or global metadata into the single c
 
 Reference keys: :term:`single-cell measurement`
 
+The metadata live in the experiment configuration file, ``config.ini`` (see :ref:`ref_experiment_config`). Celldetective edits it for you in the **Configuration** window.
+
+.. figure:: ../../_static/figures/config-editor.svg
+    :width: 100%
+    :target: ../../_static/figures/config-editor.svg
+    :align: center
+    :alt: the configuration editor
+
+    **The configuration editor.** The *Well labels* tab holds one row per well and one column per label (1, 2). The *Metadata* tab holds the values shared by the whole experiment (4, 5). The :icon:`file-cog,black` button opens the file in a text editor instead (3). Nothing is written before **Save** (6).
+
 **Step-by-step:**
 
 #. Open a project.
 
-#. Press the :icon:`cog-outline,black` button to view the experiment configuration parameters.
+#. Press the :icon:`cog-outline,black` button of the control panel to open the **Configuration** window.
 
-#. Press the :icon:`file-cog,black` button in the top-right corner to edit the configuration file with a text editor.
+**Case 1: add a metadata label per well:**
 
-**Case 1: add a metadata label per-well:**
+#. Go to the **Well labels** tab.
 
-#. Find the ``[Labels]`` section. If it does not exist, create it. It usually includes ``cell_types``, ``antibodies``, ``concentrations`` and ``pharmaceutical_agents``.
+#. Press the :icon:`table-column-plus-after,black` button and name the new label. Names are stored in lowercase, with underscores instead of spaces.
 
-#. Add a new entry in the section following the same template as existing. Example for three wells: ``new_label = val 1, val 2, val 3``. Example for one well: ``new_label = val 1``. Ensure that you have strictly as many values as there are wells.
+#. Fill in one value per well. A block of cells copied from a spreadsheet can be pasted with :kbd:`Ctrl+V`. Values cannot contain commas.
 
-#. Type :kbd:`Ctrl+S` to save the configuration file.
+The four default labels (``cell_types``, ``antibodies``, ``concentrations`` and ``pharmaceutical_agents``) can be edited but not renamed or removed. A label you added can be renamed (:icon:`pencil,black`) or removed (:icon:`table-column-remove,black`).
 
 **Case 2: add global metadata:**
 
-#. Find the ``[Metadata]`` section. If it does not exist, create it.
+#. Go to the **Metadata** tab.
 
-#. Add a new entry in the section following the template ``new_metadata = value``.
+#. Press the :icon:`table-row-plus-after,black` button and type a key and its value, e.g. ``date`` and ``2024-03-27``.
 
-#. Type :kbd:`Ctrl+S` to save the configuration file.
+Press **Save** (or :kbd:`Ctrl+S`). The configuration is written to ``config.ini`` and reloaded at once in the control panel.
 
+After computing single-cell measurements, you should be able to see these metadata as columns of the tables by pressing the :icon:`table,#1565c0` :blue:`Explore table` button for the population of interest.
 
-To see the updated config, close the experiment configuration editor window (both the text editor and the Celldetective config window). Reopen the window by pressing the :icon:`cog-outline,black` button.
+.. tip::
 
-After computing single-cell measurements, you should be able to see and write these metadata by pressing the :icon:`table,#1565c0` :blue:`Explore table` button for the population of interest.
+    The **Settings** tab gives access to the other sections of the file, such as the movie prefix, the calibration or the channel indices.

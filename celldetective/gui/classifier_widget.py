@@ -705,7 +705,10 @@ class ClassifierWidget(CelldetectiveWidget):
         open_help(
             "propagate-classification.json",
             "Propagating a classification",
-            docs_url="https://celldetective.readthedocs.io/en/latest/classify.html",
+            docs_url=(
+                "https://celldetective.readthedocs.io/en/latest/how-to-guides/"
+                "basics/perform-conditional-cell-classification.html"
+            ),
             parent=self,
         )
 
