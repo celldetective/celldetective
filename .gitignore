@@ -171,3 +171,5 @@ audit_report.json
 demo_adcc
 docs/_build_check
 scratch
+# PNG previews rendered by docs/figures/annotate.py (local only)
+docs/figures/preview/
