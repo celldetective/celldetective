@@ -1036,6 +1036,85 @@ def control_segmentation_napari(
     return None
 
 
+def _frame_segmentation_tabs(
+    viewer: "napari.Viewer",
+    stack: np.ndarray,
+    position: Optional[str],
+    population: str,
+    channels: Optional[List[str]] = None,
+    spatial_calibration: Optional[float] = None,
+    exp_dir: Optional[str] = None,
+) -> Optional[QWidget]:
+    """
+    Build the panels that segment the frame on screen, one tab per method.
+
+    A deep-learning model and a threshold pipeline are alternatives, so they
+    share the room of one panel rather than stacking up in the dock. A panel
+    that cannot be built is left out, and neither can stop the viewer opening.
+
+    Parameters
+    ----------
+    viewer : napari.Viewer
+        The viewer holding the ``segmentation`` labels layer.
+    stack : ndarray
+        The image stack being displayed (TYXC).
+    position : str or None
+        The position directory, None for a standalone image.
+    population : str
+        The population being segmented.
+    channels : list of str, optional
+        The channel names of `stack`, when there is no experiment to read.
+    spatial_calibration : float, optional
+        Microns per pixel, when there is no experiment to read.
+    exp_dir : str, optional
+        The experiment directory, when there is no position to find it from.
+
+    Returns
+    -------
+    QTabWidget or None
+        The panels, or None when neither could be built.
+    """
+
+    from PyQt5.QtWidgets import QTabWidget
+
+    tabs = QTabWidget()
+    try:
+        from celldetective.napari.frame_segmentation import FrameSegmentationPanel
+
+        model_panel = FrameSegmentationPanel(
+            viewer=viewer,
+            stack=stack,
+            position=position,
+            population=population,
+            channels=channels,
+            spatial_calibration=spatial_calibration,
+        )
+        model_panel.run_btn.setStyleSheet(Styles().button_style_sheet)
+        tabs.addTab(model_panel, "Model")
+    except Exception:
+        logger.exception("Could not build the single-frame segmentation panel.")
+
+    try:
+        from celldetective.napari.threshold_segmentation import (
+            ThresholdSegmentationPanel,
+        )
+
+        threshold_panel = ThresholdSegmentationPanel(
+            viewer=viewer,
+            stack=stack,
+            position=position,
+            population=population,
+            channels=channels,
+            exp_dir=exp_dir,
+        )
+        threshold_panel.run_btn.setStyleSheet(Styles().button_style_sheet)
+        tabs.addTab(threshold_panel, "Threshold")
+    except Exception:
+        logger.exception("Could not build the single-frame threshold panel.")
+
+    return tabs if tabs.count() else None
+
+
 def launch_segmentation_viewer(
     stack: np.ndarray,
     labels: np.ndarray,
@@ -1413,16 +1492,9 @@ def launch_segmentation_viewer(
         labels = labels.astype(np.int32)
     viewer.add_labels(labels, name="segmentation", opacity=0.4)
 
-    # A panel that cannot be built must not stop the viewer from opening.
-    try:
-        from celldetective.napari.frame_segmentation import FrameSegmentationPanel
-
-        segment_frame_panel = FrameSegmentationPanel(
-            viewer=viewer, stack=stack, position=position, population=population
-        )
-    except Exception:
-        logger.exception("Could not build the single-frame segmentation panel.")
-        segment_frame_panel = None
+    segment_frame_panel = _frame_segmentation_tabs(
+        viewer, stack, position=position, population=population
+    )
 
     button_container = QWidget()
     layout = QVBoxLayout(button_container)
@@ -1435,8 +1507,6 @@ def launch_segmentation_viewer(
     viewer.window.add_dock_widget(button_container, area="right")
 
     save_widget.native.setStyleSheet(Styles().button_style_sheet)
-    if segment_frame_panel is not None:
-        segment_frame_panel.run_btn.setStyleSheet(Styles().button_style_sheet)
     export_widget.native.setStyleSheet(Styles().button_style_sheet)
 
     def lock_controls(
@@ -1693,21 +1763,22 @@ def correct_annotation(filename: str) -> None:
     )
     viewer.add_labels(labels, name="segmentation", opacity=0.4)
 
-    # A panel that cannot be built must not stop the viewer from opening.
-    try:
-        from celldetective.napari.frame_segmentation import FrameSegmentationPanel
+    # Annotations are exported into ``<experiment>/annotations_<population>``;
+    # when that is still where this one lives, its experiment is where the last
+    # threshold configurations are remembered.
+    exp_dir = os.path.dirname(os.path.dirname(os.path.abspath(filename)))
+    if not os.path.exists(os.path.join(exp_dir, "config.ini")):
+        exp_dir = None
 
-        segment_frame_panel = FrameSegmentationPanel(
-            viewer=viewer,
-            stack=stack,
-            position=None,
-            population=_annotation_population(filename),
-            channels=channels,
-            spatial_calibration=spatial_calibration,
-        )
-    except Exception:
-        logger.exception("Could not build the single-frame segmentation panel.")
-        segment_frame_panel = None
+    segment_frame_panel = _frame_segmentation_tabs(
+        viewer,
+        stack,
+        position=None,
+        population=_annotation_population(filename),
+        channels=channels,
+        spatial_calibration=spatial_calibration,
+        exp_dir=exp_dir,
+    )
 
     button_container = QWidget()
     layout = QVBoxLayout(button_container)
@@ -1719,8 +1790,6 @@ def correct_annotation(filename: str) -> None:
     viewer.window.add_dock_widget(button_container, area="right")
 
     save_widget.native.setStyleSheet(Styles().button_style_sheet)
-    if segment_frame_panel is not None:
-        segment_frame_panel.run_btn.setStyleSheet(Styles().button_style_sheet)
 
     viewer.show(block=False)
 

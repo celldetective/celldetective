@@ -180,8 +180,13 @@ class ProcessPanel(ControlPanelBlock, Styles):
         self.exp_dir = self.parent_window.exp_dir
         self.exp_config = self.parent_window.exp_config
         self.movie_prefix = self.parent_window.movie_prefix
+        # The pipelines last used in this experiment, so they need not be
+        # uploaded again every session.
+        from celldetective.utils.threshold_configs import recall_threshold_configs
+
         self.threshold_configs = [
-            None for _ in range(len(self.parent_window.populations))
+            recall_threshold_configs(self.exp_dir, population) or None
+            for population in self.parent_window.populations
         ]
         self.wells = np.array(self.parent_window.wells, dtype=str)
         self.cellpose_calibrated = False

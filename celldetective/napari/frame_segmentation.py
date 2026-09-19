@@ -184,6 +184,36 @@ def _fit_to_layer_dtype(
     return labels.astype(dtype, copy=False)
 
 
+def record_undo(layer, t: int, before: np.ndarray, after: np.ndarray) -> None:
+    """
+    Push a bulk write onto a labels layer's undo history, if napari lets us.
+
+    Without this the frame can be segmented but not un-segmented: napari only
+    records what its own painting tools do, so a bulk write would leave Ctrl+Z
+    undoing whatever the user had done before instead. Best-effort - the
+    history is private API, so a napari that has moved it simply gets no undo
+    step rather than an error.
+
+    Parameters
+    ----------
+    layer : napari.layers.Labels
+        The layer being written to.
+    t : int
+        Index of the frame that changed.
+    before, after : ndarray
+        The frame's labels either side of the write.
+    """
+
+    try:
+        changed = np.nonzero(before != after)
+        if len(changed[0]) == 0:
+            return
+        indices = (np.full(changed[0].shape, t, dtype=np.intp),) + changed
+        layer._save_history((indices, before[changed], after[changed]))
+    except Exception as e:
+        logger.debug(f"Could not record an undo step for the segmentation: {e}")
+
+
 class _FloatEdit(QLineEdit):
     """A line edit accepting a single float, blank meaning "use the model's value"."""
 
@@ -1106,33 +1136,8 @@ class FrameSegmentationPanel(QWidget):
         )
 
     def _record_undo(self, layer, t: int, before: np.ndarray, after: np.ndarray) -> None:
-        """
-        Push this write onto the labels layer's undo history, if napari lets us.
-
-        Without this the frame can be segmented but not un-segmented: napari only
-        records what its own painting tools do, so a bulk write would leave Ctrl+Z
-        undoing whatever the user had done before instead. Best-effort - the
-        history is private API, so a napari that has moved it simply gets no undo
-        step rather than an error.
-
-        Parameters
-        ----------
-        layer : napari.layers.Labels
-            The layer being written to.
-        t : int
-            Index of the frame that changed.
-        before, after : ndarray
-            The frame's labels either side of the write.
-        """
-
-        try:
-            changed = np.nonzero(before != after)
-            if len(changed[0]) == 0:
-                return
-            indices = (np.full(changed[0].shape, t, dtype=np.intp),) + changed
-            layer._save_history((indices, before[changed], after[changed]))
-        except Exception as e:
-            logger.debug(f"Could not record an undo step for the segmentation: {e}")
+        """Push this write onto the labels layer's undo history; see :func:`record_undo`."""
+        record_undo(layer, t, before, after)
 
     def _on_succeeded(self, prepared, new_labels) -> None:
         """

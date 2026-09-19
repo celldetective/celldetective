@@ -1,7 +1,7 @@
 import json
 import os
 from glob import glob
-from typing import Optional
+from typing import Callable, Optional
 
 import numpy as np
 from PyQt5.QtCore import Qt, QSize, QThread
@@ -49,6 +49,7 @@ from celldetective import (
 )
 from celldetective.utils.data_cleaning import rename_intensity_column
 from celldetective.utils.experiment import extract_experiment_channels
+from celldetective.utils.threshold_configs import remember_threshold_configs
 import logging
 
 logger = logging.getLogger(__name__)
@@ -77,25 +78,58 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
 
     """
 
-    def __init__(self, parent_window: Optional[QMainWindow] = None) -> None:
+    def __init__(
+        self,
+        parent_window: Optional[QMainWindow] = None,
+        *,
+        mode: Optional[str] = None,
+        pos: Optional[str] = None,
+        exp_dir: Optional[str] = None,
+        movie_prefix: Optional[str] = None,
+        initial_frame: Optional[int] = None,
+        on_saved: Optional[Callable[[str], None]] = None,
+    ) -> None:
         """
         Initialize the ThresholdConfigWizard.
+
+        Opened from the main window, everything is read off the parent chain.
+        Opened from elsewhere -- the napari viewer, say -- there is no such chain,
+        and the position, experiment and movie prefix are given instead.
 
         Parameters
         ----------
         parent_window : QMainWindow, optional
-            The parent window.
+            The upload window the wizard is opened from, when there is one.
+        mode : str, optional
+            The population, overriding the parent's.
+        pos : str, optional
+            The position directory whose movie is shown, overriding the parent's.
+        exp_dir : str, optional
+            The experiment directory, overriding the parent's.
+        movie_prefix : str, optional
+            Prefix of the movie to show, overriding the parent's.
+        initial_frame : int, optional
+            The frame to show first, instead of the first one.
+        on_saved : callable, optional
+            Called with the path of the configuration once it has been written.
         """
 
         super().__init__()
         self.parent_window = parent_window
+        self.on_saved = on_saved
         # Navigate explicit parent chain: SegModelLoader -> ControlPanel -> ProcessPanel -> MainWindow
-        self.screen_height = (
-            self.parent_window.parent_window.parent_window.parent_window.screen_height
+        main_window = (
+            self.parent_window.parent_window.parent_window.parent_window
+            if self.parent_window is not None
+            else None
         )
-        self.screen_width = (
-            self.parent_window.parent_window.parent_window.parent_window.screen_width
-        )
+        if main_window is not None:
+            self.screen_height = main_window.screen_height
+            self.screen_width = main_window.screen_width
+        else:
+            geometry = QApplication.primaryScreen().availableGeometry()
+            self.screen_height = geometry.height()
+            self.screen_width = geometry.width()
         self.setMinimumWidth(800)
         self.setMinimumHeight(600)
         self.setWindowTitle("Threshold configuration wizard")
@@ -103,9 +137,18 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
         self._createActions()
         self._create_menu_bar()
 
-        self.mode = self.parent_window.mode
-        self.pos = self.parent_window.parent_window.parent_window.pos
-        self.exp_dir = self.parent_window.parent_window.exp_dir
+        self.mode = mode if mode is not None else self.parent_window.mode
+        self.pos = (
+            pos if pos is not None else self.parent_window.parent_window.parent_window.pos
+        )
+        exp_dir = exp_dir if exp_dir is not None else self.parent_window.parent_window.exp_dir
+        # Paths are built by appending to it, so it must end with a separator.
+        self.exp_dir = exp_dir if exp_dir.endswith(("/", os.sep)) else exp_dir + os.sep
+        self.movie_prefix = (
+            movie_prefix
+            if movie_prefix is not None
+            else self.parent_window.parent_window.parent_window.movie_prefix
+        )
         self.soft_path = get_software_location()
         self.footprint = 30
         self.min_dist = 30
@@ -136,6 +179,8 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
             self.prep_cell_properties()
             self.populate_widget()
             self.setAttribute(Qt.WA_DeleteOnClose)
+            if initial_frame:
+                self._show_frame(initial_frame)
 
         self.bg_loader = BackgroundLoader()
         # Tracked: this loader imports tensorflow-sized modules, so it easily
@@ -494,7 +539,7 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
         if isinstance(self.pos, str):
             movies = glob(
                 self.pos
-                + f"movie/{self.parent_window.parent_window.parent_window.movie_prefix}*.tif"
+                + f"movie/{self.movie_prefix}*.tif"
             )
 
         else:
@@ -624,6 +669,25 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
         )
 
     # self.canvas_hist.canvas.draw_idle()
+
+    def _show_frame(self, frame: int) -> None:
+        """
+        Start on a given frame rather than the first, histogram included.
+
+        Parameters
+        ----------
+        frame : int
+            The frame index, clamped to the movie.
+        """
+
+        slider = getattr(self.viewer, "frame_slider", None)
+        if slider is None:
+            return
+        try:
+            slider.setValue(int(np.clip(frame, slider.minimum(), slider.maximum())))
+            self.reload_frame()
+        except Exception as e:
+            logger.debug(f"Could not open the wizard on frame {frame}: {e}")
 
     def reload_frame(self):
         """
@@ -924,9 +988,19 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
                 f"Configuration successfully written in {self.instruction_file}"
             )
 
-            self.parent_window.filename = self.instruction_file
-            self.parent_window.file_label.setText(self.instruction_file[:16] + "...")
-            self.parent_window.file_label.setToolTip(self.instruction_file)
+            remember_threshold_configs(self.exp_dir, self.mode, self.instruction_file)
+
+            if self.parent_window is not None:
+                self.parent_window.filename = self.instruction_file
+                self.parent_window.file_label.setText(
+                    self.instruction_file[:16] + "..."
+                )
+                self.parent_window.file_label.setToolTip(self.instruction_file)
+            if self.on_saved is not None:
+                try:
+                    self.on_saved(self.instruction_file)
+                except Exception as e:
+                    logger.warning(f"Could not hand over the saved configuration: {e}")
 
             self.close()
         else:
