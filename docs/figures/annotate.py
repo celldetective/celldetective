@@ -108,6 +108,32 @@ class Figure:
         shapes.add_rect(self.project, x=x, y=y, width=w, height=h, rx=6, ry=6,
                         style=style, layer=self.marks)
 
+    def callout(self, n, x, y, w, h, side="left", rounded=True, r=14, frame=True):
+        """
+        A numbered callout: a frame drawn tightly around the target, and its badge
+        just outside the frame, centred on one of its sides.
+
+        Frame a group of tool icons as a whole, square-cornered (rounded=False);
+        frame a cell, a row, a column or a section with rounded corners. For a
+        large button that speaks for itself, pass frame=False: the badge then
+        sits on the left end of the given rectangle, inside it.
+        """
+        if not frame:
+            self.badge(n, x + r + 1, y + h / 2, r=r)
+            return
+        style = f"fill:none;stroke:{BLUE};stroke-width:3;stroke-linejoin:round"
+        rx = 6 if rounded else 0
+        shapes.add_rect(self.project, x=x, y=y, width=w, height=h, rx=rx, ry=rx,
+                        style=style, layer=self.marks)
+        gap = r + 2
+        cx, cy = {
+            "left": (x - gap, y + h / 2),
+            "right": (x + w + gap, y + h / 2),
+            "top": (x + w / 2, y - gap),
+            "bottom": (x + w / 2, y + h + gap),
+        }[side]
+        self.badge(n, cx, cy, r=r)
+
     def label(self, s, x, y, size=17, anchor="start", weight="normal", color=INK):
         """A label; several lines are separated by newlines."""
         text_mod.add_text(

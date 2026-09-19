@@ -53,14 +53,12 @@ def config_editor():
     bx, by = 330, 330
     f.shot("config_editor_2_metadata.png", bx, by)
 
-    f.badge(1, ax + 518, ay + 124)
-    f.box(ax + 467, ay + 146, 73, 60)
-    f.badge(2, ax + 540, ay + 146)
-    f.badge(3, ax + 588, ay + 56)
-    f.badge(4, bx + 588, by + 98)
-    f.box(bx + 22, by + 204, 597, 32)
-    f.badge(5, bx + 22, by + 204)
-    f.badge(6, bx + 340, by + 505)
+    f.callout(1, ax + 524, ay + 109, 97, 30, rounded=False)  # label tools
+    f.callout(2, ax + 467, ay + 146, 73, 60, side="right")  # the new column
+    f.callout(3, ax + 604, ay + 41, 25, 30, rounded=False)  # text editor button
+    f.callout(4, bx + 551, by + 111, 73, 28, rounded=False)  # metadata tools
+    f.callout(5, bx + 22, by + 204, 597, 32)  # the new entry
+    f.callout(6, bx + 325, by + 490, 303, 30, frame=False)  # Save
 
     f.legend(
         [
