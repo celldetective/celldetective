@@ -29,6 +29,10 @@ Reference keys: **tracking**
 
 .. note::
 
+    A track left with no mask in any frame, for instance after all its masks were given to other tracks, is removed from the table when the viewer opens and on export. Tracks that keep at least one mask are left untouched.
+
+.. note::
+
     The post-processing affects the trajectory (track and point) layers and the saved table. The displayed segmentation masks are not pruned for removed tracks, so a mask may remain visible for a track that was filtered out of the table on export.
 
 

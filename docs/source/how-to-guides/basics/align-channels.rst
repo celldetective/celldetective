@@ -10,7 +10,7 @@ Alignment protocol
 
 #. Launch the software. Open a project.
 
-#. Expand the **PROCESSING** block, scroll down to **CHANNEL OFFSET CORRECTION**.
+#. Expand the **PREPROCESSING** block, scroll down to **CHANNEL OFFSET CORRECTION**.
 
 #. Click on the :icon:`image-check,black` icon to set visually the shift values with a dedicated viewer.
 

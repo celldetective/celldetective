@@ -100,7 +100,7 @@ General Terms
         Any operation performed on the raw microscopy images before segmentation and measurements.
 
     alignment
-        The correction of microscopy image drifts over time and offsets so that non-moving objects do not appear to be moving up to tracking errors in case of tracking.
+        The correction of microscopy image drifts over time (registration) and of offsets between channels, so that non-moving objects do not appear to be moving, which would otherwise lead to tracking errors. See :doc:`/how-to-guides/basics/register-stacks`.
 
     input spatial calibration
         Pixel resolution of the training images (in microns). Used to rescale input images to match the model's expected scale.

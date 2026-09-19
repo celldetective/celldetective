@@ -25,7 +25,7 @@ from celldetective.gui.gui_utils import (
 from celldetective.gui.base.list_widget import ListWidget
 from celldetective.gui.base.feature_choice import FeatureChoice
 from celldetective.gui.base.components import QHSeperationLine
-from superqt import QLabeledDoubleSlider
+from celldetective.gui.base.sliders import QLabeledDoubleSlider
 from superqt.fonticon import icon
 from fonticon_mdi6 import MDI6
 

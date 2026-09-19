@@ -168,6 +168,16 @@ Importing and applying models
 
 Models are imported via the :icon:`upload,black` button in the Segmentation panel. This creates a configuration file that maps your experiment's channels to the model's expected inputs, including spatial calibration and normalization.
 
+When you set the channels for a model, the dialog also asks for the **cell size**
+in microns whenever the model has a trained size to be rescaled against: the
+frame is resized until its objects reach the size the network was trained to see.
+Models built through celldetective record that size as ``cell_size_um``; a
+generalist Cellpose model records it in pixels instead, as the diameter it was
+trained on at its own calibration, so it is asked for those too. The dialog
+reopens on the size you last set, and a model with no trained size is never given
+one behind your back. The :icon:`restore,black` button next to the field puts back
+the size the model was trained on.
+
 For a detailed list of all import parameters, see the :ref:`Segmentation Data Import Reference <ref_segmentation_settings>`.
 
 For a complete step-by-step walkthrough (including generalist model configuration), see :doc:`How to apply a segmentation model <how-to-guides/basics/apply-a-segmentation-model>`.
@@ -182,7 +192,7 @@ Once a position is segmented, the results can be visualized in **napari** by cli
 With napari, segmentation mistakes can be corrected using the brush, eraser, and fill tools. Celldetective provides two plugins:
 
 #. **Save the modified labels** — overwrite the masks in place.
-#. **Export a training sample** — create an annotated pair (image + mask) to train a Deep Learning model on your data.
+#. **Export the annotation of the current frame** — create an annotated pair (image + mask) to train a Deep Learning model on your data.
 
 Above these buttons, a set of options controls the automatic fixes applied to the masks when they are saved or exported:
 
@@ -201,6 +211,78 @@ To train a model on your annotations, see :doc:`How to train a segmentation mode
     :alt: napari
     
     **napari**. napari provides the basic requirements of image manipulation software, namely a brush, rubber, bucket and pipette, to work on the segmentation layer. In this RICM image of spreading NK cells, two couples of cells have been mistakenly segmented as one object and must be separated. On the right panel, two plugins specific to Celldetective allow 1) the export of the modified masks directly in the position folder, and 2) to create automatically an annotation consisting of the current multichannel frame, the modified mask and a configuration file specifying the modality content of the image and its spatial calibration.
+
+
+.. _segment_single_frame_napari:
+
+Segmenting a single frame from napari
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The top of the same right-hand panel can run a segmentation model on the frame
+currently on screen, without leaving the viewer or launching a run over the whole
+position. It is the quickest way to try a model, a channel mapping or a threshold
+on one frame and look at the result straight away.
+
+.. figure:: _static/figures/napari-frame-segmentation.svg
+    :width: 100%
+    :target: _static/figures/napari-frame-segmentation.svg
+    :align: center
+    :alt: segmenting a single frame from napari
+
+    **Segmenting the frame on screen.** The ``lymphocytes_ricm`` model was run on frame 20 of the RICM demo: the labels of that frame were replaced by the model's output, in the ``segmentation`` layer.
+
+Pick a model for this population (1): one that has not been downloaded yet is fetched on first use. Map the channels with one dropdown per input of the model (2), and leave the parameters blank to use the model's own values (3). **Replace the labels on this frame** chooses between segmenting the frame afresh and only filling the background (4). **Segment this frame** runs in the background (5), and the new labels land in the ``segmentation`` layer, where :kbd:`Ctrl+Z` undoes them (6).
+
+*   **model** — any model available for this population, plus the generic ones.
+    A model that has not been downloaded yet is offered too; it is fetched on the
+    first run.
+*   **channels** — the same rows as the channel dialog of the main window: one
+    dropdown per input slot of the chosen model, seeded from the mapping already
+    saved there. Set a slot to ``None`` to leave it blank. The same experiment
+    channel may feed several slots.
+*   **parameters** — the values that model type actually takes: **cell
+    probability** and **flow threshold** for Cellpose models, and **cell size**
+    for every model whose trained object size can be worked out. Leave a field
+    blank to use the model's own value.
+
+    **Cell size** is the typical object size in *these* images, in microns, and
+    it is what drives the rescaling: the frame is resized until objects reach the
+    size the network was trained to see, which is where a model does its best
+    work. A model built through celldetective records that size as
+    ``cell_size_um``; a generic Cellpose model records it in pixels instead, as
+    the diameter it was trained on at its own calibration, so the row is offered
+    for those too. The trained size itself — Cellpose's 30 px, say — is not a
+    setting and is never asked for: a network trained to see 30 px objects should
+    go on being asked for 30 px ones, and it is the image that moves.
+*   **Replace the labels on this frame** — ticked, the frame is segmented afresh.
+    Unticked, the existing labels are kept and the new ones only fill the
+    background, so manual corrections on that frame survive.
+
+The run happens on a background thread, so the viewer stays usable; the button
+turns into **Cancel** while it works. Inference itself cannot be interrupted, so
+cancelling during a forward pass returns the interface to normal and discards the
+result when it lands, while cancelling during model loading stops before any
+inference happens.
+
+The result is written into the ``segmentation`` layer and can be undone with
+:kbd:`Ctrl+Z` like any other edit. Nothing reaches disk until **Save the modified
+labels** is used, and the settings chosen here stay local to the napari session:
+they are never written back into the model configuration, so trying something out
+cannot change what the next full-position run does.
+
+The same panel is offered when correcting a training annotation, from **Plugins >
+Correct a segmentation annotation** in the start window. An annotation is the image
+exported with **Export the annotation of the current frame**, next to its mask (``_labelled.tif``) and
+a ``.json`` file recording its channels and spatial calibration. The panel reads the
+channels from that file, so an annotation can be started from a model's output and
+corrected by hand rather than drawn from nothing. **Save the modified labels**
+overwrites the ``_labelled.tif`` mask.
+
+.. note::
+
+    Segmentation here runs on the CPU, leaving the GPU to the viewer's renderer.
+    A single frame is quick, but expect it to be slower than the same model
+    running over a position in the main window.
 
 
 References

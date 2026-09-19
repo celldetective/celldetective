@@ -11,10 +11,7 @@ from imageio import v2 as imageio
 from natsort import natsorted
 from tifffile import imread, memmap, TiffFile
 
-from celldetective.utils.image_cleaning import (
-    _fix_no_contrast,
-    interpolate_nan_multichannel,
-)
+from celldetective.utils.image_cleaning import interpolate_nan_multichannel
 from celldetective.utils.normalization import normalize_multichannel
 from celldetective import get_logger
 
@@ -358,6 +355,7 @@ def locate_labels(
         )
 
     label_names = [os.path.split(lbl)[-1] for lbl in label_path]
+    name_to_idx = {name: i for i, name in enumerate(label_names)}
 
     if frames is None:
 
@@ -389,10 +387,7 @@ def locate_labels(
     elif isinstance(frames, (int, float, np.int_)):
 
         tzfill = str(int(frames)).zfill(4)
-        try:
-            idx = label_names.index(f"{tzfill}.tif")
-        except ValueError:
-            idx = -1
+        idx = name_to_idx.get(f"{tzfill}.tif", -1)
 
         if idx == -1:
             labels = None
@@ -403,10 +398,7 @@ def locate_labels(
         labels = []
         for f in frames:
             tzfill = str(int(f)).zfill(4)
-            try:
-                idx = label_names.index(f"{tzfill}.tif")
-            except ValueError:
-                idx = -1
+            idx = name_to_idx.get(f"{tzfill}.tif", -1)
 
             if idx == -1:
                 labels.append(None)
@@ -714,8 +706,8 @@ def load_frames(
     -----
     - The function uses scikit-image for reading frames and supports multi-frame TIFF stacks.
     - Normalization and scaling are optional and can be customized through function parameters.
-    - A workaround is implemented for frames with uniform pixel values to prevent normalization errors by
-      adding a 'fake' pixel.
+    - Uniform frames are returned unchanged. Callers that need contrast (e.g. deep-learning
+      segmentation) should apply `_fix_no_contrast` themselves.
 
     Examples
     --------
@@ -760,9 +752,9 @@ def load_frames(
     if normalize_input:
         frames = normalize_multichannel(frames.astype(float), **normalize_kwargs)
 
-    # add a fake pixel to prevent auto normalization errors on images that are uniform
-    frames = _fix_no_contrast(frames)
-
+    # Return the pixels as they are on disk. Consumers that cannot handle a uniform
+    # frame (segmentation models, contrast sliders) guard for it themselves; faking
+    # contrast here would leak into exported movies, measurements and blank-frame checks.
     return frames  # .astype(dtype)
 
 

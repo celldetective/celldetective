@@ -10,23 +10,20 @@ Overview
 Preprocessing is an essential step to prepare your microscopy data for analysis in Celldetective. It includes both off-software and in-software methods to align, correct, and optimize your stacks for segmentation and downstream measurements.
 
 
-Off-software preprocessing
---------------------------
-
 Registration
-~~~~~~~~~~~~
+------------
 
-We highly recommend aligning your movies before using Celldetective to correct for stage drift. This is typically done using external tools like Fiji (ImageJ).
+Stage drift and shaking make still objects move across the frames, which misleads tracking and blurs time-averaged measurements. We highly recommend registering the movies before segmentation. Celldetective registers stacks by phase cross-correlation, directly in the **Preprocessing** module (see the table below). The stacks can also be aligned before being imported, with external tools like Fiji (ImageJ), which can correct rotations too.
 
 .. seealso::
-    :doc:`how-to-guides/basics/register-stacks-with-fiji` for a step-by-step guide on using the customized Fiji macro for batch registration.
+    :doc:`how-to-guides/basics/register-stacks` to register the stacks in Celldetective, and :doc:`how-to-guides/basics/register-stacks-with-fiji` for a step-by-step guide on using the customized Fiji macro for batch registration.
 
 
 
 In-software preprocessing
 --------------------------
 
-The **Preprocessing** module lets you batch-correct stacks directly within Celldetective. Corrected stacks are saved with the prefix ``Corrected_``.
+The **Preprocessing** module lets you batch-correct stacks directly within Celldetective. Corrected stacks are saved with the prefix ``Corrected_``. The corrections added to the list are applied in order: the first one reads the raw movie, the next ones correct the ``Corrected_`` stack in place. Each step is recorded with its parameters in the ``log_preprocessing.txt`` file of the position.
 
 .. list-table::
    :widths: 30 50 20
@@ -44,6 +41,9 @@ The **Preprocessing** module lets you batch-correct stacks directly within Celld
    * - Channel offset correction
      - Aligns channels that have pixel shifts between modalities.
      - :doc:`how-to <how-to-guides/basics/align-channels>`
+   * - Stack registration
+     - Corrects the drift of the field over time, estimated on one channel and applied to all.
+     - :doc:`how-to <how-to-guides/basics/register-stacks>`
 
 For a full list of parameters (thresholds, tile options, etc.), see the :ref:`Preprocessing Protocols Reference <ref_preprocessing_settings>`.
 

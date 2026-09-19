@@ -14,11 +14,62 @@ from celldetective.utils.image_transforms import (
 from celldetective.utils.image_loaders import (
     _get_img_num_per_channel,
     _extract_channel_indices,
+    load_frames,
 )
+from celldetective.utils.image_cleaning import _fix_no_contrast
 from celldetective.utils.data_cleaning import remove_redundant_features
 from celldetective.utils.experiment import extract_experiment_channels
 from celldetective.utils.model_loaders import freeze_model_encoder
 from celldetective.utils.io import make_json_safe
+
+
+class TestLoadFramesKeepsUniformFrames(unittest.TestCase):
+    """load_frames must return the pixels on disk, even for a blank frame."""
+
+    def test_blank_frame_is_returned_unchanged(self):
+        import tempfile
+
+        import tifffile
+
+        stack = np.zeros((2, 32, 32), dtype=np.uint16)
+        stack[0, 10:20, 10:20] = 500
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "stack.tif")
+            tifffile.imwrite(path, stack, imagej=True)
+            blank = load_frames([1], path, normalize_input=False)
+            textured = load_frames([0], path, normalize_input=False)
+
+        self.assertTrue(np.all(blank == 0))
+        np.testing.assert_array_equal(textured[:, :, 0], stack[0])
+
+
+class TestFixNoContrast(unittest.TestCase):
+
+    def test_uniform_channel_gets_one_brighter_pixel(self):
+        frames = np.full((8, 8, 2), 3.0)
+        frames[2, 2, 1] = 7.0
+        fixed = _fix_no_contrast(frames)
+        self.assertEqual(fixed[0, 0, 0], 4.0)
+        self.assertEqual(np.count_nonzero(fixed[:, :, 0] != 3.0), 1)
+        self.assertEqual(fixed[0, 0, 1], 3.0)
+
+    def test_saturated_integer_frame_does_not_overflow(self):
+        frames = np.full((8, 8, 1), 255, dtype=np.uint8)
+        fixed = _fix_no_contrast(frames)
+        self.assertTrue(np.issubdtype(fixed.dtype, np.floating))
+        self.assertEqual(fixed[0, 0, 0], 256.0)
+        self.assertGreater(fixed.max(), fixed.min())
+
+    def test_all_nan_channel_is_left_alone(self):
+        frames = np.full((8, 8, 1), np.nan)
+        fixed = _fix_no_contrast(frames)
+        self.assertTrue(np.all(np.isnan(fixed)))
+
+    def test_uniform_channel_with_nan_is_fixed(self):
+        frames = np.full((8, 8, 1), 2.0)
+        frames[4, 4, 0] = np.nan
+        fixed = _fix_no_contrast(frames)
+        self.assertGreater(np.nanmax(fixed), np.nanmin(fixed))
 
 
 class TestPatchMask(unittest.TestCase):
@@ -302,3 +353,57 @@ class TestMakeJsonSafe(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestSegmentationModelListing(unittest.TestCase):
+    """
+    Listing the models must not rewrite the model tree unless asked to.
+
+    ``get_segmentation_models_list`` creates the category directory and deletes any
+    local model folder without a ``config_input.json``. That is reasonable upkeep
+    for the settings dialogs that own the model tree, but the napari panel lists
+    the models just to fill a dropdown when a viewer opens - deleting folders is
+    not a side effect an ordinary "what is available?" should have.
+    """
+
+    def setUp(self):
+        from celldetective.utils.model_getters import get_segmentation_models_list
+
+        self.list_models = get_segmentation_models_list
+        _, self.modelpath = self.list_models(
+            mode="targets", return_path=True, cleanup=False
+        )
+
+    def test_a_model_without_a_config_survives_a_read_only_listing(self):
+        import os
+        from shutil import rmtree
+
+        broken = os.path.join(self.modelpath, "a-model-with-no-config")
+        os.makedirs(broken, exist_ok=True)
+        try:
+            listed = self.list_models(mode="targets", cleanup=False)
+            self.assertTrue(os.path.isdir(broken))
+            # It is still not offered: a model with no input configuration
+            # cannot be loaded, whether or not it is left on disk.
+            self.assertNotIn("a-model-with-no-config", listed)
+        finally:
+            if os.path.isdir(broken):
+                rmtree(broken)
+
+    def test_cleanup_still_removes_it_when_asked(self):
+        import os
+
+        broken = os.path.join(self.modelpath, "a-model-with-no-config")
+        os.makedirs(broken, exist_ok=True)
+        self.list_models(mode="targets", cleanup=True)
+        self.assertFalse(os.path.isdir(broken))
+
+    def test_an_unknown_category_is_not_created_by_a_read_only_listing(self):
+        import os
+
+        # "target" (singular) is not a real category; the panel normalises it, but
+        # a listing must not conjure a directory for whatever it is handed.
+        stray = os.path.join(os.path.dirname(self.modelpath.rstrip(os.sep)), "segmentation_not-a-population")
+        self.assertFalse(os.path.isdir(stray))
+        self.list_models(mode="not-a-population", cleanup=False)
+        self.assertFalse(os.path.isdir(stray))

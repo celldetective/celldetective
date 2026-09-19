@@ -31,6 +31,7 @@ from celldetective.utils.experiment import (
     get_experiment_labels,
     get_experiment_metadata,
     extract_experiment_channels,
+    get_spatial_calibration,
 )
 from celldetective.utils.parsing import config_section_to_dict
 from celldetective import get_logger
@@ -38,6 +39,41 @@ from celldetective.log_manager import positionlogger
 from celldetective.gui.base.styles import Styles
 
 logger = get_logger()
+
+
+def _layer_controls(viewer: "napari.Viewer", layer: "napari.layers.Layer"):
+    """
+    Reach the Qt control panel of a layer, whichever napari this is.
+
+    There is no public way to get at it. ``Window.qt_viewer`` was the usual one,
+    but napari deprecated it in 0.5 and removed it in 0.6, so it both warns on
+    every viewer opened and stops working; ``Window._qt_viewer`` is what that
+    property wrapped and is what remains. Try the private one first, then the
+    public one for a napari old enough not to have it.
+
+    Parameters
+    ----------
+    viewer : napari.Viewer
+        The viewer the layer belongs to.
+    layer : napari.layers.Layer
+        The layer whose controls are wanted.
+
+    Returns
+    -------
+    QWidget or None
+        The layer's control widget, or None when this napari exposes neither.
+    """
+
+    for attribute in ("_qt_viewer", "qt_viewer"):
+        qt_viewer = getattr(viewer.window, attribute, None)
+        if qt_viewer is None:
+            continue
+        try:
+            return qt_viewer.controls.widgets[layer]
+        except Exception as e:
+            logger.debug(f"Could not reach the layer controls via {attribute}: {e}")
+    logger.debug("This napari exposes no layer controls; leaving them unlocked.")
+    return None
 
 
 def _drop_fully_maskless_tracks(df: pd.DataFrame) -> pd.DataFrame:
@@ -391,7 +427,9 @@ def launch_napari_viewer(
         locked : bool, optional
             Whether to lock or unlock the widgets.
         """
-        qctrl = viewer.window.qt_viewer.controls.widgets[layer]
+        qctrl = _layer_controls(viewer, layer)
+        if qctrl is None:
+            return
         for wdg in widgets:
             try:
                 getattr(qctrl, wdg).setEnabled(not locked)
@@ -1375,15 +1413,30 @@ def launch_segmentation_viewer(
         labels = labels.astype(np.int32)
     viewer.add_labels(labels, name="segmentation", opacity=0.4)
 
+    # A panel that cannot be built must not stop the viewer from opening.
+    try:
+        from celldetective.napari.frame_segmentation import FrameSegmentationPanel
+
+        segment_frame_panel = FrameSegmentationPanel(
+            viewer=viewer, stack=stack, position=position, population=population
+        )
+    except Exception:
+        logger.exception("Could not build the single-frame segmentation panel.")
+        segment_frame_panel = None
+
     button_container = QWidget()
     layout = QVBoxLayout(button_container)
     layout.setSpacing(10)
+    if segment_frame_panel is not None:
+        layout.addWidget(segment_frame_panel)
     layout.addWidget(correction_options.native)
     layout.addWidget(save_widget.native)
     layout.addWidget(export_widget.native)
     viewer.window.add_dock_widget(button_container, area="right")
 
     save_widget.native.setStyleSheet(Styles().button_style_sheet)
+    if segment_frame_panel is not None:
+        segment_frame_panel.run_btn.setStyleSheet(Styles().button_style_sheet)
     export_widget.native.setStyleSheet(Styles().button_style_sheet)
 
     def lock_controls(
@@ -1401,7 +1454,9 @@ def launch_segmentation_viewer(
         locked : bool, optional
             Whether to lock or unlock.
         """
-        qctrl = viewer.window.qt_viewer.controls.widgets[layer]
+        qctrl = _layer_controls(viewer, layer)
+        if qctrl is None:
+            return
         for wdg in widgets:
             try:
                 getattr(qctrl, wdg).setEnabled(not locked)
@@ -1438,9 +1493,90 @@ def launch_segmentation_viewer(
     logger.info("napari viewer was successfully closed...")
 
 
+def _annotation_metadata(filename: str) -> Tuple[Optional[List[str]], Optional[float]]:
+    """
+    Read the channels and the calibration an annotation was exported with.
+
+    An annotation image is a standalone file: there is no ``config.ini`` next to
+    it to read the experiment from. What it does carry is the sidecar written at
+    export time, which records exactly the two things a segmentation model has to
+    be told -- what each plane is, and how many microns a pixel covers.
+
+    Parameters
+    ----------
+    filename : str
+        Path to the annotation image (``.tif``).
+
+    Returns
+    -------
+    channels : list of str or None
+        The channel names, in the order the planes are stored, or None when the
+        sidecar is missing or says nothing about them.
+    spatial_calibration : float or None
+        Microns per pixel, or None when unknown.
+    """
+
+    info_name = os.path.splitext(filename)[0] + ".json"
+    if not os.path.exists(info_name):
+        logger.debug(f"No annotation sidecar next to {filename}.")
+        return None, None
+
+    try:
+        with open(info_name) as f:
+            info = json.load(f)
+    except Exception as e:
+        logger.warning(f"Could not read the annotation metadata in {info_name}: {e}")
+        return None, None
+
+    channels = info.get("channels")
+    if not isinstance(channels, list) or not channels:
+        channels = None
+
+    calibration = info.get("spatial_calibration")
+    try:
+        calibration = float(calibration) if calibration is not None else None
+    except (TypeError, ValueError):
+        logger.warning(f"Unusable spatial calibration in {info_name}: {calibration!r}")
+        calibration = None
+
+    return channels, calibration
+
+
+def _annotation_population(filename: str) -> str:
+    """
+    Work out which population an annotation belongs to, from its folder.
+
+    Annotations are exported into ``annotations_<population>``, so the folder is
+    the only record of which model family the image was annotated for. Anything
+    else falls back to the targets, which is what the viewer defaults to
+    everywhere else.
+
+    Parameters
+    ----------
+    filename : str
+        Path to the annotation image.
+
+    Returns
+    -------
+    str
+        The population name.
+    """
+
+    folder = os.path.basename(os.path.dirname(os.path.abspath(filename)))
+    prefix = "annotations_"
+    if folder.startswith(prefix) and len(folder) > len(prefix):
+        return folder[len(prefix):]
+    return "targets"
+
+
 def correct_annotation(filename: str) -> None:
     """
     New function to reannotate an annotation image in post, using napari and save update inplace.
+
+    The panel that segments the frame on screen is offered here too, so an
+    annotation can be started from a model's output and corrected by hand rather
+    than drawn from nothing. Its channel mapping is seeded from the sidecar the
+    annotation was exported with, since there is no experiment to read.
 
     Parameters
     ----------
@@ -1532,7 +1668,23 @@ def correct_annotation(filename: str) -> None:
 
     stack = img[np.newaxis, :, :, :]
     contrast_limits = _get_contrast_limits(stack)
+
+    channels, spatial_calibration = _annotation_metadata(filename)
+    if channels is not None and len(channels) != stack.shape[-1]:
+        # The sidecar was written for this very image, so a mismatch means the
+        # two have drifted apart; mapping the planes by position anyway would
+        # quietly feed the model the wrong channel.
+        logger.warning(
+            f"The annotation sidecar lists {len(channels)} channel(s) but the image "
+            f"has {stack.shape[-1]}; ignoring the stored channel names."
+        )
+        channels = None
+
     viewer = napari.Viewer()
+    try:
+        viewer.window._qt_window.setWindowIcon(Styles().celldetective_icon)
+    except Exception as e:
+        logger.debug(f"Could not set napari window icon: {e}")
     viewer.add_image(
         stack,
         channel_axis=-1,
@@ -1541,14 +1693,34 @@ def correct_annotation(filename: str) -> None:
     )
     viewer.add_labels(labels, name="segmentation", opacity=0.4)
 
+    # A panel that cannot be built must not stop the viewer from opening.
+    try:
+        from celldetective.napari.frame_segmentation import FrameSegmentationPanel
+
+        segment_frame_panel = FrameSegmentationPanel(
+            viewer=viewer,
+            stack=stack,
+            position=None,
+            population=_annotation_population(filename),
+            channels=channels,
+            spatial_calibration=spatial_calibration,
+        )
+    except Exception:
+        logger.exception("Could not build the single-frame segmentation panel.")
+        segment_frame_panel = None
+
     button_container = QWidget()
     layout = QVBoxLayout(button_container)
     layout.setSpacing(10)
+    if segment_frame_panel is not None:
+        layout.addWidget(segment_frame_panel)
     layout.addWidget(correction_options.native)
     layout.addWidget(save_widget.native)
     viewer.window.add_dock_widget(button_container, area="right")
 
     save_widget.native.setStyleSheet(Styles().button_style_sheet)
+    if segment_frame_panel is not None:
+        segment_frame_panel.run_btn.setStyleSheet(Styles().button_style_sheet)
 
     viewer.show(block=False)
 

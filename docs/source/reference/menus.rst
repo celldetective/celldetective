@@ -3,6 +3,31 @@ UI Menus & Shortcuts
 
 This reference lists the available menu actions and keyboard shortcuts for various Celldetective interfaces.
 
+.. _ref_start_window_menus:
+
+Start Window
+------------
+
+**File Menu**
+
+*   **New** (:kbd:`Ctrl+N`): Create a new experiment.
+*   **Open Project** (:kbd:`Ctrl+O`): Open an experiment folder.
+*   **Open Recent Project**: The last ten experiments opened.
+*   **Open Demo**: Download and open the *Spreading Assay* or the *Cytotoxicity Assay* demo.
+*   **Open Models Location** (:kbd:`Ctrl+L`): Open the folder where the models are stored.
+
+**Options Menu**
+
+*   **Threads**: Set the number of threads and whether to use the GPU.
+
+**Plugins Menu**
+
+*   **Correct a segmentation annotation**: Open an annotation (a ``.tif`` image exported for training, with its ``.json`` sidecar) in napari to correct its mask, or to start it over from a model's output with the frame segmentation panel. See :ref:`segment_single_frame_napari`.
+
+**Help Menu**
+
+*   **Documentation** (:kbd:`Ctrl+D`): Open this documentation.
+
 .. _ref_table_explorer_menus:
 
 Table Explorer
@@ -10,23 +35,27 @@ Table Explorer
 
 **File Menu**
 
-*   **Save as...** (:kbd:`Ctrl+S`): Export table to CSV.
+*   **Save as...** (:kbd:`Ctrl+S`): Export table to CSV, with the columns in the order they are shown.
 *   **Save inplace...**: Overwrite the original source file.
-*   **Plot...** (:kbd:`Ctrl+P`): Open the Plotting Interface.
-*   **Plot instantaneous...** (:kbd:`Ctrl+I`): Toggle row-selection plotting for track signals.
-*   **Collapse tracks...** (:kbd:`Ctrl+G`): Open the Track Collapsing dialog.
-*   **Collapse pairs in neighborhood...**: Aggregate interaction data (Pair tables only).
-*   **Group by frames...** (:kbd:`Ctrl+T`): Aggregate data by time frame.
-*   **Query...**: Filter rows using Pandas query syntax.
 
 **Edit Menu**
 
+*   **Copy** (:kbd:`Ctrl+C`): Copy the selected cells, to paste them in a spreadsheet.
 *   **Delete...** (:kbd:`Del`): Delete selected columns.
 *   **Rename...**: Rename the selected column.
+*   **Merge...**: Merge columns (pair tables only).
+
+**Table Menu**
+
+*   **Query...**: Filter rows using Pandas query syntax.
+*   **Collapse tracks...** (:kbd:`Ctrl+G`): Open the Track Collapsing dialog (tables of tracked cells only).
+*   **Collapse pairs in neighborhood...**: Aggregate interaction data (Pair tables only).
+*   **Group by frames...** (:kbd:`Ctrl+T`): Aggregate data by time frame.
 
 **Math Menu**
 
-*   **Calibrate...** (:kbd:`Ctrl+C`): Multiply a column by a factor.
+*   **Calibrate...**: Multiply a column by a factor.
+*   **Bin...**: Create a discretely binned column from a continuous measurement. This property natively scales 1D and 2D Histograms matching defined intervals.
 *   **Merge states...**: Combine multiple status columns.
 *   **Differentiate...** (:kbd:`Ctrl+D`): Compute derivatives (e.g., speed from position).
 
@@ -34,8 +63,16 @@ Table Explorer
     
 *   **Absolute value...**: Compute ``abs(x)``.
 *   **Log (decimal)...**: Compute ``log10(x)``.
-*   **Bin...**: Create a discretely binned column from a continuous measurement. This property natively scales 1D and 2D Histograms matching defined intervals.
 *   **Arithmetic**: Add, Subtract, Multiply, or Divide two columns.
+
+**Plot Menu**
+
+*   **Plot selection...** (:kbd:`Ctrl+P`): Plot the selected columns (see :ref:`table_exploration`).
+*   **Distributions and statistics...** (:kbd:`Ctrl+I`): Open the 1D plot interface, with the statistical tests.
+
+**Header tools**
+
+The tools above the table repeat the most frequent actions: plot the selection (:icon:`chart-scatter-plot,black`), distributions and statistics (:icon:`chart-bell-curve,black`), collapse tracks (:icon:`arrow-collapse-vertical,black`), query (:icon:`filter-outline,black`), copy (:icon:`content-copy,black`), delete columns (:icon:`table-column-remove,black`) and save (:icon:`content-save-outline,black`). Right-clicking a column header offers the column actions.
 
 .. _ref_signal_annotator_shortcuts:
 

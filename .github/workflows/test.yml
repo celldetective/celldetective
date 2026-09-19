@@ -34,12 +34,62 @@ jobs:
       - name: Install package [Full]
         run: |
           pip install ".[all]"
+      # The suite pulls its segmentation/signal models from Zenodo the first
+      # time a test asks for one. Zenodo answers 5xx often enough that an
+      # otherwise good commit fails on it, so keep the downloads between runs:
+      # the key rolls when the tests change, and falls back to the newest
+      # existing cache so a new model is added to it rather than re-fetched
+      # every run.
+      - name: Locate installed package
+        id: pkg
+        shell: bash
+        run: |
+          echo "dir=$(python -c 'import celldetective, os; print(os.path.dirname(os.path.realpath(celldetective.__file__)))')" >> "$GITHUB_OUTPUT"
+      # Restore and save are split so the save runs even when the tests fail.
+      # `actions/cache` only saves on success, so a job that loses one download
+      # to a Zenodo 5xx threw away every model it did fetch, and the next run
+      # started from nothing again. Push runs can only read caches from their
+      # own branch and the default branch, so a new branch has nothing to fall
+      # back on until one of its own runs saves.
+      # Save keys are unique per run and record the job status, so a partial
+      # set saved by a failed run never blocks a later save. Once a passing run
+      # has saved for the current tests, restores prefer it and saving stops.
+      - name: Restore Zenodo models and datasets
+        id: zenodo-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            ${{ steps.pkg.outputs.dir }}/models/segmentation_targets
+            ${{ steps.pkg.outputs.dir }}/models/segmentation_effectors
+            ${{ steps.pkg.outputs.dir }}/models/segmentation_generic
+            ${{ steps.pkg.outputs.dir }}/models/segmentation_oocyst
+            ${{ steps.pkg.outputs.dir }}/models/signal_detection
+            ${{ steps.pkg.outputs.dir }}/models/pair_signal_detection
+            ${{ steps.pkg.outputs.dir }}/datasets
+          key: celldetective-zenodo-${{ runner.os }}-py${{ matrix.python-version }}-${{ hashFiles('tests/**/*.py') }}-success
+          restore-keys: |
+            celldetective-zenodo-${{ runner.os }}-py${{ matrix.python-version }}-${{ hashFiles('tests/**/*.py') }}-success-
+            celldetective-zenodo-${{ runner.os }}-py${{ matrix.python-version }}-${{ hashFiles('tests/**/*.py') }}-
+            celldetective-zenodo-${{ runner.os }}-py${{ matrix.python-version }}-
       - name: Test package
         run: |
           python -m unittest
       - name: Test GUI
         run: |
-          python -m pytest tests/gui/
+          python tests/run_gui_tests.py
+      - name: Save Zenodo models and datasets
+        if: always() && !startsWith(steps.zenodo-cache.outputs.cache-matched-key, format('celldetective-zenodo-{0}-py{1}-{2}-success-', runner.os, matrix.python-version, hashFiles('tests/**/*.py')))
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ${{ steps.pkg.outputs.dir }}/models/segmentation_targets
+            ${{ steps.pkg.outputs.dir }}/models/segmentation_effectors
+            ${{ steps.pkg.outputs.dir }}/models/segmentation_generic
+            ${{ steps.pkg.outputs.dir }}/models/segmentation_oocyst
+            ${{ steps.pkg.outputs.dir }}/models/signal_detection
+            ${{ steps.pkg.outputs.dir }}/models/pair_signal_detection
+            ${{ steps.pkg.outputs.dir }}/datasets
+          key: celldetective-zenodo-${{ runner.os }}-py${{ matrix.python-version }}-${{ hashFiles('tests/**/*.py') }}-${{ job.status }}-${{ github.run_id }}-${{ github.run_attempt }}
 
   Linux-Minimal:
     name: Linux Minimal
@@ -114,12 +164,62 @@ jobs:
       - name: Install package [Full]
         run: |
           pip install -e ".[all]"
+      # The suite pulls its segmentation/signal models from Zenodo the first
+      # time a test asks for one. Zenodo answers 5xx often enough that an
+      # otherwise good commit fails on it, so keep the downloads between runs:
+      # the key rolls when the tests change, and falls back to the newest
+      # existing cache so a new model is added to it rather than re-fetched
+      # every run.
+      - name: Locate installed package
+        id: pkg
+        shell: bash
+        run: |
+          echo "dir=$(python -c 'import celldetective, os; print(os.path.dirname(os.path.realpath(celldetective.__file__)))')" >> "$GITHUB_OUTPUT"
+      # Restore and save are split so the save runs even when the tests fail.
+      # `actions/cache` only saves on success, so a job that loses one download
+      # to a Zenodo 5xx threw away every model it did fetch, and the next run
+      # started from nothing again. Push runs can only read caches from their
+      # own branch and the default branch, so a new branch has nothing to fall
+      # back on until one of its own runs saves.
+      # Save keys are unique per run and record the job status, so a partial
+      # set saved by a failed run never blocks a later save. Once a passing run
+      # has saved for the current tests, restores prefer it and saving stops.
+      - name: Restore Zenodo models and datasets
+        id: zenodo-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            ${{ steps.pkg.outputs.dir }}/models/segmentation_targets
+            ${{ steps.pkg.outputs.dir }}/models/segmentation_effectors
+            ${{ steps.pkg.outputs.dir }}/models/segmentation_generic
+            ${{ steps.pkg.outputs.dir }}/models/segmentation_oocyst
+            ${{ steps.pkg.outputs.dir }}/models/signal_detection
+            ${{ steps.pkg.outputs.dir }}/models/pair_signal_detection
+            ${{ steps.pkg.outputs.dir }}/datasets
+          key: celldetective-zenodo-${{ runner.os }}-py${{ matrix.python-version }}-${{ hashFiles('tests/**/*.py') }}-success
+          restore-keys: |
+            celldetective-zenodo-${{ runner.os }}-py${{ matrix.python-version }}-${{ hashFiles('tests/**/*.py') }}-success-
+            celldetective-zenodo-${{ runner.os }}-py${{ matrix.python-version }}-${{ hashFiles('tests/**/*.py') }}-
+            celldetective-zenodo-${{ runner.os }}-py${{ matrix.python-version }}-
       - name: Test package
         run: |
           python -m unittest
       - name: Test GUI
         run: |
-          python -m pytest tests/gui/
+          python tests/run_gui_tests.py
+      - name: Save Zenodo models and datasets
+        if: always() && !startsWith(steps.zenodo-cache.outputs.cache-matched-key, format('celldetective-zenodo-{0}-py{1}-{2}-success-', runner.os, matrix.python-version, hashFiles('tests/**/*.py')))
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ${{ steps.pkg.outputs.dir }}/models/segmentation_targets
+            ${{ steps.pkg.outputs.dir }}/models/segmentation_effectors
+            ${{ steps.pkg.outputs.dir }}/models/segmentation_generic
+            ${{ steps.pkg.outputs.dir }}/models/segmentation_oocyst
+            ${{ steps.pkg.outputs.dir }}/models/signal_detection
+            ${{ steps.pkg.outputs.dir }}/models/pair_signal_detection
+            ${{ steps.pkg.outputs.dir }}/datasets
+          key: celldetective-zenodo-${{ runner.os }}-py${{ matrix.python-version }}-${{ hashFiles('tests/**/*.py') }}-${{ job.status }}-${{ github.run_id }}-${{ github.run_attempt }}
 
   Windows-Minimal:
     name: Test Windows Minimal

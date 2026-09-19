@@ -13,11 +13,14 @@ from PyQt5.QtWidgets import (
     QCheckBox,
     QMessageBox,
     QApplication,
+    QWidget,
 )
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QBrush, QColor
+from PyQt5.QtCore import Qt, QPoint, QSize
+from PyQt5.QtGui import QBrush, QColor, QKeySequence
 from typing import Optional, Any, List, Tuple
 import pandas as pd
+from superqt.fonticon import icon
+from fonticon_mdi6 import MDI6
 
 from celldetective.gui.gui_utils import (
     PandasModel,
@@ -30,7 +33,18 @@ from celldetective.gui.base.components import (
     CelldetectiveWidget,
     CelldetectiveMainWindow,
     QHSeperationLine,
+    ToolButton,
+    set_disabled_reason,
+    tool_strip,
 )
+from celldetective.gui.base.styles import (
+    CELLDETECTIVE_BLUE,
+    DANGER_COLOR,
+    INK_COLOR,
+    MUTED_INK,
+    button_style,
+)
+from celldetective.gui.base.table_view import DataTableView
 from math import floor
 import re
 import atexit
@@ -41,6 +55,45 @@ from celldetective.utils.types import test_bool_array
 from celldetective.utils.data_cleaning import collapse_trajectories_by_status
 
 logger = get_logger(__name__)
+
+TITLE_STYLE = f"font-weight: bold; font-size: 13px; color: {INK_COLOR};"
+CAPTION_STYLE = f"font-size: 11px; color: {MUTED_INK};"
+
+
+def legend_entry(label: str, color: str) -> QWidget:
+    """
+    Build one entry of a color legend: a rounded swatch and its label.
+
+    Parameters
+    ----------
+    label : str
+        What the color stands for.
+    color : str
+        The color, as a name or a hex code.
+
+    Returns
+    -------
+    QWidget
+        The entry.
+    """
+
+    entry = QWidget()
+    layout = QHBoxLayout(entry)
+    layout.setContentsMargins(0, 0, 0, 0)
+    layout.setSpacing(5)
+
+    swatch = QLabel()
+    swatch.setFixedSize(12, 12)
+    swatch.setStyleSheet(
+        f"background-color: {color}; border: 1px solid rgba(0, 0, 0, 30); border-radius: 3px;"
+    )
+    layout.addWidget(swatch)
+
+    text = QLabel(label)
+    text.setStyleSheet(f"font-size: 11px; color: {INK_COLOR};")
+    layout.addWidget(text)
+
+    return entry
 
 
 class PivotTableUI(CelldetectiveWidget):
@@ -77,18 +130,50 @@ class PivotTableUI(CelldetectiveWidget):
         self.setWindowTitle(title)
         logger.debug(f"Pivot table to show: {self.data.shape}")
 
-        self.table = QTableView(self)
+        self.table = DataTableView(self)
 
         self.v_layout = QVBoxLayout()
-        self.information_label = QLabel("Information about color code...")
+        self.v_layout.setContentsMargins(12, 10, 12, 10)
+        self.v_layout.setSpacing(8)
 
-        # Export button
+        self.title_label = QLabel(title)
+        self.title_label.setStyleSheet(TITLE_STYLE)
+        self.title_label.setVisible(bool(title))
+
+        # The color code of the cells, filled in by the coloring methods.
+        self.legend_layout = QHBoxLayout()
+        self.legend_layout.setContentsMargins(0, 0, 0, 0)
+        self.legend_layout.setSpacing(14)
+        self.information_label = QLabel("")
+        self.information_label.setStyleSheet(CAPTION_STYLE)
+        self.information_label.hide()
+        self.legend_layout.addWidget(self.information_label)
+        self.legend_layout.addStretch(1)
+
+        # How a cell relates its row to its column, which the matrix alone does
+        # not say and which differs between the tests.
+        self.reading_label = QLabel("")
+        self.reading_label.setStyleSheet(CAPTION_STYLE)
+        self.reading_label.setWordWrap(True)
+        self.reading_label.setTextFormat(Qt.RichText)
+        self.reading_label.hide()
+
         self.export_btn = QPushButton("Export")
+        self.export_btn.setStyleSheet(button_style("secondary"))
+        self.export_btn.setIcon(icon(MDI6.export, color=CELLDETECTIVE_BLUE))
+        self.export_btn.setIconSize(QSize(18, 18))
+        self.export_btn.setToolTip("Save the table as a .csv file.")
         self.export_btn.clicked.connect(self.export_data)
 
-        self.v_layout.addWidget(self.information_label)
-        self.v_layout.addWidget(self.table)
-        self.v_layout.addWidget(self.export_btn)
+        export_layout = QHBoxLayout()
+        export_layout.addStretch(1)
+        export_layout.addWidget(self.export_btn)
+
+        self.v_layout.addWidget(self.title_label)
+        self.v_layout.addLayout(self.legend_layout)
+        self.v_layout.addWidget(self.reading_label)
+        self.v_layout.addWidget(self.table, 1)
+        self.v_layout.addLayout(export_layout)
         self.setLayout(self.v_layout)
 
         self.showdata()
@@ -109,9 +194,40 @@ class PivotTableUI(CelldetectiveWidget):
         """
         self.model = PandasModel(self.data)
         self.table.setModel(self.model)
-        self.table.horizontalHeader().setSectionsMovable(True)
-        self.table.horizontalHeader().setDragEnabled(True)
-        self.table.horizontalHeader().setDragDropMode(self.table.InternalMove)
+
+    def set_legend(self, caption: str, entries: List[Tuple[str, str]]) -> None:
+        """
+        Show the color code of the cells above the table.
+
+        Parameters
+        ----------
+        caption : str
+            What the colors measure.
+        entries : list of (str, str)
+            The (label, color) pairs, in order.
+        """
+
+        self.information_label.setText(caption)
+        self.information_label.show()
+
+        # Insert before the stretch closing the row.
+        position = self.legend_layout.count() - 1
+        for label, color in entries:
+            self.legend_layout.insertWidget(position, legend_entry(label, color))
+            position += 1
+
+    def set_reading_guide(self, text: str) -> None:
+        """
+        Explain, under the legend, how a cell relates its row to its column.
+
+        Parameters
+        ----------
+        text : str
+            The explanation, as Qt rich text.
+        """
+
+        self.reading_label.setText(text)
+        self.reading_label.show()
 
     def export_data(self) -> None:
         """
@@ -171,7 +287,7 @@ class PivotTableUI(CelldetectiveWidget):
 
         # Estimate height of other widgets in layout (label + export button + margins)
         # This is an approximation
-        extra_widgets_height = 100
+        extra_widgets_height = 130
 
         content_height = h_header_height + v_header_length + extra_widgets_height
 
@@ -185,8 +301,14 @@ class PivotTableUI(CelldetectiveWidget):
         new_width = min(content_width, max_width)
         new_height = min(content_height, max_height)
 
-        # Ensure minimum size
-        new_width = max(new_width, 300)
+        # Ensure minimum size; wider when there is a reading guide to wrap.
+        new_width = max(new_width, 300 if self.reading_label.isHidden() else 460)
+        if not self.reading_label.isHidden():
+            margins = self.v_layout.contentsMargins()
+            new_height += self.reading_label.heightForWidth(
+                new_width - margins.left() - margins.right()
+            ) + self.v_layout.spacing()
+            new_height = min(new_height, max_height)
         new_height = max(new_height, 200)
 
         self.resize(new_width, new_height)
@@ -233,16 +355,22 @@ class PivotTableUI(CelldetectiveWidget):
                 elif abs_value >= 0.474:
                     self.set_cell_color(i, j, color_codes["large"])
 
-        # Create the HTML text for the label
-        html_caption = f"""
-		<p style="background-color:black; padding: 5px; font-weight:bold;">
-			<span style="color:{color_codes['negligible']}">Negligible</span>, 
-			<span style="color:{color_codes['small']}">Small</span>, 
-			<span style="color:{color_codes['medium']}">Medium</span>, 
-			<span style="color:{color_codes['large']}">Large</span>
-		</p>
-		"""
-        self.information_label.setText(html_caption)
+        self.set_legend(
+            "Effect size |δ|:",
+            [
+                ("negligible", color_codes["negligible"]),
+                ("small", color_codes["small"]),
+                ("medium", color_codes["medium"]),
+                ("large", color_codes["large"]),
+            ],
+        )
+        self.set_reading_guide(
+            "<b>How to read:</b> each cell compares the <b>row</b> condition to the "
+            "<b>column</b> condition, δ = P(row &gt; column) − P(row &lt; column).<br>"
+            "δ = −1: every row value is smaller than every column value; "
+            "δ = +1: every row value is larger; δ ≈ 0: neither tends to be larger. "
+            "Mirror cells have opposite signs."
+        )
 
     def color_cells_pvalue(self) -> None:
         """
@@ -271,16 +399,24 @@ class PivotTableUI(CelldetectiveWidget):
                 elif value > 0.05:
                     self.set_cell_color(i, j, color_codes["ns"])
 
-        html_caption = f"""
-		<p style="background-color:black; padding: 5px; font-weight:bold;">
-			<span style="color:{color_codes['ns']}">ns</span>, 
-			<span style="color:{color_codes['*']}">*</span>, 
-			<span style="color:{color_codes['**']}">**</span>, 
-			<span style="color:{color_codes['***']}">***</span>,
-			<span style="color:{color_codes['****']}">****</span>
-		</p>
-		"""
-        self.information_label.setText(html_caption)
+        self.set_legend(
+            "p-value:",
+            [
+                ("ns", color_codes["ns"]),
+                ("* ≤ 0.05", color_codes["*"]),
+                ("** ≤ 0.01", color_codes["**"]),
+                ("*** ≤ 0.001", color_codes["***"]),
+                ("**** ≤ 0.0001", color_codes["****"]),
+            ],
+        )
+        self.set_reading_guide(
+            "<b>How to read:</b> each cell tests whether the <b>row</b> condition "
+            "has <b>larger</b> values than the <b>column</b> condition (one-sided "
+            "KS test: the row's cumulative distribution lies <i>below</i> the "
+            "column's).<br>"
+            "A small p-value means the row is significantly shifted towards larger "
+            "values. The mirror cell (column vs row) tests the opposite direction."
+        )
 
 
 class TableUI(CelldetectiveMainWindow):
@@ -320,7 +456,7 @@ class TableUI(CelldetectiveMainWindow):
         CelldetectiveMainWindow.__init__(self, *args, **kwargs)
 
         self.setWindowTitle(title)
-        self.setGeometry(100, 100, 1000, 400)
+        self.setGeometry(100, 100, 1100, 620)
         center_window(self)
         self.title = title
         self.plot_mode = plot_mode
@@ -348,23 +484,231 @@ class TableUI(CelldetectiveMainWindow):
         self.data = data
 
         self._createMenuBar()
+
+        self.table_view = DataTableView(self)
+        self.model = PandasModel(data)
+        self.table_view.setModel(self.model)
+
         self._create_actions()
+        self._build_central_widget()
 
-        self.table_view = QTableView(self)
-        self.setCentralWidget(self.table_view)
-
-        # Set the model for the table view
+        self.table_view.model_changed.connect(self._update_summary)
+        self.table_view.selection_changed.connect(self._update_selection)
+        self._update_summary()
+        self._update_selection()
+        # The table takes the keyboard on opening, so that the arrows and the
+        # shortcuts work at once rather than on the first tool button.
+        self.table_view.setFocus()
 
         import matplotlib.pyplot as plt
 
         plt.rcParams["svg.fonttype"] = "none"
 
-        self.model = PandasModel(data)
-        self.table_view.setModel(self.model)
-        self.table_view.resizeColumnsToContents()
-        self.table_view.horizontalHeader().setSectionsMovable(True)
-        self.table_view.horizontalHeader().setDragEnabled(True)
-        self.table_view.horizontalHeader().setDragDropMode(self.table_view.InternalMove)
+    def _build_central_widget(self) -> None:
+        """
+        Lay the window out: a header naming the table and holding the most
+        used actions, the table, and a line describing the selection.
+        """
+
+        central = QWidget()
+        layout = QVBoxLayout(central)
+        layout.setContentsMargins(12, 10, 12, 8)
+        layout.setSpacing(8)
+
+        titles = QVBoxLayout()
+        titles.setSpacing(1)
+        self.title_label = QLabel(self.title)
+        self.title_label.setStyleSheet(TITLE_STYLE)
+        self.title_label.setVisible(bool(self.title))
+        self.summary_label = QLabel()
+        self.summary_label.setStyleSheet(CAPTION_STYLE)
+        titles.addWidget(self.title_label)
+        titles.addWidget(self.summary_label)
+
+        select_first = "Select one or more columns first."
+        self.plot_btn = self._tool(
+            self.plot_action,
+            MDI6.chart_scatter_plot,
+            "Plot the selected columns (Ctrl+P)",
+            select_first,
+        )
+        self.plot_inst_btn = self._tool(
+            self.plot_inst_action,
+            MDI6.chart_bell_curve,
+            "Plot distributions and compare groups (Ctrl+I)",
+        )
+        self.groupby_btn = self._tool(
+            self.groupby_action,
+            MDI6.arrow_collapse_vertical,
+            "Collapse each track into a single row (Ctrl+G)",
+            "Only a table of tracked cells can be collapsed.",
+        )
+        self.query_btn = self._tool(
+            self.query_action, MDI6.filter_outline, "Keep the rows matching a query"
+        )
+        self.copy_btn = self._tool(
+            self.copy_action,
+            MDI6.content_copy,
+            "Copy the selected cells (Ctrl+C)",
+            select_first,
+        )
+        self.delete_btn = self._tool(
+            self.delete_action,
+            MDI6.table_column_remove,
+            "Delete the selected columns (Del)",
+            select_first,
+            hover_color=DANGER_COLOR,
+        )
+        self.save_btn = self._tool(
+            self.save_as, MDI6.content_save_outline, "Save the table as .csv (Ctrl+S)"
+        )
+
+        header = QHBoxLayout()
+        header.setSpacing(10)
+        header.addLayout(titles)
+        header.addStretch(1)
+        header.addLayout(
+            tool_strip(
+                self.plot_btn,
+                self.plot_inst_btn,
+                self.groupby_btn,
+                self.query_btn,
+                None,
+                self.copy_btn,
+                self.delete_btn,
+                self.save_btn,
+            )
+        )
+        layout.addLayout(header)
+
+        layout.addWidget(self.table_view, 1)
+
+        self.selection_label = QLabel()
+        self.selection_label.setStyleSheet(CAPTION_STYLE)
+        layout.addWidget(self.selection_label)
+
+        columns_header = self.table_view.horizontalHeader()
+        columns_header.setContextMenuPolicy(Qt.CustomContextMenu)
+        columns_header.customContextMenuRequested.connect(self._open_column_menu)
+
+        self.setCentralWidget(central)
+
+    def _tool(
+        self,
+        action: QAction,
+        icon_enum: str,
+        tooltip: str,
+        disabled_reason: Optional[str] = None,
+        hover_color: str = CELLDETECTIVE_BLUE,
+    ) -> ToolButton:
+        """
+        Build a tool button triggering a menu action and following its state.
+
+        Parameters
+        ----------
+        action : QAction
+            The action the button stands for.
+        icon_enum : str
+            Icon name from MDI6.
+        tooltip : str
+            What the button does.
+        disabled_reason : str, optional
+            Why the button is disabled, told in its tooltip when it is.
+        hover_color : str, optional
+            The color the icon takes under the mouse.
+
+        Returns
+        -------
+        ToolButton
+            The button.
+        """
+
+        button = ToolButton(icon_enum, tooltip=tooltip, hover_color=hover_color)
+        button.clicked.connect(action.trigger)
+        button.setEnabled(action.isEnabled())
+        action.changed.connect(lambda: button.setEnabled(action.isEnabled()))
+        if disabled_reason is not None:
+            set_disabled_reason(button, disabled_reason)
+
+        return button
+
+    def _update_summary(self) -> None:
+        """Write the size of the table under its title."""
+
+        model = self.table_view.model()
+        rows = model.rowCount() if model is not None else 0
+        columns = model.columnCount() if model is not None else 0
+
+        parts = [
+            f"{rows:,} row{'s' if rows != 1 else ''}",
+            f"{columns} column{'s' if columns != 1 else ''}",
+        ]
+        if self.population:
+            parts.insert(0, str(self.population))
+        self.summary_label.setText("  ·  ".join(parts))
+
+    def _update_selection(self) -> None:
+        """Describe the selection and enable the actions needing one."""
+
+        columns = self.table_view.selected_columns()
+        has_selection = len(columns) > 0
+
+        for action in (
+            self.plot_action,
+            self.copy_action,
+            self.delete_action,
+            self.rename_col_action,
+        ):
+            action.setEnabled(has_selection)
+
+        if not has_selection:
+            self.selection_label.setText(
+                "Click a column header to select it, Ctrl+click to add more. "
+                "Right-click a header for the column actions."
+            )
+            return
+
+        model = self.table_view.model()
+        names = [
+            str(model.headerData(c, Qt.Horizontal, Qt.DisplayRole)) for c in columns
+        ]
+        shown = ", ".join(names[:4])
+        if len(names) > 4:
+            shown += f" and {len(names) - 4} more"
+        cells = self.table_view.selected_cell_count()
+        self.selection_label.setText(
+            f"{len(names)} column{'s' if len(names) != 1 else ''} selected: {shown}"
+            f"  ·  {cells:,} cell{'s' if cells != 1 else ''}"
+        )
+
+    def _open_column_menu(self, position: QPoint) -> None:
+        """
+        Offer the column actions on a right click of the header.
+
+        Parameters
+        ----------
+        position : QPoint
+            Where the header was clicked, in its own coordinates.
+        """
+
+        header = self.table_view.horizontalHeader()
+        column = header.logicalIndexAt(position)
+        if column < 0:
+            return
+
+        if column not in self.table_view.selected_columns():
+            self.table_view.selectColumn(column)
+
+        menu = QMenu(self)
+        menu.addAction(self.plot_action)
+        menu.addAction(self.plot_inst_action)
+        menu.addSeparator()
+        menu.addAction(self.copy_action)
+        menu.addAction(self.rename_col_action)
+        menu.addAction(self.delete_action)
+        menu.addSeparator()
+        menu.addMenu(self.mathMenu)
+        menu.exec_(header.mapToGlobal(position))
 
     def resizeEvent(self, event: Any) -> None:
         """
@@ -425,20 +769,25 @@ class TableUI(CelldetectiveMainWindow):
             # self.save_inplace.setShortcut("Ctrl+s")
             self.fileMenu.addAction(self.save_inplace)
 
-        self.plot_action = QAction("&Plot...", self)
+        self.plot_action = QAction("&Plot selection...", self)
         self.plot_action.triggered.connect(self.plot)
         self.plot_action.setShortcut("Ctrl+p")
-        self.fileMenu.addAction(self.plot_action)
+        self.plotMenu.addAction(self.plot_action)
 
-        self.plot_inst_action = QAction("&Plot instantaneous...", self)
+        self.plot_inst_action = QAction("&Distributions and statistics...", self)
         self.plot_inst_action.triggered.connect(self.plot_instantaneous)
         self.plot_inst_action.setShortcut("Ctrl+i")
-        self.fileMenu.addAction(self.plot_inst_action)
+        self.plotMenu.addAction(self.plot_inst_action)
+
+        self.query_action = QAction("&Query...", self)
+        self.query_action.triggered.connect(self.perform_query)
+        self.tableMenu.addAction(self.query_action)
+        self.tableMenu.addSeparator()
 
         self.groupby_action = QAction("&Collapse tracks...", self)
         self.groupby_action.triggered.connect(self.set_projection_mode_tracks)
         self.groupby_action.setShortcut("Ctrl+g")
-        self.fileMenu.addAction(self.groupby_action)
+        self.tableMenu.addAction(self.groupby_action)
         if not self.tracks or not self.collapse_tracks_option:
             self.groupby_action.setEnabled(False)
 
@@ -450,17 +799,19 @@ class TableUI(CelldetectiveMainWindow):
             self.groupby_pairs_in_neigh_action.triggered.connect(
                 self.collapse_pairs_in_neigh
             )
-            self.fileMenu.addAction(self.groupby_pairs_in_neigh_action)
+            self.tableMenu.addAction(self.groupby_pairs_in_neigh_action)
 
         if "FRAME" in list(self.data.columns):
             self.groupby_time_action = QAction("&Group by frames...", self)
             self.groupby_time_action.triggered.connect(self.groupby_time_table)
             self.groupby_time_action.setShortcut("Ctrl+t")
-            self.fileMenu.addAction(self.groupby_time_action)
+            self.tableMenu.addAction(self.groupby_time_action)
 
-        self.query_action = QAction("Query...", self)
-        self.query_action.triggered.connect(self.perform_query)
-        self.fileMenu.addAction(self.query_action)
+        self.copy_action = QAction("&Copy", self)
+        self.copy_action.triggered.connect(self.table_view.copy_selection)
+        self.copy_action.setShortcut(QKeySequence.Copy)
+        self.editMenu.addAction(self.copy_action)
+        self.editMenu.addSeparator()
 
         self.delete_action = QAction("&Delete...", self)
         self.delete_action.triggered.connect(self.delete_columns)
@@ -480,7 +831,8 @@ class TableUI(CelldetectiveMainWindow):
 
         self.calibrate_action = QAction("&Calibrate...", self)
         self.calibrate_action.triggered.connect(self.calibrate_selected_feature)
-        self.calibrate_action.setShortcut("Ctrl+C")
+        # No Ctrl+C here: it is the copy shortcut, and taking it made the
+        # cells of the table impossible to copy.
         self.mathMenu.addAction(self.calibrate_action)
 
         self.bin_action = QAction("&Bin...", self)
@@ -1813,8 +2165,12 @@ class TableUI(CelldetectiveMainWindow):
         menuBar.addMenu(self.fileMenu)
         self.editMenu = QMenu("&Edit", self)
         menuBar.addMenu(self.editMenu)
+        self.tableMenu = QMenu("&Table", self)
+        menuBar.addMenu(self.tableMenu)
         self.mathMenu = QMenu("&Math", self)
         menuBar.addMenu(self.mathMenu)
+        self.plotMenu = QMenu("&Plot", self)
+        menuBar.addMenu(self.plotMenu)
 
     def save_as_csv(self) -> None:
         """

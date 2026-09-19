@@ -15,7 +15,7 @@ from PyQt5.QtCore import Qt, QSize, QTimer
 from celldetective.gui.base.components import generic_message
 from celldetective.gui.base.utils import center_window
 from celldetective.gui.base.channel_norm_generator import ChannelNormGenerator
-from celldetective.gui.base.components import CelldetectiveWidget
+from celldetective.gui.base.components import BrowseButton, CelldetectiveWidget
 from PyQt5.QtGui import QDoubleValidator
 from superqt.fonticon import icon
 from fonticon_mdi6 import MDI6
@@ -91,7 +91,9 @@ class SegmentationModelLoader(CelldetectiveWidget):
         self.file_dialog = QFileDialog()
 
         # Create button to open file dialog
-        self.open_dialog_button = QPushButton("Choose File")
+        self.open_dialog_button = BrowseButton(
+            "Choose File", tooltip="Locate the model to upload."
+        )
         self.open_dialog_button.clicked.connect(self.showDialog)
         self.file_label = QLabel("No file chosen", self)
         self.layout.addWidget(self.open_dialog_button, 9, 0, 1, 1)

@@ -14,11 +14,8 @@ from celldetective.gui.interactive_timeseries_viewer import InteractiveEventView
 from PyQt5.QtCore import Qt, QSize, QThread, pyqtSignal
 from PyQt5.QtGui import QKeySequence, QCloseEvent
 
-from superqt import (
-    QLabeledDoubleRangeSlider,
-    QSearchableComboBox,
-    QLabeledSlider,
-)
+from superqt import QSearchableComboBox, QLabeledSlider
+from celldetective.gui.base.sliders import QLabeledDoubleRangeSlider
 from celldetective.utils.image_loaders import (
     load_frames,
     _get_img_num_per_channel,
@@ -45,6 +42,7 @@ from celldetective.gui.base_annotator import BaseAnnotator
 import logging
 from celldetective.log_manager import positionlogger
 from celldetective.gui.base.threads import start_tracked
+from celldetective.gui.base.utils import flush_layout_events
 
 logger = logging.getLogger("celldetective")
 
@@ -413,7 +411,7 @@ class EventAnnotator(BaseAnnotator):
         if self.class_choice_cb.currentText() != "":
             self.compute_status_and_colors(0)
 
-        QApplication.processEvents()
+        flush_layout_events(self)
 
         # Add Menu for Interactive Plotter
         menubar = self.menuBar()

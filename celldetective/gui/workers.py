@@ -365,8 +365,8 @@ class Runner(QRunnable):
         Returns
         -------
         bool
-            True if this was the terminal "finished" message (the run loop
-            should stop).
+            True if this was a terminal "finished" or "error" message (the run
+            loop should stop).
         """
         try:
             # Handle dictionary for triple progress
@@ -419,6 +419,10 @@ class Runner(QRunnable):
                         msg = data.get("message", "Unknown error")
                         logger.error(f"Runner received error: {msg}")
                         self.signals.error.emit(str(msg))
+                        # Terminal: a process reporting an error stops there. Left
+                        # polling, the loop would find it dead and raise a second,
+                        # misleading "exited unexpectedly" error.
+                        return True
                     else:
                         self.signals.update_status.emit(data["status"])
 
@@ -432,6 +436,7 @@ class Runner(QRunnable):
                 return True
             elif data == "error":
                 self.signals.error.emit("Unknown error")
+                return True
 
         except Exception as e:
             logger.exception(f"Error while dispatching worker message: {e}")

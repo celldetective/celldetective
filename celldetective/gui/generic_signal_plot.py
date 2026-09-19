@@ -21,7 +21,8 @@ from celldetective.gui.tableUI import TableUI
 from celldetective.utils.experiment import collect_experiment_metadata
 
 from superqt.fonticon import icon
-from superqt import QLabeledSlider, QLabeledDoubleSlider
+from superqt import QLabeledSlider
+from celldetective.gui.base.sliders import QLabeledDoubleSlider
 from fonticon_mdi6 import MDI6
 import numpy as np
 import json
@@ -298,7 +299,11 @@ class GenericSignalPlotWidget(CelldetectiveWidget):
         self.select_option = [QRadioButton() for i in range(2)]
         self.select_label = ["by name", "spatially"]
 
-        select_hbox = QHBoxLayout()
+        # Held in a widget so the row can be dropped when there are no stage
+        # coordinates to select from, leaving "by name" as the only mode.
+        self.select_mode_widget = CelldetectiveWidget()
+        select_hbox = QHBoxLayout(self.select_mode_widget)
+        select_hbox.setContentsMargins(0, 0, 0, 0)
         select_hbox.addWidget(QLabel("select position: "), 25)
 
         select_subhbox = QHBoxLayout()
@@ -313,15 +318,22 @@ class GenericSignalPlotWidget(CelldetectiveWidget):
             )
         self.select_option[0].setChecked(True)
         self.select_btn_group.buttonClicked[int].connect(self.switch_selection_mode)
-        self.layout.addLayout(select_hbox)
+        self.layout.addWidget(self.select_mode_widget)
 
+        # A metadata file is not enough: it may hold no stage coordinates, or
+        # none for the positions shown here, which left "spatially" opening
+        # onto an empty plot.
         self.look_for_metadata()
         if self.metadata_found:
+            self.load_coordinates()
+        self.spatial_available = self.metadata_found and self.has_coordinates()
+        self.select_mode_widget.setVisible(self.spatial_available)
+
+        if self.spatial_available:
             self.fig_scatter, self.ax_scatter = plt.subplots(
                 1, 1, figsize=(4, 2)
             )  # ,figsize=(4,3)
             self.position_scatter = FigureCanvas(self.fig_scatter)
-            self.load_coordinates()
             self.plot_spatial_location()
             self.ax_scatter.spines["top"].set_visible(False)
             self.ax_scatter.spines["right"].set_visible(False)
@@ -391,11 +403,11 @@ class GenericSignalPlotWidget(CelldetectiveWidget):
             if self.select_option[i].isChecked():
                 self.selection_mode = self.select_label[i]
         if self.selection_mode == "by name":
-            if len(self.metafiles) > 0:
+            if self.spatial_available:
                 self.position_scatter.hide()
             self.line_choice_widget.show()
         else:
-            if len(self.metafiles) > 0:
+            if self.spatial_available:
                 self.position_scatter.show()
             self.line_choice_widget.hide()
 
@@ -527,6 +539,21 @@ class GenericSignalPlotWidget(CelldetectiveWidget):
                 self.df_pos_info.loc[pos_loc, "x"] = coords[0]
                 self.df_pos_info.loc[pos_loc, "y"] = coords[1]
                 self.df_pos_info.loc[pos_loc, "metadata_tag"] = pos_label
+
+    def has_coordinates(self) -> bool:
+        """
+        Whether at least one position shown here got stage coordinates.
+
+        Returns
+        -------
+        bool
+            True when `load_coordinates` placed at least one position, so that
+            there is something to pick from spatially.
+        """
+
+        if not {"x", "y"}.issubset(self.df_pos_info.columns):
+            return False
+        return bool(self.df_pos_info[["x", "y"]].notna().all(axis=1).any())
 
     def plot_spatial_location(self) -> None:
         """
@@ -1051,7 +1078,7 @@ class GenericSignalPlotWidget(CelldetectiveWidget):
                     self.pos_display_options[i].isChecked()
                 )
 
-        if len(self.metafiles) > 0:
+        if self.spatial_available:
             self.sc.set_color(self.select_color(self.df_pos_info["select"].values))
             self.position_scatter.canvas.draw_idle()
         self.plot_signals(0)

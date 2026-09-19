@@ -26,9 +26,13 @@ Segmentation parameters are typically passed via a dictionary or configuration o
 import json
 import os
 import numpy as np
+from contextlib import contextmanager
 from typing import Any, Dict, List, Optional, Tuple, Union
 
-from celldetective.utils.model_loaders import locate_segmentation_model
+from celldetective.utils.model_loaders import (
+    locate_segmentation_model,
+    trained_cell_size_um,
+)
 from celldetective.utils.normalization import normalize_multichannel
 from pathlib import Path
 from tqdm import tqdm
@@ -57,7 +61,7 @@ from celldetective.utils.cellpose_utils import (
 from celldetective.utils.mask_transforms import _rescale_labels
 from celldetective.utils.image_transforms import (
     estimate_unreliable_edge,
-    _estimate_scale_factor,
+    _combined_scale_factor,
     threshold_image,
 )
 from celldetective.utils.data_cleaning import rename_intensity_column
@@ -80,6 +84,455 @@ abs_path = os.sep.join(
 )
 
 
+class PreparedSegmentationModel:
+    """
+    A segmentation model loaded and configured for a given set of image channels.
+
+    Built by :func:`prepare_segmentation_model` and consumed by
+    :func:`segment_frame`. Holding the loaded model and its resolved channel
+    mapping in one object means the expensive setup (reading
+    ``config_input.json``, estimating the rescaling factor, instantiating the
+    StarDist / Cellpose model) happens once and can then be reused across as many
+    frames as needed - a whole stack, or a single frame picked in napari.
+
+    Attributes
+    ----------
+    model : object
+            The instantiated StarDist or Cellpose model.
+    model_type : str
+            Either ``"stardist"`` or ``"cellpose"``.
+    scale_model : float or None
+            Zoom factor applied to a frame before inference, or None when the
+            image calibration already matches the model's.
+    channels : list of str
+            Channel names of the images that will be passed to :func:`segment_frame`.
+    required_channels : list of str
+            Channel names the model expects, in the order it expects them.
+    channel_indices : list of int or None
+            One entry per model input slot: the index into `channels` of the image
+            channel feeding it, or None when the slot has no source. Matching is
+            case-insensitive, and the same image channel may feed several slots.
+            This is what :func:`segment_frame` transfers with.
+    channel_intersection : list of str
+            The channel names actually transferred, one per filled slot.
+    none_channel_indices : numpy.ndarray
+            Indices of required channels missing from the image; zeroed before inference.
+    normalize_kwargs : dict
+            Normalization settings read from the model configuration.
+    diameter : float or None
+            Cellpose object diameter. None for StarDist models.
+    cellprob_threshold : float or None
+            Cellpose cell probability threshold. None for StarDist models.
+    flow_threshold : float or None
+            Cellpose flow threshold. None for StarDist models.
+    config_defaults : dict
+            The inference parameters as the model configuration declares them, before
+            any caller override. Lets a caller restore a model's own values without
+            re-reading ``config_input.json``.
+    use_gpu : bool
+            The device choice this model was built under. :func:`segment_frame`
+            re-applies it around inference, since a framework that defers creating
+            its device context until the first prediction would otherwise see the
+            caller's environment rather than this one.
+    """
+
+    __slots__ = (
+        "model",
+        "model_type",
+        "scale_model",
+        "channels",
+        "required_channels",
+        "channel_indices",
+        "channel_intersection",
+        "none_channel_indices",
+        "normalize_kwargs",
+        "diameter",
+        "cellprob_threshold",
+        "flow_threshold",
+        "config_defaults",
+        "use_gpu",
+    )
+
+    def __init__(
+        self,
+        model: Any,
+        model_type: str,
+        scale_model: Optional[float],
+        channels: List[str],
+        required_channels: List[str],
+        channel_indices: List[Optional[int]],
+        channel_intersection: List[str],
+        none_channel_indices: np.ndarray,
+        normalize_kwargs: Dict[str, Any],
+        diameter: Optional[float] = None,
+        cellprob_threshold: Optional[float] = None,
+        flow_threshold: Optional[float] = None,
+        config_defaults: Optional[Dict[str, Any]] = None,
+        use_gpu: bool = True,
+    ) -> None:
+        self.model = model
+        self.model_type = model_type
+        self.scale_model = scale_model
+        self.channels = channels
+        self.required_channels = required_channels
+        self.channel_indices = channel_indices
+        self.channel_intersection = channel_intersection
+        self.none_channel_indices = none_channel_indices
+        self.normalize_kwargs = normalize_kwargs
+        self.diameter = diameter
+        self.cellprob_threshold = cellprob_threshold
+        self.flow_threshold = flow_threshold
+        self.config_defaults = config_defaults if config_defaults is not None else {}
+        self.use_gpu = use_gpu
+
+
+@contextmanager
+def _gpu_visibility(use_gpu: bool):
+    """
+    Expose or hide the GPU to the DL frameworks, then put the environment back.
+
+    ``CUDA_VISIBLE_DEVICES`` is process-global, and both TensorFlow and Torch read
+    it once, when they first initialise a device context. Leaving it set - as this
+    module used to - meant that a single CPU-only call from the GUI silently pinned
+    the whole process to the CPU for good. Entering this context around both model
+    construction and inference gets the intended device wherever that context
+    happens to be created, and leaves the caller's environment exactly as it was
+    found.
+
+    Parameters
+    ----------
+    use_gpu : bool
+            Whether the GPU should be visible inside the block.
+    """
+
+    previous = os.environ.get("CUDA_VISIBLE_DEVICES")
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0" if use_gpu else "-1"
+    try:
+        yield
+    finally:
+        if previous is None:
+            os.environ.pop("CUDA_VISIBLE_DEVICES", None)
+        else:
+            os.environ["CUDA_VISIBLE_DEVICES"] = previous
+
+
+def prepare_segmentation_model(
+    model_name: str,
+    channels: Optional[List[str]] = None,
+    spatial_calibration: Optional[float] = None,
+    use_gpu: bool = True,
+    cellprob_threshold: Optional[float] = None,
+    flow_threshold: Optional[float] = None,
+    selected_channels: Optional[List[str]] = None,
+    target_cell_size: Optional[float] = None,
+    diameter: Optional[float] = None,
+    use_stored_mapping: bool = False,
+) -> Optional[PreparedSegmentationModel]:
+    """
+
+    Load a segmentation model and resolve it against a set of image channels.
+
+    This is the setup half of :func:`segment`, split out so that the loaded model
+    can be reused frame by frame instead of being rebuilt on every call.
+
+    Parameters
+    ----------
+    model_name : str
+            The name of the pre-trained segmentation model to use.
+    channels : list or None, optional
+            The names of the channels in the images to segment. When None, the
+            model's own required channels are assumed, in order. Default is None.
+    spatial_calibration : float or None, optional
+            The spatial calibration factor of the images. If None, the calibration
+            factor from the model configuration will be used. Default is None.
+    use_gpu : bool, optional
+            Whether to use GPU acceleration if available. Default is True.
+    cellprob_threshold : float, optional
+            Cell probability threshold for Cellpose mask computation. Default is None.
+    flow_threshold : float, optional
+            Flow threshold for Cellpose mask computation. Default is None.
+    selected_channels : list or None, optional
+            The experiment channels feeding the model's input slots, one per slot,
+            in the model's own order; ``"None"`` leaves a slot blank. Overrides the
+            ``selected_channels`` mapping stored in the model configuration by the
+            channel-selection dialog. Default is None: the stored mapping when
+            ``use_stored_mapping`` is set, the model's own ``channels`` list
+            otherwise.
+    target_cell_size : float or None, optional
+            Typical object size in the images, in µm. Combined with the model's
+            ``cell_size_um`` it rescales the images so objects match the size the
+            model was trained on. Overrides the stored ``target_cell_size_um``.
+            Default is None: the stored value when ``use_stored_mapping`` is set,
+            no cell-size rescaling otherwise.
+    diameter : float or None, optional
+            Cellpose object diameter, in pixels. Overrides the value stored in the
+            model configuration. Ignored for StarDist models. Default is None.
+    use_stored_mapping : bool, optional
+            Whether to fall back on the ``selected_channels`` and
+            ``target_cell_size_um`` entries that the channel-selection dialog writes
+            into the model's ``config_input.json``. That file lives in the installed
+            package, shared by every experiment, so honouring it silently would let a
+            mapping saved in the GUI change what this function returns for an
+            unrelated call. The GUI opts in to get pipeline parity; library callers
+            get the model's own channel list unless they ask. Default is False.
+
+    Returns
+    -------
+    PreparedSegmentationModel or None
+            The prepared model, or None if the model or its input configuration
+            could not be located.
+
+    Raises
+    ------
+    ValueError
+            If none of the channels required by the model are present in `channels`.
+
+    Examples
+    --------
+    >>> prepared = prepare_segmentation_model('model_name', channels=['brightfield_channel'])
+    >>> labels = segment_frame(frame, prepared)
+
+    """
+
+    model_path = locate_segmentation_model(model_name)
+    if model_path is None:
+        logger.error(f"Could not locate model {model_name}. Aborting segmentation.")
+        return None
+
+    input_config = model_path + "config_input.json"
+    if os.path.exists(input_config):
+        with open(input_config) as config:
+            logger.info("Loading input configuration from 'config_input.json'.")
+            input_config = json.load(config)
+    else:
+        logger.error("Model input configuration could not be located...")
+        return None
+
+    # The channel-selection dialog stores the experiment channel feeding each of
+    # the model's input slots as `selected_channels`, same length and order as
+    # `channels`. Honour it exactly as SegmentCellDLProcess does, so calling this
+    # function directly gives the same masks as running the pipeline.
+    required_channels = input_config["channels"]
+    if selected_channels is not None:
+        required_channels = list(selected_channels)
+    elif use_stored_mapping and "selected_channels" in input_config:
+        required_channels = input_config["selected_channels"]
+
+    # The docstring has always allowed channels=None; without this the channel
+    # intersection below raises a TypeError instead of falling back.
+    if channels is None:
+        channels = list(required_channels)
+    else:
+        channels = list(channels)
+
+    # One entry per model input slot: the index into `channels` of the image
+    # channel feeding it, or None. Resolving per slot rather than intersecting the
+    # two name lists means the same image channel can feed several slots - which
+    # the channel-selection dialog allows and the pipeline handles, since
+    # `_get_img_num_per_channel` gives every slot its own row - and it keeps the
+    # case-insensitive matching of `_extract_channel_indices` instead of pairing
+    # it with a case-sensitive membership test.
+    channel_indices = _extract_channel_indices(channels, required_channels)
+    channel_intersection = [channels[i] for i in channel_indices if i is not None]
+    if len(channel_intersection) == 0:
+        raise ValueError("None of the channels required by the model can be found in the images to segment... Abort.")
+
+    required_spatial_calibration = input_config["spatial_calibration"]
+    model_type = input_config["model_type"]
+
+    normalize_kwargs = _get_normalize_kwargs_from_config(input_config)
+
+    # Kept alongside the resolved values so a caller can go back to the model's
+    # own settings without re-reading the configuration from disk.
+    config_defaults: Dict[str, Any] = {}
+
+    if model_type == "cellpose":
+        # `.get`, not indexing: a hand-written or older configuration may omit
+        # these, and a caller that passes them explicitly should not be stopped by
+        # a default it never uses.
+        config_defaults = {
+            "diameter": input_config.get("diameter"),
+            "cellprob_threshold": input_config.get("cellprob_threshold"),
+            "flow_threshold": input_config.get("flow_threshold"),
+        }
+        if diameter is None:
+            diameter = config_defaults["diameter"]
+        if cellprob_threshold is None:
+            cellprob_threshold = config_defaults["cellprob_threshold"]
+        if flow_threshold is None:
+            flow_threshold = config_defaults["flow_threshold"]
+    else:
+        diameter = None
+
+    # Both corrections in one factor, mirroring SegmentCellDLProcess.
+    # `cell_size_um` is what the model saw, `target_cell_size_um` what these
+    # images hold. Read from the model configuration, never from a caller's
+    # override: the override says what to ask Cellpose for, not what the network
+    # was trained on.
+    cell_size = trained_cell_size_um(input_config)
+
+    if target_cell_size is None and use_stored_mapping:
+        target_cell_size = input_config.get("target_cell_size_um")
+    if target_cell_size is not None and target_cell_size <= 0:
+        raise ValueError(
+            f"The target cell size must be strictly positive, got {target_cell_size}."
+        )
+
+    scale = _combined_scale_factor(
+        spatial_calibration,
+        required_spatial_calibration,
+        cell_size,
+        target_cell_size,
+    )
+
+    logger.info(
+        f"{spatial_calibration=} {required_spatial_calibration=} "
+        f"{cell_size=} {target_cell_size=} Scale = {scale}..."
+    )
+
+    model = None
+    scale_model = None
+    with _gpu_visibility(use_gpu):
+        if model_type == "stardist":
+            model, scale_model = _prep_stardist_model(
+                model_name, Path(model_path).parent, use_gpu=use_gpu, scale=scale
+            )
+        elif model_type == "cellpose":
+            # `model_name` directly, as SegmentCellDLProcess does. Deriving it from
+            # the path as `model_path.split("/")[-2]` raised IndexError on Windows,
+            # where locate_segmentation_model returns os.sep-joined backslashes and
+            # the split yields a single element.
+            model, scale_model = _prep_cellpose_model(
+                model_name,
+                model_path,
+                use_gpu=use_gpu,
+                n_channels=len(required_channels),
+                scale=scale,
+            )
+
+    if model is None:
+        logger.error(f"Could not load model {model_name}. Aborting segmentation.")
+        return None
+
+    # Resolve the missing required channels once, rather than on every frame.
+    none_channel_indices = np.array(
+        [i for i, v in enumerate(channel_indices) if v is None], dtype=int
+    )
+
+    return PreparedSegmentationModel(
+        model=model,
+        model_type=model_type,
+        scale_model=scale_model,
+        channels=channels,
+        required_channels=required_channels,
+        channel_indices=channel_indices,
+        channel_intersection=channel_intersection,
+        none_channel_indices=none_channel_indices,
+        normalize_kwargs=normalize_kwargs,
+        diameter=diameter,
+        cellprob_threshold=cellprob_threshold,
+        flow_threshold=flow_threshold,
+        config_defaults=config_defaults,
+        use_gpu=use_gpu,
+    )
+
+
+def segment_frame(
+    frame: np.ndarray,
+    prepared: PreparedSegmentationModel,
+) -> np.ndarray:
+    """
+
+    Segment a single frame with an already-prepared model.
+
+    This is the per-frame half of :func:`segment`. It performs the channel
+    transfer, normalization, rescaling and inference for one image, then rescales
+    the resulting labels back to that frame's original dimensions.
+
+    Parameters
+    ----------
+    frame : ndarray
+            A single multichannel image, with shape (height, width, channels) -
+            the channels being those named in ``prepared.channels``.
+    prepared : PreparedSegmentationModel
+            A model prepared by :func:`prepare_segmentation_model`.
+
+    Returns
+    -------
+    ndarray
+            The segmented labels, with shape (height, width).
+
+    Examples
+    --------
+    >>> prepared = prepare_segmentation_model('model_name', channels=['brightfield_channel'])
+    >>> labels = segment_frame(stack[0], prepared)
+
+    """
+
+    required_channels = prepared.required_channels
+
+    frame = _rearrange_multichannel_frame(frame).astype(float)
+
+    # Same contract as segment(): the frame's channels are the ones named in
+    # prepared.channels. Checked here too, because the mapping is resolved
+    # against those names and not against this frame -- without the check a
+    # too-narrow frame raises deep inside the channel transfer, and a wider one
+    # silently feeds arbitrary planes to the model.
+    if frame.shape[-1] != len(prepared.channels):
+        raise ValueError(
+            f"The frame has {frame.shape[-1]} channel(s) but the model was "
+            f"prepared for {len(prepared.channels)}: {prepared.channels}."
+        )
+
+    # Walk the slots, not the matched names: a name lookup collapses a mapping
+    # that feeds one image channel into several slots down to the first of them,
+    # leaving the rest silently black.
+    frame_to_segment = np.zeros(
+        (frame.shape[0], frame.shape[1], len(required_channels))
+    ).astype(float)
+    for slot, source in enumerate(prepared.channel_indices):
+        if source is not None:
+            frame_to_segment[:, :, slot] = frame[:, :, source]
+    frame = frame_to_segment
+    template = frame.copy()
+
+    frame = normalize_multichannel(frame, **prepared.normalize_kwargs)
+
+    if prepared.scale_model is not None:
+        frame = zoom_multiframes(frame, prepared.scale_model)
+
+    frame = _fix_no_contrast(frame)
+    frame = interpolate_nan_multichannel(frame)
+    frame[:, :, prepared.none_channel_indices] = 0.0
+
+    # Same device visibility as when the model was built: TensorFlow reads
+    # CUDA_VISIBLE_DEVICES when it creates its device context, and whether that
+    # happens in the StarDist constructor or on the first `predict` is an
+    # implementation detail we should not be relying on.
+    with _gpu_visibility(prepared.use_gpu):
+        if prepared.model_type == "stardist":
+            Y_pred = _segment_image_with_stardist_model(
+                frame, model=prepared.model, return_details=False
+            )
+        elif prepared.model_type == "cellpose":
+            Y_pred = _segment_image_with_cellpose_model(
+                frame,
+                model=prepared.model,
+                diameter=prepared.diameter,
+                cellprob_threshold=prepared.cellprob_threshold,
+                flow_threshold=prepared.flow_threshold,
+            )
+        else:
+            raise ValueError(f"Unknown model type {prepared.model_type}...")
+
+    # `template` carries this frame's pre-rescaling dimensions, so the check is
+    # made per frame rather than assuming every frame matches the first.
+    if Y_pred.shape != template.shape[:2]:
+        Y_pred = _rescale_labels(Y_pred, prepared.scale_model)
+
+    return _check_label_dims(Y_pred, template=template)
+
+
 def segment(
     stack: Union[np.ndarray, List[np.ndarray]],
     model_name: str,
@@ -90,7 +543,11 @@ def segment(
     channel_axis: int = -1,
     cellprob_threshold: Optional[float] = None,
     flow_threshold: Optional[float] = None,
-) -> np.ndarray:
+    selected_channels: Optional[List[str]] = None,
+    target_cell_size: Optional[float] = None,
+    diameter: Optional[float] = None,
+    use_stored_mapping: bool = False,
+) -> Optional[np.ndarray]:
     """
 
     Segment objects in a stack using a pre-trained segmentation model.
@@ -117,17 +574,62 @@ def segment(
                 Cell probability threshold for Cellpose mask computation. Default is None.
     flow_threshold : float, optional
                 Flow threshold for Cellpose mask computation. Default is None.
+    selected_channels : list or None, optional
+            The experiment channels feeding the model's input slots, one per slot, in
+            the model's own order; ``"None"`` leaves a slot blank. Overrides the
+            ``selected_channels`` mapping stored in the model configuration. Pass the
+            model's own ``channels`` list to ignore the stored mapping entirely.
+            Default is None: the stored mapping when ``use_stored_mapping`` is set,
+            the model's own ``channels`` list otherwise.
+    target_cell_size : float or None, optional
+            Typical object size in the images, in µm, used together with the model's
+            ``cell_size_um`` to rescale the images. Overrides the stored
+            ``target_cell_size_um``. Default is None: the stored value when
+            ``use_stored_mapping`` is set, no cell-size rescaling otherwise.
+    diameter : float or None, optional
+            Cellpose object diameter, in pixels, overriding the model configuration.
+            Ignored for StarDist models. Default is None.
+    use_stored_mapping : bool, optional
+            Whether to fall back on the ``selected_channels`` and
+            ``target_cell_size_um`` entries stored in the model's
+            ``config_input.json`` by the channel-selection dialog. Set it to True to
+            reproduce exactly what the pipeline does for the same model; leave it
+            False to keep a call reproducible whatever was last set in the GUI.
+            Default is False.
 
     Returns
     -------
-    ndarray
-            The segmented labels with shape (frames, height, width).
+    ndarray or None
+            The segmented labels with shape (frames, height, width), or None if the
+            model or its input configuration could not be located.
 
     Notes
     -----
     This function applies object segmentation to a stack of images using a pre-trained segmentation model. The stack is first
     preprocessed by normalizing the intensity values, rescaling the spatial dimensions, and applying the segmentation model.
     The resulting labels are returned as an ndarray with the same number of frames as the input stack.
+
+    This is a thin wrapper over :func:`prepare_segmentation_model` (called once) and
+    :func:`segment_frame` (called per frame). Reach for those two directly when the
+    same model has to run on frames that do not arrive as one stack.
+
+    .. versionchanged:: 1.5.4
+            Two settings that ``SegmentCellDLProcess`` had always applied, and that
+            this function had always ignored, can now be honoured here too, so the
+            library and the pipeline return the same masks for the same model:
+
+            - the ``selected_channels`` mapping stored in the model's
+              ``config_input.json`` by the channel-selection dialog, which then takes
+              precedence over the model's own ``channels`` list;
+            - the ``cell_size_um`` / ``target_cell_size_um`` rescaling.
+
+            Both come from the model directory, which is installed once and shared by
+            every experiment, so applying them by default would let a mapping saved
+            while working on one experiment change what this function returns for
+            another. They are therefore opt-in: pass `use_stored_mapping=True` for
+            pipeline parity, or `selected_channels` / `target_cell_size` to set them
+            explicitly. Without either, the model's own ``channels`` list is used, as
+            before.
 
     Examples
     --------
@@ -136,21 +638,6 @@ def segment(
 
     """
 
-    model_path = locate_segmentation_model(model_name)
-    input_config = model_path + "config_input.json"
-    if os.path.exists(input_config):
-        with open(input_config) as config:
-            logger.info("Loading input configuration from 'config_input.json'.")
-            input_config = json.load(config)
-    else:
-        logger.error("Model input configuration could not be located...")
-        return None
-
-    if not use_gpu:
-        os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
-    else:
-        os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-
     if channel_axis != -1:
         stack = np.moveaxis(stack, channel_axis, -1)
 
@@ -158,102 +645,28 @@ def segment(
         if len(channels) != stack.shape[-1]:
             raise ValueError(f"The channel names provided do not match with the expected number of channels in the stack: {stack.shape[-1]}.")
 
-    required_channels = input_config["channels"]
-    channel_intersection = [ch for ch in channels if ch in required_channels]
-    if len(channel_intersection) == 0:
-        raise ValueError("None of the channels required by the model can be found in the images to segment... Abort.")
-
-    channel_indices = _extract_channel_indices(channels, required_channels)
-
-    required_spatial_calibration = input_config["spatial_calibration"]
-    model_type = input_config["model_type"]
-
-    normalize_kwargs = _get_normalize_kwargs_from_config(input_config)
-
-    if model_type == "cellpose":
-        diameter = input_config["diameter"]
-        # if diameter!=30:
-        # 	required_spatial_calibration = None
-        if cellprob_threshold is None:
-            cellprob_threshold = input_config["cellprob_threshold"]
-        if flow_threshold is None:
-            flow_threshold = input_config["flow_threshold"]
-
-    scale = _estimate_scale_factor(spatial_calibration, required_spatial_calibration)
-    logger.info(
-        f"{spatial_calibration=} {required_spatial_calibration=} Scale = {scale}..."
+    prepared = prepare_segmentation_model(
+        model_name,
+        channels=channels,
+        spatial_calibration=spatial_calibration,
+        use_gpu=use_gpu,
+        cellprob_threshold=cellprob_threshold,
+        flow_threshold=flow_threshold,
+        selected_channels=selected_channels,
+        target_cell_size=target_cell_size,
+        diameter=diameter,
+        use_stored_mapping=use_stored_mapping,
     )
-
-    model = None
-    if model_type == "stardist":
-        model, scale_model = _prep_stardist_model(
-            model_name, Path(model_path).parent, use_gpu=use_gpu, scale=scale
-        )
-
-    elif model_type == "cellpose":
-        model, scale_model = _prep_cellpose_model(
-            model_path.split("/")[-2],
-            model_path,
-            use_gpu=use_gpu,
-            n_channels=len(required_channels),
-            scale=scale,
-        )
-
-    if model is None:
-        logger.error(f"Could not load model {model_name}. Aborting segmentation.")
+    if prepared is None:
         return None
 
-    labels = []
-
-    # Compute once before the loop: find missing channels and replace None with 0
-    none_channel_indices = np.array([i for i, v in enumerate(channel_indices) if v is None], dtype=int)
-    channel_indices = np.array([v if v is not None else 0 for v in channel_indices])
-
-    for t in tqdm(range(len(stack)), desc="frame"):
-
-        frame = stack[t]
-        frame = _rearrange_multichannel_frame(frame).astype(float)
-
-        frame_to_segment = np.zeros(
-            (frame.shape[0], frame.shape[1], len(required_channels))
-        ).astype(float)
-        for ch in channel_intersection:
-            idx = required_channels.index(ch)
-            frame_to_segment[:, :, idx] = frame[:, :, channels.index(ch)]
-        frame = frame_to_segment
-        template = frame.copy()
-
-        frame = normalize_multichannel(frame, **normalize_kwargs)
-
-        if scale_model is not None:
-            frame = zoom_multiframes(frame, scale_model)
-
-        frame = _fix_no_contrast(frame)
-        frame = interpolate_nan_multichannel(frame)
-        frame[:, :, none_channel_indices] = 0.0
-
-        if model_type == "stardist":
-            Y_pred = _segment_image_with_stardist_model(
-                frame, model=model, return_details=False
-            )
-
-        elif model_type == "cellpose":
-            Y_pred = _segment_image_with_cellpose_model(
-                frame,
-                model=model,
-                diameter=diameter,
-                cellprob_threshold=cellprob_threshold,
-                flow_threshold=flow_threshold,
-            )
-
-        if Y_pred.shape != stack[0].shape[:2]:
-            Y_pred = _rescale_labels(Y_pred, scale_model)
-
-        Y_pred = _check_label_dims(Y_pred, template=template)
-
-        labels.append(Y_pred)
-
-    labels = np.array(labels, dtype=int)
+    labels = np.array(
+        [
+            segment_frame(stack[t], prepared)
+            for t in tqdm(range(len(stack)), desc="frame")
+        ],
+        dtype=int,
+    )
 
     if view_on_napari:
         from celldetective.napari.utils import _view_on_napari

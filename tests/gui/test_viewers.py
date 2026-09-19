@@ -114,7 +114,13 @@ class TestChannelOffsetViewer:
             parent_window=mock_parent_window,
         )
         qtbot.addWidget(viewer)
-        viewer.show()
+        # Deliberately not shown. These assertions only read state the
+        # constructor set, so showing adds no coverage -- but it puts a real
+        # top-level window in front of pytest-qt's forced processEvents(), and
+        # on the Windows CI runner that combination faults inside Qt's own
+        # event dispatch (access violation, no Python frame, first test of the
+        # file). test_base_viewer.py still exercises show() on this same base
+        # class on the same runners.
 
         assert viewer.n_channels == 2
         assert viewer.channel_names == ["Ch1", "Ch2"]
@@ -190,7 +196,13 @@ class TestContourViewer:
             stack=dummy_labels_3d, labels=dummy_labels_3d, initial_edge=5
         )
         qtbot.addWidget(viewer)
-        viewer.show()
+        # Deliberately not shown. These assertions only read state the
+        # constructor set, so showing adds no coverage -- but it puts a real
+        # top-level window in front of pytest-qt's forced processEvents(), and
+        # on the Windows CI runner that combination faults inside Qt's own
+        # event dispatch (access violation, no Python frame, first test of the
+        # file). test_base_viewer.py still exercises show() on this same base
+        # class on the same runners.
 
         assert viewer.edge_size == 5
         assert hasattr(viewer, "im_mask")
@@ -247,7 +259,13 @@ class TestSizeViewer:
 
         viewer = CellSizeViewer(stack=dummy_stack, initial_diameter=20)
         qtbot.addWidget(viewer)
-        viewer.show()
+        # Deliberately not shown. These assertions only read state the
+        # constructor set, so showing adds no coverage -- but it puts a real
+        # top-level window in front of pytest-qt's forced processEvents(), and
+        # on the Windows CI runner that combination faults inside Qt's own
+        # event dispatch (access violation, no Python frame, first test of the
+        # file). test_base_viewer.py still exercises show() on this same base
+        # class on the same runners.
 
         assert viewer.diameter == 20
         assert hasattr(viewer, "circ")
@@ -301,7 +319,13 @@ class TestThresholdViewer:
             stack=dummy_stack_4d, initial_threshold=10.0
         )
         qtbot.addWidget(viewer)
-        viewer.show()
+        # Deliberately not shown. These assertions only read state the
+        # constructor set, so showing adds no coverage -- but it puts a real
+        # top-level window in front of pytest-qt's forced processEvents(), and
+        # on the Windows CI runner that combination faults inside Qt's own
+        # event dispatch (access violation, no Python frame, first test of the
+        # file). test_base_viewer.py still exercises show() on this same base
+        # class on the same runners.
 
         assert viewer.thresh == 10.0
         assert hasattr(viewer, "mask")

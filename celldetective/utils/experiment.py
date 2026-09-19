@@ -1107,8 +1107,15 @@ def _get_contrast_limits(stack: np.ndarray) -> Optional[List[Tuple[float, float]
             else:
                 subset = channel_data
 
+            # Realise the subsample before taking percentiles. A lazily loaded
+            # stack is a dask array, which does not implement `nanpercentile`
+            # and falls back to NumPy with a FutureWarning -- and the fallback
+            # is on the *subsample*, so this reads the same few pixels either
+            # way, without the warning and without depending on a fallback dask
+            # says may go away.
+            subset = np.asarray(subset)
             lo, hi = np.nanpercentile(subset, (1, 99.9))
-            limits.append((lo, hi))
+            limits.append((float(lo), float(hi)))
         return limits
     except Exception as e:
         logger.warning(f"Could not compute contrast limits: {e}")

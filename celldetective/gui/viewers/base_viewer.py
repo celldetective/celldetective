@@ -10,7 +10,8 @@ from PyQt5.QtWidgets import (
     QComboBox,
 )
 from fonticon_mdi6 import MDI6
-from superqt import QLabeledDoubleRangeSlider, QLabeledSlider
+from superqt import QLabeledSlider
+from celldetective.gui.base.sliders import QLabeledDoubleRangeSlider
 from superqt.fonticon import icon
 import matplotlib.gridspec as gridspec
 import matplotlib.backend_bases
@@ -851,11 +852,6 @@ class StackVisualizer(CelldetectiveWidget):
         else:
             min_val = np.nanmin(self.init_frame)
             max_val = np.nanmax(self.init_frame)
-
-        if np.isnan(min_val):
-            min_val = 0
-        if np.isnan(max_val):
-            max_val = 1
 
         self.contrast_slider.setRange(min_val, max_val)
 

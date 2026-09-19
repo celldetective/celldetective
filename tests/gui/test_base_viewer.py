@@ -137,6 +137,28 @@ class TestStackVisualizerInitialization:
 
         viewer.close()
 
+    @pytest.mark.parametrize("value", [0.0, 250.0])
+    def test_init_with_uniform_stack(self, qtbot, value):
+        """A blank movie must open: an empty contrast range crashes superqt natively."""
+        viewer = StackVisualizer(
+            stack=np.full((3, 64, 64), value, dtype=np.float32),
+            frame_slider=True,
+            contrast_slider=True,
+            channel_cb=False,
+            n_channels=1,
+            window_title="Test uniform stack",
+        )
+
+        qtbot.addWidget(viewer)
+        viewer.show()
+        qtbot.waitForWindowShown(viewer)
+
+        low, high = viewer.contrast_slider.minimum(), viewer.contrast_slider.maximum()
+        assert high > low
+        assert low == pytest.approx(value)
+
+        viewer.close()
+
     def test_init_with_4d_stack(self, qtbot, dummy_stack_4d):
         """Verify initialization with a 4D numpy array (T, Y, X, C)."""
         viewer = StackVisualizer(

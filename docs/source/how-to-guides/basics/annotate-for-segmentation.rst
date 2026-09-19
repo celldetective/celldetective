@@ -8,7 +8,7 @@ Reference keys: :term:`instance segmentation`, :term:`cell population`
 
 #. Launch the software, load an experiment containing the imaging modaliti(es) and cell population of interest. Expand the single-cell processing block for your population of interest.
 
-#. Recommended: pre-segment the cells you want using either a generic segmentation model (``CP_cyto3``, ``SD_versatile`` for nuclei, see this guide) or with a traditional segmentation pipeline -- see this guide).
+#. Recommended: pre-segment the cells you want using either a generic segmentation model (``CP_cyto3``, ``SD_versatile_fluo`` for nuclei, see :doc:`apply-a-segmentation-model`) or with a traditional segmentation pipeline (see :doc:`segment-with-threshold-wizard`). You can also pre-segment only the frames you annotate, from napari (see below).
 
 #. Click on the :icon:`eye-check,black` button on the right side of the *SEGMENT* option to open the initial masks in napari.
 
@@ -16,15 +16,19 @@ Reference keys: :term:`instance segmentation`, :term:`cell population`
 
 #. Use the sliders to find a frame of interest where you would like to annotate. Your dataset should sample everything that can be found in your data, with special emphasis on rare cases.
 
+#. Optional: to start from a model's output rather than from scratch, pick a model at the top of the right-hand panel and press **Segment this frame** (see :ref:`segment_single_frame_napari`). The result can be undone with :kbd:`Ctrl+Z`.
+
 #. Recommended: press the *New shapes layer* button in the layer list section and the *Add Rectangle* button in the layer controls to draw a crop of a sub-region of the current field of view, limiting the amount of annotations to perform and allowing you to move to another time point to take a different sub-region without spatial repetition. Use the opacity slider to make it as transparent as possible so that cell masks can be annotated properly.
 
 #. Click on the segmentation layer. Use the segmentation layer controls to paint new cells (press :kbd:`M` to increment a new label value), the rubber to erase cells or part of cells. Use the fill bucket with a label value of 0 to erase a cell. Work within the crop region, for the current timepoint only. You can use the time slider to see what happens before/after the current timepoint but the annotation should be done only for the current timepoint.
 
 #. Optional: above the save button, adjust the auto-fix options applied on export. *Split merged labels* separates objects that accidentally share a label value, *Remove small objects* discards objects below the *Min object area (px²)* threshold, and *Fill holes in masks* fills holes inside masks. By default, splitting and small-object removal are enabled and hole filling is disabled. Disable any of them if you want your annotation saved exactly as drawn.
 
-#. Once the cell masks are as perfect as they can be within the annotated region, press the *Save the modified labels* button to export the annotation. It is written in a *labels_population-name* folder in the current experiment project.
+#. Once the cell masks are as perfect as they can be within the annotated region, press the *Export the annotation of the current frame* button. The frame (or the crop), its mask and a ``.json`` file recording its channels and spatial calibration are written in an *annotations_population-name* folder at the root of the experiment. (*Save the modified labels* would instead overwrite the masks of the position.)
 
 #. Repeat the process for as many regions as possible. Try to sample both spatially and temporally, limiting sub-region repetitions. Once you reach about 10-30 samples, you may attempt to train a deep learning model on your data, with the proper strategy.
+
+#. To correct an exported annotation later, go to **Plugins > Correct a segmentation annotation** in the start window and open its ``.tif`` file. The frame segmentation panel is available there too.
 
 .. note::
 
