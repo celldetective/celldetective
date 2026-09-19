@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.3] - 2026-09-19
+
+### Fixed
+- Threshold segmentation failed on every frame with
+  `name 'interpolate_nan' is not defined` whenever the target channel held NaN
+  pixels (for instance after a background correction). The import had been
+  lost in the v1.5.0 import cleanup; a regression test now covers NaN frames.
+
 ## [1.6.2] - 2026-09-19
 
 ### Fixed
