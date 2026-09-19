@@ -103,6 +103,9 @@ class UnifiedBatchProcess(Process):
         # start of the run. Import the modules of the later stages on a
         # background thread so that their (multi-second) import cost overlaps
         # with the model loading of the first stage instead of following it.
+        # The thread is only started once the first stage's own imports are
+        # done: importing TensorFlow/torch from two threads at once can trip
+        # the import-lock deadlock detection and break the main thread.
         deferred_modules = []
         stage_modules = [
             (self.run_segmentation, ["celldetective.processes.segment_cells"]),
@@ -122,15 +125,16 @@ class UnifiedBatchProcess(Process):
         # The first enabled stage is imported by the main thread right away.
         deferred_modules = deferred_modules[1:]
 
-        warm_up_thread = None
-        if deferred_modules:
-            warm_up_thread = threading.Thread(
-                target=_warm_up_imports,
-                args=(deferred_modules,),
-                name="celldetective-warmup",
-                daemon=True,
-            )
-            warm_up_thread.start()
+        def start_warm_up():
+            # Idempotent: only the call following the first stage's imports acts.
+            if deferred_modules:
+                threading.Thread(
+                    target=_warm_up_imports,
+                    args=(list(deferred_modules),),
+                    name="celldetective-warmup",
+                    daemon=True,
+                ).start()
+                deferred_modules.clear()
 
         # Initialize Workers
         # Propagate batch structure to sub-processes so they can locate experiment config
@@ -156,6 +160,8 @@ class UnifiedBatchProcess(Process):
                     SegmentCellThresholdProcess,
                 )
 
+                start_warm_up()
+
                 seg_worker = SegmentCellThresholdProcess(
                     queue=self.queue, process_args=self.seg_args
                 )
@@ -171,6 +177,14 @@ class UnifiedBatchProcess(Process):
                     self.queue.put({"status": "Loading the StarDist library..."})
                     from celldetective.utils.stardist_utils import _prep_stardist_model
 
+                    try:
+                        # Load TensorFlow here, before the warm-up thread starts;
+                        # _prep_stardist_model reports a missing install itself.
+                        import stardist.models  # noqa: F401
+                    except ImportError:
+                        pass
+                    start_warm_up()
+
                     self.queue.put(
                         {"status": f"Loading model {seg_worker.model_name}..."}
                     )
@@ -185,6 +199,15 @@ class UnifiedBatchProcess(Process):
                     logger.info("Loading the cellpose_utils library...")
                     self.queue.put({"status": "Loading the Cellpose library..."})
                     from celldetective.utils.cellpose_utils import _prep_cellpose_model
+
+                    try:
+                        # Load torch here, before the warm-up thread starts;
+                        # _prep_cellpose_model reports a missing install itself.
+                        import torch  # noqa: F401
+                        import cellpose.models  # noqa: F401
+                    except ImportError:
+                        pass
+                    start_warm_up()
 
                     self.queue.put(
                         {"status": f"Loading model {seg_worker.model_name}..."}
@@ -204,6 +227,8 @@ class UnifiedBatchProcess(Process):
             self.queue.put({"status": "Initializing tracking..."})
             from celldetective.processes.track_cells import TrackingProcess
 
+            start_warm_up()
+
             track_worker = TrackingProcess(
                 queue=self.queue, process_args=self.track_args
             )
@@ -213,6 +238,8 @@ class UnifiedBatchProcess(Process):
             logger.info("Loading the measurement libraries...")
             self.queue.put({"status": "Initializing measurements..."})
             from celldetective.processes.measure_cells import MeasurementProcess
+
+            start_warm_up()
 
             logger.info("Initializing the measurement worker...")
             measure_worker = MeasurementProcess(
