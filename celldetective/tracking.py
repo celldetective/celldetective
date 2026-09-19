@@ -28,7 +28,6 @@ import numpy as np
 from tqdm import tqdm
 from typing import List, Optional, Union, Dict, Any, Tuple
 
-from celldetective.measure import measure_features
 from celldetective.utils.maths import velocity_per_track
 from celldetective.log_manager import get_logger
 
@@ -449,6 +448,10 @@ def extract_objects_and_features(
     >>> df = extract_objects_and_features(labels, stack, features)
 
     """
+
+    # celldetective.measure pulls in the GUI helpers, which tracking-only
+    # callers (e.g. clean_trajectories) do not need.
+    from celldetective.measure import measure_features
 
     if features is None:
         features = []
