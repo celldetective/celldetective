@@ -43,3 +43,15 @@ build_figures.py  one function per figure: layout and annotations
 If a window moved or grew, update the coordinates of its annotations in
 `build_figures.py`: they are given relative to the top-left corner of the
 screenshot they point at.
+
+## Style
+
+Point at things with numbered callouts (`Figure.callout`): a tight frame
+around the target, its badge centred just outside one side, and a legend
+explaining the numbers. `config-editor.svg` is the reference.
+
+## Editing an SVG by hand
+
+Touching up a figure in Inkscape is fine, but `build_figures.py` rewrites it
+from scratch: port the change to the figure's function (or tell Claude, whose
+`/documentation-writer` skill does it) before the next build.

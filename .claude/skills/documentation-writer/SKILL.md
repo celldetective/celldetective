@@ -64,7 +64,11 @@ Follow `references/figures.md`. The pipeline lives in `docs/figures`
 `docs/source/_static/figures/<name>.svg`. For a new figure: write a capture
 script (recipes in `references/capture-recipes.md`), add a function to
 `build_figures.py`, build, **look at the preview**, iterate on coordinates
-until no label overlaps UI text or another line.
+until no label overlaps UI text or another line. Point at things with
+numbered **callouts** — a tight frame around the target and its badge centred
+just outside one side — as in the reference figure `config-editor.svg`.
+Before rebuilding, check whether an SVG was edited by hand in Inkscape and
+port the edit to the code first (figures.md, "Hand edits").
 
 Embed as:
 

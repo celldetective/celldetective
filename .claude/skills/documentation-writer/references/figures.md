@@ -18,10 +18,33 @@ Taken from the older hand-made figures (`maingui.png`,
 - whole windows **with their title bar**, on a transparent background, with a
   soft shadow; several windows may overlap like on a desktop;
 - **thick black curved arrows** (`arrow`, width 5) for "this opens that";
-- **blue boxes** (`box`, #1565c0, rounded) to frame what is talked about;
-- **numbered blue badges** (`badge`) on the UI + a `legend` in free space
-  when there are more than ~2 things to point at — clearer than many leader
-  lines; thin `leader` lines with a dot for a few isolated labels;
+- **numbered callouts** (`callout`) + a `legend` in free space when there are
+  more than ~2 things to point at — clearer than many leader lines; thin
+  `leader` lines with a dot for a few isolated labels.
+
+### Callouts (the maintainer's preferred annotation, from their own edit of
+`config-editor.svg` — the reference figure to imitate)
+
+- **Every badge comes with a frame** drawn tightly around exactly what it
+  designates: the group of tool icons, the single button, the new column, the
+  new row. Never a badge floating over an unframed spot, never a badge on a
+  frame's corner.
+- **The badge sits just outside the frame, centred on one of its sides**
+  (centre `r + 2` px from the edge), on the side where there is room and where
+  it hides no UI text — usually the left, the right when the left is busy.
+- **A group of tool icons gets one frame around the whole group**,
+  square-cornered (`rounded=False`); cells, rows, columns and sections get a
+  rounded frame.
+- **A large button that speaks for itself** (Save, Submit) gets no frame:
+  the badge sits on its left end (`frame=False`).
+- Frame stroke 3 px, #1565c0; badge r = 14 (16 on full-screen captures),
+  white 2.5 px outline so it reads over any background.
+
+```python
+f.callout(1, ax + 524, ay + 109, 97, 30, rounded=False)   # tool icons
+f.callout(2, ax + 467, ay + 146, 73, 60, side="right")    # a column
+f.callout(6, bx + 325, by + 490, 303, 30, frame=False)    # Save button
+```
 - labels in "DejaVu Sans, Arial, sans-serif", black, 14–17 px (21 px on
   full-screen captures such as napari, which the page scales down ~50 %);
 - short lowercase labels ("tune the correlation disk on a frame").
@@ -46,6 +69,22 @@ Taken from the older hand-made figures (`maingui.png`,
    ~50–400 kB; a full-screen napari capture ~1 MB. Grep `<image` count =
    number of shots (see pitfalls).
 7. Embed in the page (SKILL.md snippet) and check it in headless Chrome.
+
+## Hand edits in Inkscape
+
+The maintainer may touch up an SVG in Inkscape. `build_figures.py` rewrites
+the SVG from scratch, so **a hand edit is lost at the next build unless it is
+ported to the code**. When an SVG differs from what the build produces
+(`git diff` on `docs/source/_static/figures/`, or a newer mtime than the
+screenshots):
+
+1. back it up to the scratchpad;
+2. read it with the base64 stripped
+   (`re.sub(r'base64,[^"]*', 'B64', s)`) and render it to PNG to see it;
+3. translate each change into `build_figures.py` calls (and new `annotate.py`
+   primitives if the change is a new kind of mark), rebuild, and compare the
+   two renders side by side until they match;
+4. if the edit shows a style preference, record it in this file.
 
 ## Pitfalls met before
 
