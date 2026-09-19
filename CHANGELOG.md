@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.1] - 2026-09-19
+
+### Fixed
+- The documentation failed to build on Read the Docs, which no longer offers
+  `ubuntu-20.04`: it now builds on `ubuntu-24.04` with Python 3.11.
+
 ## [1.6.0] - 2026-09-19
 
 ### Added
@@ -342,6 +348,7 @@ documentation and test overhaul.
 - Resolved Windows access-violation, hanging, and stalling test issues; build
   the package on tag and fix the PyPI workflow.
 
+[1.6.1]: https://github.com/celldetective/celldetective/compare/v1.6.0...v1.6.1
 [1.6.0]: https://github.com/celldetective/celldetective/compare/v1.5.3...v1.6.0
 [1.5.3]: https://github.com/celldetective/celldetective/compare/v1.5.2...v1.5.3
 [1.5.2]: https://github.com/celldetective/celldetective/compare/v1.5.1...v1.5.2
