@@ -46,3 +46,27 @@ def test_gui_imports_float_sliders_from_celldetective():
         "Import QLabeledDoubleSlider / QLabeledDoubleRangeSlider from "
         f"celldetective.gui.base.sliders, not superqt: {offenders}"
     )
+
+
+@pytest.mark.parametrize("slider_class", [QLabeledDoubleSlider, QLabeledDoubleRangeSlider])
+def test_float_slider_labels_reject_comma_decimals(qtbot, slider_class):
+    # superqt parses the label text with float(), which fails on a locale comma.
+    from qtpy.QtCore import QLocale
+    from qtpy.QtGui import QValidator
+
+    QLocale.setDefault(QLocale(QLocale.French))
+    try:
+        slider = slider_class()
+        qtbot.addWidget(slider)
+        slider.setRange(0.0, 2.0)
+        if slider_class is QLabeledDoubleRangeSlider:
+            slider.setValue((0.25, 1.0, 1.5))  # new handle labels are created
+            labels = [slider._min_label, slider._max_label, *slider._handle_labels]
+        else:
+            labels = [slider._label]
+        for label in labels:
+            validator = label.validator()
+            assert validator.validate("0,75", 0)[0] != QValidator.Acceptable
+            assert validator.validate("0.75", 0)[0] == QValidator.Acceptable
+    finally:
+        QLocale.setDefault(QLocale.c())
