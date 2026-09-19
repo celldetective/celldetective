@@ -35,6 +35,7 @@ from celldetective.measure import (
 import pandas as pd
 from celldetective.utils.image_loaders import locate_labels
 
+from celldetective.processes import PositionSkipped
 from celldetective.log_manager import get_logger, positionlogger
 from celldetective.utils import COLUMN_LABELS
 
@@ -262,8 +263,7 @@ class MeasurementProcess(Process):
         self.config = PurePath(self.exp_dir, Path("config.ini"))
 
         if not os.path.exists(self.config):
-            logger.error("The configuration file for the experiment was not found...")
-            self.abort_process()
+            self.abort_process("The configuration file for the experiment was not found.")
 
     def detect_tracks(self):
         """Detect existing tracks or features."""
@@ -629,8 +629,7 @@ class MeasurementProcess(Process):
         self.terminate()
         self.queue.put("finished")
 
-    def abort_process(self):
-        """Abort the process."""
+    def abort_process(self, reason: str = "Abort."):
+        """Skip the current position; the batch moves on to the next one."""
 
-        self.terminate()
-        self.queue.put("error")
+        raise PositionSkipped(reason)

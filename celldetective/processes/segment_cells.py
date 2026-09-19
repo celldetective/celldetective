@@ -12,6 +12,7 @@ import gc
 from art import tprint
 import concurrent.futures
 
+from celldetective.processes import PositionSkipped
 from celldetective.log_manager import get_logger, positionlogger
 from celldetective.utils.experiment import (
     extract_position_name,
@@ -219,10 +220,9 @@ class BaseSegmentProcess(Process):
         self.config = PurePath(self.exp_dir, Path("config.ini"))
 
         if not os.path.exists(self.config):
-            logger.error(
-                "The configuration file for the experiment could not be located. Abort."
+            self.abort_process(
+                "The configuration file for the experiment could not be located."
             )
-            self.abort_process()
 
     def detect_movie_length(self):
         """Detect the length of the movie."""
@@ -230,8 +230,7 @@ class BaseSegmentProcess(Process):
         try:
             self.file = glob(self.pos + f"movie/{self.movie_prefix}*.tif")[0]
         except Exception as e:
-            logger.error(f"Error {e}.\nMovie could not be found. Check the prefix.")
-            self.abort_process()
+            self.abort_process(f"Movie could not be found ({e}). Check the prefix.")
 
         len_movie_auto = auto_load_number_of_frames(self.file)
         if len_movie_auto is not None:
@@ -243,11 +242,10 @@ class BaseSegmentProcess(Process):
         self.terminate()
         self.queue.put("finished")
 
-    def abort_process(self):
-        """Abort the process."""
+    def abort_process(self, reason: str = "Abort."):
+        """Skip the current position; the batch moves on to the next one."""
 
-        self.terminate()
-        self.queue.put("error")
+        raise PositionSkipped(reason)
 
 
 class SegmentCellDLProcess(BaseSegmentProcess):
@@ -395,16 +393,14 @@ class SegmentCellDLProcess(BaseSegmentProcess):
 
         self.model_complete_path = locate_segmentation_model(self.model_name)
         if self.model_complete_path is None:
-            logger.error("Model could not be found. Abort.")
-            self.abort_process()
+            self.abort_process("Model could not be found.")
         else:
             logger.info(f"Model path: {self.model_complete_path}...")
 
         if not os.path.exists(self.model_complete_path + "config_input.json"):
-            logger.error(
-                "The configuration for the inputs to the model could not be located. Abort."
+            self.abort_process(
+                "The configuration for the inputs to the model could not be located."
             )
-            self.abort_process()
 
         with open(self.model_complete_path + "config_input.json") as config_file:
             self.input_config = json.load(config_file)
@@ -700,8 +696,7 @@ class SegmentCellThresholdProcess(BaseSegmentProcess):
                 with open(inst, "r") as f:
                     self.instructions.append(json.load(f))
             else:
-                logger.error("The configuration path is not valid. Abort.")
-                self.abort_process()
+                self.abort_process(f"The threshold configuration path {inst} is not valid.")
 
     def extract_threshold_parameters(self):
         """Extract the threshold parameters."""

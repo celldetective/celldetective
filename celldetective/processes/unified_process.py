@@ -13,6 +13,8 @@ from celldetective.log_manager import (
     forward_logs_to_queue,
     capture_library_logs,
 )
+from celldetective.processes import PositionSkipped
+from celldetective.utils.experiment import extract_position_name
 
 logger = get_logger(__name__)
 
@@ -400,17 +402,19 @@ class UnifiedBatchProcess(Process):
                         signal_worker.setup_for_position(pos_path)
                         signal_worker.process_position(model=signal_model)
 
+                except PositionSkipped as e:
+                    # Expected condition (e.g. no labels to track): no traceback.
+                    pos_name = extract_position_name(pos_path)
+                    logger.error(f"Skipping position {pos_name}: {e}")
+                    self.queue.put({"status": f"Skipped {pos_name}: {e}"})
+                    continue
                 except Exception as e:
-                    logger.error(f"Error processing position {pos_path}: {e}")
-                    self.queue.put(
-                        {
-                            "status": f"Error at {os.path.basename(pos_path)}. Skipping..."
-                        }
-                    )
+                    pos_name = extract_position_name(pos_path)
                     logger.error(
-                        f"Skipping position {os.path.basename(pos_path)} due to error: {e}",
+                        f"Skipping position {pos_name} due to error: {e}",
                         exc_info=True,
                     )
+                    self.queue.put({"status": f"Error at {pos_name}. Skipping..."})
                     continue
 
                 gc.collect()
