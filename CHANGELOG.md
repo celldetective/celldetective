@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.4] - 2026-09-20
+
+### Added
+- Threshold segmentation can be applied from inside the napari correction
+  viewer, the counterpart of the frame segmentation plugin for the classical
+  pipeline. One or more configurations written by the threshold configuration
+  wizard are applied to the frame the time slider is on, either to the whole
+  frame or only within regions of interest drawn as napari shapes, so a
+  configuration can be tried where it is hard to get right before a full run.
+  The configurations are the files the batch pipeline reads, applied the same
+  way, and the ones last used for a population are remembered in the
+  experiment.
+
+### Changed
+- Batch processing starts faster: the heavy imports of a worker are deferred
+  or skipped, and IPython is no longer imported in worker processes at all.
+- A position skipped for want of its labels, its configuration or its
+  segmentation model now says so, naming the reason, instead of failing the
+  run with a generic "Process exited unexpectedly."
+
 ### Fixed
 - Integer sliders showed at most 99 whatever their value (e.g. 300 epochs, a
   max signal length of 128, the time slider of the viewers on movies of more
@@ -27,6 +47,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ignores; the field is now hidden there.
 - The registration ROI viewer showed black images, and the napari frame
   segmentation panel was too large.
+- Every labeled float slider raised `AttributeError: 'SliderLabel' object has
+  no attribute 'lineEdit'` on superqt 0.7.8 and later, which took the viewers
+  and the control panel down with it: superqt turned the slider label from a
+  spin box, which owns a line edit, into a line edit. No version is pinned, so
+  both are handled.
+- The value labels at the ends of a range slider, the contrast slider of every
+  viewer among them, were stretched to more than twice their width: they were
+  sized for the widest number the field accepts rather than for the value they
+  show.
+- The segmentation warm-up could deadlock on the import lock when TensorFlow
+  and torch were imported from two threads at once.
 
 ### Documentation
 - New annotated figures, captured from the current interface on the demo
@@ -405,6 +436,8 @@ documentation and test overhaul.
 - Resolved Windows access-violation, hanging, and stalling test issues; build
   the package on tag and fix the PyPI workflow.
 
+[1.6.4]: https://github.com/celldetective/celldetective/compare/v1.6.3...v1.6.4
+[1.6.3]: https://github.com/celldetective/celldetective/compare/v1.6.2...v1.6.3
 [1.6.2]: https://github.com/celldetective/celldetective/compare/v1.6.1...v1.6.2
 [1.6.1]: https://github.com/celldetective/celldetective/compare/v1.6.0...v1.6.1
 [1.6.0]: https://github.com/celldetective/celldetective/compare/v1.5.3...v1.6.0
