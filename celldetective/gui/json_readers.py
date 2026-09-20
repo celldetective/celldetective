@@ -17,11 +17,12 @@ import subprocess
 from subprocess import Popen
 from typing import Dict, List, Optional
 
-from PyQt5.QtCore import QRegularExpression, Qt
+from PyQt5.QtCore import QRegularExpression, QStringListModel, Qt
 from PyQt5.QtGui import QKeyEvent, QKeySequence, QRegularExpressionValidator
 from PyQt5.QtWidgets import (
     QAbstractItemView,
     QApplication,
+    QCompleter,
     QFormLayout,
     QHBoxLayout,
     QHeaderView,
@@ -49,11 +50,22 @@ from celldetective.gui.base.components import (
 )
 from celldetective.gui.base.styles import DANGER_COLOR, MUTED_INK, TABLE_STYLE
 from celldetective.gui.base.utils import center_window
+from celldetective.utils.experiment import (
+    count_movies_matching_prefix,
+    get_movie_prefix_candidates,
+    list_movies_per_position,
+)
 
 logger = logging.getLogger("celldetective")
 
 LABELS_SECTION = "Labels"
 METADATA_SECTION = "Metadata"
+
+# The prefix telling which stack of a position folder is the movie: the field
+# is offered what the experiment holds (see scan_movies). The section is
+# compared lowercased, the way configparser reads the option names.
+MOVIE_SECTION = "moviesettings"
+MOVIE_PREFIX_KEY = "movie_prefix"
 
 # The labels the software reads by name (see utils.experiment): they can be
 # edited but neither renamed nor removed.
@@ -317,6 +329,13 @@ class ConfigEditor(CelldetectiveWidget):
         self.well_names = self._well_names()
         self.fields = {}
 
+        # The stacks of the experiment, read the first time the movie prefix
+        # is looked at rather than on opening: the folders are scanned then,
+        # and only when that field is of any interest.
+        self.movies_per_position = {}
+        self.prefix_field = None
+        self._prefix_scanned = False
+
         layout = QVBoxLayout(self)
 
         header = QHBoxLayout()
@@ -416,7 +435,10 @@ class ConfigEditor(CelldetectiveWidget):
             for key, value in self.config.items(section):
                 field = QLineEdit(value)
                 self.fields[(section, key)] = field
-                form.addRow(key, field)
+                if section.lower() == MOVIE_SECTION and key == MOVIE_PREFIX_KEY:
+                    form.addRow(key, self._build_prefix_row(field))
+                else:
+                    form.addRow(key, field)
             box.addLayout(form)
 
         box.addStretch()
@@ -426,6 +448,149 @@ class ConfigEditor(CelldetectiveWidget):
         scroll.setFrameShape(QScrollArea.NoFrame)
         scroll.setWidget(content)
         return scroll
+
+    def _build_prefix_row(self, field: QLineEdit) -> QWidget:
+        """
+        Dress the movie prefix field with the prefixes the experiment holds.
+
+        The names of the stacks sitting in the movie folders are cut into the
+        prefixes that would select them, and offered as completions. A line
+        under the field tells what the prefix currently typed matches, so that
+        a prefix leaving positions without a movie is seen here rather than at
+        the first segmentation.
+
+        Parameters
+        ----------
+        field : QLineEdit
+            The field holding the prefix.
+
+        Returns
+        -------
+        QWidget
+            The field, its suggestion button and the line of feedback.
+        """
+
+        self.prefix_field = field
+        field.setPlaceholderText("any stack of the movie folder")
+
+        self.prefix_model = QStringListModel(self)
+        completer = QCompleter(self.prefix_model, field)
+        completer.setCaseSensitivity(Qt.CaseInsensitive)
+        completer.setFilterMode(Qt.MatchContains)
+        completer.setCompletionMode(QCompleter.PopupCompletion)
+        field.setCompleter(completer)
+        self.prefix_completer = completer
+
+        self.prefix_suggest_btn = ToolButton(
+            MDI6.text_search, "Show the prefixes of the stacks of the experiment."
+        )
+        self.prefix_suggest_btn.clicked.connect(self.show_prefix_suggestions)
+
+        self.prefix_hint = self._hint("")
+        self.prefix_hint.setTextFormat(Qt.PlainText)
+        self.prefix_hint.hide()
+        field.textChanged.connect(self._on_prefix_typed)
+
+        row = QHBoxLayout()
+        row.setContentsMargins(0, 0, 0, 0)
+        row.addWidget(field, 1)
+        row.addLayout(tool_strip(self.prefix_suggest_btn))
+
+        container = CelldetectiveWidget()
+        box = QVBoxLayout(container)
+        box.setContentsMargins(0, 0, 0, 0)
+        box.setSpacing(2)
+        box.addLayout(row)
+        box.addWidget(self.prefix_hint)
+        return container
+
+    def scan_movies(self) -> None:
+        """
+        Read the stacks of the experiment, once.
+
+        Scanning the movie folder of every position takes a moment on a large
+        experiment, so it is done at the first sign of interest in the prefix
+        and kept.
+        """
+
+        if self._prefix_scanned:
+            return
+        self._prefix_scanned = True
+
+        folder = getattr(self.parent_window, "exp_dir", None) or os.path.dirname(
+            os.path.realpath(self.config_path)
+        )
+        try:
+            self.movies_per_position = list_movies_per_position(folder)
+        except Exception:
+            logger.exception("Could not list the stacks of the experiment.")
+            self.movies_per_position = {}
+
+        candidates = get_movie_prefix_candidates(self.movies_per_position)
+        self.prefix_model.setStringList([prefix for prefix, _, _ in candidates])
+
+    def show_prefix_suggestions(self) -> None:
+        """Open the list of the prefixes the experiment holds."""
+
+        self.scan_movies()
+        self._update_prefix_hint()
+        self.prefix_field.setFocus()
+        self.prefix_completer.setCompletionPrefix(self.prefix_field.text())
+        self.prefix_completer.complete()
+
+    def _on_prefix_typed(self) -> None:
+        """Read the stacks at the first edit, then follow what is typed."""
+
+        self.scan_movies()
+        self._update_prefix_hint()
+
+    def _update_prefix_hint(self) -> None:
+        """Tell what the prefix currently typed matches in the experiment."""
+
+        if not self._prefix_scanned:
+            return
+
+        total = len(self.movies_per_position)
+        if total == 0:
+            self._show_prefix_hint(
+                "No movie folder found: a stack goes in the movie folder of "
+                "a position.",
+                warning=True,
+            )
+            return
+
+        prefix = self.prefix_field.text().strip()
+        positions, stacks = count_movies_matching_prefix(
+            self.movies_per_position, prefix
+        )
+
+        if positions == 0:
+            self._show_prefix_hint(
+                f"No stack of the {total} positions starts with this prefix.",
+                warning=True,
+            )
+        elif positions < total:
+            self._show_prefix_hint(
+                f"{total - positions} of the {total} positions hold no matching "
+                "stack.",
+                warning=True,
+            )
+        elif stacks > positions:
+            self._show_prefix_hint(
+                f"{stacks} stacks over {total} positions: the first one of a "
+                "position is the one loaded.",
+                warning=True,
+            )
+        else:
+            self._show_prefix_hint(f"One stack in each of the {total} positions.")
+
+    def _show_prefix_hint(self, text: str, warning: bool = False) -> None:
+        """Write the line of feedback under the prefix field."""
+
+        color = DANGER_COLOR if warning else MUTED_INK
+        self.prefix_hint.setStyleSheet(f"color: {color};")
+        self.prefix_hint.setText(text)
+        self.prefix_hint.show()
 
     def _build_labels_tab(self) -> QWidget:
         """Build the table of the well labels."""

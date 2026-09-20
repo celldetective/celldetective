@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- The movie prefix of the experiment configuration suggests the prefixes the
+  experiment actually holds. The names of the stacks sitting in the movie
+  folders are cut around their separators and their numbering, and the pieces
+  that select a stack in the most positions are offered as completions, from
+  the field or from the button next to it. A line under the field tells what
+  the prefix typed matches, so a prefix leaving positions without a movie, or
+  matching several stacks in one, is seen there rather than at the first
+  segmentation.
+
 ## [1.6.4] - 2026-09-20
 
 ### Added

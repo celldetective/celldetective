@@ -998,6 +998,212 @@ def get_positions_in_well(well: str) -> np.ndarray:
     return np.array(positions, dtype=str)
 
 
+# The characters that separate the parts of a stack name, e.g. the '_' of
+# 'Well1_t01.tif'. A prefix is meant to end on one of these, or right before
+# the numbering of the acquisition.
+PREFIX_SEPARATORS = " _-."
+
+
+def list_movies_per_position(experiment: Union[str, Path]) -> Dict[str, List[str]]:
+    """
+    List the stacks the movie folder of each position holds.
+
+    Only the files the software can load are listed, the ``.tif`` of the
+    ``movie`` subfolder of a position, and only their names.
+
+    Parameters
+    ----------
+    experiment : str or Path
+            The path to the experiment folder.
+
+    Returns
+    -------
+    dict
+            One entry per position that has a movie folder, its path (as
+            ``get_positions_in_well`` gives it) mapped to the names of the
+            stacks it holds, naturally sorted. A position with an empty movie
+            folder is kept, with an empty list.
+
+    Examples
+    --------
+    >>> list_movies_per_position('/path/to/experiment')
+    {'/path/to/experiment/W1/101/': ['Well1_t01.tif']}
+
+    """
+
+    movies = {}
+    for well in get_experiment_wells(str(experiment)):
+        for pos in get_positions_in_well(well):
+            folder = os.sep.join([pos.rstrip(os.sep), "movie"])
+            if not os.path.isdir(folder):
+                continue
+            stacks = natsorted(glob(os.sep.join([folder, "*.tif"])))
+            movies[pos] = [os.path.basename(s) for s in stacks]
+
+    return movies
+
+
+def count_movies_matching_prefix(
+    movies_per_position: Dict[str, List[str]], prefix: str
+) -> Tuple[int, int]:
+    """
+    Count what a movie prefix matches in an experiment.
+
+    Parameters
+    ----------
+    movies_per_position : dict
+            The stacks of each position, as ``list_movies_per_position`` gives
+            them.
+    prefix : str
+            The prefix to test, the one the software globs as ``prefix*.tif``.
+
+    Returns
+    -------
+    tuple of (int, int)
+            The number of positions holding at least one matching stack, and
+            the total number of matching stacks.
+
+    """
+
+    positions = 0
+    stacks = 0
+    for names in movies_per_position.values():
+        matches = [name for name in names if name.startswith(prefix)]
+        if matches:
+            positions += 1
+            stacks += len(matches)
+
+    return positions, stacks
+
+
+def _prefixes_of_name(name: str) -> List[str]:
+    """
+    Cut a stack name where a prefix plausibly ends.
+
+    A name is cut around its separators and before the numbering that usually
+    tells the acquisitions apart, so that 'Well1_t01.tif' offers 'Well',
+    'Well1', 'Well1_' and 'Well1_t'.
+
+    Parameters
+    ----------
+    name : str
+            The name of the stack, with its extension.
+
+    Returns
+    -------
+    list of str
+            The candidate prefixes, from the shortest to the longest.
+
+    """
+
+    stem = name[: -len(".tif")] if name.lower().endswith(".tif") else name
+
+    cuts = set()
+    for i in range(1, len(stem)):
+        previous, current = stem[i - 1], stem[i]
+        if previous in PREFIX_SEPARATORS:
+            # After a separator: 'Well1_'.
+            cuts.add(i)
+        if current in PREFIX_SEPARATORS:
+            # Before a separator: 'Well1'.
+            cuts.add(i)
+        elif current.isdigit() and not previous.isdigit():
+            # Before the numbering: 'Well' in 'Well1'.
+            cuts.add(i)
+    cuts.add(len(stem))
+
+    prefixes = [stem[:i] for i in sorted(cuts)]
+
+    return [p for p in prefixes if p.strip(PREFIX_SEPARATORS)]
+
+
+def get_movie_prefix_candidates(
+    movies_per_position: Dict[str, List[str]], limit: int = 12
+) -> List[Tuple[str, int, int]]:
+    """
+    Propose the movie prefixes that make sense for an experiment.
+
+    The names of the stacks are cut around their separators and their
+    numbering, and each piece is kept as a candidate prefix. Prefixes that
+    match exactly the same stacks are the same choice written in different
+    ways, so only one of them is kept. The candidates that cover the most
+    positions come first, then those that leave the least ambiguity (one stack
+    per position), then the most specific ones.
+
+    Parameters
+    ----------
+    movies_per_position : dict
+            The stacks of each position, as ``list_movies_per_position`` gives
+            them.
+    limit : int, optional
+            The maximum number of candidates to return. Default is 12.
+
+    Returns
+    -------
+    list of (str, int, int)
+            The candidate prefixes, each with the number of positions and the
+            number of stacks it matches, best first.
+
+    Examples
+    --------
+    >>> movies = {'W1/101/': ['Well1_t01.tif'], 'W1/102/': ['Well2_t01.tif']}
+    >>> get_movie_prefix_candidates(movies)
+    [('Well', 2, 2), ('Well1_', 1, 1), ('Well2_', 1, 1)]
+
+    """
+
+    # The names repeat from one position to the next: count each of them once,
+    # as the number of positions it appears in and the number of stacks it is.
+    index = {}
+    for names in movies_per_position.values():
+        for name in set(names):
+            positions, stacks = index.get(name, (0, 0))
+            index[name] = (positions + 1, stacks + names.count(name))
+
+    candidates = set()
+    for name in index:
+        candidates.update(_prefixes_of_name(name))
+
+    # Two prefixes matching the same names are the same choice: keep the one
+    # that ends on a separator, the shortest otherwise.
+    best = {}
+    for prefix in candidates:
+        matches = frozenset(name for name in index if name.startswith(prefix))
+        if not matches:
+            continue
+        rank = (0 if prefix[-1] in PREFIX_SEPARATORS else 1, len(prefix), prefix)
+        if matches not in best or rank < best[matches][0]:
+            best[matches] = (rank, prefix)
+
+    scored = []
+    for matches, (_, prefix) in best.items():
+        positions = 0
+        stacks = 0
+        for name in matches:
+            positions += index[name][0]
+            stacks += index[name][1]
+        # A position holding two matching stacks was counted twice: what the
+        # prefix really covers is the positions holding at least one of them.
+        covered = sum(
+            1
+            for names in movies_per_position.values()
+            if any(name in matches for name in names)
+        )
+        scored.append((prefix, covered, stacks))
+
+    # The most covering first, then the least ambiguous, then the most
+    # specific, and alphabetically so that the order never depends on the set.
+    scored.sort(key=lambda c: (-c[1], c[2] - c[1], -len(c[0]), c[0]))
+
+    # The name of a single position is rarely the prefix of an experiment: it
+    # is only worth proposing when nothing covers more ground.
+    covering = [c for c in scored if c[1] > 1]
+    if covering:
+        scored = covering
+
+    return scored[:limit]
+
+
 def extract_experiment_folder_output(
     experiment_folder: str, destination_folder: str
 ) -> None:

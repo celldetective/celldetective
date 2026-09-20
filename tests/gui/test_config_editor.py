@@ -3,7 +3,7 @@ Unit tests for the experiment configuration editor in celldetective.gui.json_rea
 
 Covers the well labels table (one row per well, labels added, renamed and
 removed), the metadata table, and that saving keeps the format the rest of the
-software reads.
+software reads, and the prefixes the movie prefix field suggests.
 """
 
 import configparser
@@ -28,6 +28,7 @@ populations = targets,effectors
 [MovieSettings]
 pxtoum = 0.2
 len_movie = 40
+movie_prefix = 
 
 [Labels]
 cell_types = T,T,NK
@@ -196,3 +197,71 @@ def test_settings_are_saved_in_order(editor):
     config = saved(editor)
     assert config.get("MovieSettings", "pxtoum") == "0.5"
     assert config.sections() == ["Populations", "MovieSettings", "Labels", "Metadata"]
+
+
+def write_stacks(folder, movies):
+    """Write empty stacks in the movie folders of an experiment."""
+    for (well, position), names in movies.items():
+        movie_folder = folder / well / position / "movie"
+        movie_folder.mkdir(parents=True, exist_ok=True)
+        for name in names:
+            (movie_folder / name).write_bytes(b"")
+
+
+def test_prefix_suggestions_come_from_the_stacks(editor, tmp_path):
+    write_stacks(
+        tmp_path,
+        {
+            ("W1", "101"): ["Alexa488_stack.tif", "BF_stack.tif"],
+            ("W2", "201"): ["Alexa488_stack.tif", "BF_stack.tif"],
+            ("W3", "301"): ["Alexa488_stack.tif", "BF_stack.tif"],
+        },
+    )
+    editor.show_prefix_suggestions()
+    assert editor.prefix_model.stringList() == ["Alexa488_", "BF_"]
+
+
+def test_the_stacks_are_read_only_once(editor, tmp_path, monkeypatch):
+    write_stacks(tmp_path, {("W1", "101"): ["stack.tif"]})
+    calls = []
+    monkeypatch.setattr(
+        json_readers, "list_movies_per_position", lambda folder: calls.append(folder) or {}
+    )
+    editor.scan_movies()
+    editor.scan_movies()
+    editor.prefix_field.setText("stack")
+    assert len(calls) == 1
+
+
+def test_the_hint_tells_what_the_prefix_matches(editor, tmp_path):
+    write_stacks(
+        tmp_path,
+        {
+            ("W1", "101"): ["Alexa488_stack.tif", "BF_stack.tif"],
+            ("W2", "201"): ["Alexa488_stack.tif", "BF_stack.tif"],
+            ("W3", "301"): ["BF_stack.tif"],
+        },
+    )
+    editor.prefix_field.setText("Alexa488_")
+    assert "1 of the 3 positions" in editor.prefix_hint.text()
+
+    editor.prefix_field.setText("BF_")
+    assert editor.prefix_hint.text() == "One stack in each of the 3 positions."
+
+    editor.prefix_field.setText("")
+    assert "first one" in editor.prefix_hint.text()
+
+    editor.prefix_field.setText("Hoechst")
+    assert "No stack" in editor.prefix_hint.text()
+
+
+def test_the_hint_signals_an_experiment_without_movies(editor):
+    editor.prefix_field.setText("a")
+    assert "No movie folder" in editor.prefix_hint.text()
+
+
+def test_the_prefix_is_saved(editor, tmp_path):
+    write_stacks(tmp_path, {("W1", "101"): ["Alexa488_stack.tif"]})
+    editor.prefix_field.setText("Alexa488_")
+    assert editor.save_config()
+    assert saved(editor).get("MovieSettings", "movie_prefix") == "Alexa488_"
