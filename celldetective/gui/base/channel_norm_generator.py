@@ -21,6 +21,12 @@ from superqt.fonticon import icon
 from celldetective.gui.base.styles import Styles
 
 
+def _fit_value(line_edit: QLineEdit, sample: str = "99.999") -> QLineEdit:
+    """Keep a percentile field wide enough to show its value when the window is narrow."""
+    line_edit.setMinimumWidth(line_edit.fontMetrics().horizontalAdvance(sample) + 12)
+    return line_edit
+
+
 class ChannelNormGenerator(QVBoxLayout, Styles):
     """Generator for list of channels"""
 
@@ -270,9 +276,9 @@ class ChannelNormGenerator(QVBoxLayout, Styles):
         channel_norm_options_layout.addWidget(QLabel(""), 30)
         ch_norm_sublayout = QHBoxLayout()
         ch_norm_sublayout.addWidget(self.normalization_min_value_lbl[-1])
-        ch_norm_sublayout.addWidget(self.normalization_min_value_le[-1])
+        ch_norm_sublayout.addWidget(_fit_value(self.normalization_min_value_le[-1]))
         ch_norm_sublayout.addWidget(self.normalization_max_value_lbl[-1])
-        ch_norm_sublayout.addWidget(self.normalization_max_value_le[-1])
+        ch_norm_sublayout.addWidget(_fit_value(self.normalization_max_value_le[-1]))
         ch_norm_sublayout.addWidget(self.normalization_clip_btns[-1])
         ch_norm_sublayout.addWidget(self.normalization_mode_btns[-1])
         channel_norm_options_layout.addLayout(ch_norm_sublayout, 70)
@@ -299,9 +305,9 @@ class ChannelNormGenerator(QVBoxLayout, Styles):
             channel_norm_options_layout.addWidget(QLabel(""), 30)
             ch_norm_sublayout = QHBoxLayout()
             ch_norm_sublayout.addWidget(self.normalization_min_value_lbl[i])
-            ch_norm_sublayout.addWidget(self.normalization_min_value_le[i])
+            ch_norm_sublayout.addWidget(_fit_value(self.normalization_min_value_le[i]))
             ch_norm_sublayout.addWidget(self.normalization_max_value_lbl[i])
-            ch_norm_sublayout.addWidget(self.normalization_max_value_le[i])
+            ch_norm_sublayout.addWidget(_fit_value(self.normalization_max_value_le[i]))
             ch_norm_sublayout.addWidget(self.normalization_clip_btns[i])
             ch_norm_sublayout.addWidget(self.normalization_mode_btns[i])
             channel_norm_options_layout.addLayout(ch_norm_sublayout, 70)

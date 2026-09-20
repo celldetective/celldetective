@@ -31,18 +31,22 @@ In many applications, cell or nucleus segmentation can be achieved through the u
 
 We call this UI the ``Threshold Configuration Wizard`` (TCW). This interface allows you to interactively build a segmentation pipeline step-by-step.
 
-.. image:: _static/tcw.png
+.. figure:: _static/figures/threshold-wizard.svg
+    :width: 100%
+    :target: _static/figures/threshold-wizard.svg
     :align: center
-    :alt: threshold_config_wizard
+    :alt: The Threshold Configuration Wizard
 
-*The Threshold Configuration Wizard interface showing preprocessing, thresholding, and object detection controls.*
+    **The Threshold Configuration Wizard.** Preprocessing filters, threshold and object options on the left, the image with the detected objects on the right (live nuclei of the ADCC demo).
+
+The numbered steps are described in :doc:`how-to-guides/basics/segment-with-threshold-wizard`.
 
 The wizard guides you through four stages:
 
 1. **Preprocessing** — enhance the image with filters (``gauss``, ``median``, ``std``, etc.) to make objects easier to detect.
 2. **Thresholding** — binarize the image to separate foreground from background.
 3. **Object Detection** — split touching objects using a watershed or label all connected components.
-4. **Property Filtering** — remove false positives based on morphology or intensity queries (e.g., ``area > 100``).
+4. **Property Filtering** — remove false positives based on morphology or intensity queries (e.g., ``area < 100``).
 
 The pipeline can be saved as a ``.json`` config file, which can be loaded later via the **Upload Model** window.
 
@@ -204,14 +208,6 @@ The labels are always re-numbered consecutively from ``1`` on save to avoid enco
 
 For a step-by-step annotation workflow, see :doc:`How to annotate for segmentation <how-to-guides/basics/annotate-for-segmentation>`.
 To train a model on your annotations, see :doc:`How to train a segmentation model <how-to-guides/advanced/train-a-segmentation-model-from-scratch>`.
-
-
-.. figure:: _static/napari.png
-    :align: center
-    :alt: napari
-    
-    **napari**. napari provides the basic requirements of image manipulation software, namely a brush, rubber, bucket and pipette, to work on the segmentation layer. In this RICM image of spreading NK cells, two couples of cells have been mistakenly segmented as one object and must be separated. On the right panel, two plugins specific to Celldetective allow 1) the export of the modified masks directly in the position folder, and 2) to create automatically an annotation consisting of the current multichannel frame, the modified mask and a configuration file specifying the modality content of the image and its spatial calibration.
-
 
 .. _segment_single_frame_napari:
 

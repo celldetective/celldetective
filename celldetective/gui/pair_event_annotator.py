@@ -34,8 +34,8 @@ from celldetective.gui.base.utils import (
     center_window,
     flush_layout_events,
 )
-from superqt import QSearchableComboBox, QLabeledSlider
-from celldetective.gui.base.sliders import QLabeledDoubleRangeSlider
+from superqt import QSearchableComboBox
+from celldetective.gui.base.sliders import QLabeledSlider, QLabeledDoubleRangeSlider
 from celldetective import (
     get_software_location,
 )

@@ -11,30 +11,38 @@ Reference keys: :term:`contour measurements`, :term:`single-cell measurement`
 Enable contour measurements
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-#. Open the **Measure** tab for your population of interest.
+#. In the block of your population of interest, click the :icon:`cog-outline,black` button of the **MEASURE** row to open the measurement settings.
 
-#. In the measurement settings, locate the **Contour** section.
+#. Locate **Contour measurements (from edge of mask)** in the **MASK-BASED MEASUREMENTS** section.
 
-#. Check the **Contour** option.
+.. figure:: ../../_static/figures/contour-measurements.svg
+    :width: 100%
+    :target: ../../_static/figures/contour-measurements.svg
+    :align: center
+    :alt: The mask-based measurements of the measurement settings
+
+    **Mask-based and contour measurements.** The features measured in each mask and the distances of the contour bands.
+
+The contour bands use the intensity features of the **Add features** list (1), completed with :icon:`filter-plus,black` or with your own feature (:icon:`file-cog,black` opens ``extra_properties.py``) (2). They are measured on every channel. The :icon:`plus,black` and :icon:`eye-plus-outline,black` buttons (3) add distances to the list of bands (4).
 
 
 Configure the contour band
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-#. **Channel**: Select the intensity channel to measure.
-
-#. **Distance** :math:`d` (pixels): define the offset from the mask edge.
+#. Click :icon:`plus,black` to open the **Set distances** window and set the **Distance [px]** :math:`d`, the offset from the mask edge:
 
    *   Positive values (:math:`d > 0`) measure **inside** the cell (erosion from the boundary).
    *   Negative values (:math:`d < 0`) measure **outside** the cell (dilation beyond the boundary).
 
-#. **Range** ``(min, max)``: define a specific ring band using distance transforms. For example, ``(0, 5)`` measures a 5-pixel-wide ring at the cell edge.
+#. To measure a band between two distances, tick **outer distance**: set the **Min distance [px]** and the **Max distance [px]**. For example, ``(0,5)`` measures a 5-pixel-wide ring inside the cell edge.
+
+#. Click **Add**. Alternatively, :icon:`eye-plus-outline,black` opens a viewer on the current position where the band is drawn around each mask as you move the slider; **Add measurement** adds it to the list.
 
 
 Run the measurements
 ~~~~~~~~~~~~~~~~~~~~
 
-#. Click **Set** to save the configuration.
+#. Scroll down and click :blue:`Save` to save the configuration.
 
 #. In the control panel, check the **MEASURE** box and click **Submit**.
 

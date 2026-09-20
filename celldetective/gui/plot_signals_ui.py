@@ -14,7 +14,8 @@ from PyQt5.QtGui import QDoubleValidator
 from celldetective.gui.base.components import generic_message
 from celldetective.gui.base.utils import center_window
 from celldetective.gui.generic_signal_plot import GenericSignalPlotWidget
-from superqt import QLabeledSlider, QColormapComboBox, QSearchableComboBox
+from superqt import QColormapComboBox, QSearchableComboBox
+from celldetective.gui.base.sliders import QLabeledSlider
 from celldetective import (
     get_software_location,
 )

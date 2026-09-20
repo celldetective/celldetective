@@ -10,8 +10,7 @@ from PyQt5.QtWidgets import (
     QComboBox,
 )
 from fonticon_mdi6 import MDI6
-from superqt import QLabeledSlider
-from celldetective.gui.base.sliders import QLabeledDoubleRangeSlider
+from celldetective.gui.base.sliders import QLabeledSlider, QLabeledDoubleRangeSlider
 from superqt.fonticon import icon
 import matplotlib.gridspec as gridspec
 import matplotlib.backend_bases
@@ -824,6 +823,9 @@ class StackVisualizer(CelldetectiveWidget):
         else:
             for i in range(self.n_channels):
                 self.channel_cb.addItem(f"Channel {i}")
+        # Show the channel on display, before the switch is wired to reload.
+        if isinstance(self.target_channel, (int, np.integer)) and 0 <= self.target_channel < self.channel_cb.count():
+            self.channel_cb.setCurrentIndex(int(self.target_channel))
         self.channel_cb.currentIndexChanged.connect(self.set_channel_index)
 
         layout = QHBoxLayout()

@@ -9,25 +9,31 @@ Reference keys: :term:`instance segmentation`, :term:`cell population`
 Import a model
 ~~~~~~~~~~~~~~
 
-#. In the **Segmentation** section of the Control Panel, click **UPLOAD**.
+.. figure:: ../../_static/figures/apply-segmentation-model.svg
+    :width: 100%
+    :target: ../../_static/figures/apply-segmentation-model.svg
+    :align: center
+    :alt: The population block and the Upload model window for a Cellpose model
 
-#. Select the model type (**StarDist**, **Cellpose**, or **Threshold**).
+    **Import and run a segmentation model.** The block of the target population in the ADCC demo and the **Upload model** window, set for a Cellpose model.
 
-#. Click **Choose File** to select your model folder (**StarDist**) or file (**Cellpose**/JSON).
+#. In the **SEGMENT** row of the population block, click :icon:`upload,black` next to the **Model zoo** (1).
 
-#. Configure the import settings (:term:`input spatial calibration`, **Channel Mapping**, **Normalization**). For a detailed list of all parameters, see the :ref:`Segmentation Data Import Reference <ref_segmentation_settings>`.
+#. Select the model type (**Threshold**, **StarDist** or **Cellpose**) (2).
 
-#. Click **Upload** to save the model and its configuration to the project's model zoo.
+#. Configure the import settings: the :term:`input spatial calibration` (3), the channels the model expects and their normalization (4) and, for Cellpose, the cell diameter and the two thresholds (5). For a detailed list of all parameters, see the :ref:`Segmentation Data Import Reference <ref_segmentation_settings>`.
+
+#. Click **Choose File** (6) to select your model folder (**StarDist**), file (**Cellpose**) or configuration (``.json``, **Threshold**).
+
+#. Click **Upload** (7) to save the model and its configuration to the project's model zoo.
 
 
 Run the model
 ~~~~~~~~~~~~~
 
-#. Tick the **SEGMENT** option in the Control Panel.
+#. Tick the **SEGMENT** option in the population block and select your model in the **Model zoo** list (8).
 
-#. Select your model from the dropdown list.
-
-#. Click **Submit** to start processing.
+#. Click **Submit** (9) to start processing.
 
 
 Generalist model configuration

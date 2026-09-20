@@ -19,7 +19,7 @@ from celldetective.gui.base.utils import center_window, flush_layout_events
 from celldetective import get_software_location
 import json
 
-from superqt import QLabeledSlider
+from celldetective.gui.base.sliders import QLabeledSlider
 from PyQt5.QtCore import Qt, QSize
 from superqt.fonticon import icon
 from fonticon_mdi6 import MDI6
