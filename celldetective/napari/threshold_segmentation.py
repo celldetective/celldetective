@@ -156,6 +156,14 @@ def with_equalization_reference(
         reference = np.asarray(stack[reference_index])
         if reference.ndim == 2:
             reference = reference[:, :, np.newaxis]
+        # An older configuration stores the channel as a bare index, which may
+        # simply not be in this image; slicing it would raise an IndexError the
+        # run has no answer to, rather than something the user can read.
+        if not 0 <= channel < reference.shape[-1]:
+            raise ValueError(
+                f"The configuration thresholds channel {channel}, but the image "
+                f"only has {reference.shape[-1]}."
+            )
         resolved.append({**config, "equalize_reference": reference[:, :, channel]})
     return resolved
 
@@ -449,6 +457,12 @@ class _ThresholdWorker(QThread):
             )
         except ValueError as e:
             self.failed.emit(str(e))
+            return
+        except Exception as e:
+            # Nothing may escape `run()`: the run would die without a word, the
+            # panel would go back to idle and the user would never know why.
+            logger.exception("Could not read the equalization reference.")
+            self.failed.emit(f"Could not read the equalization reference: {e}")
             return
         for t in self._frames:
             if self._cancelled:

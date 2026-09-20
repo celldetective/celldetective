@@ -13,20 +13,38 @@ e.g. a French locale, raised an uncaught ``ValueError``.
 """
 
 from qtpy.QtCore import QLocale
+from qtpy.QtGui import QDoubleValidator
 from superqt import QLabeledDoubleRangeSlider as _QLabeledDoubleRangeSlider
 from superqt import QLabeledDoubleSlider as _QLabeledDoubleSlider
 
 from celldetective.gui.base.utils import safe_slider_range
 
 
-def _dot_decimal_labels(*labels) -> None:
-    """Make the validator of each slider label follow the C locale (dot decimals, no grouping)."""
+def _c_locale() -> QLocale:
     locale = QLocale.c()
     locale.setNumberOptions(QLocale.RejectGroupSeparator)
+    return locale
+
+
+def _dot_decimal_labels(*labels) -> None:
+    """Make each slider label read dot decimals only, whatever the system locale.
+
+    The labels are ``QDoubleSpinBox`` subclasses: they validate and parse the typed text with
+    their own locale, so setting it to C rules the decimal separator. That alone still lets a
+    comma through as a group separator on the range labels, whose range spans millions, so the
+    line edit also gets a C-locale validator. It is deliberately permissive on range and
+    precision -- both change as the slider's range does, and the spin box still clamps the value
+    when editing ends; its only job is to keep the separators out.
+    """
+    locale = _c_locale()
     for label in labels:
-        validator = label.validator()
-        if validator is not None and validator.locale() != locale:
+        if label.locale() != locale:
+            label.setLocale(locale)
+        line_edit = label.lineEdit()
+        if not isinstance(line_edit.validator(), QDoubleValidator):
+            validator = QDoubleValidator(-1e18, 1e18, 15, label)
             validator.setLocale(locale)
+            line_edit.setValidator(validator)
 
 
 class QLabeledDoubleSlider(_QLabeledDoubleSlider):
