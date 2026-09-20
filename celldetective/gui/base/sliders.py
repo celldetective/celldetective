@@ -24,6 +24,7 @@ from qtpy.QtGui import QDoubleValidator, QFontMetrics
 from superqt import QLabeledDoubleRangeSlider as _QLabeledDoubleRangeSlider
 from superqt import QLabeledDoubleSlider as _QLabeledDoubleSlider
 from superqt import QLabeledSlider as _QLabeledSlider
+from superqt.sliders._labeled import EdgeLabelMode
 
 from celldetective.gui.base.utils import safe_slider_range
 
@@ -37,37 +38,62 @@ def _c_locale() -> QLocale:
 def _dot_decimal_labels(*labels) -> None:
     """Make each slider label read dot decimals only, whatever the system locale.
 
-    The labels are ``QDoubleSpinBox`` subclasses: they validate and parse the typed text with
-    their own locale, so setting it to C rules the decimal separator. That alone still lets a
-    comma through as a group separator on the range labels, whose range spans millions, so the
-    line edit also gets a C-locale validator. It is deliberately permissive on range and
-    precision -- both change as the slider's range does, and the spin box still clamps the value
+    A label validates the typed text with its locale but parses it with :func:`float`, so a
+    comma -- accepted under e.g. a French locale -- raised an uncaught ``ValueError``. Setting
+    the locale to C rules the decimal separator; a C-locale validator is installed as well
+    because the locale alone still lets a comma through as a group separator on the range
+    labels, whose range spans millions. The validator is deliberately permissive on range and
+    precision -- both change as the slider's range does, and the label still clamps the value
     when editing ends; its only job is to keep the separators out.
+
+    superqt changed ``SliderLabel`` from a ``QDoubleSpinBox``, which holds a line edit, to a
+    ``QLineEdit``, which is one; the package pins no version, so both are handled. The line
+    edit of the newer label already carries a validator of its own, in scientific notation,
+    which is reproduced so that the only change is the locale.
     """
     locale = _c_locale()
     for label in labels:
         if label.locale() != locale:
             label.setLocale(locale)
-        line_edit = label.lineEdit()
-        if not isinstance(line_edit.validator(), QDoubleValidator):
-            validator = QDoubleValidator(-1e18, 1e18, 15, label)
-            validator.setLocale(locale)
-            line_edit.setValidator(validator)
+        # The older, spin-box label owns a line edit; the newer one *is* the line edit.
+        line_edit = label.lineEdit() if hasattr(label, "lineEdit") else label
+        current = line_edit.validator()
+        if isinstance(current, QDoubleValidator) and current.locale() == locale:
+            continue
+        validator = QDoubleValidator(-1e18, 1e18, 15, label)
+        validator.setLocale(locale)
+        if isinstance(current, QDoubleValidator):
+            validator.setNotation(current.notation())
+        line_edit.setValidator(validator)
 
 
-#: What a spin box needs beyond the text itself: the inner margins of its line
+#: What a label needs beyond the text itself: the inner margins of its line
 #: edit and the room the blinking cursor sits in.
 _LABEL_PADDING = 8
 
 
-def _fit_decimals(*labels) -> None:
-    """Keep each slider label wide enough for its bounds with all their decimals.
+def _fitted_values(label) -> tuple:
+    """The values a label must be able to show, the way superqt decides them.
 
-    superqt sizes a label from the text of its bounds and leaves only a couple of pixels
-    around it, so a value such as "0.500" is drawn right up against the frame and loses its
-    first digit under some styles. The sizing pass is wrapped rather than replaced -- it is
-    :meth:`_update_size`, which superqt itself calls whenever the range, the precision or the
-    mode changes -- and the label is only ever widened, never narrowed.
+    A label showing a *value* is sized for both bounds of the slider, since the handle may be
+    dragged to either. An edge label of a range slider shows a *bound*, and its own
+    ``minimum()``/``maximum()`` are then not the slider's range but the widest number the field
+    accepts (millions), so it is sized for what it currently displays -- superqt sizes it that
+    way too, and calls back into the sizing pass whenever the text changes.
+    """
+    if label._mode & EdgeLabelMode.LabelIsValue:
+        return (label.minimum(), label.maximum())
+    return (label.value(),)
+
+
+def _fit_decimals(*labels) -> None:
+    """Keep each slider label wide enough for the values it shows, with all their decimals.
+
+    superqt sizes a label from its text and leaves only a couple of pixels around it, so a
+    value such as "0.500" is drawn right up against the frame and loses its first digit under
+    some styles. The sizing pass is wrapped rather than replaced -- it is :meth:`_update_size`,
+    which superqt itself calls whenever the range, the value, the precision or the mode changes
+    -- and the label is only ever widened, never narrowed.
     """
     for label in labels:
         update_size = getattr(label, "_update_size", None)
@@ -79,10 +105,12 @@ def _fit_decimals(*labels) -> None:
             fm = QFontMetrics(label.font())
             widest = max(
                 fm.horizontalAdvance(f"{v:.{label.decimals()}f}"[:18])
-                for v in (label.minimum(), label.maximum())
+                for v in _fitted_values(label)
             )
             needed = widest + _LABEL_PADDING
-            if label.width() < needed:
+            # superqt's pass ends on `setFixedSize`, so the width it just asked for is the
+            # minimum, which `width()` only catches up with once the label is laid out.
+            if max(label.width(), label.minimumWidth()) < needed:
                 label.setFixedWidth(needed)
 
         _update_size.fits_decimals = True
