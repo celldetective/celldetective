@@ -131,7 +131,16 @@ class UnifiedBatchProcess(Process):
             setup_global_logging(log_file=self.log_file)
 
         with forward_logs_to_queue(self.queue):
-            self._run_batch()
+            try:
+                self._run_batch()
+            except PositionSkipped as e:
+                # Raised while building a worker, before the position loop can
+                # catch it (a missing segmentation model, say). Letting it escape
+                # would kill this process silently and leave the progress window
+                # with nothing but "Process exited unexpectedly".
+                logger.error(f"Batch aborted: {e}")
+                self.queue.put({"status": f"Aborted: {e}"})
+                self.queue.put("finished")
 
     def _status(self, message: str) -> None:
         """Log a startup step and show it in the progress window."""

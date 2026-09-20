@@ -14,13 +14,13 @@ e.g. a French locale, raised an uncaught ``ValueError``.
 The integer :class:`QLabeledSlider` is wrapped too: superqt gives its label the range of the
 slider when it is created (0-99) and never updates it, so any value above 99 was shown as 99.
 
-Last, the float sliders' labels are wide enough for the value with all its decimals. superqt sizes a label
-from ``str(minimum)`` and ``str(maximum)`` ("1.0"), so "0.500" did not fit and lost its first
-digit.
+Last, the float sliders' labels are wide enough for the value with all its decimals. superqt sizes a
+label on the text of its bounds and leaves barely a pixel around it, so "0.500" did not fit and lost
+its first digit.
 """
 
 from qtpy.QtCore import QLocale
-from qtpy.QtGui import QDoubleValidator
+from qtpy.QtGui import QDoubleValidator, QFontMetrics
 from superqt import QLabeledDoubleRangeSlider as _QLabeledDoubleRangeSlider
 from superqt import QLabeledDoubleSlider as _QLabeledDoubleSlider
 from superqt import QLabeledSlider as _QLabeledSlider
@@ -55,24 +55,46 @@ def _dot_decimal_labels(*labels) -> None:
             line_edit.setValidator(validator)
 
 
+#: What a spin box needs beyond the text itself: the inner margins of its line
+#: edit and the room the blinking cursor sits in.
+_LABEL_PADDING = 8
+
+
 def _fit_decimals(*labels) -> None:
-    """Widen each slider label by what its decimals add to the bounds superqt measures."""
+    """Keep each slider label wide enough for its bounds with all their decimals.
+
+    superqt sizes a label from the text of its bounds and leaves only a couple of pixels
+    around it, so a value such as "0.500" is drawn right up against the frame and loses its
+    first digit under some styles. The sizing pass is wrapped rather than replaced -- it is
+    :meth:`_update_size`, which superqt itself calls whenever the range, the precision or the
+    mode changes -- and the label is only ever widened, never narrowed.
+    """
     for label in labels:
-        get_size = getattr(label, "_get_size", None)
-        if get_size is None or getattr(get_size, "fits_decimals", False):
+        update_size = getattr(label, "_update_size", None)
+        if update_size is None or getattr(update_size, "fits_decimals", False):
             continue
 
-        def _get_size(label=label, get_size=get_size) -> QSize:
-            size = get_size()
+        def _update_size(*args, label=label, update_size=update_size) -> None:
+            update_size(*args)
             fm = QFontMetrics(label.font())
-            bounds = (label.minimum(), label.maximum())
-            shown = max(fm.horizontalAdvance(f"{v:.{label.decimals()}f}") for v in bounds)
-            measured = max(fm.horizontalAdvance(str(v)[:18]) for v in bounds)
-            return QSize(size.width() + max(0, shown - measured), size.height())
+            widest = max(
+                fm.horizontalAdvance(f"{v:.{label.decimals()}f}"[:18])
+                for v in (label.minimum(), label.maximum())
+            )
+            needed = widest + _LABEL_PADDING
+            if label.width() < needed:
+                label.setFixedWidth(needed)
 
-        _get_size.fits_decimals = True
-        label._get_size = _get_size
-        label._update_size()
+        _update_size.fits_decimals = True
+        label._update_size = _update_size
+        # superqt connected the *original* method to the slider's `rangeChanged`
+        # before this wrapper existed, and Qt's own `setRange` does not go through
+        # the Python overrides that would call the wrapper instead, so it is
+        # connected too -- last, hence after superqt's own sizing pass.
+        slider = getattr(label, "_slider", None)
+        if slider is not None:
+            slider.rangeChanged.connect(_update_size)
+        _update_size()
 
 
 class QLabeledSlider(_QLabeledSlider):

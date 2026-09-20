@@ -7,9 +7,20 @@ from importlib.resources import files as _files
 # Spawned worker processes (segmentation/tracking/measurement) never drive
 # matplotlib interactively, and importing IPython costs well over a second of
 # their start-up, so they skip the workaround. Importing it is cheap here.
+#
+# `parent_process()` is not usable for the test: it is only set in
+# `BaseProcess._bootstrap`, which runs *after* the child has unpickled the
+# process object -- and unpickling it is what imports this package. The name of
+# the current process is set earlier, by `spawn.prepare()`, and is already the
+# worker's ("Worker-1", ...) by the time this module is executed there.
+from multiprocessing import current_process as _current_process
 from multiprocessing.process import parent_process as _parent_process
 
-if _parent_process() is None:
+_in_worker_process = (
+    _parent_process() is not None or _current_process().name != "MainProcess"
+)
+
+if not _in_worker_process:
     try:
         import IPython
     except ImportError:
