@@ -388,6 +388,21 @@ class TestPanel:
         assert panel._worker is None
         assert failures and "frame 1" in failures[0]
 
+    def test_labels_that_do_not_match_the_movie_are_reported(
+        self, qtbot, tmp_path, monkeypatch
+    ):
+        """Transposed labels used to surface as a numpy broadcasting error."""
+        path = _write_config(tmp_path / "thr.json")
+        viewer, labels = _viewer()
+        labels.data = np.zeros((2, 30, 40), dtype=np.uint16)
+        panel = self._panel(qtbot, viewer)
+        panel.load_configs([path])
+        failures = []
+        monkeypatch.setattr(panel, "_failed", failures.append)
+        panel.threshold_current_frame()
+        assert panel._worker is None
+        assert failures and "30x40" in failures[0] and "40x40" in failures[0]
+
     def _run(self, qtbot, panel):
         panel.threshold_current_frame()
         qtbot.waitUntil(lambda: panel._worker is None, timeout=30000)

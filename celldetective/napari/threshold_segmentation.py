@@ -931,7 +931,23 @@ class ThresholdSegmentationPanel(QWidget):
         t = int(self.viewer.dims.current_step[0])
         try:
             layer = self.viewer.layers["segmentation"]
-            shape = tuple(layer.data.shape[-2:])
+            # The region masks the thresholded frame, which comes from the image,
+            # so it is drawn at the image's shape rather than the layer's. They
+            # are the same whenever the labels belong to the movie, and saying so
+            # beats a broadcasting error from deep inside the run when they are
+            # not -- empty labels written transposed, labels from another
+            # position, a stack registered to a different size.
+            shape = tuple(int(n) for n in self.stack.shape[1:3])
+            labels_shape = tuple(int(n) for n in layer.data.shape[-2:])
+            if labels_shape != shape:
+                self._failed(
+                    f"The labels of this position are "
+                    f"{labels_shape[0]}x{labels_shape[1]} pixels but its movie is "
+                    f"{shape[0]}x{shape[1]}, so the two cannot be overlaid. Delete "
+                    f"the labels folder and let celldetective create it again, or "
+                    f"run the segmentation over the position."
+                )
+                return
             region, description = self._selected_region(t, shape)
         except ValueError as e:
             self._failed(str(e))

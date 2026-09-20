@@ -182,6 +182,7 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
             self.initalize_props_scatter()
             self.prep_cell_properties()
             self.populate_widget()
+            self._follow_viewer()
             self.setAttribute(Qt.WA_DeleteOnClose)
             if initial_frame:
                 self._show_frame(initial_frame)
@@ -615,11 +616,19 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
         self.canvas_hist.canvas.draw_idle()
         self.canvas_hist.canvas.setMinimumHeight(self.screen_height // 8)
 
-    def update_histogram(self):
+    def update_histogram(self, reset_threshold: bool = True) -> None:
         """
         Redraw the histogram after an update on the image.
         Move the threshold slider accordingly.
 
+        Parameters
+        ----------
+        reset_threshold : bool, optional
+            Whether the threshold is set afresh from the new image. True when the
+            intensities themselves changed -- another channel, other filters --
+            since the old threshold means nothing in the new domain. False when
+            only the frame changed: the threshold being tuned is kept, and the
+            range is merely widened if the new frame reaches further.
         """
 
         self.ax_hist.clear()
@@ -639,13 +648,17 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
         self.add_hist_threshold()
         self.canvas_hist.canvas.draw()
 
-        self.threshold_slider.setRange(
-            np.amin(self.img[self.img == self.img]),
-            np.amax(self.img[self.img == self.img]),
-        )
-        self.threshold_slider.setValue(
-            [np.nanpercentile(self.img.ravel(), 90), np.amax(self.img)]
-        )
+        low = np.amin(self.img[self.img == self.img])
+        high = np.amax(self.img[self.img == self.img])
+        if reset_threshold:
+            self.threshold_slider.setRange(low, high)
+            self.threshold_slider.setValue(
+                [np.nanpercentile(self.img.ravel(), 90), high]
+            )
+        else:
+            kept = self.threshold_slider.value()
+            self.threshold_slider.setRange(min(low, kept[0]), max(high, kept[1]))
+            self.threshold_slider.setValue(kept)
         self.threshold_changed(self.threshold_slider.value())
 
     def add_hist_threshold(self):
@@ -664,6 +677,47 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
         )
 
     # self.canvas_hist.canvas.draw_idle()
+
+    def _follow_viewer(self) -> None:
+        """
+        Keep the histogram on the image the viewer is showing.
+
+        The viewer recomputes its filtered frame whenever the channel or the time
+        slider moves, but nothing told the wizard: the histogram, and with it the
+        threshold slider's range, stayed on the channel the wizard opened with,
+        so a threshold was read off one image and applied to another.
+        """
+
+        channel_cb = getattr(self.viewer, "channel_cb", None)
+        if channel_cb is not None:
+            channel_cb.currentIndexChanged.connect(
+                lambda _: self._refresh_histogram(reset_threshold=True)
+            )
+        frame_slider = getattr(self.viewer, "frame_slider", None)
+        if frame_slider is not None:
+            frame_slider.valueChanged.connect(
+                lambda _: self._refresh_histogram(reset_threshold=False)
+            )
+
+    def _refresh_histogram(self, reset_threshold: bool) -> None:
+        """
+        Redraw the histogram on the viewer's current image.
+
+        Connected after the viewer's own handlers, so the filtered frame it reads
+        is the one just recomputed for the new channel or frame.
+
+        Parameters
+        ----------
+        reset_threshold : bool
+            Passed on to :meth:`update_histogram`.
+        """
+
+        image = getattr(self.viewer, "processed_image", None)
+        if image is None:
+            return
+        self.clear_post_threshold_options()
+        self.img = image
+        self.update_histogram(reset_threshold=reset_threshold)
 
     def _show_frame(self, frame: int) -> None:
         """

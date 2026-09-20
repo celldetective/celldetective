@@ -684,8 +684,13 @@ class ProcessPanel(ControlPanelBlock, Styles):
                 return None
             else:
                 os.mkdir(os.sep.join([self.parent_window.pos, f"labels_{self.mode}"]))
+                # Rows are Y, columns are X: the other way round wrote labels
+                # transposed on any non-square image, and every later write into
+                # them -- a model or a threshold run from napari, a correction --
+                # failed to broadcast.
                 lbl = np.zeros(
-                    (self.parent_window.shape_x, self.parent_window.shape_y), dtype=int
+                    (self.parent_window.shape_y, self.parent_window.shape_x),
+                    dtype=np.int32,
                 )
                 for i in range(self.parent_window.len_movie):
                     imwrite(
