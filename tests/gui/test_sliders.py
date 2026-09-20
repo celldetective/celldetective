@@ -92,10 +92,14 @@ def test_float_slider_labels_reject_comma_decimals(qtbot, slider_class):
         else:
             labels = [slider._label]
         for label in labels:
-            validator = label.lineEdit().validator()
+            # superqt turned SliderLabel from a QDoubleSpinBox, which owns a line
+            # edit and parses the text itself, into a QLineEdit, which is one and
+            # parses with float(); the package pins no version, so both are read.
+            line_edit = label.lineEdit() if hasattr(label, "lineEdit") else label
+            validator = line_edit.validator()
             assert validator.validate("0,75", 4)[0] == QValidator.Invalid
             assert validator.validate("0.75", 4)[0] == QValidator.Acceptable
-            if label.decimals() >= 2:
+            if hasattr(label, "valueFromText") and label.decimals() >= 2:
                 assert label.valueFromText("0.75") == 0.75
     finally:
         QLocale.setDefault(QLocale.c())
