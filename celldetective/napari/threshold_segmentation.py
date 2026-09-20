@@ -645,6 +645,10 @@ class ThresholdSegmentationPanel(QWidget):
         self.status_lbl.hide()
         outer.addWidget(self.status_lbl)
 
+        # The panel fills the height of its tab; the slack belongs at the bottom
+        # rather than between the rows.
+        outer.addStretch(1)
+
     def _connect_layer_events(self) -> None:
         """Keep the region dropdown in step with the shapes layers of the viewer."""
         try:

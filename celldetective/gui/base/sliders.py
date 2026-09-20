@@ -125,6 +125,21 @@ def _fit_decimals(*labels) -> None:
         _update_size()
 
 
+def _keep_labels_inside(widget, labels) -> None:
+    """Pull a label that a handle pushed past the edge back inside the slider.
+
+    superqt centres a handle label on its handle, so a handle at either end of
+    the range leaves half the label outside the widget, where Qt clips it: a
+    contrast slider sitting at ``0.00`` showed ``).00``. The label is moved back
+    just inside instead, which is where it was going to be read anyway.
+    """
+    right = max(0, widget.width())
+    for label in labels:
+        x = min(max(label.x(), 0), max(0, right - label.width()))
+        if x != label.x():
+            label.move(x, label.y())
+
+
 class QLabeledSlider(_QLabeledSlider):
     """:class:`superqt.QLabeledSlider` whose label follows the range of the slider."""
 
@@ -173,6 +188,10 @@ class QLabeledDoubleRangeSlider(_QLabeledDoubleRangeSlider):
         # superqt recreates the handle labels when the number of handles changes.
         super()._on_value_changed(v)
         _dot_decimal_labels(*self._handle_labels)
+
+    def _reposition_labels(self) -> None:
+        super()._reposition_labels()
+        _keep_labels_inside(self, self._handle_labels)
 
     def setRange(self, min: float, max: float) -> None:
         super().setRange(*safe_slider_range(min, max))
