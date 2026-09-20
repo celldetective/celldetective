@@ -15,6 +15,7 @@ from celldetective.tracking import track
 import pandas as pd
 from natsort import natsorted
 from art import tprint
+from celldetective.processes import PositionSkipped
 from celldetective.log_manager import get_logger, positionlogger
 
 from celldetective.utils.data_cleaning import _mask_intensity_measurements
@@ -226,8 +227,7 @@ class TrackingProcess(Process):
         self.config = PurePath(self.exp_dir, Path("config.ini"))
 
         if not os.path.exists(self.config):
-            logger.info("The configuration file for the experiment was not found...")
-            self.abort_process()
+            self.abort_process("The configuration file for the experiment was not found.")
 
     def detect_movie_and_labels(self):
         """Detect the movie and headers."""
@@ -238,10 +238,9 @@ class TrackingProcess(Process):
         if len(self.label_path) > 0:
             logger.info(f"Found {len(self.label_path)} segmented frames...")
         else:
-            logger.error(
-                f"No segmented frames have been found. Please run segmentation first. Abort..."
+            self.abort_process(
+                "No segmented frames have been found. Please run segmentation first."
             )
-            self.abort_process()
 
         try:
             self.file = glob(self.pos + f"movie/{self.movie_prefix}*.tif")[0]
@@ -478,8 +477,7 @@ class TrackingProcess(Process):
         self.terminate()
         self.queue.put("finished")
 
-    def abort_process(self):
-        """Abort the process."""
+    def abort_process(self, reason: str = "Abort."):
+        """Skip the current position; the batch moves on to the next one."""
 
-        self.terminate()
-        self.queue.put("error")
+        raise PositionSkipped(reason)

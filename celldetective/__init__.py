@@ -3,11 +3,17 @@ import os
 import datetime
 from importlib.resources import files as _files
 
-# Prevent matplotlib circular import issue with partially initialized IPython
-try:
-    import IPython
-except ImportError:
-    pass
+# Prevent matplotlib circular import issue with partially initialized IPython.
+# Spawned worker processes (segmentation/tracking/measurement) never drive
+# matplotlib interactively, and importing IPython costs well over a second of
+# their start-up, so they skip the workaround. Importing it is cheap here.
+from multiprocessing.process import parent_process as _parent_process
+
+if _parent_process() is None:
+    try:
+        import IPython
+    except ImportError:
+        pass
 
 from .log_manager import setup_global_logging, get_logger, cleanup_old_logs
 
