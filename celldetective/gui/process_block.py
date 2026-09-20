@@ -180,8 +180,13 @@ class ProcessPanel(ControlPanelBlock, Styles):
         self.exp_dir = self.parent_window.exp_dir
         self.exp_config = self.parent_window.exp_config
         self.movie_prefix = self.parent_window.movie_prefix
+        # The pipelines last used in this experiment, so they need not be
+        # uploaded again every session.
+        from celldetective.utils.threshold_configs import recall_threshold_configs
+
         self.threshold_configs = [
-            None for _ in range(len(self.parent_window.populations))
+            recall_threshold_configs(self.exp_dir, population)
+            for population in self.parent_window.populations
         ]
         self.wells = np.array(self.parent_window.wells, dtype=str)
         self.cellpose_calibrated = False
@@ -1408,7 +1413,7 @@ class ProcessPanel(ControlPanelBlock, Styles):
 
             # Threshold config check
             if run_segmentation and self.seg_model_list.currentText() == "Threshold":
-                if self.threshold_config is None:
+                if not self.threshold_config:
                     msgBox = QMessageBox()
                     msgBox.setIcon(QMessageBox.Warning)
                     msgBox.setText(

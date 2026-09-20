@@ -61,6 +61,15 @@ def temp_model_dir():
     shutil.rmtree(tmpdir, ignore_errors=True)
 
 
+@pytest.fixture(autouse=True)
+def no_threshold_memory(monkeypatch):
+    """Keep the loader from recording its choice into the shared ExperimentTest."""
+    monkeypatch.setattr(
+        "celldetective.utils.threshold_configs.remember_threshold_configs",
+        lambda *args, **kwargs: None,
+    )
+
+
 @pytest.fixture
 def mock_parent_window():
     """Create a mock parent window with required attributes."""

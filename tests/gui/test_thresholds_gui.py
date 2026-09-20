@@ -56,6 +56,15 @@ def disable_logging():
         logging.disable(logging.NOTSET)
 
 
+@pytest.fixture(autouse=True)
+def no_threshold_memory(monkeypatch):
+    """Keep saving from the wizard from recording into the shared ExperimentTest."""
+    monkeypatch.setattr(
+        "celldetective.gui.thresholds_gui.remember_threshold_configs",
+        lambda *args, **kwargs: None,
+    )
+
+
 @pytest.fixture
 def ensure_experiment_test():
     """

@@ -455,6 +455,14 @@ class SegmentationModelLoader(CelldetectiveWidget):
 
             idx = self.parent_window.parent_window.populations.index(self.mode)
             self.parent_window.threshold_configs[idx] = self.filename
+            # Offered again next session, and in the napari viewer.
+            from celldetective.utils.threshold_configs import (
+                remember_threshold_configs,
+            )
+
+            remember_threshold_configs(
+                self.parent_window.exp_dir, self.mode, self.filename
+            )
             self.parent_window.seg_model_list.setCurrentText("Threshold")
             self.close()
 

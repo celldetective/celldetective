@@ -7,7 +7,7 @@ from PyQt5.QtWidgets import (
     QMainWindow,
     QWidget,
 )
-from PyQt5.QtCore import QEvent, QObject, QRect
+from PyQt5.QtCore import QEvent, QObject, QRect, Qt
 from typing import Tuple, Union
 from prettytable import PrettyTable
 
@@ -226,6 +226,23 @@ def fit_window_to_content(
     wanted = content.sizeHint().height() + chrome
 
     window.resize(window.width(), max(window.minimumHeight(), min(wanted, max_height)))
+
+    # With the horizontal bar off the content is never scrolled sideways, so a
+    # viewport narrower than it cuts it on the right. The area is then given a
+    # minimum width that holds the content, its frame and the vertical scroll
+    # bar, and the window follows. Set on the area rather than measured off the
+    # window, which would ratchet up in width from one call to the next before
+    # the window has been laid out again. An area that may show a horizontal bar
+    # is left alone: it can scroll sideways, and a minimum width -- which is only
+    # ever raised -- would just stop the user narrowing the window again.
+    if area.horizontalScrollBarPolicy() == Qt.ScrollBarAlwaysOff:
+        needed = content.minimumSizeHint().width() + 2 * area.frameWidth()
+        if area.verticalScrollBarPolicy() != Qt.ScrollBarAlwaysOff:
+            needed += area.verticalScrollBar().sizeHint().width()
+        needed = min(needed, int(0.95 * screen.width()))
+        if area.minimumWidth() < needed:
+            area.setMinimumWidth(needed)
+
     keep_window_on_screen(window)
 
 

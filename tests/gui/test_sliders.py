@@ -92,8 +92,10 @@ def test_float_slider_labels_reject_comma_decimals(qtbot, slider_class):
         else:
             labels = [slider._label]
         for label in labels:
-            validator = label.validator()
-            assert validator.validate("0,75", 0)[0] != QValidator.Acceptable
-            assert validator.validate("0.75", 0)[0] == QValidator.Acceptable
+            validator = label.lineEdit().validator()
+            assert validator.validate("0,75", 4)[0] == QValidator.Invalid
+            assert validator.validate("0.75", 4)[0] == QValidator.Acceptable
+            if label.decimals() >= 2:
+                assert label.valueFromText("0.75") == 0.75
     finally:
         QLocale.setDefault(QLocale.c())

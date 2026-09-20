@@ -14,7 +14,7 @@ full-stack run.
 import json
 import os
 from collections import OrderedDict
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Sequence, Set
 
 import numpy as np
 from PyQt5.QtCore import QEvent, Qt, QThread, QTimer, pyqtSignal
@@ -47,8 +47,6 @@ from celldetective.utils.model_loaders import locate_segmentation_model
 
 logger = get_logger(__name__)
 
-# Offered in the model dropdown when nothing is installed, so that the panel --
-# and with it the whole viewer -- still builds.
 NO_MODEL = "(no segmentation model found)"
 
 # How many prepared models the panel keeps alive at once. Each one is a whole
@@ -56,10 +54,7 @@ NO_MODEL = "(no segmentation model found)"
 # reloading when the user goes back and forth between two settings.
 MAX_CACHED_MODELS = 2
 
-# Workers that have been started and not yet finished. A QThread must outlive its
-# own `run()`, and destroying one that is still running is a fatal error in Qt, so
-# the thread objects are parented to nothing and held here instead of on the panel
-# -- that way closing the viewer cannot take a running thread down with it.
+# Workers that have been started and not yet finished.
 _LIVE_WORKERS: Set["_SegmentationWorker"] = set()
 
 
@@ -182,6 +177,100 @@ def _fit_to_layer_dtype(
         )
         raise ValueError(f"{message} {remedy}".strip())
     return labels.astype(dtype, copy=False)
+
+
+def history_atom(t: int, before: np.ndarray, after: np.ndarray):
+    """
+    The change to one frame, as a napari labels history atom.
+
+    Parameters
+    ----------
+    t : int
+        Index of the frame that changed.
+    before, after : ndarray
+        The frame's labels either side of the write.
+
+    Returns
+    -------
+    tuple or None
+        ``(indices, before, after)`` over the changed pixels, None if none did.
+    """
+
+    changed = np.nonzero(before != after)
+    if len(changed[0]) == 0:
+        return None
+    indices = (np.full(changed[0].shape, t, dtype=np.intp),) + changed
+    return indices, before[changed], after[changed]
+
+
+def record_undo(layer, atoms: Sequence[tuple]) -> None:
+    """
+    Push a bulk write onto a labels layer's undo history, if napari lets us.
+
+    Without this the frame can be segmented but not un-segmented: napari only
+    records what its own painting tools do, so a bulk write would leave Ctrl+Z
+    undoing whatever the user had done before instead. Best-effort - the
+    history is private API, so a napari that has moved it simply gets no undo
+    step rather than an error.
+
+    Several atoms are pushed as one step, so one Ctrl+Z takes a whole run of
+    frames back rather than a frame at a time.
+
+    Parameters
+    ----------
+    layer : napari.layers.Labels
+        The layer being written to.
+    atoms : list of tuple
+        The changes to record, as returned by :func:`history_atom`. None entries
+        -- frames nothing changed on -- are ignored.
+    """
+
+    atoms = [atom for atom in atoms if atom is not None]
+    if not atoms:
+        return
+    try:
+        n_axes = len(atoms[0][0])
+        indices = tuple(
+            np.concatenate([atom[0][axis] for atom in atoms]) for axis in range(n_axes)
+        )
+        layer._save_history(
+            (
+                indices,
+                np.concatenate([atom[1] for atom in atoms]),
+                np.concatenate([atom[2] for atom in atoms]),
+            )
+        )
+    except Exception as e:
+        logger.debug(f"Could not record an undo step for the segmentation: {e}")
+
+
+def merge_labels(current: np.ndarray, new_labels: np.ndarray) -> np.ndarray:
+    """
+    Combine new labels with the ones already drawn on the frame.
+
+    The incoming labels are pushed past the highest existing one so the two sets
+    cannot collide, and only fill background, so manual corrections survive.
+
+    Parameters
+    ----------
+    current : ndarray
+        The labels currently on the frame.
+    new_labels : ndarray
+        The labels to add.
+
+    Returns
+    -------
+    ndarray
+        The merged labels, as int64.
+    """
+
+    # int64 throughout: `new_labels` is typically uint16, and adding the offset
+    # in its own dtype wraps round without a word of warning.
+    current = np.asarray(current).astype(np.int64, copy=False)
+    new_labels = np.asarray(new_labels)
+    offset = int(current.max()) if current.size else 0
+    incoming = np.where(new_labels > 0, new_labels.astype(np.int64) + offset, 0)
+    return np.where(current > 0, current, incoming)
 
 
 class _FloatEdit(QLineEdit):
@@ -1069,11 +1158,7 @@ class FrameSegmentationPanel(QWidget):
 
     def _merged_labels(self, current: np.ndarray, new_labels: np.ndarray) -> np.ndarray:
         """
-        Combine new labels with the ones already drawn on the frame.
-
-        The incoming labels are pushed past the highest existing one so the two
-        sets cannot collide, and only fill background, so manual corrections
-        survive.
+        Combine new labels with the ones already drawn on the frame, for this layer.
 
         Parameters
         ----------
@@ -1085,7 +1170,7 @@ class FrameSegmentationPanel(QWidget):
         Returns
         -------
         ndarray
-            The merged labels, in `current`'s dtype.
+            The merged labels, in `current`'s dtype; see :func:`merge_labels`.
 
         Raises
         ------
@@ -1094,45 +1179,15 @@ class FrameSegmentationPanel(QWidget):
             round silently would merge unrelated cells under one identifier.
         """
 
-        offset = int(current.max())
-        # int64 throughout: `new_labels` is typically uint16, and adding the offset
-        # in its own dtype wraps round without a word of warning.
-        incoming = np.where(new_labels > 0, new_labels.astype(np.int64) + offset, 0)
-        merged = np.where(current > 0, current.astype(np.int64), incoming)
         return _fit_to_layer_dtype(
-            merged,
+            merge_labels(current, new_labels),
             current.dtype,
             "Tick 'Replace the labels on this frame' to segment it afresh.",
         )
 
     def _record_undo(self, layer, t: int, before: np.ndarray, after: np.ndarray) -> None:
-        """
-        Push this write onto the labels layer's undo history, if napari lets us.
-
-        Without this the frame can be segmented but not un-segmented: napari only
-        records what its own painting tools do, so a bulk write would leave Ctrl+Z
-        undoing whatever the user had done before instead. Best-effort - the
-        history is private API, so a napari that has moved it simply gets no undo
-        step rather than an error.
-
-        Parameters
-        ----------
-        layer : napari.layers.Labels
-            The layer being written to.
-        t : int
-            Index of the frame that changed.
-        before, after : ndarray
-            The frame's labels either side of the write.
-        """
-
-        try:
-            changed = np.nonzero(before != after)
-            if len(changed[0]) == 0:
-                return
-            indices = (np.full(changed[0].shape, t, dtype=np.intp),) + changed
-            layer._save_history((indices, before[changed], after[changed]))
-        except Exception as e:
-            logger.debug(f"Could not record an undo step for the segmentation: {e}")
+        """Push this write onto the labels layer's undo history; see :func:`record_undo`."""
+        record_undo(layer, [history_atom(t, before, after)])
 
     def _on_succeeded(self, prepared, new_labels) -> None:
         """
