@@ -9,7 +9,7 @@ Reference keys: :term:`characteristic group`, :term:`phenotype`
 
 **Step-by-step:**
 
-#. Go to the MEASURE section for the cell population of interest. Click on the :icon:`eye-check,black` icon on the right side to view single-cell measurements in-situ.
+#. Go to the MEASURE section for the cell population of interest. Click on the :icon:`eye-check-outline,black` button on the right side to view single-cell measurements in-situ.
 
 #. Set a frame of interest in the top right part of the viewer, using the slider.
 

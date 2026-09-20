@@ -8,7 +8,7 @@ This reference page lists the configuration parameters for various Celldetective
 Segmentation Data Import
 ------------------------
 
-These parameters appear in the **Upload Model** window when importing a pretrained model.
+These parameters appear in the **Upload model** window when importing a pretrained model.
 
 **General Settings (All Models)**
 
@@ -40,7 +40,10 @@ These parameters appear when applying a **generalist** model.
 **Cellpose** (Generalist)
 
 *   **Channel Mapping**: Select "Cytoplasm" and "Nuclei" channels.
-*   **Diameter** [px]: Expected cell diameter. Use the :icon:`eye,black` button to open the *Interactive Diameter Estimator*.
+*   **diameter [px]**: Expected cell diameter. The :icon:`image-check,black` button
+    next to the field opens the current stack with a red circle of that diameter
+    drawn on it; move the slider until the circle matches the cells and press
+    **Set** to write the value back.
 *   **Flow/Cellprob Thresholds**: Adjust detection sensitivity and shape constraints on the fly.
 
 .. _ref_tracking_settings:

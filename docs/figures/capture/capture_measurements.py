@@ -57,7 +57,8 @@ pl = ms.protocol_layout
 grab(ms, "measure_local", marks={
     "tabs": pl.tabs.tabBar(), "channel": local.channels_cb, "distance": local.threshold_le,
     "viewer": local.threshold_viewer_btn, "model": local.models_cb,
-    "subtract": local.operation_layout.subtract_btn, "noclip": local.operation_layout.clip_not_btn,
+    "subtract": local.operation_layout.subtract_btn, "divide": local.operation_layout.divide_btn,
+    "clip": local.operation_layout.clip_btn, "noclip": local.operation_layout.clip_not_btn,
     "add": local.add_correction_btn, "list": pl.protocol_list, "delete": pl.delete_protocol_btn,
 })
 
@@ -84,7 +85,8 @@ pump(0.5)
 grab(ms, "measure_fit", marks={
     "tabs": pl.tabs.tabBar(), "channel": fit.channels_cb, "threshold": fit.threshold_le,
     "viewer": fit.threshold_viewer_btn, "model": fit.models_cb, "downsample": fit.downsample_le,
-    "subtract": fit.operation_layout.subtract_btn, "noclip": fit.operation_layout.clip_not_btn,
+    "subtract": fit.operation_layout.subtract_btn, "divide": fit.operation_layout.divide_btn,
+    "clip": fit.operation_layout.clip_btn, "noclip": fit.operation_layout.clip_not_btn,
     "preview": fit.corrected_stack_viewer, "add": fit.add_correction_btn, "list": pl.protocol_list,
 })
 

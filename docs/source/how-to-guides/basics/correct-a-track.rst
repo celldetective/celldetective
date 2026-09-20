@@ -7,7 +7,7 @@ Reference keys: **tracking**
 
 **Prerequisite:** You have accurately segmented, and **tracked** a cell population of interest. This guide only applies to dynamic data.
 
-#. Go to the TRACK section for the cell population of interest. Click on the :icon:`eye-check,black` icon on the right side to open napari and explore tracking results.
+#. Go to the TRACK section for the cell population of interest. Click on the :icon:`eye-check-outline,black` button on the right side to open napari and explore tracking results.
 
 #. On the left side, click on the Image layer associated with your channel of interest. With multi-channel data, click on the :icon:`eye,black` icon to disable other Image layers. Adjust the *contrast limits* with the double slider (top left).
 

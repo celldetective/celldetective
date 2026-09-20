@@ -53,7 +53,7 @@ For a detailed list of runtime parameters, see the :ref:`Segmentation Runtime Se
 
 *   **Diameter [px]**: The expected cell diameter in pixels.
 
-    *   *Interactive Tool*: Click the **eye icon** next to the diameter field to open a specific viewer. Adjust the diameter slider until the red circle matches your cells' size. This ensures the model receives images scaled correctly for its training parameters.
+    *   *Interactive tool*: the :icon:`image-check,black` button next to the diameter field opens the current stack with a red circle of that diameter drawn on it. Adjust the diameter slider until the circle matches your cells, then press **Set** to write the value back. This ensures the model receives images scaled correctly for its training parameters.
 
 *   **Thresholds**:
 

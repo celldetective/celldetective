@@ -103,3 +103,25 @@ Setting too many threads for the device you are using may lead to jobs aborting 
 .. note::
 
     In general, avoid combining both the use of GPU and multithreading as it may lead to memory issues.
+
+Skipped positions
+-----------------
+
+A position the pipeline cannot process is skipped, and the run carries on with
+the next one. The progress window says which and why, for instance:
+
+.. code-block:: console
+
+    Skipped 100: No segmented frames have been found. Please run segmentation first.
+    Skipped 101: Model could not be found.
+    Skipped 102: The configuration file for the experiment could not be located.
+    Skipped 103: Movie could not be found (...). Check the prefix.
+
+The same line is written to the log. A missing movie almost always means the
+**movie prefix** of the experiment does not match the file names on disk; it is
+set in the **Configuration** window, opened with the :icon:`cog-outline,black`
+button of the control panel, under *MovieSettings*.
+
+Anything else that goes wrong in a position is reported as
+``Error at <position>. Skipping...``, with the traceback in the log, and the run
+moves on likewise.

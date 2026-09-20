@@ -159,9 +159,39 @@ def napari_frame_segmentation():
     f = Figure("napari-frame-segmentation", 1607, 937)
     nx, ny = 20, 20
     f.shot("napari_frame_segmentation.png", nx, ny)
-    for n, y in [(1, 100), (2, 157), (3, 255), (4, 324), (5, 356)]:
-        f.badge(n, nx + 1268, ny + y, r=16)
-    f.badge(6, nx + 1062, ny + 398, r=16)
+    m = marks("napari_frame_segmentation", nx, ny)
+
+    # The rows start at the very edge of the dock, so a badge on their left would
+    # sit on the label it points at: those rows are called out from the right.
+    f.callout(1, *m["tabs"], side="left", r=16, rounded=False)
+    f.callout(2, *grow(m["model"], left=89), side="right", r=16)
+    f.callout(3, *m["channels"], side="left", r=16)
+    f.callout(4, *m["parameters"], side="left", r=16)
+    f.callout(5, *m["replace"], side="right", r=16)
+    f.callout(6, *m["run"], frame=False, r=16)
+    # The layer the labels land in, in the layer list.
+    f.callout(7, nx + 7, ny + 504, 278, 30, side="right", r=16)
+    return f.render()
+
+
+def napari_threshold_segmentation():
+    f = Figure("napari-threshold-segmentation", 1607, 937)
+    nx, ny = 20, 20
+    f.shot("napari_threshold_segmentation.png", nx, ny)
+    m = marks("napari_threshold_segmentation", nx, ny)
+
+    # The rows are ~30 px apart, closer than two badges: alternate the sides.
+    f.callout(1, *m["tabs"], side="right", r=16, rounded=False)
+    f.callout(2, *grow(m["config"], left=65, top=2, bottom=2), side="left", r=16)
+    f.callout(3, *union(m["load"], m["wizard"]), side="right", r=16)
+    # The frame takes in the "region:" label, so that the badge lands beside the
+    # panel rather than on the word.
+    f.callout(4, *grow(union(m["region"], m["add_roi"]), left=74), side="left", r=16)
+    f.callout(5, *m["replace"], side="right", r=16)
+    f.callout(6, *m["following"], side="left", r=16)
+    f.callout(7, *m["run"], frame=False, r=16)
+    # One of the two regions drawn on the frame.
+    f.callout(8, nx + 508, ny + 563, 234, 219, side="left", r=16)
     return f.render()
 
 
@@ -181,7 +211,11 @@ def background_correction_local():
     f.callout(3, *v["edge"])
     f.callout(4, *v["set"], frame=False)
     f.callout(5, *m["model"], side="right")
-    f.callout(6, *union(m["subtract"], m["noclip"]), side="right")
+    # The whole operation block: a frame drawn on the two selected buttons alone
+    # cut through the label of a third, and the paragraph names all four.
+    f.callout(
+        6, *union(m["subtract"], m["divide"], m["clip"], m["noclip"]), side="right"
+    )
     f.callout(7, *m["add"], frame=False)
     f.callout(8, *m["list"], side="right")
     return f.render()
@@ -203,7 +237,9 @@ def background_correction_fit():
     f.callout(3, *v["threshold"], side="right")
     f.callout(4, *v["apply"], frame=False)
     f.callout(5, *union(m["model"], m["downsample"]), side="right")
-    f.callout(6, *union(m["subtract"], m["noclip"]), side="right")
+    f.callout(
+        6, *union(m["subtract"], m["divide"], m["clip"], m["noclip"]), side="right"
+    )
     f.callout(7, *m["preview"], side="right", rounded=False)
     f.callout(8, *m["add"], frame=False)
     f.callout(9, *m["list"], side="right")
@@ -263,7 +299,13 @@ def spot_detection():
     f.callout(4, *m["viewer"], side="right", rounded=False)
     f.arrow(m["viewer"][0] + 36, m["viewer"][1] + 12, vx - 4, vy + 200, bend=-0.3)
     f.callout(5, *v["preprocessing"], side="right")
-    f.callout(6, *union(v["diameter"], v["set_threshold"]), side="right")
+    # Both fields and both Set buttons: the threshold field reaches further left
+    # than the diameter one, and a frame on the diameter alone cut through it.
+    f.callout(
+        6,
+        *union(v["diameter"], v["threshold"], v["set_diameter"], v["set_threshold"]),
+        side="right",
+    )
     f.callout(7, *v["add"], frame=False)
     f.callout(8, *m["save"], frame=False)
     return f.render()
@@ -480,6 +522,7 @@ FIGURES = [
     table_stats,
     help_panel,
     napari_frame_segmentation,
+    napari_threshold_segmentation,
     background_correction_local,
     background_correction_fit,
     texture_measurements,
