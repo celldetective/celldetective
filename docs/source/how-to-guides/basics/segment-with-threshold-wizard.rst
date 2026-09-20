@@ -105,12 +105,33 @@ Save and apply the pipeline
 
 #. To process the entire position or experiment, select **Threshold** in the segmentation zoo and click **Submit**.
 
+Celldetective records the configuration(s) last uploaded for each population in
+``configs/last_threshold_configs.json``, next to the configurations themselves,
+and loads them again when the experiment is reopened: the wizard and the
+**Upload model** window only have to be visited again to *change* the pipeline.
+The paths are stored relative to the experiment folder, so the record survives
+the folder being moved or opened on another machine.
+
+
+Try the pipeline on one frame
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+A configuration can be applied to a single frame from inside the napari
+correction viewer (the :icon:`eye-check-outline,black` button of the **SEGMENT** row), in the
+**Threshold** tab of its right-hand panel — over the whole frame, or only within
+regions of interest drawn as napari shapes. The same files are applied the same
+way as in a full run, so this is the quickest way to check a pipeline on a hard
+field of view before launching the position. **Wizard…** there reopens the
+wizard on the frame on screen, and picks up the configuration it saves.
+
+See :ref:`segment_single_frame_threshold_napari` for the whole panel.
+
 Merging Multiple Configurations
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 In some cases, a single thresholding pipeline may not be sufficient to capture all variations of a cell population. You can merge multiple configurations together to create a more robust union mask:
 
-#. In the **Upload Model** window, click **Choose File** for the Threshold option.
+#. In the **Upload model** window, click **Choose File** for the Threshold option.
 #. Select **multiple** ``.json`` threshold configuration files (using ``Ctrl+Click`` or ``Shift+Click``).
 #. A **Merging option** dropdown will appear. Currently, the supported method is **OR**, which computes the logical union of the objects detected by all the selected pipelines.
 #. Click **Upload**. When you run the segmentation task, Celldetective will process the images through each pipeline and merge the resulting masks.
@@ -126,4 +147,4 @@ In some cases, a single thresholding pipeline may not be sufficient to capture a
 
 .. note::
 
-    You must reload the threshold config file if you reopen the experiment later.
+    A merged set is remembered as a whole, in the order the files were picked.

@@ -14,7 +14,7 @@ Open the Pair Signal Viewer
 
 #. Open the **Interactions** section in the control panel.
 
-#. Click the :icon:`eye-check,black` button next to the **MEASURE PAIRS** checkbox (or the relevant pair protocol).
+#. Click the :icon:`eye-check-outline,black` button next to the **MEASURE PAIRS** checkbox (or the relevant pair protocol).
 
     .. note::
         The viewer adapts the standard Signal Annotator interface to show both reference and neighbor populations simultaneously.

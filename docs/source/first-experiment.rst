@@ -57,7 +57,7 @@ Now we will detect the cells in the images. The demo dataset contains images of 
     The progress windows shows you segmentation masks as they are produced
 
 .. tip::
-    You can visualize and correct the segmentation results by clicking the :icon:`eye-outline-check,black` button next to the segmentation entry. This opens napari with the image and mask layers.
+    You can visualize and correct the segmentation results by clicking the :icon:`eye-check-outline,black` button of the **SEGMENT** row. This opens napari with the image and mask layers.
 
 
 Step 3: Track Cells
@@ -96,7 +96,7 @@ Step 5: Analyze Time-Series
 This is the core of Celldetective: analyzing how single-cell features change over time.
 
 1.  Scroll to the **DETECT EVENTS** section.
-2.  Click the :icon:`eye,black` button (:term:`Event Annotator`) to open the interactive viewer.
+2.  Click the :icon:`eye-check-outline,black` button (:term:`Event Annotator`) to open the interactive viewer.
 3.  **Click on any cell** in the movie (the circle marker will turn green).
 4.  The panel on the left displays its feature time-series (e.g., ``area`` vs ``FRAME``).
 

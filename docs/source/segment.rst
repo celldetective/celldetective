@@ -48,7 +48,7 @@ The wizard guides you through four stages:
 3. **Object Detection** — split touching objects using a watershed or label all connected components.
 4. **Property Filtering** — remove false positives based on morphology or intensity queries (e.g., ``area < 100``).
 
-The pipeline can be saved as a ``.json`` config file, which can be loaded later via the **Upload Model** window.
+The pipeline can be saved as a ``.json`` config file, which can be loaded later via the **Upload model** window.
 
 For a complete step-by-step walkthrough, see :doc:`How to segment with the Threshold Configuration Wizard <how-to-guides/basics/segment-with-threshold-wizard>`.
 
@@ -191,7 +191,7 @@ For a complete step-by-step walkthrough (including generalist model configuratio
 Mask visualization and correction
 ---------------------------------
 
-Once a position is segmented, the results can be visualized in **napari** by clicking the :icon:`eye,black` button in the segmentation section. This overlays the segmented masks on the original images.
+Once a position is segmented, the results can be visualized in **napari** by clicking the :icon:`eye-check-outline,black` button of the **SEGMENT** row. This overlays the segmented masks on the original images.
 
 With napari, segmentation mistakes can be corrected using the brush, eraser, and fill tools. Celldetective provides two plugins:
 
@@ -214,20 +214,30 @@ To train a model on your annotations, see :doc:`How to train a segmentation mode
 Segmenting a single frame from napari
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The top of the same right-hand panel can run a segmentation model on the frame
-currently on screen, without leaving the viewer or launching a run over the whole
-position. It is the quickest way to try a model, a channel mapping or a threshold
-on one frame and look at the result straight away.
+The top of the same right-hand panel segments the frame currently on screen,
+without leaving the viewer or launching a run over the whole position. It is the
+quickest way to try a model, a channel mapping or a threshold pipeline on one
+frame and look at the result straight away.
+
+Its two tabs are the two ways of segmenting a population in celldetective:
+**Model** runs a segmentation model, **Threshold** applies the configurations
+written by the :doc:`threshold configuration wizard
+<how-to-guides/basics/segment-with-threshold-wizard>`. Both write into the
+``segmentation`` layer, where :kbd:`Ctrl+Z` undoes them, and neither touches the
+disk until **Save the modified labels** is used.
+
+With a segmentation model
+^^^^^^^^^^^^^^^^^^^^^^^^^
 
 .. figure:: _static/figures/napari-frame-segmentation.svg
     :width: 100%
     :target: _static/figures/napari-frame-segmentation.svg
     :align: center
-    :alt: segmenting a single frame from napari
+    :alt: segmenting a single frame from napari with a model
 
-    **Segmenting the frame on screen.** The ``lymphocytes_ricm`` model was run on frame 20 of the RICM demo: the labels of that frame were replaced by the model's output, in the ``segmentation`` layer.
+    **Segmenting the frame on screen with a model.** The ``lymphocytes_ricm`` model was run on frame 20 of the RICM demo: the labels of that frame were replaced by the model's output, in the ``segmentation`` layer.
 
-Pick a model for this population (1): one that has not been downloaded yet is fetched on first use. Map the channels with one dropdown per input of the model (2), and leave the parameters blank to use the model's own values (3). **Replace the labels on this frame** chooses between segmenting the frame afresh and only filling the background (4). **Segment this frame** runs in the background (5), and the new labels land in the ``segmentation`` layer, where :kbd:`Ctrl+Z` undoes them (6).
+The **Model** tab (1) picks a model for this population (2): one that has not been downloaded yet is fetched on first use. Map the channels with one dropdown per input of the model (3), and leave the parameters blank to use the model's own values (4). **Replace the labels on this frame** chooses between segmenting the frame afresh and only filling the background (5). **Segment this frame** runs in the background (6), and the new labels land in the ``segmentation`` layer (7), where :kbd:`Ctrl+Z` undoes them.
 
 *   **model** — any model available for this population, plus the generic ones.
     A model that has not been downloaded yet is offered too; it is fetched on the
@@ -266,7 +276,71 @@ labels** is used, and the settings chosen here stay local to the napari session:
 they are never written back into the model configuration, so trying something out
 cannot change what the next full-position run does.
 
-The same panel is offered when correcting a training annotation, from **Plugins >
+.. note::
+
+    Segmentation here runs on the CPU, leaving the GPU to the viewer's renderer.
+    A single frame is quick, but expect it to be slower than the same model
+    running over a position in the main window.
+
+.. _segment_single_frame_threshold_napari:
+
+With a threshold pipeline
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The **Threshold** tab applies the ``.json`` configurations of the threshold
+configuration wizard to the frame on screen, exactly as the batch pipeline
+applies them — same files, same merging of several of them. What is tried here
+is therefore what a full run would produce, and it can be tried where the
+pipeline is hard to get right rather than over the whole frame.
+
+.. figure:: _static/figures/napari-threshold-segmentation.svg
+    :width: 100%
+    :target: _static/figures/napari-threshold-segmentation.svg
+    :align: center
+    :alt: thresholding the frame on screen inside two regions of interest
+
+    **Thresholding the frame on screen, inside two regions.** The ADCC demo's own ``threshold_config_targets.json`` was applied to frame 22, within two rectangles drawn on a shapes layer: only the nuclei inside them were labelled.
+
+The **Threshold** tab (1) shows the configuration in use (2), the name of the
+file or ``n merged`` when several are applied. **Load…** picks one or more
+``.json`` configurations, and **Wizard…** opens the
+:doc:`threshold configuration wizard <how-to-guides/basics/segment-with-threshold-wizard>`
+on this very frame and loads back whatever it saves (3). **region** thresholds
+the whole frame or only the shapes of a shapes layer, which the **+**
+button creates and selects, ready to draw rectangles in (4). **Replace the labels in the
+region** clears the objects already there before writing the new ones (5), and
+**Also the following frames** repeats the run from this frame to the end of the
+movie (6). **Threshold this frame** starts it (7); here, the region was the two
+rectangles drawn on the frame (8).
+
+*   **config** — the configuration(s) applied, in the order they were picked.
+    Several are merged at the object level with the ``OR`` rule of the batch
+    pipeline. The choice is remembered for the experiment, in
+    ``configs/last_threshold_configs.json``, so the same pipeline is loaded
+    again the next time the viewer is opened — whether it was picked here, in
+    the **Upload model** window of the main window, or just written by the
+    wizard.
+*   **region** — ``whole frame``, or any shapes layer of the viewer.
+    Rectangles, polygons and ellipses count; lines and paths enclose nothing.
+    An object is kept when its centre falls inside the shapes, so a cell
+    straddling the edge of a rectangle is either in or out, never cut in two.
+    The shapes of the current frame are used, or, when it has none, those of the
+    closest earlier frame, so a region drawn once carries on through the movie.
+*   **Replace the labels in the region** — ticked, the region is segmented
+    afresh: the objects whose centre lies in it are cleared first. Unticked,
+    they are kept and the new ones only fill the background around them, so
+    manual corrections survive.
+*   **Also the following frames** — the button becomes **Threshold from this
+    frame on**, and every frame from the one on screen to the end of the movie is
+    thresholded, all of them within the region drawn on the current frame. A
+    counter under the button follows the run, each frame appearing in the viewer
+    as it is done. **Cancel** stops before the next frame and keeps what is
+    already done; a single :kbd:`Ctrl+Z` takes the whole run back.
+
+Correcting a training annotation
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Both tabs are offered when correcting a training annotation, from **Plugins >
 Correct a segmentation annotation** in the start window. An annotation is the image
 exported with **Export the annotation of the current frame**, next to its mask (``_labelled.tif``) and
 a ``.json`` file recording its channels and spatial calibration. The panel reads the
@@ -274,11 +348,10 @@ channels from that file, so an annotation can be started from a model's output a
 corrected by hand rather than drawn from nothing. **Save the modified labels**
 overwrites the ``_labelled.tif`` mask.
 
-.. note::
-
-    Segmentation here runs on the CPU, leaving the GPU to the viewer's renderer.
-    A single frame is quick, but expect it to be slower than the same model
-    running over a position in the main window.
+An annotation still sitting in the ``annotations_<population>`` folder of its
+experiment is recognised as belonging to it, so the threshold configurations
+remembered for that experiment are offered there too. The **Wizard…** button,
+which needs the movie of a position, is greyed out on an annotation.
 
 
 References
