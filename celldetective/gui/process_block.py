@@ -185,7 +185,7 @@ class ProcessPanel(ControlPanelBlock, Styles):
         from celldetective.utils.threshold_configs import recall_threshold_configs
 
         self.threshold_configs = [
-            recall_threshold_configs(self.exp_dir, population) or None
+            recall_threshold_configs(self.exp_dir, population)
             for population in self.parent_window.populations
         ]
         self.wells = np.array(self.parent_window.wells, dtype=str)
@@ -1413,7 +1413,7 @@ class ProcessPanel(ControlPanelBlock, Styles):
 
             # Threshold config check
             if run_segmentation and self.seg_model_list.currentText() == "Threshold":
-                if self.threshold_config is None:
+                if not self.threshold_config:
                     msgBox = QMessageBox()
                     msgBox.setIcon(QMessageBox.Warning)
                     msgBox.setText(

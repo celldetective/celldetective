@@ -15,7 +15,6 @@ window, or just written by the wizard.
 """
 
 import os
-from glob import glob
 from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 
 import numpy as np
@@ -33,10 +32,16 @@ from PyQt5.QtWidgets import (
 )
 
 from celldetective import get_logger
-from celldetective.napari.frame_segmentation import _fit_to_layer_dtype
+from celldetective.napari.frame_segmentation import (
+    _fit_to_layer_dtype,
+    history_atom,
+    merge_labels,
+    record_undo,
+)
 from celldetective.utils.experiment import (
     extract_experiment_channels,
     extract_experiment_from_position,
+    get_position_movie_path,
 )
 from celldetective.utils.threshold_configs import (
     load_threshold_config,
@@ -105,6 +110,56 @@ def _channel_index(target, channel_names: Sequence[str]) -> int:
     )
 
 
+def with_equalization_reference(
+    stack, configs: Sequence[Dict[str, Any]], channel_names: Sequence[str]
+) -> List[Dict[str, Any]]:
+    """
+    Read the equalization reference frames a run needs, once.
+
+    The reference a configuration equalizes against is the same for every frame
+    of a run, so it is read here rather than again for each of them. The
+    configurations come back with ``equalize_reference`` already the 2D
+    reference image, which :func:`threshold_frame` passes straight on.
+
+    Parameters
+    ----------
+    stack : ndarray or dask.array.Array
+        The TYXC stack the reference is read from.
+    configs : list of dict
+        Threshold configurations, as written by the wizard.
+    channel_names : list of str
+        The channel names of `stack`, in order.
+
+    Returns
+    -------
+    list of dict
+        The configurations, those equalizing carrying their reference image.
+    """
+
+    resolved = []
+    for config in configs:
+        equalize = config.get("equalize_reference")
+        if not (
+            isinstance(equalize, (list, tuple)) and len(equalize) == 2 and equalize[0]
+        ):
+            resolved.append(config)
+            continue
+        reference_index = int(equalize[1])
+        if not 0 <= reference_index < len(stack):
+            logger.warning(
+                f"The equalization reference (frame {reference_index}) is not in "
+                f"this stack; thresholding without equalization."
+            )
+            resolved.append({**config, "equalize_reference": None})
+            continue
+        channel = _channel_index(config["target_channel"], channel_names)
+        reference = np.asarray(stack[reference_index])
+        if reference.ndim == 2:
+            reference = reference[:, :, np.newaxis]
+        resolved.append({**config, "equalize_reference": reference[:, :, channel]})
+    return resolved
+
+
 def threshold_frame(
     stack,
     frame_index: int,
@@ -144,7 +199,8 @@ def threshold_frame(
         frame = frame[:, :, np.newaxis]
 
     masks = []
-    for config in configs:
+    # A no-op for the configurations of a run, whose references are already read.
+    for config in with_equalization_reference(stack, configs, channel_names):
         channel = _channel_index(config["target_channel"], channel_names)
         if not 0 <= channel < frame.shape[-1]:
             raise ValueError(
@@ -157,34 +213,14 @@ def threshold_frame(
         kwargs["channel_names"] = list(channel_names) or None
 
         equalize = config.get("equalize_reference")
-        if isinstance(equalize, (list, tuple)) and len(equalize) == 2 and equalize[0]:
-            reference_index = int(equalize[1])
-            if 0 <= reference_index < len(stack):
-                reference = np.asarray(stack[reference_index])
-                if reference.ndim == 2:
-                    reference = reference[:, :, np.newaxis]
-                kwargs["equalize_reference"] = reference[:, :, channel]
-            else:
-                logger.warning(
-                    f"The equalization reference (frame {reference_index}) is not in "
-                    f"this stack; thresholding without equalization."
-                )
+        if isinstance(equalize, np.ndarray):
+            kwargs["equalize_reference"] = equalize
 
         masks.append(segment_frame_from_thresholds(frame, **kwargs))
 
     if len(masks) > 1:
         return merge_instance_segmentation(masks, mode="OR")
     return masks[0]
-
-
-def _polygon_mask(vertices: np.ndarray, shape: Tuple[int, int]) -> np.ndarray:
-    """Rasterize a polygon given as (y, x) vertices."""
-    from skimage.draw import polygon
-
-    mask = np.zeros(shape, dtype=bool)
-    rr, cc = polygon(vertices[:, 0], vertices[:, 1], shape=shape)
-    mask[rr, cc] = True
-    return mask
 
 
 def _ellipse_vertices(corners: np.ndarray, n: int = 64) -> np.ndarray:
@@ -239,6 +275,8 @@ def shapes_region(
         The frame the shapes were drawn on, None for 2D shapes.
     """
 
+    from skimage.draw import polygon
+
     shape_types = list(getattr(layer, "shape_type", []))
     candidates = []
     for i, vertices in enumerate(layer.data):
@@ -261,7 +299,8 @@ def shapes_region(
             continue
         if kind == "ellipse" and len(yx) == 4:
             yx = _ellipse_vertices(yx)
-        region |= _polygon_mask(yx, shape)
+        rr, cc = polygon(yx[:, 0], yx[:, 1], shape=shape)
+        region[rr, cc] = True
         n_shapes += 1
 
     if n_shapes == 0:
@@ -276,18 +315,38 @@ def _labels_in_region(labels: np.ndarray, region: np.ndarray) -> np.ndarray:
     An object is taken or left whole rather than cut along the edge of the
     region, so a cell straddling the outline of a shape keeps its full mask.
     """
-    from scipy import ndimage as ndi
-
-    ids = np.unique(labels)
-    ids = ids[ids > 0]
-    if len(ids) == 0:
-        return ids
-    centroids = np.asarray(
-        ndi.center_of_mass(np.ones_like(labels, dtype=np.uint8), labels, ids)
-    )
-    rows = np.clip(np.round(centroids[:, 0]).astype(int), 0, labels.shape[0] - 1)
-    cols = np.clip(np.round(centroids[:, 1]).astype(int), 0, labels.shape[1] - 1)
+    flat = np.asarray(labels).ravel()
+    # Only the labelled pixels take part, so the sums are over the objects rather
+    # than over the whole frame.
+    pixels = np.flatnonzero(flat)
+    if pixels.size == 0:
+        return np.zeros(0, dtype=np.intp)
+    at = flat[pixels]
+    rows, cols = np.divmod(pixels, labels.shape[1])
+    areas = np.bincount(at)
+    ids = np.flatnonzero(areas)
+    rows = np.bincount(at, weights=rows)[ids] / areas[ids]
+    cols = np.bincount(at, weights=cols)[ids] / areas[ids]
+    rows = np.clip(np.round(rows).astype(int), 0, labels.shape[0] - 1)
+    cols = np.clip(np.round(cols).astype(int), 0, labels.shape[1] - 1)
     return ids[region[rows, cols]]
+
+
+def _mask_labels(labels: np.ndarray, ids: np.ndarray, keep: bool) -> np.ndarray:
+    """
+    Zero every label but `ids` (``keep``), or zero exactly those (not ``keep``).
+
+    A lookup table over the label values rather than a membership test over the
+    pixels: one pass, one temporary, whatever the number of objects.
+    """
+    highest = int(labels.max()) if labels.size else 0
+    if keep:
+        lut = np.zeros(highest + 1, dtype=labels.dtype)
+        lut[ids] = ids
+    else:
+        lut = np.arange(highest + 1, dtype=labels.dtype)
+        lut[ids] = 0
+    return lut[labels]
 
 
 def combine_labels(
@@ -322,27 +381,22 @@ def combine_labels(
 
     from skimage.segmentation import relabel_sequential
 
-    current = current.astype(np.int64)
-    new_labels = np.asarray(new_labels).astype(np.int64)
+    current = np.asarray(current)
+    new_labels = np.asarray(new_labels)
 
     if region is None:
         if replace:
             return relabel_sequential(new_labels)[0]
         kept = current
     else:
-        new_labels = np.where(
-            np.isin(new_labels, _labels_in_region(new_labels, region)), new_labels, 0
+        new_labels = _mask_labels(
+            new_labels, _labels_in_region(new_labels, region), keep=True
         )
         kept = current
         if replace:
-            kept = np.where(
-                np.isin(current, _labels_in_region(current, region)), 0, current
-            )
+            kept = _mask_labels(current, _labels_in_region(current, region), keep=False)
 
-    new_labels = relabel_sequential(new_labels)[0]
-    offset = int(kept.max()) if kept.size else 0
-    incoming = np.where(new_labels > 0, new_labels + offset, 0)
-    return np.where(kept > 0, kept, incoming)
+    return merge_labels(kept, relabel_sequential(new_labels)[0])
 
 
 def _experiment_movie_prefix(exp_dir: str) -> Optional[str]:
@@ -388,13 +442,19 @@ class _ThresholdWorker(QThread):
         return self._cancelled
 
     def run(self) -> None:
+        try:
+            # Read once here rather than again for every frame of the run.
+            configs = with_equalization_reference(
+                self._stack, self._configs, self._channel_names
+            )
+        except ValueError as e:
+            self.failed.emit(str(e))
+            return
         for t in self._frames:
             if self._cancelled:
                 return
             try:
-                labels = threshold_frame(
-                    self._stack, t, self._configs, self._channel_names
-                )
+                labels = threshold_frame(self._stack, t, configs, self._channel_names)
             except ValueError as e:
                 self.failed.emit(str(e))
                 return
@@ -403,48 +463,6 @@ class _ThresholdWorker(QThread):
                 self.failed.emit(f"Threshold segmentation of frame {t} failed: {e}")
                 return
             self.frame_done.emit(t, labels)
-
-
-def _history_atom(t: int, before: np.ndarray, after: np.ndarray):
-    """
-    The change to one frame, as a napari labels history atom.
-
-    Returns
-    -------
-    tuple or None
-        ``(indices, before, after)`` over the changed pixels, None if none did.
-    """
-    changed = np.nonzero(before != after)
-    if len(changed[0]) == 0:
-        return None
-    indices = (np.full(changed[0].shape, t, dtype=np.intp),) + changed
-    return indices, before[changed], after[changed]
-
-
-def _record_run_undo(layer, atoms: Sequence[tuple]) -> None:
-    """
-    Push every frame a run changed as a single undo step.
-
-    One Ctrl+Z then takes the whole run back, rather than a frame at a time.
-    Best-effort, like :func:`~celldetective.napari.frame_segmentation.record_undo`:
-    the history is private napari API.
-    """
-    if not atoms:
-        return
-    try:
-        n_axes = len(atoms[0][0])
-        indices = tuple(
-            np.concatenate([atom[0][axis] for atom in atoms]) for axis in range(n_axes)
-        )
-        layer._save_history(
-            (
-                indices,
-                np.concatenate([atom[1] for atom in atoms]),
-                np.concatenate([atom[2] for atom in atoms]),
-            )
-        )
-    except Exception as e:
-        logger.debug(f"Could not record an undo step for the thresholding: {e}")
 
 
 class ThresholdSegmentationPanel(QWidget):
@@ -546,7 +564,14 @@ class ThresholdSegmentationPanel(QWidget):
         outer.addLayout(buttons)
 
         # Looked up once: it takes reading the experiment configuration.
-        self._movie = self._wizard_movie()
+        self.movie_prefix = (
+            _experiment_movie_prefix(self.exp_dir) if self.exp_dir else None
+        )
+        self._movie = (
+            get_position_movie_path(self.position, self.movie_prefix)
+            if self.position and self.movie_prefix is not None
+            else None
+        )
         if self._movie is None:
             self.wizard_btn.setEnabled(False)
             self.wizard_btn.setToolTip(
@@ -616,6 +641,8 @@ class ThresholdSegmentationPanel(QWidget):
             logger.debug(f"Could not follow the viewer's layers: {e}")
 
     def _shapes_layers(self) -> List[Any]:
+        # By name rather than by class: napari is imported lazily everywhere here,
+        # and anything shaped like a shapes layer will do.
         try:
             layers = list(self.viewer.layers)
         except Exception:
@@ -721,7 +748,7 @@ class ThresholdSegmentationPanel(QWidget):
         if paths:
             self.load_configs(paths)
 
-    def load_configs(self, paths: Sequence[str]) -> None:
+    def load_configs(self, paths: Sequence[str]) -> bool:
         """
         Use these configurations from now on, and remember them for the experiment.
 
@@ -729,28 +756,22 @@ class ThresholdSegmentationPanel(QWidget):
         ----------
         paths : list of str
             The configuration files, merged when there are several.
+
+        Returns
+        -------
+        bool
+            Whether the configurations were loaded.
         """
 
-        if self._set_configs(paths):
-            remember_threshold_configs(self.exp_dir, self.population, list(paths))
-            self.viewer.status = f"Threshold configuration: {self.config_lbl.text()}."
+        if not self._set_configs(paths):
+            return False
+        remember_threshold_configs(self.exp_dir, self.population, list(paths))
+        self.viewer.status = f"Threshold configuration: {self.config_lbl.text()}."
+        return True
 
     # ------------------------------------------------------------------
     # Wizard
     # ------------------------------------------------------------------
-
-    def _movie_prefix(self) -> Optional[str]:
-        return _experiment_movie_prefix(self.exp_dir) if self.exp_dir else None
-
-    def _wizard_movie(self) -> Optional[str]:
-        """The movie the wizard would open on, or None when there is none."""
-        if not self.position or not self.exp_dir:
-            return None
-        prefix = self._movie_prefix()
-        if prefix is None:
-            return None
-        movies = glob(os.path.join(self.position, "movie", f"{prefix}*.tif"))
-        return movies[0] if movies else None
 
     def open_wizard(self) -> None:
         """Open the threshold configuration wizard on the frame on screen."""
@@ -766,7 +787,7 @@ class ThresholdSegmentationPanel(QWidget):
                 mode=self.population,
                 pos=self.position,
                 exp_dir=self.exp_dir,
-                movie_prefix=self._movie_prefix(),
+                movie_prefix=self.movie_prefix,
                 initial_frame=int(self.viewer.dims.current_step[0]),
                 on_saved=self._on_wizard_saved,
             )
@@ -778,8 +799,7 @@ class ThresholdSegmentationPanel(QWidget):
     def _on_wizard_saved(self, path: str) -> None:
         """Pick up the configuration the wizard just wrote."""
         self._wizard = None
-        if self._set_configs([path]):
-            remember_threshold_configs(self.exp_dir, self.population, [path])
+        if self.load_configs([path]):
             self.viewer.status = (
                 f"Loaded {os.path.basename(path)}. Threshold this frame to apply it."
             )
@@ -948,8 +968,11 @@ class ThresholdSegmentationPanel(QWidget):
             layer = self.viewer.layers["segmentation"]
         except Exception:
             return
-        _record_run_undo(layer, pending.get("atoms", []))
+        # One Ctrl+Z takes the whole run back, rather than a frame at a time.
+        record_undo(layer, pending.get("atoms", []))
         pending["atoms"] = []
+        # A full-frame mask; no reason to keep it alive until the next run.
+        pending["region"] = None
 
         frames = pending.get("frames", [])
         done = pending.get("done", 0)
@@ -1005,7 +1028,7 @@ class ThresholdSegmentationPanel(QWidget):
             )
             return
 
-        atom = _history_atom(t, before, layer.data[t])
+        atom = history_atom(t, before, layer.data[t])
         if atom is not None:
             self._pending.setdefault("atoms", []).append(atom)
         self._pending["done"] = self._pending.get("done", 0) + 1

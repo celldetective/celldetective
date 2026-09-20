@@ -137,17 +137,22 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
         self._createActions()
         self._create_menu_bar()
 
-        self.mode = mode if mode is not None else self.parent_window.mode
-        self.pos = (
-            pos if pos is not None else self.parent_window.parent_window.parent_window.pos
-        )
-        exp_dir = exp_dir if exp_dir is not None else self.parent_window.parent_window.exp_dir
+        # Each of these is either given -- opened from the napari viewer, say --
+        # or read off the parent chain (loader -> upload -> control), which is
+        # only walked for the ones that are missing.
+        def from_parent(attribute, depth):
+            owner = self.parent_window
+            for _ in range(depth):
+                owner = owner.parent_window
+            return getattr(owner, attribute)
+
+        self.mode = mode if mode is not None else from_parent("mode", 0)
+        self.pos = pos if pos is not None else from_parent("pos", 2)
+        exp_dir = exp_dir if exp_dir is not None else from_parent("exp_dir", 1)
         # Paths are built by appending to it, so it must end with a separator.
         self.exp_dir = exp_dir if exp_dir.endswith(("/", os.sep)) else exp_dir + os.sep
         self.movie_prefix = (
-            movie_prefix
-            if movie_prefix is not None
-            else self.parent_window.parent_window.parent_window.movie_prefix
+            movie_prefix if movie_prefix is not None else from_parent("movie_prefix", 2)
         )
         self.soft_path = get_software_location()
         self.footprint = 30
@@ -225,21 +230,12 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
     def _create_menu_bar(self):
         """Create the menu bar."""
         menu_bar = self.menuBar()
-        # Creating menus using a QMenu object
         file_menu = QMenu("&File", self)
         file_menu.addAction(self.openAction)
         menu_bar.addMenu(file_menu)
 
-    # Creating menus using a title
-    # editMenu = menuBar.addMenu("&Edit")
-    # helpMenu = menuBar.addMenu("&Help")
-
     def _createActions(self):
         """Create actions."""
-        # Creating action using the first constructor
-        # self.newAction = QAction(self)
-        # self.newAction.setText("&New")
-        # Creating actions using the second constructor
         self.openAction = QAction(icon(MDI6.folder), "&Open...", self)
         self.openAction.triggered.connect(self.load_previous_config)
 
@@ -959,7 +955,6 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
 
         instructions = {
             "target_channel": self.viewer.channel_cb.currentText(),
-            # for now index but would be more universal to use name
             "thresholds": self.threshold_slider.value(),
             "filters": self.preprocessing.list.items,
             "marker_min_distance": self.min_dist,

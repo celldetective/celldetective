@@ -29,16 +29,14 @@ def _memory_path(exp_dir: str) -> str:
     return os.path.join(exp_dir, "configs", MEMORY_FILENAME)
 
 
-def _population_keys(population: str) -> List[str]:
+def _population_alias(population: str) -> str:
     """
-    The population as given, then its singular / plural twin.
+    The singular / plural twin of a population name.
 
     ``"target"`` and ``"targets"`` are used interchangeably across the software,
     so a configuration remembered under one is found under the other.
     """
-    if population.endswith("s"):
-        return [population, population[:-1]]
-    return [population, f"{population}s"]
+    return population[:-1] if population.endswith("s") else f"{population}s"
 
 
 def _read_memory(exp_dir: str) -> Dict[str, Any]:
@@ -93,8 +91,7 @@ def remember_threshold_configs(
         )
 
     memory = _read_memory(exp_dir)
-    for key in _population_keys(population)[1:]:
-        memory.pop(key, None)
+    memory.pop(_population_alias(population), None)
     memory[population] = stored
 
     try:
@@ -126,19 +123,17 @@ def recall_threshold_configs(exp_dir: Optional[str], population: str) -> List[st
     if not isinstance(exp_dir, str) or not exp_dir:
         return []
     memory = _read_memory(exp_dir)
-    for key in _population_keys(population):
-        stored = memory.get(key)
-        if not stored:
-            continue
-        if isinstance(stored, str):
-            stored = [stored]
-        paths = [
-            p if os.path.isabs(p) else os.path.join(exp_dir, *p.split("/"))
-            for p in stored
-            if isinstance(p, str)
-        ]
-        return [os.path.normpath(p) for p in paths if os.path.exists(p)]
-    return []
+    stored = memory.get(population) or memory.get(_population_alias(population))
+    if not stored:
+        return []
+    if isinstance(stored, str):
+        stored = [stored]
+    paths = [
+        p if os.path.isabs(p) else os.path.join(exp_dir, *p.split("/"))
+        for p in stored
+        if isinstance(p, str)
+    ]
+    return [os.path.normpath(p) for p in paths if os.path.exists(p)]
 
 
 def load_threshold_config(path: str) -> Dict[str, Any]:

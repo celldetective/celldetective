@@ -1077,11 +1077,10 @@ def _frame_segmentation_tabs(
 
     from PyQt5.QtWidgets import QTabWidget
 
-    tabs = QTabWidget()
-    try:
+    def model_panel():
         from celldetective.napari.frame_segmentation import FrameSegmentationPanel
 
-        model_panel = FrameSegmentationPanel(
+        return FrameSegmentationPanel(
             viewer=viewer,
             stack=stack,
             position=position,
@@ -1089,17 +1088,13 @@ def _frame_segmentation_tabs(
             channels=channels,
             spatial_calibration=spatial_calibration,
         )
-        model_panel.run_btn.setStyleSheet(Styles().button_style_sheet)
-        tabs.addTab(model_panel, "Model")
-    except Exception:
-        logger.exception("Could not build the single-frame segmentation panel.")
 
-    try:
+    def threshold_panel():
         from celldetective.napari.threshold_segmentation import (
             ThresholdSegmentationPanel,
         )
 
-        threshold_panel = ThresholdSegmentationPanel(
+        return ThresholdSegmentationPanel(
             viewer=viewer,
             stack=stack,
             position=position,
@@ -1107,10 +1102,16 @@ def _frame_segmentation_tabs(
             channels=channels,
             exp_dir=exp_dir,
         )
-        threshold_panel.run_btn.setStyleSheet(Styles().button_style_sheet)
-        tabs.addTab(threshold_panel, "Threshold")
-    except Exception:
-        logger.exception("Could not build the single-frame threshold panel.")
+
+    tabs = QTabWidget()
+    button_style = Styles().button_style_sheet
+    for label, build in (("Model", model_panel), ("Threshold", threshold_panel)):
+        try:
+            panel = build()
+            panel.run_btn.setStyleSheet(button_style)
+            tabs.addTab(panel, label)
+        except Exception:
+            logger.exception(f"Could not build the single-frame {label} panel.")
 
     return tabs if tabs.count() else None
 
