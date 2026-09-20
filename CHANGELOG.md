@@ -8,6 +8,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- Answering *yes* to "No labels can be found for this position. Do you want to
+  annotate from scratch?" wrote the empty labels transposed on any non-square
+  image (`shape_x` rows by `shape_y` columns). Every later write into them then
+  failed to broadcast: segmenting or thresholding the frame from napari, and
+  correcting a mask. The labels now have the shape of the movie.
+- Thresholding the frame from napari inside a region of interest raised
+  `operands could not be broadcast together` when the labels of the position did
+  not have the shape of its movie. The region is now drawn at the shape of the
+  image, and a position whose labels do not match it says so and what to do
+  about it.
+- The threshold configuration wizard kept its histogram — and with it the range
+  of the threshold slider — on the channel it opened with: picking another
+  channel changed the image but not the intensities the threshold was set on.
+  The histogram now follows the viewer, both when the channel changes (the
+  threshold is set afresh, the intensity domain being another one) and when the
+  frame does (the threshold being tuned is kept).
 - A value label sitting over a handle at either end of a range slider — the
   contrast slider of every viewer at its minimum, for one — lost its first digit
   (`).00` for `0.00`): superqt centres the label on its handle, leaving half of
