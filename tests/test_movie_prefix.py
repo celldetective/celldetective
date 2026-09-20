@@ -8,34 +8,12 @@ turn them into the prefixes worth proposing.
 
 import os
 
-import pytest
-
 from celldetective.utils.experiment import (
     _prefixes_of_name,
     count_movies_matching_prefix,
     get_movie_prefix_candidates,
     list_movies_per_position,
 )
-
-
-def build_experiment(folder, movies):
-    """
-    Write an experiment holding the given stacks.
-
-    Parameters
-    ----------
-    folder : Path
-        The experiment folder.
-    movies : dict
-        The names of the stacks of each position, keyed by ``(well, position)``.
-    """
-
-    for (well, position), names in movies.items():
-        movie_folder = folder / well / position / "movie"
-        movie_folder.mkdir(parents=True, exist_ok=True)
-        for name in names:
-            (movie_folder / name).write_bytes(b"")
-    return str(folder)
 
 
 def test_prefixes_of_name_cuts_on_separators_and_numbering():
@@ -53,8 +31,8 @@ def test_prefixes_of_name_ignores_the_extension_and_empty_pieces():
     assert "stack.tif" not in _prefixes_of_name("stack.tif")
 
 
-def test_list_movies_per_position_reads_the_movie_folders(tmp_path):
-    folder = build_experiment(
+def test_list_movies_per_position_reads_the_movie_folders(tmp_path, write_stacks):
+    folder = write_stacks(
         tmp_path,
         {
             ("W1", "101"): ["Alexa488_stack.tif", "BF_stack.tif"],
@@ -77,8 +55,8 @@ def test_list_movies_per_position_reads_the_movie_folders(tmp_path):
     assert all("notes.txt" not in names for names in movies.values())
 
 
-def test_list_movies_per_position_skips_positions_without_movie_folder(tmp_path):
-    folder = build_experiment(tmp_path, {("W1", "101"): ["a.tif"]})
+def test_list_movies_per_position_skips_positions_without_movie_folder(tmp_path, write_stacks):
+    folder = write_stacks(tmp_path, {("W1", "101"): ["a.tif"]})
     (tmp_path / "W1" / "102").mkdir(parents=True)
     assert len(list_movies_per_position(folder)) == 1
 

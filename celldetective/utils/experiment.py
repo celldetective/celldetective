@@ -2,7 +2,9 @@
 # mention (dask, napari) do not have to be imported when this module is loaded.
 from __future__ import annotations
 
+import fnmatch
 import os
+from bisect import bisect_left
 from glob import glob
 from pathlib import Path, PosixPath, PurePosixPath, WindowsPath
 from shutil import copyfile
@@ -904,6 +906,36 @@ def interpret_wells_and_positions(
     return well_indices, position_indices
 
 
+def movie_pattern(prefix: str = "") -> str:
+    """
+    Give the pattern selecting the movie of a position, from its prefix.
+
+    The prefix stored in ``config.ini`` is not compared to a name, it is
+    globbed: this is the one place saying so, so that whoever counts what a
+    prefix matches and whoever loads the stack agree on it.
+
+    Parameters
+    ----------
+    prefix : str, optional
+            The movie prefix. Defaults to an empty string, which takes any
+            stack.
+
+    Returns
+    -------
+    str
+            The pattern, to glob in a movie folder or to match a name against
+            with ``fnmatch``.
+
+    Examples
+    --------
+    >>> movie_pattern('Alexa488_')
+    'Alexa488_*.tif'
+
+    """
+
+    return prefix + "*.tif"
+
+
 def get_position_movie_path(pos: str, prefix: str = "") -> Optional[str]:
     """
     Get the path of the movie file for a given position.
@@ -942,7 +974,7 @@ def get_position_movie_path(pos: str, prefix: str = "") -> Optional[str]:
 
     if not pos.endswith(os.sep):
         pos += os.sep
-    movies = glob(pos + os.sep.join(["movie", prefix + "*.tif"]))
+    movies = glob(pos + os.sep.join(["movie", movie_pattern(prefix)]))
     if len(movies) > 0:
         stack_path = movies[0]
     else:
@@ -1021,8 +1053,8 @@ def list_movies_per_position(experiment: Union[str, Path]) -> Dict[str, List[str
     dict
             One entry per position that has a movie folder, its path (as
             ``get_positions_in_well`` gives it) mapped to the names of the
-            stacks it holds, naturally sorted. A position with an empty movie
-            folder is kept, with an empty list.
+            stacks it holds, sorted. A position with an empty movie folder is
+            kept, with an empty list.
 
     Examples
     --------
@@ -1037,8 +1069,8 @@ def list_movies_per_position(experiment: Union[str, Path]) -> Dict[str, List[str
             folder = os.sep.join([pos.rstrip(os.sep), "movie"])
             if not os.path.isdir(folder):
                 continue
-            stacks = natsorted(glob(os.sep.join([folder, "*.tif"])))
-            movies[pos] = [os.path.basename(s) for s in stacks]
+            stacks = glob(os.sep.join([folder, movie_pattern()]))
+            movies[pos] = sorted(os.path.basename(s) for s in stacks)
 
     return movies
 
@@ -1065,10 +1097,15 @@ def count_movies_matching_prefix(
 
     """
 
+    # The names are matched against the pattern the software globs rather than
+    # compared to the prefix, so that what is counted here is what would be
+    # loaded (see movie_pattern).
+    pattern = movie_pattern(prefix)
+
     positions = 0
     stacks = 0
     for names in movies_per_position.values():
-        matches = [name for name in names if name.startswith(prefix)]
+        matches = fnmatch.filter(names, pattern)
         if matches:
             positions += 1
             stacks += len(matches)
@@ -1098,23 +1135,50 @@ def _prefixes_of_name(name: str) -> List[str]:
 
     stem = name[: -len(".tif")] if name.lower().endswith(".tif") else name
 
-    cuts = set()
-    for i in range(1, len(stem)):
-        previous, current = stem[i - 1], stem[i]
-        if previous in PREFIX_SEPARATORS:
-            # After a separator: 'Well1_'.
-            cuts.add(i)
-        if current in PREFIX_SEPARATORS:
-            # Before a separator: 'Well1'.
-            cuts.add(i)
-        elif current.isdigit() and not previous.isdigit():
-            # Before the numbering: 'Well' in 'Well1'.
-            cuts.add(i)
+    # A prefix ends right after a separator ('Well1_'), right before one
+    # ('Well1'), or right before the numbering ('Well' in 'Well1').
+    cuts = {
+        i
+        for i in range(1, len(stem))
+        if stem[i - 1] in PREFIX_SEPARATORS
+        or stem[i] in PREFIX_SEPARATORS
+        or (stem[i].isdigit() and not stem[i - 1].isdigit())
+    }
     cuts.add(len(stem))
 
     prefixes = [stem[:i] for i in sorted(cuts)]
 
     return [p for p in prefixes if p.strip(PREFIX_SEPARATORS)]
+
+
+def _matching_range(names: List[str], prefix: str) -> Tuple[int, int]:
+    """
+    Locate the names a prefix matches, in a sorted list of names.
+
+    Sorted, the names starting with a prefix sit next to each other, so each
+    prefix is placed by two bisections instead of a pass over every name: an
+    experiment offers a few thousand candidate prefixes over as many names,
+    and scanning one for each of the other is what makes the suggestions slow.
+
+    Parameters
+    ----------
+    names : list of str
+            The names of the stacks, sorted.
+    prefix : str
+            The prefix to locate. It cannot be empty.
+
+    Returns
+    -------
+    tuple of (int, int)
+            The bounds of the slice of ``names`` starting with the prefix.
+
+    """
+
+    # The prefix with its last character nudged up sorts right after every
+    # name the prefix matches, and before every name it does not.
+    past = prefix[:-1] + chr(ord(prefix[-1]) + 1)
+
+    return bisect_left(names, prefix), bisect_left(names, past)
 
 
 def get_movie_prefix_candidates(
@@ -1152,44 +1216,37 @@ def get_movie_prefix_candidates(
 
     """
 
-    # The names repeat from one position to the next: count each of them once,
-    # as the number of positions it appears in and the number of stacks it is.
-    index = {}
-    for names in movies_per_position.values():
-        for name in set(names):
-            positions, stacks = index.get(name, (0, 0))
-            index[name] = (positions + 1, stacks + names.count(name))
+    # The same names repeat from one position to the next: index each of them
+    # once, with the positions it sits in.
+    positions_of_name = {}
+    for position, stack_names in enumerate(movies_per_position.values()):
+        for name in stack_names:
+            positions_of_name.setdefault(name, set()).add(position)
+
+    names = sorted(positions_of_name)
 
     candidates = set()
-    for name in index:
+    for name in names:
         candidates.update(_prefixes_of_name(name))
 
-    # Two prefixes matching the same names are the same choice: keep the one
-    # that ends on a separator, the shortest otherwise.
+    # Two prefixes matching the same stacks are the same choice: keep the one
+    # that ends on a separator, the shortest otherwise. The range of names a
+    # prefix matches is what identifies the choice.
     best = {}
     for prefix in candidates:
-        matches = frozenset(name for name in index if name.startswith(prefix))
-        if not matches:
-            continue
+        matches = _matching_range(names, prefix)
         rank = (0 if prefix[-1] in PREFIX_SEPARATORS else 1, len(prefix), prefix)
-        if matches not in best or rank < best[matches][0]:
-            best[matches] = (rank, prefix)
+        if matches not in best or rank < best[matches]:
+            best[matches] = rank
 
     scored = []
-    for matches, (_, prefix) in best.items():
-        positions = 0
+    for (start, stop), (_, _, prefix) in best.items():
+        covered = set()
         stacks = 0
-        for name in matches:
-            positions += index[name][0]
-            stacks += index[name][1]
-        # A position holding two matching stacks was counted twice: what the
-        # prefix really covers is the positions holding at least one of them.
-        covered = sum(
-            1
-            for names in movies_per_position.values()
-            if any(name in matches for name in names)
-        )
-        scored.append((prefix, covered, stacks))
+        for name in names[start:stop]:
+            covered |= positions_of_name[name]
+            stacks += len(positions_of_name[name])
+        scored.append((prefix, len(covered), stacks))
 
     # The most covering first, then the least ambiguous, then the most
     # specific, and alphabetically so that the order never depends on the set.

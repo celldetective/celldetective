@@ -63,6 +63,7 @@ class FakeControlPanel:
     """The part of the control panel the editor relies on."""
 
     def __init__(self, folder):
+        self.exp_dir = folder + os.sep
         self.exp_config = os.path.join(folder, "config.ini")
         self.wells = [os.path.join(folder, f"W{i}") + os.sep for i in (1, 2, 3)]
         self.reloads = 0
@@ -199,16 +200,7 @@ def test_settings_are_saved_in_order(editor):
     assert config.sections() == ["Populations", "MovieSettings", "Labels", "Metadata"]
 
 
-def write_stacks(folder, movies):
-    """Write empty stacks in the movie folders of an experiment."""
-    for (well, position), names in movies.items():
-        movie_folder = folder / well / position / "movie"
-        movie_folder.mkdir(parents=True, exist_ok=True)
-        for name in names:
-            (movie_folder / name).write_bytes(b"")
-
-
-def test_prefix_suggestions_come_from_the_stacks(editor, tmp_path):
+def test_prefix_suggestions_come_from_the_stacks(editor, tmp_path, write_stacks):
     write_stacks(
         tmp_path,
         {
@@ -217,23 +209,24 @@ def test_prefix_suggestions_come_from_the_stacks(editor, tmp_path):
             ("W3", "301"): ["Alexa488_stack.tif", "BF_stack.tif"],
         },
     )
-    editor.show_prefix_suggestions()
-    assert editor.prefix_model.stringList() == ["Alexa488_", "BF_"]
+    editor.prefix_widget.show_suggestions()
+    assert editor.prefix_widget.model.stringList() == ["Alexa488_", "BF_"]
 
 
-def test_the_stacks_are_read_only_once(editor, tmp_path, monkeypatch):
+def test_the_stacks_are_read_only_once(editor, tmp_path, write_stacks, monkeypatch):
     write_stacks(tmp_path, {("W1", "101"): ["stack.tif"]})
     calls = []
     monkeypatch.setattr(
         json_readers, "list_movies_per_position", lambda folder: calls.append(folder) or {}
     )
-    editor.scan_movies()
-    editor.scan_movies()
-    editor.prefix_field.setText("stack")
+    prefix = editor.prefix_widget
+    prefix.scan_movies()
+    prefix.scan_movies()
+    prefix.field.setText("stack")
     assert len(calls) == 1
 
 
-def test_the_hint_tells_what_the_prefix_matches(editor, tmp_path):
+def test_the_hint_tells_what_the_prefix_matches(editor, tmp_path, write_stacks):
     write_stacks(
         tmp_path,
         {
@@ -242,26 +235,37 @@ def test_the_hint_tells_what_the_prefix_matches(editor, tmp_path):
             ("W3", "301"): ["BF_stack.tif"],
         },
     )
-    editor.prefix_field.setText("Alexa488_")
-    assert "1 of the 3 positions" in editor.prefix_hint.text()
+    prefix = editor.prefix_widget
+    prefix.field.setText("Alexa488_")
+    assert "1 of the 3 positions" in prefix.hint.text()
 
-    editor.prefix_field.setText("BF_")
-    assert editor.prefix_hint.text() == "One stack in each of the 3 positions."
+    prefix.field.setText("BF_")
+    assert prefix.hint.text() == "One stack in each of the 3 positions."
 
-    editor.prefix_field.setText("")
-    assert "first one" in editor.prefix_hint.text()
+    prefix.field.setText("")
+    assert "5 stacks over 3 positions" in prefix.hint.text()
 
-    editor.prefix_field.setText("Hoechst")
-    assert "No stack" in editor.prefix_hint.text()
+    prefix.field.setText("Hoechst")
+    assert "No stack" in prefix.hint.text()
 
 
 def test_the_hint_signals_an_experiment_without_movies(editor):
-    editor.prefix_field.setText("a")
-    assert "No movie folder" in editor.prefix_hint.text()
+    editor.prefix_widget.field.setText("a")
+    assert "No movie folder" in editor.prefix_widget.hint.text()
 
 
-def test_the_prefix_is_saved(editor, tmp_path):
+def test_the_hint_signals_a_folder_that_cannot_be_read(editor, monkeypatch):
+    monkeypatch.setattr(
+        json_readers,
+        "list_movies_per_position",
+        lambda folder: (_ for _ in ()).throw(OSError("unreachable share")),
+    )
+    editor.prefix_widget.field.setText("a")
+    assert "could not be read" in editor.prefix_widget.hint.text()
+
+
+def test_the_prefix_is_saved(editor, tmp_path, write_stacks):
     write_stacks(tmp_path, {("W1", "101"): ["Alexa488_stack.tif"]})
-    editor.prefix_field.setText("Alexa488_")
+    editor.prefix_widget.field.setText("Alexa488_")
     assert editor.save_config()
     assert saved(editor).get("MovieSettings", "movie_prefix") == "Alexa488_"

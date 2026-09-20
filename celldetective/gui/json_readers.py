@@ -61,10 +61,9 @@ logger = logging.getLogger("celldetective")
 LABELS_SECTION = "Labels"
 METADATA_SECTION = "Metadata"
 
-# The prefix telling which stack of a position folder is the movie: the field
-# is offered what the experiment holds (see scan_movies). The section is
-# compared lowercased, the way configparser reads the option names.
-MOVIE_SECTION = "moviesettings"
+# The prefix telling which stack of a position folder is the movie: that one
+# field is offered what the experiment holds (see MoviePrefixField).
+MOVIE_SECTION = "MovieSettings"
 MOVIE_PREFIX_KEY = "movie_prefix"
 
 # The labels the software reads by name (see utils.experiment): they can be
@@ -297,6 +296,180 @@ class EditableTable(QTableWidget):
         super().keyPressEvent(event)
 
 
+def hint_label(text: str) -> QLabel:
+    """
+    Return a line of secondary text, explaining a tab or a field.
+
+    Parameters
+    ----------
+    text : str
+        The line to show.
+
+    Returns
+    -------
+    QLabel
+        The label, wrapping and in the muted ink of secondary text.
+    """
+
+    label = QLabel(text)
+    label.setWordWrap(True)
+    label.setStyleSheet(f"color: {MUTED_INK};")
+    return label
+
+
+class MoviePrefixField(CelldetectiveWidget):
+    """
+    The movie prefix field, dressed with the prefixes the experiment holds.
+
+    The names of the stacks sitting in the movie folders are cut into the
+    prefixes that would select them and offered as completions, from the field
+    or from the button next to it. A line under the field tells what the
+    prefix currently typed matches, so that a prefix leaving positions without
+    a movie is seen here rather than at the first segmentation.
+    """
+
+    def __init__(
+        self, field: QLineEdit, exp_dir: str, parent: Optional[QWidget] = None
+    ) -> None:
+        """
+        Dress a prefix field with what the experiment holds.
+
+        Parameters
+        ----------
+        field : QLineEdit
+            The field holding the prefix, kept by the editor that saves it.
+        exp_dir : str
+            The experiment folder whose stacks are proposed.
+        parent : QWidget, optional
+            The parent widget.
+        """
+
+        super().__init__(parent)
+
+        self.field = field
+        self.exp_dir = exp_dir
+
+        # The stacks of the experiment, read the first time the prefix is
+        # looked at rather than on opening: the folders are scanned then, and
+        # only when this field is of any interest.
+        self.movies_per_position = None
+        self.scan_failed = False
+
+        field.setPlaceholderText("any stack of the movie folder")
+
+        self.model = QStringListModel(self)
+        self.completer = QCompleter(self.model, field)
+        self.completer.setCaseSensitivity(Qt.CaseInsensitive)
+        self.completer.setFilterMode(Qt.MatchContains)
+        self.completer.setCompletionMode(QCompleter.PopupCompletion)
+        field.setCompleter(self.completer)
+
+        self.suggest_btn = ToolButton(
+            MDI6.text_search, "Show the prefixes of the stacks of the experiment."
+        )
+        self.suggest_btn.clicked.connect(self.show_suggestions)
+
+        self.hint = hint_label("")
+        self.hint.setTextFormat(Qt.PlainText)
+        self.hint.hide()
+        field.textChanged.connect(self.update_hint)
+
+        row = QHBoxLayout()
+        row.setContentsMargins(0, 0, 0, 0)
+        row.addWidget(field, 1)
+        row.addLayout(tool_strip(self.suggest_btn))
+
+        box = QVBoxLayout(self)
+        box.setContentsMargins(0, 0, 0, 0)
+        box.setSpacing(2)
+        box.addLayout(row)
+        box.addWidget(self.hint)
+
+    def scan_movies(self) -> None:
+        """
+        Read the stacks of the experiment, once.
+
+        Scanning the movie folder of every position takes a moment on a large
+        experiment, so it is done at the first sign of interest in the prefix
+        and kept.
+        """
+
+        if self.movies_per_position is not None:
+            return
+
+        try:
+            self.movies_per_position = list_movies_per_position(self.exp_dir)
+        except Exception:
+            logger.exception("Could not list the stacks of the experiment.")
+            self.movies_per_position = {}
+            self.scan_failed = True
+
+        candidates = get_movie_prefix_candidates(self.movies_per_position)
+        self.model.setStringList([prefix for prefix, _, _ in candidates])
+
+    def show_suggestions(self) -> None:
+        """Open the list of the prefixes the experiment holds."""
+
+        self.update_hint()
+        self.field.setFocus()
+        self.completer.setCompletionPrefix(self.field.text())
+        self.completer.complete()
+
+    def update_hint(self) -> None:
+        """Tell what the prefix currently typed matches in the experiment."""
+
+        self.scan_movies()
+
+        if self.scan_failed:
+            self._show_hint(
+                "The stacks of the experiment could not be read: see the log.",
+                warning=True,
+            )
+            return
+
+        total = len(self.movies_per_position)
+        if total == 0:
+            self._show_hint(
+                "No movie folder found: a stack goes in the movie folder of "
+                "a position.",
+                warning=True,
+            )
+            return
+
+        prefix = self.field.text().strip()
+        positions, stacks = count_movies_matching_prefix(
+            self.movies_per_position, prefix
+        )
+
+        if positions == 0:
+            self._show_hint(
+                f"No stack of the {total} positions matches this prefix.",
+                warning=True,
+            )
+        elif positions < total:
+            self._show_hint(
+                f"{total - positions} of the {total} positions hold no matching "
+                "stack.",
+                warning=True,
+            )
+        elif stacks > positions:
+            self._show_hint(
+                f"{stacks} stacks over {total} positions: which one of a "
+                "position is loaded is left to chance.",
+                warning=True,
+            )
+        else:
+            self._show_hint(f"One stack in each of the {total} positions.")
+
+    def _show_hint(self, text: str, warning: bool = False) -> None:
+        """Write the line of feedback under the field."""
+
+        color = DANGER_COLOR if warning else MUTED_INK
+        self.hint.setStyleSheet(f"color: {color};")
+        self.hint.setText(text)
+        self.hint.show()
+
+
 class ConfigEditor(CelldetectiveWidget):
     """
     Edit the configuration of an experiment.
@@ -320,6 +493,7 @@ class ConfigEditor(CelldetectiveWidget):
 
         self.parent_window = parent_window
         self.config_path = self.parent_window.exp_config
+        self.exp_dir = self.parent_window.exp_dir
 
         self.setWindowTitle("Configuration")
 
@@ -328,13 +502,6 @@ class ConfigEditor(CelldetectiveWidget):
 
         self.well_names = self._well_names()
         self.fields = {}
-
-        # The stacks of the experiment, read the first time the movie prefix
-        # is looked at rather than on opening: the folders are scanned then,
-        # and only when that field is of any interest.
-        self.movies_per_position = {}
-        self.prefix_field = None
-        self._prefix_scanned = False
 
         layout = QVBoxLayout(self)
 
@@ -406,15 +573,6 @@ class ConfigEditor(CelldetectiveWidget):
             )
         return [f"W{i + 1}" for i in range(n_wells)]
 
-    @staticmethod
-    def _hint(text: str) -> QLabel:
-        """Return a line of secondary text explaining a tab."""
-
-        label = QLabel(text)
-        label.setWordWrap(True)
-        label.setStyleSheet(f"color: {MUTED_INK};")
-        return label
-
     def _build_settings_tab(self) -> QWidget:
         """Build one form per plain section of the file."""
 
@@ -435,8 +593,9 @@ class ConfigEditor(CelldetectiveWidget):
             for key, value in self.config.items(section):
                 field = QLineEdit(value)
                 self.fields[(section, key)] = field
-                if section.lower() == MOVIE_SECTION and key == MOVIE_PREFIX_KEY:
-                    form.addRow(key, self._build_prefix_row(field))
+                if section == MOVIE_SECTION and key == MOVIE_PREFIX_KEY:
+                    self.prefix_widget = MoviePrefixField(field, self.exp_dir)
+                    form.addRow(key, self.prefix_widget)
                 else:
                     form.addRow(key, field)
             box.addLayout(form)
@@ -448,149 +607,6 @@ class ConfigEditor(CelldetectiveWidget):
         scroll.setFrameShape(QScrollArea.NoFrame)
         scroll.setWidget(content)
         return scroll
-
-    def _build_prefix_row(self, field: QLineEdit) -> QWidget:
-        """
-        Dress the movie prefix field with the prefixes the experiment holds.
-
-        The names of the stacks sitting in the movie folders are cut into the
-        prefixes that would select them, and offered as completions. A line
-        under the field tells what the prefix currently typed matches, so that
-        a prefix leaving positions without a movie is seen here rather than at
-        the first segmentation.
-
-        Parameters
-        ----------
-        field : QLineEdit
-            The field holding the prefix.
-
-        Returns
-        -------
-        QWidget
-            The field, its suggestion button and the line of feedback.
-        """
-
-        self.prefix_field = field
-        field.setPlaceholderText("any stack of the movie folder")
-
-        self.prefix_model = QStringListModel(self)
-        completer = QCompleter(self.prefix_model, field)
-        completer.setCaseSensitivity(Qt.CaseInsensitive)
-        completer.setFilterMode(Qt.MatchContains)
-        completer.setCompletionMode(QCompleter.PopupCompletion)
-        field.setCompleter(completer)
-        self.prefix_completer = completer
-
-        self.prefix_suggest_btn = ToolButton(
-            MDI6.text_search, "Show the prefixes of the stacks of the experiment."
-        )
-        self.prefix_suggest_btn.clicked.connect(self.show_prefix_suggestions)
-
-        self.prefix_hint = self._hint("")
-        self.prefix_hint.setTextFormat(Qt.PlainText)
-        self.prefix_hint.hide()
-        field.textChanged.connect(self._on_prefix_typed)
-
-        row = QHBoxLayout()
-        row.setContentsMargins(0, 0, 0, 0)
-        row.addWidget(field, 1)
-        row.addLayout(tool_strip(self.prefix_suggest_btn))
-
-        container = CelldetectiveWidget()
-        box = QVBoxLayout(container)
-        box.setContentsMargins(0, 0, 0, 0)
-        box.setSpacing(2)
-        box.addLayout(row)
-        box.addWidget(self.prefix_hint)
-        return container
-
-    def scan_movies(self) -> None:
-        """
-        Read the stacks of the experiment, once.
-
-        Scanning the movie folder of every position takes a moment on a large
-        experiment, so it is done at the first sign of interest in the prefix
-        and kept.
-        """
-
-        if self._prefix_scanned:
-            return
-        self._prefix_scanned = True
-
-        folder = getattr(self.parent_window, "exp_dir", None) or os.path.dirname(
-            os.path.realpath(self.config_path)
-        )
-        try:
-            self.movies_per_position = list_movies_per_position(folder)
-        except Exception:
-            logger.exception("Could not list the stacks of the experiment.")
-            self.movies_per_position = {}
-
-        candidates = get_movie_prefix_candidates(self.movies_per_position)
-        self.prefix_model.setStringList([prefix for prefix, _, _ in candidates])
-
-    def show_prefix_suggestions(self) -> None:
-        """Open the list of the prefixes the experiment holds."""
-
-        self.scan_movies()
-        self._update_prefix_hint()
-        self.prefix_field.setFocus()
-        self.prefix_completer.setCompletionPrefix(self.prefix_field.text())
-        self.prefix_completer.complete()
-
-    def _on_prefix_typed(self) -> None:
-        """Read the stacks at the first edit, then follow what is typed."""
-
-        self.scan_movies()
-        self._update_prefix_hint()
-
-    def _update_prefix_hint(self) -> None:
-        """Tell what the prefix currently typed matches in the experiment."""
-
-        if not self._prefix_scanned:
-            return
-
-        total = len(self.movies_per_position)
-        if total == 0:
-            self._show_prefix_hint(
-                "No movie folder found: a stack goes in the movie folder of "
-                "a position.",
-                warning=True,
-            )
-            return
-
-        prefix = self.prefix_field.text().strip()
-        positions, stacks = count_movies_matching_prefix(
-            self.movies_per_position, prefix
-        )
-
-        if positions == 0:
-            self._show_prefix_hint(
-                f"No stack of the {total} positions starts with this prefix.",
-                warning=True,
-            )
-        elif positions < total:
-            self._show_prefix_hint(
-                f"{total - positions} of the {total} positions hold no matching "
-                "stack.",
-                warning=True,
-            )
-        elif stacks > positions:
-            self._show_prefix_hint(
-                f"{stacks} stacks over {total} positions: the first one of a "
-                "position is the one loaded.",
-                warning=True,
-            )
-        else:
-            self._show_prefix_hint(f"One stack in each of the {total} positions.")
-
-    def _show_prefix_hint(self, text: str, warning: bool = False) -> None:
-        """Write the line of feedback under the prefix field."""
-
-        color = DANGER_COLOR if warning else MUTED_INK
-        self.prefix_hint.setStyleSheet(f"color: {color};")
-        self.prefix_hint.setText(text)
-        self.prefix_hint.show()
 
     def _build_labels_tab(self) -> QWidget:
         """Build the table of the well labels."""
@@ -637,7 +653,7 @@ class ConfigEditor(CelldetectiveWidget):
         box = QVBoxLayout(page)
         top = QHBoxLayout()
         top.addWidget(
-            self._hint(
+            hint_label(
                 "One row per well. Paste a block from a spreadsheet with Ctrl+V; "
                 "values cannot contain commas."
             ),
@@ -686,7 +702,7 @@ class ConfigEditor(CelldetectiveWidget):
         box = QVBoxLayout(page)
         top = QHBoxLayout()
         top.addWidget(
-            self._hint(
+            hint_label(
                 "Values shared by every well of the experiment, e.g. date = 2026-09-15. "
                 "Each key becomes a column of the measurement tables."
             ),
