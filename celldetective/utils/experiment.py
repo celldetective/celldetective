@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import fnmatch
 import os
+import re
 from bisect import bisect_left
 from glob import glob
 from pathlib import Path, PosixPath, PurePosixPath, WindowsPath
@@ -911,8 +912,10 @@ def movie_pattern(prefix: str = "") -> str:
     Give the pattern selecting the movie of a position, from its prefix.
 
     The prefix stored in ``config.ini`` is not compared to a name, it is
-    globbed: this is the one place saying so, so that whoever counts what a
-    prefix matches and whoever loads the stack agree on it.
+    globbed, so that its wildcards and, on Windows, its case follow the rules
+    of ``glob``. ``get_position_movie_path`` and the helpers counting what a
+    prefix matches build their pattern here; a loader globbing
+    ``prefix*.tif`` itself must be kept in step with it.
 
     Parameters
     ----------
@@ -1035,6 +1038,10 @@ def get_positions_in_well(well: str) -> np.ndarray:
 # the numbering of the acquisition.
 PREFIX_SEPARATORS = " _-."
 
+# The characters glob reads as wildcards. A suggested prefix stops before the
+# first of them, so that the prefix globbed matches the name it was cut from.
+GLOB_WILDCARDS = re.compile(r"[*?\[]")
+
 
 def list_movies_per_position(experiment: Union[str, Path]) -> Dict[str, List[str]]:
     """
@@ -1051,10 +1058,10 @@ def list_movies_per_position(experiment: Union[str, Path]) -> Dict[str, List[str
     Returns
     -------
     dict
-            One entry per position that has a movie folder, its path (as
-            ``get_positions_in_well`` gives it) mapped to the names of the
-            stacks it holds, sorted. A position with an empty movie folder is
-            kept, with an empty list.
+            One entry per position, its path (as ``get_positions_in_well``
+            gives it) mapped to the names of the stacks it holds, sorted. A
+            position without a movie folder, or with an empty one, is kept
+            with an empty list: the software goes through it all the same.
 
     Examples
     --------
@@ -1066,10 +1073,7 @@ def list_movies_per_position(experiment: Union[str, Path]) -> Dict[str, List[str
     movies = {}
     for well in get_experiment_wells(str(experiment)):
         for pos in get_positions_in_well(well):
-            folder = os.sep.join([pos.rstrip(os.sep), "movie"])
-            if not os.path.isdir(folder):
-                continue
-            stacks = glob(os.sep.join([folder, movie_pattern()]))
+            stacks = glob(os.path.join(pos, "movie", movie_pattern()))
             movies[pos] = sorted(os.path.basename(s) for s in stacks)
 
     return movies
@@ -1099,16 +1103,18 @@ def count_movies_matching_prefix(
 
     # The names are matched against the pattern the software globs rather than
     # compared to the prefix, so that what is counted here is what would be
-    # loaded (see movie_pattern).
-    pattern = movie_pattern(prefix)
+    # loaded (see movie_pattern). The same names repeat from one position to
+    # the next: each is matched once.
+    names = set().union(*movies_per_position.values())
+    matched = set(fnmatch.filter(names, movie_pattern(prefix)))
 
     positions = 0
     stacks = 0
     for names in movies_per_position.values():
-        matches = fnmatch.filter(names, pattern)
+        matches = len(matched.intersection(names))
         if matches:
             positions += 1
-            stacks += len(matches)
+            stacks += matches
 
     return positions, stacks
 
@@ -1119,7 +1125,9 @@ def _prefixes_of_name(name: str) -> List[str]:
 
     A name is cut around its separators and before the numbering that usually
     tells the acquisitions apart, so that 'Well1_t01.tif' offers 'Well',
-    'Well1', 'Well1_' and 'Well1_t'.
+    'Well1', 'Well1_', 'Well1_t' and 'Well1_t01'. A prefix is saved stripped
+    of its surrounding spaces and globbed, so none is offered that ends on a
+    space or reaches a wildcard of glob.
 
     Parameters
     ----------
@@ -1133,7 +1141,7 @@ def _prefixes_of_name(name: str) -> List[str]:
 
     """
 
-    stem = name[: -len(".tif")] if name.lower().endswith(".tif") else name
+    stem = GLOB_WILDCARDS.split(os.path.splitext(name)[0], maxsplit=1)[0]
 
     # A prefix ends right after a separator ('Well1_'), right before one
     # ('Well1'), or right before the numbering ('Well' in 'Well1').
@@ -1146,9 +1154,12 @@ def _prefixes_of_name(name: str) -> List[str]:
     }
     cuts.add(len(stem))
 
-    prefixes = [stem[:i] for i in sorted(cuts)]
+    prefixes = {stem[:i].rstrip() for i in cuts}
 
-    return [p for p in prefixes if p.strip(PREFIX_SEPARATORS)]
+    return sorted(
+        (p for p in prefixes if p.strip(PREFIX_SEPARATORS) and not p[0].isspace()),
+        key=len,
+    )
 
 
 def _matching_range(names: List[str], prefix: str) -> Tuple[int, int]:
@@ -1183,7 +1194,7 @@ def _matching_range(names: List[str], prefix: str) -> Tuple[int, int]:
 
 def get_movie_prefix_candidates(
     movies_per_position: Dict[str, List[str]], limit: int = 12
-) -> List[Tuple[str, int, int]]:
+) -> List[str]:
     """
     Propose the movie prefixes that make sense for an experiment.
 
@@ -1192,7 +1203,8 @@ def get_movie_prefix_candidates(
     match exactly the same stacks are the same choice written in different
     ways, so only one of them is kept. The candidates that cover the most
     positions come first, then those that leave the least ambiguity (one stack
-    per position), then the most specific ones.
+    per position), then the most specific ones. Names are compared the way
+    glob compares them, regardless of case on Windows.
 
     Parameters
     ----------
@@ -1204,43 +1216,46 @@ def get_movie_prefix_candidates(
 
     Returns
     -------
-    list of (str, int, int)
-            The candidate prefixes, each with the number of positions and the
-            number of stacks it matches, best first.
+    list of str
+            The candidate prefixes, best first.
 
     Examples
     --------
     >>> movies = {'W1/101/': ['Well1_t01.tif'], 'W1/102/': ['Well2_t01.tif']}
     >>> get_movie_prefix_candidates(movies)
-    [('Well', 2, 2), ('Well1_', 1, 1), ('Well2_', 1, 1)]
+    ['Well']
 
     """
 
     # The same names repeat from one position to the next: index each of them
-    # once, with the positions it sits in.
+    # once, with the positions it sits in, under the form glob compares.
     positions_of_name = {}
+    spelling = {}
     for position, stack_names in enumerate(movies_per_position.values()):
         for name in stack_names:
-            positions_of_name.setdefault(name, set()).add(position)
+            key = os.path.normcase(name)
+            positions_of_name.setdefault(key, set()).add(position)
+            spelling.setdefault(key, name)
 
     names = sorted(positions_of_name)
 
     candidates = set()
-    for name in names:
+    for name in spelling.values():
         candidates.update(_prefixes_of_name(name))
 
     # Two prefixes matching the same stacks are the same choice: keep the one
     # that ends on a separator, the shortest otherwise. The range of names a
     # prefix matches is what identifies the choice.
+    def preference(prefix):
+        return (prefix[-1] not in PREFIX_SEPARATORS, len(prefix), prefix)
+
     best = {}
     for prefix in candidates:
-        matches = _matching_range(names, prefix)
-        rank = (0 if prefix[-1] in PREFIX_SEPARATORS else 1, len(prefix), prefix)
-        if matches not in best or rank < best[matches]:
-            best[matches] = rank
+        matches = _matching_range(names, os.path.normcase(prefix))
+        best[matches] = min(best.get(matches, prefix), prefix, key=preference)
 
     scored = []
-    for (start, stop), (_, _, prefix) in best.items():
+    for (start, stop), prefix in best.items():
         covered = set()
         stacks = 0
         for name in names[start:stop]:
@@ -1258,7 +1273,7 @@ def get_movie_prefix_candidates(
     if covering:
         scored = covering
 
-    return scored[:limit]
+    return [prefix for prefix, _, _ in scored[:limit]]
 
 
 def extract_experiment_folder_output(

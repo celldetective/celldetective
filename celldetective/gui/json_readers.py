@@ -15,9 +15,9 @@ import os
 import re
 import subprocess
 from subprocess import Popen
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
-from PyQt5.QtCore import QRegularExpression, QStringListModel, Qt
+from PyQt5.QtCore import QRegularExpression, QStringListModel, Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QKeyEvent, QKeySequence, QRegularExpressionValidator
 from PyQt5.QtWidgets import (
     QAbstractItemView,
@@ -46,9 +46,11 @@ from celldetective.gui.base.components import (
     CelldetectiveWidget,
     ToolButton,
     generic_message,
+    hint_label,
     tool_strip,
 )
 from celldetective.gui.base.styles import DANGER_COLOR, MUTED_INK, TABLE_STYLE
+from celldetective.gui.base.threads import start_tracked
 from celldetective.gui.base.utils import center_window
 from celldetective.utils.experiment import (
     count_movies_matching_prefix,
@@ -296,25 +298,45 @@ class EditableTable(QTableWidget):
         super().keyPressEvent(event)
 
 
-def hint_label(text: str) -> QLabel:
+class MovieScanThread(QThread):
     """
-    Return a line of secondary text, explaining a tab or a field.
+    Read the stacks of an experiment and the prefixes they offer.
 
-    Parameters
-    ----------
-    text : str
-        The line to show.
-
-    Returns
-    -------
-    QLabel
-        The label, wrapping and in the muted ink of secondary text.
+    Scanning the movie folder of every position takes a moment on a large
+    experiment or a network share, so it is done off the GUI thread.
     """
 
-    label = QLabel(text)
-    label.setWordWrap(True)
-    label.setStyleSheet(f"color: {MUTED_INK};")
-    return label
+    # The stacks of each position (None when they could not be read), the
+    # prefixes they offer, and what went wrong, if anything.
+    scanned = pyqtSignal(object, list, str)
+
+    def __init__(self, exp_dir: str) -> None:
+        """
+        Prepare the scan of an experiment.
+
+        Parameters
+        ----------
+        exp_dir : str
+            The experiment folder to scan.
+        """
+
+        super().__init__()
+        self.exp_dir = exp_dir
+
+    def run(self) -> None:
+        """Scan the experiment and hand the result over."""
+
+        try:
+            movies = list_movies_per_position(self.exp_dir)
+            candidates = get_movie_prefix_candidates(movies)
+        except Exception:
+            logger.exception("Could not list the stacks of the experiment.")
+            self.scanned.emit(
+                None, [], "The stacks of the experiment could not be read: see the log."
+            )
+            return
+
+        self.scanned.emit(movies, candidates, "")
 
 
 class MoviePrefixField(CelldetectiveWidget):
@@ -347,13 +369,11 @@ class MoviePrefixField(CelldetectiveWidget):
         super().__init__(parent)
 
         self.field = field
-        self.exp_dir = exp_dir
 
-        # The stacks of the experiment, read the first time the prefix is
-        # looked at rather than on opening: the folders are scanned then, and
-        # only when this field is of any interest.
+        # The stacks of the experiment, None until the scan started on opening
+        # is over, so that the prefix stored is checked without being edited.
         self.movies_per_position = None
-        self.scan_failed = False
+        self.scan_error = ""
 
         field.setPlaceholderText("any stack of the movie folder")
 
@@ -371,7 +391,7 @@ class MoviePrefixField(CelldetectiveWidget):
 
         self.hint = hint_label("")
         self.hint.setTextFormat(Qt.PlainText)
-        self.hint.hide()
+        self._warning = False
         field.textChanged.connect(self.update_hint)
 
         row = QHBoxLayout()
@@ -385,89 +405,77 @@ class MoviePrefixField(CelldetectiveWidget):
         box.addLayout(row)
         box.addWidget(self.hint)
 
-    def scan_movies(self) -> None:
-        """
-        Read the stacks of the experiment, once.
+        self.update_hint()
+        self.scan_thread = MovieScanThread(exp_dir)
+        self.scan_thread.scanned.connect(self._on_scanned)
+        start_tracked(self.scan_thread)
 
-        Scanning the movie folder of every position takes a moment on a large
-        experiment, so it is done at the first sign of interest in the prefix
-        and kept.
-        """
+    def _on_scanned(self, movies: Optional[dict], candidates: list, error: str) -> None:
+        """Keep what the scan read, and check the prefix against it."""
 
-        if self.movies_per_position is not None:
-            return
-
-        try:
-            self.movies_per_position = list_movies_per_position(self.exp_dir)
-        except Exception:
-            logger.exception("Could not list the stacks of the experiment.")
-            self.movies_per_position = {}
-            self.scan_failed = True
-
-        candidates = get_movie_prefix_candidates(self.movies_per_position)
-        self.model.setStringList([prefix for prefix, _, _ in candidates])
+        self.movies_per_position = movies
+        self.scan_error = error
+        self.model.setStringList(candidates)
+        self.update_hint()
 
     def show_suggestions(self) -> None:
         """Open the list of the prefixes the experiment holds."""
 
-        self.update_hint()
         self.field.setFocus()
-        self.completer.setCompletionPrefix(self.field.text())
+        # Every prefix, whatever the field already holds.
+        self.completer.setCompletionPrefix("")
         self.completer.complete()
 
     def update_hint(self) -> None:
         """Tell what the prefix currently typed matches in the experiment."""
 
-        self.scan_movies()
+        self._show_hint(*self._describe_prefix())
 
-        if self.scan_failed:
-            self._show_hint(
-                "The stacks of the experiment could not be read: see the log.",
-                warning=True,
-            )
-            return
+    def _describe_prefix(self) -> Tuple[str, bool]:
+        """Return the line telling what the prefix matches, and if it warns."""
+
+        if self.scan_error:
+            return self.scan_error, True
+        if self.movies_per_position is None:
+            return "Reading the stacks of the experiment…", False
 
         total = len(self.movies_per_position)
         if total == 0:
-            self._show_hint(
-                "No movie folder found: a stack goes in the movie folder of "
-                "a position.",
-                warning=True,
+            return "No position found in the experiment folder.", True
+        if not any(self.movies_per_position.values()):
+            return (
+                f"No stack in the movie folder of any of the {total} positions.",
+                True,
             )
-            return
 
-        prefix = self.field.text().strip()
         positions, stacks = count_movies_matching_prefix(
-            self.movies_per_position, prefix
+            self.movies_per_position, self.field.text().strip()
         )
 
         if positions == 0:
-            self._show_hint(
-                f"No stack of the {total} positions matches this prefix.",
-                warning=True,
+            return f"No stack of the {total} positions matches this prefix.", True
+        if positions < total:
+            return (
+                f"{total - positions} of the {total} positions hold no matching stack.",
+                True,
             )
-        elif positions < total:
-            self._show_hint(
-                f"{total - positions} of the {total} positions hold no matching "
-                "stack.",
-                warning=True,
+        if stacks > positions:
+            return (
+                f"{stacks} stacks over {total} positions: which one of a position "
+                "is loaded is left to chance.",
+                True,
             )
-        elif stacks > positions:
-            self._show_hint(
-                f"{stacks} stacks over {total} positions: which one of a "
-                "position is loaded is left to chance.",
-                warning=True,
-            )
-        else:
-            self._show_hint(f"One stack in each of the {total} positions.")
+        return f"One stack in each of the {total} positions.", False
 
-    def _show_hint(self, text: str, warning: bool = False) -> None:
+    def _show_hint(self, text: str, warning: bool) -> None:
         """Write the line of feedback under the field."""
 
-        color = DANGER_COLOR if warning else MUTED_INK
-        self.hint.setStyleSheet(f"color: {color};")
+        # Restyling repolishes the label: only when the ink changes.
+        if warning != self._warning:
+            self._warning = warning
+            color = DANGER_COLOR if warning else MUTED_INK
+            self.hint.setStyleSheet(f"color: {color};")
         self.hint.setText(text)
-        self.hint.show()
 
 
 class ConfigEditor(CelldetectiveWidget):
@@ -493,7 +501,6 @@ class ConfigEditor(CelldetectiveWidget):
 
         self.parent_window = parent_window
         self.config_path = self.parent_window.exp_config
-        self.exp_dir = self.parent_window.exp_dir
 
         self.setWindowTitle("Configuration")
 
@@ -578,6 +585,8 @@ class ConfigEditor(CelldetectiveWidget):
 
         content = QWidget()
         box = QVBoxLayout(content)
+        # Stays None when the file holds no movie prefix.
+        self.prefix_widget = None
 
         for section in self.config.sections():
             if section in (LABELS_SECTION, METADATA_SECTION):
@@ -594,7 +603,9 @@ class ConfigEditor(CelldetectiveWidget):
                 field = QLineEdit(value)
                 self.fields[(section, key)] = field
                 if section == MOVIE_SECTION and key == MOVIE_PREFIX_KEY:
-                    self.prefix_widget = MoviePrefixField(field, self.exp_dir)
+                    self.prefix_widget = MoviePrefixField(
+                        field, self.parent_window.exp_dir
+                    )
                     form.addRow(key, self.prefix_widget)
                 else:
                     form.addRow(key, field)

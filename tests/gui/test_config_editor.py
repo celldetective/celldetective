@@ -200,42 +200,63 @@ def test_settings_are_saved_in_order(editor):
     assert config.sections() == ["Populations", "MovieSettings", "Labels", "Metadata"]
 
 
-def test_prefix_suggestions_come_from_the_stacks(editor, tmp_path, write_stacks):
-    write_stacks(
-        tmp_path,
-        {
-            ("W1", "101"): ["Alexa488_stack.tif", "BF_stack.tif"],
-            ("W2", "201"): ["Alexa488_stack.tif", "BF_stack.tif"],
-            ("W3", "301"): ["Alexa488_stack.tif", "BF_stack.tif"],
-        },
-    )
-    editor.prefix_widget.show_suggestions()
-    assert editor.prefix_widget.model.stringList() == ["Alexa488_", "BF_"]
+@pytest.fixture
+def open_editor(qtbot, tmp_path, write_stacks):
+    """Return an opener of the editor over the stacks given, once it read them."""
+
+    def open_(movies=None, prefix=""):
+        write_stacks(tmp_path, movies or {})
+        (tmp_path / "config.ini").write_text(
+            CONFIG.replace("movie_prefix = \n", f"movie_prefix = {prefix}\n")
+        )
+        widget = ConfigEditor(FakeControlPanel(str(tmp_path)))
+        qtbot.addWidget(widget)
+        field = widget.prefix_widget
+        qtbot.waitUntil(
+            lambda: field.movies_per_position is not None or bool(field.scan_error)
+        )
+        return widget
+
+    return open_
 
 
-def test_the_stacks_are_read_only_once(editor, tmp_path, write_stacks, monkeypatch):
-    write_stacks(tmp_path, {("W1", "101"): ["stack.tif"]})
+THREE_POSITIONS = {
+    ("W1", "101"): ["Alexa488_stack.tif", "BF_stack.tif"],
+    ("W2", "201"): ["Alexa488_stack.tif", "BF_stack.tif"],
+    ("W3", "301"): ["BF_stack.tif"],
+}
+
+
+def test_prefix_suggestions_come_from_the_stacks(open_editor):
+    editor = open_editor(THREE_POSITIONS)
+    assert editor.prefix_widget.model.stringList() == ["BF_", "Alexa488_"]
+
+
+def test_the_button_lists_every_prefix(open_editor):
+    prefix = open_editor(THREE_POSITIONS).prefix_widget
+    prefix.field.setText("sample")
+    prefix.show_suggestions()
+    assert prefix.completer.completionCount() == 2
+
+
+def test_the_stacks_are_read_only_once(open_editor, monkeypatch):
     calls = []
     monkeypatch.setattr(
         json_readers, "list_movies_per_position", lambda folder: calls.append(folder) or {}
     )
-    prefix = editor.prefix_widget
-    prefix.scan_movies()
-    prefix.scan_movies()
+    prefix = open_editor().prefix_widget
     prefix.field.setText("stack")
+    prefix.field.setText("stacks")
     assert len(calls) == 1
 
 
-def test_the_hint_tells_what_the_prefix_matches(editor, tmp_path, write_stacks):
-    write_stacks(
-        tmp_path,
-        {
-            ("W1", "101"): ["Alexa488_stack.tif", "BF_stack.tif"],
-            ("W2", "201"): ["Alexa488_stack.tif", "BF_stack.tif"],
-            ("W3", "301"): ["BF_stack.tif"],
-        },
-    )
-    prefix = editor.prefix_widget
+def test_the_stored_prefix_is_checked_on_opening(open_editor):
+    prefix = open_editor(THREE_POSITIONS, prefix="sample").prefix_widget
+    assert "No stack" in prefix.hint.text()
+
+
+def test_the_hint_tells_what_the_prefix_matches(open_editor):
+    prefix = open_editor(THREE_POSITIONS).prefix_widget
     prefix.field.setText("Alexa488_")
     assert "1 of the 3 positions" in prefix.hint.text()
 
@@ -249,23 +270,27 @@ def test_the_hint_tells_what_the_prefix_matches(editor, tmp_path, write_stacks):
     assert "No stack" in prefix.hint.text()
 
 
-def test_the_hint_signals_an_experiment_without_movies(editor):
-    editor.prefix_widget.field.setText("a")
-    assert "No movie folder" in editor.prefix_widget.hint.text()
+def test_the_hint_counts_positions_without_movie_folder(open_editor, tmp_path):
+    (tmp_path / "W2" / "201").mkdir(parents=True)
+    prefix = open_editor({("W1", "101"): ["BF_stack.tif"]}).prefix_widget
+    prefix.field.setText("BF_")
+    assert "1 of the 2 positions" in prefix.hint.text()
 
 
-def test_the_hint_signals_a_folder_that_cannot_be_read(editor, monkeypatch):
-    monkeypatch.setattr(
-        json_readers,
-        "list_movies_per_position",
-        lambda folder: (_ for _ in ()).throw(OSError("unreachable share")),
-    )
-    editor.prefix_widget.field.setText("a")
-    assert "could not be read" in editor.prefix_widget.hint.text()
+def test_the_hint_signals_an_experiment_without_positions(open_editor):
+    assert "No position" in open_editor().prefix_widget.hint.text()
 
 
-def test_the_prefix_is_saved(editor, tmp_path, write_stacks):
-    write_stacks(tmp_path, {("W1", "101"): ["Alexa488_stack.tif"]})
+def test_the_hint_signals_a_folder_that_cannot_be_read(open_editor, monkeypatch):
+    def unreachable(folder):
+        raise OSError("unreachable share")
+
+    monkeypatch.setattr(json_readers, "list_movies_per_position", unreachable)
+    assert "could not be read" in open_editor().prefix_widget.hint.text()
+
+
+def test_the_prefix_is_saved(open_editor):
+    editor = open_editor({("W1", "101"): ["Alexa488_stack.tif"]})
     editor.prefix_widget.field.setText("Alexa488_")
     assert editor.save_config()
     assert saved(editor).get("MovieSettings", "movie_prefix") == "Alexa488_"
