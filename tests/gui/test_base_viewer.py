@@ -670,3 +670,55 @@ class TestEdgeCases:
         assert viewer.im.get_cmap().name == "viridis"
 
         viewer.close()
+
+
+def test_auto_contrast_peels_outliers_then_restores_full_range(qtbot, safe_close):
+    # A flat field with a few diverging pixels, as left by a background division near 0 / 0.
+    rng = np.random.default_rng(0)
+    frame = rng.normal(1.0, 0.05, (64, 64)).astype(np.float32)
+    frame[:2, :2] = 1e4
+    frame[-1, -1] = -1e4
+    frame[5, 5] = np.nan
+    viewer = StackVisualizer(
+        stack=frame[np.newaxis], frame_slider=False, contrast_slider=True, n_channels=1
+    )
+    qtbot.addWidget(viewer)
+
+    widths = []
+    for _ in range(3):
+        viewer.auto_contrast_btn.click()
+        low, high = viewer.contrast_slider.value()
+        assert viewer.im.get_clim() == pytest.approx((low, high))
+        widths.append(high - low)
+    # Every click keeps the 1-99th percentiles of what is within the previous limits.
+    assert widths[0] < 1 and widths[2] < widths[1] < widths[0]
+
+    viewer.auto_contrast_btn.click()
+    assert viewer.contrast_slider.value() == pytest.approx((-1e4, 1e4))
+    # The cycle starts again from the full range.
+    viewer.auto_contrast_btn.click()
+    assert viewer.contrast_slider.value() == pytest.approx(
+        tuple(np.nanpercentile(frame, [1, 99])), abs=0.01
+    )
+    safe_close(viewer)
+
+
+def test_auto_contrast_uses_the_pixels_in_view(qtbot, safe_close):
+    # Dim left half, bright right half: zoomed on the right, only bright pixels count.
+    frame = np.zeros((40, 80), dtype=np.float32)
+    frame[:, :40] = np.linspace(0, 10, 40)[None, :]
+    frame[:, 40:] = np.linspace(100, 110, 40)[None, :]
+    viewer = StackVisualizer(
+        stack=frame[np.newaxis], frame_slider=False, contrast_slider=True, n_channels=1
+    )
+    qtbot.addWidget(viewer)
+
+    viewer.ax.set_xlim(49.5, 79.5)
+    viewer.ax.set_ylim(39.5, -0.5)
+    np.testing.assert_array_equal(viewer.pixels_in_view(frame), frame[:, 50:80])
+
+    viewer.contrast_slider.setValue((0, 110))
+    viewer.auto_contrast_btn.click()
+    low, high = viewer.contrast_slider.value()
+    assert low > 100 and high <= 110
+    safe_close(viewer)

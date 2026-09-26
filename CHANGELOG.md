@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the prefix typed matches, so a prefix leaving positions without a movie, or
   matching several stacks in one, is seen there rather than at the first
   segmentation.
+- Image viewers have an auto contrast button next to the contrast slider. As
+  in Fiji, each click narrows the contrast to the 1st-99th percentiles of the
+  pixels in view (the zoomed region) within the current limits, peeling off outliers such as the diverging
+  values of a background division; the fourth click restores the full range.
 
 ### Fixed
 - Answering *yes* to "No labels can be found for this position. Do you want to

@@ -8,6 +8,7 @@ from PyQt5.QtWidgets import (
     QAction,
     QLabel,
     QComboBox,
+    QPushButton,
 )
 from fonticon_mdi6 import MDI6
 from celldetective.gui.base.sliders import QLabeledSlider, QLabeledDoubleRangeSlider
@@ -26,6 +27,9 @@ from celldetective.utils.image_loaders import (
 from celldetective import get_logger
 
 logger = get_logger(__name__)
+
+# Clicks of the auto contrast button before it restores the full range.
+AUTO_CONTRAST_STEPS = 3
 
 
 class StackLoader(QThread):
@@ -880,9 +884,81 @@ class StackVisualizer(CelldetectiveWidget):
         self.contrast_slider.setDecimals(self.contrast_decimals)
 
         self.contrast_slider.valueChanged.connect(self.change_contrast)
+
+        self.auto_contrast_btn = QPushButton()
+        self.auto_contrast_btn.setIcon(icon(MDI6.contrast_box, color="black"))
+        self.auto_contrast_btn.setStyleSheet(self.button_select_all)
+        self.auto_contrast_btn.setToolTip(
+            "Auto contrast: each click keeps the 1st-99th percentiles of the pixels\n"
+            f"within the current contrast; the {AUTO_CONTRAST_STEPS + 1}th click restores the full range."
+        )
+        self.auto_contrast_btn.clicked.connect(self.auto_contrast)
+        self.auto_contrast_step = 0
+
         layout.addWidget(QLabel("Contrast: "), 15)
-        layout.addWidget(self.contrast_slider, 85)
+        layout.addWidget(self.contrast_slider, 80)
+        layout.addWidget(self.auto_contrast_btn, 5)
         self.canvas.layout.addLayout(layout)
+
+    def auto_contrast(self):
+        """
+        Refine the contrast iteratively, as the "Auto" button of Fiji.
+
+        Each click sets the limits to the 1st and 99th percentiles of the finite pixels in view
+        (the zoomed region, or the whole frame) that lie within the current limits, so outliers
+        (e.g. diverging values of a background division) are peeled off step by step. After
+        ``AUTO_CONTRAST_STEPS`` clicks, the next one restores the full range of the frame.
+        """
+
+        frame = np.asarray(self.init_frame, dtype=float)
+        restore = self.auto_contrast_step >= AUTO_CONTRAST_STEPS
+        values = frame if restore else self.pixels_in_view(frame)
+        values = values[np.isfinite(values)]
+        if values.size == 0:
+            return
+
+        if restore:
+            limits = (values.min(), values.max())
+        else:
+            low, high = self.contrast_slider.value()
+            within = values[(values >= low) & (values <= high)]
+            if within.size == 0:
+                within = values
+            limits = tuple(np.percentile(within, [1, 99]))
+
+        if limits[1] <= limits[0]:
+            # Nothing to narrow (flat frame): leave the cycle where it is.
+            return
+        self.auto_contrast_step = 0 if restore else self.auto_contrast_step + 1
+        range_min, range_max = self.contrast_slider.minimum(), self.contrast_slider.maximum()
+        if limits[0] < range_min or limits[1] > range_max:
+            self.contrast_slider.setRange(
+                min(range_min, limits[0]), max(range_max, limits[1])
+            )
+        self.contrast_slider.setValue(limits)
+
+    def pixels_in_view(self, frame: np.ndarray) -> np.ndarray:
+        """
+        Pixels of the frame shown by the axes, i.e. the zoomed region.
+
+        Parameters
+        ----------
+        frame : numpy.ndarray
+            2D image displayed in the axes.
+
+        Returns
+        -------
+        numpy.ndarray
+            The visible part of the frame, or the whole frame if none of it is in view.
+        """
+        ny, nx = frame.shape[:2]
+        # Pixel i spans [i - 0.5, i + 0.5] in data coordinates.
+        x0, x1 = sorted(self.ax.get_xlim())
+        y0, y1 = sorted(self.ax.get_ylim())
+        cols = slice(max(int(np.floor(x0 + 0.5)), 0), min(int(np.ceil(x1 + 0.5)), nx))
+        rows = slice(max(int(np.floor(y0 + 0.5)), 0), min(int(np.ceil(y1 + 0.5)), ny))
+        view = frame[rows, cols]
+        return view if view.size else frame
 
     def generate_frame_slider(self):
         """Generate the frame slider."""
@@ -966,6 +1042,7 @@ class StackVisualizer(CelldetectiveWidget):
             self.im.set_clim(vmin=p01, vmax=p99)
             if self.create_contrast_slider and hasattr(self, "contrast_slider"):
                 self.contrast_slider.setValue((p01, p99))
+                self.auto_contrast_step = 0
             self.channel_trigger = False
             self.canvas.draw()
 
