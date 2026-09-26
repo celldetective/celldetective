@@ -22,7 +22,7 @@ Start Window
 
 **Plugins Menu**
 
-*   **Correct a segmentation annotation**: Open an annotation (a ``.tif`` image exported for training, with its ``.json`` sidecar) in napari to correct its mask, or to start it over from a model's output with the frame segmentation panel. See :ref:`segment_single_frame_napari`.
+*   **Correct a segmentation annotation**: Open an annotation (a ``.tif`` image exported for training, with its ``.json`` sidecar) in napari to correct its mask, or to start it over from a model's output or a threshold pipeline with the single-frame segmentation panel. See :ref:`segment_single_frame_napari`.
 
 **Help Menu**
 

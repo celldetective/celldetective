@@ -658,6 +658,10 @@ class FrameSegmentationPanel(QWidget):
         self.status_lbl.hide()
         outer.addWidget(self.status_lbl)
 
+        # The panel fills the height of its tab, and without this the slack goes
+        # to the group boxes, which stretch their rows apart.
+        outer.addStretch(1)
+
         self.model_cb.currentTextChanged.connect(self._reload_model)
         self._reload_model(self.model_cb.currentText())
 

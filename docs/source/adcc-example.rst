@@ -33,7 +33,7 @@ We will process the first position of the first well.
 5.  Click **Submit** to run segmentation.
 
     .. tip::
-        Click the :icon:`eye-outline,black` button to visualize the segmentation results in Napari.
+        Click the :icon:`eye-check-outline,black` button to visualize the segmentation results in Napari.
 
 Step 3: Track Targets
 ---------------------
@@ -92,7 +92,7 @@ Visualize the single-cell signals and the detected lysis events.
 
 1.  Click the :icon:`cog-outline,black` button in the **Detect Events** section (Event Annotator settings).
 2.  Configure the RGB representation if needed and click **Save**.
-3.  Click the :icon:`eye,black` button (Event Annotator) to open the viewer.
+3.  Click the :icon:`eye-check-outline,black` button (Event Annotator) to open the viewer.
 4.  You can inspect the traces and see the detected lysis times.
 
 .. note::

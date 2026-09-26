@@ -10,13 +10,13 @@ Reference keys: :term:`instance segmentation`, :term:`cell population`
 
 #. Recommended: pre-segment the cells you want using either a generic segmentation model (``CP_cyto3``, ``SD_versatile_fluo`` for nuclei, see :doc:`apply-a-segmentation-model`) or with a traditional segmentation pipeline (see :doc:`segment-with-threshold-wizard`). You can also pre-segment only the frames you annotate, from napari (see below).
 
-#. Click on the :icon:`eye-check,black` button on the right side of the *SEGMENT* option to open the initial masks in napari.
+#. Click on the :icon:`eye-check-outline,black` button on the right side of the *SEGMENT* option to open the initial masks in napari.
 
 #. In the layer list section, select the channel layer of interest and play with the contrast limits slider to adjust contrast. Activate or deactivate other channels to be able to see your cell population of interest clearly.
 
 #. Use the sliders to find a frame of interest where you would like to annotate. Your dataset should sample everything that can be found in your data, with special emphasis on rare cases.
 
-#. Optional: to start from a model's output rather than from scratch, pick a model at the top of the right-hand panel and press **Segment this frame** (see :ref:`segment_single_frame_napari`). The result can be undone with :kbd:`Ctrl+Z`.
+#. Optional: to start from a segmentation rather than from scratch, use the panel at the top right: in its **Model** tab pick a model and press **Segment this frame**, or in its **Threshold** tab load a threshold configuration and press **Threshold this frame** — the latter can be restricted to the region you are about to annotate (see :ref:`segment_single_frame_napari`). The result can be undone with :kbd:`Ctrl+Z`.
 
 #. Recommended: press the *New shapes layer* button in the layer list section and the *Add Rectangle* button in the layer controls to draw a crop of a sub-region of the current field of view, limiting the amount of annotations to perform and allowing you to move to another time point to take a different sub-region without spatial repetition. Use the opacity slider to make it as transparent as possible so that cell masks can be annotated properly.
 
@@ -28,7 +28,7 @@ Reference keys: :term:`instance segmentation`, :term:`cell population`
 
 #. Repeat the process for as many regions as possible. Try to sample both spatially and temporally, limiting sub-region repetitions. Once you reach about 10-30 samples, you may attempt to train a deep learning model on your data, with the proper strategy.
 
-#. To correct an exported annotation later, go to **Plugins > Correct a segmentation annotation** in the start window and open its ``.tif`` file. The frame segmentation panel is available there too.
+#. To correct an exported annotation later, go to **Plugins > Correct a segmentation annotation** in the start window and open its ``.tif`` file. The single-frame segmentation panel is available there too, both of its tabs.
 
 .. note::
 
