@@ -175,7 +175,8 @@ def unpad(img: np.ndarray, pad: int) -> np.ndarray:
     img : ndarray
             The input image from which the padding will be removed.
     pad : int
-            The amount of padding to remove from each side of the image.
+            The amount of padding to remove from each side of the image. 0 or None leaves the
+            image unchanged.
 
     Returns
     -------
@@ -210,6 +211,9 @@ def unpad(img: np.ndarray, pad: int) -> np.ndarray:
                [1, 1, 1]])
     """
 
+    # img[0:-0] would be empty, and -None raises.
+    if not pad:
+        return img
     return img[pad:-pad, pad:-pad]
 
 

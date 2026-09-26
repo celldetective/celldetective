@@ -178,6 +178,10 @@ class TestUnpad(unittest.TestCase):
         test_array = unpad(self.array, 1)
         self.assertTrue(np.array_equal(test_array, expected_unpad_array))
 
+    def test_unpad_nothing(self):
+        self.assertTrue(np.array_equal(unpad(self.array, 0), self.array))
+        self.assertTrue(np.array_equal(unpad(self.array, None), self.array))
+
 
 class TestMaskEdge(unittest.TestCase):
 
