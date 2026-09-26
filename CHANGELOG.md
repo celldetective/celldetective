@@ -21,6 +21,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   pixels in view (the zoomed region) within the current limits, peeling off outliers such as the diverging
   values of a background division; the fourth click restores the full range.
 
+
+### Changed
+- Applying the model-free background correction is faster and lighter. The
+  optimal coefficient is found by a binary search on the convex loss instead of
+  one evaluation per coefficient, with the same result, and *interpolate NaNs*
+  runs once on the background, then on a corrected frame only if NaNs are left
+  in it. On 2048 x 2048 frames, a frame takes about 1.5 s instead of 7.5 s, and
+  22 s instead of 39 s when every frame still has NaNs to interpolate. The
+  corrected stack is held in float32, halving its memory.
 ### Fixed
 - Answering *yes* to "No labels can be found for this position. Do you want to
   annotate from scratch?" wrote the empty labels transposed on any non-square

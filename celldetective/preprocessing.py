@@ -653,6 +653,50 @@ def correct_background_model_free(
         return stacks
 
 
+def _best_l1_coefficient(
+    target: np.ndarray, background: np.ndarray, coefficients: np.ndarray
+) -> float:
+    """
+    Coefficient of the grid minimizing ``sum(|target - c * background|)``.
+
+    The loss is convex in ``c``, so along the sorted grid it decreases, then increases. A binary
+    search for the first grid value after which the loss stops decreasing finds the minimum
+    with a few loss evaluations instead of one per coefficient.
+
+    Parameters
+    ----------
+    target : numpy.ndarray
+        Finite background pixels of the frame, 1D.
+    background : numpy.ndarray
+        Finite background model values at the same pixels, 1D.
+    coefficients : numpy.ndarray
+        Grid of coefficients to choose from.
+
+    Returns
+    -------
+    float
+        The coefficient of the grid with the lowest loss, the smallest one on a tie.
+    """
+
+    grid = np.unique(coefficients)
+    residual = np.empty_like(target, dtype=float)
+
+    def loss(c):
+        # One buffer for the whole evaluation instead of three full-size temporaries.
+        np.multiply(background, c, out=residual)
+        np.subtract(target, residual, out=residual)
+        return np.abs(residual, out=residual).sum()
+
+    lo, hi = 0, len(grid) - 1
+    while lo < hi:
+        mid = (lo + hi) // 2
+        if loss(grid[mid]) <= loss(grid[mid + 1]):
+            hi = mid
+        else:
+            lo = mid + 1
+    return float(grid[lo])
+
+
 def apply_background_to_stack(
     stack_path: str,
     background: np.ndarray,
@@ -696,7 +740,8 @@ def apply_background_to_stack(
     activation_protocol : list of list, optional
             The activation protocol consisting of filters and their respective parameters (default is [['gauss', 2], ['std', 4]]).
     fix_nan : bool, optional
-            Whether to interpolate NaN values in the corrected image. Default is False.
+            Whether to interpolate NaN values: those of the background once before it is
+            applied, then those of a corrected frame only if some are left. Default is False.
     threshold_on_std : float, optional
             The threshold for the standard deviation filter to identify high-variance areas. Defaults to 1.
     optimize_option : bool, optional
@@ -739,11 +784,25 @@ def apply_background_to_stack(
             logger.error("stack length not provided")
             return None
 
+    if operation not in ("divide", "subtract"):
+        logger.error("Operation not supported... Abort.")
+        return None
+
+    background = np.asarray(background, dtype=float)
+    if fix_nan:
+        background = interpolate_nan(background)
+    bg_valid = np.isfinite(background)
+
     if optimize_option:
+        from celldetective.filters import filter_image
+
         coefficients = np.linspace(
             opt_coef_range[0], opt_coef_range[1], int(opt_coef_nbr)
         )
         coefficients = np.append(coefficients, [1.0])
+        edge = estimate_unreliable_edge(activation_protocol)
+        bg_crop = unpad(background, edge)
+        fit_region_crop = unpad(bg_valid, edge)
     if export:
         path, file = os.path.split(stack_path)
         if prefix is None:
@@ -751,9 +810,9 @@ def apply_background_to_stack(
         else:
             newfile = "_".join([prefix, file])
 
-    corrected_stack = []
+    corrected_stack = None
 
-    for i in range(0, int(stack_length * nbr_channels), nbr_channels):
+    for t, i in enumerate(range(0, int(stack_length * nbr_channels), nbr_channels)):
 
         frames = load_frames(
             list(np.arange(i, (i + nbr_channels))), stack_path, normalize_input=False
@@ -764,13 +823,7 @@ def apply_background_to_stack(
 
         if optimize_option:
 
-            target_copy = target_img.copy()
-
-            from celldetective.segmentation import threshold_image
-            from celldetective.filters import filter_image
-
-            std_frame = filter_image(target_copy.copy(), filters=activation_protocol)
-            edge = estimate_unreliable_edge(activation_protocol)
+            std_frame = filter_image(target_img, filters=activation_protocol)
             mask = threshold_image(
                 std_frame,
                 threshold_on_std,
@@ -778,55 +831,45 @@ def apply_background_to_stack(
                 foreground_value=1,
                 edge_exclusion=edge,
             )
-            target_copy[np.where(mask.astype(int) == 1)] = np.nan
 
-            loss = []
+            target_crop = unpad(target_img, edge)
+            valid = fit_region_crop & ~unpad(mask, edge) & np.isfinite(target_crop)
 
-            # brute-force regression, could do gradient descent instead
-            for c in coefficients:
-
-                target_crop = unpad(target_copy, edge)
-                bg_crop = unpad(background, edge)
-
-                roi = np.zeros_like(target_crop).astype(int)
-                roi[target_crop != target_crop] = 1
-                roi[bg_crop != bg_crop] = 1
-
-                diff = np.subtract(target_crop, c * bg_crop, where=roi == 0)
-                s = np.sum(np.abs(diff, where=roi == 0), where=roi == 0)
-                loss.append(s)
-
-            c = coefficients[np.argmin(loss)]
-            logger.info(f"IFD {i}; optimal coefficient: {c}...")
-            # if c==min(coefficients) or c==max(coefficients):
-            # 	print('Warning... The optimal coefficient is beyond the range provided... Please adjust your coefficient range...')
+            if not np.any(valid):
+                logger.warning(
+                    f"IFD {i}; no background pixel left to optimize the coefficient, "
+                    "check the threshold... Using 1."
+                )
+                c = 1
+            else:
+                c = _best_l1_coefficient(target_crop[valid], bg_crop[valid], coefficients)
+                logger.info(f"IFD {i}; optimal coefficient: {c}...")
         else:
             c = 1
 
-        if operation == "divide":
-            correction = np.divide(
-                target_img, background * c, where=background == background
-            )
-            correction[background != background] = np.nan
-            correction[target_img != target_img] = np.nan
+        # NaN where the background is unknown; a NaN of the frame carries through.
+        correction = np.full(target_img.shape, np.nan)
+        apply = np.divide if operation == "divide" else np.subtract
+        with np.errstate(divide="ignore", invalid="ignore"):
+            apply(target_img, background * c, out=correction, where=bg_valid)
+        if operation == "subtract" and clip:
+            correction[correction <= 0.0] = 0.0
 
-        elif operation == "subtract":
-            correction = np.subtract(
-                target_img, background * c, where=background == background
-            )
-            correction[background != background] = np.nan
-            correction[target_img != target_img] = np.nan
-            if clip:
-                correction[correction <= 0.0] = 0.0
-        else:
-            logger.error("Operation not supported... Abort.")
-            return
-
-        correction[~np.isfinite(correction)] = np.nan
-        if fix_nan:
-            correction = interpolate_nan(correction.copy())
+        invalid = ~np.isfinite(correction)
+        if np.any(invalid):
+            correction[invalid] = np.nan
+            # The background is already interpolated: only a frame left with NaNs
+            # (e.g. 0 / 0 where the background is 0) still needs it, and it is costly.
+            if fix_nan:
+                correction = interpolate_nan(correction)
         frames[:, :, target_channel_index] = correction
-        corrected_stack.append(frames)
+        if corrected_stack is None:
+            # Filled in place, in the float32 of the exported file, rather than
+            # stacked from a list of float64 frames at the end.
+            corrected_stack = np.empty(
+                (int(stack_length),) + frames.shape, dtype=np.float32
+            )
+        corrected_stack[t] = frames
 
         if progress_callback:
             progress_callback(
@@ -835,8 +878,6 @@ def apply_background_to_stack(
                 total=int(stack_length * nbr_channels),
                 stage="correcting",
             )
-
-    corrected_stack = np.array(corrected_stack)
 
     if export:
         from celldetective.utils.io import save_tiff_imagej_compatible

@@ -4,6 +4,7 @@ import tifffile
 from scipy.ndimage import shift
 
 from celldetective.preprocessing import (
+    _best_l1_coefficient,
     correct_background_model,
     correct_background_model_free,
     correct_channel_offset,
@@ -94,3 +95,18 @@ def test_corrections_report_well_and_position_progress(experiment):
     # Reported once each position is done, including the one skipped for lack of a movie.
     assert [c["iter"] for c in positions] == [0, 1]
     assert all(c["total"] == 2 for c in positions)
+
+
+def test_coefficient_search_matches_brute_force():
+    rng = np.random.default_rng(0)
+    for _ in range(200):
+        n = rng.integers(1, 300)
+        background = np.round(rng.normal(100, 60, n))
+        target = np.round(
+            background * rng.uniform(0.8, 1.2) + rng.normal(0, rng.uniform(0, 50), n)
+        )
+        grid = np.append(np.linspace(0.9, 1.1, rng.integers(1, 120)), [1.0])
+
+        losses = [np.sum(np.abs(target - c * background)) for c in grid]
+        found = _best_l1_coefficient(target, background, grid)
+        assert np.sum(np.abs(target - found * background)) == pytest.approx(min(losses))
