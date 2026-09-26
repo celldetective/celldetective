@@ -47,3 +47,31 @@ def test_invalid_offset_or_coefficient_number_is_rejected(layout, warnings):
     layout.add_correction_btn.click()
     assert layout.parent_window.protocols == []
     assert len(warnings) == 2
+
+
+def test_fit_radius_goes_into_the_protocol(layout):
+    assert not layout.radius_le.isEnabled()
+    layout.regress_cb.setChecked(True)
+    assert layout.radius_le.isEnabled()
+
+    layout.radius_le.setText("250,5")
+    layout.add_correction_btn.click()
+
+    protocol = layout.parent_window.protocols[-1]
+    assert protocol["optimize_option"]
+    assert protocol["opt_radius"] == pytest.approx(250.5)
+
+
+def test_empty_fit_radius_is_full_frame_and_zero_is_rejected(layout, monkeypatch):
+    radius_warnings = []
+    monkeypatch.setattr(
+        "celldetective.gui.gui_utils.generic_message",
+        lambda *args, **kwargs: radius_warnings.append(args),
+    )
+    layout.regress_cb.setChecked(True)
+    assert layout.correction_parameters()["opt_radius"] is None
+
+    layout.radius_le.setText("0")
+    layout.add_correction_btn.click()
+    assert layout.parent_window.protocols == []
+    assert radius_warnings

@@ -3,11 +3,14 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 import tifffile
-from PyQt5.QtWidgets import QListWidget
+from PyQt5.QtWidgets import QLineEdit, QListWidget
 
 from celldetective.gui.layouts import RegistrationOptionsLayout
-from celldetective.gui.viewers.registration_roi_viewer import RegistrationROIViewer
-from celldetective.utils.registration import tukey_window
+from celldetective.gui.viewers.registration_roi_viewer import (
+    DiskROIViewer,
+    RegistrationROIViewer,
+)
+from celldetective.utils.registration import radial_distance, tukey_window
 
 
 @pytest.fixture
@@ -67,3 +70,25 @@ def test_roi_viewer_matches_registration_window_and_sets_parent(
     protocol = options_layout.parent_window.protocol_layout.protocols[-1]
     assert protocol["radius"] == pytest.approx(25.0)
     assert protocol["tukey_alpha"] == pytest.approx(0.5)
+
+
+def test_disk_viewer_shades_outside_the_disk_and_sets_radius(qtbot, stack_path):
+    parent = SimpleNamespace(radius_le=QLineEdit())
+    viewer = DiskROIViewer(
+        parent,
+        stack_path=stack_path,
+        channel_names=["brightfield", "nuclei"],
+        n_channels=2,
+        target_channel=0,
+        initial_radius=20,
+    )
+    qtbot.addWidget(viewer)
+
+    assert viewer.circ.center == pytest.approx((39.5, 29.5))
+    outside = radial_distance((60, 80)) > 20
+    np.testing.assert_allclose(viewer.im_weight.get_array()[..., 3], 0.6 * outside)
+    assert not hasattr(viewer, "alpha_slider")
+
+    viewer.diameter_slider.setValue(25.0)
+    viewer.apply_threshold_btn.click()
+    assert parent.radius_le.text() == "25.0"

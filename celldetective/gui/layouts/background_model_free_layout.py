@@ -28,7 +28,11 @@ from celldetective.gui.base.components import (
     generic_message,
 )
 from celldetective.gui.base.styles import Styles
-from celldetective.gui.gui_utils import ThresholdLineEdit, QuickSliderLayout
+from celldetective.gui.gui_utils import (
+    QuickSliderLayout,
+    RadiusLineEdit,
+    ThresholdLineEdit,
+)
 from celldetective.gui.layouts.operation_layout import OperationLayout
 from celldetective.processes.background_correction import BackgroundCorrectionProcess
 from celldetective.utils.parsing import _extract_channel_indices_from_config
@@ -152,11 +156,31 @@ class BackgroundModelFreeCorrectionLayout(QGridLayout, Styles):
         self.nbr_coef_le.setValidator(QIntValidator())
         self.nbr_coef_le.setPlaceholderText("nbr of coefs")
 
+        self.radius_lbl = QLabel("Fit radius: ")
+        self.radius_lbl.setToolTip(
+            "Radius [px] of the disk centred on the image over which\n"
+            "the coefficient is optimized. Pixels outside (e.g. a diaphragm\n"
+            "close to the camera black level) are ignored by the fit\n"
+            "but still corrected. Leave empty to use the full frame."
+        )
+        self.radius_le = RadiusLineEdit()
+
+        self.radius_viewer_btn = QPushButton()
+        self.radius_viewer_btn.setIcon(icon(MDI6.image_check, color="k"))
+        self.radius_viewer_btn.setStyleSheet(self.button_select_all)
+        self.radius_viewer_btn.setToolTip(
+            "Tune the fit radius on a frame of the current position."
+        )
+        self.radius_viewer_btn.clicked.connect(self.open_radius_viewer)
+
         self.coef_widgets = [
             self.coef_range_layout.qlabel,
             self.coef_range_slider,
             self.nbr_coefs_lbl,
             self.nbr_coef_le,
+            self.radius_lbl,
+            self.radius_le,
+            self.radius_viewer_btn,
         ]
         for c in self.coef_widgets:
             c.setEnabled(False)
@@ -225,23 +249,31 @@ class BackgroundModelFreeCorrectionLayout(QGridLayout, Styles):
         coef_nbr_layout.addWidget(self.nbr_coef_le, 75)
         self.addLayout(coef_nbr_layout, 7, 0, 1, 3)
 
+        radius_layout = QHBoxLayout()
+        radius_layout.addWidget(self.radius_lbl, 25)
+        radius_field_layout = QHBoxLayout()
+        radius_field_layout.addWidget(self.radius_le, 95)
+        radius_field_layout.addWidget(self.radius_viewer_btn, 5)
+        radius_layout.addLayout(radius_field_layout, 75)
+        self.addLayout(radius_layout, 8, 0, 1, 3)
+
         offset_layout = QHBoxLayout()
         offset_layout.addWidget(QLabel("Offset: "), 25)
         self.camera_offset_le = QLineEdit("0")
         self.camera_offset_le.setPlaceholderText("camera black level")
         self.camera_offset_le.setValidator(QDoubleValidator())
         offset_layout.addWidget(self.camera_offset_le, 75)
-        self.addLayout(offset_layout, 8, 0, 1, 3)
+        self.addLayout(offset_layout, 9, 0, 1, 3)
 
         self.operation_layout = OperationLayout()
-        self.addLayout(self.operation_layout, 9, 0, 1, 3)
+        self.addLayout(self.operation_layout, 10, 0, 1, 3)
 
-        self.addWidget(self.interpolate_check, 10, 0, 1, 1)
+        self.addWidget(self.interpolate_check, 11, 0, 1, 1)
 
         correction_layout = QHBoxLayout()
         correction_layout.addWidget(self.add_correction_btn, 95)
         correction_layout.addWidget(self.corrected_stack_viewer_btn, 5)
-        self.addLayout(correction_layout, 11, 0, 1, 3)
+        self.addLayout(correction_layout, 12, 0, 1, 3)
 
         # verticalSpacer = QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
         # self.addItem(verticalSpacer, 5, 0, 1, 3)
@@ -304,10 +336,14 @@ class BackgroundModelFreeCorrectionLayout(QGridLayout, Styles):
                     "warning",
                 )
                 return None
+            valid_radius, opt_radius = self.radius_le.radius_or_warn()
+            if not valid_radius:
+                return None
         else:
             optimize_option = False
             opt_coef_range = None
             opt_coef_nbr = None
+            opt_radius = None
 
         if self.operation_layout.subtract_btn.isChecked():
             operation = "subtract"
@@ -331,11 +367,32 @@ class BackgroundModelFreeCorrectionLayout(QGridLayout, Styles):
             "optimize_option": optimize_option,
             "opt_coef_range": opt_coef_range,
             "opt_coef_nbr": opt_coef_nbr,
+            "opt_radius": opt_radius,
             "operation": operation,
             "clip": clip,
             "offset": offset,
             "fix_nan": self.interpolate_check.isChecked(),
         }
+
+    def open_radius_viewer(self):
+        """Open a frame of the current position to tune the fit radius."""
+        from celldetective.gui.viewers.registration_roi_viewer import DiskROIViewer
+
+        self.attr_parent.locate_image()
+        if self.attr_parent.current_stack is None:
+            return
+        self.set_target_channel()
+        self.viewer = DiskROIViewer(
+            self,
+            stack_path=self.attr_parent.current_stack,
+            channel_names=self.channel_names,
+            n_channels=len(self.channel_names),
+            channel_cb=True,
+            target_channel=self.target_channel,
+            window_title="Coefficient fit radius",
+            initial_radius=self.radius_le.radius_or_none(),
+        )
+        self.viewer.show()
 
     def set_target_channel(self):
         """Set the target channel index."""

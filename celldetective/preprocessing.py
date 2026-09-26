@@ -459,6 +459,7 @@ def correct_background_model_free(
     optimize_option: bool = False,
     opt_coef_range: Union[List[float], tuple[float, float]] = [0.95, 1.05],
     opt_coef_nbr: int = 100,
+    opt_radius: Optional[float] = None,
     operation: Literal["divide", "subtract"] = "divide",
     clip: bool = False,
     offset: Optional[float] = None,
@@ -502,6 +503,10 @@ def correct_background_model_free(
             The range of coefficients to try for optimization. Defaults to [0.95, 1.05].
     opt_coef_nbr : int, optional
             The number of coefficients to test within the optimization range. Defaults to 100.
+    opt_radius : float, optional
+            Radius in pixels of the disk centred on the image over which the coefficient is
+            optimized. Pixels outside (e.g. a diaphragm close to the camera black level) are
+            ignored by the fit but still corrected. None (default) uses the full frame.
     operation : {'divide', 'subtract'}, optional
             The operation to apply for background correction. Defaults to 'divide'.
     clip : bool, optional
@@ -613,6 +618,7 @@ def correct_background_model_free(
                 optimize_option=optimize_option,
                 opt_coef_range=opt_coef_range,
                 opt_coef_nbr=opt_coef_nbr,
+                opt_radius=opt_radius,
                 operation=operation,
                 clip=clip,
                 offset=offset,
@@ -637,6 +643,7 @@ def correct_background_model_free(
                     "optimize_option": optimize_option,
                     "opt_coef_range": opt_coef_range,
                     "opt_coef_nbr": opt_coef_nbr,
+                    "opt_radius": opt_radius,
                     "fix_nan": fix_nan,
                     "activation_protocol": activation_protocol,
                     "movie_prefix": movie_prefix,
@@ -709,6 +716,7 @@ def apply_background_to_stack(
     optimize_option: bool = True,
     opt_coef_range: Union[List[float], tuple[float, float]] = (0.95, 1.05),
     opt_coef_nbr: int = 100,
+    opt_radius: Optional[float] = None,
     operation: Literal["divide", "subtract"] = "divide",
     clip: bool = False,
     export: bool = False,
@@ -750,6 +758,9 @@ def apply_background_to_stack(
             The range of coefficients to try for optimization. Defaults to (0.95, 1.05).
     opt_coef_nbr : int, optional
             The number of coefficients to test within the optimization range. Defaults to 100.
+    opt_radius : float, optional
+            Radius in pixels of the disk centred on the image over which the coefficient is
+            optimized. None (default) uses the full frame.
     operation : {'divide', 'subtract'}, optional
             The operation to apply for background correction. Defaults to 'divide'.
     clip : bool, optional
@@ -795,6 +806,7 @@ def apply_background_to_stack(
 
     if optimize_option:
         from celldetective.filters import filter_image
+        from celldetective.utils.registration import radial_distance
 
         coefficients = np.linspace(
             opt_coef_range[0], opt_coef_range[1], int(opt_coef_nbr)
@@ -802,7 +814,12 @@ def apply_background_to_stack(
         coefficients = np.append(coefficients, [1.0])
         edge = estimate_unreliable_edge(activation_protocol)
         bg_crop = unpad(background, edge)
-        fit_region_crop = unpad(bg_valid, edge)
+        fit_region = bg_valid
+        outside = None
+        if opt_radius is not None:
+            outside = radial_distance(background.shape) > opt_radius
+            fit_region = fit_region & ~outside
+        fit_region_crop = unpad(fit_region, edge)
     if export:
         path, file = os.path.split(stack_path)
         if prefix is None:
@@ -824,6 +841,11 @@ def apply_background_to_stack(
         if optimize_option:
 
             std_frame = filter_image(target_img, filters=activation_protocol)
+            if outside is not None:
+                # Out of the thresholding too: a closed high-variance ring such as a diaphragm
+                # edge would otherwise have its whole inside masked by the hole filling.
+                # A new array: filter_image may hand back target_img itself.
+                std_frame = np.where(outside, np.nan, std_frame)
             mask = threshold_image(
                 std_frame,
                 threshold_on_std,
@@ -838,7 +860,7 @@ def apply_background_to_stack(
             if not np.any(valid):
                 logger.warning(
                     f"IFD {i}; no background pixel left to optimize the coefficient, "
-                    "check the threshold... Using 1."
+                    "check the fit radius and threshold... Using 1."
                 )
                 c = 1
             else:

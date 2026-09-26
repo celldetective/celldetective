@@ -17,7 +17,7 @@ from PyQt5.QtGui import QBrush, QColor, QDoubleValidator, QIntValidator
 
 from celldetective.gui.base.list_widget import ListWidget
 from celldetective.gui.base.styles import DISABLED_INK, Styles
-from celldetective.gui.base.components import CelldetectiveWidget
+from celldetective.gui.base.components import CelldetectiveWidget, generic_message
 from celldetective.gui.base.help_panel import HelpButton, open_help
 from superqt.fonticon import icon
 from fonticon_mdi6 import MDI6
@@ -937,6 +937,75 @@ class DistanceChoice(CelldetectiveWidget):
         values = [value]
         self.parent_window.list_widget.addItems(values)
         self.close()
+
+
+class RadiusLineEdit(QLineEdit):
+    """
+    Optional radius in pixels of a disk centred on the image, empty for the full frame.
+
+    Parameters
+    ----------
+    *args, **kwargs
+        Passed to :class:`QLineEdit` (e.g. the parent widget).
+    tooltip : str, optional
+        Tooltip of the field, keyword only.
+    """
+
+    INVALID = "The radius must be a strictly positive number, or empty for the full frame."
+
+    def __init__(self, *args: Any, tooltip: Optional[str] = None, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        validator = QDoubleValidator()
+        validator.setBottom(0.0)
+        self.setValidator(validator)
+        self.setPlaceholderText("full frame")
+        if tooltip:
+            self.setToolTip(tooltip)
+
+    def radius(self) -> Optional[float]:
+        """
+        Read the radius.
+
+        Returns
+        -------
+        float or None
+            The radius, or None when the field is empty (full frame).
+
+        Raises
+        ------
+        ValueError
+            If the field is not a strictly positive number, e.g. an intermediate input such as
+            ``"1e"`` that the validator lets through, or 0.
+        """
+        text = self.text().strip().replace(",", ".")
+        if not text:
+            return None
+        radius = float(text)
+        if radius <= 0:
+            raise ValueError(self.INVALID)
+        return radius
+
+    def radius_or_warn(self) -> Tuple[bool, Optional[float]]:
+        """
+        Read the radius, with a warning if it is invalid.
+
+        Returns
+        -------
+        tuple of (bool, float or None)
+            Whether the field is valid, and the radius (None for the full frame).
+        """
+        try:
+            return True, self.radius()
+        except ValueError:
+            generic_message(self.INVALID, "warning")
+            return False, None
+
+    def radius_or_none(self) -> Optional[float]:
+        """The radius, or None when the field is empty or invalid."""
+        try:
+            return self.radius()
+        except ValueError:
+            return None
 
 
 class ThresholdLineEdit(QLineEdit):

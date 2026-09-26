@@ -20,7 +20,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   in Fiji, each click narrows the contrast to the 1st-99th percentiles of the
   pixels in view (the zoomed region) within the current limits, peeling off outliers such as the diverging
   values of a background division; the fourth click restores the full range.
-
+- The model-free background correction can optimize its coefficient over a
+  disk centred on the image, set by a fit radius tuned on a frame. Dark field
+  edges such as a diaphragm close to the camera black level no longer drive
+  the coefficient.
 
 ### Changed
 - Applying the model-free background correction is faster and lighter. The

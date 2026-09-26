@@ -5,6 +5,7 @@ from scipy.ndimage import shift
 
 from celldetective.preprocessing import (
     _best_l1_coefficient,
+    apply_background_to_stack,
     correct_background_model,
     correct_background_model_free,
     correct_channel_offset,
@@ -97,6 +98,36 @@ def test_corrections_report_well_and_position_progress(experiment):
     assert all(c["total"] == 2 for c in positions)
 
 
+def test_model_free_coefficient_fit_ignores_pixels_outside_radius(tmp_path):
+    # Background at 100 everywhere; the frame is 5 % brighter in the field, but a diaphragm
+    # darkens it to the camera black level outside a centred disk.
+    size, field_radius = 64, 20
+    yy, xx = np.mgrid[:size, :size]
+    inside = np.hypot(yy - (size - 1) / 2, xx - (size - 1) / 2) <= field_radius
+    background = np.full((size, size), 100.0)
+    frame = np.where(inside, 105.0, 0.0).astype(np.float32)
+    stack_path = tmp_path / "sample.tif"
+    tifffile.imwrite(stack_path, frame[np.newaxis], imagej=True, metadata={"axes": "TYX"})
+
+    def fitted_coefficient(opt_radius):
+        (corrected,) = apply_background_to_stack(
+            str(stack_path),
+            background,
+            stack_length=1,
+            optimize_option=True,
+            opt_coef_range=(0.9, 1.1),
+            opt_coef_nbr=21,
+            opt_radius=opt_radius,
+            operation="divide",
+        )
+        return 1.05 / corrected[size // 2, size // 2, 0]
+
+    # Over the full frame, the high-variance diaphragm edge is a closed ring whose inside is
+    # masked by the hole filling: only the dark diaphragm is left and drags the fit down.
+    assert fitted_coefficient(None) == pytest.approx(0.9)
+    assert fitted_coefficient(field_radius - 5) == pytest.approx(1.05)
+
+
 def test_coefficient_search_matches_brute_force():
     rng = np.random.default_rng(0)
     for _ in range(200):
@@ -110,3 +141,4 @@ def test_coefficient_search_matches_brute_force():
         losses = [np.sum(np.abs(target - c * background)) for c in grid]
         found = _best_l1_coefficient(target, background, grid)
         assert np.sum(np.abs(target - found * background)) == pytest.approx(min(losses))
+

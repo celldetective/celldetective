@@ -207,6 +207,7 @@ class BackgroundCorrectionProcess(Process):
                     optimize_option=getattr(self, "optimize_option", False),
                     opt_coef_range=getattr(self, "opt_coef_range", [0.95, 1.05]),
                     opt_coef_nbr=getattr(self, "opt_coef_nbr", 100),
+                    opt_radius=getattr(self, "opt_radius", None),
                     operation=self.operation,
                     clip=self.clip,
                     offset=getattr(self, "offset", None),
