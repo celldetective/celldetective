@@ -1,8 +1,10 @@
 import os
 from typing import Optional
 
+import numpy as np
+
 from PyQt5.QtCore import QSize, Qt, QThread, pyqtSignal
-from PyQt5.QtGui import QIntValidator, QDoubleValidator
+from PyQt5.QtGui import QDoubleValidator
 from PyQt5.QtWidgets import (
     QGridLayout,
     QLabel,
@@ -40,6 +42,9 @@ from celldetective import get_logger
 from celldetective.gui.base.threads import start_tracked
 
 logger = get_logger(__name__)
+
+# Frames corrected by the preview, spread over the movie.
+PREVIEW_FRAMES = 5
 
 
 class BackgroundModelFreeCorrectionLayout(QGridLayout, Styles):
@@ -143,18 +148,10 @@ class BackgroundModelFreeCorrectionLayout(QGridLayout, Styles):
             slider=self.coef_range_slider,
             slider_initial_value=(0.95, 1.05),
             slider_range=(0.75, 1.25),
-            slider_tooltip="Coefficient range to increase or decrease the background intensity level...",
+            slider_tooltip="Range the coefficient scaling the background intensity\n"
+            "is kept within. The optimal coefficient is computed exactly\n"
+            "and set to the closest bound if it falls outside.",
         )
-
-        self.nbr_coefs_lbl = QLabel("Nbr of coefs: ")
-        self.nbr_coefs_lbl.setToolTip(
-            "Number of coefficients to be tested within range.\nThe more, the slower."
-        )
-
-        self.nbr_coef_le = QLineEdit()
-        self.nbr_coef_le.setText("100")
-        self.nbr_coef_le.setValidator(QIntValidator())
-        self.nbr_coef_le.setPlaceholderText("nbr of coefs")
 
         self.radius_lbl = QLabel("Fit radius: ")
         self.radius_lbl.setToolTip(
@@ -176,8 +173,6 @@ class BackgroundModelFreeCorrectionLayout(QGridLayout, Styles):
         self.coef_widgets = [
             self.coef_range_layout.qlabel,
             self.coef_range_slider,
-            self.nbr_coefs_lbl,
-            self.nbr_coef_le,
             self.radius_lbl,
             self.radius_le,
             self.radius_viewer_btn,
@@ -244,18 +239,13 @@ class BackgroundModelFreeCorrectionLayout(QGridLayout, Styles):
 
         self.addLayout(self.coef_range_layout, 6, 0, 1, 3)
 
-        coef_nbr_layout = QHBoxLayout()
-        coef_nbr_layout.addWidget(self.nbr_coefs_lbl, 25)
-        coef_nbr_layout.addWidget(self.nbr_coef_le, 75)
-        self.addLayout(coef_nbr_layout, 7, 0, 1, 3)
-
         radius_layout = QHBoxLayout()
         radius_layout.addWidget(self.radius_lbl, 25)
         radius_field_layout = QHBoxLayout()
         radius_field_layout.addWidget(self.radius_le, 95)
         radius_field_layout.addWidget(self.radius_viewer_btn, 5)
         radius_layout.addLayout(radius_field_layout, 75)
-        self.addLayout(radius_layout, 8, 0, 1, 3)
+        self.addLayout(radius_layout, 7, 0, 1, 3)
 
         offset_layout = QHBoxLayout()
         offset_layout.addWidget(QLabel("Offset: "), 25)
@@ -263,17 +253,17 @@ class BackgroundModelFreeCorrectionLayout(QGridLayout, Styles):
         self.camera_offset_le.setPlaceholderText("camera black level")
         self.camera_offset_le.setValidator(QDoubleValidator())
         offset_layout.addWidget(self.camera_offset_le, 75)
-        self.addLayout(offset_layout, 9, 0, 1, 3)
+        self.addLayout(offset_layout, 8, 0, 1, 3)
 
         self.operation_layout = OperationLayout()
-        self.addLayout(self.operation_layout, 10, 0, 1, 3)
+        self.addLayout(self.operation_layout, 9, 0, 1, 3)
 
-        self.addWidget(self.interpolate_check, 11, 0, 1, 1)
+        self.addWidget(self.interpolate_check, 10, 0, 1, 1)
 
         correction_layout = QHBoxLayout()
         correction_layout.addWidget(self.add_correction_btn, 95)
         correction_layout.addWidget(self.corrected_stack_viewer_btn, 5)
-        self.addLayout(correction_layout, 12, 0, 1, 3)
+        self.addLayout(correction_layout, 11, 0, 1, 3)
 
         # verticalSpacer = QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
         # self.addItem(verticalSpacer, 5, 0, 1, 3)
@@ -326,23 +316,12 @@ class BackgroundModelFreeCorrectionLayout(QGridLayout, Styles):
         if self.regress_cb.isChecked():
             optimize_option = True
             opt_coef_range = self.coef_range_slider.value()
-            try:
-                opt_coef_nbr = int(self.nbr_coef_le.text())
-            except ValueError:
-                opt_coef_nbr = 0
-            if opt_coef_nbr < 1:
-                generic_message(
-                    "The number of coefficients must be a strictly positive integer.",
-                    "warning",
-                )
-                return None
             valid_radius, opt_radius = self.radius_le.radius_or_warn()
             if not valid_radius:
                 return None
         else:
             optimize_option = False
             opt_coef_range = None
-            opt_coef_nbr = None
             opt_radius = None
 
         if self.operation_layout.subtract_btn.isChecked():
@@ -352,12 +331,8 @@ class BackgroundModelFreeCorrectionLayout(QGridLayout, Styles):
             operation = "divide"
             clip = False
 
-        offset_text = self.camera_offset_le.text().strip().replace(",", ".")
-        try:
-            offset = float(offset_text) if offset_text else None
-        except ValueError:
-            # Intermediate input such as "-" or "1e" that the validator lets through.
-            generic_message("The offset must be a number, or empty.", "warning")
+        valid_offset, offset = self.offset_or_warn()
+        if not valid_offset:
             return None
 
         return {
@@ -366,13 +341,31 @@ class BackgroundModelFreeCorrectionLayout(QGridLayout, Styles):
             "mode": mode,
             "optimize_option": optimize_option,
             "opt_coef_range": opt_coef_range,
-            "opt_coef_nbr": opt_coef_nbr,
             "opt_radius": opt_radius,
             "operation": operation,
             "clip": clip,
             "offset": offset,
             "fix_nan": self.interpolate_check.isChecked(),
         }
+
+    def offset_or_warn(self) -> tuple:
+        """
+        Read the camera offset.
+
+        Returns
+        -------
+        tuple
+            ``(valid, offset)``: offset is None if the field is empty. If the field is not a
+            number, a warning is shown and valid is False.
+        """
+
+        offset_text = self.camera_offset_le.text().strip().replace(",", ".")
+        try:
+            return True, float(offset_text) if offset_text else None
+        except ValueError:
+            # Intermediate input such as "-" or "1e" that the validator lets through.
+            generic_message("The offset must be a number, or empty.", "warning")
+            return False, None
 
     def open_radius_viewer(self):
         """Open a frame of the current position to tune the fit radius."""
@@ -448,6 +441,9 @@ class BackgroundModelFreeCorrectionLayout(QGridLayout, Styles):
         if parameters is None:
             return None
 
+        self.attr_parent.locate_image()
+        if self.attr_parent.current_stack is None:
+            return None
         process_args = {
             "exp_dir": self.attr_parent.exp_dir,
             "well_option": self.attr_parent.well_list.getSelectedIndices(),
@@ -456,6 +452,7 @@ class BackgroundModelFreeCorrectionLayout(QGridLayout, Styles):
             **parameters,
             "activation_protocol": [["gauss", 2], ["std", 4]],
             "correction_type": "model-free",
+            "subset_indices": self.preview_frame_indices(),
         }
         from celldetective.gui.workers import ProgressWindow
 
@@ -489,6 +486,27 @@ class BackgroundModelFreeCorrectionLayout(QGridLayout, Styles):
         else:
             logger.info("Background correction cancelled.")
 
+    def preview_frame_indices(self) -> Optional[list]:
+        """
+        Frames of the current position to correct for the preview.
+
+        Returns
+        -------
+        list of int or None
+            The absolute frame indices (IFDs) of up to ``PREVIEW_FRAMES`` frames spread over
+            the movie, or None (whole movie) if its length cannot be read.
+        """
+        from celldetective.utils.image_loaders import auto_load_number_of_frames
+
+        stack = getattr(self.attr_parent, "current_stack", None)
+        n_frames = auto_load_number_of_frames(stack) if stack is not None else None
+        if not n_frames:
+            return None
+        frames = np.unique(
+            np.linspace(0, n_frames - 1, min(PREVIEW_FRAMES, n_frames)).round()
+        )
+        return [int(t) * len(self.channel_names) for t in frames]
+
     def activate_time_range(self):
         """Enable or disable time range options based on acquisition mode."""
 
@@ -513,6 +531,10 @@ class BackgroundModelFreeCorrectionLayout(QGridLayout, Styles):
         """Estimate the background and display the result."""
 
         mode = "tiles" if self.tiles_rb.isChecked() else "timeseries"
+        # The background as applied: offset subtracted, NaNs interpolated if asked.
+        valid_offset, offset = self.offset_or_warn()
+        if not valid_offset:
+            return
 
         # Create progress dialog
         window_title = "Background reconstruction"
@@ -527,6 +549,8 @@ class BackgroundModelFreeCorrectionLayout(QGridLayout, Styles):
             self.channels_cb.currentText(),
             self.threshold_le.get_threshold(),
             mode,
+            offset=offset,
+            fix_nan=self.interpolate_check.isChecked(),
         )
         from celldetective.gui.viewers.base_viewer import StackVisualizer
 
@@ -548,7 +572,10 @@ class BackgroundModelFreeCorrectionLayout(QGridLayout, Styles):
                 logger.info("Background estimation cancelled.")
                 return
 
-            if bg and len(bg) > 0:
+            if bg is None or (bg and bg[0] is None):
+                # None for the well whose background could not be computed.
+                QMessageBox.critical(None, "Error", "Background estimation failed.")
+            elif bg:
                 bg_img = bg[0]["bg"]
                 if len(bg_img) > 0:
                     self.viewer = StackVisualizer(
@@ -561,8 +588,6 @@ class BackgroundModelFreeCorrectionLayout(QGridLayout, Styles):
                     QMessageBox.warning(
                         None, "Warning", "Background estimation returned empty image."
                     )
-            elif bg is None:
-                QMessageBox.critical(None, "Error", "Background estimation failed.")
 
         self.bg_worker.finished_with_result.connect(on_finished)
         self.bg_progress.canceled.connect(self.bg_worker.stop)
@@ -582,6 +607,8 @@ class BackgroundEstimatorThread(QThread):
         channel: str,
         threshold: float,
         mode: str,
+        offset: Optional[float] = None,
+        fix_nan: bool = False,
     ) -> None:
         """
         Initialize the BackgroundEstimatorThread.
@@ -600,6 +627,10 @@ class BackgroundEstimatorThread(QThread):
             The threshold on STD.
         mode : str
             The acquisition mode ('timeseries' or 'tiles').
+        offset : float, optional
+            The camera offset subtracted from the background.
+        fix_nan : bool, optional
+            Whether to interpolate the NaNs of the background.
         """
         super().__init__()
         self.exp_dir = exp_dir
@@ -608,6 +639,8 @@ class BackgroundEstimatorThread(QThread):
         self.channel = channel
         self.threshold = threshold
         self.mode = mode
+        self.offset = offset
+        self.fix_nan = fix_nan
         self._is_cancelled = False
 
     def stop(self):
@@ -648,6 +681,8 @@ class BackgroundEstimatorThread(QThread):
                 show_progress_per_pos=False,
                 threshold_on_std=self.threshold,
                 mode=self.mode,
+                offset=self.offset,
+                fix_nan=self.fix_nan,
                 progress_callback=callback,
             )
             if not self._is_cancelled:

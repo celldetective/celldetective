@@ -206,7 +206,6 @@ class BackgroundCorrectionProcess(Process):
                     frame_range=getattr(self, "frame_range", [0, 5]),
                     optimize_option=getattr(self, "optimize_option", False),
                     opt_coef_range=getattr(self, "opt_coef_range", [0.95, 1.05]),
-                    opt_coef_nbr=getattr(self, "opt_coef_nbr", 100),
                     opt_radius=getattr(self, "opt_radius", None),
                     operation=self.operation,
                     clip=self.clip,
@@ -220,6 +219,7 @@ class BackgroundCorrectionProcess(Process):
                     movie_prefix=movie_prefix,
                     export_prefix=export_prefix,
                     progress_callback=progress_callback,
+                    subset_indices=getattr(self, "subset_indices", None),
                 )
             elif correction_type == "offset":
                 from celldetective.preprocessing import correct_channel_offset
@@ -293,16 +293,13 @@ class BackgroundCorrectionProcess(Process):
                 )
 
             if return_stacks and corrected_stacks and len(corrected_stacks) > 0:
-                # If doing a preview (subset_indices is set), return via queue instead of disk
-                if getattr(self, "subset_indices", None) is not None:
-                    self.queue.put({"status": "result", "data": corrected_stacks[0]})
-                else:
-                    temp_path = os.path.join(self.exp_dir, "temp_corrected_stack.tif")
-                    try:
-                        imwrite(temp_path, corrected_stacks[0])
-                        logger.info(f"Saved temp stack to {temp_path}")
-                    except Exception as temp_e:
-                        logger.error(f"Failed to save temp stack: {temp_e}")
+                # Handed to the preview through a file: the progress window reads no result.
+                temp_path = os.path.join(self.exp_dir, "temp_corrected_stack.tif")
+                try:
+                    imwrite(temp_path, corrected_stacks[0])
+                    logger.info(f"Saved temp stack to {temp_path}")
+                except Exception as temp_e:
+                    logger.error(f"Failed to save temp stack: {temp_e}")
 
             self.queue.put(
                 {

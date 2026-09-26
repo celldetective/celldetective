@@ -24,10 +24,7 @@ Correction protocol
 
 #. Tick the "Optimize for each frame?" option.
 
-#. Leave default values:
-
-	- coefficient range between 0.95 and 1.05
-	- number of coefficients of 100
+#. Leave the default coefficient range, between 0.95 and 1.05. The optimal coefficient is computed exactly for each frame and kept within this range.
 
 #. If the edges of the field are dark (e.g. a diaphragm close to the camera black level), set a fit radius so that the coefficient is optimized only over a disk centred on the image. Click on the :icon:`image-check,black` next to it to tune the radius on a frame of the current position: the shaded pixels are left out of the fit, but still corrected. Leave it empty to fit over the full frame.
 

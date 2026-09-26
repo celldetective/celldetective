@@ -27,12 +27,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Applying the model-free background correction is faster and lighter. The
-  optimal coefficient is found by a binary search on the convex loss instead of
-  one evaluation per coefficient, with the same result, and *interpolate NaNs*
-  runs once on the background, then on a corrected frame only if NaNs are left
-  in it. On 2048 x 2048 frames, a frame takes about 1.5 s instead of 7.5 s, and
-  22 s instead of 39 s when every frame still has NaNs to interpolate. The
-  corrected stack is held in float32, halving its memory.
+  optimal coefficient is no longer searched on a grid but computed exactly, as
+  the median of the frame to background ratios weighted by the background: the
+  *Nbr of coefs* option is gone, and the coefficient range only bounds the
+  coefficient, a warning telling when it is reached. *Interpolate NaNs* runs
+  once on the background, then on a corrected frame only if NaNs are left in
+  it. On 2048 x 2048 frames, a frame takes about 1.5 s instead of 7.5 s, and
+  22 s instead of 39 s when every frame still has NaNs to interpolate. The corrected
+  frames are written to disk as they come instead of being held in memory for
+  the whole movie.
+- In *timeseries* mode, the model-free background masks the cells in each frame
+  of the time range before taking the median over time, as *tiles* mode does,
+  instead of masking them in the average of the frames. A cell passing through
+  in one frame was blurred in the average, often below the threshold, and ended
+  up in the background.
+- The model-free correction preview corrects five frames spread over the movie
+  instead of all of them.
+- The background shown by the QC button of the model-free correction is the one
+  applied: camera offset subtracted, NaNs interpolated if asked.
 ### Fixed
 - Answering *yes* to "No labels can be found for this position. Do you want to
   annotate from scratch?" wrote the empty labels transposed on any non-square
@@ -60,6 +72,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   panel, as it did before the two panels were put in tabs.
 - The model-free background correction preview now subtracts the camera
   offset, as the correction itself does.
+- A model-free background correction coming after another step of the
+  preprocessing protocol estimated its background on the raw movie while
+  correcting the output of the previous step, e.g. a registered movie. It now
+  estimates it on the movie it corrects.
+- A model-free background correction overwriting its movie, as every step after
+  the first one of a protocol does, wrote straight over it: a crash on the way
+  left it truncated. It now writes a temporary file that replaces the movie once
+  complete, as the other corrections do.
+- `correct_background_model_free` stops when its progress callback cancels the
+  background estimation, instead of skipping on to the next well.
 
 ### Documentation
 - The single-frame segmentation section of *Segment* is written around the two
