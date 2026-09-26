@@ -23,7 +23,10 @@ from celldetective.gui.base.sliders import QLabeledSlider, QLabeledDoubleRangeSl
 from superqt.fonticon import icon
 from tifffile import imread
 
-from celldetective.gui.base.components import CelldetectiveProgressDialog
+from celldetective.gui.base.components import (
+    CelldetectiveProgressDialog,
+    generic_message,
+)
 from celldetective.gui.base.styles import Styles
 from celldetective.gui.gui_utils import ThresholdLineEdit, QuickSliderLayout
 from celldetective.gui.layouts.operation_layout import OperationLayout
@@ -246,7 +249,8 @@ class BackgroundModelFreeCorrectionLayout(QGridLayout, Styles):
     def add_instructions_to_parent_list(self):
         """Add instructions to the parent protocol list."""
 
-        self.generate_instructions()
+        if not self.generate_instructions():
+            return
         self.parent_window.protocols.append(self.instructions)
         correction_description = ""
         for index, (key, value) in enumerate(self.instructions.items()):
@@ -255,18 +259,51 @@ class BackgroundModelFreeCorrectionLayout(QGridLayout, Styles):
             correction_description += str(key) + " : " + str(value)
         self.parent_window.protocol_list.addItem(correction_description)
 
-    def generate_instructions(self):
-        """Generate the instructions dictionary."""
+    def generate_instructions(self) -> bool:
+        """
+        Generate the instructions dictionary.
 
-        if self.timeseries_rb.isChecked():
-            mode = "timeseries"
-        elif self.tiles_rb.isChecked():
-            mode = "tiles"
+        Returns
+        -------
+        bool
+            False if a parameter is invalid, in which case a warning is shown.
+        """
+
+        parameters = self.correction_parameters()
+        if parameters is None:
+            return False
+        self.instructions = {
+            "target_channel": self.channels_cb.currentText(),
+            "correction_type": "model-free",
+            **parameters,
+        }
+        return True
+
+    def correction_parameters(self) -> Optional[dict]:
+        """
+        Read the correction parameters shared by the protocol and the preview.
+
+        Returns
+        -------
+        dict or None
+            The parameters, or None if one is invalid, in which case a warning is shown.
+        """
+
+        mode = "tiles" if self.tiles_rb.isChecked() else "timeseries"
 
         if self.regress_cb.isChecked():
             optimize_option = True
             opt_coef_range = self.coef_range_slider.value()
-            opt_coef_nbr = int(self.nbr_coef_le.text())
+            try:
+                opt_coef_nbr = int(self.nbr_coef_le.text())
+            except ValueError:
+                opt_coef_nbr = 0
+            if opt_coef_nbr < 1:
+                generic_message(
+                    "The number of coefficients must be a strictly positive integer.",
+                    "warning",
+                )
+                return None
         else:
             optimize_option = False
             opt_coef_range = None
@@ -274,26 +311,20 @@ class BackgroundModelFreeCorrectionLayout(QGridLayout, Styles):
 
         if self.operation_layout.subtract_btn.isChecked():
             operation = "subtract"
+            clip = self.operation_layout.clip_btn.isChecked()
         else:
             operation = "divide"
-            clip = None
-
-        if (
-            self.operation_layout.clip_btn.isChecked()
-            and self.operation_layout.subtract_btn.isChecked()
-        ):
-            clip = True
-        else:
             clip = False
 
-        if self.camera_offset_le.text() == "":
-            offset = None
-        else:
-            offset = float(self.camera_offset_le.text().replace(",", "."))
+        offset_text = self.camera_offset_le.text().strip().replace(",", ".")
+        try:
+            offset = float(offset_text) if offset_text else None
+        except ValueError:
+            # Intermediate input such as "-" or "1e" that the validator lets through.
+            generic_message("The offset must be a number, or empty.", "warning")
+            return None
 
-        self.instructions = {
-            "target_channel": self.channels_cb.currentText(),
-            "correction_type": "model-free",
+        return {
             "threshold_on_std": self.threshold_le.get_threshold(),
             "frame_range": self.frame_range_slider.value(),
             "mode": mode,
@@ -356,50 +387,16 @@ class BackgroundModelFreeCorrectionLayout(QGridLayout, Styles):
             if returnValue == QMessageBox.Ok:
                 return None
 
-        if self.timeseries_rb.isChecked():
-            mode = "timeseries"
-        elif self.tiles_rb.isChecked():
-            mode = "tiles"
-        else:
-            mode = "tiles"
-
-        if self.regress_cb.isChecked():
-            optimize_option = True
-            opt_coef_range = self.coef_range_slider.value()
-            opt_coef_nbr = int(self.nbr_coef_le.text())
-        else:
-            optimize_option = False
-            opt_coef_range = None
-            opt_coef_nbr = None
-
-        if self.operation_layout.subtract_btn.isChecked():
-            operation = "subtract"
-        else:
-            operation = "divide"
-            clip = None
-
-        if (
-            self.operation_layout.clip_btn.isChecked()
-            and self.operation_layout.subtract_btn.isChecked()
-        ):
-            clip = True
-        else:
-            clip = False
+        parameters = self.correction_parameters()
+        if parameters is None:
+            return None
 
         process_args = {
             "exp_dir": self.attr_parent.exp_dir,
             "well_option": self.attr_parent.well_list.getSelectedIndices(),
             "position_option": self.attr_parent.position_list.getSelectedIndices(),
             "target_channel": self.channels_cb.currentText(),
-            "mode": mode,
-            "threshold_on_std": self.threshold_le.get_threshold(),
-            "frame_range": self.frame_range_slider.value(),
-            "optimize_option": optimize_option,
-            "opt_coef_range": opt_coef_range,
-            "opt_coef_nbr": opt_coef_nbr,
-            "operation": operation,
-            "clip": clip,
-            "fix_nan": self.interpolate_check.isChecked(),
+            **parameters,
             "activation_protocol": [["gauss", 2], ["std", 4]],
             "correction_type": "model-free",
         }
@@ -458,12 +455,7 @@ class BackgroundModelFreeCorrectionLayout(QGridLayout, Styles):
     def estimate_bg(self):
         """Estimate the background and display the result."""
 
-        if self.timeseries_rb.isChecked():
-            mode = "timeseries"
-        elif self.tiles_rb.isChecked():
-            mode = "tiles"
-        else:
-            mode = "tiles"
+        mode = "tiles" if self.tiles_rb.isChecked() else "timeseries"
 
         # Create progress dialog
         window_title = "Background reconstruction"

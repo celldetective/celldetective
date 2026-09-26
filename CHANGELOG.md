@@ -46,6 +46,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The single-frame segmentation panels of the napari viewer stretched their rows
   apart to fill the height of their tab: the slack now goes to the bottom of the
   panel, as it did before the two panels were put in tabs.
+- The model-free background correction preview now subtracts the camera
+  offset, as the correction itself does.
 
 ### Documentation
 - The single-frame segmentation section of *Segment* is written around the two
