@@ -234,6 +234,7 @@ def test_prefix_suggestions_come_from_the_stacks(open_editor):
 
 def test_the_button_lists_every_prefix(open_editor):
     prefix = open_editor(THREE_POSITIONS).prefix_widget
+    assert prefix.suggest_btn.isEnabled()
     prefix.field.setText("sample")
     prefix.show_suggestions()
     assert prefix.completer.completionCount() == 2
@@ -278,7 +279,10 @@ def test_the_hint_counts_positions_without_movie_folder(open_editor, tmp_path):
 
 
 def test_the_hint_signals_an_experiment_without_positions(open_editor):
-    assert "No position" in open_editor().prefix_widget.hint.text()
+    prefix = open_editor().prefix_widget
+    assert "No position" in prefix.hint.text()
+    # Nothing to suggest: the button stays off.
+    assert not prefix.suggest_btn.isEnabled()
 
 
 def test_the_hint_signals_a_folder_that_cannot_be_read(open_editor, monkeypatch):

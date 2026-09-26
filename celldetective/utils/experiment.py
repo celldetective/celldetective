@@ -1503,7 +1503,7 @@ def locate_stack(
     if not position.endswith(os.sep):
         position += os.sep
 
-    stack_path = glob(position + os.sep.join(["movie", f"{prefix}*.tif"]))
+    stack_path = glob(position + os.sep.join(["movie", movie_pattern(prefix)]))
     if not stack_path:
         raise FileNotFoundError(f"No movie with prefix {prefix} found...")
 

@@ -51,7 +51,7 @@ from celldetective.gui.base.components import (
 )
 from celldetective.gui.base.styles import DANGER_COLOR, MUTED_INK, TABLE_STYLE
 from celldetective.gui.base.threads import start_tracked
-from celldetective.gui.base.utils import center_window
+from celldetective.gui.base.utils import center_window, is_alive
 from celldetective.utils.experiment import (
     count_movies_matching_prefix,
     get_movie_prefix_candidates,
@@ -388,6 +388,8 @@ class MoviePrefixField(CelldetectiveWidget):
             MDI6.text_search, "Show the prefixes of the stacks of the experiment."
         )
         self.suggest_btn.clicked.connect(self.show_suggestions)
+        # Nothing to list until the scan has found prefixes.
+        self.suggest_btn.setEnabled(False)
 
         self.hint = hint_label("")
         self.hint.setTextFormat(Qt.PlainText)
@@ -413,9 +415,15 @@ class MoviePrefixField(CelldetectiveWidget):
     def _on_scanned(self, movies: Optional[dict], candidates: list, error: str) -> None:
         """Keep what the scan read, and check the prefix against it."""
 
+        # The scan of a slow share can end after the editor was closed, and
+        # the window is deleted on closing.
+        if not is_alive(self):
+            return
+
         self.movies_per_position = movies
         self.scan_error = error
         self.model.setStringList(candidates)
+        self.suggest_btn.setEnabled(bool(candidates))
         self.update_hint()
 
     def show_suggestions(self) -> None:
