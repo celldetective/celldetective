@@ -11,6 +11,7 @@ from imageio import v2 as imageio
 from natsort import natsorted
 from tifffile import imread, memmap, TiffFile
 
+from celldetective.utils.experiment import movie_pattern
 from celldetective.utils.image_cleaning import interpolate_nan_multichannel
 from celldetective.utils.normalization import normalize_multichannel
 from celldetective import get_logger
@@ -75,7 +76,7 @@ def locate_stack(position: str, prefix: str = "Aligned") -> np.ndarray:
     if not position.endswith(os.sep):
         position += os.sep
 
-    stack_path = glob(position + os.sep.join(["movie", f"{prefix}*.tif"]))
+    stack_path = glob(position + os.sep.join(["movie", movie_pattern(prefix)]))
     if not stack_path:
         raise FileNotFoundError(f"No movie with prefix {prefix} found...")
 
@@ -241,7 +242,7 @@ def locate_stack_lazy(position: str, prefix: str = "Aligned") -> Optional[Any]:
     if not position.endswith(os.sep):
         position += os.sep
 
-    stack_path = glob(position + os.sep.join(["movie", f"{prefix}*.tif"]))
+    stack_path = glob(position + os.sep.join(["movie", movie_pattern(prefix)]))
     if not stack_path:
         return None
     file_path = stack_path[0].replace("\\", "/")

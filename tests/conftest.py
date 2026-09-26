@@ -4,6 +4,27 @@ import pytest
 from tqdm import tqdm
 
 
+@pytest.fixture
+def write_stacks():
+    """
+    Return a writer for the stacks of an experiment.
+
+    The writer takes the experiment folder and the names of the stacks of each
+    position, keyed by ``(well, position)``, and creates the empty ``.tif``
+    files in the movie folder of each position.
+    """
+
+    def write(folder, movies):
+        for (well, position), names in movies.items():
+            movie_folder = folder / well / position / "movie"
+            movie_folder.mkdir(parents=True, exist_ok=True)
+            for name in names:
+                (movie_folder / name).write_bytes(b"")
+        return str(folder)
+
+    return write
+
+
 @pytest.fixture(autouse=True)
 def disable_tqdm_monitor():
     """

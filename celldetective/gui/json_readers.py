@@ -15,13 +15,14 @@ import os
 import re
 import subprocess
 from subprocess import Popen
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
-from PyQt5.QtCore import QRegularExpression, Qt
+from PyQt5.QtCore import QRegularExpression, QStringListModel, Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QKeyEvent, QKeySequence, QRegularExpressionValidator
 from PyQt5.QtWidgets import (
     QAbstractItemView,
     QApplication,
+    QCompleter,
     QFormLayout,
     QHBoxLayout,
     QHeaderView,
@@ -45,15 +46,27 @@ from celldetective.gui.base.components import (
     CelldetectiveWidget,
     ToolButton,
     generic_message,
+    hint_label,
     tool_strip,
 )
 from celldetective.gui.base.styles import DANGER_COLOR, MUTED_INK, TABLE_STYLE
-from celldetective.gui.base.utils import center_window
+from celldetective.gui.base.threads import start_tracked
+from celldetective.gui.base.utils import center_window, is_alive
+from celldetective.utils.experiment import (
+    count_movies_matching_prefix,
+    get_movie_prefix_candidates,
+    list_movies_per_position,
+)
 
 logger = logging.getLogger("celldetective")
 
 LABELS_SECTION = "Labels"
 METADATA_SECTION = "Metadata"
+
+# The prefix telling which stack of a position folder is the movie: that one
+# field is offered what the experiment holds (see MoviePrefixField).
+MOVIE_SECTION = "MovieSettings"
+MOVIE_PREFIX_KEY = "movie_prefix"
 
 # The labels the software reads by name (see utils.experiment): they can be
 # edited but neither renamed nor removed.
@@ -285,6 +298,194 @@ class EditableTable(QTableWidget):
         super().keyPressEvent(event)
 
 
+class MovieScanThread(QThread):
+    """
+    Read the stacks of an experiment and the prefixes they offer.
+
+    Scanning the movie folder of every position takes a moment on a large
+    experiment or a network share, so it is done off the GUI thread.
+    """
+
+    # The stacks of each position (None when they could not be read), the
+    # prefixes they offer, and what went wrong, if anything.
+    scanned = pyqtSignal(object, list, str)
+
+    def __init__(self, exp_dir: str) -> None:
+        """
+        Prepare the scan of an experiment.
+
+        Parameters
+        ----------
+        exp_dir : str
+            The experiment folder to scan.
+        """
+
+        super().__init__()
+        self.exp_dir = exp_dir
+
+    def run(self) -> None:
+        """Scan the experiment and hand the result over."""
+
+        try:
+            movies = list_movies_per_position(self.exp_dir)
+            candidates = get_movie_prefix_candidates(movies)
+        except Exception:
+            logger.exception("Could not list the stacks of the experiment.")
+            self.scanned.emit(
+                None, [], "The stacks of the experiment could not be read: see the log."
+            )
+            return
+
+        self.scanned.emit(movies, candidates, "")
+
+
+class MoviePrefixField(CelldetectiveWidget):
+    """
+    The movie prefix field, dressed with the prefixes the experiment holds.
+
+    The names of the stacks sitting in the movie folders are cut into the
+    prefixes that would select them and offered as completions, from the field
+    or from the button next to it. A line under the field tells what the
+    prefix currently typed matches, so that a prefix leaving positions without
+    a movie is seen here rather than at the first segmentation.
+    """
+
+    def __init__(
+        self, field: QLineEdit, exp_dir: str, parent: Optional[QWidget] = None
+    ) -> None:
+        """
+        Dress a prefix field with what the experiment holds.
+
+        Parameters
+        ----------
+        field : QLineEdit
+            The field holding the prefix, kept by the editor that saves it.
+        exp_dir : str
+            The experiment folder whose stacks are proposed.
+        parent : QWidget, optional
+            The parent widget.
+        """
+
+        super().__init__(parent)
+
+        self.field = field
+
+        # The stacks of the experiment, None until the scan started on opening
+        # is over, so that the prefix stored is checked without being edited.
+        self.movies_per_position = None
+        self.scan_error = ""
+
+        field.setPlaceholderText("any stack of the movie folder")
+
+        self.model = QStringListModel(self)
+        self.completer = QCompleter(self.model, field)
+        self.completer.setCaseSensitivity(Qt.CaseInsensitive)
+        self.completer.setFilterMode(Qt.MatchContains)
+        self.completer.setCompletionMode(QCompleter.PopupCompletion)
+        field.setCompleter(self.completer)
+
+        self.suggest_btn = ToolButton(
+            MDI6.text_search, "Show the prefixes of the stacks of the experiment."
+        )
+        self.suggest_btn.clicked.connect(self.show_suggestions)
+        # Nothing to list until the scan has found prefixes.
+        self.suggest_btn.setEnabled(False)
+
+        self.hint = hint_label("")
+        self.hint.setTextFormat(Qt.PlainText)
+        self._warning = False
+        field.textChanged.connect(self.update_hint)
+
+        row = QHBoxLayout()
+        row.setContentsMargins(0, 0, 0, 0)
+        row.addWidget(field, 1)
+        row.addLayout(tool_strip(self.suggest_btn))
+
+        box = QVBoxLayout(self)
+        box.setContentsMargins(0, 0, 0, 0)
+        box.setSpacing(2)
+        box.addLayout(row)
+        box.addWidget(self.hint)
+
+        self.update_hint()
+        self.scan_thread = MovieScanThread(exp_dir)
+        self.scan_thread.scanned.connect(self._on_scanned)
+        start_tracked(self.scan_thread)
+
+    def _on_scanned(self, movies: Optional[dict], candidates: list, error: str) -> None:
+        """Keep what the scan read, and check the prefix against it."""
+
+        # The scan of a slow share can end after the editor was closed, and
+        # the window is deleted on closing.
+        if not is_alive(self):
+            return
+
+        self.movies_per_position = movies
+        self.scan_error = error
+        self.model.setStringList(candidates)
+        self.suggest_btn.setEnabled(bool(candidates))
+        self.update_hint()
+
+    def show_suggestions(self) -> None:
+        """Open the list of the prefixes the experiment holds."""
+
+        self.field.setFocus()
+        # Every prefix, whatever the field already holds.
+        self.completer.setCompletionPrefix("")
+        self.completer.complete()
+
+    def update_hint(self) -> None:
+        """Tell what the prefix currently typed matches in the experiment."""
+
+        self._show_hint(*self._describe_prefix())
+
+    def _describe_prefix(self) -> Tuple[str, bool]:
+        """Return the line telling what the prefix matches, and if it warns."""
+
+        if self.scan_error:
+            return self.scan_error, True
+        if self.movies_per_position is None:
+            return "Reading the stacks of the experiment…", False
+
+        total = len(self.movies_per_position)
+        if total == 0:
+            return "No position found in the experiment folder.", True
+        if not any(self.movies_per_position.values()):
+            return (
+                f"No stack in the movie folder of any of the {total} positions.",
+                True,
+            )
+
+        positions, stacks = count_movies_matching_prefix(
+            self.movies_per_position, self.field.text().strip()
+        )
+
+        if positions == 0:
+            return f"No stack of the {total} positions matches this prefix.", True
+        if positions < total:
+            return (
+                f"{total - positions} of the {total} positions hold no matching stack.",
+                True,
+            )
+        if stacks > positions:
+            return (
+                f"{stacks} stacks over {total} positions: which one of a position "
+                "is loaded is left to chance.",
+                True,
+            )
+        return f"One stack in each of the {total} positions.", False
+
+    def _show_hint(self, text: str, warning: bool) -> None:
+        """Write the line of feedback under the field."""
+
+        # Restyling repolishes the label: only when the ink changes.
+        if warning != self._warning:
+            self._warning = warning
+            color = DANGER_COLOR if warning else MUTED_INK
+            self.hint.setStyleSheet(f"color: {color};")
+        self.hint.setText(text)
+
+
 class ConfigEditor(CelldetectiveWidget):
     """
     Edit the configuration of an experiment.
@@ -387,20 +588,13 @@ class ConfigEditor(CelldetectiveWidget):
             )
         return [f"W{i + 1}" for i in range(n_wells)]
 
-    @staticmethod
-    def _hint(text: str) -> QLabel:
-        """Return a line of secondary text explaining a tab."""
-
-        label = QLabel(text)
-        label.setWordWrap(True)
-        label.setStyleSheet(f"color: {MUTED_INK};")
-        return label
-
     def _build_settings_tab(self) -> QWidget:
         """Build one form per plain section of the file."""
 
         content = QWidget()
         box = QVBoxLayout(content)
+        # Stays None when the file holds no movie prefix.
+        self.prefix_widget = None
 
         for section in self.config.sections():
             if section in (LABELS_SECTION, METADATA_SECTION):
@@ -416,7 +610,13 @@ class ConfigEditor(CelldetectiveWidget):
             for key, value in self.config.items(section):
                 field = QLineEdit(value)
                 self.fields[(section, key)] = field
-                form.addRow(key, field)
+                if section == MOVIE_SECTION and key == MOVIE_PREFIX_KEY:
+                    self.prefix_widget = MoviePrefixField(
+                        field, self.parent_window.exp_dir
+                    )
+                    form.addRow(key, self.prefix_widget)
+                else:
+                    form.addRow(key, field)
             box.addLayout(form)
 
         box.addStretch()
@@ -472,7 +672,7 @@ class ConfigEditor(CelldetectiveWidget):
         box = QVBoxLayout(page)
         top = QHBoxLayout()
         top.addWidget(
-            self._hint(
+            hint_label(
                 "One row per well. Paste a block from a spreadsheet with Ctrl+V; "
                 "values cannot contain commas."
             ),
@@ -521,7 +721,7 @@ class ConfigEditor(CelldetectiveWidget):
         box = QVBoxLayout(page)
         top = QHBoxLayout()
         top.addWidget(
-            self._hint(
+            hint_label(
                 "Values shared by every well of the experiment, e.g. date = 2026-09-15. "
                 "Each key becomes a column of the measurement tables."
             ),
