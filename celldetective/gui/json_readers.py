@@ -450,9 +450,13 @@ class MoviePrefixField(CelldetectiveWidget):
         total = len(self.movies_per_position)
         if total == 0:
             return "No position found in the experiment folder.", True
+        # "the position" or "the 3 positions", so a single one reads right.
+        of_all = "the position" if total == 1 else f"the {total} positions"
         if not any(self.movies_per_position.values()):
+            if total == 1:
+                return "No stack in the movie folder of the position.", True
             return (
-                f"No stack in the movie folder of any of the {total} positions.",
+                f"No stack in the movie folder of any of {of_all}.",
                 True,
             )
 
@@ -461,7 +465,7 @@ class MoviePrefixField(CelldetectiveWidget):
         )
 
         if positions == 0:
-            return f"No stack of the {total} positions matches this prefix.", True
+            return f"No stack of {of_all} matches this prefix.", True
         if positions < total:
             return (
                 f"{total - positions} of the {total} positions hold no matching stack.",
@@ -470,10 +474,15 @@ class MoviePrefixField(CelldetectiveWidget):
         if stacks > positions:
             return (
                 f"{stacks} stacks over {total} positions: which one of a position "
-                "is loaded is left to chance.",
+                "is loaded is left to chance."
+                if total > 1
+                else f"{stacks} stacks in the position: which one is loaded is "
+                "left to chance.",
                 True,
             )
-        return f"One stack in each of the {total} positions.", False
+        if total == 1:
+            return "One stack in the position.", False
+        return f"One stack in each of {of_all}.", False
 
     def _show_hint(self, text: str, warning: bool) -> None:
         """Write the line of feedback under the field."""

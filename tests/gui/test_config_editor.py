@@ -271,6 +271,20 @@ def test_the_hint_tells_what_the_prefix_matches(open_editor):
     assert "No stack" in prefix.hint.text()
 
 
+def test_the_hint_reads_right_for_a_single_position(open_editor):
+    prefix = open_editor(
+        {("W1", "101"): ["Alexa488_stack.tif", "BF_stack.tif"]}
+    ).prefix_widget
+    prefix.field.setText("BF_")
+    assert prefix.hint.text() == "One stack in the position."
+
+    prefix.field.setText("")
+    assert prefix.hint.text().startswith("2 stacks in the position")
+
+    prefix.field.setText("Hoechst")
+    assert prefix.hint.text() == "No stack of the position matches this prefix."
+
+
 def test_the_hint_counts_positions_without_movie_folder(open_editor, tmp_path):
     (tmp_path / "W2" / "201").mkdir(parents=True)
     prefix = open_editor({("W1", "101"): ["BF_stack.tif"]}).prefix_widget
