@@ -110,3 +110,20 @@ def test_static_table_without_track_id(tmp_path):
         ]
     )
     _check_isotropic_columns(_measure(_write_experiment(tmp_path, table=table)))
+
+
+def test_neither_table_nor_labels_measures_nothing_without_failing(tmp_path):
+    pos = _write_experiment(tmp_path)
+    for name in os.listdir(pos + "labels_targets"):
+        os.remove(os.path.join(pos, "labels_targets", name))
+
+    worker = MeasurementProcess(
+        queue=Queue(), process_args={"mode": "targets", "n_threads": 1}
+    )
+    worker.setup_for_position(pos)
+    assert not worker.do_iso_intensities and not worker.do_features
+    worker.process_position()
+
+    assert not os.path.exists(
+        pos + os.sep.join(["output", "tables", "trajectories_targets.csv"])
+    )

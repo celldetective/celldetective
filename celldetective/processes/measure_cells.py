@@ -307,7 +307,8 @@ class MeasurementProcess(Process):
         if len(self.label_path) > 0:
             logger.info(f"Found {len(self.label_path)} segmented frames...")
         else:
-            self.features = None
+            # No features without labels, but a list: the steps after this one extend it.
+            self.features = []
             self.haralick_options = None
             self.border_distances = None
             self.label_path = None
@@ -520,6 +521,10 @@ class MeasurementProcess(Process):
     def process_position(self):
         """Process the measurements for the position."""
         tprint("Measure")
+
+        if not (self.do_features or self.do_iso_intensities):
+            logger.error("No measurement could be performed. Check your inputs.")
+            return
 
         self.indices = list(range(self.img_num_channels.shape[1]))
         chunks = np.array_split(self.indices, self.n_threads)
