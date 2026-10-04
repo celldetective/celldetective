@@ -173,3 +173,6 @@ docs/_build_check
 scratch
 # PNG previews rendered by docs/figures/annotate.py (local only)
 docs/figures/preview/
+
+# Written by setuptools-scm at build time
+celldetective/_version.py
