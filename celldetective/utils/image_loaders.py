@@ -659,6 +659,38 @@ def _load_frames_to_measure(
     return load_frames(indices, file, scale=None, normalize_input=False)
 
 
+def _read_pages_from_memmap(
+    stack_path: str, img_nums: Union[int, List[int]]
+) -> np.ndarray:
+    """
+    Read images by page index from a memory map of the first series.
+
+    Fiji saves a hyperstack larger than 4 GB with a single IFD and the pixels
+    stored contiguously after it, so the file has one page where the movie has
+    hundreds of images, and reading by page index fails past the first one.
+    tifffile rebuilds the series from the ImageJ metadata; flattening every axis
+    before the image plane gives back the page order (channels interleaved).
+
+    Parameters
+    ----------
+    stack_path : str
+        Path to an uncompressed, contiguously stored TIFF.
+    img_nums : int or list of int
+        Page index or indices, as for :func:`load_frames`.
+
+    Returns
+    -------
+    ndarray
+        ``(Y, X)`` for a single index, ``(N, Y, X)`` for a list, as
+        ``imageio.imread(stack_path, key=img_nums)`` would return them.
+    """
+
+    with TiffFile(stack_path) as tif:
+        page_shape = tif.pages.first.shape
+    pages = memmap(stack_path).reshape((-1, *page_shape))
+    return np.array(pages[img_nums])
+
+
 def load_frames(
     img_nums: Union[int, List[int], np.ndarray],
     stack_path: str,
@@ -728,7 +760,10 @@ def load_frames(
                 )
                 if isinstance(img_nums, np.ndarray):
                     img_nums = img_nums.tolist()
-                frames = imageio.imread(stack_path, key=img_nums)
+                try:
+                    frames = imageio.imread(stack_path, key=img_nums)
+                except IndexError:
+                    frames = _read_pages_from_memmap(stack_path, img_nums)
     except Exception as e:
         logger.error(
             f"Error in loading the frame {img_nums}: {e}. Please check that the experiment channel information is consistent with the movie being read."
