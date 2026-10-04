@@ -20,7 +20,7 @@ from celldetective.log_manager import get_logger, positionlogger
 
 from celldetective.utils.data_cleaning import _mask_intensity_measurements
 from celldetective.utils.data_loaders import interpret_tracking_configuration
-from celldetective.utils.experiment import extract_experiment_channels
+from celldetective.utils.experiment import extract_experiment_channels, get_image_shape
 from celldetective.utils.image_loaders import (
     _get_img_num_per_channel,
     auto_load_number_of_frames,
@@ -207,12 +207,7 @@ class TrackingProcess(Process):
         self.len_movie = float(
             config_section_to_dict(self.config, "MovieSettings")["len_movie"]
         )
-        self.shape_x = int(
-            config_section_to_dict(self.config, "MovieSettings")["shape_x"]
-        )
-        self.shape_y = int(
-            config_section_to_dict(self.config, "MovieSettings")["shape_y"]
-        )
+        self.image_shape = get_image_shape(self.exp_dir)
 
         self.channel_names, self.channel_indices = extract_experiment_channels(
             self.exp_dir
@@ -417,7 +412,8 @@ class TrackingProcess(Process):
                 optimizer_options={"tm_lim": int(12e4)},
                 track_kwargs={"step_size": 100},
                 clean_trajectories_kwargs=self.post_processing_options,
-                volume=(self.shape_x, self.shape_y),
+                # bTrack takes (width, height).
+                volume=self.image_shape[::-1],
                 btrack_option=self.btrack_option,
                 search_range=self.search_range,
                 memory=self.memory,

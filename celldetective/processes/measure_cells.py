@@ -252,12 +252,6 @@ class MeasurementProcess(Process):
         self.len_movie = float(
             config_section_to_dict(self.config, "MovieSettings")["len_movie"]
         )
-        self.shape_x = int(
-            config_section_to_dict(self.config, "MovieSettings")["shape_x"]
-        )
-        self.shape_y = int(
-            config_section_to_dict(self.config, "MovieSettings")["shape_y"]
-        )
 
         self.channel_names, self.channel_indices = extract_experiment_channels(
             self.exp_dir

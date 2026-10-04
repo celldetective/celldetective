@@ -342,6 +342,27 @@ def get_temporal_calibration(experiment: Union[str, Path]) -> float:
     return frame_to_min
 
 
+def get_image_shape(experiment: Union[str, Path]) -> Tuple[int, int]:
+    """
+    Retrieves the shape of the images of an experiment.
+
+    Parameters
+    ----------
+    experiment : str
+            The file system path to the experiment directory.
+
+    Returns
+    -------
+    tuple of int
+            ``(height, width)``, the shape of a NumPy image: ``shape_y`` then ``shape_x`` of the
+            ``MovieSettings`` section of the configuration file. bTrack takes the volume the
+            other way round, ``(width, height)``.
+    """
+
+    settings = config_section_to_dict(get_config(experiment), "MovieSettings")
+    return int(settings["shape_y"]), int(settings["shape_x"])
+
+
 def get_experiment_metadata(experiment: Union[str, Path]) -> Dict[str, Any]:
     """
     Get experiment metadata.
