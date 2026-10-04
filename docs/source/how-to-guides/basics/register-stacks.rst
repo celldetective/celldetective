@@ -52,7 +52,7 @@ Apply the registration
 
 #. The registered stack is written in the ``movie/`` folder of each position with the prefix ``Corrected_``, next to a ``Corrected_<movie>_registration_shifts.csv`` table holding the shift of each frame (``FRAME``, ``SHIFT_Y``, ``SHIFT_X``, in pixels). The step and its parameters are recorded in the position's ``log_preprocessing.txt``.
 
-#. Change the movie prefix of the experiment to ``Corrected`` (press the :icon:`cog-outline,black` button of the control panel, see :doc:`../advanced/inject-metadata`) so that segmentation and the other steps read the registered stacks.
+#. Change the movie prefix of the experiment to ``Corrected`` (press the :icon:`cog-outline,black` button of the control panel, see :ref:`change-movie-prefix`) so that segmentation and the other steps read the registered stacks.
 
 .. note::
 

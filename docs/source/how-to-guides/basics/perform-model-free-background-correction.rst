@@ -32,6 +32,8 @@ Correction protocol
 
 #. Tick the ``Divide`` option.
 
+#. Click on the :icon:`eye-outline,black` button to preview the correction on five frames spread over the movie of the current position. A division leaves a few diverging values that stretch the contrast: click the auto contrast button (:icon:`contrast-box,black`) at the end of the contrast slider, once or twice, to peel them off (see :ref:`ref_image_viewers`).
+
 
 Apply correction
 ~~~~~~~~~~~~~~~~

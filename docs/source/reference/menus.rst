@@ -28,6 +28,33 @@ Start Window
 
 *   **Documentation** (:kbd:`Ctrl+D`): Open this documentation.
 
+.. _ref_image_viewers:
+
+Image Viewers
+-------------
+
+The :icon:`image-check,black` button next to the position list of the control panel opens the stack of the selected position. The viewers opened from the preprocessing, segmentation and measurement settings to tune a parameter on a frame are built on the same window and share its controls.
+
+.. figure:: ../_static/figures/stack-viewer.svg
+    :width: 75%
+    :target: ../_static/figures/stack-viewer.svg
+    :align: center
+    :alt: the stack viewer with an intensity profile and the auto contrast button
+
+    **The stack viewer.** An intensity profile drawn across the frame, and the contrast refined once with the auto contrast button.
+
+The line profile tools sit in the toolbar (1) and the auto contrast button at the end of the contrast slider (2).
+
+**Controls**
+
+*   **Toolbar**: Matplotlib navigation: home, back and forward, pan, zoom, the margins and the axes settings, and save the view as an image.
+*   **Line Profile** (:icon:`chart-line,black`): Draw a line on the image by click and drag; the intensities along it are plotted under the image, with the length of the line in pixels and in µm. The profile follows the frame and the channel shown. Press the button again to leave the mode.
+*   **Lock Y-Axis** (:icon:`lock,black`): Keep the intensity range of the profile when the line or the frame changes, to compare profiles. Available in line profile mode.
+*   **Channel**: The channel shown.
+*   **Contrast**: The intensity range mapped from black to white.
+*   **Auto contrast** (:icon:`contrast-box,black`): Each click narrows the contrast to the 1st–99th percentiles of the pixels in view (the zoomed region, or the whole frame) that lie within the current range, as the *Auto* button of Fiji. Outliers, such as the diverging values of a background division, are peeled off click after click; the fourth click restores the full range of the frame.
+*   **Time**: The frame shown.
+
 .. _ref_table_explorer_menus:
 
 Table Explorer

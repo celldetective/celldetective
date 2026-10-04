@@ -46,3 +46,26 @@ After computing single-cell measurements, you should be able to see these metada
 .. tip::
 
     The **Settings** tab gives access to the other sections of the file, such as the movie prefix, the calibration or the channel indices.
+
+.. _change-movie-prefix:
+
+Change the movie prefix
+~~~~~~~~~~~~~~~~~~~~~~~
+
+The movie prefix tells which stack of a position's ``movie/`` folder is the movie: the ``.tif`` file whose name starts with it. Preprocessing writes new stacks next to the original one (``Corrected_`` for a background correction or a registration), and the prefix is what switches the analysis over to them.
+
+.. figure:: ../../_static/figures/movie-prefix.svg
+    :width: 85%
+    :target: ../../_static/figures/movie-prefix.svg
+    :align: center
+    :alt: the movie prefix field of the configuration editor and the prefixes it suggests
+
+    **The movie prefix field.** The prefixes cut from the names of the stacks the experiment holds, and the line telling what the prefix typed matches.
+
+#. Open the **Configuration** window (:icon:`cog-outline,black` button of the control panel) on its **Settings** tab, section *MovieSettings*.
+
+#. Press the :icon:`text-search,black` button next to ``movie_prefix`` (1) to list the prefixes the stacks of the experiment offer, the ones selecting a stack in the most positions first, or start typing to get the matching ones. The names of the stacks are cut around their separators and their numbering to build them.
+
+#. Read the line under the field (2): it tells, as you type, how many positions hold a matching stack. It turns red when a prefix leaves positions without a movie, or matches several stacks in a position, in which case which one is loaded is left to chance. Such a prefix is better fixed here than found out at the first segmentation.
+
+#. Press **Save**.

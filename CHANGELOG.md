@@ -82,8 +82,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   complete, as the other corrections do.
 - `correct_background_model_free` stops when its progress callback cancels the
   background estimation, instead of skipping on to the next well.
+- Every frame past the first of an ImageJ hyperstack larger than 4 GB failed
+  to load with `list index out of range`, and segmentation skipped the position,
+  while the frame count and the napari viewer worked. Fiji writes such a stack
+  with a single IFD and the pixels stored contiguously after it: the frames are
+  now read from a memory map of the series.
+- Isotropic (position-based) measurements were only computed on tracked
+  tables. On a position measured before tracking, or with a table without
+  `TRACK_ID`, the radii were dropped silently and the run reported success
+  without their columns (#19). They are now centred on the centroids of the
+  masks when there is no table, and on the positions of the table otherwise.
+- A model or demo download that was cancelled from its progress window, or
+  interrupted during the extraction, left a half-written folder behind. It was
+  taken for the installed model, never downloaded again, and failed at every
+  load with an obscure error. Archives are now extracted into a staging folder
+  moved into place once complete, a file shorter than the size the server
+  announced is refused, and the temporary archive is removed whatever happens.
+- The line under the movie prefix field read "One stack in each of the 1
+  positions" on a single-position experiment.
+- The documentation showed version 1.5.0b16: it read a stale copy of the
+  generated `_version.py` kept in the repository. The version now comes from
+  the git tags, and the file is no longer tracked.
 
 ### Documentation
+- *UI Menus & Shortcuts* has an *Image Viewers* section: the stack viewer of a
+  position and its controls, the line profile and the new auto contrast
+  button, with a figure. The model-free correction guide points at the auto
+  contrast button for its preview, a step it was missing.
+- *Change the movie prefix*, a new section of the configuration editor guide,
+  covers the suggested prefixes and the line telling what a prefix matches,
+  with a figure; the registration guide and *Troubleshooting* link to it.
+- *Measure* says where the position-based measurements are centred, with and
+  without tracking.
 - The single-frame segmentation section of *Segment* is written around the two
   tabs of the panel: **Model** for a segmentation model and the new **Threshold**
   for the pipelines of the threshold configuration wizard, with the region of

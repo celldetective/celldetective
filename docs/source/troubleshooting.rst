@@ -120,7 +120,9 @@ the next one. The progress window says which and why, for instance:
 The same line is written to the log. A missing movie almost always means the
 **movie prefix** of the experiment does not match the file names on disk; it is
 set in the **Configuration** window, opened with the :icon:`cog-outline,black`
-button of the control panel, under *MovieSettings*.
+button of the control panel, under *MovieSettings*, where the prefixes of the
+stacks the experiment holds are suggested and the line under the field tells
+which positions the prefix leaves without a movie (see :ref:`change-movie-prefix`).
 
 Anything else that goes wrong in a position is reported as
 ``Error at <position>. Skipping...``, with the traceback in the log, and the run
