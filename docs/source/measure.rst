@@ -75,7 +75,7 @@ The segmentation mask defines the ROI over which single-cell measurements are pe
 Position-based measurements
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Position-based measurements rely solely on centroid coordinates and are independent of mask shape. Useful for tracked cells where masks might be missing.
+Position-based measurements rely solely on centroid coordinates and are independent of mask shape. They are centred on the positions of the table: for tracked cells, the track positions, so a cell is measured even in the frames where its mask is missing. Without tracking, they are centred on the centroids of the masks.
 
 *   **Isotropic measurements** — intensities within circular or ring-shaped ROIs centered on the cell, with configurable radii and statistical operations (mean, std, sum, median, min, max).
 

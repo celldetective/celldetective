@@ -98,6 +98,15 @@ class MeasurementProcess(Process):
         else:
             self.do_features = True
 
+        if self.do_iso_intensities and self.trajectories is None and not self.do_features:
+            # Without a table, the centroids the measurements are centred on
+            # come from the masks.
+            self.do_iso_intensities = False
+            logger.warning(
+                "No table and no labels to take the cell positions from... "
+                "Isotropic intensities will not be computed..."
+            )
+
         if self.trajectories is None:
             logger.info("Use features as a substitute for the trajectory table.")
             if "label" not in self.features:
@@ -277,8 +286,6 @@ class MeasurementProcess(Process):
             self.trajectories = pd.read_csv(self.trajectories)
             if "TRACK_ID" not in list(self.trajectories.columns):
                 logger.info("Static measurements detected...")
-                self.do_iso_intensities = False
-                self.intensity_measurement_radii = None
                 if self.clear_previous:
                     logger.info("Clear previous measurements...")
                     self.trajectories = None  # remove_trajectory_measurements(trajectories, column_labels)
@@ -296,7 +303,6 @@ class MeasurementProcess(Process):
             self.trajectories = None
             self.do_features = True
             self.features += ["centroid"]
-            self.do_iso_intensities = False
 
     def detect_movie_and_labels(self):
         """Detect the movie file and label images."""
@@ -362,6 +368,7 @@ class MeasurementProcess(Process):
 
             if perform_measurement:
 
+                iso_column_labels = self.column_labels
                 if self.trajectories is not None:
                     # Optimized access
                     if self.frame_slices is not None:
@@ -396,7 +403,7 @@ class MeasurementProcess(Process):
                         positions_at_t = _extract_coordinates_from_features(
                             feature_table, timepoint=t
                         )
-                        column_labels = {
+                        iso_column_labels = {
                             "track": "ID",
                             "time": self.column_labels["time"],
                             "x": self.column_labels["x"],
@@ -410,22 +417,20 @@ class MeasurementProcess(Process):
                         inplace=True,
                     )
 
-                if self.do_iso_intensities and not self.trajectories is None:
+                # Centred on the positions of the table, or, without one, on
+                # the centroids of the masks just measured.
+                if self.do_iso_intensities:
                     iso_table = measure_isotropic_intensity(
                         positions_at_t,
                         img,
                         channels=self.channel_names,
                         intensity_measurement_radii=self.intensity_measurement_radii,
-                        column_labels=self.column_labels,
+                        column_labels=iso_column_labels,
                         operations=self.isotropic_operations,
                         verbose=False,
                     )
 
-                if (
-                    self.do_iso_intensities
-                    and self.do_features
-                    and not self.trajectories is None
-                ):
+                if self.do_iso_intensities and self.do_features:
                     measurements_at_t = iso_table.merge(
                         feature_table,
                         how="outer",
@@ -439,11 +444,7 @@ class MeasurementProcess(Process):
                             if not c.endswith("_delme")
                         ]
                     ]
-                elif (
-                    self.do_iso_intensities
-                    * (not self.do_features)
-                    * (not self.trajectories is None)
-                ):
+                elif self.do_iso_intensities:
                     measurements_at_t = iso_table
                 elif self.do_features:
                     measurements_at_t = positions_at_t.merge(
