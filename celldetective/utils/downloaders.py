@@ -185,6 +185,115 @@ def open_url_with_retries(url: str):
             retry_delay = min(retry_delay * 2, max_retry_delay)
 
 
+class DownloadCancelled(Exception):
+    """The user cancelled a download from its progress dialog."""
+
+
+class IncompleteDownloadError(OSError):
+    """The connection closed before the whole file was received."""
+
+
+def check_download_complete(path: str, file_size: Optional[int], url: str) -> None:
+    """
+    Check that a downloaded file has the size the server announced.
+
+    A connection dropped mid-transfer can end the read loop as a plain end of
+    stream, so a truncated file would otherwise be kept as if it were complete.
+
+    Parameters
+    ----------
+    path : str
+        The downloaded file.
+    file_size : int or None
+        The Content-Length the server sent, None if it sent none (nothing to
+        check against then).
+    url : str
+        Where the file came from, for the error message.
+
+    Raises
+    ------
+    IncompleteDownloadError
+        If the file is not the announced size.
+    """
+
+    if file_size is None:
+        return
+    received = os.path.getsize(path)
+    if received != file_size:
+        raise IncompleteDownloadError(
+            f"Download of {url} incomplete: received {received} of {file_size} bytes."
+        )
+
+
+def _merge_into(src: str, dst: str) -> None:
+    """Move the content of directory `src` into the existing directory `dst`."""
+
+    for entry in os.listdir(src):
+        s, d = os.path.join(src, entry), os.path.join(dst, entry)
+        if os.path.isdir(s) and os.path.isdir(d):
+            _merge_into(s, d)
+        else:
+            if os.path.isdir(d):
+                shutil.rmtree(d)
+            os.replace(s, d)
+
+
+def extract_zenodo_archive(path_to_zip_file: str, output_dir: str, file: str) -> None:
+    """
+    Extract a Zenodo archive into `output_dir`, all or nothing.
+
+    The archive is extracted into a hidden staging folder of `output_dir`, and
+    its folders are moved into place only once complete. Extracting straight
+    into `output_dir` left a partial model folder behind when the extraction
+    was interrupted -- a download cancelled from its progress window terminates
+    the process doing it -- and that folder was then taken for the installed
+    model and never downloaded again, failing at every load instead.
+
+    Parameters
+    ----------
+    path_to_zip_file : str
+        The downloaded archive.
+    output_dir : str
+        The folder the archive's content goes into.
+    file : str
+        The name of the Zenodo entry (archive name without ``.zip``); the
+        weights file of a model folder of that name is renamed after it.
+    """
+
+    # Staging folders of an extraction that was killed half-way.
+    for stale in glob(os.path.join(output_dir, ".extract-*")):
+        shutil.rmtree(stale, ignore_errors=True)
+
+    staging = tempfile.mkdtemp(prefix=".extract-", dir=output_dir)
+    try:
+        with zipfile.ZipFile(path_to_zip_file, "r") as zip_ref:
+            zip_ref.extractall(staging)
+
+        file_to_rename = glob(
+            os.sep.join(
+                [staging, file, "*[!.json][!.png][!.h5][!.csv][!.npy][!.tif][!.ini]"]
+            )
+        )
+        if (
+            len(file_to_rename) > 0
+            and not file_to_rename[0].endswith(os.sep)
+            and not file.startswith("demo")
+        ):
+            os.rename(file_to_rename[0], os.sep.join([staging, file, file]))
+
+        for entry in os.listdir(staging):
+            src, dst = os.path.join(staging, entry), os.path.join(output_dir, entry)
+            if os.path.isdir(src) and os.path.isdir(dst):
+                # Extracting over an existing folder (a demo downloaded again)
+                # overwrites what the archive holds and keeps the rest, as
+                # extracting in place did.
+                _merge_into(src, dst)
+            else:
+                os.replace(src, dst)
+    finally:
+        shutil.rmtree(staging, ignore_errors=True)
+
+
 def download_url_to_file(url: str, dst: str, progress: bool = True) -> None:
     r"""
     Download object at the given URL to a local path.
@@ -249,8 +358,8 @@ def download_url_to_file(url: str, dst: str, progress: bool = True) -> None:
 
                 QApplication.processEvents()
                 if pd.wasCanceled():
-                    logger.info("Download cancelled by user.")
-                    break
+                    pd.close()
+                    raise DownloadCancelled(f"Download of {url} cancelled.")
             pd.close()
 
         else:
@@ -277,6 +386,7 @@ def download_url_to_file(url: str, dst: str, progress: bool = True) -> None:
                         raise
 
         f.close()
+        check_download_complete(f.name, file_size, url)
         shutil.move(f.name, dst)
     except Exception as e:
         f.close()
@@ -365,20 +475,10 @@ def download_zenodo_file(file: str, output_dir: str) -> None:
     zip_url = full_links[index]
 
     path_to_zip_file = os.sep.join([output_dir, "temp.zip"])
-    download_url_to_file(rf"{zip_url}", path_to_zip_file)
-    with zipfile.ZipFile(path_to_zip_file, "r") as zip_ref:
-        zip_ref.extractall(output_dir)
-
-    file_to_rename = glob(
-        os.sep.join(
-            [output_dir, file, "*[!.json][!.png][!.h5][!.csv][!.npy][!.tif][!.ini]"]
-        )
-    )
-    if (
-        len(file_to_rename) > 0
-        and not file_to_rename[0].endswith(os.sep)
-        and not file.startswith("demo")
-    ):
-        os.rename(file_to_rename[0], os.sep.join([output_dir, file, file]))
-
-    os.remove(path_to_zip_file)
+    try:
+        download_url_to_file(rf"{zip_url}", path_to_zip_file)
+        extract_zenodo_archive(path_to_zip_file, output_dir, file)
+    except DownloadCancelled:
+        logger.info("Download cancelled or failed.")
+    finally:
+        remove_file_if_exists(path_to_zip_file)
