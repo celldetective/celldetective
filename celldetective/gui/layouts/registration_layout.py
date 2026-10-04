@@ -12,7 +12,7 @@ from PyQt5.QtWidgets import (
 from fonticon_mdi6 import MDI6
 from superqt.fonticon import icon
 
-from celldetective.gui.base.components import generic_message
+from celldetective.gui.base.components import ToolButton, generic_message
 from celldetective.gui.base.styles import Styles
 from celldetective.gui.gui_utils import RadiusLineEdit, ThresholdLineEdit
 from celldetective.utils.parsing import _extract_channel_indices_from_config
@@ -73,11 +73,9 @@ class RegistrationOptionsLayout(QVBoxLayout, Styles):
             "Leave empty to use the full frame."
         )
 
-        self.roi_viewer_btn = QPushButton()
-        self.roi_viewer_btn.setIcon(icon(MDI6.image_check, color="k"))
-        self.roi_viewer_btn.setStyleSheet(self.button_select_all)
-        self.roi_viewer_btn.setToolTip(
-            "Tune the correlation radius and Tukey α on a frame of the current position."
+        self.roi_viewer_btn = ToolButton(
+            MDI6.image_check,
+            "Tune the correlation radius and Tukey α on a frame of the current position.",
         )
         self.roi_viewer_btn.clicked.connect(self.open_roi_viewer)
 
@@ -181,7 +179,7 @@ class RegistrationOptionsLayout(QVBoxLayout, Styles):
         downscale = self.downscale_le.get_threshold()
         if alpha is None or upsample is None or downscale is None:
             return False
-        valid_radius, radius = self.radius_le.radius_or_warn()
+        valid_radius, radius = self.radius_le.value_or_warn()
         if not valid_radius:
             return False
         if upsample < 1:
@@ -233,7 +231,7 @@ class RegistrationOptionsLayout(QVBoxLayout, Styles):
             channel_cb=True,
             target_channel=target_channel,
             window_title="Registration ROI",
-            initial_radius=self.radius_le.radius_or_none(),
+            initial_radius=self.radius_le.value_or_none(),
             tukey_alpha=0.25 if alpha is None else alpha,
         )
         self.viewer.show()

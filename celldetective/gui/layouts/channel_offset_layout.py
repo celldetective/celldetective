@@ -12,6 +12,7 @@ from PyQt5.QtWidgets import (
 from fonticon_mdi6 import MDI6
 from superqt.fonticon import icon
 
+from celldetective.gui.base.components import ToolButton
 from celldetective.gui.base.styles import Styles
 from celldetective.gui.gui_utils import ThresholdLineEdit
 from celldetective.utils.parsing import _extract_channel_indices_from_config
@@ -63,10 +64,7 @@ class ChannelOffsetOptionsLayout(QVBoxLayout, Styles):
         self.shift_h_lbl = QLabel("(h): ")
         self.shift_v_lbl = QLabel("(v): ")
 
-        self.set_shift_btn = QPushButton()
-        self.set_shift_btn.setIcon(icon(MDI6.image_check, color="k"))
-        self.set_shift_btn.setStyleSheet(self.button_select_all)
-        self.set_shift_btn.setToolTip("Set the channel shift.")
+        self.set_shift_btn = ToolButton(MDI6.image_check, "Set the channel shift.")
         self.set_shift_btn.clicked.connect(self.open_offset_viewer)
 
         self.add_correction_btn = QPushButton("Add correction")
@@ -117,7 +115,8 @@ class ChannelOffsetOptionsLayout(QVBoxLayout, Styles):
     def add_instructions_to_parent_list(self):
         """Add instructions to the parent protocol list."""
 
-        self.generate_instructions()
+        if not self.generate_instructions():
+            return
         self.parent_window.protocol_layout.protocols.append(self.instructions)
         correction_description = ""
         for index, (key, value) in enumerate(self.instructions.items()):
@@ -126,15 +125,31 @@ class ChannelOffsetOptionsLayout(QVBoxLayout, Styles):
             correction_description += str(key) + " : " + str(value)
         self.parent_window.protocol_layout.protocol_list.addItem(correction_description)
 
-    def generate_instructions(self):
-        """Generate the instructions dictionary."""
+    def generate_instructions(self) -> bool:
+        """
+        Generate the instructions dictionary.
+
+        Returns
+        -------
+        bool
+            False if a shift is invalid, in which case a warning is shown.
+        """
+
+        # None once the field warned it is invalid.
+        horizontal = self.horizontal_shift_le.get_threshold()
+        if horizontal is None:
+            return False
+        vertical = self.vertical_shift_le.get_threshold()
+        if vertical is None:
+            return False
 
         self.instructions = {
             "correction_type": "offset",
             "target_channel": self.channels_cb.currentText(),
-            "correction_horizontal": self.horizontal_shift_le.get_threshold(),
-            "correction_vertical": self.vertical_shift_le.get_threshold(),
+            "correction_horizontal": horizontal,
+            "correction_vertical": vertical,
         }
+        return True
 
     def set_target_channel(self):
         """Set the target channel index."""

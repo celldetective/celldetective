@@ -21,7 +21,7 @@ def layout(qtbot):
 def warnings(monkeypatch):
     shown = []
     monkeypatch.setattr(
-        "celldetective.gui.layouts.background_model_free_layout.generic_message",
+        "celldetective.gui.gui_utils.generic_message",
         lambda *args, **kwargs: shown.append(args),
     )
     return shown
@@ -63,13 +63,10 @@ def test_background_qc_shows_the_background_as_applied(layout, monkeypatch):
     assert received["fix_nan"] is True
 
 
-def test_preview_corrects_a_few_frames_spread_over_the_movie(layout, monkeypatch):
-    monkeypatch.setattr(
-        "celldetective.utils.image_loaders.auto_load_number_of_frames", lambda path: 10
-    )
-    layout.attr_parent.current_stack = "movie.tif"
+def test_preview_corrects_a_few_frames_spread_over_the_movie():
+    from celldetective.preprocessing import preview_frame_indices
 
-    indices = layout.preview_frame_indices()
+    indices = preview_frame_indices(10, 2, 5)
 
     # IFDs of frames 0 to 9 of a two-channel movie.
     assert len(indices) == 5
@@ -103,3 +100,18 @@ def test_empty_fit_radius_is_full_frame_and_zero_is_rejected(layout, monkeypatch
     layout.add_correction_btn.click()
     assert layout.parent_window.protocols == []
     assert radius_warnings
+
+
+def test_invalid_threshold_is_rejected(layout, monkeypatch):
+    shown = []
+    monkeypatch.setattr(
+        "celldetective.gui.gui_utils.QMessageBox.exec",
+        lambda self: shown.append(self.text()),
+    )
+    # Typed through: the validator lets intermediate input such as this one in.
+    layout.threshold_le.setText("1e")
+    layout.add_correction_btn.click()
+
+    assert layout.parent_window.protocols == []
+    assert layout.correction_parameters() is None
+    assert shown

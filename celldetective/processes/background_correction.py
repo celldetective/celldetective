@@ -220,6 +220,7 @@ class BackgroundCorrectionProcess(Process):
                     export_prefix=export_prefix,
                     progress_callback=progress_callback,
                     subset_indices=getattr(self, "subset_indices", None),
+                    preview_frames=getattr(self, "preview_frames", None),
                 )
             elif correction_type == "offset":
                 from celldetective.preprocessing import correct_channel_offset

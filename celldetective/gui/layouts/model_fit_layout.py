@@ -18,7 +18,7 @@ from PyQt5.QtWidgets import (
 from fonticon_mdi6 import MDI6
 from superqt.fonticon import icon
 
-from celldetective.gui.base.components import CelldetectiveProgressDialog
+from celldetective.gui.base.components import CelldetectiveProgressDialog, ToolButton
 from celldetective.gui.base.styles import Styles
 from celldetective.gui.gui_utils import ThresholdLineEdit
 from celldetective.gui.layouts.operation_layout import OperationLayout
@@ -77,11 +77,10 @@ class BackgroundFitCorrectionLayout(QGridLayout, Styles):
         self.thresh_lbl.setToolTip(
             "Threshold on the STD-filtered image.\nPixel values above the threshold are\nconsidered as non-background and are\nmasked prior to background estimation."
         )
-        self.threshold_viewer_btn = QPushButton()
-        self.threshold_viewer_btn.setIcon(icon(MDI6.image_check, color="k"))
-        self.threshold_viewer_btn.setStyleSheet(self.button_select_all)
+        self.threshold_viewer_btn = ToolButton(
+            MDI6.image_check, "Set the threshold graphically."
+        )
         self.threshold_viewer_btn.clicked.connect(self.set_threshold_graphically)
-        self.threshold_viewer_btn.setToolTip("Set the threshold graphically.")
 
         self.model_lbl = QLabel("Model: ")
         self.model_lbl.setToolTip("2D model to fit the background with.")
@@ -89,12 +88,11 @@ class BackgroundFitCorrectionLayout(QGridLayout, Styles):
         self.models_cb.addItems(["paraboloid", "plane"])
         self.models_cb.setToolTip("2D model to fit the background with.")
 
-        self.corrected_stack_viewer = QPushButton("")
-        self.corrected_stack_viewer.setStyleSheet(self.button_select_all)
-        self.corrected_stack_viewer.setIcon(icon(MDI6.eye_outline, color="black"))
-        self.corrected_stack_viewer.setToolTip("View corrected image")
+        self.corrected_stack_viewer = ToolButton(
+            MDI6.eye_outline,
+            "View corrected image",
+        )
         self.corrected_stack_viewer.clicked.connect(self.preview_correction)
-        self.corrected_stack_viewer.setIconSize(QSize(20, 20))
 
         self.add_correction_btn = QPushButton("Add correction")
         self.add_correction_btn.setStyleSheet(self.button_style_sheet_2)
@@ -160,7 +158,8 @@ class BackgroundFitCorrectionLayout(QGridLayout, Styles):
     def add_instructions_to_parent_list(self):
         """Add instructions to the parent protocol list."""
 
-        self.generate_instructions()
+        if not self.generate_instructions():
+            return
         self.parent_window.protocols.append(self.instructions)
         correction_description = ""
         for index, (key, value) in enumerate(self.instructions.items()):
@@ -169,8 +168,20 @@ class BackgroundFitCorrectionLayout(QGridLayout, Styles):
             correction_description += str(key) + " : " + str(value)
         self.parent_window.protocol_list.addItem(correction_description)
 
-    def generate_instructions(self):
-        """Generate the instructions dictionary."""
+    def generate_instructions(self) -> bool:
+        """
+        Generate the instructions dictionary.
+
+        Returns
+        -------
+        bool
+            False if the threshold is invalid, in which case a warning is shown.
+        """
+
+        # None once the field warned it is invalid.
+        threshold = self.threshold_le.get_threshold()
+        if threshold is None:
+            return False
 
         if self.operation_layout.subtract_btn.isChecked():
             operation = "subtract"
@@ -189,11 +200,12 @@ class BackgroundFitCorrectionLayout(QGridLayout, Styles):
             "target_channel": self.channels_cb.currentText(),
             "correction_type": "fit",
             "model": self.models_cb.currentText(),
-            "threshold_on_std": self.threshold_le.get_threshold(),
+            "threshold_on_std": threshold,
             "operation": operation,
             "clip": clip,
             "downsample": int(self.downsample_le.text()),
         }
+        return True
 
     def set_target_channel(self):
         """Set the target channel index."""
@@ -242,6 +254,11 @@ class BackgroundFitCorrectionLayout(QGridLayout, Styles):
             if returnValue == QMessageBox.Ok:
                 return None
 
+        # None once the field warned it is invalid.
+        threshold = self.threshold_le.get_threshold()
+        if threshold is None:
+            return None
+
         if self.operation_layout.subtract_btn.isChecked():
             operation = "subtract"
         else:
@@ -276,7 +293,7 @@ class BackgroundFitCorrectionLayout(QGridLayout, Styles):
             "position_option": self.attr_parent.position_list.getSelectedIndices(),
             "target_channel": self.channels_cb.currentText(),
             "model": self.models_cb.currentText(),
-            "threshold_on_std": self.threshold_le.get_threshold(),
+            "threshold_on_std": threshold,
             "operation": operation,
             "clip": clip,
             "activation_protocol": [["gauss", 2], ["std", 4]],

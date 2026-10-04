@@ -939,9 +939,12 @@ class DistanceChoice(CelldetectiveWidget):
         self.close()
 
 
-class RadiusLineEdit(QLineEdit):
+class NumberLineEdit(QLineEdit):
     """
-    Optional radius in pixels of a disk centred on the image, empty for the full frame.
+    Number field, read with a comma or a dot as decimal separator.
+
+    Optional by default: an empty field reads as None. Subclasses set ``OPTIONAL`` to False
+    for a value that is required, and ``LOWER_BOUND`` for one that must be above a bound.
 
     Parameters
     ----------
@@ -949,66 +952,98 @@ class RadiusLineEdit(QLineEdit):
         Passed to :class:`QLineEdit` (e.g. the parent widget).
     tooltip : str, optional
         Tooltip of the field, keyword only.
+    invalid : str, optional
+        Warning shown by :meth:`value_or_warn` for an invalid value, keyword only.
     """
 
-    INVALID = "The radius must be a strictly positive number, or empty for the full frame."
+    INVALID = "The value must be a number, or empty."
+    # Whether an empty field is valid, read as None.
+    OPTIONAL = True
+    # Values must be strictly above it, if set.
+    LOWER_BOUND: Optional[float] = None
 
-    def __init__(self, *args: Any, tooltip: Optional[str] = None, **kwargs: Any) -> None:
+    def __init__(
+        self,
+        *args: Any,
+        tooltip: Optional[str] = None,
+        invalid: Optional[str] = None,
+        **kwargs: Any,
+    ) -> None:
         super().__init__(*args, **kwargs)
+        if invalid:
+            self.INVALID = invalid
         validator = QDoubleValidator()
-        validator.setBottom(0.0)
+        if self.LOWER_BOUND is not None:
+            validator.setBottom(self.LOWER_BOUND)
         self.setValidator(validator)
-        self.setPlaceholderText("full frame")
         if tooltip:
             self.setToolTip(tooltip)
 
-    def radius(self) -> Optional[float]:
+    def value(self) -> Optional[float]:
         """
-        Read the radius.
+        Read the value.
 
         Returns
         -------
         float or None
-            The radius, or None when the field is empty (full frame).
+            The value, or None when the field is empty and ``OPTIONAL``.
 
         Raises
         ------
         ValueError
-            If the field is not a strictly positive number, e.g. an intermediate input such as
-            ``"1e"`` that the validator lets through, or 0.
+            If the field is not a valid number, e.g. an intermediate input such as ``"1e"``
+            that the validator lets through, a value not above ``LOWER_BOUND``, or an empty
+            field that is not ``OPTIONAL``.
         """
         text = self.text().strip().replace(",", ".")
         if not text:
-            return None
-        radius = float(text)
-        if radius <= 0:
+            if self.OPTIONAL:
+                return None
             raise ValueError(self.INVALID)
-        return radius
+        value = self._parse(text)
+        if self.LOWER_BOUND is not None and value <= self.LOWER_BOUND:
+            raise ValueError(self.INVALID)
+        return value
 
-    def radius_or_warn(self) -> Tuple[bool, Optional[float]]:
+    def _parse(self, text: str) -> float:
+        """Convert the text, decimal separator already a dot; raise ValueError if invalid."""
+        return float(text)
+
+    def value_or_warn(self) -> Tuple[bool, Optional[float]]:
         """
-        Read the radius, with a warning if it is invalid.
+        Read the value, with a warning if it is invalid.
 
         Returns
         -------
         tuple of (bool, float or None)
-            Whether the field is valid, and the radius (None for the full frame).
+            Whether the field is valid, and the value (None when the field is empty).
         """
         try:
-            return True, self.radius()
+            return True, self.value()
         except ValueError:
             generic_message(self.INVALID, "warning")
             return False, None
 
-    def radius_or_none(self) -> Optional[float]:
-        """The radius, or None when the field is empty or invalid."""
+    def value_or_none(self) -> Optional[float]:
+        """The value, or None when the field is empty or invalid."""
         try:
-            return self.radius()
+            return self.value()
         except ValueError:
             return None
 
 
-class ThresholdLineEdit(QLineEdit):
+class RadiusLineEdit(NumberLineEdit):
+    """Optional radius in pixels of a disk centred on the image, empty for the full frame."""
+
+    INVALID = "The radius must be a strictly positive number, or empty for the full frame."
+    LOWER_BOUND = 0.0
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.setPlaceholderText("full frame")
+
+
+class ThresholdLineEdit(NumberLineEdit):
     """
     A custom QLineEdit widget to manage and validate threshold values.
 
@@ -1045,6 +1080,9 @@ class ThresholdLineEdit(QLineEdit):
     >>> print(threshold_input.get_threshold())
     5
     """
+
+    INVALID = "Please set a valid threshold value."
+    OPTIONAL = False
 
     def __init__(
         self,
@@ -1092,6 +1130,7 @@ class ThresholdLineEdit(QLineEdit):
         else:
             self.init_value = int(self.init_value)
             validator = QIntValidator()
+        # Only kept out by the validator: unlike ``LOWER_BOUND``, the bottom itself is valid.
         if bottom is not None:
             validator.setBottom(bottom)
         self.setValidator(validator)
@@ -1154,23 +1193,12 @@ class ThresholdLineEdit(QLineEdit):
                 The threshold value as a float or int, or None if the value is invalid.
         """
 
-        try:
-            if self.value_type == "float":
-                thresh = float(self.text().replace(",", "."))
-            else:
-                thresh = int(self.text().replace(",", "."))
-        except ValueError:
-            if show_warning:
-                msgBox = QMessageBox()
-                msgBox.setWindowTitle("warning")
-                msgBox.setIcon(QMessageBox.Critical)
-                msgBox.setText("Please set a valid threshold value.")
-                msgBox.setWindowTitle("")
-                msgBox.setStandardButtons(QMessageBox.Ok)
-                returnValue = msgBox.exec()
-            thresh = None
+        if show_warning:
+            return self.value_or_warn()[1]
+        return self.value_or_none()
 
-        return thresh
+    def _parse(self, text: str) -> Union[float, int]:
+        return float(text) if self.value_type == "float" else int(text)
 
 
 def color_from_status(status: int, recently_modified: bool = False) -> str:

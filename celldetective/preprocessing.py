@@ -152,13 +152,14 @@ def _iter_movies(
     len_movie: float,
     progress_callback: Optional[Callable] = None,
     show_progress: bool = True,
+    stage: str = "correcting",
 ):
     """
     Yield ``(pos_path, stack_path, stack_length)`` for each position that holds a movie.
 
     ``stack_length`` is read from the movie, or ``len_movie`` if it cannot be. Positions without
-    a movie are skipped with a warning. The position progress is reported once each position is
-    done.
+    a movie are skipped with a warning. The position progress is reported, under ``stage``, once
+    each position is done.
     """
     total = len(positions)
     for pidx, pos_path in enumerate(tqdm(positions, disable=not show_progress)):
@@ -172,7 +173,7 @@ def _iter_movies(
             )
         if progress_callback:
             progress_callback(
-                level="position", iter=pidx, total=total, stage="correcting"
+                level="position", iter=pidx, total=total, stage=stage
             )
 
 
@@ -324,112 +325,133 @@ def estimate_background_per_condition(
     len_movie, movie_prefix, channel_index, nbr_channels = _correction_inputs(
         experiment, target_channel, movie_prefix
     )
-    channel_indices = [channel_index]
-    wells = get_experiment_wells(experiment)
-
-    well_indices, position_indices = interpret_wells_and_positions(
-        experiment, well_option, "*"
-    )
-
-    edge = estimate_unreliable_edge(activation_protocol)
-
     backgrounds = []
 
-    for k, well_path in enumerate(
-        tqdm(wells[well_indices], disable=not show_progress_per_well)
+    for _, well_path, positions in _iter_wells(
+        experiment, well_option, "*", show_progress=show_progress_per_well
     ):
-
         well_name, _ = extract_well_name_and_number(well_path)
-
-        positions = get_positions_in_well(well_path)
-        logger.info(
-            f"Reconstruct a background in well {well_name} from positions: {[extract_position_name(p) for p in positions]}..."
-        )
-
-        background_per_position = []
-
-        for l, pos_path in enumerate(
-            tqdm(positions, disable=not show_progress_per_pos)
-        ):
-            if progress_callback is not None:
-                should_continue = progress_callback(
-                    level="position", iter=l, total=len(positions)
-                )
-                if should_continue is False:
-                    logger.info("Background estimation cancelled by user.")
-                    return None
-
-            stack_path = get_position_movie_path(pos_path, prefix=movie_prefix)
-            if stack_path is not None:
-                stack_length = auto_load_number_of_frames(stack_path)
-                img_num_channels = _get_img_num_per_channel(
-                    channel_indices,
-                    int(len_movie if stack_length is None else stack_length),
-                    nbr_channels,
-                )[0]
-                if mode == "timeseries":
-                    img_num_channels = img_num_channels[frame_range[0] : frame_range[1]]
-
-                # Each frame is masked before the frames are combined: a cell seen in one
-                # frame only would otherwise be blurred into the average, below the threshold.
-                masked = None
-                for t, img_num in enumerate(img_num_channels):
-                    frame = load_frames(
-                        [int(img_num)], stack_path, normalize_input=False
-                    )[:, :, 0]
-                    frame = _mask_non_background(
-                        frame, threshold_on_std, activation_protocol, edge
-                    )
-                    if masked is None:
-                        masked = np.empty(
-                            (len(img_num_channels),) + frame.shape, dtype=np.float32
-                        )
-                    masked[t] = frame
-
-                if masked is None:
-                    logger.warning(
-                        f"No frame of {pos_path} to estimate the background from"
-                        + (
-                            f" in the frame range {frame_range}..."
-                            if mode == "timeseries"
-                            else "..."
-                        )
-                    )
-                else:
-                    background_per_position.append(np.nanmedian(masked, axis=0))
-            else:
-                # Left out of the median: an empty entry would make it fail for the whole well.
-                logger.warning(f"Stack not found for position {pos_path}...")
-
-            if progress_callback:
-                progress_callback(
-                    level="position", iter=l, total=len(positions), stage="estimating"
-                )
-
-        if not background_per_position:
-            # The median of nothing is a scalar NaN, which would correct every pixel to NaN.
-            logger.error(
-                f"No position of well {well_name} to estimate the background from..."
+        try:
+            background = _estimate_well_background(
+                positions,
+                len_movie,
+                movie_prefix,
+                channel_index,
+                nbr_channels,
+                threshold_on_std=threshold_on_std,
+                frame_range=frame_range,
+                mode=mode,
+                activation_protocol=activation_protocol,
+                offset=offset,
+                fix_nan=fix_nan,
+                progress_callback=progress_callback,
+                show_progress=show_progress_per_pos,
             )
+        except Exception as e:
+            logger.error(f"Background could not be estimated for well {well_name}: {e}")
             backgrounds.append(None)
             continue
-
-        try:
-            background = np.nanmedian(background_per_position, axis=0).astype(float)
-            if progress_callback:
-                progress_callback(image_preview=background)
-
-            if offset is not None:
-                background -= offset
-            if fix_nan:
-                background = interpolate_nan(background)
-            backgrounds.append({"bg": background, "well": well_path})
-            logger.info(f"Background successfully computed for well {well_name}...")
-        except Exception as e:
-            logger.error(f"{e}")
-            backgrounds.append(None)
+        if background is None:
+            logger.info("Background estimation cancelled by user.")
+            return None
+        backgrounds.append({"bg": background, "well": well_path})
+        logger.info(f"Background successfully computed for well {well_name}...")
 
     return backgrounds
+
+
+def _estimate_well_background(
+    positions,
+    len_movie: float,
+    movie_prefix: Optional[str],
+    channel_index: int,
+    nbr_channels: int,
+    threshold_on_std: float,
+    frame_range: List[int],
+    mode: Literal["timeseries", "tiles"],
+    activation_protocol: List[List[Any]],
+    offset: Optional[float] = None,
+    fix_nan: bool = False,
+    progress_callback: Optional[Callable] = None,
+    show_progress: bool = False,
+) -> Optional[np.ndarray]:
+    """
+    Background of a well, estimated from its positions (see `estimate_background_per_condition`).
+
+    Returns
+    -------
+    numpy.ndarray or None
+        The background, or None if cancelled (``progress_callback`` returned False).
+
+    Raises
+    ------
+    ValueError
+        If no position holds a frame to estimate the background from: the median of nothing
+        is a scalar NaN, which would correct every pixel to NaN.
+    """
+    logger.info(
+        f"Reconstruct a background from positions: {[extract_position_name(p) for p in positions]}..."
+    )
+    edge = estimate_unreliable_edge(activation_protocol)
+    background_per_position = []
+
+    for pos_path, stack_path, stack_length in _iter_movies(
+        positions,
+        movie_prefix,
+        len_movie,
+        progress_callback=progress_callback,
+        show_progress=show_progress,
+        stage="estimating",
+    ):
+        # Called with no progress to report, only to know whether to stop.
+        if progress_callback is not None and progress_callback() is False:
+            return None
+
+        img_num_channels = _get_img_num_per_channel(
+            [channel_index], int(stack_length), nbr_channels
+        )[0]
+        if mode == "timeseries":
+            img_num_channels = img_num_channels[frame_range[0] : frame_range[1]]
+
+        # Each frame is masked before the frames are combined: a cell seen in one
+        # frame only would otherwise be blurred into the average, below the threshold.
+        masked = None
+        for t, img_num in enumerate(img_num_channels):
+            frame = load_frames([int(img_num)], stack_path, normalize_input=False)[
+                :, :, 0
+            ]
+            frame = _mask_non_background(
+                frame, threshold_on_std, activation_protocol, edge
+            )
+            if masked is None:
+                masked = np.empty(
+                    (len(img_num_channels),) + frame.shape, dtype=np.float32
+                )
+            masked[t] = frame
+
+        if masked is None:
+            logger.warning(
+                f"No frame of {pos_path} to estimate the background from"
+                + (
+                    f" in the frame range {frame_range}..."
+                    if mode == "timeseries"
+                    else "..."
+                )
+            )
+        else:
+            background_per_position.append(np.nanmedian(masked, axis=0))
+
+    if not background_per_position:
+        raise ValueError("no position to estimate the background from")
+
+    background = np.nanmedian(background_per_position, axis=0).astype(float)
+    if progress_callback:
+        progress_callback(image_preview=background)
+    if offset is not None:
+        background -= offset
+    if fix_nan:
+        background = interpolate_nan(background)
+    return background
 
 
 def _mask_non_background(
@@ -444,22 +466,43 @@ def _mask_non_background(
     Non-background pixels are those above ``threshold_on_std`` in the frame filtered by
     ``activation_protocol``, holes filled. An empty (all zero) frame is entirely NaN.
     """
-    from celldetective.filters import filter_image
-
     frame = np.array(frame, dtype=float)
     if not np.any(frame):
         frame[:] = np.nan
         return frame
-    std_frame = filter_image(frame.copy(), filters=activation_protocol)
-    mask = threshold_image(
+    frame[
+        _non_background_mask(frame.copy(), threshold_on_std, activation_protocol, edge)
+    ] = np.nan
+    return frame
+
+
+def _non_background_mask(
+    frame: np.ndarray,
+    threshold_on_std: float,
+    activation_protocol: List[List[Any]],
+    edge: Optional[int],
+    outside: Optional[np.ndarray] = None,
+) -> np.ndarray:
+    """
+    Boolean mask of the pixels above ``threshold_on_std`` in the frame filtered by
+    ``activation_protocol``, holes filled.
+
+    ``frame`` must be a float array the filters may modify in place: pass a copy to keep it.
+    The pixels of ``outside`` are left out of the thresholding: a closed high-variance ring
+    such as a diaphragm edge would otherwise have its whole inside masked by the hole filling.
+    """
+    from celldetective.filters import filter_image
+
+    std_frame = filter_image(frame, filters=activation_protocol)
+    if outside is not None:
+        std_frame[outside] = np.nan
+    return threshold_image(
         std_frame,
         threshold_on_std,
         np.inf,
         foreground_value=1,
         edge_exclusion=edge,
-    )
-    frame[mask.astype(bool)] = np.nan
-    return frame
+    ).astype(bool)
 
 
 def correct_background_model_free(
@@ -485,6 +528,8 @@ def correct_background_model_free(
     activation_protocol: List[List[Any]] = [["gauss", 2], ["std", 4]],
     export_prefix: str = "Corrected",
     progress_callback: Optional[Callable] = None,
+    subset_indices: Optional[List[int]] = None,
+    preview_frames: Optional[int] = None,
     **kwargs: Any,
 ) -> Optional[List[np.ndarray]]:
     """
@@ -542,9 +587,13 @@ def correct_background_model_free(
             The prefix for the exported file name. Defaults to "Corrected".
     progress_callback : callable, optional
             A callback function to be called at each step of the process (default is None).
+    subset_indices : list of int, optional
+            Absolute frame indices (IFDs) to correct for a preview, never exported.
+    preview_frames : int, optional
+            For a preview, the number of frames to correct, spread over each movie (see
+            `preview_frame_indices`). Ignored if ``subset_indices`` is given.
     **kwargs : Any
-            ``subset_indices``: absolute frame indices (IFDs) to correct for a preview, never
-            exported.
+            Ignored.
 
     Returns
     -------
@@ -570,7 +619,7 @@ def correct_background_model_free(
     )
     stacks = []
 
-    for well_index, well_path, positions in _iter_wells(
+    for _, well_path, positions in _iter_wells(
         experiment,
         well_option,
         position_option,
@@ -583,21 +632,21 @@ def correct_background_model_free(
             progress_callback(status="Reconstructing background...")
 
         try:
-            # Estimate background
-            background = estimate_background_per_condition(
-                experiment,
+            # From all the positions of the well, not only those to correct.
+            background = _estimate_well_background(
+                get_positions_in_well(well_path),
+                len_movie,
+                movie_prefix,
+                channel_index,
+                nbr_channels,
                 threshold_on_std=threshold_on_std,
-                well_option=int(well_index),
-                target_channel=target_channel,
                 frame_range=frame_range,
                 mode=mode,
-                show_progress_per_pos=True,
-                show_progress_per_well=False,
                 activation_protocol=activation_protocol,
                 offset=offset,
                 fix_nan=fix_nan,
                 progress_callback=progress_callback,
-                movie_prefix=movie_prefix,
+                show_progress=show_progress_per_pos,
             )
         except Exception as e:
             logger.error(
@@ -607,12 +656,6 @@ def correct_background_model_free(
         if background is None:
             logger.info("Background correction cancelled.")
             break
-        if background[0] is None:
-            logger.error(
-                f"Background could not be estimated... Skipping well {well_name}..."
-            )
-            continue
-        background = background[0]["bg"]
 
         if progress_callback:
             progress_callback(
@@ -648,29 +691,35 @@ def correct_background_model_free(
                 activation_protocol=activation_protocol,
                 prefix=export_prefix,
                 progress_callback=progress_callback,
-                subset_indices=kwargs.get("subset_indices", None),
+                subset_indices=(
+                    preview_frame_indices(stack_length, nbr_channels, preview_frames)
+                    if subset_indices is None and preview_frames
+                    else subset_indices
+                ),
             )
             logger.info("Correction successful.")
-            _log_preprocessing_step(
-                pos_path,
-                "model-free",
-                {
-                    "target_channel": target_channel,
-                    "mode": mode,
-                    "operation": operation,
-                    "clip": clip,
-                    "threshold_on_std": threshold_on_std,
-                    "offset": offset,
-                    "frame_range": frame_range,
-                    "optimize_option": optimize_option,
-                    "opt_coef_range": opt_coef_range,
-                    "opt_radius": opt_radius,
-                    "fix_nan": fix_nan,
-                    "activation_protocol": activation_protocol,
-                    "movie_prefix": movie_prefix,
-                    "export_prefix": export_prefix,
-                },
-            )
+            # Only what was written to the position: a preview leaves its data unchanged.
+            if export:
+                _log_preprocessing_step(
+                    pos_path,
+                    "model-free",
+                    {
+                        "target_channel": target_channel,
+                        "mode": mode,
+                        "operation": operation,
+                        "clip": clip,
+                        "threshold_on_std": threshold_on_std,
+                        "offset": offset,
+                        "frame_range": frame_range,
+                        "optimize_option": optimize_option,
+                        "opt_coef_range": opt_coef_range,
+                        "opt_radius": opt_radius,
+                        "fix_nan": fix_nan,
+                        "activation_protocol": activation_protocol,
+                        "movie_prefix": movie_prefix,
+                        "export_prefix": export_prefix,
+                    },
+                )
             if return_stacks:
                 stacks.append(corrected_stack)
             else:
@@ -679,6 +728,38 @@ def correct_background_model_free(
 
     if return_stacks:
         return stacks
+
+
+def preview_frame_indices(
+    stack_length: float, nbr_channels: int, n_frames: int
+) -> Optional[List[int]]:
+    """
+    Frames of a movie to correct for a preview.
+
+    Parameters
+    ----------
+    stack_length : int or float
+            Number of frames of the movie, possibly the configured movie length (a float)
+            when the movie's own cannot be read.
+    nbr_channels : int
+            Number of channels, interleaved in the movie.
+    n_frames : int
+            Number of frames wanted.
+
+    Returns
+    -------
+    list of int or None
+            The absolute frame indices (IFDs) of up to ``n_frames`` frames spread over the
+            movie, first and last included, or None (the whole movie) for a movie without
+            frames.
+    """
+    stack_length = int(stack_length)
+    if stack_length < 1:
+        return None
+    frames = np.unique(
+        np.linspace(0, stack_length - 1, min(n_frames, stack_length)).round()
+    )
+    return [int(t) * nbr_channels for t in frames]
 
 
 def _best_l1_coefficient(target: np.ndarray, background: np.ndarray) -> float:
@@ -842,7 +923,6 @@ def apply_background_to_stack(
     bg_valid = np.isfinite(background)
 
     if optimize_option:
-        from celldetective.filters import filter_image
         from celldetective.utils.registration import radial_distance
 
         coef_min, coef_max = sorted(opt_coef_range)
@@ -862,18 +942,10 @@ def apply_background_to_stack(
         frame_indices = subset_indices
 
     def coefficient(i, target_img):
-        std_frame = filter_image(target_img, filters=activation_protocol)
-        if outside is not None:
-            # Out of the thresholding too: a closed high-variance ring such as a diaphragm
-            # edge would otherwise have its whole inside masked by the hole filling.
-            # A new array: filter_image may hand back target_img itself.
-            std_frame = np.where(outside, np.nan, std_frame)
-        mask = threshold_image(
-            std_frame,
-            threshold_on_std,
-            np.inf,
-            foreground_value=1,
-            edge_exclusion=edge,
+        # A copy: target_img is the frame corrected next. The radius is left out of the
+        # thresholding too.
+        mask = _non_background_mask(
+            target_img.copy(), threshold_on_std, activation_protocol, edge, outside
         )
 
         target_crop = unpad(target_img, edge)
@@ -1238,6 +1310,7 @@ def correct_background_model(
     export_prefix: str = "Corrected",
     progress_callback: Optional[Callable] = None,
     downsample: int = 10,
+    subset_indices: Optional[List[int]] = None,
     **kwargs: Any,
 ) -> Optional[List[np.ndarray]]:
     """
@@ -1283,8 +1356,10 @@ def correct_background_model(
             A callback function to be called at each step of the process (default is None).
     downsample : int, optional
             The downsampling factor to reduce the number of points used for fitting (default is 10).
+    subset_indices : list of int, optional
+            Absolute frame indices (IFDs) to correct for a preview, never exported.
     **kwargs : Any
-            Additional keyword arguments to be passed to the underlying correction function.
+            Ignored.
 
     Returns
     -------
@@ -1339,24 +1414,26 @@ def correct_background_model(
                 return_stacks=return_stacks,
                 progress_callback=progress_callback,
                 downsample=downsample,
-                subset_indices=kwargs.get("subset_indices", None),
+                subset_indices=subset_indices,
             )
             logger.info("Correction successful.")
-            _log_preprocessing_step(
-                pos_path,
-                "model",
-                {
-                    "target_channel": target_channel,
-                    "model": model,
-                    "operation": operation,
-                    "clip": clip,
-                    "threshold_on_std": threshold_on_std,
-                    "activation_protocol": activation_protocol,
-                    "downsample": downsample,
-                    "movie_prefix": movie_prefix,
-                    "export_prefix": export_prefix,
-                },
-            )
+            # Only what was written to the position: a preview leaves its data unchanged.
+            if export:
+                _log_preprocessing_step(
+                    pos_path,
+                    "model",
+                    {
+                        "target_channel": target_channel,
+                        "model": model,
+                        "operation": operation,
+                        "clip": clip,
+                        "threshold_on_std": threshold_on_std,
+                        "activation_protocol": activation_protocol,
+                        "downsample": downsample,
+                        "movie_prefix": movie_prefix,
+                        "export_prefix": export_prefix,
+                    },
+                )
             if return_stacks:
                 stacks.append(corrected_stack)
             else:
@@ -1553,13 +1630,10 @@ def field_correction(
     if np.percentile(target_copy.flatten(), 99.9) == 0.0:
         return target_copy
 
-    from celldetective.filters import filter_image
-
-    std_frame = filter_image(target_copy, filters=activation_protocol)
     edge = estimate_unreliable_edge(activation_protocol)
-    mask = threshold_image(
-        std_frame, threshold, np.inf, foreground_value=1, edge_exclusion=edge
-    ).astype(int)
+    mask = _non_background_mask(target_copy, threshold, activation_protocol, edge).astype(
+        int
+    )
     background = fit_background_model(
         img, cell_masks=mask, model=model, edge_exclusion=edge, downsample=downsample
     )
@@ -1741,17 +1815,19 @@ def correct_channel_offset(
             )
 
             logger.info("Correction successful.")
-            _log_preprocessing_step(
-                pos_path,
-                "offset",
-                {
-                    "target_channel": target_channel,
-                    "correction_horizontal": correction_horizontal,
-                    "correction_vertical": correction_vertical,
-                    "movie_prefix": movie_prefix,
-                    "export_prefix": export_prefix,
-                },
-            )
+            # Only what was written to the position: a preview leaves its data unchanged.
+            if export:
+                _log_preprocessing_step(
+                    pos_path,
+                    "offset",
+                    {
+                        "target_channel": target_channel,
+                        "correction_horizontal": correction_horizontal,
+                        "correction_vertical": correction_vertical,
+                        "movie_prefix": movie_prefix,
+                        "export_prefix": export_prefix,
+                    },
+                )
             if return_stacks:
                 stacks.append(corrected_stack)
             else:
