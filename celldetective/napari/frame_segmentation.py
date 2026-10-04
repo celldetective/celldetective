@@ -244,6 +244,39 @@ def record_undo(layer, atoms: Sequence[tuple]) -> None:
         logger.debug(f"Could not record an undo step for the segmentation: {e}")
 
 
+def labels_mismatch(stack, layer) -> Optional[str]:
+    """
+    Tell why the labels of a layer cannot be overlaid on the movie, if they cannot.
+
+    Saying so beats a broadcasting error from deep inside a run, once the work
+    is done: empty labels written transposed, labels from another position, a
+    stack registered to a different size.
+
+    Parameters
+    ----------
+    stack : ndarray or dask.array.Array
+        The movie (TYXC).
+    layer : napari.layers.Labels
+        The segmentation layer.
+
+    Returns
+    -------
+    str or None
+        The message to show, or None when the labels have the movie's shape.
+    """
+
+    shape = tuple(int(n) for n in stack.shape[1:3])
+    labels_shape = tuple(int(n) for n in layer.data.shape[-2:])
+    if labels_shape == shape:
+        return None
+    return (
+        f"The labels of this position are {labels_shape[0]}x{labels_shape[1]} "
+        f"pixels but its movie is {shape[0]}x{shape[1]}, so the two cannot be "
+        "overlaid. Delete the labels folder and let celldetective create it "
+        "again, or run the segmentation over the position."
+    )
+
+
 def merge_labels(current: np.ndarray, new_labels: np.ndarray) -> np.ndarray:
     """
     Combine new labels with the ones already drawn on the frame.
@@ -972,6 +1005,15 @@ class FrameSegmentationPanel(QWidget):
                 "Every input channel is set to None. Assign at least one experiment "
                 "channel to a model input."
             )
+            return
+
+        try:
+            mismatch = labels_mismatch(self.stack, self.viewer.layers["segmentation"])
+        except Exception as e:
+            self._failed(f"Could not read the segmentation layer: {e}")
+            return
+        if mismatch:
+            self._failed(mismatch)
             return
 
         t = int(self.viewer.dims.current_step[0])

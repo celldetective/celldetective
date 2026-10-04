@@ -465,3 +465,33 @@ class TestParameterRows:
         panel, labels = self._rows(qtbot, {"model_type": "stardist"})
         assert panel.cell_size_le is None
         assert panel.param_form.rowCount() == 1
+
+
+class TestLabelsMismatch:
+    """
+    Labels that do not have the movie's shape are reported before the model
+    runs, rather than as a broadcasting error once the inference is done.
+    """
+
+    def test_matching_labels_pass(self):
+        layer = MagicMock(data=np.zeros((2, 30, 40), dtype=np.uint16))
+        assert fs.labels_mismatch(np.zeros((2, 30, 40, 1)), layer) is None
+
+    def test_transposed_labels_are_reported_before_the_model_runs(self):
+        panel = _panel()
+        panel._worker = None
+        panel.model_cb = MagicMock(currentText=MagicMock(return_value="model"))
+        panel.channel_selection = None
+        panel._selected_channels = lambda: None
+        panel.stack = np.zeros((2, 30, 40, 1))
+        layer = MagicMock(data=np.zeros((2, 40, 30), dtype=np.uint16))
+        panel.viewer = MagicMock(layers={"segmentation": layer})
+        failures = []
+        panel._failed = failures.append
+        panel._reuse_prepared = MagicMock(
+            side_effect=AssertionError("the model must not be prepared")
+        )
+
+        panel.segment_current_frame()
+
+        assert failures and "40x30" in failures[0] and "30x40" in failures[0]
