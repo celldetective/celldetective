@@ -4,7 +4,7 @@ from glob import glob
 from typing import Callable, Optional
 
 import numpy as np
-from PyQt5.QtCore import Qt, QSize, QThread
+from PyQt5.QtCore import Qt, QSize, QThread, QTimer
 from PyQt5.QtGui import QDoubleValidator, QIntValidator, QCloseEvent
 from PyQt5.QtWidgets import (
     QAction,
@@ -52,6 +52,9 @@ from celldetective.utils.threshold_configs import remember_threshold_configs
 import logging
 
 logger = logging.getLogger(__name__)
+
+# Rest [ms] of the viewer's sliders before the histogram follows them.
+HISTOGRAM_REFRESH_DELAY = 100
 
 
 class BackgroundLoader(QThread):
@@ -640,25 +643,27 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
         self.ax_hist.spines["top"].set_visible(False)
         self.ax_hist.spines["right"].set_visible(False)
         # self.ax_hist.set_yticks([])
-        self.ax_hist.set_xlim(
-            np.amin(self.img[self.img == self.img]),
-            np.amax(self.img[self.img == self.img]),
-        )
+        low, high = np.nanmin(self.img), np.nanmax(self.img)
+        self.ax_hist.set_xlim(low, high)
         self.ax_hist.set_ylim(0, self.hist_y.max())
         self.add_hist_threshold()
         self.canvas_hist.canvas.draw()
 
-        low = np.amin(self.img[self.img == self.img])
-        high = np.amax(self.img[self.img == self.img])
-        if reset_threshold:
-            self.threshold_slider.setRange(low, high)
-            self.threshold_slider.setValue(
-                [np.nanpercentile(self.img.ravel(), 90), high]
-            )
-        else:
-            kept = self.threshold_slider.value()
-            self.threshold_slider.setRange(min(low, kept[0]), max(high, kept[1]))
-            self.threshold_slider.setValue(kept)
+        # Silent: the threshold is applied once, below, rather than on each change.
+        self.threshold_slider.blockSignals(True)
+        try:
+            if reset_threshold:
+                self.threshold_slider.setRange(low, high)
+                self.threshold_slider.setValue(
+                    [np.nanpercentile(self.img.ravel(), 90), high]
+                )
+            else:
+                kept = self.threshold_slider.value()
+                self.threshold_slider.setRange(min(low, kept[0]), max(high, kept[1]))
+                self.threshold_slider.setValue(kept)
+        finally:
+            # Never left mute: the slider would stop applying the threshold for good.
+            self.threshold_slider.blockSignals(False)
         self.threshold_changed(self.threshold_slider.value())
 
     def add_hist_threshold(self):
@@ -685,37 +690,39 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
         The viewer recomputes its filtered frame whenever the channel or the time
         slider moves, but nothing told the wizard: the histogram, and with it the
         threshold slider's range, stayed on the channel the wizard opened with,
-        so a threshold was read off one image and applied to another.
+        so a threshold was read off one image and applied to another. The
+        histogram follows once the slider rests, rather than at each step of a
+        drag.
         """
 
-        channel_cb = getattr(self.viewer, "channel_cb", None)
-        if channel_cb is not None:
-            channel_cb.currentIndexChanged.connect(
-                lambda _: self._refresh_histogram(reset_threshold=True)
-            )
-        frame_slider = getattr(self.viewer, "frame_slider", None)
-        if frame_slider is not None:
-            frame_slider.valueChanged.connect(
-                lambda _: self._refresh_histogram(reset_threshold=False)
-            )
+        self._histogram_key = self.viewer.image_key()
+        self._histogram_timer = QTimer(self)
+        self._histogram_timer.setSingleShot(True)
+        self._histogram_timer.setInterval(HISTOGRAM_REFRESH_DELAY)
+        self._histogram_timer.timeout.connect(self._refresh_histogram)
+        self.viewer.processed_image_changed.connect(self._histogram_timer.start)
 
-    def _refresh_histogram(self, reset_threshold: bool) -> None:
+    def _refresh_histogram(self) -> None:
         """
-        Redraw the histogram on the viewer's current image.
+        Redraw the histogram on the viewer's current image, if it is another one.
 
-        Connected after the viewer's own handlers, so the filtered frame it reads
-        is the one just recomputed for the new channel or frame.
-
-        Parameters
-        ----------
-        reset_threshold : bool
-            Passed on to :meth:`update_histogram`.
+        The viewer also recomputes its frame for the same image (after a
+        watershed, for one), which must leave the threshold and what was
+        computed from it alone.
         """
 
-        image = getattr(self.viewer, "processed_image", None)
-        if image is None:
+        if not is_alive(self.viewer):
             return
-        self.clear_post_threshold_options()
+        image = getattr(self.viewer, "processed_image", None)
+        key = self.viewer.image_key()
+        if image is None or key == self._histogram_key:
+            return
+        # Another frame keeps the threshold being tuned; another channel or
+        # other filters change the intensities themselves.
+        reset_threshold = (
+            key[0] != self._histogram_key[0] or key[2] != self._histogram_key[2]
+        )
+        self._histogram_key = key
         self.img = image
         self.update_histogram(reset_threshold=reset_threshold)
 
@@ -747,6 +754,11 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
         self.viewer.set_preprocessing(self.filters)
         self.img = self.viewer.processed_image
         self.update_histogram()
+        # Drawn on the image shown: a refresh still pending would draw it again.
+        self._histogram_key = self.viewer.image_key()
+        timer = getattr(self, "_histogram_timer", None)
+        if timer is not None:
+            timer.stop()
 
     def preprocess_image(self):
         """
@@ -756,7 +768,6 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
 
         self.filters = self.preprocessing.list.items
         self.reload_frame()
-        self.update_histogram()
 
     def threshold_changed(self, value: list) -> None:
         """

@@ -14,15 +14,18 @@ e.g. a French locale, raised an uncaught ``ValueError``.
 The integer :class:`QLabeledSlider` is wrapped too: superqt gives its label the range of the
 slider when it is created (0-99) and never updates it, so any value above 99 was shown as 99.
 
-Last, the float sliders' labels are wide enough for the value with all its decimals. superqt sizes a
+The float sliders' labels are wide enough for the value with all its decimals. superqt sizes a
 label on the text of its bounds and leaves barely a pixel around it, so "0.500" did not fit and lost
 its first digit.
+
+Last, the range sliders keep their handle labels inside the widget at either end of the range.
 """
 
 from qtpy.QtCore import QLocale
 from qtpy.QtGui import QDoubleValidator, QFontMetrics
 from superqt import QLabeledDoubleRangeSlider as _QLabeledDoubleRangeSlider
 from superqt import QLabeledDoubleSlider as _QLabeledDoubleSlider
+from superqt import QLabeledRangeSlider as _QLabeledRangeSlider
 from superqt import QLabeledSlider as _QLabeledSlider
 from superqt.sliders._labeled import EdgeLabelMode
 
@@ -169,6 +172,14 @@ class QLabeledDoubleSlider(_QLabeledDoubleSlider):
 
     def setRange(self, min: float, max: float) -> None:
         super().setRange(*safe_slider_range(min, max))
+
+
+class QLabeledRangeSlider(_QLabeledRangeSlider):
+    """:class:`superqt.QLabeledRangeSlider` whose handle labels stay inside the widget."""
+
+    def _reposition_labels(self) -> None:
+        super()._reposition_labels()
+        _keep_labels_inside(self, self._handle_labels)
 
 
 class QLabeledDoubleRangeSlider(_QLabeledDoubleRangeSlider):

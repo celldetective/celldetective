@@ -8,7 +8,6 @@ from PyQt5.QtWidgets import (
     QAction,
     QLabel,
     QComboBox,
-    QPushButton,
 )
 from fonticon_mdi6 import MDI6
 from celldetective.gui.base.sliders import QLabeledSlider, QLabeledDoubleRangeSlider
@@ -16,7 +15,7 @@ from superqt.fonticon import icon
 import matplotlib.gridspec as gridspec
 import matplotlib.backend_bases
 
-from celldetective.gui.base.components import CelldetectiveWidget
+from celldetective.gui.base.components import CelldetectiveWidget, ToolButton
 from celldetective.gui.base.threads import start_tracked, stop_thread
 from celldetective.gui.base.utils import center_window
 from celldetective.utils.image_loaders import (
@@ -885,12 +884,10 @@ class StackVisualizer(CelldetectiveWidget):
 
         self.contrast_slider.valueChanged.connect(self.change_contrast)
 
-        self.auto_contrast_btn = QPushButton()
-        self.auto_contrast_btn.setIcon(icon(MDI6.contrast_box, color="black"))
-        self.auto_contrast_btn.setStyleSheet(self.button_select_all)
-        self.auto_contrast_btn.setToolTip(
+        self.auto_contrast_btn = ToolButton(
+            MDI6.contrast_box,
             "Auto contrast: each click keeps the 1st-99th percentiles of the pixels\n"
-            f"within the current contrast; the {AUTO_CONTRAST_STEPS + 1}th click restores the full range."
+            f"within the current contrast; the {AUTO_CONTRAST_STEPS + 1}th click restores the full range.",
         )
         self.auto_contrast_btn.clicked.connect(self.auto_contrast)
         self.auto_contrast_step = 0
@@ -910,7 +907,9 @@ class StackVisualizer(CelldetectiveWidget):
         ``AUTO_CONTRAST_STEPS`` clicks, the next one restores the full range of the frame.
         """
 
-        frame = np.asarray(self.init_frame, dtype=float)
+        # The image displayed, which subclasses may filter (threshold and spot detection
+        # previews): the contrast slider is in its intensities, not those of init_frame.
+        frame = np.asarray(self.im.get_array(), dtype=float)
         restore = self.auto_contrast_step >= AUTO_CONTRAST_STEPS
         values = frame if restore else self.pixels_in_view(frame)
         values = values[np.isfinite(values)]
