@@ -12,6 +12,7 @@ import io
 import os
 import shutil
 import tempfile
+import time
 import unittest
 import zipfile
 from unittest import mock
@@ -76,11 +77,22 @@ class TestExtractZenodoArchive(unittest.TestCase):
     def test_a_staging_folder_left_by_a_killed_extraction_is_removed(self):
         stale = os.path.join(self.out, ".extract-killed")
         os.makedirs(os.path.join(stale, "my_model"))
+        old = time.time() - downloaders.STALE_EXTRACTION_AGE - 60
+        os.utime(stale, (old, old))
         _make_archive(self.zip, {"my_model/a.json": b"{}"})
 
         downloaders.extract_zenodo_archive(self.zip, self.out, "my_model")
 
         self.assertEqual(os.listdir(self.out), ["my_model"])
+
+    def test_the_staging_folder_of_a_running_extraction_is_left_alone(self):
+        running = os.path.join(self.out, ".extract-running")
+        os.makedirs(os.path.join(running, "other_model"))
+        _make_archive(self.zip, {"my_model/a.json": b"{}"})
+
+        downloaders.extract_zenodo_archive(self.zip, self.out, "my_model")
+
+        self.assertEqual(sorted(os.listdir(self.out)), [".extract-running", "my_model"])
 
     def test_extracting_over_a_folder_keeps_what_the_archive_does_not_hold(self):
         demo = os.path.join(self.out, "demo_ricm")

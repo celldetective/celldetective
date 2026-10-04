@@ -2,6 +2,7 @@ import json
 import os
 import shutil
 import tempfile
+import time
 import zipfile
 from glob import glob
 from urllib.request import urlopen
@@ -11,7 +12,7 @@ from tqdm import tqdm
 
 from celldetective.utils.io import remove_file_if_exists
 from celldetective import get_logger
-from typing import Optional, List, Union, Tuple
+from typing import Callable, Optional, List, Union, Tuple
 
 logger = get_logger()
 
@@ -139,7 +140,6 @@ def open_url_with_retries(url: str):
     import random
     import socket
     import ssl
-    import time
     from urllib.error import HTTPError, URLError
 
     ssl._create_default_https_context = ssl._create_unverified_context
@@ -238,6 +238,11 @@ def _merge_into(src: str, dst: str) -> None:
             os.replace(s, d)
 
 
+# Age [s] past which a staging folder is taken for that of an extraction killed
+# half-way: a younger one may be that of an extraction still running.
+STALE_EXTRACTION_AGE = 3600
+
+
 def extract_zenodo_archive(path_to_zip_file: str, output_dir: str, file: str) -> None:
     """
     Extract a Zenodo archive into `output_dir`, all or nothing.
@@ -260,9 +265,15 @@ def extract_zenodo_archive(path_to_zip_file: str, output_dir: str, file: str) ->
         weights file of a model folder of that name is renamed after it.
     """
 
-    # Staging folders of an extraction that was killed half-way.
-    for stale in glob(os.path.join(output_dir, ".extract-*")):
-        shutil.rmtree(stale, ignore_errors=True)
+    # Staging folders of an extraction that was killed half-way, leaving alone
+    # those of another download extracting into the same folder right now.
+    for staged in glob(os.path.join(output_dir, ".extract-*")):
+        try:
+            age = time.time() - os.path.getmtime(staged)
+        except OSError:
+            continue
+        if age > STALE_EXTRACTION_AGE:
+            shutil.rmtree(staged, ignore_errors=True)
 
     staging = tempfile.mkdtemp(prefix=".extract-", dir=output_dir)
     try:
@@ -281,17 +292,64 @@ def extract_zenodo_archive(path_to_zip_file: str, output_dir: str, file: str) ->
         ):
             os.rename(file_to_rename[0], os.sep.join([staging, file, file]))
 
-        for entry in os.listdir(staging):
-            src, dst = os.path.join(staging, entry), os.path.join(output_dir, entry)
-            if os.path.isdir(src) and os.path.isdir(dst):
-                # Extracting over an existing folder (a demo downloaded again)
-                # overwrites what the archive holds and keeps the rest, as
-                # extracting in place did.
-                _merge_into(src, dst)
-            else:
-                os.replace(src, dst)
+        # Extracting over an existing folder (a demo downloaded again) overwrites
+        # what the archive holds and keeps the rest, as extracting in place did.
+        _merge_into(staging, output_dir)
     finally:
         shutil.rmtree(staging, ignore_errors=True)
+
+
+def stream_url_to_file(
+    url: str,
+    dst: str,
+    on_chunk: Optional[Callable[[int, Optional[int]], None]] = None,
+) -> None:
+    """
+    Download the object at a URL to a local path, all or nothing.
+
+    The object is written to a temporary file next to `dst`, moved into place
+    only once the size the server announced is checked.
+
+    Parameters
+    ----------
+    url : str
+        URL of the object to download.
+    dst : str
+        Full path where the object is saved.
+    on_chunk : callable, optional
+        Called as ``on_chunk(downloaded, file_size)`` once the URL is open, then
+        after each chunk; ``file_size`` is None if the server announced none. An
+        exception raised from it aborts the download.
+    """
+
+    dst = os.path.expanduser(dst)
+    u, file_size = open_url_with_retries(url)
+    try:
+        f = tempfile.NamedTemporaryFile(delete=False, dir=os.path.dirname(dst))
+    except BaseException:
+        # No file to write to (e.g. a missing or read-only folder): the response is
+        # closed all the same.
+        u.close()
+        raise
+    try:
+        downloaded = 0
+        if on_chunk is not None:
+            on_chunk(downloaded, file_size)
+        while True:
+            buffer = u.read(8192)
+            if len(buffer) == 0:
+                break
+            f.write(buffer)
+            downloaded += len(buffer)
+            if on_chunk is not None:
+                on_chunk(downloaded, file_size)
+        f.close()
+        check_download_complete(f.name, file_size, url)
+        shutil.move(f.name, dst)
+    finally:
+        u.close()
+        f.close()
+        remove_file_if_exists(f.name)
 
 
 def download_url_to_file(url: str, dst: str, progress: bool = True) -> None:
@@ -308,14 +366,6 @@ def download_url_to_file(url: str, dst: str, progress: bool = True) -> None:
     progress : bool, optional
         Whether to display a progress bar to stderr. Default is True.
     """
-    from urllib.error import HTTPError, URLError
-
-    u, file_size = open_url_with_retries(url)
-
-    # We deliberately save it in a temp file and move it after
-    dst = os.path.expanduser(dst)
-    dst_dir = os.path.dirname(dst)
-    f = tempfile.NamedTemporaryFile(delete=False, dir=dst_dir)
 
     # GUI Check
     try:
@@ -333,69 +383,38 @@ def download_url_to_file(url: str, dst: str, progress: bool = True) -> None:
     except ImportError:
         use_gui = False
 
-    try:
-        if use_gui and progress:
-            # Setup QProgressDialog
-            pd = QProgressDialog("Downloading...", "Cancel", 0, 100)
-            pd.setWindowTitle("Downloading content")
-            pd.setWindowModality(Qt.WindowModal)
-            pd.setMinimumDuration(0)
-            pd.setValue(0)
+    if use_gui and progress:
+        pd = QProgressDialog("Downloading...", "Cancel", 0, 100)
+        pd.setWindowTitle("Downloading content")
+        pd.setWindowModality(Qt.WindowModal)
+        pd.setMinimumDuration(0)
+        pd.setValue(0)
 
-            downloaded = 0
-            while True:
-                buffer = u.read(8192)
-                if len(buffer) == 0:
-                    break
-                f.write(buffer)
-                downloaded += len(buffer)
-                if file_size:
-                    perc = int(downloaded * 100 / file_size)
-                    pd.setValue(perc)
-                    pd.setLabelText(
-                        f"Downloading... {downloaded/1024/1024:.1f}/{file_size/1024/1024:.1f} MB"
-                    )
+        def on_chunk(downloaded: int, file_size: Optional[int]) -> None:
+            if file_size:
+                pd.setValue(int(downloaded * 100 / file_size))
+                pd.setLabelText(
+                    f"Downloading... {downloaded/1024/1024:.1f}/{file_size/1024/1024:.1f} MB"
+                )
+            QApplication.processEvents()
+            if pd.wasCanceled():
+                raise DownloadCancelled(f"Download of {url} cancelled.")
 
-                QApplication.processEvents()
-                if pd.wasCanceled():
-                    pd.close()
-                    raise DownloadCancelled(f"Download of {url} cancelled.")
+        try:
+            stream_url_to_file(url, dst, on_chunk)
+        finally:
             pd.close()
+    else:
+        with tqdm(
+            disable=not progress, unit="B", unit_scale=True, unit_divisor=1024
+        ) as pbar:
 
-        else:
-            # Console / TQDM fallback
-            with tqdm(
-                total=file_size,
-                disable=not progress,
-                unit="B",
-                unit_scale=True,
-                unit_divisor=1024,
-            ) as pbar:
-                while True:
-                    try:
-                        buffer = u.read(8192)  # 8192
-                        if len(buffer) == 0:
-                            break
-                        f.write(buffer)
-                        pbar.update(len(buffer))
-                    except (HTTPError, URLError) as e:
-                        # Attempt rudimentary resume-like behavior or just fail?
-                        # Simple retry of read is hard without Range headers on a stream.
-                        # Best to just fail the whole download and rely on outer retry if we wrapped the whole thing.
-                        # For now, let's just let it raise, but really we should wrap the whole download block.
-                        raise
+            def on_chunk(downloaded: int, file_size: Optional[int]) -> None:
+                if downloaded == 0 and file_size:
+                    pbar.reset(total=file_size)
+                pbar.update(downloaded - pbar.n)
 
-        f.close()
-        check_download_complete(f.name, file_size, url)
-        shutil.move(f.name, dst)
-    except Exception as e:
-        f.close()
-        remove_file_if_exists(f.name)
-        raise
-    finally:
-        u.close()
-        f.close()
-        remove_file_if_exists(f.name)
+            stream_url_to_file(url, dst, on_chunk)
 
 
 def download_zenodo_file(file: str, output_dir: str) -> None:
