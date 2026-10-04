@@ -13,6 +13,7 @@ from celldetective.utils.experiment import (
     _prefixes_of_name,
     count_movies_matching_prefix,
     get_movie_prefix_candidates,
+    index_positions_of_movies,
     list_movies_per_position,
 )
 
@@ -76,9 +77,10 @@ def test_count_movies_matching_prefix():
         "102": ["Alexa488_stack.tif"],
         "103": [],
     }
-    assert count_movies_matching_prefix(movies, "Alexa488_") == (2, 2)
-    assert count_movies_matching_prefix(movies, "") == (2, 3)
-    assert count_movies_matching_prefix(movies, "Hoechst") == (0, 0)
+    index = index_positions_of_movies(movies)
+    assert count_movies_matching_prefix(index, "Alexa488_") == (2, 2)
+    assert count_movies_matching_prefix(index, "") == (2, 3)
+    assert count_movies_matching_prefix(index, "Hoechst") == (0, 0)
 
 
 def test_candidates_separate_the_channels_of_a_position():
@@ -95,7 +97,8 @@ def test_candidates_put_the_covering_prefix_first():
 
     assert candidates[0] == "sample_"
     # The name of one position is not the prefix of the experiment.
-    assert all(count_movies_matching_prefix(movies, p)[0] > 1 for p in candidates)
+    index = index_positions_of_movies(movies)
+    assert all(count_movies_matching_prefix(index, p)[0] > 1 for p in candidates)
 
 
 def test_the_names_of_single_positions_are_a_last_resort():

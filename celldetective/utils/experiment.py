@@ -1079,17 +1079,47 @@ def list_movies_per_position(experiment: Union[str, Path]) -> Dict[str, List[str
     return movies
 
 
-def count_movies_matching_prefix(
-    movies_per_position: Dict[str, List[str]], prefix: str
-) -> Tuple[int, int]:
+def index_positions_of_movies(
+    movies_per_position: Dict[str, List[str]],
+) -> Dict[str, set]:
     """
-    Count what a movie prefix matches in an experiment.
+    Index the stacks of an experiment by name.
+
+    The same names repeat from one position to the next: indexed once, each
+    is matched once against a prefix (see ``count_movies_matching_prefix``).
 
     Parameters
     ----------
     movies_per_position : dict
             The stacks of each position, as ``list_movies_per_position`` gives
             them.
+
+    Returns
+    -------
+    dict
+            The name of each stack mapped to the set of the positions holding
+            it, by their order in ``movies_per_position``.
+
+    """
+
+    positions_of_movie = {}
+    for position, names in enumerate(movies_per_position.values()):
+        for name in names:
+            positions_of_movie.setdefault(name, set()).add(position)
+    return positions_of_movie
+
+
+def count_movies_matching_prefix(
+    positions_of_movie: Dict[str, set], prefix: str
+) -> Tuple[int, int]:
+    """
+    Count what a movie prefix matches in an experiment.
+
+    Parameters
+    ----------
+    positions_of_movie : dict
+            The stacks of the experiment, as ``index_positions_of_movies``
+            indexes them.
     prefix : str
             The prefix to test, the one the software globs as ``prefix*.tif``.
 
@@ -1103,20 +1133,12 @@ def count_movies_matching_prefix(
 
     # The names are matched against the pattern the software globs rather than
     # compared to the prefix, so that what is counted here is what would be
-    # loaded (see movie_pattern). The same names repeat from one position to
-    # the next: each is matched once.
-    names = set().union(*movies_per_position.values())
-    matched = set(fnmatch.filter(names, movie_pattern(prefix)))
-
-    positions = 0
-    stacks = 0
-    for names in movies_per_position.values():
-        matches = len(matched.intersection(names))
-        if matches:
-            positions += 1
-            stacks += matches
-
-    return positions, stacks
+    # loaded (see movie_pattern).
+    matched = [
+        positions_of_movie[name]
+        for name in fnmatch.filter(positions_of_movie, movie_pattern(prefix))
+    ]
+    return len(set().union(*matched)), sum(len(positions) for positions in matched)
 
 
 def _prefixes_of_name(name: str) -> List[str]:

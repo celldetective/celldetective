@@ -213,7 +213,7 @@ def open_editor(qtbot, tmp_path, write_stacks):
         qtbot.addWidget(widget)
         field = widget.prefix_widget
         qtbot.waitUntil(
-            lambda: field.movies_per_position is not None or bool(field.scan_error)
+            lambda: field.position_count is not None or bool(field.scan_error)
         )
         return widget
 

@@ -55,6 +55,7 @@ from celldetective.gui.base.utils import center_window, is_alive
 from celldetective.utils.experiment import (
     count_movies_matching_prefix,
     get_movie_prefix_candidates,
+    index_positions_of_movies,
     list_movies_per_position,
 )
 
@@ -370,9 +371,12 @@ class MoviePrefixField(CelldetectiveWidget):
 
         self.field = field
 
-        # The stacks of the experiment, None until the scan started on opening
-        # is over, so that the prefix stored is checked without being edited.
-        self.movies_per_position = None
+        # The number of positions, None until the scan started on opening is
+        # over, so that the prefix stored is checked without being edited.
+        self.position_count = None
+        # The stacks of the experiment by name, to count the matches of each
+        # prefix typed.
+        self.positions_of_movie = {}
         self.scan_error = ""
 
         field.setPlaceholderText("any stack of the movie folder")
@@ -420,7 +424,8 @@ class MoviePrefixField(CelldetectiveWidget):
         if not is_alive(self):
             return
 
-        self.movies_per_position = movies
+        self.position_count = None if movies is None else len(movies)
+        self.positions_of_movie = index_positions_of_movies(movies or {})
         self.scan_error = error
         self.model.setStringList(candidates)
         self.suggest_btn.setEnabled(bool(candidates))
@@ -444,28 +449,30 @@ class MoviePrefixField(CelldetectiveWidget):
 
         if self.scan_error:
             return self.scan_error, True
-        if self.movies_per_position is None:
+        total = self.position_count
+        if total is None:
             return "Reading the stacks of the experiment…", False
 
-        total = len(self.movies_per_position)
         if total == 0:
             return "No position found in the experiment folder.", True
-        # "the position" or "the 3 positions", so a single one reads right.
-        of_all = "the position" if total == 1 else f"the {total} positions"
-        if not any(self.movies_per_position.values()):
-            if total == 1:
-                return "No stack in the movie folder of the position.", True
-            return (
-                f"No stack in the movie folder of any of {of_all}.",
-                True,
-            )
+        # The wording of a single position, of several otherwise.
+        if total == 1:
+            all_positions = any_position = each_position = "the position"
+            spread, which = "in the position", "which one"
+        else:
+            all_positions = f"the {total} positions"
+            any_position = f"any of {all_positions}"
+            each_position = f"each of {all_positions}"
+            spread, which = f"over {total} positions", "which one of a position"
+
+        if not self.positions_of_movie:
+            return f"No stack in the movie folder of {any_position}.", True
 
         positions, stacks = count_movies_matching_prefix(
-            self.movies_per_position, self.field.text().strip()
+            self.positions_of_movie, self.field.text().strip()
         )
-
         if positions == 0:
-            return f"No stack of {of_all} matches this prefix.", True
+            return f"No stack of {all_positions} matches this prefix.", True
         if positions < total:
             return (
                 f"{total - positions} of the {total} positions hold no matching stack.",
@@ -473,16 +480,10 @@ class MoviePrefixField(CelldetectiveWidget):
             )
         if stacks > positions:
             return (
-                f"{stacks} stacks over {total} positions: which one of a position "
-                "is loaded is left to chance."
-                if total > 1
-                else f"{stacks} stacks in the position: which one is loaded is "
-                "left to chance.",
+                f"{stacks} stacks {spread}: {which} is loaded is left to chance.",
                 True,
             )
-        if total == 1:
-            return "One stack in the position.", False
-        return f"One stack in each of {of_all}.", False
+        return f"One stack in {each_position}.", False
 
     def _show_hint(self, text: str, warning: bool) -> None:
         """Write the line of feedback under the field."""
