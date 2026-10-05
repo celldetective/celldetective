@@ -125,6 +125,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   load with an obscure error. Archives are now extracted into a staging folder
   moved into place once complete, a file shorter than the size the server
   announced is refused, and the temporary archive is removed whatever happens.
+- A Cellpose model downloaded on Linux could have its weights replaced by its
+  licence, and failed to load with `Weights only load failed ... Unsupported
+  operand 67`. The weights file of a model folder was picked by a pattern that
+  the licence matched too, and the first match was taken, in the order the folder
+  happened to list them. The weights are now picked by name, whatever the order.
+  A model already broken this way is not downloaded again by itself: delete its
+  folder (e.g. `models/segmentation_generic/CP_cyto3`) and it is fetched anew.
 - The line under the movie prefix field read "One stack in each of the 1
   positions" on a single-position experiment.
 - The documentation showed version 1.5.0b16: it read a stale copy of the

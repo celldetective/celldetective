@@ -61,6 +61,43 @@ class TestExtractZenodoArchive(unittest.TestCase):
             ["config_input.json", "my_model"],
         )
 
+    def test_weights_named_after_the_model_are_kept_beside_a_licence(self):
+        # The layout of CP_cyto3: the licence also passed for the weights, and
+        # replaced them when the folder listed it first, as it may on Linux.
+        _make_archive(
+            self.zip,
+            {
+                "my_model/config_input.json": b"{}",
+                "my_model/my_model": b"weights",
+                "my_model/LICENSE": b"Creative Commons",
+                "my_model/README": b"readme",
+            },
+        )
+        downloaders.extract_zenodo_archive(self.zip, self.out, "my_model")
+
+        folder = os.path.join(self.out, "my_model")
+        with open(os.path.join(folder, "my_model"), "rb") as f:
+            self.assertEqual(f.read(), b"weights")
+        with open(os.path.join(folder, "LICENSE"), "rb") as f:
+            self.assertEqual(f.read(), b"Creative Commons")
+
+    def test_the_weights_are_renamed_rather_than_the_licence(self):
+        # "LICENSE" lists before "weights": the first file found is not the one.
+        _make_archive(
+            self.zip,
+            {
+                "my_model/weights": b"weights",
+                "my_model/LICENSE": b"Creative Commons",
+                "my_model/README.md": b"readme",
+            },
+        )
+        downloaders.extract_zenodo_archive(self.zip, self.out, "my_model")
+
+        folder = os.path.join(self.out, "my_model")
+        self.assertEqual(sorted(os.listdir(folder)), ["LICENSE", "README.md", "my_model"])
+        with open(os.path.join(folder, "my_model"), "rb") as f:
+            self.assertEqual(f.read(), b"weights")
+
     def test_an_interrupted_extraction_leaves_no_model_folder(self):
         _make_archive(self.zip, {"my_model/a": b"a", "my_model/b.json": b"{}"})
 

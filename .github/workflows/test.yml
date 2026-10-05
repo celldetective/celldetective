@@ -54,9 +54,11 @@ jobs:
       # Save keys are unique per run and record the job status, so a partial
       # set saved by a failed run never blocks a later save. Once a passing run
       # has saved for the current tests, restores prefer it and saving stops.
-      # v2: caches saved before downloads were extracted all or nothing could
-      # hold a model folder half-written by a killed job, taken for the model
-      # by every later run; they are never restored again.
+      # v3: caches saved before downloads were extracted all or nothing could
+      # hold a model folder half-written by a killed job, and those saved
+      # before the weights were picked by name could hold a CP_cyto3 whose
+      # weights the licence replaced; either was taken for the model by every
+      # later run, so they are never restored again.
       - name: Restore Zenodo models and datasets
         id: zenodo-cache
         uses: actions/cache/restore@v4
@@ -69,11 +71,11 @@ jobs:
             ${{ steps.pkg.outputs.dir }}/models/signal_detection
             ${{ steps.pkg.outputs.dir }}/models/pair_signal_detection
             ${{ steps.pkg.outputs.dir }}/datasets
-          key: celldetective-zenodo-v2-${{ runner.os }}-py${{ matrix.python-version }}-${{ hashFiles('tests/**/*.py') }}-success
+          key: celldetective-zenodo-v3-${{ runner.os }}-py${{ matrix.python-version }}-${{ hashFiles('tests/**/*.py') }}-success
           restore-keys: |
-            celldetective-zenodo-v2-${{ runner.os }}-py${{ matrix.python-version }}-${{ hashFiles('tests/**/*.py') }}-success-
-            celldetective-zenodo-v2-${{ runner.os }}-py${{ matrix.python-version }}-${{ hashFiles('tests/**/*.py') }}-
-            celldetective-zenodo-v2-${{ runner.os }}-py${{ matrix.python-version }}-
+            celldetective-zenodo-v3-${{ runner.os }}-py${{ matrix.python-version }}-${{ hashFiles('tests/**/*.py') }}-success-
+            celldetective-zenodo-v3-${{ runner.os }}-py${{ matrix.python-version }}-${{ hashFiles('tests/**/*.py') }}-
+            celldetective-zenodo-v3-${{ runner.os }}-py${{ matrix.python-version }}-
       - name: Test package
         run: |
           python -m unittest
@@ -81,7 +83,7 @@ jobs:
         run: |
           python tests/run_gui_tests.py
       - name: Save Zenodo models and datasets
-        if: always() && !startsWith(steps.zenodo-cache.outputs.cache-matched-key, format('celldetective-zenodo-v2-{0}-py{1}-{2}-success-', runner.os, matrix.python-version, hashFiles('tests/**/*.py')))
+        if: always() && !startsWith(steps.zenodo-cache.outputs.cache-matched-key, format('celldetective-zenodo-v3-{0}-py{1}-{2}-success-', runner.os, matrix.python-version, hashFiles('tests/**/*.py')))
         uses: actions/cache/save@v4
         with:
           path: |
@@ -92,7 +94,7 @@ jobs:
             ${{ steps.pkg.outputs.dir }}/models/signal_detection
             ${{ steps.pkg.outputs.dir }}/models/pair_signal_detection
             ${{ steps.pkg.outputs.dir }}/datasets
-          key: celldetective-zenodo-v2-${{ runner.os }}-py${{ matrix.python-version }}-${{ hashFiles('tests/**/*.py') }}-${{ job.status }}-${{ github.run_id }}-${{ github.run_attempt }}
+          key: celldetective-zenodo-v3-${{ runner.os }}-py${{ matrix.python-version }}-${{ hashFiles('tests/**/*.py') }}-${{ job.status }}-${{ github.run_id }}-${{ github.run_attempt }}
 
   Linux-Minimal:
     name: Linux Minimal
@@ -187,9 +189,11 @@ jobs:
       # Save keys are unique per run and record the job status, so a partial
       # set saved by a failed run never blocks a later save. Once a passing run
       # has saved for the current tests, restores prefer it and saving stops.
-      # v2: caches saved before downloads were extracted all or nothing could
-      # hold a model folder half-written by a killed job, taken for the model
-      # by every later run; they are never restored again.
+      # v3: caches saved before downloads were extracted all or nothing could
+      # hold a model folder half-written by a killed job, and those saved
+      # before the weights were picked by name could hold a CP_cyto3 whose
+      # weights the licence replaced; either was taken for the model by every
+      # later run, so they are never restored again.
       - name: Restore Zenodo models and datasets
         id: zenodo-cache
         uses: actions/cache/restore@v4
@@ -202,11 +206,11 @@ jobs:
             ${{ steps.pkg.outputs.dir }}/models/signal_detection
             ${{ steps.pkg.outputs.dir }}/models/pair_signal_detection
             ${{ steps.pkg.outputs.dir }}/datasets
-          key: celldetective-zenodo-v2-${{ runner.os }}-py${{ matrix.python-version }}-${{ hashFiles('tests/**/*.py') }}-success
+          key: celldetective-zenodo-v3-${{ runner.os }}-py${{ matrix.python-version }}-${{ hashFiles('tests/**/*.py') }}-success
           restore-keys: |
-            celldetective-zenodo-v2-${{ runner.os }}-py${{ matrix.python-version }}-${{ hashFiles('tests/**/*.py') }}-success-
-            celldetective-zenodo-v2-${{ runner.os }}-py${{ matrix.python-version }}-${{ hashFiles('tests/**/*.py') }}-
-            celldetective-zenodo-v2-${{ runner.os }}-py${{ matrix.python-version }}-
+            celldetective-zenodo-v3-${{ runner.os }}-py${{ matrix.python-version }}-${{ hashFiles('tests/**/*.py') }}-success-
+            celldetective-zenodo-v3-${{ runner.os }}-py${{ matrix.python-version }}-${{ hashFiles('tests/**/*.py') }}-
+            celldetective-zenodo-v3-${{ runner.os }}-py${{ matrix.python-version }}-
       - name: Test package
         run: |
           python -m unittest
@@ -214,7 +218,7 @@ jobs:
         run: |
           python tests/run_gui_tests.py
       - name: Save Zenodo models and datasets
-        if: always() && !startsWith(steps.zenodo-cache.outputs.cache-matched-key, format('celldetective-zenodo-v2-{0}-py{1}-{2}-success-', runner.os, matrix.python-version, hashFiles('tests/**/*.py')))
+        if: always() && !startsWith(steps.zenodo-cache.outputs.cache-matched-key, format('celldetective-zenodo-v3-{0}-py{1}-{2}-success-', runner.os, matrix.python-version, hashFiles('tests/**/*.py')))
         uses: actions/cache/save@v4
         with:
           path: |
@@ -225,7 +229,7 @@ jobs:
             ${{ steps.pkg.outputs.dir }}/models/signal_detection
             ${{ steps.pkg.outputs.dir }}/models/pair_signal_detection
             ${{ steps.pkg.outputs.dir }}/datasets
-          key: celldetective-zenodo-v2-${{ runner.os }}-py${{ matrix.python-version }}-${{ hashFiles('tests/**/*.py') }}-${{ job.status }}-${{ github.run_id }}-${{ github.run_attempt }}
+          key: celldetective-zenodo-v3-${{ runner.os }}-py${{ matrix.python-version }}-${{ hashFiles('tests/**/*.py') }}-${{ job.status }}-${{ github.run_id }}-${{ github.run_attempt }}
 
   Windows-Minimal:
     name: Test Windows Minimal

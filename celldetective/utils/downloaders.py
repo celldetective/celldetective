@@ -238,6 +238,45 @@ def _merge_into(src: str, dst: str) -> None:
             os.replace(s, d)
 
 
+# Files of a model folder that are not its weights: by extension, and by name.
+NOT_WEIGHTS_SUFFIXES = {".json", ".png", ".h5", ".csv", ".npy", ".tif", ".ini"}
+NOT_WEIGHTS_NAMES = {"LICENSE", "README"}
+
+
+def _name_weights_after_model(folder: str, model: str) -> None:
+    """
+    Rename the weights file of a model folder after the model, as it is loaded.
+
+    The weights are the one file that is neither a known side file by its extension
+    nor a licence or readme. A glob standing for that matched the licence too, and
+    whichever file the folder listed first was renamed: on Linux, where a folder lists
+    in no set order, the licence of CP_cyto3 could replace its weights.
+
+    Parameters
+    ----------
+    folder : str
+        The model folder.
+    model : str
+        The name of the model.
+    """
+
+    if not os.path.isdir(folder) or os.path.isfile(os.path.join(folder, model)):
+        return
+    candidates = sorted(
+        entry
+        for entry in os.listdir(folder)
+        if os.path.isfile(os.path.join(folder, entry))
+        and os.path.splitext(entry)[1].lower() not in NOT_WEIGHTS_SUFFIXES
+        and os.path.splitext(entry)[0].upper() not in NOT_WEIGHTS_NAMES
+    )
+    if len(candidates) == 1:
+        os.rename(os.path.join(folder, candidates[0]), os.path.join(folder, model))
+    elif len(candidates) > 1:
+        logger.warning(
+            f"Several files of {model} could be its weights ({candidates}): none renamed."
+        )
+
+
 # Age [s] past which a staging folder is taken for that of an extraction killed
 # half-way: a younger one may be that of an extraction still running.
 STALE_EXTRACTION_AGE = 3600
@@ -280,17 +319,8 @@ def extract_zenodo_archive(path_to_zip_file: str, output_dir: str, file: str) ->
         with zipfile.ZipFile(path_to_zip_file, "r") as zip_ref:
             zip_ref.extractall(staging)
 
-        file_to_rename = glob(
-            os.sep.join(
-                [staging, file, "*[!.json][!.png][!.h5][!.csv][!.npy][!.tif][!.ini]"]
-            )
-        )
-        if (
-            len(file_to_rename) > 0
-            and not file_to_rename[0].endswith(os.sep)
-            and not file.startswith("demo")
-        ):
-            os.rename(file_to_rename[0], os.sep.join([staging, file, file]))
+        if not file.startswith("demo"):
+            _name_weights_after_model(os.path.join(staging, file), file)
 
         # Extracting over an existing folder (a demo downloaded again) overwrites
         # what the archive holds and keeps the rest, as extracting in place did.
