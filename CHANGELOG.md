@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.5] - 2026-10-05
+
 ### Added
 - The movie prefix of the experiment configuration suggests the prefixes the
   experiment actually holds. The names of the stacks sitting in the movie
@@ -45,6 +47,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   instead of all of them.
 - The background shown by the QC button of the model-free correction is the one
   applied: camera offset subtracted, NaNs interpolated if asked.
+
 ### Fixed
 - Answering *yes* to "No labels can be found for this position. Do you want to
   annotate from scratch?" wrote the empty labels transposed on any non-square
@@ -59,9 +62,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The threshold configuration wizard kept its histogram — and with it the range
   of the threshold slider — on the channel it opened with: picking another
   channel changed the image but not the intensities the threshold was set on.
-  The histogram now follows the viewer, both when the channel changes (the
-  threshold is set afresh, the intensity domain being another one) and when the
-  frame does (the threshold being tuned is kept).
+  The histogram now follows the viewer once its sliders rest, both when the
+  channel changes (the threshold is set afresh, the intensity domain being
+  another one) and when the frame does (the threshold being tuned is kept).
 - A value label sitting over a handle at either end of a range slider — the
   contrast slider of every viewer at its minimum, for one — lost its first digit
   (`).00` for `0.00`): superqt centres the label on its handle, leaving half of
@@ -86,7 +89,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   to load with `list index out of range`, and segmentation skipped the position,
   while the frame count and the napari viewer worked. Fiji writes such a stack
   with a single IFD and the pixels stored contiguously after it: the frames are
-  now read from a memory map of the series.
+  now read from a memory map of the series, the stack being recognised as such
+  once rather than at every frame.
+- On non-square movies, the width and the height of the images were swapped in
+  three places, each building its own shape from `shape_x` and `shape_y`:
+  - tracking tested the first detection of each cell against the wrong edges
+    (`class_firstdetection`);
+  - the neighbourhood measurements were given the wrong image shape;
+  - the `radial_distance` to the centre of the image centred X on the height and
+    Y on the width.
+
+  The image shape is now read in one place. `radial_distance` values measured on
+  a non-square movie change; square movies are unaffected.
+- The background correction by model fit and the channel offset correction
+  warned about an empty or invalid threshold or shift, then added the
+  correction (or started its preview) with no value all the same; it failed at
+  the run. They now stop at the warning, as the model-free correction does.
+- A preview of a background or channel offset correction was recorded in
+  `log_preprocessing.txt` as if it had been applied to the position. Only
+  exported corrections are recorded.
+- Running a segmentation model on a frame from napari, with labels that do not
+  have the shape of the movie, failed with a broadcasting error once the
+  inference was done. It is now refused beforehand, saying why, as the
+  threshold segmentation already did.
+- Measuring a position with neither a table nor labels failed with a
+  `TypeError`. The log now says there is nothing to measure.
 - Isotropic (position-based) measurements were only computed on tracked
   tables. On a position measured before tracking, or with a table without
   `TRACK_ID`, the radii were dropped silently and the run reported success
@@ -567,6 +594,7 @@ documentation and test overhaul.
 - Resolved Windows access-violation, hanging, and stalling test issues; build
   the package on tag and fix the PyPI workflow.
 
+[1.6.5]: https://github.com/celldetective/celldetective/compare/v1.6.4...v1.6.5
 [1.6.4]: https://github.com/celldetective/celldetective/compare/v1.6.3...v1.6.4
 [1.6.3]: https://github.com/celldetective/celldetective/compare/v1.6.2...v1.6.3
 [1.6.2]: https://github.com/celldetective/celldetective/compare/v1.6.1...v1.6.2
