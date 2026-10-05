@@ -2225,9 +2225,10 @@ def measure_radial_distance_to_center(
     try:
         df[column_labels["x"]] = df[column_labels["x"]].astype(float)
         df[column_labels["y"]] = df[column_labels["y"]].astype(float)
+        # The volume is (Y, X): X is centred on the width, volume[1].
         df["radial_distance"] = np.sqrt(
-            (df[column_labels["x"]] - volume[0] / 2) ** 2
-            + (df[column_labels["y"]] - volume[1] / 2) ** 2
+            (df[column_labels["x"]] - volume[1] / 2) ** 2
+            + (df[column_labels["y"]] - volume[0] / 2) ** 2
         )
     except Exception as e:
         logger.warning(f"Could not compute radial distance: {e}")

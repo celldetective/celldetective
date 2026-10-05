@@ -2,7 +2,7 @@ from collections import OrderedDict
 
 import numpy as np
 from PyQt5.QtWidgets import QLineEdit, QHBoxLayout, QPushButton, QLabel
-from PyQt5.QtCore import QEvent
+from PyQt5.QtCore import QEvent, pyqtSignal
 from typing import Optional, Union, List, Any
 from celldetective.gui.base.sliders import QLabeledDoubleSlider
 
@@ -41,6 +41,10 @@ class ThresholdedStackVisualizer(StackVisualizer):
     - This class extends the functionality of StackVisualizer to visualize thresholded image stacks
       with interactive sliders for threshold and mask opacity adjustment.
     """
+
+    # Emitted once the filtered frame (`processed_image`) is recomputed, possibly
+    # for the same image: compare `image_key()` to tell.
+    processed_image_changed = pyqtSignal()
 
     def __init__(
         self,
@@ -285,6 +289,7 @@ class ThresholdedStackVisualizer(StackVisualizer):
         if self.thresholded:
             self.thresholded = False
             self.init_contrast = False
+        self.processed_image_changed.emit()
 
     def compute_mask(
         self, threshold_value: Union[float, List[float], np.ndarray]
@@ -327,14 +332,20 @@ class ThresholdedStackVisualizer(StackVisualizer):
                 edge_exclusion=edge,
             ).astype(int)
 
+    def image_key(self) -> tuple:
+        """The channel, frame and filters of the processed image, its cache key."""
+
+        return (
+            self.target_channel,
+            getattr(self, "current_time_index", 0),
+            str(self.preprocessing),
+        )
+
     def preprocess_image(self):
         """Preprocess the image before thresholding."""
         # Preprocess the image before thresholding
 
-        # Determine cache key
-        target = self.target_channel
-        time_idx = getattr(self, "current_time_index", 0)
-        cache_key = (target, time_idx, str(self.preprocessing))
+        cache_key = self.image_key()
 
         # Check cache
         if self.preprocessing is not None:

@@ -4,7 +4,7 @@ from PyQt5.QtCore import Qt
 
 from celldetective.gui.base.components import CelldetectiveWidget
 from celldetective.gui.base.utils import center_window
-from celldetective._version import __version__
+from celldetective import __version__
 
 
 class AboutWidget(CelldetectiveWidget):

@@ -888,6 +888,31 @@ class TestViewerIntegration:
             # Verify channel changed
             assert wizard.viewer.channel_cb.currentIndex() != initial_channel
 
+    def test_the_histogram_follows_the_channel(self, wizard_from_app, qtbot):
+        """
+        Switching channel used to leave the histogram, and the range of the
+        threshold slider, on the channel the wizard opened with: the threshold
+        was read off one image and applied to another.
+        """
+        wizard = wizard_from_app
+        if wizard.viewer.channel_cb.count() < 2:
+            pytest.skip("single-channel movie")
+
+        before = np.asarray(wizard.img).copy()
+        wizard.viewer.channel_cb.setCurrentIndex(
+            (wizard.viewer.channel_cb.currentIndex() + 1)
+            % wizard.viewer.channel_cb.count()
+        )
+        qtbot.wait(INTERACTION_TIME * 2)
+
+        shown = np.asarray(wizard.viewer.processed_image)
+        assert np.array_equal(np.asarray(wizard.img), shown)
+        assert not np.array_equal(before, shown)
+
+        low, high = wizard.ax_hist.get_xlim()
+        assert low == pytest.approx(float(np.nanmin(shown)))
+        assert high == pytest.approx(float(np.nanmax(shown)))
+
     def test_frame_switching(self, wizard_from_app, qtbot):
         """Navigate to different frames."""
         wizard = wizard_from_app

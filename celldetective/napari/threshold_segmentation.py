@@ -35,6 +35,7 @@ from celldetective import get_logger
 from celldetective.napari.frame_segmentation import (
     _fit_to_layer_dtype,
     history_atom,
+    labels_mismatch,
     merge_labels,
     record_undo,
 )
@@ -645,6 +646,10 @@ class ThresholdSegmentationPanel(QWidget):
         self.status_lbl.hide()
         outer.addWidget(self.status_lbl)
 
+        # The panel fills the height of its tab; the slack belongs at the bottom
+        # rather than between the rows.
+        outer.addStretch(1)
+
     def _connect_layer_events(self) -> None:
         """Keep the region dropdown in step with the shapes layers of the viewer."""
         try:
@@ -927,7 +932,13 @@ class ThresholdSegmentationPanel(QWidget):
         t = int(self.viewer.dims.current_step[0])
         try:
             layer = self.viewer.layers["segmentation"]
-            shape = tuple(layer.data.shape[-2:])
+            mismatch = labels_mismatch(self.stack, layer)
+            if mismatch:
+                self._failed(mismatch)
+                return
+            # The region masks the thresholded frame, which comes from the image,
+            # so it is drawn at the image's shape (the same as the labels', checked).
+            shape = tuple(int(n) for n in self.stack.shape[1:3])
             region, description = self._selected_region(t, shape)
         except ValueError as e:
             self._failed(str(e))

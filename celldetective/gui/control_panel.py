@@ -39,6 +39,7 @@ from celldetective.utils.experiment import (
     extract_experiment_channels,
     get_spatial_calibration,
     get_temporal_calibration,
+    get_image_shape,
     get_experiment_concentrations,
     get_experiment_cell_types,
     get_experiment_antibodies,
@@ -487,12 +488,9 @@ class ControlPanel(CelldetectiveMainWindow):
         self.len_movie = int(
             config_section_to_dict(self.exp_config, "MovieSettings")["len_movie"]
         )
-        self.shape_x = int(
-            config_section_to_dict(self.exp_config, "MovieSettings")["shape_x"]
-        )
-        self.shape_y = int(
-            config_section_to_dict(self.exp_config, "MovieSettings")["shape_y"]
-        )
+        # (height, width)
+        self.image_shape = get_image_shape(self.exp_dir)
+        self.shape_y, self.shape_x = self.image_shape
         self.movie_prefix = config_section_to_dict(self.exp_config, "MovieSettings")[
             "movie_prefix"
         ]

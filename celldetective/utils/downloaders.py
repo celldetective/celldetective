@@ -2,6 +2,7 @@ import json
 import os
 import shutil
 import tempfile
+import time
 import zipfile
 from glob import glob
 from urllib.request import urlopen
@@ -11,7 +12,7 @@ from tqdm import tqdm
 
 from celldetective.utils.io import remove_file_if_exists
 from celldetective import get_logger
-from typing import Optional, List, Union, Tuple
+from typing import Callable, Optional, List, Union, Tuple
 
 logger = get_logger()
 
@@ -139,7 +140,6 @@ def open_url_with_retries(url: str):
     import random
     import socket
     import ssl
-    import time
     from urllib.error import HTTPError, URLError
 
     ssl._create_default_https_context = ssl._create_unverified_context
@@ -185,6 +185,203 @@ def open_url_with_retries(url: str):
             retry_delay = min(retry_delay * 2, max_retry_delay)
 
 
+class DownloadCancelled(Exception):
+    """The user cancelled a download from its progress dialog."""
+
+
+class IncompleteDownloadError(OSError):
+    """The connection closed before the whole file was received."""
+
+
+def check_download_complete(path: str, file_size: Optional[int], url: str) -> None:
+    """
+    Check that a downloaded file has the size the server announced.
+
+    A connection dropped mid-transfer can end the read loop as a plain end of
+    stream, so a truncated file would otherwise be kept as if it were complete.
+
+    Parameters
+    ----------
+    path : str
+        The downloaded file.
+    file_size : int or None
+        The Content-Length the server sent, None if it sent none (nothing to
+        check against then).
+    url : str
+        Where the file came from, for the error message.
+
+    Raises
+    ------
+    IncompleteDownloadError
+        If the file is not the announced size.
+    """
+
+    if file_size is None:
+        return
+    received = os.path.getsize(path)
+    if received != file_size:
+        raise IncompleteDownloadError(
+            f"Download of {url} incomplete: received {received} of {file_size} bytes."
+        )
+
+
+def _merge_into(src: str, dst: str) -> None:
+    """Move the content of directory `src` into the existing directory `dst`."""
+
+    for entry in os.listdir(src):
+        s, d = os.path.join(src, entry), os.path.join(dst, entry)
+        if os.path.isdir(s) and os.path.isdir(d):
+            _merge_into(s, d)
+        else:
+            if os.path.isdir(d):
+                shutil.rmtree(d)
+            os.replace(s, d)
+
+
+# Files of a model folder that are not its weights: by extension, and by name.
+NOT_WEIGHTS_SUFFIXES = {".json", ".png", ".h5", ".csv", ".npy", ".tif", ".ini"}
+NOT_WEIGHTS_NAMES = {"LICENSE", "README"}
+
+
+def _name_weights_after_model(folder: str, model: str) -> None:
+    """
+    Rename the weights file of a model folder after the model, as it is loaded.
+
+    The weights are the one file that is neither a known side file by its extension
+    nor a licence or readme. A glob standing for that matched the licence too, and
+    whichever file the folder listed first was renamed: on Linux, where a folder lists
+    in no set order, the licence of CP_cyto3 could replace its weights.
+
+    Parameters
+    ----------
+    folder : str
+        The model folder.
+    model : str
+        The name of the model.
+    """
+
+    if not os.path.isdir(folder) or os.path.isfile(os.path.join(folder, model)):
+        return
+    candidates = sorted(
+        entry
+        for entry in os.listdir(folder)
+        if os.path.isfile(os.path.join(folder, entry))
+        and os.path.splitext(entry)[1].lower() not in NOT_WEIGHTS_SUFFIXES
+        and os.path.splitext(entry)[0].upper() not in NOT_WEIGHTS_NAMES
+    )
+    if len(candidates) == 1:
+        os.rename(os.path.join(folder, candidates[0]), os.path.join(folder, model))
+    elif len(candidates) > 1:
+        logger.warning(
+            f"Several files of {model} could be its weights ({candidates}): none renamed."
+        )
+
+
+# Age [s] past which a staging folder is taken for that of an extraction killed
+# half-way: a younger one may be that of an extraction still running.
+STALE_EXTRACTION_AGE = 3600
+
+
+def extract_zenodo_archive(path_to_zip_file: str, output_dir: str, file: str) -> None:
+    """
+    Extract a Zenodo archive into `output_dir`, all or nothing.
+
+    The archive is extracted into a hidden staging folder of `output_dir`, and
+    its folders are moved into place only once complete. Extracting straight
+    into `output_dir` left a partial model folder behind when the extraction
+    was interrupted -- a download cancelled from its progress window terminates
+    the process doing it -- and that folder was then taken for the installed
+    model and never downloaded again, failing at every load instead.
+
+    Parameters
+    ----------
+    path_to_zip_file : str
+        The downloaded archive.
+    output_dir : str
+        The folder the archive's content goes into.
+    file : str
+        The name of the Zenodo entry (archive name without ``.zip``); the
+        weights file of a model folder of that name is renamed after it.
+    """
+
+    # Staging folders of an extraction that was killed half-way, leaving alone
+    # those of another download extracting into the same folder right now.
+    for staged in glob(os.path.join(output_dir, ".extract-*")):
+        try:
+            age = time.time() - os.path.getmtime(staged)
+        except OSError:
+            continue
+        if age > STALE_EXTRACTION_AGE:
+            shutil.rmtree(staged, ignore_errors=True)
+
+    staging = tempfile.mkdtemp(prefix=".extract-", dir=output_dir)
+    try:
+        with zipfile.ZipFile(path_to_zip_file, "r") as zip_ref:
+            zip_ref.extractall(staging)
+
+        if not file.startswith("demo"):
+            _name_weights_after_model(os.path.join(staging, file), file)
+
+        # Extracting over an existing folder (a demo downloaded again) overwrites
+        # what the archive holds and keeps the rest, as extracting in place did.
+        _merge_into(staging, output_dir)
+    finally:
+        shutil.rmtree(staging, ignore_errors=True)
+
+
+def stream_url_to_file(
+    url: str,
+    dst: str,
+    on_chunk: Optional[Callable[[int, Optional[int]], None]] = None,
+) -> None:
+    """
+    Download the object at a URL to a local path, all or nothing.
+
+    The object is written to a temporary file next to `dst`, moved into place
+    only once the size the server announced is checked.
+
+    Parameters
+    ----------
+    url : str
+        URL of the object to download.
+    dst : str
+        Full path where the object is saved.
+    on_chunk : callable, optional
+        Called as ``on_chunk(downloaded, file_size)`` once the URL is open, then
+        after each chunk; ``file_size`` is None if the server announced none. An
+        exception raised from it aborts the download.
+    """
+
+    dst = os.path.expanduser(dst)
+    u, file_size = open_url_with_retries(url)
+    try:
+        f = tempfile.NamedTemporaryFile(delete=False, dir=os.path.dirname(dst))
+    except BaseException:
+        # No file to write to (e.g. a missing or read-only folder): the response is
+        # closed all the same.
+        u.close()
+        raise
+    try:
+        downloaded = 0
+        if on_chunk is not None:
+            on_chunk(downloaded, file_size)
+        while True:
+            buffer = u.read(8192)
+            if len(buffer) == 0:
+                break
+            f.write(buffer)
+            downloaded += len(buffer)
+            if on_chunk is not None:
+                on_chunk(downloaded, file_size)
+        f.close()
+        check_download_complete(f.name, file_size, url)
+        shutil.move(f.name, dst)
+    finally:
+        u.close()
+        f.close()
+        remove_file_if_exists(f.name)
+
+
 def download_url_to_file(url: str, dst: str, progress: bool = True) -> None:
     r"""
     Download object at the given URL to a local path.
@@ -199,14 +396,6 @@ def download_url_to_file(url: str, dst: str, progress: bool = True) -> None:
     progress : bool, optional
         Whether to display a progress bar to stderr. Default is True.
     """
-    from urllib.error import HTTPError, URLError
-
-    u, file_size = open_url_with_retries(url)
-
-    # We deliberately save it in a temp file and move it after
-    dst = os.path.expanduser(dst)
-    dst_dir = os.path.dirname(dst)
-    f = tempfile.NamedTemporaryFile(delete=False, dir=dst_dir)
 
     # GUI Check
     try:
@@ -224,68 +413,38 @@ def download_url_to_file(url: str, dst: str, progress: bool = True) -> None:
     except ImportError:
         use_gui = False
 
-    try:
-        if use_gui and progress:
-            # Setup QProgressDialog
-            pd = QProgressDialog("Downloading...", "Cancel", 0, 100)
-            pd.setWindowTitle("Downloading content")
-            pd.setWindowModality(Qt.WindowModal)
-            pd.setMinimumDuration(0)
-            pd.setValue(0)
+    if use_gui and progress:
+        pd = QProgressDialog("Downloading...", "Cancel", 0, 100)
+        pd.setWindowTitle("Downloading content")
+        pd.setWindowModality(Qt.WindowModal)
+        pd.setMinimumDuration(0)
+        pd.setValue(0)
 
-            downloaded = 0
-            while True:
-                buffer = u.read(8192)
-                if len(buffer) == 0:
-                    break
-                f.write(buffer)
-                downloaded += len(buffer)
-                if file_size:
-                    perc = int(downloaded * 100 / file_size)
-                    pd.setValue(perc)
-                    pd.setLabelText(
-                        f"Downloading... {downloaded/1024/1024:.1f}/{file_size/1024/1024:.1f} MB"
-                    )
+        def on_chunk(downloaded: int, file_size: Optional[int]) -> None:
+            if file_size:
+                pd.setValue(int(downloaded * 100 / file_size))
+                pd.setLabelText(
+                    f"Downloading... {downloaded/1024/1024:.1f}/{file_size/1024/1024:.1f} MB"
+                )
+            QApplication.processEvents()
+            if pd.wasCanceled():
+                raise DownloadCancelled(f"Download of {url} cancelled.")
 
-                QApplication.processEvents()
-                if pd.wasCanceled():
-                    logger.info("Download cancelled by user.")
-                    break
+        try:
+            stream_url_to_file(url, dst, on_chunk)
+        finally:
             pd.close()
+    else:
+        with tqdm(
+            disable=not progress, unit="B", unit_scale=True, unit_divisor=1024
+        ) as pbar:
 
-        else:
-            # Console / TQDM fallback
-            with tqdm(
-                total=file_size,
-                disable=not progress,
-                unit="B",
-                unit_scale=True,
-                unit_divisor=1024,
-            ) as pbar:
-                while True:
-                    try:
-                        buffer = u.read(8192)  # 8192
-                        if len(buffer) == 0:
-                            break
-                        f.write(buffer)
-                        pbar.update(len(buffer))
-                    except (HTTPError, URLError) as e:
-                        # Attempt rudimentary resume-like behavior or just fail?
-                        # Simple retry of read is hard without Range headers on a stream.
-                        # Best to just fail the whole download and rely on outer retry if we wrapped the whole thing.
-                        # For now, let's just let it raise, but really we should wrap the whole download block.
-                        raise
+            def on_chunk(downloaded: int, file_size: Optional[int]) -> None:
+                if downloaded == 0 and file_size:
+                    pbar.reset(total=file_size)
+                pbar.update(downloaded - pbar.n)
 
-        f.close()
-        shutil.move(f.name, dst)
-    except Exception as e:
-        f.close()
-        remove_file_if_exists(f.name)
-        raise
-    finally:
-        u.close()
-        f.close()
-        remove_file_if_exists(f.name)
+            stream_url_to_file(url, dst, on_chunk)
 
 
 def download_zenodo_file(file: str, output_dir: str) -> None:
@@ -365,20 +524,10 @@ def download_zenodo_file(file: str, output_dir: str) -> None:
     zip_url = full_links[index]
 
     path_to_zip_file = os.sep.join([output_dir, "temp.zip"])
-    download_url_to_file(rf"{zip_url}", path_to_zip_file)
-    with zipfile.ZipFile(path_to_zip_file, "r") as zip_ref:
-        zip_ref.extractall(output_dir)
-
-    file_to_rename = glob(
-        os.sep.join(
-            [output_dir, file, "*[!.json][!.png][!.h5][!.csv][!.npy][!.tif][!.ini]"]
-        )
-    )
-    if (
-        len(file_to_rename) > 0
-        and not file_to_rename[0].endswith(os.sep)
-        and not file.startswith("demo")
-    ):
-        os.rename(file_to_rename[0], os.sep.join([output_dir, file, file]))
-
-    os.remove(path_to_zip_file)
+    try:
+        download_url_to_file(rf"{zip_url}", path_to_zip_file)
+        extract_zenodo_archive(path_to_zip_file, output_dir, file)
+    except DownloadCancelled:
+        logger.info("Download cancelled or failed.")
+    finally:
+        remove_file_if_exists(path_to_zip_file)

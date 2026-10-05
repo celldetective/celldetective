@@ -1,21 +1,19 @@
 from typing import Optional
 
-from PyQt5.QtCore import QSize, Qt
+from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
     QVBoxLayout,
     QLabel,
     QTabWidget,
     QSizePolicy,
     QListWidget,
-    QPushButton,
     QHBoxLayout,
     QMainWindow,
 )
 from fonticon_mdi6 import MDI6
-from superqt.fonticon import icon
 
-from celldetective.gui.base.components import CelldetectiveWidget
-from celldetective.gui.base.styles import Styles
+from celldetective.gui.base.components import CelldetectiveWidget, ToolButton
+from celldetective.gui.base.styles import DANGER_COLOR, Styles
 
 
 class ProtocolDesignerLayout(QVBoxLayout, Styles):
@@ -89,11 +87,11 @@ class ProtocolDesignerLayout(QVBoxLayout, Styles):
         self.protocol_list_lbl = QLabel(self.list_title)
         self.protocol_list = QListWidget()
 
-        self.delete_protocol_btn = QPushButton("")
-        self.delete_protocol_btn.setStyleSheet(self.button_select_all)
-        self.delete_protocol_btn.setIcon(icon(MDI6.trash_can, color="black"))
-        self.delete_protocol_btn.setToolTip("Remove.")
-        self.delete_protocol_btn.setIconSize(QSize(20, 20))
+        self.delete_protocol_btn = ToolButton(
+            MDI6.trash_can,
+            "Remove.",
+            hover_color=DANGER_COLOR,
+        )
         self.delete_protocol_btn.clicked.connect(self.remove_protocol_from_list)
 
     def generate_layout(self):

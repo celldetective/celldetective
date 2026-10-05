@@ -24,6 +24,7 @@ from PyQt5.QtWidgets import (
     QAbstractButton,
     QAbstractItemView,
     QHBoxLayout,
+    QLabel,
 )
 from PyQt5.QtCore import (
     Qt,
@@ -46,6 +47,7 @@ from celldetective.gui.base.styles import (
     DANGER_COLOR,
     DISABLED_INK,
     INK_COLOR,
+    MUTED_INK,
     TOOL_BUTTON_SIZE,
     TOOL_ICON_SIZE,
     TOOL_IDLE_COLOR,
@@ -1124,3 +1126,24 @@ def tool_strip(*tools, spacing: Optional[int] = 2) -> "QHBoxLayout":
             strip.addWidget(tool)
 
     return strip
+
+
+def hint_label(text: str) -> QLabel:
+    """
+    Return a line of secondary text, explaining a tab or a field.
+
+    Parameters
+    ----------
+    text : str
+        The line to show.
+
+    Returns
+    -------
+    QLabel
+        The label, wrapping and in the muted ink of secondary text.
+    """
+
+    label = QLabel(text)
+    label.setWordWrap(True)
+    label.setStyleSheet(f"color: {MUTED_INK};")
+    return label

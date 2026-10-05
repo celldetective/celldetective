@@ -152,13 +152,14 @@ def _iter_movies(
     len_movie: float,
     progress_callback: Optional[Callable] = None,
     show_progress: bool = True,
+    stage: str = "correcting",
 ):
     """
     Yield ``(pos_path, stack_path, stack_length)`` for each position that holds a movie.
 
     ``stack_length`` is read from the movie, or ``len_movie`` if it cannot be. Positions without
-    a movie are skipped with a warning. The position progress is reported once each position is
-    done.
+    a movie are skipped with a warning. The position progress is reported, under ``stage``, once
+    each position is done.
     """
     total = len(positions)
     for pidx, pos_path in enumerate(tqdm(positions, disable=not show_progress)):
@@ -172,7 +173,7 @@ def _iter_movies(
             )
         if progress_callback:
             progress_callback(
-                level="position", iter=pidx, total=total, stage="correcting"
+                level="position", iter=pidx, total=total, stage=stage
             )
 
 
@@ -250,14 +251,17 @@ def estimate_background_per_condition(
     offset: Optional[float] = None,
     fix_nan: bool = False,
     progress_callback: Optional[Callable] = None,
+    movie_prefix: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     """
     Estimate the background for each condition in an experiment.
 
     This function calculates the background for each well within
     a given experiment by processing image frames using a specified activation
-    protocol. It supports time-series and tile-based modes for background
-    estimation.
+    protocol. In each frame, the pixels above the threshold in the filtered frame are
+    masked; the background of a position is the median of its masked frames over time
+    (``timeseries``: the frames of ``frame_range``; ``tiles``: all frames), and that of the
+    well the median over its positions.
 
     Parameters
     ----------
@@ -285,11 +289,17 @@ def estimate_background_per_condition(
             Whether to interpolate NaN values in the background. Default is False.
     progress_callback : callable, optional
             A callback function to be called at each step of the process (default is None).
+            If it returns False, the estimation is cancelled and None is returned.
+    movie_prefix : str, optional
+            The prefix of the movies to estimate the background from. Defaults to the movie
+            prefix of the experiment configuration.
 
     Returns
     -------
-    list of dict
-            A list of dictionaries, each containing the background image (`bg`) and the corresponding well path (`well`).
+    list of dict or None
+            A list of dictionaries, each containing the background image (`bg`) and the
+            corresponding well path (`well`), or None for a well whose background could not
+            be computed. None if cancelled.
 
     See Also
     --------
@@ -309,143 +319,190 @@ def estimate_background_per_condition(
     ...     print(bg["well"], bg["bg"].shape)
     """
 
-    config = get_config(experiment)
-    wells = get_experiment_wells(experiment)
-    len_movie = float(config_section_to_dict(config, "MovieSettings")["len_movie"])
-    movie_prefix = config_section_to_dict(config, "MovieSettings")["movie_prefix"]
+    if mode not in ("timeseries", "tiles"):
+        raise ValueError(f"Unknown background estimation mode {mode!r}.")
 
-    well_indices, position_indices = interpret_wells_and_positions(
-        experiment, well_option, "*"
+    len_movie, movie_prefix, channel_index, nbr_channels = _correction_inputs(
+        experiment, target_channel, movie_prefix
     )
-
-    channel_indices = _extract_channel_indices_from_config(config, [target_channel])
-    nbr_channels = _extract_nbr_channels_from_config(config)
-    img_num_channels = _get_img_num_per_channel(
-        channel_indices, int(len_movie), nbr_channels
-    )
-
     backgrounds = []
 
-    for k, well_path in enumerate(
-        tqdm(wells[well_indices], disable=not show_progress_per_well)
+    for _, well_path, positions in _iter_wells(
+        experiment, well_option, "*", show_progress=show_progress_per_well
     ):
-
         well_name, _ = extract_well_name_and_number(well_path)
-        well_idx = well_indices[k]
-
-        positions = get_positions_in_well(well_path)
-        logger.info(
-            f"Reconstruct a background in well {well_name} from positions: {[extract_position_name(p) for p in positions]}..."
-        )
-
-        frame_mean_per_position = []
-
-        for l, pos_path in enumerate(
-            tqdm(positions, disable=not show_progress_per_pos)
-        ):
-            if progress_callback is not None:
-                should_continue = progress_callback(
-                    level="position", iter=l, total=len(positions)
-                )
-                if should_continue is False:
-                    logger.info("Background estimation cancelled by user.")
-                    return None
-
-            stack_path = get_position_movie_path(pos_path, prefix=movie_prefix)
-            if stack_path is not None:
-                len_movie_auto = auto_load_number_of_frames(stack_path)
-                if len_movie_auto is not None:
-                    len_movie = len_movie_auto
-                    img_num_channels = _get_img_num_per_channel(
-                        channel_indices, int(len_movie), nbr_channels
-                    )
-
-                from celldetective.filters import filter_image
-
-                if mode == "timeseries":
-
-                    frames = load_frames(
-                        img_num_channels[0, frame_range[0] : frame_range[1]],
-                        stack_path,
-                        normalize_input=False,
-                    )
-                    frames = np.moveaxis(frames, -1, 0).astype(float)
-
-                    for i in range(len(frames)):
-                        if np.all(frames[i].flatten() == 0):
-                            frames[i, :, :] = np.nan
-
-                    frame_mean = np.nanmean(frames, axis=0)
-
-                    frame = frame_mean.copy().astype(float)
-
-                    std_frame = filter_image(frame.copy(), filters=activation_protocol)
-                    edge = estimate_unreliable_edge(activation_protocol)
-                    mask = threshold_image(
-                        std_frame,
-                        threshold_on_std,
-                        np.inf,
-                        foreground_value=1,
-                        edge_exclusion=edge,
-                    )
-                    frame[np.where(mask.astype(int) == 1)] = np.nan
-
-                elif mode == "tiles":
-
-                    frames = load_frames(
-                        img_num_channels[0, :], stack_path, normalize_input=False
-                    ).astype(float)
-                    frames = np.moveaxis(frames, -1, 0).astype(float)
-
-                    new_frames = []
-                    for i in range(len(frames)):
-
-                        if np.all(frames[i].flatten() == 0):
-                            empty_frame = np.zeros_like(frames[i])
-                            empty_frame[:, :] = np.nan
-                            new_frames.append(empty_frame)
-                            continue
-
-                        f = frames[i].copy()
-                        std_frame = filter_image(f.copy(), filters=activation_protocol)
-                        edge = estimate_unreliable_edge(activation_protocol)
-                        mask = threshold_image(
-                            std_frame,
-                            threshold_on_std,
-                            np.inf,
-                            foreground_value=1,
-                            edge_exclusion=edge,
-                        )
-                        f[np.where(mask.astype(int) == 1)] = np.nan
-                        new_frames.append(f.copy())
-
-                    frame = np.nanmedian(new_frames, axis=0)
-                frame_mean_per_position.append(frame)
-            else:
-                # Left out of the median: an empty entry would make it fail for the whole well.
-                logger.warning(f"Stack not found for position {pos_path}...")
-
-            if progress_callback:
-                progress_callback(
-                    level="position", iter=l, total=len(positions), stage="estimating"
-                )
-
         try:
-            background = np.nanmedian(frame_mean_per_position, axis=0)
-            if progress_callback:
-                progress_callback(image_preview=background)
-
-            if offset is not None:
-                background -= offset
-            if fix_nan:
-                background = interpolate_nan(background.copy().astype(float))
-            backgrounds.append({"bg": background, "well": well_path})
-            logger.info(f"Background successfully computed for well {well_name}...")
+            background = _estimate_well_background(
+                positions,
+                len_movie,
+                movie_prefix,
+                channel_index,
+                nbr_channels,
+                threshold_on_std=threshold_on_std,
+                frame_range=frame_range,
+                mode=mode,
+                activation_protocol=activation_protocol,
+                offset=offset,
+                fix_nan=fix_nan,
+                progress_callback=progress_callback,
+                show_progress=show_progress_per_pos,
+            )
         except Exception as e:
-            logger.error(f"{e}")
+            logger.error(f"Background could not be estimated for well {well_name}: {e}")
             backgrounds.append(None)
+            continue
+        if background is None:
+            logger.info("Background estimation cancelled by user.")
+            return None
+        backgrounds.append({"bg": background, "well": well_path})
+        logger.info(f"Background successfully computed for well {well_name}...")
 
     return backgrounds
+
+
+def _estimate_well_background(
+    positions,
+    len_movie: float,
+    movie_prefix: Optional[str],
+    channel_index: int,
+    nbr_channels: int,
+    threshold_on_std: float,
+    frame_range: List[int],
+    mode: Literal["timeseries", "tiles"],
+    activation_protocol: List[List[Any]],
+    offset: Optional[float] = None,
+    fix_nan: bool = False,
+    progress_callback: Optional[Callable] = None,
+    show_progress: bool = False,
+) -> Optional[np.ndarray]:
+    """
+    Background of a well, estimated from its positions (see `estimate_background_per_condition`).
+
+    Returns
+    -------
+    numpy.ndarray or None
+        The background, or None if cancelled (``progress_callback`` returned False).
+
+    Raises
+    ------
+    ValueError
+        If no position holds a frame to estimate the background from: the median of nothing
+        is a scalar NaN, which would correct every pixel to NaN.
+    """
+    logger.info(
+        f"Reconstruct a background from positions: {[extract_position_name(p) for p in positions]}..."
+    )
+    edge = estimate_unreliable_edge(activation_protocol)
+    background_per_position = []
+
+    for pos_path, stack_path, stack_length in _iter_movies(
+        positions,
+        movie_prefix,
+        len_movie,
+        progress_callback=progress_callback,
+        show_progress=show_progress,
+        stage="estimating",
+    ):
+        # Called with no progress to report, only to know whether to stop.
+        if progress_callback is not None and progress_callback() is False:
+            return None
+
+        img_num_channels = _get_img_num_per_channel(
+            [channel_index], int(stack_length), nbr_channels
+        )[0]
+        if mode == "timeseries":
+            img_num_channels = img_num_channels[frame_range[0] : frame_range[1]]
+
+        # Each frame is masked before the frames are combined: a cell seen in one
+        # frame only would otherwise be blurred into the average, below the threshold.
+        masked = None
+        for t, img_num in enumerate(img_num_channels):
+            frame = load_frames([int(img_num)], stack_path, normalize_input=False)[
+                :, :, 0
+            ]
+            frame = _mask_non_background(
+                frame, threshold_on_std, activation_protocol, edge
+            )
+            if masked is None:
+                masked = np.empty(
+                    (len(img_num_channels),) + frame.shape, dtype=np.float32
+                )
+            masked[t] = frame
+
+        if masked is None:
+            logger.warning(
+                f"No frame of {pos_path} to estimate the background from"
+                + (
+                    f" in the frame range {frame_range}..."
+                    if mode == "timeseries"
+                    else "..."
+                )
+            )
+        else:
+            background_per_position.append(np.nanmedian(masked, axis=0))
+
+    if not background_per_position:
+        raise ValueError("no position to estimate the background from")
+
+    background = np.nanmedian(background_per_position, axis=0).astype(float)
+    if progress_callback:
+        progress_callback(image_preview=background)
+    if offset is not None:
+        background -= offset
+    if fix_nan:
+        background = interpolate_nan(background)
+    return background
+
+
+def _mask_non_background(
+    frame: np.ndarray,
+    threshold_on_std: float,
+    activation_protocol: List[List[Any]],
+    edge: Optional[int],
+) -> np.ndarray:
+    """
+    Float copy of a frame with its non-background pixels set to NaN.
+
+    Non-background pixels are those above ``threshold_on_std`` in the frame filtered by
+    ``activation_protocol``, holes filled. An empty (all zero) frame is entirely NaN.
+    """
+    frame = np.array(frame, dtype=float)
+    if not np.any(frame):
+        frame[:] = np.nan
+        return frame
+    frame[
+        _non_background_mask(frame.copy(), threshold_on_std, activation_protocol, edge)
+    ] = np.nan
+    return frame
+
+
+def _non_background_mask(
+    frame: np.ndarray,
+    threshold_on_std: float,
+    activation_protocol: List[List[Any]],
+    edge: Optional[int],
+    outside: Optional[np.ndarray] = None,
+) -> np.ndarray:
+    """
+    Boolean mask of the pixels above ``threshold_on_std`` in the frame filtered by
+    ``activation_protocol``, holes filled.
+
+    ``frame`` must be a float array the filters may modify in place: pass a copy to keep it.
+    The pixels of ``outside`` are left out of the thresholding: a closed high-variance ring
+    such as a diaphragm edge would otherwise have its whole inside masked by the hole filling.
+    """
+    from celldetective.filters import filter_image
+
+    std_frame = filter_image(frame, filters=activation_protocol)
+    if outside is not None:
+        std_frame[outside] = np.nan
+    return threshold_image(
+        std_frame,
+        threshold_on_std,
+        np.inf,
+        foreground_value=1,
+        edge_exclusion=edge,
+    ).astype(bool)
 
 
 def correct_background_model_free(
@@ -458,7 +515,7 @@ def correct_background_model_free(
     frame_range: List[int] = [0, 5],
     optimize_option: bool = False,
     opt_coef_range: Union[List[float], tuple[float, float]] = [0.95, 1.05],
-    opt_coef_nbr: int = 100,
+    opt_radius: Optional[float] = None,
     operation: Literal["divide", "subtract"] = "divide",
     clip: bool = False,
     offset: Optional[float] = None,
@@ -471,6 +528,8 @@ def correct_background_model_free(
     activation_protocol: List[List[Any]] = [["gauss", 2], ["std", 4]],
     export_prefix: str = "Corrected",
     progress_callback: Optional[Callable] = None,
+    subset_indices: Optional[List[int]] = None,
+    preview_frames: Optional[int] = None,
     **kwargs: Any,
 ) -> Optional[List[np.ndarray]]:
     """
@@ -499,9 +558,11 @@ def correct_background_model_free(
     optimize_option : bool, optional
             If True, optimize the correction coefficient. Defaults to False.
     opt_coef_range : list of float or tuple of float, optional
-            The range of coefficients to try for optimization. Defaults to [0.95, 1.05].
-    opt_coef_nbr : int, optional
-            The number of coefficients to test within the optimization range. Defaults to 100.
+            The range the optimal coefficient is kept within. Defaults to [0.95, 1.05].
+    opt_radius : float, optional
+            Radius in pixels of the disk centred on the image over which the coefficient is
+            optimized. Pixels outside (e.g. a diaphragm close to the camera black level) are
+            ignored by the fit but still corrected. None (default) uses the full frame.
     operation : {'divide', 'subtract'}, optional
             The operation to apply for background correction. Defaults to 'divide'.
     clip : bool, optional
@@ -526,8 +587,13 @@ def correct_background_model_free(
             The prefix for the exported file name. Defaults to "Corrected".
     progress_callback : callable, optional
             A callback function to be called at each step of the process (default is None).
+    subset_indices : list of int, optional
+            Absolute frame indices (IFDs) to correct for a preview, never exported.
+    preview_frames : int, optional
+            For a preview, the number of frames to correct, spread over each movie (see
+            `preview_frame_indices`). Ignored if ``subset_indices`` is given.
     **kwargs : Any
-            Additional keyword arguments.
+            Ignored.
 
     Returns
     -------
@@ -553,7 +619,7 @@ def correct_background_model_free(
     )
     stacks = []
 
-    for well_index, well_path, positions in _iter_wells(
+    for _, well_path, positions in _iter_wells(
         experiment,
         well_option,
         position_option,
@@ -566,27 +632,30 @@ def correct_background_model_free(
             progress_callback(status="Reconstructing background...")
 
         try:
-            # Estimate background
-            background = estimate_background_per_condition(
-                experiment,
+            # From all the positions of the well, not only those to correct.
+            background = _estimate_well_background(
+                get_positions_in_well(well_path),
+                len_movie,
+                movie_prefix,
+                channel_index,
+                nbr_channels,
                 threshold_on_std=threshold_on_std,
-                well_option=int(well_index),
-                target_channel=target_channel,
                 frame_range=frame_range,
                 mode=mode,
-                show_progress_per_pos=True,
-                show_progress_per_well=False,
                 activation_protocol=activation_protocol,
                 offset=offset,
                 fix_nan=fix_nan,
                 progress_callback=progress_callback,
+                show_progress=show_progress_per_pos,
             )
-            background = background[0]["bg"]
         except Exception as e:
             logger.error(
                 f'Background could not be estimated due to error "{e}"... Skipping well {well_name}...'
             )
             continue
+        if background is None:
+            logger.info("Background correction cancelled.")
+            break
 
         if progress_callback:
             progress_callback(
@@ -612,37 +681,45 @@ def correct_background_model_free(
                 threshold_on_std=threshold_on_std,
                 optimize_option=optimize_option,
                 opt_coef_range=opt_coef_range,
-                opt_coef_nbr=opt_coef_nbr,
+                opt_radius=opt_radius,
                 operation=operation,
                 clip=clip,
                 offset=offset,
                 export=export,
+                return_stacks=return_stacks,
                 fix_nan=fix_nan,
                 activation_protocol=activation_protocol,
                 prefix=export_prefix,
                 progress_callback=progress_callback,
+                subset_indices=(
+                    preview_frame_indices(stack_length, nbr_channels, preview_frames)
+                    if subset_indices is None and preview_frames
+                    else subset_indices
+                ),
             )
             logger.info("Correction successful.")
-            _log_preprocessing_step(
-                pos_path,
-                "model-free",
-                {
-                    "target_channel": target_channel,
-                    "mode": mode,
-                    "operation": operation,
-                    "clip": clip,
-                    "threshold_on_std": threshold_on_std,
-                    "offset": offset,
-                    "frame_range": frame_range,
-                    "optimize_option": optimize_option,
-                    "opt_coef_range": opt_coef_range,
-                    "opt_coef_nbr": opt_coef_nbr,
-                    "fix_nan": fix_nan,
-                    "activation_protocol": activation_protocol,
-                    "movie_prefix": movie_prefix,
-                    "export_prefix": export_prefix,
-                },
-            )
+            # Only what was written to the position: a preview leaves its data unchanged.
+            if export:
+                _log_preprocessing_step(
+                    pos_path,
+                    "model-free",
+                    {
+                        "target_channel": target_channel,
+                        "mode": mode,
+                        "operation": operation,
+                        "clip": clip,
+                        "threshold_on_std": threshold_on_std,
+                        "offset": offset,
+                        "frame_range": frame_range,
+                        "optimize_option": optimize_option,
+                        "opt_coef_range": opt_coef_range,
+                        "opt_radius": opt_radius,
+                        "fix_nan": fix_nan,
+                        "activation_protocol": activation_protocol,
+                        "movie_prefix": movie_prefix,
+                        "export_prefix": export_prefix,
+                    },
+                )
             if return_stacks:
                 stacks.append(corrected_stack)
             else:
@@ -651,6 +728,93 @@ def correct_background_model_free(
 
     if return_stacks:
         return stacks
+
+
+def preview_frame_indices(
+    stack_length: float, nbr_channels: int, n_frames: int
+) -> Optional[List[int]]:
+    """
+    Frames of a movie to correct for a preview.
+
+    Parameters
+    ----------
+    stack_length : int or float
+            Number of frames of the movie, possibly the configured movie length (a float)
+            when the movie's own cannot be read.
+    nbr_channels : int
+            Number of channels, interleaved in the movie.
+    n_frames : int
+            Number of frames wanted.
+
+    Returns
+    -------
+    list of int or None
+            The absolute frame indices (IFDs) of up to ``n_frames`` frames spread over the
+            movie, first and last included, or None (the whole movie) for a movie without
+            frames.
+    """
+    stack_length = int(stack_length)
+    if stack_length < 1:
+        return None
+    frames = np.unique(
+        np.linspace(0, stack_length - 1, min(n_frames, stack_length)).round()
+    )
+    return [int(t) * nbr_channels for t in frames]
+
+
+def _best_l1_coefficient(target: np.ndarray, background: np.ndarray) -> float:
+    """
+    Coefficient ``c`` minimizing ``sum(|target - c * background|)``, exactly.
+
+    As ``|t - c * b| = |b| * |t / b - c|``, the loss is minimized by the median of the ratios
+    ``target / background`` weighted by ``|background|``. Pixels where the background is 0
+    add a constant to the loss and are left out.
+
+    Rather than sorting all the ratios, they are binned and only the bin holding the median
+    is kept, until few enough are left to sort: a few linear passes over the frame.
+
+    Parameters
+    ----------
+    target : numpy.ndarray
+        Finite background pixels of the frame, 1D.
+    background : numpy.ndarray
+        Finite background model values at the same pixels, 1D.
+
+    Returns
+    -------
+    float
+        The optimal coefficient, the smallest one on a tie; 1 if the background is 0 at
+        every pixel.
+    """
+
+    nonzero = background != 0
+    if not np.any(nonzero):
+        return 1.0
+    ratio = target[nonzero] / background[nonzero]
+    weight = np.abs(background[nonzero])
+    half = 0.5 * weight.sum()
+    below = 0.0  # weight of the ratios left out below the kept ones
+
+    bins = 4096
+    while ratio.size > bins:
+        low, high = ratio.min(), ratio.max()
+        scale = (bins - 1) / (high - low) if high > low else np.inf
+        if not np.isfinite(scale):
+            break
+        # The bin index grows with the ratio: the bins before the median one hold the
+        # ratios below all of those kept.
+        index = np.minimum(((ratio - low) * scale).astype(np.intp), bins - 1)
+        cumulative = np.cumsum(np.bincount(index, weights=weight, minlength=bins))
+        median_bin = min(np.searchsorted(cumulative, half - below), bins - 1)
+        if median_bin > 0:
+            below += cumulative[median_bin - 1]
+        kept = index == median_bin
+        ratio, weight = ratio[kept], weight[kept]
+
+    order = np.argsort(ratio)
+    cumulative = below + np.cumsum(weight[order])
+    median = min(np.searchsorted(cumulative, half), ratio.size - 1)
+    return float(ratio[order[median]])
 
 
 def apply_background_to_stack(
@@ -664,20 +828,23 @@ def apply_background_to_stack(
     threshold_on_std: float = 1,
     optimize_option: bool = True,
     opt_coef_range: Union[List[float], tuple[float, float]] = (0.95, 1.05),
-    opt_coef_nbr: int = 100,
+    opt_radius: Optional[float] = None,
     operation: Literal["divide", "subtract"] = "divide",
     clip: bool = False,
     export: bool = False,
-    prefix: str = "Corrected",
+    prefix: Optional[str] = "Corrected",
     fix_nan: bool = False,
+    return_stacks: bool = True,
     progress_callback: Optional[Callable] = None,
+    subset_indices: Optional[List[int]] = None,
 ) -> Optional[np.ndarray]:
     """
     Apply background correction to an image stack.
 
     This function corrects the background of an image stack by applying a specified operation
-    (either division or subtraction) between the image stack and the background. It also supports
-    optimization of the correction coefficient through brute-force regression.
+    (either division or subtraction) between the image stack and the background. The
+    background can be scaled in each frame by the coefficient that best fits it to the
+    background pixels of the frame (least absolute deviations).
 
     Parameters
     ----------
@@ -695,31 +862,40 @@ def apply_background_to_stack(
             A constant value to subtract from the image. Default is None.
     activation_protocol : list of list, optional
             The activation protocol consisting of filters and their respective parameters (default is [['gauss', 2], ['std', 4]]).
-    fix_nan : bool, optional
-            Whether to interpolate NaN values in the corrected image. Default is False.
     threshold_on_std : float, optional
             The threshold for the standard deviation filter to identify high-variance areas. Defaults to 1.
     optimize_option : bool, optional
-            If True, optimize the correction coefficient using a range of values. Defaults to True.
+            If True, scale the background by the optimal coefficient in each frame. Defaults to True.
     opt_coef_range : list of float or tuple of float, optional
-            The range of coefficients to try for optimization. Defaults to (0.95, 1.05).
-    opt_coef_nbr : int, optional
-            The number of coefficients to test within the optimization range. Defaults to 100.
+            The range the optimal coefficient is kept within: a coefficient out of it is set
+            to the closest bound, with a warning. Defaults to (0.95, 1.05).
+    opt_radius : float, optional
+            Radius in pixels of the disk centred on the image over which the coefficient is
+            optimized. None (default) uses the full frame.
     operation : {'divide', 'subtract'}, optional
             The operation to apply for background correction. Defaults to 'divide'.
     clip : bool, optional
             If True, clip the corrected values to be non-negative when using subtraction. Defaults to False.
     export : bool, optional
             If True, export the corrected stack to a file. Defaults to False.
-    prefix : str, optional
-            The prefix for the exported file name. Defaults to "Corrected".
+    prefix : str or None, optional
+            The prefix for the exported file name. None overwrites the stack, through a
+            temporary file. Defaults to "Corrected".
+    fix_nan : bool, optional
+            Whether to interpolate NaN values: those of the background once before it is
+            applied, then those of a corrected frame only if some are left. Default is False.
+    return_stacks : bool, optional
+            Whether to return the corrected stack. Defaults to True.
     progress_callback : callable, optional
             A callback function to be called at each step of the process (default is None).
+    subset_indices : list of int, optional
+            Absolute frame indices (IFDs) to correct instead of the whole stack, for a
+            preview. Ignored when exporting.
 
     Returns
     -------
     corrected_stack : numpy.ndarray, optional
-            The background-corrected image stack.
+            The (T, Y, X, C) float32 background-corrected stack if `return_stacks` is True.
 
     Examples
     --------
@@ -727,11 +903,9 @@ def apply_background_to_stack(
     >>> background = np.zeros((512, 512))  # Example background
     >>> corrected_stack = apply_background_to_stack(stack_path, background, target_channel_index=0, nbr_channels=3, stack_length=45, optimize_option=False, operation='subtract', clip=True)
     >>> print(corrected_stack.shape)
-    (44, 512, 512, 3)
+    (45, 512, 512, 3)
 
     """
-    import os
-    import numpy as np
 
     if stack_length is None:
         stack_length = auto_load_number_of_frames(stack_path)
@@ -739,113 +913,108 @@ def apply_background_to_stack(
             logger.error("stack length not provided")
             return None
 
+    if operation not in ("divide", "subtract"):
+        logger.error("Operation not supported... Abort.")
+        return None
+
+    background = np.asarray(background, dtype=float)
+    if fix_nan:
+        background = interpolate_nan(background)
+    bg_valid = np.isfinite(background)
+
     if optimize_option:
-        coefficients = np.linspace(
-            opt_coef_range[0], opt_coef_range[1], int(opt_coef_nbr)
+        from celldetective.utils.registration import radial_distance
+
+        coef_min, coef_max = sorted(opt_coef_range)
+        edge = estimate_unreliable_edge(activation_protocol)
+        bg_crop = unpad(background, edge)
+        fit_region = bg_valid
+        outside = None
+        if opt_radius is not None:
+            outside = radial_distance(background.shape) > opt_radius
+            fit_region = fit_region & ~outside
+        fit_region_crop = unpad(fit_region, edge)
+
+    # A subset of frames is only corrected for a preview, never exported.
+    if subset_indices is None or export:
+        frame_indices = range(0, int(stack_length * nbr_channels), nbr_channels)
+    else:
+        frame_indices = subset_indices
+
+    def coefficient(i, target_img):
+        # A copy: target_img is the frame corrected next. The radius is left out of the
+        # thresholding too.
+        mask = _non_background_mask(
+            target_img.copy(), threshold_on_std, activation_protocol, edge, outside
         )
-        coefficients = np.append(coefficients, [1.0])
-    if export:
-        path, file = os.path.split(stack_path)
-        if prefix is None:
-            newfile = file
-        else:
-            newfile = "_".join([prefix, file])
 
-    corrected_stack = []
+        target_crop = unpad(target_img, edge)
+        valid = fit_region_crop & ~unpad(mask, edge) & np.isfinite(target_crop)
 
-    for i in range(0, int(stack_length * nbr_channels), nbr_channels):
-
-        frames = load_frames(
-            list(np.arange(i, (i + nbr_channels))), stack_path, normalize_input=False
-        ).astype(float)
-        target_img = frames[:, :, target_channel_index].copy()
-        if offset is not None:
-            target_img -= offset
-
-        if optimize_option:
-
-            target_copy = target_img.copy()
-
-            from celldetective.segmentation import threshold_image
-            from celldetective.filters import filter_image
-
-            std_frame = filter_image(target_copy.copy(), filters=activation_protocol)
-            edge = estimate_unreliable_edge(activation_protocol)
-            mask = threshold_image(
-                std_frame,
-                threshold_on_std,
-                np.inf,
-                foreground_value=1,
-                edge_exclusion=edge,
+        if not np.any(valid):
+            logger.warning(
+                f"IFD {i}; no background pixel left to optimize the coefficient, "
+                "check the fit radius and threshold... Using 1."
             )
-            target_copy[np.where(mask.astype(int) == 1)] = np.nan
-
-            loss = []
-
-            # brute-force regression, could do gradient descent instead
-            for c in coefficients:
-
-                target_crop = unpad(target_copy, edge)
-                bg_crop = unpad(background, edge)
-
-                roi = np.zeros_like(target_crop).astype(int)
-                roi[target_crop != target_crop] = 1
-                roi[bg_crop != bg_crop] = 1
-
-                diff = np.subtract(target_crop, c * bg_crop, where=roi == 0)
-                s = np.sum(np.abs(diff, where=roi == 0), where=roi == 0)
-                loss.append(s)
-
-            c = coefficients[np.argmin(loss)]
-            logger.info(f"IFD {i}; optimal coefficient: {c}...")
-            # if c==min(coefficients) or c==max(coefficients):
-            # 	print('Warning... The optimal coefficient is beyond the range provided... Please adjust your coefficient range...')
-        else:
-            c = 1
-
-        if operation == "divide":
-            correction = np.divide(
-                target_img, background * c, where=background == background
+            return 1
+        c = _best_l1_coefficient(target_crop[valid], bg_crop[valid])
+        if not coef_min <= c <= coef_max:
+            # The loss is convex: the closest bound is the best coefficient of the range.
+            logger.warning(
+                f"IFD {i}; optimal coefficient {c:.4f} out of the range "
+                f"[{coef_min}, {coef_max}], set to the closest bound..."
             )
-            correction[background != background] = np.nan
-            correction[target_img != target_img] = np.nan
+            return min(max(c, coef_min), coef_max)
+        logger.info(f"IFD {i}; optimal coefficient: {c:.4f}...")
+        return c
 
-        elif operation == "subtract":
-            correction = np.subtract(
-                target_img, background * c, where=background == background
-            )
-            correction[background != background] = np.nan
-            correction[target_img != target_img] = np.nan
-            if clip:
+    apply = np.divide if operation == "divide" else np.subtract
+
+    def corrected_frames():
+        for i in frame_indices:
+            frames = load_frames(
+                list(np.arange(i, (i + nbr_channels))), stack_path, normalize_input=False
+            ).astype(float)
+            target_img = frames[:, :, target_channel_index].copy()
+            if offset is not None:
+                target_img -= offset
+
+            c = coefficient(i, target_img) if optimize_option else 1
+            scaled = background if c == 1 else background * c
+
+            # NaN where the background is unknown; a NaN of the frame carries through.
+            correction = np.full(target_img.shape, np.nan)
+            with np.errstate(divide="ignore", invalid="ignore"):
+                apply(target_img, scaled, out=correction, where=bg_valid)
+            if operation == "subtract" and clip:
                 correction[correction <= 0.0] = 0.0
-        else:
-            logger.error("Operation not supported... Abort.")
-            return
 
-        correction[~np.isfinite(correction)] = np.nan
-        if fix_nan:
-            correction = interpolate_nan(correction.copy())
-        frames[:, :, target_channel_index] = correction
-        corrected_stack.append(frames)
+            invalid = ~np.isfinite(correction)
+            if np.any(invalid):
+                correction[invalid] = np.nan
+                # The background is already interpolated: only a frame left with NaNs
+                # (e.g. 0 / 0 where the background is 0) still needs it, and it is costly.
+                if fix_nan:
+                    correction = interpolate_nan(correction)
+            frames[:, :, target_channel_index] = correction
+            yield frames
 
-        if progress_callback:
-            progress_callback(
-                level="frame",
-                iter=i,
-                total=int(stack_length * nbr_channels),
-                stage="correcting",
-            )
+            if progress_callback:
+                progress_callback(
+                    level="frame",
+                    iter=i,
+                    total=int(stack_length * nbr_channels),
+                    stage="correcting",
+                )
 
-    corrected_stack = np.array(corrected_stack)
-
-    if export:
-        from celldetective.utils.io import save_tiff_imagej_compatible
-
-        save_tiff_imagej_compatible(
-            os.sep.join([path, newfile]), corrected_stack, axes="TYXC"
-        )
-
-    return corrected_stack
+    return _write_frames(
+        corrected_frames(),
+        len(frame_indices),
+        stack_path,
+        prefix,
+        export,
+        return_stacks,
+    )
 
 
 def paraboloid(
@@ -1141,6 +1310,7 @@ def correct_background_model(
     export_prefix: str = "Corrected",
     progress_callback: Optional[Callable] = None,
     downsample: int = 10,
+    subset_indices: Optional[List[int]] = None,
     **kwargs: Any,
 ) -> Optional[List[np.ndarray]]:
     """
@@ -1186,8 +1356,10 @@ def correct_background_model(
             A callback function to be called at each step of the process (default is None).
     downsample : int, optional
             The downsampling factor to reduce the number of points used for fitting (default is 10).
+    subset_indices : list of int, optional
+            Absolute frame indices (IFDs) to correct for a preview, never exported.
     **kwargs : Any
-            Additional keyword arguments to be passed to the underlying correction function.
+            Ignored.
 
     Returns
     -------
@@ -1242,24 +1414,26 @@ def correct_background_model(
                 return_stacks=return_stacks,
                 progress_callback=progress_callback,
                 downsample=downsample,
-                subset_indices=kwargs.get("subset_indices", None),
+                subset_indices=subset_indices,
             )
             logger.info("Correction successful.")
-            _log_preprocessing_step(
-                pos_path,
-                "model",
-                {
-                    "target_channel": target_channel,
-                    "model": model,
-                    "operation": operation,
-                    "clip": clip,
-                    "threshold_on_std": threshold_on_std,
-                    "activation_protocol": activation_protocol,
-                    "downsample": downsample,
-                    "movie_prefix": movie_prefix,
-                    "export_prefix": export_prefix,
-                },
-            )
+            # Only what was written to the position: a preview leaves its data unchanged.
+            if export:
+                _log_preprocessing_step(
+                    pos_path,
+                    "model",
+                    {
+                        "target_channel": target_channel,
+                        "model": model,
+                        "operation": operation,
+                        "clip": clip,
+                        "threshold_on_std": threshold_on_std,
+                        "activation_protocol": activation_protocol,
+                        "downsample": downsample,
+                        "movie_prefix": movie_prefix,
+                        "export_prefix": export_prefix,
+                    },
+                )
             if return_stacks:
                 stacks.append(corrected_stack)
             else:
@@ -1456,13 +1630,10 @@ def field_correction(
     if np.percentile(target_copy.flatten(), 99.9) == 0.0:
         return target_copy
 
-    from celldetective.filters import filter_image
-
-    std_frame = filter_image(target_copy, filters=activation_protocol)
     edge = estimate_unreliable_edge(activation_protocol)
-    mask = threshold_image(
-        std_frame, threshold, np.inf, foreground_value=1, edge_exclusion=edge
-    ).astype(int)
+    mask = _non_background_mask(target_copy, threshold, activation_protocol, edge).astype(
+        int
+    )
     background = fit_background_model(
         img, cell_masks=mask, model=model, edge_exclusion=edge, downsample=downsample
     )
@@ -1644,17 +1815,19 @@ def correct_channel_offset(
             )
 
             logger.info("Correction successful.")
-            _log_preprocessing_step(
-                pos_path,
-                "offset",
-                {
-                    "target_channel": target_channel,
-                    "correction_horizontal": correction_horizontal,
-                    "correction_vertical": correction_vertical,
-                    "movie_prefix": movie_prefix,
-                    "export_prefix": export_prefix,
-                },
-            )
+            # Only what was written to the position: a preview leaves its data unchanged.
+            if export:
+                _log_preprocessing_step(
+                    pos_path,
+                    "offset",
+                    {
+                        "target_channel": target_channel,
+                        "correction_horizontal": correction_horizontal,
+                        "correction_vertical": correction_vertical,
+                        "movie_prefix": movie_prefix,
+                        "export_prefix": export_prefix,
+                    },
+                )
             if return_stacks:
                 stacks.append(corrected_stack)
             else:

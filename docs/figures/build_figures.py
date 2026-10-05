@@ -515,6 +515,35 @@ def signals():
     return f.render()
 
 
+def movie_prefix():
+    f = Figure("movie-prefix", 700, 560)
+    ex, ey = 20, 20
+    f.shot("config_editor_movie_prefix.png", ex, ey, crop=(0, 0, 642, 400))
+    m = marks("config_editor_movie_prefix", ex, ey)
+    # The list of suggestions covers the line under the field when it is open:
+    # it is shown apart, below the window.
+    px, py = ex + 101, ey + 470
+    f.shot("config_editor_movie_prefix_popup.png", px, py)
+
+    f.callout(1, *m["button"], side="right", rounded=False)
+    # From beside the line under the field, so it crosses neither frame.
+    h = m["hint"]
+    f.arrow(h[0] + h[2] + 20, h[1] + h[3] + 4, px + 478 - 40, py - 6, bend=-0.3)
+    f.callout(2, *m["hint"], side="bottom")
+    return f.render()
+
+
+def stack_viewer():
+    f = Figure("stack-viewer", 700, 840)
+    vx, vy = 20, 20
+    f.shot("stack_viewer.png", vx, vy)
+    v = marks("stack_viewer", vx, vy)
+
+    f.callout(1, *union(v["line"], v["lock"]), side="top", rounded=False)
+    f.callout(2, *v["auto"], side="right", rounded=False)
+    return f.render()
+
+
 FIGURES = [
     registration,
     config_editor,
@@ -539,6 +568,8 @@ FIGURES = [
     signal_annotator_settings,
     survival,
     signals,
+    movie_prefix,
+    stack_viewer,
 ]
 
 if __name__ == "__main__":

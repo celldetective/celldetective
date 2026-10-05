@@ -7,15 +7,35 @@ import re
 sys.path.insert(0, os.path.abspath("./../../"))
 sys.path.insert(0, os.path.abspath("./../../examples/"))
 
-VERSIONFILE = os.path.abspath("./../../celldetective/_version.py")
-verstrline = open(VERSIONFILE, "rt").read()
-VSRE = r"^__version__\s*=\s*(?:version\s*=\s*)?['\"]([^'\"]*)['\"]"
+def _celldetective_version():
+    """
+    The version of the checkout being documented.
 
-mo = re.search(VSRE, verstrline, re.M)
-if mo:
-    verstr = mo.group(1)
-else:
-    raise RuntimeError("Unable to find version string in %s." % (VERSIONFILE,))
+    ``celldetective/_version.py`` is written by setuptools-scm when the package
+    is built and is not tracked, so the version is asked of setuptools-scm
+    first, from the git tags, and read from that file only as a fallback.
+    """
+    root = os.path.abspath("./../../")
+    try:
+        from setuptools_scm import get_version
+
+        return get_version(root=root)
+    except Exception:
+        pass
+    versionfile = os.path.join(root, "celldetective", "_version.py")
+    if os.path.exists(versionfile):
+        with open(versionfile, "rt") as f:
+            mo = re.search(
+                r"^__version__\s*=\s*(?:version\s*=\s*)?['\"]([^'\"]*)['\"]",
+                f.read(),
+                re.M,
+            )
+        if mo:
+            return mo.group(1)
+    return "unknown"
+
+
+verstr = _celldetective_version()
 
 
 # Configuration file for the Sphinx documentation builder.

@@ -3,3 +3,5 @@
 # longer tuples), and the docs are verified with Sphinx 7.4.
 -r ../requirements.txt
 sphinx>=7.4,<8
+# The version shown in the docs is read from the git tags.
+setuptools_scm>=6.2

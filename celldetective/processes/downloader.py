@@ -1,16 +1,13 @@
 import logging
 import os
-from tqdm import tqdm
 from multiprocessing import Process, Queue
 
 logger = logging.getLogger("celldetective")
 from typing import Optional, Dict, Any
-from glob import glob
-import shutil
-import zipfile
-import tempfile
 import time
 import json
+
+from celldetective.utils.io import remove_file_if_exists
 
 
 class DownloadProcess(Process):
@@ -44,7 +41,6 @@ class DownloadProcess(Process):
                 setattr(self, key, value)
 
         self.queue = queue
-        self.progress = True
 
         # Get celldetective package root
         current_dir = os.path.dirname(os.path.realpath(__file__))
@@ -61,12 +57,11 @@ class DownloadProcess(Process):
         self.zip_url = full_links[index]
         self.path_to_zip_file = os.sep.join([self.output_dir, "temp.zip"])
 
-        self.sum_done = 0
         self.t0 = time.time()
 
     def download_url_to_file(self, url: str, dst: str) -> None:
         """
-        Download a file from a URL.
+        Download a file from a URL, reporting the progress to the queue.
 
         Parameters
         ----------
@@ -80,47 +75,29 @@ class DownloadProcess(Process):
         Exception
             If the download fails once transient errors have been retried.
         """
-        from celldetective.utils.downloaders import open_url_with_retries
+        from celldetective.utils.downloaders import stream_url_to_file
 
         self.queue.put({"status": "Contacting Zenodo..."})
-        u, file_size = open_url_with_retries(url)
-        self.queue.put({"status": "Downloading..."})
 
-        # We deliberately save it in a temp file and move it after
-        dst = os.path.expanduser(dst)
-        dst_dir = os.path.dirname(dst)
-        f = tempfile.NamedTemporaryFile(delete=False, dir=dst_dir)
+        # The last tenth of a percent reported: one message per 8 KiB chunk would
+        # flood the queue the progress window reads (some 130,000 for a 1 GB file).
+        last_step = -1
 
-        try:
-            with tqdm(
-                total=file_size,
-                disable=not self.progress,
-                unit="B",
-                unit_scale=True,
-                unit_divisor=1024,
-            ) as pbar:
-                while True:
-                    buffer = u.read(8192)  # 8192
-                    if len(buffer) == 0:
-                        break
-                    f.write(buffer)
-                    pbar.update(len(buffer))
-                    if file_size:
-                        self.sum_done += len(buffer) / file_size * 100
-                        mean_exec_per_step = (time.time() - self.t0) / (
-                            self.sum_done * file_size / 100 + 1
-                        )
-                        pred_time = (
-                            file_size - (self.sum_done * file_size / 100 + 1)
-                        ) * mean_exec_per_step
-                        self.queue.put([self.sum_done, pred_time])
-            f.close()
-            shutil.move(f.name, dst)
-        finally:
-            u.close()
-            f.close()
-            if os.path.exists(f.name):
-                os.remove(f.name)
+        def on_chunk(downloaded: int, file_size: Optional[int]) -> None:
+            nonlocal last_step
+            if downloaded == 0:
+                self.queue.put({"status": "Downloading..."})
+            elif file_size:
+                pct = downloaded / file_size * 100
+                step = int(pct * 10)
+                if step == last_step:
+                    return
+                last_step = step
+                mean_exec_per_step = (time.time() - self.t0) / (downloaded + 1)
+                pred_time = (file_size - (downloaded + 1)) * mean_exec_per_step
+                self.queue.put([pct, pred_time])
+
+        stream_url_to_file(url, dst, on_chunk)
 
     def run(self):
         """Run the download process."""
@@ -129,8 +106,7 @@ class DownloadProcess(Process):
             self._download_and_extract()
         except Exception as e:
             logger.error(f"Download of {self.file} failed: {e}")
-            if os.path.exists(self.path_to_zip_file):
-                os.remove(self.path_to_zip_file)
+            remove_file_if_exists(self.path_to_zip_file)
             self.queue.put(
                 {
                     "status": "error",
@@ -147,28 +123,10 @@ class DownloadProcess(Process):
     def _download_and_extract(self):
         """Download the zip archive, extract it and tidy up the model folder."""
 
+        from celldetective.utils.downloaders import extract_zenodo_archive
+
         self.download_url_to_file(rf"{self.zip_url}", self.path_to_zip_file)
-        with zipfile.ZipFile(self.path_to_zip_file, "r") as zip_ref:
-            zip_ref.extractall(self.output_dir)
-
-        file_to_rename = glob(
-            os.sep.join(
-                [
-                    self.output_dir,
-                    self.file,
-                    "*[!.json][!.png][!.h5][!.csv][!.npy][!.tif][!.ini]",
-                ]
-            )
-        )
-        if (
-            len(file_to_rename) > 0
-            and not file_to_rename[0].endswith(os.sep)
-            and not self.file.startswith("demo")
-        ):
-            os.rename(
-                file_to_rename[0], os.sep.join([self.output_dir, self.file, self.file])
-            )
-
+        extract_zenodo_archive(self.path_to_zip_file, self.output_dir, self.file)
         os.remove(self.path_to_zip_file)
         self.queue.put([100, 0])
         time.sleep(0.5)

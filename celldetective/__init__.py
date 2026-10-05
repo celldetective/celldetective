@@ -1,4 +1,12 @@
-from ._version import __version__
+try:
+    from ._version import __version__
+except ImportError:  # a source checkout that was never built or installed
+    try:
+        from importlib.metadata import version as _version
+
+        __version__ = _version("celldetective")
+    except Exception:
+        __version__ = "unknown"
 import os
 import datetime
 from importlib.resources import files as _files

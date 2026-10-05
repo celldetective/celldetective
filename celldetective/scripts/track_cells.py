@@ -16,6 +16,7 @@ from celldetective.utils.image_loaders import (
 from celldetective.utils.experiment import (
     extract_position_name,
     extract_experiment_channels,
+    get_image_shape,
 )
 from celldetective.utils.data_cleaning import _mask_intensity_measurements
 from celldetective.utils.parsing import config_section_to_dict
@@ -96,8 +97,7 @@ movie_prefix = config_section_to_dict(config, "MovieSettings")["movie_prefix"]
 spatial_calibration = float(config_section_to_dict(config, "MovieSettings")["pxtoum"])
 time_calibration = float(config_section_to_dict(config, "MovieSettings")["frametomin"])
 len_movie = float(config_section_to_dict(config, "MovieSettings")["len_movie"])
-shape_x = int(config_section_to_dict(config, "MovieSettings")["shape_x"])
-shape_y = int(config_section_to_dict(config, "MovieSettings")["shape_y"])
+image_height, image_width = get_image_shape(expfolder)
 
 channel_names, channel_indices = extract_experiment_channels(expfolder)
 nbr_channels = len(channel_names)
@@ -287,7 +287,7 @@ trajectories, napari_data = track(
     optimizer_options={"tm_lim": int(12e4)},
     track_kwargs={"step_size": 100},
     clean_trajectories_kwargs=post_processing_options,
-    volume=(shape_x, shape_y),
+    volume=(image_width, image_height),
     btrack_option=btrack_option,
     search_range=search_range,
     memory=memory,

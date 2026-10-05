@@ -401,16 +401,18 @@ Accessible via the **Preprocessing** module.
     
     *   **Stack mode**:
 
-        *   ``timeseries``: Estimates background from a range of frames in the current position.
-        *   ``tiles``: Estimates background across all positions/tiles (best for global background).
+        *   ``timeseries``: Estimates background from the frames of the time range, in every position of the well.
+        *   ``tiles``: Estimates background from all the frames (tiles) of every position of the well.
+
+        The cells are masked in each frame before the frames are combined by a median.
     
     *   **Time range**: Specific frames to use for estimation (only in ``timeseries`` mode).
     *   **Threshold**: Standard deviation threshold to mask cells during estimation.
     *   **Optimization**:
 
-        *   **Optimize for each frame**: If checked, performs a linear regression to adjust the background level per-frame.
-        *   **Coef. range**: Range of scaling factors allowed during optimization (e.g., 0.95 - 1.05).
-        *   **Nbr of coefs**: Number of values to test within the coefficient range.
+        *   **Optimize for each frame**: If checked, scales the background in each frame by the coefficient that best fits it to the background pixels of the frame (least absolute deviations), computed exactly.
+        *   **Coef. range**: Range the coefficient is kept within (e.g., 0.95 - 1.05). A coefficient out of it is set to the closest bound, with a warning in the log.
+        *   **Fit radius**: Radius of the disk centred on the image over which the coefficient is fitted. Empty for the full frame.
 
 **Local Correction**
 

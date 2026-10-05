@@ -16,11 +16,12 @@ Documented formats (from first-experiment.rst):
 
 import os
 import shutil
+import struct
 import tempfile
 import unittest
 
 import numpy as np
-from tifffile import imwrite
+from tifffile import TiffFile, imwrite
 
 from celldetective.utils.io import save_tiff_imagej_compatible
 from celldetective.utils.image_loaders import (
@@ -228,6 +229,50 @@ class TestLoadFrames(unittest.TestCase):
         self.assertIsNotNone(frames)
         self.assertEqual(frames.ndim, 3)
         self.assertEqual(frames.shape[:2], (H, W))
+
+
+class TestLoadFramesSingleIFDImageJ(unittest.TestCase):
+    """Fiji saves a hyperstack over 4 GB with one IFD and contiguous pixels:
+    the file has a single page, so frames must be read through the series."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmpdir = tempfile.mkdtemp(prefix="cd_ij4gb_test_")
+        cls.path = os.path.join(cls.tmpdir, "Corrected.tif")
+        cls.data = np.arange(N_FRAMES * N_CHANNELS * H * W, dtype=np.float32).reshape(
+            N_FRAMES, N_CHANNELS, H, W
+        )
+        save_tiff_imagej_compatible(cls.path, cls.data, axes="TCYX")
+
+        # Cut the IFD chain after the first page, as ImageJ does past 4 GB.
+        with TiffFile(cls.path) as tif:
+            offset = tif.pages.first.offset
+        with open(cls.path, "r+b") as f:
+            f.seek(offset)
+            (n_tags,) = struct.unpack("<H", f.read(2))
+            f.seek(offset + 2 + 12 * n_tags)
+            f.write(struct.pack("<I", 0))
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(cls.tmpdir, ignore_errors=True)
+
+    def test_file_has_a_single_page(self):
+        with TiffFile(self.path) as tif:
+            self.assertEqual(len(tif.pages), 1)
+        self.assertEqual(auto_load_number_of_frames(self.path), N_FRAMES)
+
+    def test_load_last_frame_all_channels(self):
+        t = N_FRAMES - 1
+        indices = [t * N_CHANNELS + c for c in range(N_CHANNELS)]
+        frames = load_frames(indices, self.path, normalize_input=False)
+        self.assertIsNotNone(frames)
+        np.testing.assert_array_equal(frames, np.moveaxis(self.data[t], 0, -1))
+
+    def test_load_single_page(self):
+        frames = load_frames(2, self.path, normalize_input=False)
+        self.assertIsNotNone(frames)
+        np.testing.assert_array_equal(frames[..., 0], self.data[0, 2])
 
 
 class TestRearrangeMultichannelFrame(unittest.TestCase):

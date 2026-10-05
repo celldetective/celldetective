@@ -11,6 +11,7 @@ from imageio import v2 as imageio
 from natsort import natsorted
 from tifffile import imread, memmap, TiffFile
 
+from celldetective.utils.experiment import movie_pattern
 from celldetective.utils.image_cleaning import interpolate_nan_multichannel
 from celldetective.utils.normalization import normalize_multichannel
 from celldetective import get_logger
@@ -27,6 +28,11 @@ import warnings
 # (0xC0000005). The lock is process-local, so multiprocessing workers are
 # unaffected, and decoding is not a threaded hot path, so contention is negligible.
 _DECODE_LOCK = threading.Lock()
+
+# Page shape of the stacks read by memory map, by absolute path, with the (modification
+# time, size) it was read at: the read by page index, bound to fail on them, is only tried
+# once per file, and a file replaced since is probed again.
+_MEMMAP_PAGE_SHAPES: Dict[str, tuple] = {}
 
 logger = get_logger(__name__)
 
@@ -75,7 +81,7 @@ def locate_stack(position: str, prefix: str = "Aligned") -> np.ndarray:
     if not position.endswith(os.sep):
         position += os.sep
 
-    stack_path = glob(position + os.sep.join(["movie", f"{prefix}*.tif"]))
+    stack_path = glob(position + os.sep.join(["movie", movie_pattern(prefix)]))
     if not stack_path:
         raise FileNotFoundError(f"No movie with prefix {prefix} found...")
 
@@ -241,7 +247,7 @@ def locate_stack_lazy(position: str, prefix: str = "Aligned") -> Optional[Any]:
     if not position.endswith(os.sep):
         position += os.sep
 
-    stack_path = glob(position + os.sep.join(["movie", f"{prefix}*.tif"]))
+    stack_path = glob(position + os.sep.join(["movie", movie_pattern(prefix)]))
     if not stack_path:
         return None
     file_path = stack_path[0].replace("\\", "/")
@@ -658,6 +664,38 @@ def _load_frames_to_measure(
     return load_frames(indices, file, scale=None, normalize_input=False)
 
 
+def _read_pages_from_memmap(
+    stack_path: str, img_nums: Union[int, List[int]], page_shape: tuple
+) -> np.ndarray:
+    """
+    Read images by page index from a memory map of the first series.
+
+    Fiji saves a hyperstack larger than 4 GB with a single IFD and the pixels
+    stored contiguously after it, so the file has one page where the movie has
+    hundreds of images, and reading by page index fails past the first one.
+    tifffile rebuilds the series from the ImageJ metadata; flattening every axis
+    before the image plane gives back the page order (channels interleaved).
+
+    Parameters
+    ----------
+    stack_path : str
+        Path to an uncompressed, contiguously stored TIFF.
+    img_nums : int or list of int
+        Page index or indices, as for :func:`load_frames`.
+    page_shape : tuple
+        Shape of the first page.
+
+    Returns
+    -------
+    ndarray
+        ``(Y, X)`` for a single index, ``(N, Y, X)`` for a list, as
+        ``imageio.imread(stack_path, key=img_nums)`` would return them.
+    """
+
+    pages = memmap(stack_path).reshape((-1, *page_shape))
+    return np.array(pages[img_nums])
+
+
 def load_frames(
     img_nums: Union[int, List[int], np.ndarray],
     stack_path: str,
@@ -727,7 +765,31 @@ def load_frames(
                 )
                 if isinstance(img_nums, np.ndarray):
                     img_nums = img_nums.tolist()
-                frames = imageio.imread(stack_path, key=img_nums)
+                path = os.path.abspath(stack_path)
+                cached = _MEMMAP_PAGE_SHAPES.get(path)
+                if cached is not None:
+                    # Only a file read by memory map before is stat-ed, to see it was not
+                    # replaced since: the other stacks pay nothing per frame.
+                    stat = os.stat(path)
+                    if cached[0] != (stat.st_mtime_ns, stat.st_size):
+                        del _MEMMAP_PAGE_SHAPES[path]
+                        cached = None
+                if cached is not None:
+                    frames = _read_pages_from_memmap(stack_path, img_nums, cached[1])
+                else:
+                    try:
+                        frames = imageio.imread(stack_path, key=img_nums)
+                    except IndexError:
+                        with TiffFile(stack_path) as tif:
+                            page_shape = tif.pages.first.shape
+                        frames = _read_pages_from_memmap(
+                            stack_path, img_nums, page_shape
+                        )
+                        stat = os.stat(path)
+                        _MEMMAP_PAGE_SHAPES[path] = (
+                            (stat.st_mtime_ns, stat.st_size),
+                            page_shape,
+                        )
     except Exception as e:
         logger.error(
             f"Error in loading the frame {img_nums}: {e}. Please check that the experiment channel information is consistent with the movie being read."

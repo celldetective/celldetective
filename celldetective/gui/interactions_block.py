@@ -639,10 +639,7 @@ class NeighPanel(ControlPanelBlock, Styles):
                             "pos": self.pos,
                             "pos_name": self.pos_name,
                             "protocol": protocol,
-                            "img_shape": (
-                                self.parent_window.shape_x,
-                                self.parent_window.shape_y,
-                            ),
+                            "img_shape": self.parent_window.image_shape,
                             "log_file": getattr(
                                 self.parent_window.parent_window, "log_file", None
                             ),

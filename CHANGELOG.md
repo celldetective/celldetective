@@ -7,7 +7,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.5] - 2026-10-05
+
+### Added
+- The movie prefix of the experiment configuration suggests the prefixes the
+  experiment actually holds. The names of the stacks sitting in the movie
+  folders are cut around their separators and their numbering, and the pieces
+  that select a stack in the most positions are offered as completions, from
+  the field or from the button next to it. A line under the field tells what
+  the prefix typed matches, so a prefix leaving positions without a movie, or
+  matching several stacks in one, is seen there rather than at the first
+  segmentation.
+- Image viewers have an auto contrast button next to the contrast slider. As
+  in Fiji, each click narrows the contrast to the 1st-99th percentiles of the
+  pixels in view (the zoomed region) within the current limits, peeling off outliers such as the diverging
+  values of a background division; the fourth click restores the full range.
+- The model-free background correction can optimize its coefficient over a
+  disk centred on the image, set by a fit radius tuned on a frame. Dark field
+  edges such as a diaphragm close to the camera black level no longer drive
+  the coefficient.
+
+### Changed
+- Applying the model-free background correction is faster and lighter. The
+  optimal coefficient is no longer searched on a grid but computed exactly, as
+  the median of the frame to background ratios weighted by the background: the
+  *Nbr of coefs* option is gone, and the coefficient range only bounds the
+  coefficient, a warning telling when it is reached. *Interpolate NaNs* runs
+  once on the background, then on a corrected frame only if NaNs are left in
+  it. On 2048 x 2048 frames, a frame takes about 1.5 s instead of 7.5 s, and
+  22 s instead of 39 s when every frame still has NaNs to interpolate. The corrected
+  frames are written to disk as they come instead of being held in memory for
+  the whole movie.
+- In *timeseries* mode, the model-free background masks the cells in each frame
+  of the time range before taking the median over time, as *tiles* mode does,
+  instead of masking them in the average of the frames. A cell passing through
+  in one frame was blurred in the average, often below the threshold, and ended
+  up in the background.
+- The model-free correction preview corrects five frames spread over the movie
+  instead of all of them.
+- The background shown by the QC button of the model-free correction is the one
+  applied: camera offset subtracted, NaNs interpolated if asked.
+
 ### Fixed
+- Answering *yes* to "No labels can be found for this position. Do you want to
+  annotate from scratch?" wrote the empty labels transposed on any non-square
+  image (`shape_x` rows by `shape_y` columns). Every later write into them then
+  failed to broadcast: segmenting or thresholding the frame from napari, and
+  correcting a mask. The labels now have the shape of the movie.
+- Thresholding the frame from napari inside a region of interest raised
+  `operands could not be broadcast together` when the labels of the position did
+  not have the shape of its movie. The region is now drawn at the shape of the
+  image, and a position whose labels do not match it says so and what to do
+  about it.
+- The threshold configuration wizard kept its histogram — and with it the range
+  of the threshold slider — on the channel it opened with: picking another
+  channel changed the image but not the intensities the threshold was set on.
+  The histogram now follows the viewer once its sliders rest, both when the
+  channel changes (the threshold is set afresh, the intensity domain being
+  another one) and when the frame does (the threshold being tuned is kept).
 - A value label sitting over a handle at either end of a range slider — the
   contrast slider of every viewer at its minimum, for one — lost its first digit
   (`).00` for `0.00`): superqt centres the label on its handle, leaving half of
@@ -16,8 +73,81 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The single-frame segmentation panels of the napari viewer stretched their rows
   apart to fill the height of their tab: the slack now goes to the bottom of the
   panel, as it did before the two panels were put in tabs.
+- The model-free background correction preview now subtracts the camera
+  offset, as the correction itself does.
+- A model-free background correction coming after another step of the
+  preprocessing protocol estimated its background on the raw movie while
+  correcting the output of the previous step, e.g. a registered movie. It now
+  estimates it on the movie it corrects.
+- A model-free background correction overwriting its movie, as every step after
+  the first one of a protocol does, wrote straight over it: a crash on the way
+  left it truncated. It now writes a temporary file that replaces the movie once
+  complete, as the other corrections do.
+- `correct_background_model_free` stops when its progress callback cancels the
+  background estimation, instead of skipping on to the next well.
+- Every frame past the first of an ImageJ hyperstack larger than 4 GB failed
+  to load with `list index out of range`, and segmentation skipped the position,
+  while the frame count and the napari viewer worked. Fiji writes such a stack
+  with a single IFD and the pixels stored contiguously after it: the frames are
+  now read from a memory map of the series, the stack being recognised as such
+  once rather than at every frame.
+- On non-square movies, the width and the height of the images were swapped in
+  three places, each building its own shape from `shape_x` and `shape_y`:
+  - tracking tested the first detection of each cell against the wrong edges
+    (`class_firstdetection`);
+  - the neighbourhood measurements were given the wrong image shape;
+  - the `radial_distance` to the centre of the image centred X on the height and
+    Y on the width.
+
+  The image shape is now read in one place. `radial_distance` values measured on
+  a non-square movie change; square movies are unaffected.
+- The background correction by model fit and the channel offset correction
+  warned about an empty or invalid threshold or shift, then added the
+  correction (or started its preview) with no value all the same; it failed at
+  the run. They now stop at the warning, as the model-free correction does.
+- A preview of a background or channel offset correction was recorded in
+  `log_preprocessing.txt` as if it had been applied to the position. Only
+  exported corrections are recorded.
+- Running a segmentation model on a frame from napari, with labels that do not
+  have the shape of the movie, failed with a broadcasting error once the
+  inference was done. It is now refused beforehand, saying why, as the
+  threshold segmentation already did.
+- Measuring a position with neither a table nor labels failed with a
+  `TypeError`. The log now says there is nothing to measure.
+- Isotropic (position-based) measurements were only computed on tracked
+  tables. On a position measured before tracking, or with a table without
+  `TRACK_ID`, the radii were dropped silently and the run reported success
+  without their columns (#19). They are now centred on the centroids of the
+  masks when there is no table, and on the positions of the table otherwise.
+- A model or demo download that was cancelled from its progress window, or
+  interrupted during the extraction, left a half-written folder behind. It was
+  taken for the installed model, never downloaded again, and failed at every
+  load with an obscure error. Archives are now extracted into a staging folder
+  moved into place once complete, a file shorter than the size the server
+  announced is refused, and the temporary archive is removed whatever happens.
+- A Cellpose model downloaded on Linux could have its weights replaced by its
+  licence, and failed to load with `Weights only load failed ... Unsupported
+  operand 67`. The weights file of a model folder was picked by a pattern that
+  the licence matched too, and the first match was taken, in the order the folder
+  happened to list them. The weights are now picked by name, whatever the order.
+  A model already broken this way is not downloaded again by itself: delete its
+  folder (e.g. `models/segmentation_generic/CP_cyto3`) and it is fetched anew.
+- The line under the movie prefix field read "One stack in each of the 1
+  positions" on a single-position experiment.
+- The documentation showed version 1.5.0b16: it read a stale copy of the
+  generated `_version.py` kept in the repository. The version now comes from
+  the git tags, and the file is no longer tracked.
 
 ### Documentation
+- *UI Menus & Shortcuts* has an *Image Viewers* section: the stack viewer of a
+  position and its controls, the line profile and the new auto contrast
+  button, with a figure. The model-free correction guide points at the auto
+  contrast button for its preview, a step it was missing.
+- *Change the movie prefix*, a new section of the configuration editor guide,
+  covers the suggested prefixes and the line telling what a prefix matches,
+  with a figure; the registration guide and *Troubleshooting* link to it.
+- *Measure* says where the position-based measurements are centred, with and
+  without tracking.
 - The single-frame segmentation section of *Segment* is written around the two
   tabs of the panel: **Model** for a segmentation model and the new **Threshold**
   for the pipelines of the threshold configuration wizard, with the region of
@@ -471,6 +601,7 @@ documentation and test overhaul.
 - Resolved Windows access-violation, hanging, and stalling test issues; build
   the package on tag and fix the PyPI workflow.
 
+[1.6.5]: https://github.com/celldetective/celldetective/compare/v1.6.4...v1.6.5
 [1.6.4]: https://github.com/celldetective/celldetective/compare/v1.6.3...v1.6.4
 [1.6.3]: https://github.com/celldetective/celldetective/compare/v1.6.2...v1.6.3
 [1.6.2]: https://github.com/celldetective/celldetective/compare/v1.6.1...v1.6.2

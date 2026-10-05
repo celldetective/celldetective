@@ -234,7 +234,8 @@ def track(
     memory : int, optional
             Memory for `trackpy`. Required if `btrack_option` is False. Default is None.
     volume : tuple, optional
-            The volume dimensions (height, width) for bTrack. Default is (2048, 2048).
+            The extent of the image along X then Y (width, height), as bTrack takes it.
+            Default is (2048, 2048).
     objects : DataFrame or None, optional
             Pre-computed objects to track. If None, objects are extracted from labels. Default is None.
     column_labels : dict, optional
@@ -373,7 +374,10 @@ def track(
     if channel_names is not None:
         df = rename_intensity_column(df, channel_names)
 
-    df = write_first_detection_class(df, img_shape=volume, column_labels=column_labels)
+    # The volume is (X, Y), as bTrack takes it; the image shape is (Y, X).
+    df = write_first_detection_class(
+        df, img_shape=(volume[1], volume[0]), column_labels=column_labels
+    )
 
     if clean_trajectories_kwargs is not None:
         logger.debug(f"Calling clean_trajectories with kwargs: {clean_trajectories_kwargs}, df shape before: {df.shape}")
