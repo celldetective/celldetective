@@ -182,21 +182,32 @@ class TestPairEventAnnotatorCloseEvent:
             # Verify dataframes.clear() was called
             mock_dataframes.clear.assert_called_once()
 
-    def test_closeevent_deletes_df_relative(self):
+    def test_closeevent_deletes_df_relative(self, qtbot):
         """
-        Test that closeEvent code deletes df_relative.
+        Test that closeEvent deletes the pair table.
 
         Steps:
-        1. Inspect the closeEvent source code
-        2. Verify it contains the delete statement for df_relative
+        1. Create a mock PairEventAnnotator holding a pair table
+        2. Call closeEvent
+        3. Verify the table is gone
         """
-        import inspect
         from celldetective.gui.pair_event_annotator import PairEventAnnotator
 
-        source = inspect.getsource(PairEventAnnotator.closeEvent)
+        with patch.object(PairEventAnnotator, "__init__", lambda self, parent: None):
+            annotator = PairEventAnnotator(None)
+            annotator.dataframes = {}
+            annotator.df_relative = MagicMock()
+            annotator.stop = MagicMock()
+            annotator.anim = None
+            annotator.fig = None
+            annotator.cell_fig = None
+            annotator.stack = MagicMock()
 
-        # Verify the cleanup code exists
-        assert "del self.df_relative" in source or "df_relative" in source
+            with patch("celldetective.gui.annotator_common.plt"):
+                with patch.object(CelldetectiveMainWindow, "closeEvent"):
+                    PairEventAnnotator.closeEvent(annotator, QCloseEvent())
+
+            assert "df_relative" not in annotator.__dict__
 
     def test_closeevent_closes_figures(self, qtbot):
         """

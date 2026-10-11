@@ -9,6 +9,7 @@ and a time per track or pair), :class:`AnimationMixin` for those playing the
 movie.
 """
 
+import gc
 import json
 import os
 from glob import glob
@@ -21,7 +22,7 @@ from fonticon_mdi6 import MDI6
 from matplotlib.animation import FuncAnimation
 from matplotlib.ticker import MultipleLocator
 from PyQt5.QtCore import QSize, Qt
-from PyQt5.QtGui import QKeySequence, QResizeEvent
+from PyQt5.QtGui import QCloseEvent, QKeySequence, QResizeEvent
 from PyQt5.QtWidgets import (
     QFileDialog,
     QHBoxLayout,
@@ -356,12 +357,27 @@ def icon_button(
     return button
 
 
-def set_toggle_icon(button: Any, icon_name: str, active: bool, size: int = 0) -> None:
+def set_toggle_icon(button: Any, icon_name: str, active: bool) -> None:
     """Color the icon of a plot option button (or action) as on or off."""
-
     button.setIcon(icon(icon_name, color=ACTIVE_ICON_COLOR if active else "black"))
-    if size:
-        button.setIconSize(QSize(size, size))
+
+
+def signal_limits(values: np.ndarray) -> Optional[Tuple[float, float, float]]:
+    """
+    Y-limits of a signal plot showing `values`: a little beyond their range in
+    linear scale, from their first percentile (or 1) in log scale.
+
+    Returns
+    -------
+    tuple of float or None
+        Linear minimum and maximum, and log minimum; None without values.
+    """
+
+    values = np.asarray(values, dtype=float)
+    if not np.any(values == values):
+        return None
+    log_min = np.nanpercentile(values, 1) if np.any(values > 0) else 1
+    return 0.98 * np.nanmin(values), np.nanmax(values) * 1.02, log_min
 
 
 def confirm(text: str) -> bool:
@@ -509,9 +525,11 @@ class AnnotatorMixin:
     ``n_signals``, and builds ``correct_btn`` and ``cancel_btn``.
     """
 
-    # Shortcuts enabled while a cell is selected, if the window has them.
-    del_shortcut = None
-    no_event_shortcut = None
+    # Shortcuts acting on the selection, enabled only while there is one.
+    selection_shortcuts = ()
+    # Widgets showing whether the plot is in log scale, or its features normalized.
+    log_toggles = ()
+    normalize_toggles = ()
 
     def load_annotator_config(self) -> None:
         """Load the display settings of the annotator, or their defaults."""
@@ -692,11 +710,36 @@ class AnnotatorMixin:
             else:
                 self.cell_ax.set_yscale("linear")
                 self.log_scale = False
-            set_toggle_icon(self.log_btn, MDI6.math_log, self.log_scale)
+            for widget in self.log_toggles:
+                set_toggle_icon(widget, MDI6.math_log, self.log_scale)
         except Exception as e:
             logger.warning(f"Failed to toggle log scale: {e}")
 
         self.cell_fcanvas.canvas.draw_idle()
+
+    def show_normalized(self) -> None:
+        """Show on the plot options whether the features are normalized."""
+        for widget in self.normalize_toggles:
+            set_toggle_icon(widget, MDI6.arrow_collapse_vertical, self.normalized_signals)
+
+    def set_signal_ylim(self, ymin: float, ymax: float, log_min: float) -> None:
+        """Set the y-limits of the signal plot, from `log_min` in log scale."""
+
+        self.non_log_ymin, self.non_log_ymax = ymin, ymax
+        self.value_magnitude = log_min
+        if self.cell_ax.get_yscale() == "linear":
+            self.cell_ax.set_ylim(ymin, ymax)
+        else:
+            self.cell_ax.set_ylim(log_min, ymax)
+
+    def add_selection_shortcut(self, key: Any, slot: Callable) -> QShortcut:
+        """A shortcut acting on the selection, disabled until there is one."""
+
+        shortcut = QShortcut(key, self)
+        shortcut.activated.connect(slot)
+        shortcut.setEnabled(False)
+        self.selection_shortcuts = (*self.selection_shortcuts, shortcut)
+        return shortcut
 
     def set_correct_action(self, slot: Callable) -> None:
         """Make the correct button trigger `slot`, and only it."""
@@ -712,9 +755,8 @@ class AnnotatorMixin:
 
         self.correct_btn.setEnabled(True)
         self.cancel_btn.setEnabled(True)
-        for shortcut in (self.del_shortcut, self.no_event_shortcut):
-            if shortcut is not None:
-                shortcut.setEnabled(True)
+        for shortcut in self.selection_shortcuts:
+            shortcut.setEnabled(True)
 
     def reset_correction(self) -> None:
         """Leave the correction: options hidden, correct and cancel disabled."""
@@ -724,9 +766,8 @@ class AnnotatorMixin:
         self.correct_btn.setText("correct")
         self.set_correct_action(self.show_annotation_buttons)
         self.cancel_btn.setEnabled(False)
-        for shortcut in (self.del_shortcut, self.no_event_shortcut):
-            if shortcut is not None:
-                shortcut.setEnabled(False)
+        for shortcut in self.selection_shortcuts:
+            shortcut.setEnabled(False)
 
     def hide_annotation_buttons(self) -> None:
         """Hide the correction widgets and clear the time (or phenotype) field."""
@@ -746,6 +787,26 @@ class AnnotatorMixin:
             for entry in self.annotation_log:
                 logger.info(f"modified {entry}")
         self.annotation_log = []
+
+    def release_resources(self) -> None:
+        """
+        Free what the window holds when it closes. Each layer extends it, the
+        window releasing its tables.
+        """
+
+        figure = getattr(self, "cell_fig", None)  # Absent if closed while opening.
+        if figure is not None:
+            try:
+                plt.close(figure)
+            except Exception as e:
+                logger.debug(f"Could not close cell_fig: {e}")
+
+    def closeEvent(self, event: QCloseEvent) -> None:
+        """Release the resources of the window, then close it."""
+
+        self.release_resources()
+        gc.collect()
+        super().closeEvent(event)
 
     def close_without_new_class(self) -> None:
         """Close the new class dialog."""
@@ -1063,22 +1124,21 @@ class AnimationMixin:
         self.anim_interval = int(1000 / max(1, fps))
         logger.debug(f"Framerate {fps} FPS: interval of {self.anim_interval} ms.")
 
-        anim = getattr(self, "anim", None)
-        if anim is None or not getattr(anim, "event_source", None):
-            return
+        # The slider is built with the movie playing.
         try:
-            anim._interval = self.anim_interval
-            anim.event_source.interval = self.anim_interval
+            self.anim._interval = self.anim_interval
+            self.anim.event_source.interval = self.anim_interval
             if self.stop_btn.isVisible():  # Playing: restart the timer.
-                anim.event_source.stop()
-                anim.event_source.start()
+                self.anim.event_source.stop()
+                self.anim.event_source.start()
         except Exception as e:
             logger.debug(f"Error updating animation interval: {e}")
 
-    def release_movie(self) -> None:
+    def release_resources(self) -> None:
         """
-        Stop the movie and free the figures and the stack, breaking the
-        reference cycles of the animation.
+        Stop the movie and free its figure and the stack, breaking the
+        reference cycles of the animation. The window may close while the
+        stack is loading, before any of them exist.
         """
 
         try:
@@ -1093,13 +1153,14 @@ class AnimationMixin:
                 logger.debug(f"Could not stop animation event source: {e}")
             del self.anim
 
-        for name in ("fig", "cell_fig"):
-            figure = getattr(self, name, None)
-            if figure is not None:
-                try:
-                    plt.close(figure)
-                except Exception as e:
-                    logger.debug(f"Could not close {name}: {e}")
+        figure = getattr(self, "fig", None)
+        if figure is not None:
+            try:
+                plt.close(figure)
+            except Exception as e:
+                logger.debug(f"Could not close fig: {e}")
 
         if hasattr(self, "stack"):
             del self.stack
+
+        super().release_resources()

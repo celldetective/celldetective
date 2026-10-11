@@ -2,7 +2,6 @@ from PyQt5.QtWidgets import (
     QLabel,
     QVBoxLayout,
     QHBoxLayout,
-    QShortcut,
     QAction,
     QWidget,
 )
@@ -11,7 +10,6 @@ from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtGui import QKeySequence, QCloseEvent
 
 import numpy as np
-import gc
 from matplotlib.cm import tab10
 from typing import Tuple, Any
 from celldetective.gui.annotator_common import (
@@ -23,6 +21,7 @@ from celldetective.gui.annotator_common import (
     event_class_columns,
     event_columns,
     prefill_class,
+    signal_limits,
     split_by_frame,
     write_event_status,
 )
@@ -105,6 +104,12 @@ class EventAnnotator(EventAnnotationMixin, AnimationMixin, BaseAnnotator):
         Arbitrary keyword arguments.
     """
 
+    # Set while the stack loads in the background.
+    _loader_thread = None
+    _progress_dialog = None
+    # The interactive signal plotter, once opened.
+    plotter = None
+
     def __init__(self, *args, lazy_load=False, **kwargs):
         """
         Initialize the annotator.
@@ -125,7 +130,6 @@ class EventAnnotator(EventAnnotationMixin, AnimationMixin, BaseAnnotator):
         self.class_name = "class"
         self.time_name = "t0"
         self.status_name = "status"
-        self._loader_thread = None
 
         if not self.proceed:
             self.close()
@@ -160,7 +164,7 @@ class EventAnnotator(EventAnnotationMixin, AnimationMixin, BaseAnnotator):
         value : int
             Progress value (0-100).
         """
-        if getattr(self, "_progress_dialog", None):
+        if self._progress_dialog:
             self._progress_dialog.setValue(value)
 
     def _on_load_status(self, status: str) -> None:
@@ -172,7 +176,7 @@ class EventAnnotator(EventAnnotationMixin, AnimationMixin, BaseAnnotator):
         status : str
             Status message to display.
         """
-        if getattr(self, "_progress_dialog", None):
+        if self._progress_dialog:
             self._progress_dialog.setLabelText(status)
 
     def _on_load_canceled(self):
@@ -184,7 +188,7 @@ class EventAnnotator(EventAnnotationMixin, AnimationMixin, BaseAnnotator):
 
     def _on_load_finished(self):
         """Called when loading completes."""
-        if getattr(self, "_progress_dialog", None):
+        if self._progress_dialog:
             self._progress_dialog.close()
             self._progress_dialog = None
         self._loader_thread = None
@@ -231,9 +235,9 @@ class EventAnnotator(EventAnnotationMixin, AnimationMixin, BaseAnnotator):
         super().populate_window()
         self.populate_options_layout()
 
-        self.no_event_shortcut = QShortcut(QKeySequence("n"), self)
-        self.no_event_shortcut.activated.connect(self.shortcut_no_event)
-        self.no_event_shortcut.setEnabled(False)
+        self.no_event_shortcut = self.add_selection_shortcut(
+            QKeySequence("n"), self.shortcut_no_event
+        )
 
         # Right side
         self.right_panel.addLayout(self.build_animation_controls(), 5)
@@ -259,8 +263,7 @@ class EventAnnotator(EventAnnotationMixin, AnimationMixin, BaseAnnotator):
 
     def launch_interactive_viewer(self):
         """Launch the interactive signal viewer."""
-        plotter = getattr(self, "plotter", None)
-        if plotter is None or not plotter.isVisible():
+        if self.plotter is None or not self.plotter.isVisible():
             label = None
             if self.class_name.startswith("class_"):
                 label = self.class_name.replace("class_", "")
@@ -439,16 +442,9 @@ class EventAnnotator(EventAnnotationMixin, AnimationMixin, BaseAnnotator):
         except Exception as e:
             logger.warning(f"Failed to update cell plot: {e}")
 
-        if len(range_values) > 0:
-            range_values = np.array(range_values)
-            if np.any(~np.isnan(range_values)):
-                self.value_magnitude = np.nanpercentile(range_values, 1) if np.any(range_values > 0) else 1
-                self.non_log_ymin = 0.98 * np.nanmin(range_values)
-                self.non_log_ymax = np.nanmax(range_values) * 1.02
-                if self.cell_ax.get_yscale() == "linear":
-                    self.cell_ax.set_ylim(self.non_log_ymin, self.non_log_ymax)
-                else:
-                    self.cell_ax.set_ylim(self.value_magnitude, self.non_log_ymax)
+        limits = signal_limits(range_values)
+        if limits is not None:
+            self.set_signal_ylim(*limits)
 
     def extract_scatter_from_trajectories(self):
         """Extract scatter data from trajectories using efficient groupby."""
@@ -472,7 +468,7 @@ class EventAnnotator(EventAnnotationMixin, AnimationMixin, BaseAnnotator):
         # prepare_stack against this (being-destroyed) widget — racing on
         # self.stack with the `del` below and firing finished -> finalize_init on
         # a dead window.
-        loader = getattr(self, "_loader_thread", None)
+        loader = self._loader_thread
         if loader is not None:
             try:
                 loader.progress.disconnect()
@@ -488,7 +484,7 @@ class EventAnnotator(EventAnnotationMixin, AnimationMixin, BaseAnnotator):
                 pass  # underlying C++ thread already gone
             self._loader_thread = None
 
-        dlg = getattr(self, "_progress_dialog", None)
+        dlg = self._progress_dialog
         if dlg is not None:
             try:
                 dlg.close()
@@ -496,12 +492,6 @@ class EventAnnotator(EventAnnotationMixin, AnimationMixin, BaseAnnotator):
                 logger.debug(f"Could not close loading dialog: {e}")
             self._progress_dialog = None
 
-        self.release_movie()
-
-        if hasattr(self, "df_tracks"):
-            del self.df_tracks
-
-        gc.collect()
         super().closeEvent(event)
 
     def looped_animation(self):

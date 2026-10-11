@@ -7,12 +7,11 @@ from PyQt5.QtWidgets import (
     QPushButton,
     QVBoxLayout,
     QHBoxLayout,
-    QShortcut,
     QButtonGroup,
     QWidget,
 )
 from PyQt5.QtCore import Qt, QSize
-from PyQt5.QtGui import QKeySequence, QCloseEvent
+from PyQt5.QtGui import QKeySequence
 from celldetective.gui.base.components import (
     CelldetectiveMainWindow,
     CelldetectiveWidget,
@@ -41,7 +40,7 @@ from celldetective.gui.annotator_common import (
     new_class_dialog,
     prefill_class,
     save_dataset,
-    set_toggle_icon,
+    signal_limits,
     split_by_frame,
     warn,
     write_event_status,
@@ -50,7 +49,6 @@ from celldetective.gui.gui_utils import color_from_status
 import numpy as np
 from fonticon_mdi6 import MDI6
 import os
-import gc
 from matplotlib.cm import tab10
 import pandas as pd
 from functools import partial
@@ -70,6 +68,9 @@ class PairEventAnnotator(
     UI to explore cell interactions.
 
     """
+
+    # The lines to the neighbors drawn on the current frame.
+    lines_list = ()
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         """
@@ -327,13 +328,10 @@ class PairEventAnnotator(
 
         self.hide_annotation_buttons()
 
-        self.del_shortcut = QShortcut(Qt.Key_Delete, self)
-        self.del_shortcut.activated.connect(self.shortcut_suppr)
-        self.del_shortcut.setEnabled(False)
-
-        self.no_event_shortcut = QShortcut(QKeySequence("n"), self)
-        self.no_event_shortcut.activated.connect(self.shortcut_no_event)
-        self.no_event_shortcut.setEnabled(False)
+        self.del_shortcut = self.add_selection_shortcut(Qt.Key_Delete, self.shortcut_suppr)
+        self.no_event_shortcut = self.add_selection_shortcut(
+            QKeySequence("n"), self.shortcut_no_event
+        )
 
         # Cell signals
         # Outweighs the stretch above the save button: the plot takes the room
@@ -349,6 +347,9 @@ class PairEventAnnotator(
 
         self.log_btn = icon_button(MDI6.math_log, self.button_select_all)
         self.log_btn.clicked.connect(self.switch_to_log)
+
+        self.log_toggles = [self.log_btn]
+        self.normalize_toggles = [self.normalize_features_btn]
 
         # In the toolbar of the plot rather than on a row of their own, as in
         # the phenotype annotator: the row cost the plot its height in a short
@@ -1127,19 +1128,9 @@ class PairEventAnnotator(
             line.set_ydata(signal)
             line.set_color(tab10(i / float(self.n_signals)))
 
-        if len(range_values) > 0:
-            range_values = np.array(pd.to_numeric(range_values, errors='coerce'), dtype=float)
-            if np.any(range_values == range_values):
-                if np.any(range_values > 0):
-                    self.value_magnitude = np.nanpercentile(range_values, 1)
-                else:
-                    self.value_magnitude = 1
-                self.non_log_ymin = 0.98 * np.nanmin(range_values)
-                self.non_log_ymax = np.nanmax(range_values) * 1.02
-                if self.cell_ax.get_yscale() == "linear":
-                    self.cell_ax.set_ylim(self.non_log_ymin, self.non_log_ymax)
-                else:
-                    self.cell_ax.set_ylim(self.value_magnitude, self.non_log_ymax)
+        limits = signal_limits(pd.to_numeric(range_values, errors="coerce"))
+        if limits is not None:
+            self.set_signal_ylim(*limits)
 
         df_reference = self.dataframes[self.reference_population]
         t_reference = df_reference.loc[
@@ -1250,25 +1241,14 @@ class PairEventAnnotator(
         ):
             self.highlight_the_pair()
 
-    def closeEvent(self, event: QCloseEvent) -> None:
-        """
-        Handle close event.
+    def release_resources(self) -> None:
+        """Free the tables, with the rest of the window."""
 
-        Parameters
-        ----------
-        event : QCloseEvent
-            The close event.
-        """
-        self.release_movie()
-
-        if hasattr(self, "dataframes"):
-            self.dataframes.clear()
-
+        super().release_resources()
+        self.dataframes.clear()
+        # A window may be closed twice.
         if hasattr(self, "df_relative"):
             del self.df_relative
-
-        gc.collect()
-        super().closeEvent(event)
 
     def looped_animation(self):
         """Show the movie with the cells of each population marked, playing in a loop."""
@@ -1650,7 +1630,7 @@ class PairEventAnnotator(
             self.class_scatter[pop].set_edgecolor(colors[:, 0])
 
         # The lines of the previous frame would otherwise pile up on the axes.
-        for line in getattr(self, "lines_list", []):
+        for line in self.lines_list:
             line.remove()
         self.lines_list = []
 
@@ -1812,10 +1792,5 @@ class PairEventAnnotator(
             )(self.df_relative[self.pair_columns].values)
 
         self.normalized_signals = not self.normalized_signals
-        set_toggle_icon(
-            self.normalize_features_btn,
-            MDI6.arrow_collapse_vertical,
-            self.normalized_signals,
-            size=25,
-        )
+        self.show_normalized()
         self.plot_signals()

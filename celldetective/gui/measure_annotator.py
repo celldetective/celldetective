@@ -3,7 +3,6 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
     QLabel,
     QLineEdit,
-    QShortcut,
     QTabWidget,
     QWidget,
 )
@@ -392,9 +391,7 @@ class MeasureAnnotator(BaseAnnotator):
         self.button_widget.adjustSize()
         self.setCentralWidget(self.button_widget)
 
-        self.del_shortcut = QShortcut(Qt.Key_Delete, self)
-        self.del_shortcut.activated.connect(self.shortcut_suppr)
-        self.del_shortcut.setEnabled(False)
+        self.del_shortcut = self.add_selection_shortcut(Qt.Key_Delete, self.shortcut_suppr)
 
         # Force start at frame 0
         self.viewer.frame_slider.setValue(0)
@@ -403,8 +400,7 @@ class MeasureAnnotator(BaseAnnotator):
 
     def compact_layout_main(self) -> None:
         """Compact the main layout."""
-        if hasattr(self, "viewer"):
-            self.viewer.compact_layout()
+        self.viewer.compact_layout()
 
     def _build_left_panel_tabs(self) -> None:
         """Build the QTabWidget with signals and histogram tabs."""
@@ -433,13 +429,17 @@ class MeasureAnnotator(BaseAnnotator):
             self._strip_toolbar(tb)
             tb.addSeparator()
             tb.addWidget(self.outliers_check)
-            self._sig_norm_action = tb.addAction(
-                icon(MDI6.arrow_collapse_vertical, color="black"),
-                "Normalize", self.normalize_features,
+            self.normalize_toggles.append(
+                tb.addAction(
+                    icon(MDI6.arrow_collapse_vertical, color="black"),
+                    "Normalize", self.normalize_features,
+                )
             )
-            self._sig_log_action = tb.addAction(
-                icon(MDI6.math_log, color="black"),
-                "Log scale", self.switch_to_log,
+            self.log_toggles.append(
+                tb.addAction(
+                    icon(MDI6.math_log, color="black"),
+                    "Log scale", self.switch_to_log,
+                )
             )
             tb.addAction(
                 icon(MDI6.content_save, color="black"),
@@ -458,11 +458,11 @@ class MeasureAnnotator(BaseAnnotator):
             tb = self.hist_canvas.toolbar
             self._strip_toolbar(tb)
             tb.addSeparator()
-            self._hist_density_action = tb.addAction(
+            self.hist_option_actions["density"] = tb.addAction(
                 icon(MDI6.chart_bell_curve_cumulative, color="black"),
                 "Density", self._toggle_hist_density,
             )
-            self._hist_log_action = tb.addAction(
+            self.hist_option_actions["log"] = tb.addAction(
                 icon(MDI6.math_log, color="black"),
                 "Log scale", self._toggle_hist_log,
             )
@@ -484,22 +484,6 @@ class MeasureAnnotator(BaseAnnotator):
             if action.text() in ("Subplots", "Customize", "Save"):
                 toolbar.removeAction(action)
 
-    def switch_to_log(self):
-        """Override to also update the toolbar action icon."""
-        super().switch_to_log()
-        if hasattr(self, "_sig_log_action"):
-            set_toggle_icon(self._sig_log_action, MDI6.math_log, self.log_scale)
-
-    def normalize_features(self):
-        """Override to also update the toolbar action icon."""
-        super().normalize_features()
-        if hasattr(self, "_sig_norm_action"):
-            set_toggle_icon(
-                self._sig_norm_action,
-                MDI6.arrow_collapse_vertical,
-                self.normalized_signals,
-            )
-
     # ------------------------------------------------------------------
     # Cell intensity histogram
     # ------------------------------------------------------------------
@@ -511,6 +495,7 @@ class MeasureAnnotator(BaseAnnotator):
         self.hist_log_scale = False
         self.hist_density = False
         self._hist_ymax = 0  # remembered y-limit for density mode
+        self.hist_option_actions = {}
 
         # Hidden ExportPlotBtn used for its save_plot() method
         self.hist_export_btn = ExportPlotBtn(self.hist_fig, export_dir=self.exp_dir)
@@ -540,8 +525,10 @@ class MeasureAnnotator(BaseAnnotator):
         self.hist_log_scale = self.hist_ax.get_yscale() == "linear"
         self.hist_ax.set_yscale("log" if self.hist_log_scale else "linear")
 
-        if hasattr(self, "_hist_log_action"):
-            set_toggle_icon(self._hist_log_action, MDI6.math_log, self.hist_log_scale)
+        if "log" in self.hist_option_actions:
+            set_toggle_icon(
+                self.hist_option_actions["log"], MDI6.math_log, self.hist_log_scale
+            )
 
         self._fit_hist_ylim()
         self.hist_fig.tight_layout()
@@ -551,9 +538,9 @@ class MeasureAnnotator(BaseAnnotator):
         """Toggle density normalization on the histogram."""
         self._hist_ymax = 0
         self.hist_density = not self.hist_density
-        if hasattr(self, "_hist_density_action"):
+        if "density" in self.hist_option_actions:
             set_toggle_icon(
-                self._hist_density_action,
+                self.hist_option_actions["density"],
                 MDI6.chart_bell_curve_cumulative,
                 self.hist_density,
             )
@@ -562,10 +549,6 @@ class MeasureAnnotator(BaseAnnotator):
 
     def update_cell_histogram(self) -> None:
         """Redraw the histogram for the currently selected cell."""
-        if not hasattr(self, "hist_ax"):
-            return
-        if not hasattr(self, "track_of_interest"):
-            return
 
         frame = self.current_frame
         image = self.viewer.init_frame  # raw pixels of the displayed channel
@@ -671,8 +654,6 @@ class MeasureAnnotator(BaseAnnotator):
 
     def plot_signals(self) -> None:
         """Plot the chosen signals of all the cells at the current frame, the cell of interest in red."""
-        if not hasattr(self, "viewer"):
-            return
 
         signals = [
             combo.currentText()
@@ -721,13 +702,7 @@ class MeasureAnnotator(BaseAnnotator):
             if len(range_values) > 0:
                 low, high = np.nanmin(range_values), np.nanmax(range_values)
                 margin = 0.03 * (high - low)
-                self.value_magnitude = low - margin
-                self.non_log_ymin = low - margin
-                self.non_log_ymax = high + margin
-                if self.cell_ax.get_yscale() == "linear":
-                    self.cell_ax.set_ylim(self.non_log_ymin, self.non_log_ymax)
-                else:
-                    self.cell_ax.set_ylim(self.value_magnitude, self.non_log_ymax)
+                self.set_signal_ylim(low - margin, high + margin, low - margin)
             else:
                 self.value_magnitude = 1
         else:
@@ -799,11 +774,10 @@ class MeasureAnnotator(BaseAnnotator):
         super().cancel_selection()
         self.draw_frame(self.current_frame)
         # Clear the histogram
-        if hasattr(self, "hist_ax"):
-            self.hist_ax.clear()
-            self._style_hist_ax()
-            self.hist_fig.tight_layout()
-            self.hist_fig.canvas.draw()
+        self.hist_ax.clear()
+        self._style_hist_ax()
+        self.hist_fig.tight_layout()
+        self.hist_fig.canvas.draw()
 
     def export_measurements(self) -> None:
         """Export measurements to file."""

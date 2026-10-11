@@ -1,14 +1,12 @@
 from typing import Any, Optional
 
-import gc
 import os
 import numpy as np
 import pandas as pd
-from PyQt5.QtGui import QCloseEvent, QKeySequence
+from PyQt5.QtGui import QKeySequence
 from PyQt5.QtWidgets import (
     QCheckBox,
     QHBoxLayout,
-    QShortcut,
     QVBoxLayout,
     QPushButton,
     QComboBox,
@@ -40,7 +38,6 @@ from celldetective.gui.annotator_common import (
     icon_button,
     new_class_dialog,
     save_dataset,
-    set_toggle_icon,
     warn,
 )
 from celldetective.gui.base.utils import flush_layout_events
@@ -171,6 +168,9 @@ class BaseAnnotator(AnnotatorMixin, CelldetectiveMainWindow):
         self.log_btn = icon_button(MDI6.math_log, self.button_select_all)
         self.log_btn.clicked.connect(self.switch_to_log)
 
+        self.log_toggles = [self.log_btn]
+        self.normalize_toggles = [self.normalize_features_btn]
+
         self.export_plot_btn = ExportPlotBtn(self.cell_fig, export_dir=self.exp_dir)
 
     def init_class_selection_block(self):
@@ -278,9 +278,7 @@ class BaseAnnotator(AnnotatorMixin, CelldetectiveMainWindow):
         self.setCentralWidget(self.button_widget)
         self.resize(int(0.8 * self.screen_width), int(0.8 * self.screen_height))
 
-        self.del_shortcut = QShortcut(Qt.Key_Delete, self)
-        self.del_shortcut.activated.connect(self.shortcut_suppr)
-        self.del_shortcut.setEnabled(False)
+        self.del_shortcut = self.add_selection_shortcut(Qt.Key_Delete, self.shortcut_suppr)
 
         flush_layout_events(self)
 
@@ -431,12 +429,7 @@ class BaseAnnotator(AnnotatorMixin, CelldetectiveMainWindow):
         self.df_tracks[self.columns_to_rescale] = x
         self.plot_signals()
         self.normalized_signals = not self.normalized_signals
-        set_toggle_icon(
-            self.normalize_features_btn,
-            MDI6.arrow_collapse_vertical,
-            self.normalized_signals,
-            size=25,
-        )
+        self.show_normalized()
 
     def show_outliers(self):
         """Toggle outliers visibility."""
@@ -469,17 +462,11 @@ class BaseAnnotator(AnnotatorMixin, CelldetectiveMainWindow):
             self.close_without_new_class,
         )
 
-    def closeEvent(self, event: QCloseEvent) -> None:
-        """
-        Handle close event.
-
-        Parameters
-        ----------
-        event : QCloseEvent
-            The close event.
-        """
-        gc.collect()
-        super().closeEvent(event)
+    def release_resources(self) -> None:
+        """Free the trajectories, with the rest of the window."""
+        super().release_resources()
+        if hasattr(self, "df_tracks"):  # Absent if the window closed while opening.
+            del self.df_tracks
 
     def save_trajectories(self):
         """Save trajectories (not implemented)."""
