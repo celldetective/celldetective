@@ -8,6 +8,7 @@ from PyQt5.QtWidgets import (
     QShortcut,
     QLineEdit,
     QAction,
+    QMessageBox,
     QWidget,
 )
 from celldetective.gui.interactive_timeseries_viewer import InteractiveEventViewer
@@ -510,8 +511,38 @@ class EventAnnotator(BaseAnnotator):
 
         self.fcanvas.canvas.draw()
 
-    # def close_without_new_class(self):
-    # 	self.newClassWidget.close()
+    def write_new_event_class(self):
+        """Add the event class named in the new class dialog, prefilled as chosen."""
+
+        name = self.class_name_le.text()
+        target_class = f"class_{name}" if name else "class"
+        target_time = f"t_{name}" if name else "t0"
+
+        if target_class in self.df_tracks.columns:
+            msgBox = QMessageBox()
+            msgBox.setIcon(QMessageBox.Warning)
+            msgBox.setText(
+                "This event name already exists. If you proceed,\nall annotated data will be rewritten. Do you wish to continue?"
+            )
+            msgBox.setWindowTitle("Warning")
+            msgBox.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+            if msgBox.exec() == QMessageBox.No:
+                return
+
+        fill_option = [c.isChecked() for c in self.class_option_rb].index(True)
+        self.df_tracks.loc[:, target_class] = fill_option
+        self.df_tracks.loc[:, target_time] = 0.1 if fill_option == 0 else -1
+
+        self.class_choice_cb.clear()
+        self.class_cols = [
+            c
+            for c in self.df_tracks.columns
+            if c.startswith("class") and c not in ("class_id", "class_color")
+        ]
+        self.class_choice_cb.addItems(self.class_cols)
+        self.class_choice_cb.setCurrentIndex(self.class_choice_cb.findText(target_class))
+
+        self.newClassWidget.close()
 
     def cancel_selection(self):
         """Cancel the current selection and revert color changes."""
