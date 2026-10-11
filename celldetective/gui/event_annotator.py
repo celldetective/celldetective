@@ -337,6 +337,10 @@ class EventAnnotator(EventAnnotationMixin, AnimationMixin, BaseAnnotator):
         fill_option = prefill_class(self.class_option_rb)
         self.df_tracks.loc[:, target_class] = fill_option
         self.df_tracks.loc[:, target_time] = 0.1 if fill_option == 0 else -1
+        # A rewritten class keeps its status column, which selecting it would
+        # not remake: derive it from the new class and time now.
+        _, target_status = event_columns(target_class)
+        write_event_status(self.df_tracks, target_class, target_time, target_status)
 
         self.class_choice_cb.clear()
         self.class_cols = event_class_columns(self.df_tracks.columns)
@@ -366,7 +370,10 @@ class EventAnnotator(EventAnnotationMixin, AnimationMixin, BaseAnnotator):
     def apply_modification(self):
         """Apply modification to the event."""
 
-        cclass, t0 = self.chosen_annotation()
+        annotation = self.chosen_annotation()
+        if annotation is None:
+            return
+        cclass, t0 = annotation
         track_mask = self.track_rows()
 
         # Record the previous class/time so the log shows what actually changed
@@ -451,7 +458,11 @@ class EventAnnotator(EventAnnotationMixin, AnimationMixin, BaseAnnotator):
 
         frames = split_by_frame(self.df_tracks, self.len_movie)
         self.positions = [cells[["x_anim", "y_anim"]].to_numpy() for cells in frames]
-        self.colors = [cells[["class_color", "status_color"]].to_numpy() for cells in frames]
+        # A copy: the colors are written to highlight the selected cell, and
+        # under copy-on-write pandas hands out read-only arrays.
+        self.colors = [
+            cells[["class_color", "status_color"]].to_numpy().copy() for cells in frames
+        ]
         self.tracks = [cells["TRACK_ID"].to_numpy() for cells in frames]
 
     def closeEvent(self, event: QCloseEvent) -> None:

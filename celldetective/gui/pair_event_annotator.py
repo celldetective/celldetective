@@ -542,12 +542,23 @@ class PairEventAnnotator(
         rows = self.neighborhood_rows()
         self.df_relative.loc[rows, class_name] = fill_option
         self.df_relative.loc[rows, time_name] = 0.1 if fill_option == 0 else -1
+        # A rewritten class keeps its status column, which selecting it would
+        # not remake: derive it from the new class and time now.
+        write_event_status(
+            self.df_relative,
+            class_name,
+            time_name,
+            status_name,
+            keys=PAIR_COLUMNS,
+            rows=rows,
+        )
 
+        # Selecting the class in the list sets the pair columns, so that the
+        # annotations go to the class shown.
         self.extract_relevant_events()
-
-        self.pair_class_name = class_name
-        self.pair_time_name = time_name
-        self.pair_status_name = status_name
+        index = self.relative_class_choice_cb.findText(class_name)
+        if index >= 0:
+            self.relative_class_choice_cb.setCurrentIndex(index)
 
         self.newClassWidget.close()
 
@@ -762,7 +773,10 @@ class PairEventAnnotator(
     def apply_modification(self):
         """Apply modification."""
 
-        cclass, t0 = self.chosen_annotation()
+        annotation = self.chosen_annotation()
+        if annotation is None:
+            return
+        cclass, t0 = annotation
         pair_filter = self.selected_pair_rows()
 
         # Record the previous class/time so the log shows what actually changed
@@ -1224,8 +1238,11 @@ class PairEventAnnotator(
         if df is not None:
             for t, cells in enumerate(split_by_frame(df, self.len_movie)):
                 positions.append(cells[["x_anim", "y_anim"]].to_numpy())
-                colors.append(cells[["class_color", "status_color"]].to_numpy())
-                initial_colors.append(cells[["class_color", "status_color"]].to_numpy())
+                # Copies: both are written (selection highlight, restore), and
+                # under copy-on-write pandas hands out read-only arrays.
+                cell_colors = cells[["class_color", "status_color"]].to_numpy()
+                colors.append(cell_colors.copy())
+                initial_colors.append(cell_colors.copy())
                 tracks.append(cells["TRACK_ID"].to_numpy())
                 timeline.append(t)
 

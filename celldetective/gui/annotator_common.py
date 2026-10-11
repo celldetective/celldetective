@@ -900,10 +900,10 @@ class EventAnnotationMixin:
         self.correct_btn.setText("submit")
         self.set_correct_action(self.apply_modification)
 
-    def chosen_annotation(self) -> Tuple[int, float]:
+    def chosen_annotation(self) -> Optional[Tuple[int, float]]:
         """
-        Class and time chosen in the options. An event without a valid time
-        falls back to the "else" class.
+        Class and time chosen in the options, None if no option is chosen. An
+        event without a valid time falls back to the "else" class.
         """
 
         if self.event_btn.isChecked():
@@ -918,7 +918,11 @@ class EventAnnotationMixin:
             return NO_EVENT, -1
         if self.else_btn.isChecked():
             return ELSE, -1
-        return DELETED, -1
+        if self.suppr_btn.isChecked():
+            return DELETED, -1
+        # A class the options do not show (NaN) leaves them all unchecked:
+        # submitting must not mark the cell for deletion.
+        return None
 
     def shortcut_no_event(self) -> None:
         """Mark the selected cell as without event (N key)."""

@@ -317,6 +317,35 @@ class TestEventAnnotatorFixes:
         assert annotator.selection == []
 
 
+    def test_submit_without_option_keeps_the_cell(self, event_annotator):
+        """
+        Submitting with no option checked changes nothing.
+
+        Bug prevented: a cell whose class the options do not show (NaN) was
+        marked for deletion on submit.
+        """
+
+        annotator = event_annotator
+        annotator.on_scatter_pick(
+            pick(annotator.status_scatter, 0, annotator.positions[0])
+        )
+        track = annotator.track_of_interest
+        before = annotator.df_tracks.loc[
+            annotator.df_tracks["TRACK_ID"] == track, "class_lysis"
+        ].to_numpy()
+
+        annotator.correct_btn.click()
+        for button in annotator.class_options:
+            button.setAutoExclusive(False)
+            button.setChecked(False)
+        annotator.correct_btn.click()
+
+        after = annotator.df_tracks.loc[
+            annotator.df_tracks["TRACK_ID"] == track, "class_lysis"
+        ].to_numpy()
+        assert list(after) == list(before)
+
+
 class TestPairEventAnnotatorWorkflow:
 
     def test_opens_on_the_position(self, pair_annotator):
