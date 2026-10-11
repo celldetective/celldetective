@@ -1,19 +1,16 @@
 from PyQt5.QtWidgets import (
-    QAction,
     QHBoxLayout,
     QVBoxLayout,
     QLabel,
     QLineEdit,
-    QPushButton,
-    QMessageBox,
-    QFileDialog,
+    QShortcut,
     QTabWidget,
     QWidget,
 )
-from PyQt5.QtCore import Qt, QSize
+from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIntValidator
 from matplotlib.axes import Axes
-from typing import Optional, Union, Any
+from typing import List, Optional, Union, Any
 import numpy as np
 import pandas as pd
 import os
@@ -23,6 +20,20 @@ from superqt.fonticon import icon
 from fonticon_mdi6 import MDI6
 
 import matplotlib.pyplot as plt
+from celldetective.gui.annotator_common import (
+    NON_SIGNAL_COLUMNS,
+    closest_picked_index,
+    confirm,
+    default_dataset_name,
+    experiment_columns,
+    fit_feature_scaler,
+    icon_button,
+    new_class_dialog,
+    save_dataset,
+    set_toggle_icon,
+    split_by_frame,
+    warn,
+)
 from celldetective.gui.base_annotator import BaseAnnotator
 from celldetective.gui.viewers.contour_viewer import CellEdgeVisualizer
 from celldetective.gui.base.components import CelldetectiveWidget
@@ -30,11 +41,19 @@ from celldetective.gui.base.figure_canvas import FigureCanvas
 from celldetective.gui.gui_utils import color_from_state, ExportPlotBtn
 from celldetective.utils.image_loaders import locate_labels
 from celldetective.utils.data_cleaning import extract_identity_col
-from celldetective.gui.base.utils import center_window
 from celldetective import get_logger
-from celldetective.log_manager import positionlogger
 
 logger = get_logger(__name__)
+
+# Columns of the annotation bookkeeping rather than characteristic groups.
+NON_GROUP_COLUMNS = (
+    "class_id",
+    "group_color",
+    "class_color",
+    "group_id",
+    "status_color",
+    "status_id",
+)
 
 
 class AnnotatorStackVisualizer(CellEdgeVisualizer):
@@ -59,8 +78,6 @@ class AnnotatorStackVisualizer(CellEdgeVisualizer):
         """
         super().generate_figure_canvas()
         self.generate_custom_overlays()
-        # Force layout update
-        self.compact_layout()
 
     def generate_custom_overlays(self) -> None:
         """Initialize scatter artists."""
@@ -78,10 +95,8 @@ class AnnotatorStackVisualizer(CellEdgeVisualizer):
         colors : array-like
             The colors of the points.
         """
-        # Update Scatter
         self.scat_markers.set_offsets(positions)
         if len(positions) > 0 and len(colors) > 0:
-            # colors should be an array of colors
             self.scat_markers.set_edgecolors(colors)
             self.scat_markers.set_facecolors("none")
             self.scat_markers.set_picker(10)
@@ -91,17 +106,12 @@ class AnnotatorStackVisualizer(CellEdgeVisualizer):
         self.canvas.canvas.draw_idle()
 
     def generate_edge_slider(self) -> None:
-        """
-        Override to hide the edge slider.
-        """
-        # Override to hide edge slider
-        pass
+        """No edge slider: the contours are not tuned here."""
 
     def generate_opacity_slider(self) -> None:
         """
         Generate a compact opacity slider for the mask.
         """
-        # Compact opacity slider
         self.opacity_slider = QLabeledDoubleSlider()
         self.opacity_slider.setOrientation(Qt.Horizontal)
         self.opacity_slider.setRange(0, 1)
@@ -120,17 +130,13 @@ class AnnotatorStackVisualizer(CellEdgeVisualizer):
         """
         Reduce margins and spacing for a more compact layout.
         """
-        # Reduce margins/spacing for all slider layouts in canvas
         self.canvas.layout.setSpacing(0)
         self.canvas.layout.setContentsMargins(0, 5, 0, 5)
         for i in range(self.canvas.layout.count()):
-            item = self.canvas.layout.itemAt(i)
-            if item.layout():
-                item.layout().setContentsMargins(0, 0, 0, 0)
-                item.layout().setSpacing(0)
-            elif item.widget():
-                # If there are direct widgets, ensure they are compact too if possible
-                pass
+            layout = self.canvas.layout.itemAt(i).layout()
+            if layout:
+                layout.setContentsMargins(0, 0, 0, 0)
+                layout.setSpacing(0)
 
 
 class MeasureAnnotator(BaseAnnotator):
@@ -155,40 +161,42 @@ class MeasureAnnotator(BaseAnnotator):
         self.current_frame = 0
         self.show_fliers = False
 
-        if self.proceed:
-
-            from celldetective.utils.image_loaders import fix_missing_labels
-            from celldetective.tracking import write_first_detection_class
-
-            # Ensure labels match stack length
-            if self.len_movie > 0:
-                temp_labels = locate_labels(self.pos, population=self.mode)
-                if temp_labels is None or len(temp_labels) < self.len_movie:
-                    fix_missing_labels(
-                        self.pos,
-                        population=self.mode,
-                        prefix=self.parent_window.movie_prefix,
-                    )
-                    self.labels = locate_labels(self.pos, population=self.mode)
-                elif len(temp_labels) > self.len_movie:
-                    self.labels = temp_labels[: self.len_movie]
-                else:
-                    self.labels = temp_labels
-            else:
-                self.labels = locate_labels(self.pos, population=self.mode)
-
-            self.current_channel = 0
-            self.frame_lbl = QLabel("position: ")
-
-            # self.static_image() # Replaced by StackVisualizer initialization in populate_window
-
-            self.populate_window()
-            self.changed_class()
-
-            self.previous_index = None
-
-        else:
+        if not self.proceed:
             self.close()
+            return
+
+        from celldetective.utils.image_loaders import fix_missing_labels
+
+        # Ensure labels match stack length
+        self.labels = locate_labels(self.pos, population=self.mode)
+        if self.len_movie > 0:
+            if self.labels is None or len(self.labels) < self.len_movie:
+                fix_missing_labels(
+                    self.pos,
+                    population=self.mode,
+                    prefix=self.parent_window.movie_prefix,
+                )
+                self.labels = locate_labels(self.pos, population=self.mode)
+            elif len(self.labels) > self.len_movie:
+                self.labels = self.labels[: self.len_movie]
+
+        self.current_channel = 0
+        self.frame_lbl = QLabel("position: ")
+
+        self.populate_window()
+        self.changed_class()
+
+        self.previous_index = None
+
+    @staticmethod
+    def group_columns(columns) -> List[str]:
+        """The characteristic groups: group, group_* and status_* columns."""
+        return [
+            c
+            for c in columns
+            if (c == "group" or c.startswith(("group_", "status_")))
+            and c not in NON_GROUP_COLUMNS
+        ]
 
     def locate_tracks(self) -> None:
         """
@@ -196,171 +204,75 @@ class MeasureAnnotator(BaseAnnotator):
         """
 
         if not os.path.exists(self.trajectories_path):
-
-            msgBox = QMessageBox()
-            msgBox.setIcon(QMessageBox.Warning)
-            msgBox.setText("The trajectories cannot be detected.")
-            msgBox.setWindowTitle("Warning")
-            msgBox.setStandardButtons(QMessageBox.Ok)
-            msgBox.exec()
+            warn("The trajectories cannot be detected.")
             self.close()
+            return
+
+        self.annotation_log = []
+
+        # Load and prep tracks
+        self.df_tracks = pd.read_csv(self.trajectories_path)
+        id_col = extract_identity_col(self.df_tracks)
+        self.df_tracks = self.df_tracks.sort_values(by=[id_col, "FRAME"])
+
+        # Generate missing status columns from class columns
+        for c in self.df_tracks.columns:
+            if not c.startswith("class_") or c in NON_GROUP_COLUMNS:
+                continue
+            status_col = c.replace("class_", "status_")
+            if status_col in self.df_tracks.columns:
+                continue
+            if c == "class_firstdetection":
+                try:
+                    from celldetective.tracking import write_first_detection_class
+
+                    self.df_tracks = write_first_detection_class(self.df_tracks)
+                except Exception as e:
+                    logger.error(f"Could not generate status_firstdetection: {e}")
+                    self.df_tracks[status_col] = self.df_tracks[c]
+            else:
+                self.df_tracks[status_col] = self.df_tracks[c]
+
+        self.class_cols = [
+            c
+            for c in self.df_tracks.columns
+            if c.startswith(("group", "status")) and c not in NON_GROUP_COLUMNS
+        ]
+        if self.class_cols:
+            if self.status_name not in self.class_cols:
+                self.status_name = self.class_cols[0]
         else:
+            self.status_name = "group"
 
-            # Load and prep tracks
-            self.df_tracks = pd.read_csv(self.trajectories_path)
-            id_col = extract_identity_col(self.df_tracks)
-            self.df_tracks = self.df_tracks.sort_values(by=[id_col, "FRAME"])
+        if self.status_name not in self.df_tracks.columns:
+            # only create the status column if it does not exist to not erase static classification results
+            self.make_status_column()
 
-            cols = np.array(self.df_tracks.columns)
-            self.class_cols = np.array(
-                [
-                    c.startswith("group")
-                    or c.startswith("class")
-                    or c.startswith("status")
-                    for c in list(self.df_tracks.columns)
-                ]
-            )
-            self.class_cols = list(cols[self.class_cols])
+        self.color_states()
 
-            to_remove = [
-                "class_id",
-                "group_color",
-                "class_color",
-                "group_id",
-                "status_color",
-                "status_id",
-            ]
-            self.class_cols = [c for c in self.class_cols if c not in to_remove]
+        self.df_tracks = self.df_tracks.dropna(subset=["POSITION_X", "POSITION_Y"])
+        self.df_tracks["x_anim"] = self.df_tracks["POSITION_X"].astype(int)
+        self.df_tracks["y_anim"] = self.df_tracks["POSITION_Y"].astype(int)
 
-            # Generate missing status columns from class columns
-            for c in self.class_cols:
-                if c.startswith("class_"):
-                    status_col = c.replace("class_", "status_")
-                    if status_col not in self.df_tracks.columns:
-                        if (
-                            status_col == "status_firstdetection"
-                            or c == "class_firstdetection"
-                        ):
-                            try:
-                                from celldetective.tracking import (
-                                    write_first_detection_class,
-                                )
+        self.extract_scatter_from_trajectories()
+        self.track_of_interest = self.df_tracks.dropna(subset=id_col)[id_col].min()
+        self.locate_track_of_interest()
 
-                                self.df_tracks = write_first_detection_class(
-                                    self.df_tracks
-                                )
-                            except Exception as e:
-                                logger.error(
-                                    f"Could not generate status_firstdetection: {e}"
-                                )
-                                self.df_tracks[status_col] = self.df_tracks[c]
-                        else:
-                            self.df_tracks[status_col] = self.df_tracks[c]
+        self.columns_to_rescale, self.feature_scaler = fit_feature_scaler(
+            self.df_tracks,
+            excluded=list(NON_SIGNAL_COLUMNS)
+            + self.class_cols
+            + experiment_columns(self.exp_dir),
+        )
 
-            # Re-evaluate class_cols after generation
-            cols = np.array(self.df_tracks.columns)
-            self.class_cols = np.array(
-                [
-                    c.startswith("group") or c.startswith("status")
-                    for c in list(self.df_tracks.columns)
-                ]
-            )
-            self.class_cols = [c for c in list(cols[self.class_cols]) if c not in to_remove]
+    def color_states(self) -> None:
+        """Color the cells by their state in the current group."""
 
-            if len(self.class_cols) > 0:
-                if self.status_name not in self.class_cols:
-                    self.status_name = self.class_cols[0]
-            else:
-                self.status_name = "group"
-
-            if self.status_name not in self.df_tracks.columns:
-                # only create the status column if it does not exist to not erase static classification results
-                self.make_status_column()
-            else:
-                # all good, do nothing
-                pass
-
-            all_states = self.df_tracks.loc[:, self.status_name].tolist()
-            all_states = np.array(all_states)
-            self.state_color_map = color_from_state(all_states, recently_modified=False)
-            self.df_tracks["group_color"] = self.df_tracks[self.status_name].apply(
-                self.assign_color_state
-            )
-
-            self.df_tracks = self.df_tracks.dropna(subset=["POSITION_X", "POSITION_Y"])
-            self.df_tracks["x_anim"] = self.df_tracks["POSITION_X"]
-            self.df_tracks["y_anim"] = self.df_tracks["POSITION_Y"]
-            self.df_tracks["x_anim"] = self.df_tracks["x_anim"].astype(int)
-            self.df_tracks["y_anim"] = self.df_tracks["y_anim"].astype(int)
-
-            self.extract_scatter_from_trajectories()
-            self.track_of_interest = self.df_tracks.dropna(subset=id_col)[id_col].min()
-
-            self.loc_t = []
-            self.loc_idx = []
-            for t in range(len(self.tracks)):
-                indices = np.where(self.tracks[t] == self.track_of_interest)[0]
-                if len(indices) > 0:
-                    self.loc_t.append(t)
-                    self.loc_idx.append(indices[0])
-
-            from sklearn.preprocessing import MinMaxScaler
-
-            self.MinMaxScaler = MinMaxScaler()
-            self.columns_to_rescale = list(self.df_tracks.columns)
-
-            cols_to_remove = [
-                "group",
-                "group_color",
-                "status",
-                "status_color",
-                "class_color",
-                "TRACK_ID",
-                "FRAME",
-                "x_anim",
-                "y_anim",
-                "t",
-                "dummy",
-                "group_color",
-                "state",
-                "generation",
-                "root",
-                "parent",
-                "class_id",
-                "class",
-                "t0",
-                "POSITION_X",
-                "POSITION_Y",
-                "position",
-                "well",
-                "well_index",
-                "well_name",
-                "pos_name",
-                "index",
-                "concentration",
-                "cell_type",
-                "antibody",
-                "pharmaceutical_agent",
-                "ID",
-            ] + self.class_cols
-
-            from celldetective.utils.experiment import (
-                get_experiment_metadata,
-                get_experiment_labels,
-            )
-
-            meta = get_experiment_metadata(self.exp_dir)
-            if meta is not None:
-                cols_to_remove.extend(meta.keys())
-
-            labels = get_experiment_labels(self.exp_dir)
-            if labels is not None:
-                cols_to_remove.extend(labels.keys())
-
-            self.columns_to_rescale = [c for c in self.columns_to_rescale if c not in cols_to_remove]
-
-            x = self.df_tracks[self.columns_to_rescale].values
-            self.MinMaxScaler.fit(x)
+        all_states = np.array(self.df_tracks.loc[:, self.status_name].tolist())
+        self.state_color_map = color_from_state(all_states, recently_modified=False)
+        self.df_tracks["group_color"] = self.df_tracks[self.status_name].apply(
+            self.assign_color_state
+        )
 
     def populate_options_layout(self) -> None:
         """Populate the options layout."""
@@ -379,11 +291,9 @@ class MeasureAnnotator(BaseAnnotator):
         self.time_of_interest_le.setValidator(self.int_validator)
         time_option_hbox.addWidget(self.time_of_interest_le)
 
-        self.suppr_btn = QPushButton("")
-        self.suppr_btn.setStyleSheet(self.button_select_all)
-        self.suppr_btn.setIcon(icon(MDI6.delete, color="black"))
-        self.suppr_btn.setToolTip("Delete cell")
-        self.suppr_btn.setIconSize(QSize(20, 20))
+        self.suppr_btn = icon_button(
+            MDI6.delete, self.button_select_all, tooltip="Delete cell"
+        )
         self.suppr_btn.clicked.connect(self.del_cell)
         time_option_hbox.addWidget(self.suppr_btn)
 
@@ -403,41 +313,7 @@ class MeasureAnnotator(BaseAnnotator):
         """Update class combo box."""
         self.class_choice_cb.disconnect()
         self.class_choice_cb.clear()
-        cols = np.array(self.df_tracks.columns)
-        self.class_cols = np.array(
-            [
-                c.startswith("group")
-                or c.startswith("status")
-                or (
-                    c.startswith("class")
-                    and not c.endswith("_id")
-                    and not c.endswith("_color")
-                )
-                for c in list(self.df_tracks.columns)
-            ]
-        )
-        self.class_cols = list(cols[self.class_cols])
-
-        to_remove = [
-            "group_id",
-            "group_color",
-            "class_id",
-            "class_color",
-            "status_color",
-            "status_id",
-        ]
-        for col in to_remove:
-            while col in self.class_cols:
-                self.class_cols.remove(col)
-
-        # Filter to keep only group_* and status_* as requested by user, but allow 'group' if it exists
-        final_cols = []
-        for c in self.class_cols:
-            if c == "group" or c.startswith("group_") or c.startswith("status_"):
-                final_cols.append(c)
-
-        self.class_cols = final_cols
-
+        self.class_cols = self.group_columns(self.df_tracks.columns)
         self.class_choice_cb.addItems(self.class_cols)
         if self.status_name in self.class_cols:
             self.class_choice_cb.setCurrentText(self.status_name)
@@ -516,8 +392,6 @@ class MeasureAnnotator(BaseAnnotator):
         self.button_widget.adjustSize()
         self.setCentralWidget(self.button_widget)
 
-        from PyQt5.QtWidgets import QShortcut
-        from PyQt5.QtGui import QKeySequence
         self.del_shortcut = QShortcut(Qt.Key_Delete, self)
         self.del_shortcut.activated.connect(self.shortcut_suppr)
         self.del_shortcut.setEnabled(False)
@@ -540,11 +414,11 @@ class MeasureAnnotator(BaseAnnotator):
         sig_layout.setContentsMargins(10, 10, 10, 5)
         sig_layout.setSpacing(6)
 
-        for i in range(len(self.signal_choice_cb)):
+        for label, combo in zip(self.signal_choice_label, self.signal_choice_cb):
             row = QHBoxLayout()
             row.setContentsMargins(0, 0, 0, 0)
-            row.addWidget(self.signal_choice_label[i], 20)
-            row.addWidget(self.signal_choice_cb[i], 80)
+            row.addWidget(label, 20)
+            row.addWidget(combo, 80)
             sig_layout.addLayout(row)
 
         # The plot outweighs the stretch below it: it takes the room until its
@@ -614,15 +488,17 @@ class MeasureAnnotator(BaseAnnotator):
         """Override to also update the toolbar action icon."""
         super().switch_to_log()
         if hasattr(self, "_sig_log_action"):
-            color = "#1565c0" if self.log_scale else "black"
-            self._sig_log_action.setIcon(icon(MDI6.math_log, color=color))
+            set_toggle_icon(self._sig_log_action, MDI6.math_log, self.log_scale)
 
     def normalize_features(self):
         """Override to also update the toolbar action icon."""
         super().normalize_features()
         if hasattr(self, "_sig_norm_action"):
-            color = "#1565c0" if self.normalized_signals else "black"
-            self._sig_norm_action.setIcon(icon(MDI6.arrow_collapse_vertical, color=color))
+            set_toggle_icon(
+                self._sig_norm_action,
+                MDI6.arrow_collapse_vertical,
+                self.normalized_signals,
+            )
 
     # ------------------------------------------------------------------
     # Cell intensity histogram
@@ -653,26 +529,21 @@ class MeasureAnnotator(BaseAnnotator):
         ylabel = "density" if self.hist_density else "count"
         self.hist_ax.set_ylabel(ylabel)
 
+    def _fit_hist_ylim(self) -> None:
+        """Fit the y-axis of the histogram to its highest bar, from 0.1 in log scale."""
+        heights = [p.get_height() for p in self.hist_ax.patches if p.get_height() > 0]
+        if heights:
+            self.hist_ax.set_ylim(1e-1 if self.hist_log_scale else 0, max(heights))
+
     def _toggle_hist_log(self) -> None:
         """Toggle log scale on the histogram y-axis (like ThresholdConfigurationWizard)."""
-        if self.hist_ax.get_yscale() == "linear":
-            self.hist_ax.set_yscale("log")
-            self.hist_log_scale = True
-        else:
-            self.hist_ax.set_yscale("linear")
-            self.hist_log_scale = False
+        self.hist_log_scale = self.hist_ax.get_yscale() == "linear"
+        self.hist_ax.set_yscale("log" if self.hist_log_scale else "linear")
 
-        # Update icon on the toolbar action
-        color = "#1565c0" if self.hist_log_scale else "black"
         if hasattr(self, "_hist_log_action"):
-            self._hist_log_action.setIcon(icon(MDI6.math_log, color=color))
+            set_toggle_icon(self._hist_log_action, MDI6.math_log, self.hist_log_scale)
 
-        # Adjust y-limits
-        ymin = 1e-1 if self.hist_log_scale else 0
-        patches = self.hist_ax.patches
-        if patches:
-            ymax = max(p.get_height() for p in patches if p.get_height() > 0)
-            self.hist_ax.set_ylim(ymin, ymax)
+        self._fit_hist_ylim()
         self.hist_fig.tight_layout()
         self.hist_fig.canvas.draw_idle()
 
@@ -680,9 +551,12 @@ class MeasureAnnotator(BaseAnnotator):
         """Toggle density normalization on the histogram."""
         self._hist_ymax = 0
         self.hist_density = not self.hist_density
-        color = "#1565c0" if self.hist_density else "black"
         if hasattr(self, "_hist_density_action"):
-            self._hist_density_action.setIcon(icon(MDI6.chart_bell_curve_cumulative, color=color))
+            set_toggle_icon(
+                self._hist_density_action,
+                MDI6.chart_bell_curve_cumulative,
+                self.hist_density,
+            )
         if self.selection:
             self.update_cell_histogram()
 
@@ -739,21 +613,14 @@ class MeasureAnnotator(BaseAnnotator):
         # Re-apply log scale if toggled (clear() resets to linear)
         if self.hist_log_scale:
             self.hist_ax.set_yscale("log")
-            patches = self.hist_ax.patches
-            if patches:
-                ymax = max(p.get_height() for p in patches if p.get_height() > 0)
-                self.hist_ax.set_ylim(1e-1, ymax)
+            self._fit_hist_ylim()
 
         self.hist_fig.tight_layout()
         self.hist_fig.canvas.draw()
 
     def _label_id_for_track(self, track_id, frame: int) -> Optional[int]:
         """Return the segmentation label id for *track_id* at *frame*."""
-        id_col = extract_identity_col(self.df_tracks)
-        rows = self.df_tracks.loc[
-            (self.df_tracks[id_col] == track_id)
-            & (self.df_tracks["FRAME"] == frame)
-        ]
+        rows = self.df_tracks.loc[self.cell_rows(track_id, frame)]
         if rows.empty:
             return None
         if "class_id" in rows.columns:
@@ -783,57 +650,48 @@ class MeasureAnnotator(BaseAnnotator):
         if self.selection:
             self.update_cell_histogram()
 
+    def cell_rows(self, track_id=None, frame: Optional[int] = None) -> pd.Series:
+        """Rows of a cell (the cell of interest by default) at a frame (the current one)."""
+
+        track_id = self.track_of_interest if track_id is None else track_id
+        frame = self.current_frame if frame is None else frame
+        id_col = extract_identity_col(self.df_tracks)
+        return (self.df_tracks[id_col] == track_id) & (self.df_tracks["FRAME"] == frame)
+
+    def cell_values(self) -> List[float]:
+        """Values of the chosen signals for the cell of interest, at the current frame."""
+
+        rows = self.cell_rows()
+        values = []
+        for combo in self.signal_choice_cb:
+            signal = combo.currentText()
+            if signal != "--":
+                values.extend(self.df_tracks.loc[rows, signal].to_numpy())
+        return values
+
     def plot_signals(self) -> None:
-        """Delegate signal plotting but check for viewer availability"""
+        """Plot the chosen signals of all the cells at the current frame, the cell of interest in red."""
         if not hasattr(self, "viewer"):
             return
 
-        # Call the original plot_signals logic or adapt it.
-        # Since plot_signals uses self.cell_ax (left panel), it should be fine.
-        # However, we need to ensure it uses the correct current_frame.
+        signals = [
+            combo.currentText()
+            for combo in self.signal_choice_cb
+            if combo.currentText() != "--"
+        ]
+        frame_rows = self.df_tracks["FRAME"] == self.current_frame
 
-        current_frame = self.current_frame
+        def not_nan(values):
+            return values[values == values]
 
-        yvalues = []
-        all_yvalues = []
-        current_yvalues = []
-        labels = []
-        range_values = []
-
-        for i in range(len(self.signal_choice_cb)):
-            signal_choice = self.signal_choice_cb[i].currentText()
-
-            if signal_choice != "--":
-                if "TRACK_ID" in self.df_tracks.columns:
-                    ydata = self.df_tracks.loc[
-                        (self.df_tracks["TRACK_ID"] == self.track_of_interest)
-                        & (self.df_tracks["FRAME"] == current_frame),
-                        signal_choice,
-                    ].to_numpy()
-                else:
-                    ydata = self.df_tracks.loc[
-                        (self.df_tracks["ID"] == self.track_of_interest), signal_choice
-                    ].to_numpy()
-                all_ydata = self.df_tracks.loc[:, signal_choice].to_numpy()
-                ydataNaN = ydata
-                ydata = ydata[ydata == ydata]  # remove nan
-
-                current_ydata = self.df_tracks.loc[
-                    (self.df_tracks["FRAME"] == current_frame), signal_choice
-                ].to_numpy()
-                current_ydata = current_ydata[current_ydata == current_ydata]
-                all_ydata = all_ydata[all_ydata == all_ydata]
-                yvalues.extend(ydataNaN)
-                current_yvalues.append(current_ydata)
-                all_yvalues.append(all_ydata)
-                range_values.extend(all_ydata)
-                labels.append(signal_choice)
+        all_yvalues = [not_nan(self.df_tracks[s].to_numpy()) for s in signals]
+        current_yvalues = [
+            not_nan(self.df_tracks.loc[frame_rows, s].to_numpy()) for s in signals
+        ]
+        yvalues = self.cell_values()
 
         self.cell_ax.clear()
-        if self.log_scale:
-            self.cell_ax.set_yscale("log")
-        else:
-            self.cell_ax.set_yscale("linear")
+        self.cell_ax.set_yscale("log" if self.log_scale else "linear")
 
         if len(yvalues) > 0:
             try:
@@ -841,7 +699,6 @@ class MeasureAnnotator(BaseAnnotator):
             except Exception as e:
                 logger.error(f"{e}")
 
-            x_pos = np.arange(len(all_yvalues)) + 1
             for index, feature in enumerate(current_yvalues):
                 x_values_strip = (index + 1) + np.random.normal(
                     0, 0.04, size=len(feature)
@@ -854,38 +711,25 @@ class MeasureAnnotator(BaseAnnotator):
                     color=tab10.colors[0],
                     alpha=0.1,
                 )
-            self.cell_ax.plot(
-                x_pos,
-                yvalues,
-                marker="H",
-                linestyle="None",
-                color=tab10.colors[3],
-                alpha=1,
-            )
-            range_values = np.array(range_values)
-            range_values = range_values[range_values == range_values]
+            self.plot_red_points(self.cell_ax, yvalues, draw=False)
 
+            range_values = np.concatenate(all_yvalues) if all_yvalues else np.array([])
             # Filter out non-positive values if log scale is active to prevent warnings
             if self.log_scale:
                 range_values = range_values[range_values > 0]
 
             if len(range_values) > 0:
-                self.value_magnitude = np.nanmin(range_values) - 0.03 * (
-                    np.nanmax(range_values) - np.nanmin(range_values)
-                )
+                low, high = np.nanmin(range_values), np.nanmax(range_values)
+                margin = 0.03 * (high - low)
+                self.value_magnitude = low - margin
+                self.non_log_ymin = low - margin
+                self.non_log_ymax = high + margin
+                if self.cell_ax.get_yscale() == "linear":
+                    self.cell_ax.set_ylim(self.non_log_ymin, self.non_log_ymax)
+                else:
+                    self.cell_ax.set_ylim(self.value_magnitude, self.non_log_ymax)
             else:
                 self.value_magnitude = 1
-
-            self.non_log_ymin = np.nanmin(range_values) - 0.03 * (
-                np.nanmax(range_values) - np.nanmin(range_values)
-            )
-            self.non_log_ymax = np.nanmax(range_values) + 0.03 * (
-                np.nanmax(range_values) - np.nanmin(range_values)
-            )
-            if self.cell_ax.get_yscale() == "linear":
-                self.cell_ax.set_ylim(self.non_log_ymin, self.non_log_ymax)
-            else:
-                self.cell_ax.set_ylim(self.value_magnitude, self.non_log_ymax)
         else:
             self.cell_ax.text(
                 0.5,
@@ -898,33 +742,29 @@ class MeasureAnnotator(BaseAnnotator):
 
         self.cell_fcanvas.canvas.draw()
 
-    def plot_red_points(self, ax: Axes) -> None:
+    def plot_red_points(
+        self, ax: Axes, yvalues: Optional[List[float]] = None, draw: bool = True
+    ) -> None:
         """
-        Plot red points on the axes.
+        Plot the values of the cell of interest in red, over the box plots.
 
         Parameters
         ----------
         ax : Axes
             The matplotlib axes.
+        yvalues : list of float, optional
+            The values, those of :meth:`cell_values` by default.
+        draw : bool, optional
+            Whether to redraw the plot.
         """
-        yvalues = []
-        current_frame = self.current_frame
-        id_col = extract_identity_col(self.df_tracks)
-        for i in range(len(self.signal_choice_cb)):
-            signal_choice = self.signal_choice_cb[i].currentText()
-            if signal_choice != "--":
-                ydata = self.df_tracks.loc[
-                    (self.df_tracks[id_col] == self.track_of_interest)
-                    & (self.df_tracks["FRAME"] == current_frame),
-                    signal_choice,
-                ].to_numpy()
-                ydata = ydata[ydata == ydata]  # remove nan
-                yvalues.extend(ydata)
+        if yvalues is None:
+            yvalues = [v for v in self.cell_values() if v == v]
         x_pos = np.arange(len(yvalues)) + 1
         ax.plot(
             x_pos, yvalues, marker="H", linestyle="None", color=tab10.colors[3], alpha=1
-        )  # Plot red points representing cells
-        self.cell_fcanvas.canvas.draw()
+        )
+        if draw:
+            self.cell_fcanvas.canvas.draw()
 
     def select_single_cell(self, index: int, timepoint: int) -> None:
         """
@@ -938,41 +778,25 @@ class MeasureAnnotator(BaseAnnotator):
             The timepoint.
         """
 
-        self.correct_btn.setEnabled(True)
-        self.cancel_btn.setEnabled(True)
-        self.del_shortcut.setEnabled(True)
+        self.enable_correction()
 
         self.track_of_interest = self.tracks[timepoint][index]
         logger.info(f"You selected cell #{self.track_of_interest}...")
         self.give_cell_information()
 
         if len(self.cell_ax.lines) > 0:
-            self.cell_ax.lines[
-                -1
-            ].remove()  # Remove the last line (red points) from the plot
+            # The last line holds the red points of the previous cell.
+            self.cell_ax.lines[-1].remove()
             self.plot_red_points(self.cell_ax)
         else:
             self.plot_signals()
 
-        self.loc_t = []
-        self.loc_idx = []
-        for t in range(len(self.tracks)):
-            indices = np.where(self.tracks[t] == self.track_of_interest)[0]
-            if len(indices) > 0:
-                self.loc_t.append(t)
-                self.loc_idx.append(indices[0])
-
-        self.previous_color = []
-        for t, idx in zip(self.loc_t, self.loc_idx):
-            self.previous_color.append(self.colors[t][idx].copy())
-            self.colors[t][idx] = "lime"
-
+        self.highlight_track_of_interest()
         self.draw_frame(self.current_frame)
 
     def cancel_selection(self) -> None:
         """Cancel selection."""
         super().cancel_selection()
-        self.event = None
         self.draw_frame(self.current_frame)
         # Clear the histogram
         if hasattr(self, "hist_ax"):
@@ -984,58 +808,30 @@ class MeasureAnnotator(BaseAnnotator):
     def export_measurements(self) -> None:
         """Export measurements to file."""
         logger.info("User interactions: Exporting measurements...")
-        # Implementation same as before
-        auto_dataset_name = (
-            self.pos.split(os.sep)[-4]
-            + "_"
-            + self.pos.split(os.sep)[-2]
-            + f"_{str(self.current_frame).zfill(3)}"
-            + f"_{self.status_name}.npy"
-        )
-
         if self.normalized_signals:
             self.normalize_features_btn.click()
 
-        subdf = self.df_tracks.loc[self.df_tracks["FRAME"] == self.current_frame, :]
-        subdf["class"] = subdf[self.status_name]
-        dico = subdf.to_dict("records")
+        cells = self.df_tracks.loc[self.df_tracks["FRAME"] == self.current_frame].copy()
+        cells["class"] = cells[self.status_name]
 
-        pathsave = QFileDialog.getSaveFileName(
-            self, "Select file name", self.exp_dir + auto_dataset_name, ".npy"
-        )[0]
-        if pathsave != "":
-            if not pathsave.endswith(".npy"):
-                pathsave += ".npy"
-            try:
-                np.save(pathsave, dico)
-                logger.info(f"File successfully written in {pathsave}.")
-            except Exception as e:
-                logger.error(f"Error {e}...")
+        name = default_dataset_name(
+            self.pos, suffix=f"_{str(self.current_frame).zfill(3)}_{self.status_name}"
+        )
+        save_dataset(self, cells.to_dict("records"), self.exp_dir + name)
 
     def write_new_event_class(self) -> None:
         """Write new event class."""
-        if self.class_name_le.text() == "":
-            self.target_class = "group"
-        else:
-            self.target_class = "group_" + self.class_name_le.text()
+        name = self.class_name_le.text()
+        self.target_class = f"group_{name}" if name else "group"
 
         logger.info(
             f"User interactions: Creating new characteristic group '{self.target_class}'"
         )
 
-        if self.target_class in list(self.df_tracks.columns):
-            msgBox = QMessageBox()
-            msgBox.setIcon(QMessageBox.Warning)
-            msgBox.setText(
-                "This characteristic group name already exists. If you proceed,\nall annotated data will be rewritten. Do you wish to continue?"
-            )
-            msgBox.setWindowTitle("Warning")
-            msgBox.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
-            returnValue = msgBox.exec()
-            if returnValue == QMessageBox.No:
-                return None
-            else:
-                pass
+        if self.target_class in self.df_tracks.columns and not confirm(
+            "This characteristic group name already exists. If you proceed,\nall annotated data will be rewritten. Do you wish to continue?"
+        ):
+            return
 
         self.df_tracks.loc[:, self.target_class] = 0
 
@@ -1046,15 +842,6 @@ class MeasureAnnotator(BaseAnnotator):
         self.class_choice_cb.setCurrentIndex(idx)
         self.newClassWidget.close()
 
-    def hide_annotation_buttons(self) -> None:
-        """Hide annotation buttons."""
-
-        for a in self.annotation_btns_to_hide:
-            a.hide()
-        self.time_of_interest_label.setEnabled(False)
-        self.time_of_interest_le.setText("")
-        self.time_of_interest_le.setEnabled(False)
-
     def show_annotation_buttons(self) -> None:
         """Show annotation buttons."""
 
@@ -1064,9 +851,7 @@ class MeasureAnnotator(BaseAnnotator):
         self.time_of_interest_label.setEnabled(True)
         self.time_of_interest_le.setEnabled(True)
         self.correct_btn.setText("submit")
-
-        self.correct_btn.disconnect()
-        self.correct_btn.clicked.connect(self.apply_modification)
+        self.set_correct_action(self.apply_modification)
 
     def give_cell_information(self) -> None:
         """Display cell information."""
@@ -1074,24 +859,11 @@ class MeasureAnnotator(BaseAnnotator):
         try:
             cell_selected = f"cell: {self.track_of_interest}\n"
             if self.status_name in self.df_tracks.columns:
-                if "TRACK_ID" in self.df_tracks.columns:
-                    val = self.df_tracks.loc[
-                        (self.df_tracks["FRAME"] == self.current_frame)
-                        & (self.df_tracks["TRACK_ID"] == self.track_of_interest),
-                        self.status_name,
-                    ].to_numpy()
-                    if len(val) > 0:
-                        cell_status = f"phenotype: {val[0]}\n"
-                    else:
-                        cell_status = "phenotype: N/A\n"
+                val = self.df_tracks.loc[self.cell_rows(), self.status_name].to_numpy()
+                if len(val) > 0:
+                    cell_status = f"phenotype: {val[0]}\n"
                 else:
-                    val = self.df_tracks.loc[
-                        self.df_tracks["ID"] == self.track_of_interest, self.status_name
-                    ].to_numpy()
-                    if len(val) > 0:
-                        cell_status = f"phenotype: {val[0]}\n"
-                    else:
-                        cell_status = "phenotype: N/A\n"
+                    cell_status = "phenotype: N/A\n"
             else:
                 cell_status = f"phenotype: N/A (col '{self.status_name}' missing)\n"
             self.cell_info.setText(cell_selected + cell_status)
@@ -1101,30 +873,14 @@ class MeasureAnnotator(BaseAnnotator):
     def create_new_event_class(self) -> None:
         """Create a new event class."""
 
-        # display qwidget to name the event
-        self.newClassWidget = CelldetectiveWidget()
-        self.newClassWidget.setWindowTitle("Create new characteristic group")
-
-        layout = QVBoxLayout()
-        self.newClassWidget.setLayout(layout)
-        name_hbox = QHBoxLayout()
-        name_hbox.addWidget(QLabel("group name: "), 25)
-        self.class_name_le = QLineEdit("group")
-        name_hbox.addWidget(self.class_name_le, 75)
-        layout.addLayout(name_hbox)
-
-        btn_hbox = QHBoxLayout()
-        submit_btn = QPushButton("submit")
-        cancel_btn = QPushButton("cancel")
-        btn_hbox.addWidget(cancel_btn, 50)
-        btn_hbox.addWidget(submit_btn, 50)
-        layout.addLayout(btn_hbox)
-
-        submit_btn.clicked.connect(self.write_new_event_class)
-        cancel_btn.clicked.connect(self.close_without_new_class)
-
-        self.newClassWidget.show()
-        center_window(self.newClassWidget)
+        self.newClassWidget, self.class_name_le, _ = new_class_dialog(
+            "Create new characteristic group",
+            "group name: ",
+            "group",
+            self.write_new_event_class,
+            self.close_without_new_class,
+            prefill=False,
+        )
 
     def apply_modification(self) -> None:
         """Apply modification to the cell."""
@@ -1138,44 +894,20 @@ class MeasureAnnotator(BaseAnnotator):
         )
         # Record the previous group/status (df still holds the old value here) so the log
         # shows which cells actually changed and how
-        id_col = extract_identity_col(self.df_tracks)
-        old_status = self.df_tracks.loc[
-            (self.df_tracks[id_col] == self.track_of_interest)
-            & (self.df_tracks["FRAME"] == self.current_frame),
-            self.status_name,
-        ].to_numpy()
+        rows = self.cell_rows()
+        old_status = self.df_tracks.loc[rows, self.status_name].to_numpy()
         old_status = old_status[0] if len(old_status) else None
-        if not hasattr(self, "annotation_log"):
-            self.annotation_log = []
         self.annotation_log.append(
             f"cell {self.track_of_interest} @ FRAME {self.current_frame}: "
             f"{self.status_name} {old_status}->{status}"
         )
-        mask = (self.df_tracks[id_col] == self.track_of_interest) & (
-            self.df_tracks["FRAME"] == self.current_frame
-        )
-        self.df_tracks.loc[mask, self.status_name] = status
-        indices = self.df_tracks.index[mask]
+        self.df_tracks.loc[rows, self.status_name] = status
 
-        self.df_tracks.loc[indices, self.status_name] = status
-        all_states = self.df_tracks.loc[:, self.status_name].tolist()
-        all_states = np.array(all_states)
-        self.state_color_map = color_from_state(all_states, recently_modified=False)
-
-        self.df_tracks["group_color"] = self.df_tracks[self.status_name].apply(
-            self.assign_color_state
-        )
+        self.color_states()
         self.extract_scatter_from_trajectories()
         self.give_cell_information()
 
-        self.correct_btn.disconnect()
-        self.correct_btn.clicked.connect(self.show_annotation_buttons)
-
-        self.hide_annotation_buttons()
-        self.correct_btn.setEnabled(False)
-        self.correct_btn.setText("correct")
-        self.cancel_btn.setEnabled(False)
-        self.del_shortcut.setEnabled(False)
+        self.reset_correction()
 
         if len(self.selection) > 0:
             self.selection.pop(0)
@@ -1212,39 +944,23 @@ class MeasureAnnotator(BaseAnnotator):
         event : matplotlib.backend_bases.PickEvent
             The pick event.
         """
-        self.event = event
-        ind = event.ind
+        idx = closest_picked_index(
+            event.ind, self.positions[self.current_frame], event.mouseevent
+        )
+        if idx is None:
+            return
 
-        if len(ind) > 1:
-            # disambiguate based on distance to mouse click
-            datax, datay = [self.positions[self.current_frame][i, 0] for i in ind], [
-                self.positions[self.current_frame][i, 1] for i in ind
-            ]
-            msx, msy = event.mouseevent.xdata, event.mouseevent.ydata
-            dist = np.sqrt((np.array(datax) - msx) ** 2 + (np.array(datay) - msy) ** 2)
-            ind = [ind[np.argmin(dist)]]
+        # Enforce single selection: picking the selected cell again unselects it.
+        if len(self.selection) > 0:
+            prev_idx, _ = self.selection[0]
+            self.cancel_selection()
+            if prev_idx == idx:
+                return
 
-        if len(ind) > 0:
-            # We have a single point
-            idx = ind[0]
-
-            # Enforce single selection / Toggle
-            if len(self.selection) > 0:
-                # Check if we clicked the same cell
-                prev_idx, prev_frame = self.selection[0]
-                if (
-                    prev_idx == idx
-                ):  # and prev_frame == self.current_frame (implicit since we pick on current frame)
-
-                    self.cancel_selection()
-                    return
-
-                self.cancel_selection()
-
-            self.selection = [[idx, self.current_frame]]
-            self._hist_ymax = 0  # reset y-limit memory for new cell
-            self.select_single_cell(idx, self.current_frame)
-            self.update_cell_histogram()
+        self.selection = [[idx, self.current_frame]]
+        self._hist_ymax = 0  # reset y-limit memory for new cell
+        self.select_single_cell(idx, self.current_frame)
+        self.update_cell_histogram()
 
     def draw_frame(self, framedata: int) -> None:
         """
@@ -1258,57 +974,29 @@ class MeasureAnnotator(BaseAnnotator):
         """
         self.framedata = framedata
 
-        # Prepare overlays
+        # The mask is updated by the change_frame of the viewer.
         if self.framedata < len(self.positions):
-            pos = self.positions[self.framedata]
-            cols = self.colors[self.framedata][:, 0]
+            positions = self.positions[self.framedata]
+            colors = self.colors[self.framedata][:, 0]
         else:
-            pos = []
-            cols = []
-
-        # No need to manage contour cache or labels here
-        # CellEdgeVisualizer handles it.
-
-        # Update Viewer Scatter Only
-        # Note: Mask is updated automatically by CellEdgeVisualizer's change_frame
-        self.viewer.update_overlays(
-            positions=pos,
-            colors=cols,
-        )
+            positions, colors = [], []
+        self.viewer.update_overlays(positions=positions, colors=colors)
 
     def make_status_column(self) -> None:
         """Create the status column."""
         if self.status_name != "state_firstdetection":
             self.df_tracks.loc[:, self.status_name] = 0
-            all_states = self.df_tracks.loc[:, self.status_name].tolist()
-            all_states = np.array(all_states)
-            self.state_color_map = color_from_state(all_states, recently_modified=False)
-            self.df_tracks["group_color"] = self.df_tracks[self.status_name].apply(
-                self.assign_color_state
-            )
+            self.color_states()
 
     def extract_scatter_from_trajectories(self) -> None:
         """Extract scatter data from trajectories."""
 
-        self.positions = []
-        self.colors = []
-        self.tracks = []
-
         id_col = extract_identity_col(self.df_tracks)
-        for t in np.arange(self.len_movie):
-            self.positions.append(
-                self.df_tracks.loc[
-                    self.df_tracks["FRAME"] == t, ["POSITION_X", "POSITION_Y"]
-                ].to_numpy()
-            )
-            self.colors.append(
-                self.df_tracks.loc[self.df_tracks["FRAME"] == t, ["group_color"]]
-                .to_numpy()
-                .copy()
-            )
-            self.tracks.append(
-                self.df_tracks.loc[self.df_tracks["FRAME"] == t, id_col].to_numpy()
-            )
+        frames = split_by_frame(self.df_tracks, self.len_movie)
+        self.positions = [cells[["POSITION_X", "POSITION_Y"]].to_numpy() for cells in frames]
+        # A copy: the colors are written to highlight the selected cell.
+        self.colors = [cells[["group_color"]].to_numpy().copy() for cells in frames]
+        self.tracks = [cells[id_col].to_numpy() for cells in frames]
 
     def compute_status_and_colors(self, index: Optional[int] = None) -> None:
         """
@@ -1325,7 +1013,6 @@ class MeasureAnnotator(BaseAnnotator):
         """Handle class change."""
         self.status_name = self.class_choice_cb.currentText()
         if self.status_name != "":
-            # self.compute_status_and_colors()
             self.modify()
             self.draw_frame(self.current_frame)
 
@@ -1334,9 +1021,9 @@ class MeasureAnnotator(BaseAnnotator):
         Logic to execute when frame changes.
         """
         # Auto-switch track of interest if ID mode
-        if "TRACK_ID" not in list(self.df_tracks.columns) and "ID" in list(self.df_tracks.columns):
-            candidates = self.df_tracks[self.df_tracks["FRAME"] == self.current_frame][
-                "ID"
+        if "TRACK_ID" not in self.df_tracks.columns and "ID" in self.df_tracks.columns:
+            candidates = self.df_tracks.loc[
+                self.df_tracks["FRAME"] == self.current_frame, "ID"
             ]
             if not candidates.empty:
                 self.track_of_interest = candidates.min()
@@ -1346,34 +1033,21 @@ class MeasureAnnotator(BaseAnnotator):
         self.give_cell_information()
         self.plot_signals()
 
-    def changed_channel(self):
-        """Handle channel change."""
-        """Handled by StackViewer mostly, but we might need to refresh plotting if things depend on channel"""
-        pass  # StackViewer handles image reload
-
     def save_trajectories(self):
         """Save trajectories to file."""
-        logger.info(f"Saving trajectories...")
+        logger.info("Saving trajectories...")
         if self.normalized_signals:
             self.normalize_features_btn.click()
         if self.selection:
             self.cancel_selection()
 
-        # Avoid crash if status doesn't exist or is special
-        # self.df_tracks = self.df_tracks.drop(
-        #     self.df_tracks[self.df_tracks[self.status_name] == 99].index
-        # )
-
         self.df_tracks.drop(columns=["", "group_color", "x_anim", "y_anim"], errors="ignore", inplace=True)
 
         self.df_tracks.to_csv(self.trajectories_path, index=False)
         logger.info("Table successfully exported...")
-        with positionlogger(self.pos, filename=f"log_{self.mode}.txt"):
-            logger.info("MEASUREMENT ANNOTATION (manual)")
-            logger.info(f"group: {self.status_name}")
-            for entry in getattr(self, "annotation_log", []):
-                logger.info(f"modified {entry}")
-        self.annotation_log = []
+        self.write_annotation_log(
+            "MEASUREMENT ANNOTATION (manual)", f"group: {self.status_name}"
+        )
 
         self.locate_tracks()
         self.changed_class()
@@ -1386,19 +1060,10 @@ class MeasureAnnotator(BaseAnnotator):
             )
             return
 
-        all_states = self.df_tracks.loc[:, self.status_name].tolist()
-        all_states = np.array(all_states)
-        self.state_color_map = color_from_state(all_states, recently_modified=False)
-
-        self.df_tracks["group_color"] = self.df_tracks[self.status_name].apply(
-            self.assign_color_state
-        )
-
+        self.color_states()
         self.extract_scatter_from_trajectories()
         self.give_cell_information()
-
-        self.correct_btn.disconnect()
-        self.correct_btn.clicked.connect(self.show_annotation_buttons)
+        self.set_correct_action(self.show_annotation_buttons)
 
     def del_cell(self):
         """Delete the selected cell."""

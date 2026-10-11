@@ -33,6 +33,8 @@ from PyQt5 import QtCore
 from PyQt5.QtWidgets import QApplication
 from PyQt5.QtGui import QCloseEvent
 
+from celldetective.gui.base.components import CelldetectiveMainWindow
+
 from celldetective import get_software_location
 
 
@@ -542,7 +544,7 @@ class TestEventAnnotatorAnimationControls:
             annotator.draw_frame = MagicMock()
             annotator.animation_generator = MagicMock()
 
-            with patch("celldetective.gui.event_annotator.FuncAnimation"):
+            with patch("celldetective.gui.annotator_common.FuncAnimation"):
                 annotator.update_speed()
 
             # FPS 30 -> interval = 1000/30 ≈ 33ms
@@ -581,8 +583,8 @@ class TestEventAnnotatorCloseEvent:
 
             event = QCloseEvent()
 
-            with patch("celldetective.gui.event_annotator.plt"):
-                with patch.object(EventAnnotator.__bases__[0], "closeEvent"):
+            with patch("celldetective.gui.annotator_common.plt"):
+                with patch.object(CelldetectiveMainWindow, "closeEvent"):
                     EventAnnotator.closeEvent(annotator, event)
 
             mock_anim.event_source.stop.assert_called_once()
@@ -609,8 +611,8 @@ class TestEventAnnotatorCloseEvent:
 
             event = QCloseEvent()
 
-            with patch("celldetective.gui.event_annotator.plt"):
-                with patch.object(EventAnnotator.__bases__[0], "closeEvent"):
+            with patch("celldetective.gui.annotator_common.plt"):
+                with patch.object(CelldetectiveMainWindow, "closeEvent"):
                     EventAnnotator.closeEvent(annotator, event)
             # closeEvent deletes stack and df_tracks - verify by checking
             # the del statements in the source code (the actual deletion

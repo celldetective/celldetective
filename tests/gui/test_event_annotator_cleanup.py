@@ -18,6 +18,8 @@ from unittest.mock import MagicMock, patch, PropertyMock
 import matplotlib.pyplot as plt
 from PyQt5.QtGui import QCloseEvent
 
+from celldetective.gui.base.components import CelldetectiveMainWindow
+
 
 @pytest.fixture(autouse=True)
 def disable_logging():
@@ -48,7 +50,7 @@ class TestEventAnnotatorCloseEvent:
         2. Call closeEvent
         3. Verify plt.close was called for both figures
         """
-        with patch("celldetective.gui.event_annotator.plt") as mock_plt:
+        with patch("celldetective.gui.annotator_common.plt") as mock_plt:
             # Create a minimal mock that simulates the annotator
             from celldetective.gui.event_annotator import EventAnnotator
 
@@ -79,7 +81,7 @@ class TestEventAnnotatorCloseEvent:
                 event = QCloseEvent()
 
                 # Patch super().closeEvent to avoid Qt issues
-                with patch.object(EventAnnotator.__bases__[0], "closeEvent"):
+                with patch.object(CelldetectiveMainWindow, "closeEvent"):
                     EventAnnotator.closeEvent(annotator, event)
 
                 # Verify figures were closed
@@ -121,8 +123,8 @@ class TestEventAnnotatorCloseEvent:
 
             event = QCloseEvent()
 
-            with patch("celldetective.gui.event_annotator.plt"):
-                with patch.object(EventAnnotator.__bases__[0], "closeEvent"):
+            with patch("celldetective.gui.annotator_common.plt"):
+                with patch.object(CelldetectiveMainWindow, "closeEvent"):
                     EventAnnotator.closeEvent(annotator, event)
 
             # Verify animation was stopped
@@ -173,8 +175,8 @@ class TestPairEventAnnotatorCloseEvent:
 
             event = QCloseEvent()
 
-            with patch("celldetective.gui.pair_event_annotator.plt"):
-                with patch.object(PairEventAnnotator.__bases__[0], "closeEvent"):
+            with patch("celldetective.gui.annotator_common.plt"):
+                with patch.object(CelldetectiveMainWindow, "closeEvent"):
                     PairEventAnnotator.closeEvent(annotator, event)
 
             # Verify dataframes.clear() was called
@@ -207,7 +209,7 @@ class TestPairEventAnnotatorCloseEvent:
         """
         from celldetective.gui.pair_event_annotator import PairEventAnnotator
 
-        with patch("celldetective.gui.pair_event_annotator.plt") as mock_plt:
+        with patch("celldetective.gui.annotator_common.plt") as mock_plt:
             with patch.object(
                 PairEventAnnotator, "__init__", lambda self, parent: None
             ):
@@ -229,7 +231,7 @@ class TestPairEventAnnotatorCloseEvent:
 
                 event = QCloseEvent()
 
-                with patch.object(PairEventAnnotator.__bases__[0], "closeEvent"):
+                with patch.object(CelldetectiveMainWindow, "closeEvent"):
                     PairEventAnnotator.closeEvent(annotator, event)
 
                 # Verify figures were closed
@@ -238,53 +240,22 @@ class TestPairEventAnnotatorCloseEvent:
 
 class TestPairEventAnnotatorNoDuplicateMethods:
     """
-    Test that duplicate method definitions have been removed.
+    Test that the frame navigation methods are defined once.
 
     Bug: set_first_frame and set_last_frame were defined twice in the class,
     with the later definition shadowing the earlier one.
-
-    Fix: Removed the simpler first definitions, keeping the more complete versions.
     """
 
-    def test_no_duplicate_set_first_frame(self):
-        """
-        Test that set_first_frame is defined only once.
-
-        Steps:
-        1. Import PairEventAnnotator
-        2. Use inspect to find all method definitions
-        3. Verify set_first_frame appears only once
-        """
+    @pytest.mark.parametrize("name", ["set_first_frame", "set_last_frame"])
+    def test_defined_once(self, name):
+        """The class defining the method has a single definition of it."""
         import inspect
         from celldetective.gui.pair_event_annotator import PairEventAnnotator
 
-        # Get the source code
-        source = inspect.getsource(PairEventAnnotator)
-
-        # Count occurrences of 'def set_first_frame'
-        count = source.count("def set_first_frame(")
-
-        assert count == 1, f"set_first_frame is defined {count} times, expected 1"
-
-    def test_no_duplicate_set_last_frame(self):
-        """
-        Test that set_last_frame is defined only once.
-
-        Steps:
-        1. Import PairEventAnnotator
-        2. Use inspect to find all method definitions
-        3. Verify set_last_frame appears only once
-        """
-        import inspect
-        from celldetective.gui.pair_event_annotator import PairEventAnnotator
-
-        # Get the source code
-        source = inspect.getsource(PairEventAnnotator)
-
-        # Count occurrences of 'def set_last_frame'
-        count = source.count("def set_last_frame(")
-
-        assert count == 1, f"set_last_frame is defined {count} times, expected 1"
+        owner = next(
+            cls for cls in PairEventAnnotator.__mro__ if name in cls.__dict__
+        )
+        assert inspect.getsource(owner).count(f"def {name}(") == 1
 
 
 class TestPairEventAnnotatorNoNeighborhoodsError:
@@ -294,25 +265,41 @@ class TestPairEventAnnotatorNoNeighborhoodsError:
     Bug: PairEventAnnotator crashed with KeyError when opened without computed
     neighborhoods.
 
-    Fix: Added check for empty neighborhood_cols and raise ValueError with
-    user-friendly message.
+    Fix: raise a ValueError with a user-friendly message, which the caller shows.
     """
 
-    def test_raises_valueerror_on_empty_neighborhoods(self, qtbot):
-        """
-        Test that ValueError is raised when neighborhood_cols is empty.
-
-        Steps:
-        1. Mock PairEventAnnotator initialization to simulate empty neighborhoods
-        2. Verify ValueError is raised with appropriate message
-        """
-        # This is a more complex test that would require mocking the entire
-        # initialization chain. For now, we test the check exists in the code.
-        import inspect
+    def _annotator(self, dataframes):
+        import pandas as pd
         from celldetective.gui.pair_event_annotator import PairEventAnnotator
 
-        source = inspect.getsource(PairEventAnnotator.__init__)
+        with patch.object(PairEventAnnotator, "__init__", lambda self, parent: None):
+            annotator = PairEventAnnotator(None)
+        annotator.dataframes = {
+            pop: None if columns is None else pd.DataFrame(columns=columns)
+            for pop, columns in dataframes.items()
+        }
+        return annotator
 
-        # Verify the check exists
-        assert "len(self.neighborhood_cols) == 0" in source
-        assert "raise ValueError" in source
+    def test_raises_valueerror_on_empty_neighborhoods(self, qtbot):
+        """No neighborhood column in any population raises a ValueError."""
+
+        annotator = self._annotator(
+            {"targets": ["TRACK_ID", "FRAME", "area"], "effectors": None}
+        )
+        with pytest.raises(ValueError, match="No neighborhoods detected"):
+            annotator.locate_neighborhoods()
+
+    def test_lists_the_neighborhoods_per_population(self, qtbot):
+        """The neighborhoods are named after their reference population."""
+
+        annotator = self._annotator(
+            {
+                "targets": ["TRACK_ID", "neighborhood_2_circle_30_px"],
+                "effectors": ["TRACK_ID", "neighborhood_self_circle_10_px"],
+            }
+        )
+        annotator.locate_neighborhoods()
+        assert annotator.neighborhood_cols == [
+            "targets_ref_neighborhood_2_circle_30_px",
+            "effectors_ref_neighborhood_self_circle_10_px",
+        ]
