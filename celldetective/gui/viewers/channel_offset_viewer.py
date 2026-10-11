@@ -22,7 +22,6 @@ from celldetective.gui.gui_utils import QuickSliderLayout, ThresholdLineEdit
 from celldetective.gui.viewers.base_viewer import StackVisualizer
 from celldetective.utils.contrast import contrast_limits, value_range
 from celldetective.utils.image_loaders import (
-    load_frames,
     auto_load_number_of_frames,
     _get_img_num_per_channel,
 )
@@ -58,8 +57,6 @@ class ChannelOffsetViewer(StackVisualizer):
         self.shift_horizontal = 0
         self.overlay_init_contrast = False
         super().__init__(*args, **kwargs)
-
-        self.load_stack()
 
         if self.mode == "direct":
             # Initialize overlay frames for direct mode
@@ -168,13 +165,9 @@ class ChannelOffsetViewer(StackVisualizer):
         if self.mode == "direct":
             self.overlay_last_frame = self.stack[-1, :, :, self.overlay_target_channel]
         elif self.mode == "virtual":
-            self.overlay_last_frame = load_frames(
-                self.img_num_per_channel[
-                    self.overlay_target_channel, self.stack_length - 1
-                ],
-                self.stack_path,
-                normalize_input=False,
-            ).astype(float)[:, :, 0]
+            self.overlay_last_frame = self.read_frame(
+                self.overlay_target_channel, self.stack_length - 1
+            ).astype(float)
         self.change_overlay_frame(self.frame_slider.value())
         self.overlay_init_contrast = False
 
@@ -246,12 +239,9 @@ class ChannelOffsetViewer(StackVisualizer):
         # Change the displayed frame based on slider value
 
         if self.mode == "virtual":
-
-            self.overlay_init_frame = load_frames(
-                self.img_num_per_channel[self.overlay_target_channel, value],
-                self.stack_path,
-                normalize_input=False,
-            ).astype(float)[:, :, 0]
+            self.overlay_init_frame = self.read_frame(
+                self.overlay_target_channel, value
+            ).astype(float)
         elif self.mode == "direct":
             self.overlay_init_frame = self.stack[
                 value, :, :, self.overlay_target_channel
@@ -288,30 +278,15 @@ class ChannelOffsetViewer(StackVisualizer):
             np.arange(self.n_channels), self.stack_length, self.n_channels
         )
 
-        self.init_frame = load_frames(
-            self.img_num_per_channel[self.target_channel, self.current_time_index],
-            self.stack_path,
-            normalize_input=False,
-        ).astype(float)[:, :, 0]
-        self.last_frame = load_frames(
-            self.img_num_per_channel[self.target_channel, self.stack_length - 1],
-            self.stack_path,
-            normalize_input=False,
-        ).astype(float)[:, :, 0]
-        self.overlay_init_frame = load_frames(
-            self.img_num_per_channel[
-                self.overlay_target_channel, self.current_time_index
-            ],
-            self.stack_path,
-            normalize_input=False,
-        ).astype(float)[:, :, 0]
-        self.overlay_last_frame = load_frames(
-            self.img_num_per_channel[
-                self.overlay_target_channel, self.stack_length - 1
-            ],
-            self.stack_path,
-            normalize_input=False,
-        ).astype(float)[:, :, 0]
+        first, last = self.current_time_index, self.stack_length - 1
+        self.init_frame = self.read_frame(self.target_channel, first).astype(float)
+        self.last_frame = self.read_frame(self.target_channel, last).astype(float)
+        self.overlay_init_frame = self.read_frame(
+            self.overlay_target_channel, first
+        ).astype(float)
+        self.overlay_last_frame = self.read_frame(
+            self.overlay_target_channel, last
+        ).astype(float)
 
     def change_contrast_overlay(self, value: Tuple[float, float]) -> None:
         """
@@ -359,33 +334,32 @@ class ChannelOffsetViewer(StackVisualizer):
         self.shift_right_shortcut = QShortcut(QKeySequence(Qt.Key_Right), self.canvas)
         self.shift_right_shortcut.activated.connect(self.shift_overlay_right)
 
+    def shift_overlay_by(self, vertical: float = 0, horizontal: float = 0) -> None:
+        """Move the overlay by a number of pixels, and apply the shift."""
+        # Only the field moved is rewritten: the other may hold a value typed in.
+        if vertical:
+            self.shift_vertical += vertical
+            self.vertical_shift_le.set_threshold(self.shift_vertical)
+        if horizontal:
+            self.shift_horizontal += horizontal
+            self.horizontal_shift_le.set_threshold(self.shift_horizontal)
+        self.apply_shift_btn.click()
+
     def shift_overlay_up(self):
         """Shift the overlay up."""
-        self.shift_vertical -= 2
-        self.vertical_shift_le.set_threshold(self.shift_vertical)
-        # self.shift_generic()
-        self.apply_shift_btn.click()
+        self.shift_overlay_by(vertical=-2)
 
     def shift_overlay_down(self):
         """Shift the overlay down."""
-        self.shift_vertical += 2
-        self.vertical_shift_le.set_threshold(self.shift_vertical)
-        # self.shift_generic()
-        self.apply_shift_btn.click()
+        self.shift_overlay_by(vertical=2)
 
     def shift_overlay_left(self):
         """Shift the overlay left."""
-        self.shift_horizontal -= 2
-        self.horizontal_shift_le.set_threshold(self.shift_horizontal)
-        # self.shift_generic()
-        self.apply_shift_btn.click()
+        self.shift_overlay_by(horizontal=-2)
 
     def shift_overlay_right(self):
         """Shift the overlay right."""
-        self.shift_horizontal += 2
-        self.horizontal_shift_le.set_threshold(self.shift_horizontal)
-        # self.shift_generic()
-        self.apply_shift_btn.click()
+        self.shift_overlay_by(horizontal=2)
 
     def shift_generic(self):
         """Apply the shift to the overlay."""
@@ -405,104 +379,17 @@ class ChannelOffsetViewer(StackVisualizer):
     def generate_add_to_parent_btn(self):
         """Generate the 'Set' button to apply shifts to parent."""
 
-        add_hbox = QHBoxLayout()
-        add_hbox.setContentsMargins(0, 5, 0, 5)
         self.set_shift_btn.clicked.connect(self.set_parent_attributes)
         self.set_shift_btn.setStyleSheet(self.button_style_sheet)
-        add_hbox.addWidget(QLabel(""), 33)
-        add_hbox.addWidget(self.set_shift_btn, 33)
-        add_hbox.addWidget(QLabel(""), 33)
-        self.canvas.layout.addLayout(add_hbox)
+        self.add_centered_button(self.set_shift_btn, margins=(0, 5, 0, 5))
 
-    def update_profile(self):
-        """Update the intensity profile plot."""
-        if not self.line_mode or not hasattr(self, "line_x") or not self.line_x:
-            return
-
-        # Calculate profile
-        x0, y0 = self.line_x[0], self.line_y[0]
-        x1, y1 = self.line_x[1], self.line_y[1]
-        length_px = np.hypot(x1 - x0, y1 - y0)
-        if length_px == 0:
-            return
-
-        num_points = int(length_px)
-        if num_points < 2:
-            num_points = 2
-
-        x, y = np.linspace(x0, x1, num_points), np.linspace(y0, y1, num_points)
-
-        # Use self.init_frame and overlay frame
-        profiles = []
-        colors = ["black", "tab:blue"]
-
-        # Main channel profile
-        if hasattr(self, "init_frame") and self.init_frame is not None:
-            from scipy.ndimage import map_coordinates
-
-            profile = map_coordinates(
-                self.init_frame, np.vstack((y, x)), order=1, mode="nearest"
-            )
-            profiles.append(profile)
-        else:
-            profiles.append(None)
-
-        # Overlay channel profile
-        # Use data currently in im_overlay, which accounts for shifts
-        overlay_data = self.im_overlay.get_array()
-        if overlay_data is not None:
-            from scipy.ndimage import map_coordinates
-
-            profile_overlay = map_coordinates(
-                overlay_data, np.vstack((y, x)), order=1, mode="nearest"
-            )
-            profiles.append(profile_overlay)
-        else:
-            profiles.append(None)
-
-        # Basic setup
-        self.ax_profile.clear()
-        self.ax_profile.set_facecolor("none")
-
-        # Distance axis
-        dist_axis = np.arange(num_points)
-        title_str = f"{round(length_px,2)} [px]"
-        if self.PxToUm is not None:
-            title_str += f" | {round(length_px*self.PxToUm,3)} [µm]"
-
-        # Handle Y-Axis Locking
-        current_ylim = None
-        if self.lock_y_action.isChecked():
-            current_ylim = self.ax_profile.get_ylim()
-
-        # Plot profiles
-        for i, (profile, color) in enumerate(zip(profiles, colors)):
-            if profile is not None:
-                if np.all(np.isnan(profile)):
-                    profile = np.zeros_like(profile)
-                    profile[:] = np.nan
-
-                self.ax_profile.plot(
-                    dist_axis, profile, color=color, linestyle="-", label=f"Ch{i}"
-                )
-
-        self.ax_profile.set_xticks([])
-        self.ax_profile.set_ylabel("Intensity", fontsize=8)
-        self.ax_profile.set_xlabel(title_str, fontsize=8)
-        self.ax_profile.tick_params(axis="y", which="major", labelsize=6)
-
-        # Hide spines
-        self.ax_profile.spines["top"].set_visible(False)
-        self.ax_profile.spines["right"].set_visible(False)
-        self.ax_profile.spines["bottom"].set_color("black")
-        self.ax_profile.spines["left"].set_color("black")
-
-        self.fig.set_facecolor("none")
-
-        if current_ylim:
-            self.ax_profile.set_ylim(current_ylim)
-
-        self.fig.canvas.draw_idle()
+    def profile_sources(self):
+        """The main channel in black and the overlay, as shifted, in blue."""
+        sources = super().profile_sources()
+        overlay = self.im_overlay.get_array()
+        if overlay is not None:
+            sources.append((overlay, "tab:blue"))
+        return sources
 
     def set_parent_attributes(self):
         """Set the shift attributes in the parent window."""

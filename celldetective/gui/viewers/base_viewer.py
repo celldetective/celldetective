@@ -1,3 +1,4 @@
+import os
 from collections import OrderedDict
 from typing import Optional, List, Tuple, Dict, Any, Union
 
@@ -15,7 +16,11 @@ from superqt.fonticon import icon
 import matplotlib.gridspec as gridspec
 import matplotlib.backend_bases
 
-from celldetective.gui.base.components import CelldetectiveWidget, ToolButton
+from celldetective.gui.base.components import (
+    CelldetectiveWidget,
+    ToolButton,
+    generic_message,
+)
 from celldetective.gui.base.threads import start_tracked, stop_thread
 from celldetective.gui.base.utils import center_window
 from celldetective.utils.image_loaders import (
@@ -35,6 +40,23 @@ AUTO_CONTRAST_STEPS = 3
 def _intersect(a: slice, b: slice) -> slice:
     """Intersection of two slices with a start, a stop and no step."""
     return slice(max(a.start, b.start), min(a.stop, b.stop))
+
+
+def read_frame(stack_path: str, img_num: int) -> np.ndarray:
+    """One image of a stack on disk, as a 2D array."""
+    return load_frames(img_num, stack_path, normalize_input=False)[:, :, 0]
+
+
+def style_profile_axes(ax) -> None:
+    """The look of the intensity profile under the image."""
+
+    ax.set_facecolor("none")
+    ax.set_xticks([])
+    ax.set_ylabel("Intensity", fontsize=8)
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.spines["bottom"].set_color("black")
+    ax.spines["left"].set_color("black")
 
 
 class StackLoader(QThread):
@@ -147,14 +169,9 @@ class StackLoader(QThread):
                     break
 
                 try:
-                    # Load the frame
-                    from celldetective.utils.image_loaders import load_frames
-
-                    img = load_frames(
-                        self.img_num_per_channel[t_ch, frame_to_load],
-                        self.stack_path,
-                        normalize_input=False,
-                    )[:, :, 0]
+                    img = read_frame(
+                        self.stack_path, self.img_num_per_channel[t_ch, frame_to_load]
+                    )
 
                     # Only emit if still running
                     if self.running:
@@ -443,17 +460,9 @@ class StackVisualizer(CelldetectiveWidget):
 
             self.ax_profile.set_visible(True)
             self.ax_profile.set_label("profile_axes")
-            self.ax_profile.set_facecolor("none")
+            style_profile_axes(self.ax_profile)
             self.ax_profile.tick_params(axis="y", which="major", labelsize=8)
-            self.ax_profile.set_xticks([])
             self.ax_profile.set_xlabel("")
-            self.ax_profile.set_ylabel("Intensity", fontsize=8)
-
-            # Hide spines initially
-            self.ax_profile.spines["top"].set_visible(False)
-            self.ax_profile.spines["right"].set_visible(False)
-            self.ax_profile.spines["bottom"].set_color("black")
-            self.ax_profile.spines["left"].set_color("black")
 
             # Update Toolbar Home State to match new layout BUT with full field of view
             # 1. Save current zoom
@@ -489,11 +498,7 @@ class StackVisualizer(CelldetectiveWidget):
             if hasattr(self.canvas, "manual_layout"):
                 self.canvas.manual_layout = False
 
-            # Disconnect events
-            if hasattr(self, "cid_press"):
-                self.fig.canvas.mpl_disconnect(self.cid_press)
-                self.fig.canvas.mpl_disconnect(self.cid_move)
-                self.fig.canvas.mpl_disconnect(self.cid_release)
+            self.disconnect_line_events()
 
             # Remove line artist
             if self.line_artist:
@@ -527,6 +532,12 @@ class StackVisualizer(CelldetectiveWidget):
 
             self.canvas.draw()
             self.info_lbl.setText("")
+
+    def disconnect_line_events(self) -> None:
+        """Stop following the mouse for the line profile."""
+        if hasattr(self, "cid_press"):
+            for cid in (self.cid_press, self.cid_move, self.cid_release):
+                self.fig.canvas.mpl_disconnect(cid)
 
     def on_line_press(self, event: matplotlib.backend_bases.MouseEvent) -> None:
         """
@@ -589,74 +600,59 @@ class StackVisualizer(CelldetectiveWidget):
         self.ax.draw_artist(self.line_artist)
         self.canvas.canvas.blit(self.ax.bbox)
 
+    def profile_sources(self) -> List[Tuple[np.ndarray, str]]:
+        """The images whose intensity is profiled along the line, with their color."""
+
+        # init_frame rather than the displayed array, which may be filtered.
+        if getattr(self, "init_frame", None) is None:
+            return []
+        return [(self.init_frame, "black")]
+
     def update_profile(self):
         """Update the intensity profile plot."""
         if not self.line_mode or not hasattr(self, "line_x") or not self.line_x:
             return
 
-        # Calculate profile
         x0, y0 = self.line_x[0], self.line_y[0]
         x1, y1 = self.line_x[1], self.line_y[1]
         length_px = np.hypot(x1 - x0, y1 - y0)
         if length_px == 0:
             return
 
-        num_points = int(length_px)
-        if num_points < 2:
-            num_points = 2
-
-        x, y = np.linspace(x0, x1, num_points), np.linspace(y0, y1, num_points)
-
-        # Use self.init_frame as self.im.get_array() might be unreliable or cached
-        if hasattr(self, "init_frame") and self.init_frame is not None:
-            from scipy.ndimage import map_coordinates
-
-            profile = map_coordinates(
-                self.init_frame, np.vstack((y, x)), order=1, mode="nearest"
-            )
-        else:
+        sources = self.profile_sources()
+        if not sources:
             return
 
-        if np.all(np.isnan(profile)):
-            # If profile is all NaNs, we can't plot meaningful data, but we should maintain the axes
-            profile = np.zeros_like(profile)
-            profile[:] = np.nan
+        from scipy.ndimage import map_coordinates
 
-        # Distance in pixels
-        dist_axis = np.arange(num_points)
+        num_points = max(int(length_px), 2)
+        coords = np.vstack(
+            (np.linspace(y0, y1, num_points), np.linspace(x0, x1, num_points))
+        )
 
-        # Only show pixel length, rounded to integer
         title_str = f"{round(length_px,2)} [px]"
         if self.PxToUm is not None:
             title_str += f" | {round(length_px*self.PxToUm,3)} [µm]"
 
-        # Handle Y-Axis Locking
+        # Keep the y-axis if it is locked.
         current_ylim = None
         if self.lock_y_action.isChecked():
             current_ylim = self.ax_profile.get_ylim()
 
-        # Plot profile
         # ax_profile.clear() already removes every artist on the axes,
         # including any previous profile_line. Calling profile_line.remove()
         # afterwards raises NotImplementedError ("cannot remove artist") because
         # the artist is already detached, so we rely on clear() alone here.
         self.ax_profile.clear()
-        self.ax_profile.set_facecolor("none")
-
-        (self.profile_line,) = self.ax_profile.plot(
-            dist_axis, profile, color="black", linestyle="-"
-        )
-        self.ax_profile.set_xticks([])
-        self.ax_profile.set_ylabel("Intensity", fontsize=8)
+        dist_axis = np.arange(num_points)
+        for i, (image, color) in enumerate(sources):
+            profile = map_coordinates(image, coords, order=1, mode="nearest")
+            (self.profile_line,) = self.ax_profile.plot(
+                dist_axis, profile, color=color, linestyle="-", label=f"Ch{i}"
+            )
+        style_profile_axes(self.ax_profile)
         self.ax_profile.set_xlabel(title_str, fontsize=8)
         self.ax_profile.tick_params(axis="y", which="major", labelsize=6)
-        # self.ax_profile.grid(True)
-
-        # Hide spines
-        self.ax_profile.spines["top"].set_visible(False)
-        self.ax_profile.spines["right"].set_visible(False)
-        self.ax_profile.spines["bottom"].set_color("black")
-        self.ax_profile.spines["left"].set_color("black")
 
         self.fig.set_facecolor("none")
 
@@ -756,16 +752,63 @@ class StackVisualizer(CelldetectiveWidget):
         loader = self.loader_thread
         self.destroyed.connect(lambda _=None, t=loader: stop_thread(t, timeout=2000))
 
-        self.init_frame = load_frames(
-            self.img_num_per_channel[self.target_channel, self.current_time_index],
-            self.stack_path,
-            normalize_input=False,
-        )[:, :, 0]
-        self.last_frame = load_frames(
-            self.img_num_per_channel[self.target_channel, self.stack_length - 1],
-            self.stack_path,
-            normalize_input=False,
-        )[:, :, 0]
+        self.init_frame = self.read_frame(self.target_channel, self.current_time_index)
+        self.last_frame = self.read_frame(self.target_channel, self.stack_length - 1)
+
+    def read_frame(self, channel: int, frame: int) -> np.ndarray:
+        """A frame of a channel of the stack on disk."""
+        return read_frame(self.stack_path, self.img_num_per_channel[channel, frame])
+
+    def add_centered_button(self, button, layout=None, margins=None) -> None:
+        """Add a button to the bottom of the viewer (or to `layout`), centered."""
+
+        hbox = QHBoxLayout()
+        if margins is not None:
+            hbox.setContentsMargins(*margins)
+        hbox.addWidget(QLabel(""), 33)
+        hbox.addWidget(button, 33)
+        hbox.addWidget(QLabel(""), 33)
+        (self.canvas.layout if layout is None else layout).addLayout(hbox)
+
+    def labels_path_pattern(self, cell_type: str) -> str:
+        """Glob pattern of the label images of a population, next to the movie."""
+        from pathlib import Path
+
+        return os.sep.join([str(Path(self.stack_path).parent.parent), f"labels_{cell_type}", "*.tif"])
+
+    def find_label_paths(self, cell_type: str) -> List[str]:
+        """
+        The label images of a population for the stack on disk; an error box
+        closes the viewer when there are none.
+        """
+        from glob import glob
+        from natsort import natsorted
+
+        paths = natsorted(glob(self.labels_path_pattern(cell_type)))
+        if not paths:
+            generic_message(
+                "No labels were found for the selected cells. Abort.", msg_type="critical"
+            )
+            self.close()
+        return paths
+
+    def check_labels(self, labels) -> np.ndarray:
+        """Labels given as an array, checked against the stack (TYX, as many frames)."""
+
+        labels = np.asarray(labels)
+        if labels.ndim != 3:
+            raise ValueError("Wrong dimensions for the provided labels, expect TXY")
+        if len(labels) != self.stack_length:
+            raise ValueError("Labels length does not match stack length.")
+        return labels
+
+    def check_virtual_stack(self) -> None:
+        """Without labels given, they are found next to a .tif stack on disk."""
+
+        if not isinstance(self.stack_path, str):
+            raise TypeError("stack_path must be a string.")
+        if not self.stack_path.endswith(".tif"):
+            raise ValueError("stack_path must point to a .tif file.")
 
     def generate_figure_canvas(self):
         """Generate the figure canvas."""
@@ -986,6 +1029,10 @@ class StackVisualizer(CelldetectiveWidget):
             The channel index.
         """
         self.target_channel = value
+        self.show_direct_frame()
+
+    def show_direct_frame(self) -> None:
+        """Show the current frame of the target channel of a stack in memory."""
         self.init_frame = self.stack[self.current_time_index, :, :, self.target_channel]
         self.im.set_data(self.init_frame)
         self.canvas.draw()
@@ -1018,14 +1065,8 @@ class StackVisualizer(CelldetectiveWidget):
         self.channel_trigger = True
         if self.create_frame_slider:
             self.change_frame_from_channel_switch(self.frame_slider.value())
-        else:
-            if self.stack is not None and self.stack.ndim == 4:
-                self.init_frame = self.stack[
-                    self.current_time_index, :, :, self.target_channel
-                ]
-                self.im.set_data(self.init_frame)
-                self.canvas.draw()
-                self.update_profile()
+        elif self.stack is not None and self.stack.ndim == 4:
+            self.show_direct_frame()
 
     def change_frame_from_channel_switch(self, value: int) -> None:
         """
@@ -1084,23 +1125,13 @@ class StackVisualizer(CelldetectiveWidget):
             self.init_frame = self.stack[value, :, :, self.target_channel]
 
         elif self.mode == "virtual":
-            # Check cache first
             cache_key = (self.target_channel, value)
             if cache_key in self.frame_cache:
                 self.init_frame = self.frame_cache[cache_key]
                 self.frame_cache.move_to_end(cache_key)  # Mark as recently used
             else:
-                self.init_frame = load_frames(
-                    self.img_num_per_channel[self.target_channel, value],
-                    self.stack_path,
-                    normalize_input=False,
-                )[:, :, 0]
-
-                # Add to cache
-                self.frame_cache[cache_key] = self.init_frame
-                # Enforce size limit
-                if len(self.frame_cache) > self.max_cache_size:
-                    self.frame_cache.popitem(last=False)  # Remove oldest
+                self.init_frame = self.read_frame(self.target_channel, value)
+                self.cache_frame(cache_key, self.init_frame)
 
         if not hasattr(self, "im") or self.im is None:
             return
@@ -1128,6 +1159,12 @@ class StackVisualizer(CelldetectiveWidget):
         self.canvas.canvas.draw_idle()
         self.update_profile()
 
+    def cache_frame(self, key: Tuple[int, int], image: np.ndarray) -> None:
+        """Keep a frame in the cache, forgetting the least recently used beyond its size."""
+        self.frame_cache[key] = image
+        if len(self.frame_cache) > self.max_cache_size:
+            self.frame_cache.popitem(last=False)
+
     def on_frame_loaded(self, channel: int, frame: int, image: np.ndarray) -> None:
         """
         Callback from loader thread.
@@ -1141,13 +1178,9 @@ class StackVisualizer(CelldetectiveWidget):
         image : numpy.ndarray
             The loaded image.
         """
-        """Callback from loader thread"""
-        # Store in cache
         cache_key = (channel, frame)
         if cache_key not in self.frame_cache:
-            self.frame_cache[cache_key] = image
-            if len(self.frame_cache) > self.max_cache_size:
-                self.frame_cache.popitem(last=False)
+            self.cache_frame(cache_key, image)
 
         # If this is the current frame (user might have scrolled while loading), update display?
         # Usually change_frame handles display. If we are waiting for this frame, we might want to refresh.
@@ -1168,13 +1201,10 @@ class StackVisualizer(CelldetectiveWidget):
 
         # Disconnect matplotlib event handlers if line mode is still active.
         if getattr(self, "line_mode", False):
-            if hasattr(self, "cid_press"):
-                try:
-                    self.fig.canvas.mpl_disconnect(self.cid_press)
-                    self.fig.canvas.mpl_disconnect(self.cid_move)
-                    self.fig.canvas.mpl_disconnect(self.cid_release)
-                except Exception as e:
-                    logger.debug(f"Could not disconnect matplotlib events: {e}")
+            try:
+                self.disconnect_line_events()
+            except Exception as e:
+                logger.debug(f"Could not disconnect matplotlib events: {e}")
 
         if self.loader_thread:
             # Disconnect first so an in-flight queued emission cannot be

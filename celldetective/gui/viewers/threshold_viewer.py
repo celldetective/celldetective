@@ -1,7 +1,7 @@
 from collections import OrderedDict
 
 import numpy as np
-from PyQt5.QtWidgets import QLineEdit, QHBoxLayout, QPushButton, QLabel
+from PyQt5.QtWidgets import QLineEdit, QPushButton
 from PyQt5.QtCore import QEvent, pyqtSignal
 from typing import Optional, Union, List, Any
 from celldetective.gui.base.sliders import QLabeledDoubleSlider
@@ -125,14 +125,10 @@ class ThresholdedStackVisualizer(StackVisualizer):
     def generate_apply_btn(self):
         """Generate the apply button to set the threshold in the parent QLineEdit."""
         # Generate the apply button to set the threshold in the parent QLineEdit
-        apply_hbox = QHBoxLayout()
         self.apply_threshold_btn = QPushButton("Apply")
         self.apply_threshold_btn.clicked.connect(self.set_threshold_in_parent_le)
         self.apply_threshold_btn.setStyleSheet(self.button_style_sheet)
-        apply_hbox.addWidget(QLabel(""), 33)
-        apply_hbox.addWidget(self.apply_threshold_btn, 33)
-        apply_hbox.addWidget(QLabel(""), 33)
-        self.canvas.layout.addLayout(apply_hbox)
+        self.add_centered_button(self.apply_threshold_btn)
 
     def closeEvent(self, event: QEvent) -> None:
         """
@@ -315,23 +311,17 @@ class ThresholdedStackVisualizer(StackVisualizer):
         edge = estimate_unreliable_edge(self.preprocessing or [])
 
         if isinstance(threshold_value, (list, np.ndarray, tuple)):
-            self.mask = threshold_image(
-                self.processed_image,
-                threshold_value[0],
-                threshold_value[1],
-                foreground_value=1,
-                fill_holes=self.fill_holes,
-                edge_exclusion=edge,
-            ).astype(int)
+            low, high = threshold_value[0], threshold_value[1]
         else:
-            self.mask = threshold_image(
-                self.processed_image,
-                threshold_value,
-                np.inf,
-                foreground_value=1,
-                fill_holes=self.fill_holes,
-                edge_exclusion=edge,
-            ).astype(int)
+            low, high = threshold_value, np.inf
+        self.mask = threshold_image(
+            self.processed_image,
+            low,
+            high,
+            foreground_value=1,
+            fill_holes=self.fill_holes,
+            edge_exclusion=edge,
+        ).astype(int)
 
     def image_key(self) -> tuple:
         """The channel, frame and filters of the processed image, its cache key."""

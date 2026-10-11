@@ -3,7 +3,7 @@ from typing import Any, Optional, Tuple
 import matplotlib.axes
 import numpy as np
 from PyQt5.QtCore import QSize
-from PyQt5.QtWidgets import QLineEdit, QListWidget, QHBoxLayout, QPushButton, QLabel
+from PyQt5.QtWidgets import QLineEdit, QListWidget, QPushButton
 from fonticon_mdi6 import MDI6
 from celldetective.gui.base.sliders import QLabeledDoubleSlider
 from superqt.fonticon import icon
@@ -125,16 +125,12 @@ class CellSizeViewer(StackVisualizer):
         """Generate the add to list button."""
         # Generate the add to list button
 
-        add_hbox = QHBoxLayout()
         self.add_measurement_btn = QPushButton("Add measurement")
         self.add_measurement_btn.clicked.connect(self.set_measurement_in_parent_list)
         self.add_measurement_btn.setIcon(icon(MDI6.plus, color="white"))
         self.add_measurement_btn.setIconSize(QSize(20, 20))
         self.add_measurement_btn.setStyleSheet(self.button_style_sheet)
-        add_hbox.addWidget(QLabel(""), 33)
-        add_hbox.addWidget(self.add_measurement_btn, 33)
-        add_hbox.addWidget(QLabel(""), 33)
-        self.canvas.layout.addLayout(add_hbox)
+        self.add_centered_button(self.add_measurement_btn)
 
     def set_measurement_in_parent_list(self):
         """Add the diameter to the parent QListWidget."""
@@ -167,14 +163,10 @@ class CellSizeViewer(StackVisualizer):
         """Generate the set button for QLineEdit."""
         # Generate the set button for QLineEdit
 
-        apply_hbox = QHBoxLayout()
         self.apply_threshold_btn = QPushButton("Set")
         self.apply_threshold_btn.clicked.connect(self.set_threshold_in_parent_le)
         self.apply_threshold_btn.setStyleSheet(self.button_style_sheet)
-        apply_hbox.addWidget(QLabel(""), 33)
-        apply_hbox.addWidget(self.apply_threshold_btn, 33)
-        apply_hbox.addWidget(QLabel(""), 33)
-        self.canvas.layout.addLayout(apply_hbox)
+        self.add_centered_button(self.apply_threshold_btn)
 
     def set_threshold_in_parent_le(self):
         """Set the diameter in the parent QLineEdit."""

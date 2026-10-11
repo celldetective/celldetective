@@ -1,5 +1,3 @@
-import os
-from glob import glob
 from pathlib import Path
 from typing import Optional, Union, Tuple, Any
 
@@ -8,13 +6,11 @@ from PyQt5.QtCore import QSize, Qt, QEvent
 from PyQt5.QtWidgets import (
     QListWidget,
     QLineEdit,
-    QMessageBox,
     QHBoxLayout,
     QPushButton,
     QLabel,
 )
 from fonticon_mdi6 import MDI6
-from natsort import natsorted
 from celldetective.gui.base.sliders import QLabeledDoubleSlider, QLabeledRangeSlider
 from superqt.fonticon import icon
 from collections import OrderedDict
@@ -149,23 +145,12 @@ class CellEdgeVisualizer(StackVisualizer):
         # Load the cell labels
 
         if self.labels is not None:
-
-            if isinstance(self.labels, list):
-                self.labels = np.array(self.labels)
-
-            if self.labels.ndim != 3:
-                raise ValueError("Wrong dimensions for the provided labels, expect TXY")
-            if len(self.labels) != self.stack_length:
-                raise ValueError("Labels length does not match stack length.")
-
+            self.labels = self.check_labels(self.labels)
             self.label_mode = "direct"
             self.init_label = self.labels[self.mid_time, :, :]
         else:
             self.label_mode = "virtual"
-            if not isinstance(self.stack_path, str):
-                raise TypeError("stack_path must be a string.")
-            if not self.stack_path.endswith(".tif"):
-                raise ValueError("stack_path must point to a .tif file.")
+            self.check_virtual_stack()
             self.locate_labels_virtual()
 
         self.compute_edge_labels()
@@ -174,23 +159,7 @@ class CellEdgeVisualizer(StackVisualizer):
         """Locate virtual labels."""
         # Locate virtual labels
 
-        labels_path = (
-            str(Path(self.stack_path).parent.parent)
-            + os.sep
-            + f"labels_{self.cell_type}"
-            + os.sep
-        )
-        self.mask_paths = natsorted(glob(labels_path + "*.tif"))
-
-        if len(self.mask_paths) == 0:
-
-            msgBox = QMessageBox()
-            msgBox.setIcon(QMessageBox.Critical)
-            msgBox.setText("No labels were found for the selected cells. Abort.")
-            msgBox.setWindowTitle("Critical")
-            msgBox.setStandardButtons(QMessageBox.Ok)
-            returnValue = msgBox.exec()
-            self.close()
+        self.mask_paths = self.find_label_paths(self.cell_type)
 
         self.label_map = {}
         for path in self.mask_paths:
@@ -214,29 +183,21 @@ class CellEdgeVisualizer(StackVisualizer):
         """Generate the add to list button."""
         # Generate the add to list button
 
-        add_hbox = QHBoxLayout()
         self.add_measurement_btn = QPushButton("Add measurement")
         self.add_measurement_btn.clicked.connect(self.set_measurement_in_parent_list)
         self.add_measurement_btn.setIcon(icon(MDI6.plus, color="white"))
         self.add_measurement_btn.setIconSize(QSize(20, 20))
         self.add_measurement_btn.setStyleSheet(self.button_style_sheet)
-        add_hbox.addWidget(QLabel(""), 33)
-        add_hbox.addWidget(self.add_measurement_btn, 33)
-        add_hbox.addWidget(QLabel(""), 33)
-        self.canvas.layout.addLayout(add_hbox)
+        self.add_centered_button(self.add_measurement_btn)
 
     def generate_add_to_le_btn(self):
         """Generate the set measurement button for QLineEdit."""
         # Generate the set measurement button for QLineEdit
 
-        add_hbox = QHBoxLayout()
         self.set_measurement_btn = QPushButton("Set")
         self.set_measurement_btn.clicked.connect(self.set_measurement_in_parent_le)
         self.set_measurement_btn.setStyleSheet(self.button_style_sheet)
-        add_hbox.addWidget(QLabel(""), 33)
-        add_hbox.addWidget(self.set_measurement_btn, 33)
-        add_hbox.addWidget(QLabel(""), 33)
-        self.canvas.layout.addLayout(add_hbox)
+        self.add_centered_button(self.set_measurement_btn)
 
     def set_measurement_in_parent_le(self):
         """Set the edge size in the parent QLineEdit."""
@@ -462,26 +423,11 @@ class CellEdgeVisualizer(StackVisualizer):
         # Use unified utility
         from celldetective.utils.masks import contour_of_instance_segmentation
 
+        # [2, 5] is a stripe inside, [-5, -2] outside, [-2, 2] across the border;
+        # the Voronoi map carries the identity of the cells outside them.
         self.edge_labels = contour_of_instance_segmentation(
             self.init_label,
             distance=self.edge_size,
             sdf=sdf,
             voronoi_map=self.voronoi_map,
         )
-
-        # Handle scalar edge_size (fallback or initial init)
-        if isinstance(self.edge_size, (int, float)):
-            if self.edge_size >= 0:
-                r_min, r_max = 0, self.edge_size
-            else:
-                r_min, r_max = self.edge_size, 0
-        else:
-            r_min, r_max = self.edge_size
-
-        # Create Mask [r_min, r_max]
-        # Example: [2, 5] -> Stripe inside. [-5, -2] -> Stripe outside. [-2, 2] -> Border crossing.
-        mask = (sdf >= r_min) & (sdf <= r_max)
-
-        # Apply Instance Identities using Voronoi Map
-        # Note: Voronoi map covers entire space.
-        self.edge_labels = self.voronoi_map * mask
