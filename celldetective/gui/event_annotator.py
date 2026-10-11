@@ -29,6 +29,7 @@ from celldetective.gui.gui_utils import (
     color_from_class,
 )
 from celldetective.gui.base.figure_canvas import FigureCanvas
+from celldetective.utils.contrast import contrast_limits
 import numpy as np
 from superqt.fonticon import icon
 from fonticon_mdi6 import MDI6
@@ -396,13 +397,9 @@ class EventAnnotator(BaseAnnotator):
             self.contrast_slider.setSingleStep(0.001)
             self.contrast_slider.setTickInterval(0.001)
             self.contrast_slider.setOrientation(Qt.Horizontal)
-            # Cache percentile values to avoid recomputing on the full stack
-            self._stack_p_low = np.nanpercentile(self.stack, 0.001)
-            self._stack_p_high = np.nanpercentile(self.stack, 99.999)
-            self._stack_p1 = np.nanpercentile(self.stack, 1)
-            self._stack_p99 = np.nanpercentile(self.stack, 99.99)
-            self.contrast_slider.setRange(self._stack_p_low, self._stack_p_high)
-            self.contrast_slider.setValue([self._stack_p1, self._stack_p99])
+            value_range, limits = contrast_limits(self.stack)
+            self.contrast_slider.setRange(*value_range)
+            self.contrast_slider.setValue(limits)
             self.contrast_slider.valueChanged.connect(self.contrast_slider_action)
             contrast_hbox.addWidget(QLabel("contrast: "))
             contrast_hbox.addWidget(self.contrast_slider, 90)

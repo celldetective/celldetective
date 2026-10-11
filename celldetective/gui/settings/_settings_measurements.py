@@ -1,7 +1,7 @@
 import subprocess
 from subprocess import Popen
 
-from typing import Optional, List
+from typing import Optional
 from PyQt5.QtWidgets import (
     QMessageBox,
     QComboBox,
@@ -1007,59 +1007,6 @@ class SettingsMeasurements(CelldetectiveSettingsPanel):
             from tifffile import imread
 
             self.test_mask = imread(masks[self.mid_time])
-
-    def switch_channel_contour(self, value: int) -> None:
-        """
-        Adjust intensity values when changing channels in the contour visualizer.
-
-        Parameters
-        ----------
-        value : int
-            The index of the selected channel.
-        """
-
-        self.im_contour.set_array(self.test_frame[:, :, value])
-        self.im_contour.set_clim(
-            vmin=np.percentile(self.test_frame[:, :, value].flatten(), 1),
-            vmax=np.percentile(self.test_frame[:, :, value].flatten(), 99.99),
-        )
-        self.contrast_slider_contour.setRange(
-            np.amin(self.test_frame[:, :, value]), np.amax(self.test_frame[:, :, value])
-        )
-        self.contrast_slider_contour.setValue(
-            [
-                np.percentile(self.test_frame[:, :, value].flatten(), 1),
-                np.percentile(self.test_frame[:, :, value].flatten(), 99.99),
-            ]
-        )
-        self.fig_contour.canvas.draw_idle()
-
-    def contrast_im_contour(self, value: List[float]) -> None:
-        """
-        Contrast the image for contour visualization.
-
-        Parameters
-        ----------
-        value : list
-            A list containing [vmin, vmax].
-        """
-        vmin = value[0]
-        vmax = value[1]
-        self.im_contour.set_clim(vmin=vmin, vmax=vmax)
-        self.fig_contour.canvas.draw_idle()
-
-    def make_contour_transparent(self, value: float) -> None:
-        """
-        Make the contour transparent.
-
-        Parameters
-        ----------
-        value : float
-            Transparency value (alpha).
-        """
-
-        self.im_mask.set_alpha(value)
-        self.fig_contour.canvas.draw_idle()
 
     def remove_item_from_list(self):
         """Remove the selected item from the list."""

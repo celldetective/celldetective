@@ -23,12 +23,18 @@ from celldetective.utils.image_loaders import (
     _get_img_num_per_channel,
     load_frames,
 )
+from celldetective.utils.contrast import contrast_limits, interior_slices, value_range
 from celldetective import get_logger
 
 logger = get_logger(__name__)
 
 # Clicks of the auto contrast button before it restores the full range.
 AUTO_CONTRAST_STEPS = 3
+
+
+def _intersect(a: slice, b: slice) -> slice:
+    """Intersection of two slices with a start, a stop and no step."""
+    return slice(max(a.start, b.start), min(a.stop, b.stop))
 
 
 class StackLoader(QThread):
@@ -296,8 +302,9 @@ class StackVisualizer(CelldetectiveWidget):
         self.line_mode = False
         self.line_artist = None
         self.ax_profile = None
-        self._min = 0
-        self._max = 0
+        # Range of the contrast slider, widened as frames are browsed.
+        self._min = np.inf
+        self._max = -np.inf
 
         self.loader_thread = None
         self.load_stack()
@@ -763,16 +770,9 @@ class StackVisualizer(CelldetectiveWidget):
     def generate_figure_canvas(self):
         """Generate the figure canvas."""
 
-        if np.all(np.isnan(self.init_frame)):
-            p01, p99 = 0, 1
-        else:
-            p01 = np.nanpercentile(self.init_frame, 0.1)
-            p99 = np.nanpercentile(self.init_frame, 99.9)
-
-        if np.isnan(p01):
-            p01 = 0
-        if np.isnan(p99):
-            p99 = 1
+        # Kept for the contrast slider.
+        self._initial_contrast = contrast_limits(self.init_frame)
+        _, (p01, p99) = self._initial_contrast
 
         from matplotlib.figure import Figure
         from celldetective.gui.base.figure_canvas import FigureCanvas
@@ -852,30 +852,9 @@ class StackVisualizer(CelldetectiveWidget):
         layout = QHBoxLayout()
         self.set_contrast_decimals()
         self.contrast_slider = QLabeledDoubleRangeSlider(Qt.Horizontal)
-        if np.all(np.isnan(self.init_frame)):
-            min_val, max_val = 0, 1
-        else:
-            min_val = np.nanmin(self.init_frame)
-            max_val = np.nanmax(self.init_frame)
-
-        self.contrast_slider.setRange(min_val, max_val)
-
-        # Set initial value to percentiles to avoid outliers
-        if np.all(np.isnan(self.init_frame)):
-            p01, p99 = 0, 1
-        else:
-            p01 = np.nanpercentile(self.init_frame, 0.1)
-            p99 = np.nanpercentile(self.init_frame, 99.9)
-
-        if np.isnan(p01):
-            p01 = min_val
-        if np.isnan(p99):
-            p99 = max_val
-
-        if p99 > p01:
-            self.contrast_slider.setValue((p01, p99))
-        else:
-            self.contrast_slider.setValue((min_val, max_val))
+        (self._min, self._max), limits = self._initial_contrast
+        self.contrast_slider.setRange(self._min, self._max)
+        self.contrast_slider.setValue(limits)
 
         self.contrast_slider.setEdgeLabelMode(
             QLabeledDoubleRangeSlider.EdgeLabelMode.NoLabel
@@ -903,15 +882,24 @@ class StackVisualizer(CelldetectiveWidget):
 
         Each click sets the limits to the 1st and 99th percentiles of the finite pixels in view
         (the zoomed region, or the whole frame) that lie within the current limits, so outliers
-        (e.g. diverging values of a background division) are peeled off step by step. After
-        ``AUTO_CONTRAST_STEPS`` clicks, the next one restores the full range of the frame.
+        (e.g. diverging values of a background division) are peeled off step by step. The frame
+        border is left out, as for the initial contrast. After ``AUTO_CONTRAST_STEPS`` clicks,
+        the next one restores the full range of the frame, border included.
         """
 
         # The image displayed, which subclasses may filter (threshold and spot detection
         # previews): the contrast slider is in its intensities, not those of init_frame.
         frame = np.asarray(self.im.get_array(), dtype=float)
         restore = self.auto_contrast_step >= AUTO_CONTRAST_STEPS
-        values = frame if restore else self.pixels_in_view(frame)
+        if restore:
+            values = frame
+        else:
+            # The pixels in view, without the frame border unless the view lies within it.
+            rows, cols = self.view_slices(frame)
+            inner_rows, inner_cols = interior_slices(frame.shape)
+            values = frame[_intersect(rows, inner_rows), _intersect(cols, inner_cols)]
+            if not values.size:
+                values = self.pixels_in_view(frame)
         values = values[np.isfinite(values)]
         if values.size == 0:
             return
@@ -931,10 +919,32 @@ class StackVisualizer(CelldetectiveWidget):
         self.auto_contrast_step = 0 if restore else self.auto_contrast_step + 1
         range_min, range_max = self.contrast_slider.minimum(), self.contrast_slider.maximum()
         if limits[0] < range_min or limits[1] > range_max:
-            self.contrast_slider.setRange(
-                min(range_min, limits[0]), max(range_max, limits[1])
-            )
+            # Kept as the range that browsing frames widens, or the next frame cuts it back.
+            self._min, self._max = min(range_min, limits[0]), max(range_max, limits[1])
+            self.contrast_slider.setRange(self._min, self._max)
         self.contrast_slider.setValue(limits)
+
+    def view_slices(self, frame: np.ndarray) -> Tuple[slice, slice]:
+        """
+        Rows and columns of the frame shown by the axes, i.e. the zoomed region.
+
+        Parameters
+        ----------
+        frame : numpy.ndarray
+            2D image displayed in the axes.
+
+        Returns
+        -------
+        tuple of slice
+            The rows and columns in view, clipped to the frame (possibly empty).
+        """
+        ny, nx = frame.shape[:2]
+        # Pixel i spans [i - 0.5, i + 0.5] in data coordinates.
+        x0, x1 = sorted(self.ax.get_xlim())
+        y0, y1 = sorted(self.ax.get_ylim())
+        cols = slice(max(int(np.floor(x0 + 0.5)), 0), min(int(np.ceil(x1 + 0.5)), nx))
+        rows = slice(max(int(np.floor(y0 + 0.5)), 0), min(int(np.ceil(y1 + 0.5)), ny))
+        return rows, cols
 
     def pixels_in_view(self, frame: np.ndarray) -> np.ndarray:
         """
@@ -950,13 +960,7 @@ class StackVisualizer(CelldetectiveWidget):
         numpy.ndarray
             The visible part of the frame, or the whole frame if none of it is in view.
         """
-        ny, nx = frame.shape[:2]
-        # Pixel i spans [i - 0.5, i + 0.5] in data coordinates.
-        x0, x1 = sorted(self.ax.get_xlim())
-        y0, y1 = sorted(self.ax.get_ylim())
-        cols = slice(max(int(np.floor(x0 + 0.5)), 0), min(int(np.ceil(x1 + 0.5)), nx))
-        rows = slice(max(int(np.floor(y0 + 0.5)), 0), min(int(np.ceil(y1 + 0.5)), ny))
-        view = frame[rows, cols]
+        view = frame[self.view_slices(frame)]
         return view if view.size else frame
 
     def generate_frame_slider(self):
@@ -1032,18 +1036,31 @@ class StackVisualizer(CelldetectiveWidget):
         value : int
             The frame index.
         """
-        self._min = 0
-        self._max = 0
+        # The new channel sets the range afresh.
+        self._min = np.inf
+        self._max = -np.inf
         self.change_frame(value)
         if self.channel_trigger:
-            p01 = np.nanpercentile(self.init_frame, 0.1)
-            p99 = np.nanpercentile(self.init_frame, 99.9)
-            self.im.set_clim(vmin=p01, vmax=p99)
-            if self.create_contrast_slider and hasattr(self, "contrast_slider"):
-                self.contrast_slider.setValue((p01, p99))
-                self.auto_contrast_step = 0
+            self.reset_contrast(self.init_frame)
             self.channel_trigger = False
             self.canvas.draw()
+
+    def reset_contrast(self, image: np.ndarray) -> None:
+        """
+        Set the contrast, and the range of the contrast slider, from an image.
+
+        Parameters
+        ----------
+        image : numpy.ndarray
+            The image displayed, whose border is left out (see ``contrast_limits``).
+        """
+        (vmin, vmax), limits = contrast_limits(image)
+        self.im.set_clim(*limits)
+        if self.create_contrast_slider and hasattr(self, "contrast_slider"):
+            self._min, self._max = vmin, vmax
+            self.contrast_slider.setRange(vmin, vmax)
+            self.contrast_slider.setValue(limits)
+            self.auto_contrast_step = 0
 
     def change_frame(self, value: int) -> None:
         """
@@ -1091,14 +1108,7 @@ class StackVisualizer(CelldetectiveWidget):
         self.im.set_data(self.init_frame)
         rescale_contrast = False
 
-        # Optimization: Check min/max on subsampled array for large images
-        if self.init_frame.size > 1000000:
-            view = self.init_frame[::30, ::30]
-        else:
-            view = self.init_frame
-
-        curr_min = np.nanmin(view)
-        curr_max = np.nanmax(view)
+        curr_min, curr_max = value_range(self.init_frame)
 
         if curr_min < self._min:
             self._min = curr_min
@@ -1109,6 +1119,8 @@ class StackVisualizer(CelldetectiveWidget):
 
         if (
             rescale_contrast
+            # A channel switch then resets the range itself.
+            and not self.channel_trigger
             and self.create_contrast_slider
             and hasattr(self, "contrast_slider")
         ):

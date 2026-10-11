@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- The initial contrast of the image viewers, the signal and pair annotators and
+  napari leaves out a border of 5% of the frame on each side, where
+  registration leaves zeros that dragged the lower bound (and the slider range)
+  down. All of them now open at the 0.1st-99.9th percentiles of the frame
+  interior, so the annotators look like the stack viewer: they used the
+  1st-99.99th percentiles of the whole movie, napari the 1st-99.9th. The slider
+  still reaches the brightest pixel of the frame, border included, and so does
+  the fourth click of the auto contrast button.
+
 ## [1.6.5] - 2026-10-05
 
 ### Added

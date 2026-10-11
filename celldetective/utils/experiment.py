@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Union, List, Tuple, Optional, Dict, Any
 import numpy as np
 from natsort import natsorted
 
+from celldetective.utils.contrast import contrast_limits
 from celldetective.utils.io import save_tiff_imagej_compatible
 from celldetective.utils.parsing import (
     _extract_channels_from_config,
@@ -1416,28 +1417,12 @@ def _get_contrast_limits(stack: np.ndarray) -> Optional[List[Tuple[float, float]
     Returns
     -------
     list
-        List of (min, max) contrast limits for each channel.
+        List of (low, high) contrast limits for each channel, the frame border left out.
     """
     try:
-        limits = []
-        n_channels = stack.shape[-1]
-        for c in range(n_channels):
-            channel_data = stack[..., c]
-            if channel_data.size > 1e6:
-                subset = channel_data.ravel()[:: int(max(1, channel_data.size / 1e5))]
-            else:
-                subset = channel_data
-
-            # Realise the subsample before taking percentiles. A lazily loaded
-            # stack is a dask array, which does not implement `nanpercentile`
-            # and falls back to NumPy with a FutureWarning -- and the fallback
-            # is on the *subsample*, so this reads the same few pixels either
-            # way, without the warning and without depending on a fallback dask
-            # says may go away.
-            subset = np.asarray(subset)
-            lo, hi = np.nanpercentile(subset, (1, 99.9))
-            limits.append((float(lo), float(hi)))
-        return limits
+        # A lazily loaded stack is a dask array: `contrast_limits` subsamples it before
+        # realising it, so it is neither loaded whole nor sent through NumPy's fallback.
+        return [contrast_limits(stack[..., c])[1] for c in range(stack.shape[-1])]
     except Exception as e:
         logger.warning(f"Could not compute contrast limits: {e}")
         return None

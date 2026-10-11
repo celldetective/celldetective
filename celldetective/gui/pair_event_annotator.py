@@ -54,6 +54,7 @@ from celldetective.gui.gui_utils import (
     color_from_class,
 )
 from celldetective.gui.base.figure_canvas import FigureCanvas
+from celldetective.utils.contrast import contrast_limits
 import json
 import numpy as np
 from superqt.fonticon import icon
@@ -604,14 +605,10 @@ class PairEventAnnotator(CelldetectiveMainWindow):
             # self.contrast_slider.setSingleStep(0.001)
             # self.contrast_slider.setTickInterval(0.001)
             self.contrast_slider.setOrientation(Qt.Horizontal)
-            logger.debug(f"Contrast range: {[np.nanpercentile(self.stack.flatten(), 0.001), np.nanpercentile(self.stack.flatten(), 99.999)]}")
-            self.contrast_slider.setRange(
-                np.nanpercentile(self.stack, 0.001),
-                np.nanpercentile(self.stack, 99.999),
-            )
-            self.contrast_slider.setValue(
-                [np.nanpercentile(self.stack, 1), np.nanpercentile(self.stack, 99.99)]
-            )
+            value_range, limits = self._contrast
+            logger.debug(f"Contrast range: {value_range}")
+            self.contrast_slider.setRange(*value_range)
+            self.contrast_slider.setValue(limits)
             self.contrast_slider.valueChanged.connect(self.contrast_slider_action)
             contrast_hbox.addWidget(QLabel("contrast: "))
             contrast_hbox.addWidget(self.contrast_slider, 90)
@@ -2285,12 +2282,14 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         if not hasattr(self, "lines"):
             self.lines_data = {}
 
-        self.im = self.ax.imshow(
-            self.stack[0],
-            cmap="gray",
-            vmin=np.nanpercentile(self.stack, 1),
-            vmax=np.nanpercentile(self.stack, 99.99),
-        )
+        if self.rgb_mode:
+            # Matplotlib ignores the limits of an RGB image.
+            self.im = self.ax.imshow(self.stack[0])
+        else:
+            # Kept for the contrast slider.
+            self._contrast = contrast_limits(self.stack)
+            _, (vmin, vmax) = self._contrast
+            self.im = self.ax.imshow(self.stack[0], cmap="gray", vmin=vmin, vmax=vmax)
 
         self.status_scatter = {}
         self.class_scatter = {}

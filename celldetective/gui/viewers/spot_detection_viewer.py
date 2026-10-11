@@ -481,22 +481,14 @@ class SpotDetectionVisualizer(StackVisualizer):
                 self.im.set_data(preprocessed_img)
 
                 # Update contrast to match new range
-                p01 = np.nanpercentile(preprocessed_img, 0.1)
-                p99 = np.nanpercentile(preprocessed_img, 99.9)
-                self.im.set_clim(vmin=p01, vmax=p99)
-                if hasattr(self, "contrast_slider"):
-                    self.contrast_slider.setValue((p01, p99))
+                self.reset_contrast(preprocessed_img)
                 self.canvas.draw()
             except Exception as e:
                 logger.error(f"Preprocessing preview failed: {e}")
         else:
             # Restore original
             self.im.set_data(self.target_img)
-            p01 = np.nanpercentile(self.target_img, 0.1)
-            p99 = np.nanpercentile(self.target_img, 99.9)
-            self.im.set_clim(vmin=p01, vmax=p99)
-            if hasattr(self, "contrast_slider"):
-                self.contrast_slider.setValue((p01, p99))
+            self.reset_contrast(self.target_img)
             self.canvas.draw()
 
     def control_valid_parameters(self):

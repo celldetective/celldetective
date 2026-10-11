@@ -8,6 +8,7 @@ from celldetective.gui.base.sliders import QLabeledDoubleSlider
 
 from celldetective.gui.gui_utils import QuickSliderLayout
 from celldetective.gui.viewers.base_viewer import StackVisualizer
+from celldetective.utils.contrast import value_range
 from celldetective import get_logger
 from celldetective.gui.base.utils import is_alive
 
@@ -366,14 +367,7 @@ class ThresholdedStackVisualizer(StackVisualizer):
                 self.init_frame.copy().astype(float), filters=self.preprocessing
             )
 
-            # Subsampled min/max for slider range
-            if self.processed_image.size > 1000000:
-                view = self.processed_image[::30, ::30]
-            else:
-                view = self.processed_image
-
-            min_ = np.nanmin(view)
-            max_ = np.nanmax(view)
+            min_, max_ = value_range(self.processed_image)
 
             if min_ < self.thresh_min:
                 self.thresh_min = min_
@@ -406,12 +400,6 @@ class ThresholdedStackVisualizer(StackVisualizer):
         self.preprocess_image()
 
         self.im.set_data(self.processed_image)
-        vmin = np.nanpercentile(self.processed_image, 1.0)
-        vmax = np.nanpercentile(self.processed_image, 99.99)
-        self.contrast_slider.setRange(
-            np.nanmin(self.processed_image), np.nanmax(self.processed_image)
-        )
-        self.contrast_slider.setValue((vmin, vmax))
-        self.im.set_clim(vmin, vmax)
+        self.reset_contrast(self.processed_image)
         self.canvas.canvas.draw()
         self.thresholded = True

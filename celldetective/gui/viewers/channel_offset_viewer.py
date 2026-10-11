@@ -20,6 +20,7 @@ from celldetective.gui.base.sliders import (
 from celldetective.gui.base.components import QHSeperationLine
 from celldetective.gui.gui_utils import QuickSliderLayout, ThresholdLineEdit
 from celldetective.gui.viewers.base_viewer import StackVisualizer
+from celldetective.utils.contrast import contrast_limits, value_range
 from celldetective.utils.image_loaders import (
     load_frames,
     auto_load_number_of_frames,
@@ -137,25 +138,17 @@ class ChannelOffsetViewer(StackVisualizer):
         # Generate the contrast slider if enabled
 
         self.overlay_contrast_slider = QLabeledDoubleRangeSlider()
+        overlay_range, (vmin, vmax) = contrast_limits(self.overlay_init_frame)
         contrast_layout = QuickSliderLayout(
             label="Overlay contrast: ",
             slider=self.overlay_contrast_slider,
-            slider_initial_value=[
-                np.nanpercentile(self.overlay_init_frame, 0.1),
-                np.nanpercentile(self.overlay_init_frame, 99.99),
-            ],
-            slider_range=(
-                np.nanmin(self.overlay_init_frame),
-                np.nanmax(self.overlay_init_frame),
-            ),
+            slider_initial_value=[vmin, vmax],
+            slider_range=overlay_range,
             decimal_option=True,
             precision=5,
         )
         contrast_layout.setContentsMargins(15, 0, 15, 0)
-        self.im_overlay.set_clim(
-            vmin=np.nanpercentile(self.overlay_init_frame, 0.1),
-            vmax=np.nanpercentile(self.overlay_init_frame, 99.99),
-        )
+        self.im_overlay.set_clim(vmin=vmin, vmax=vmax)
         self.overlay_contrast_slider.valueChanged.connect(self.change_contrast_overlay)
         self.canvas.layout.addLayout(contrast_layout)
 
@@ -267,13 +260,12 @@ class ChannelOffsetViewer(StackVisualizer):
         self.im_overlay.set_data(self.overlay_init_frame)
 
         if self.overlay_init_contrast and self.create_contrast_slider:
-            self.im_overlay.autoscale()
-            I_min, I_max = self.im_overlay.get_clim()
+            (init_min, init_max), limits = contrast_limits(self.overlay_init_frame)
+            last_min, last_max = value_range(self.overlay_last_frame)
             self.overlay_contrast_slider.setRange(
-                np.nanmin([self.overlay_init_frame, self.overlay_last_frame]),
-                np.nanmax([self.overlay_init_frame, self.overlay_last_frame]),
+                min(init_min, last_min), max(init_max, last_max)
             )
-            self.overlay_contrast_slider.setValue((I_min, I_max))
+            self.overlay_contrast_slider.setValue(limits)
 
         if self.create_contrast_slider:
             self.change_contrast_overlay(self.overlay_contrast_slider.value())

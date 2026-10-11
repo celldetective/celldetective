@@ -18,6 +18,7 @@ from PyQt5.QtCore import Qt
 from unittest.mock import MagicMock, patch
 
 from celldetective.gui.viewers.base_viewer import StackVisualizer, StackLoader
+from celldetective.utils.contrast import image_interior
 
 
 @pytest.fixture
@@ -371,11 +372,11 @@ class TestContrastControl:
         viewer.show()
         qtbot.waitForWindowShown(viewer)
 
-        # Slider range should cover the data range of the initial frame
+        # Slider range covers the initial frame: its border left out of the minimum only
         slider_min = viewer.contrast_slider.minimum()
         slider_max = viewer.contrast_slider.maximum()
 
-        data_min = np.nanmin(viewer.init_frame)
+        data_min = np.nanmin(image_interior(viewer.init_frame))
         data_max = np.nanmax(viewer.init_frame)
 
         assert slider_min == data_min
@@ -698,8 +699,27 @@ def test_auto_contrast_peels_outliers_then_restores_full_range(qtbot, safe_close
     # The cycle starts again from the full range.
     viewer.auto_contrast_btn.click()
     assert viewer.contrast_slider.value() == pytest.approx(
-        tuple(np.nanpercentile(frame, [1, 99])), abs=0.01
+        tuple(np.nanpercentile(image_interior(frame), [1, 99])), abs=0.01
     )
+    safe_close(viewer)
+
+
+def test_contrast_ignores_the_zero_border_left_by_registration(qtbot, safe_close):
+    rng = np.random.default_rng(0)
+    frame = rng.normal(100.0, 5.0, (100, 100)).astype(np.float32)
+    # Registration shifts leave a border of exact zeros, wider than 0.1% of the frame.
+    frame[:4, :] = 0
+    frame[:, -3:] = 0
+    viewer = StackVisualizer(
+        stack=frame[np.newaxis], frame_slider=False, contrast_slider=True, n_channels=1
+    )
+    qtbot.addWidget(viewer)
+
+    low, high = viewer.contrast_slider.value()
+    assert viewer.contrast_slider.minimum() > 50
+    assert low > 50 and viewer.im.get_clim() == pytest.approx((low, high))
+    viewer.auto_contrast_btn.click()
+    assert viewer.contrast_slider.value()[0] > 50
     safe_close(viewer)
 
 
