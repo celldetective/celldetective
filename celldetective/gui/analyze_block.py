@@ -77,6 +77,24 @@ class AnalysisPanel(QFrame, Styles):
         self.survival_btn.clicked.connect(self.configure_survival)
         self.grid.addWidget(self.survival_btn)
 
+        self.hazard_btn = QPushButton("hazard model")
+        self.hazard_btn.setIcon(
+            QIcon(
+                os.sep.join(
+                    [self.soft_path, "celldetective", "icons", "hazard.png"]
+                )
+            )
+        )
+        self.hazard_btn.setToolTip(
+            "Relate the hazard of an event of the cells, such as their death, to what\n"
+            "may affect it frame by frame: their contacts, their measurements and the\n"
+            "conditions of their wells, with a Cox model with time-varying covariates."
+        )
+        self.hazard_btn.setStyleSheet(self.button_style_sheet_2)
+        self.hazard_btn.setIconSize(QSize(35, 35))
+        self.hazard_btn.clicked.connect(self.configure_hazard)
+        self.grid.addWidget(self.hazard_btn)
+
         signal_lbl = QLabel("Single-cell signals")
         signal_lbl.setStyleSheet(
             """
@@ -151,3 +169,18 @@ class AnalysisPanel(QFrame, Styles):
         else:
             generic_message("No population table could be found... Abort...")
             return None
+
+    def configure_hazard(self):
+        """
+        Open the hazard model configuration window.
+        """
+        from celldetective.gui.hazard_ui import ConfigHazard
+
+        self.config_hazard = ConfigHazard(self)
+        if not self.config_hazard.cols_per_pop:
+            generic_message(
+                "No population has an event time (t_* column): detect an event first."
+            )
+            return None
+        self.config_hazard.show()
+        center_window(self.config_hazard)

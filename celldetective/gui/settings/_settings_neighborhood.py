@@ -25,7 +25,7 @@ from glob import glob
 from pathlib import Path
 from natsort import natsorted
 import pandas as pd
-from celldetective.gui.viewers.contour_viewer import CellEdgeVisualizer
+from celldetective.gui.viewers.contour_viewer import ContactEdgeVisualizer
 from celldetective.gui.viewers.size_viewer import CellSizeViewer
 
 from celldetective.gui.base.components import CelldetectiveWidget
@@ -249,13 +249,16 @@ class SettingsNeighborhood(CelldetectiveWidget):
         self.attr_parent.locate_image()
         if self.attr_parent.current_stack is not None:
             population = self.reference_population_cb.currentText()
+            neighbor_population = self.neighbor_population_cb.currentText()
             if not self.check_mask_existence(population):
                 return
+            if not self.check_mask_existence(neighbor_population):
+                return
 
-            self.viewer = CellEdgeVisualizer(
+            self.viewer = ContactEdgeVisualizer(
                 cell_type=population,
-                edge_range=(1, 30),
-                invert=True,
+                neighbor_cell_type=neighbor_population,
+                edge_range=(0, 30),
                 initial_edge=3,
                 parent_list_widget=self.measurements_list.list_widget,
                 stack_path=self.attr_parent.current_stack,
@@ -266,7 +269,6 @@ class SettingsNeighborhood(CelldetectiveWidget):
                 channel_names=self.attr_parent.exp_channels,
                 n_channels=self.attr_parent.nbr_channels,
                 PxToUm=1,
-                single_value_mode=True,
             )
             self.viewer.show()
 

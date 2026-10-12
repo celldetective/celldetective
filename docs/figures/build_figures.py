@@ -544,6 +544,84 @@ def stack_viewer():
     return f.render()
 
 
+def contact_viewer():
+    f = Figure("contact-viewer", 620, 830)
+    vx, vy = 40, 20
+    f.shot("contact_viewer.png", vx, vy)
+    v = marks("contact_viewer", vx, vy)
+
+    # Slider with its label and value.
+    f.callout(1, *grow(v["edge"], left=86, right=32))
+    # Target 7 of frame 26, with three effectors docked.
+    f.callout(2, vx + 418, vy + 222, 82, 96, side="right")
+    return f.render()
+
+
+def contact_hazard():
+    f = Figure("contact-hazard", 1780, 720)
+    ax, ay = 20, 20
+    f.shot("analyze_tab_contacts.png", ax, ay)
+    a = marks("analyze_tab_contacts", ax, ay)
+    ox, oy = 540, 40
+    f.shot("contact_hazard_options.png", ox, oy)
+    o = marks("contact_hazard_options", ox, oy)
+    px, py = 1040, 60
+    f.shot("contact_hazard_forest.png", px, py)
+
+    f.callout(1, *a["hazard"], frame=False)
+    hb = a["hazard"]
+    f.arrow(hb[0] + hb[2] - 40, hb[1] - 6, ox - 4, oy + 120, bend=-0.3)
+    f.callout(2, *o["population"], side="right")
+    f.callout(3, *o["neighborhoods"], side="right")
+    f.callout(4, *union(o["event"], o["origin"]), side="right")
+    f.callout(5, *o["covariates"], side="right")
+    f.callout(6, *o["lag"], side="right")
+    f.callout(7, *o["penalty"], side="right")
+    f.callout(8, *o["submit"], frame=False)
+    sb = o["submit"]
+    f.arrow(sb[0] + sb[2] + 8, sb[1] + sb[3] / 2, px + 90, py + 418, bend=0.35)
+    # The two panels of the plot.
+    f.callout(9, px + 12, py + 42, 698, 282, side="top")
+    return f.render()
+
+
+def contact_episodes():
+    f = Figure("contact-episodes", 1110, 520)
+    ox, oy = 20, 20
+    top = 430
+    f.shot("contact_hazard_options.png", ox, oy, crop=(0, top, 462, 659))
+    o = marks("contact_hazard_options", ox, oy - top)
+    px, py = 560, 20
+    f.shot("contact_episodes_plot.png", px, py)
+
+    f.callout(1, *o["episodes"], side="right")
+    f.callout(2, *o["window"], side="right")
+    f.callout(3, *o["align"], side="right")
+    f.callout(4, *union(o["gap"], o["bins"]), side="right")
+    sb = o["submit"]
+    f.arrow(sb[0] + sb[2] + 8, sb[1] + sb[3] / 2, px - 6, py + 230, bend=0.3)
+    f.callout(5, px + 12, py + 42, 498, 340, side="right")
+    return f.render()
+
+
+def pair_episodes():
+    f = Figure("pair-episodes", 1100, 790)
+    dx, dy = 20, 20
+    f.shot("pair_collapse_episodes.png", dx, dy)
+    d = marks("pair_collapse_episodes", dx, dy)
+    tx, ty = 20, 320
+    f.shot("contact_episodes_table.png", tx, ty)
+
+    f.callout(1, *union(d["reference"], d["neighborhood"]), side="right")
+    f.callout(2, *union(d["episode"], d["gap"], d["operation"]), side="right")
+    f.callout(3, *d["set"], frame=False)
+    sb = d["set"]
+    f.arrow(sb[0] + sb[2] + 10, sb[1] + sb[3] / 2, tx + 640, ty - 6, bend=-0.3)
+    # Columns episode to gap_before.
+    f.callout(4, tx + 500, ty + 100, 454, 310, side="bottom")
+    return f.render()
+
+
 FIGURES = [
     registration,
     config_editor,
@@ -570,6 +648,10 @@ FIGURES = [
     signals,
     movie_prefix,
     stack_viewer,
+    contact_viewer,
+    contact_hazard,
+    contact_episodes,
+    pair_episodes,
 ]
 
 if __name__ == "__main__":

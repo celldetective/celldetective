@@ -55,6 +55,16 @@ This module generates Kaplan-Meier survival curves between two events. A start e
     :ref:`Survival Analysis Settings <ref_survival_settings>` for parameter details.
 
 
+Hazard model
+------------
+
+This module relates the hazard of an event of the cells, typically their death, to what may affect it frame by frame. A Cox proportional-hazards model is fitted with time-varying covariates, as they were up to each frame (or a lag before): the contacts a cell receives from a neighbor population (whether it is in contact, with how many neighbors, for how long so far), its own measurements (area, intensities...) and the conditions of its well (a concentration...). A neighborhood is only needed for the contact covariates. The model can be fitted for each neighborhood checked or each condition, and a plot shows the :term:`hazard ratios <hazard ratio>` with their 95% intervals. The contact episodes measured in the pair table can also be related to the event that follows them.
+
+.. seealso::
+    :doc:`how-to-guides/advanced/relate-contacts-to-an-event` for a step-by-step guide. |
+    :ref:`Hazard Model Settings <ref_hazard_settings>` for parameter details.
+
+
 Data exploration
 ----------------
 

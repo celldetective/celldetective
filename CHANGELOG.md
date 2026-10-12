@@ -7,6 +7,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- A hazard model in the Analysis tab (`celldetective.hazard`) relates the contacts a
+  reference cell receives to the hazard of one of its events, such as its
+  death. It fits a Cox model with time-varying covariates: at each frame, being
+  in contact, the number of neighbors, the contact time so far, the length of
+  the ongoing contact and the contact-site intensities, as received up to that
+  frame or an optional lag before, along with any measurement of the cell
+  itself (area, intensities, ...), to tell whether the contacts matter beyond
+  the state of the cell. Measuring exposure only up to each moment avoids the
+  bias of comparing cells grouped by their total contact time, which a cell
+  dying early cannot build up. Hazard ratios are given per standard deviation
+  by default, so that covariates of different units compare. Checking several
+  neighborhoods fits the model for each; one plot shows every ratio per
+  covariate and neighborhood, coloured by whether its 95% interval lies above
+  1 (higher hazard), below 1 (lower hazard) or crosses it (no clear effect).
+  Wells or positions can get their own baseline hazard, and the long table
+  (one row per cell and frame interval) can be shown and exported. The
+  options that rarely need changing are folded under "Advanced parameters".
+  "Fit separately per" repeats the fit for each value of a condition of the
+  wells (a concentration, say), to compare the hazard ratio of a contact
+  between conditions. The conditions of the wells can also enter the model as
+  covariates: a numeric one (a concentration) as a continuous quantity, on its
+  scale or a log scale, and any one by level, each value compared with that
+  of the first well (e.g. 1 and 100 pM against 0 pM, or the antibody against
+  none), without assuming a shape of the dose-response. A neighborhood is only
+  needed for the contact covariates: a single population with an event can be
+  analyzed from its measurements and the conditions of its wells. The penalty is a fixed
+  weight on the partial likelihood, whatever the number of cells and frames.
+- `write_experiment` writes several wells of several positions each, with the
+  conditions of the wells (concentrations, antibodies or any other quantity)
+  in `config.ini`, so that a synthetic dose-response experiment can be
+  analyzed like a real one.
+- Pairs collapse into contact episodes in the table UI ("Collapse pairs in
+  neighborhood", "Group by contact episode"): one row per run of frames a pair
+  spends in the neighborhood, with its start, end, duration, the gap since the
+  previous episode, whether the movie cut it, and its measurements reduced over
+  it. Short interruptions can be bridged. The hazard model window plots the
+  fraction of episodes followed by the event per class of duration.
+- The synthetic effector-target movie can kill targets at random during their
+  contacts (`death_probability`) or independently of them
+  (`background_death`), to check an analysis on deaths caused, or not, by the
+  contacts.
+
 ### Changed
 - The initial contrast of the image viewers, the signal and pair annotators and
   napari leaves out a border of 5% of the frame on each side, where
@@ -16,6 +59,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   1st-99.99th percentiles of the whole movie, napari the 1st-99.9th. The slider
   still reaches the brightest pixel of the frame, border included, and so does
   the fourth click of the auto contrast button.
+- The viewer that sets the distance of a mask-contact neighborhood shows what
+  the computation uses: the masks of both the reference and the neighbor
+  populations, each grown outward by the distance, in two colors. Cells are in
+  contact where their grown masks touch or overlap. A single slider sets the
+  distance on the outer side, from -30 to 0 px; it used to be the two-sided
+  range of the contour measurements, which started inside the cells, and only
+  the reference population was drawn.
+
+### Fixed
+- Measuring pairs no longer fails with "The truth value of an array with more
+  than one element is ambiguous" when the neighbor lists of a table come back
+  as arrays, with or without tracks.
+- A position's movie loaded without a prefix is found by the movie prefix of
+  its experiment; it was looked for as `Aligned*`. Contact-site intensities,
+  measured with a neighborhood or with the pairs, were left out of every
+  experiment whose movies are named otherwise.- Computing a neighborhood twice with the same options gives the same result:
+  the status options were rewritten by the first run, so that a second one
+  with an inverted status inverted it again.
+- The neighborhood field of the pair collapse dialog was labelled "neighborhod".
+
+### Documentation
+- A new guide, *How to relate contacts and other quantities to an event with a
+  hazard model*, walks through the hazard model window, the long table and the
+  contact episodes, explains the immortal-time bias and reverse causation the
+  model guards against, what it cannot show, and how to check an analysis on a
+  synthetic experiment.
+- The Table Explorer page documents the collapse of pairs, by pair, by
+  reference or by contact episode, and the columns of the episode table.
+- The mask-contact neighborhood is described as it is computed: both
+  populations grown outward by the distance, in contact when the grown masks
+  touch or overlap. The guide to measure interactions shows the new viewer.
+- New figures: the mask contact viewer, the hazard model window with its
+  forest plot, the contact episodes, and the pair collapse. They are captured
+  on a synthetic experiment written by
+  `docs/figures/capture/make_contacts_experiment.py`.
 
 ## [1.6.5] - 2026-10-05
 

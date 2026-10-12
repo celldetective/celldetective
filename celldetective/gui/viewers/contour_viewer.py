@@ -147,6 +147,7 @@ class CellEdgeVisualizer(StackVisualizer):
         if self.labels is not None:
             self.labels = self.check_labels(self.labels)
             self.label_mode = "direct"
+            self.label_map = None
             self.init_label = self.labels[self.mid_time, :, :]
         else:
             self.label_mode = "virtual"
@@ -160,15 +161,7 @@ class CellEdgeVisualizer(StackVisualizer):
         # Locate virtual labels
 
         self.mask_paths = self.find_label_paths(self.cell_type)
-
-        self.label_map = {}
-        for path in self.mask_paths:
-            # Find the last number in the filename
-            match = re.findall(r"(\d+)", Path(path).stem)
-            if match:
-                # Assume the last number is the frame index (Use direct mapping: 0000 -> 0)
-                frame_num = int(match[-1])
-                self.label_map[frame_num] = path
+        self.label_map = self.map_label_paths(self.mask_paths)
 
         current_frame = self.frame_slider.value()
         if current_frame in self.label_map:
@@ -178,6 +171,31 @@ class CellEdgeVisualizer(StackVisualizer):
                 self.init_label = np.zeros_like(self.init_frame)
             else:
                 self.init_label = imread(self.mask_paths[0])
+
+    @staticmethod
+    def map_label_paths(paths) -> dict:
+        """Frame index -> label image path, from the last number of each file name (0000 -> 0)."""
+
+        label_map = {}
+        for path in paths:
+            match = re.findall(r"(\d+)", Path(path).stem)
+            if match:
+                label_map[int(match[-1])] = path
+        return label_map
+
+    def read_labels(self, frame: int, labels, label_map) -> np.ndarray:
+        """The label image of a population at a frame, from ``labels`` (TYX) or
+        a ``label_map`` of paths; empty when there is none."""
+
+        empty = np.zeros(self.init_frame.shape[:2], dtype=int)
+        if labels is not None:
+            return labels[frame] if frame < len(labels) else empty
+        if label_map and frame in label_map:
+            try:
+                return imread(label_map[frame])
+            except Exception as e:
+                logger.warning(f"Could not read {label_map[frame]}: {e}")
+        return empty
 
     def generate_add_to_list_btn(self):
         """Generate the add to list button."""
@@ -344,19 +362,7 @@ class CellEdgeVisualizer(StackVisualizer):
             self.sdf_cache.move_to_end(value)
         else:
             # Cache Miss: Load Label
-            if self.label_mode == "virtual":
-                if hasattr(self, "label_map") and value in self.label_map:
-                    try:
-                        self.init_label = imread(self.label_map[value])
-                    except Exception:
-                        self.init_label = np.zeros_like(self.init_frame)
-                else:
-                    self.init_label = np.zeros_like(self.init_frame)
-            elif self.label_mode == "direct":
-                if value < len(self.labels):
-                    self.init_label = self.labels[value, :, :]
-                else:
-                    self.init_label = np.zeros_like(self.init_frame)
+            self.init_label = self.read_labels(value, self.labels, self.label_map)
 
             # Compute SDFs
             self.update_sdf()
@@ -431,3 +437,176 @@ class CellEdgeVisualizer(StackVisualizer):
             sdf=sdf,
             voronoi_map=self.voronoi_map,
         )
+
+
+class ContactEdgeVisualizer(CellEdgeVisualizer):
+    """
+    Set the contact distance of a mask-contact neighborhood.
+
+    Both populations are grown outward by the distance, as the computation
+    does (:func:`celldetective.neighborhood.contact_neighborhood`): a reference
+    and a neighbor cell are in contact when their grown masks touch or overlap,
+    so a neighbor inside a reference mask is always in contact. Each population
+    is drawn in its own color, the mask in a dark shade and the grown edge in a
+    light one.
+
+    Parameters
+    ----------
+    neighbor_cell_type : str, optional
+        The neighbor population; ``None`` or the reference population for a
+        self neighborhood, then only one population is drawn.
+    neighbor_labels : numpy.ndarray, optional
+        Labels of the neighbor population (TYX), instead of the ones on disk.
+    *args, **kwargs
+        Passed to :class:`CellEdgeVisualizer`.
+    """
+
+    # (mask, edge) colors of the reference and neighbor populations.
+    reference_colors = ("#1f77b4", "#9ecae9")
+    neighbor_colors = ("#d95f02", "#fdbf6f")
+
+    def __init__(
+        self,
+        neighbor_cell_type: Optional[str] = None,
+        neighbor_labels: Optional[np.ndarray] = None,
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
+        # Read while the parent class builds the viewer.
+        self.neighbor_cell_type = neighbor_cell_type
+        self.neighbor_labels = neighbor_labels
+        super().__init__(*args, **kwargs)
+
+    @property
+    def two_populations(self) -> bool:
+        return (
+            self.neighbor_cell_type is not None
+            and self.neighbor_cell_type != self.cell_type
+        ) or self.neighbor_labels is not None
+
+    def load_labels(self):
+        """Load the labels of both populations at the first frame shown."""
+
+        self.label_map = self.neighbor_label_map = None
+        if self.labels is not None:
+            self.labels = self.check_labels(self.labels)
+            self.label_mode = "direct"
+        else:
+            self.label_mode = "virtual"
+            self.check_virtual_stack()
+            self.label_map = self.map_label_paths(self.find_label_paths(self.cell_type))
+
+        if self.two_populations:
+            if self.neighbor_labels is not None:
+                self.neighbor_labels = self.check_labels(self.neighbor_labels)
+            else:
+                self.check_virtual_stack()
+                self.neighbor_label_map = self.map_label_paths(
+                    self.find_label_paths(self.neighbor_cell_type)
+                )
+
+        self.edge_size = abs(int(self.edge_size))
+        self.load_frame_labels(self.frame_slider.value())
+
+    def load_frame_labels(self, frame: int) -> None:
+        """
+        Per population, the distance in pixels of each pixel to the masks at
+        a frame: 0 on a mask, capped at 255 (the slider stops well before).
+        """
+        from scipy.ndimage import distance_transform_edt
+
+        if frame in self.sdf_cache:
+            self.distances = self.sdf_cache[frame]
+            self.sdf_cache.move_to_end(frame)
+            return
+        sources = [(self.labels, self.label_map)]
+        if self.two_populations:
+            sources.append((self.neighbor_labels, self.neighbor_label_map))
+        self.distances = []
+        for labels, label_map in sources:
+            outside = self.read_labels(frame, labels, label_map) == 0
+            if outside.all():
+                distance = np.full(outside.shape, 255, dtype=np.uint8)
+            else:
+                distance = np.minimum(np.ceil(distance_transform_edt(outside)), 255).astype(np.uint8)
+            self.distances.append(distance)
+        self.sdf_cache[frame] = self.distances
+        if len(self.sdf_cache) > self.max_sdf_cache_size:
+            self.sdf_cache.popitem(last=False)
+
+    def edge_norm(self):
+        """0 (the mask) to the dark shade, up to the distance to the light one,
+        further out to the transparent "over" color."""
+        from matplotlib.colors import BoundaryNorm
+
+        return BoundaryNorm([-0.5, 0.5, max(self.edge_size, 0.25) + 0.5], ncolors=2)
+
+    def grown_masks(self):
+        """Per population: 2 on the mask, 1 on its edge grown by the distance, masked elsewhere."""
+
+        layers = []
+        for distance in self.distances:
+            layer = np.where(distance == 0, 2, np.where(distance <= self.edge_size, 1, 0))
+            layers.append(np.ma.masked_where(layer == 0, layer))
+        return layers
+
+    def generate_label_imshow(self):
+        """One layer per population, its colors set by :meth:`edge_norm`."""
+        from matplotlib.colors import ListedColormap
+
+        self.im_masks = []
+        for distance, (dark, light) in zip(self.distances, [self.reference_colors, self.neighbor_colors]):
+            cmap = ListedColormap([dark, light])
+            cmap.set_over((0, 0, 0, 0))
+            self.im_masks.append(
+                self.ax.imshow(distance, alpha=self.mask_alpha, interpolation="none",
+                               cmap=cmap, norm=self.edge_norm())
+            )
+        self.canvas.canvas.draw()
+
+    def generate_edge_slider(self):
+        """A single slider: how far outside the masks the edge reaches."""
+        from celldetective.gui.base.sliders import QLabeledSlider
+
+        # Negative like the outer contours of the measurements: outside the masks.
+        self.edge_slider = QLabeledSlider(Qt.Horizontal)
+        self.edge_slider.setRange(-(self.edge_range[1] if self.edge_range else 30), 0)
+        self.edge_slider.setValue(-self.edge_size)
+        self.edge_slider.setToolTip(
+            "Distance in pixels the masks of both populations are grown by, outward.\n"
+            "Cells are in contact when their grown masks touch or overlap."
+        )
+        self.edge_slider.valueChanged.connect(self.change_edge_size)
+
+        edge_layout = QHBoxLayout()
+        edge_layout.setContentsMargins(15, 0, 15, 0)
+        edge_layout.addWidget(QLabel("Outer edge: "), 15)
+        edge_layout.addWidget(self.edge_slider, 85)
+        self.canvas.layout.addLayout(edge_layout)
+
+    def change_mask_opacity(self, value: float) -> None:
+        self.mask_alpha = value
+        for im in self.im_masks:
+            im.set_alpha(value)
+        self.canvas.canvas.draw_idle()
+
+    def change_edge_size(self, value: int) -> None:
+        # The distance maps stay: only where the colors stop changes.
+        self.edge_size = abs(int(value))
+        for im in self.im_masks:
+            im.set_norm(self.edge_norm())
+        self.canvas.canvas.draw_idle()
+
+    def change_frame(self, value: int) -> None:
+        StackVisualizer.change_frame(self, value)
+        if not hasattr(self, "im_masks"):
+            return
+        self.load_frame_labels(value)
+        for im, distance in zip(self.im_masks, self.distances):
+            im.set_data(distance)
+        self.canvas.canvas.draw_idle()
+
+    def set_measurement_in_parent_le(self):
+        # The parent writes the larger end of a range; here the slider is negative.
+        self.parent_le.setText(str(self.edge_size))
+        self.close()

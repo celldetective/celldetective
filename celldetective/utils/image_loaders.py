@@ -11,7 +11,7 @@ from imageio import v2 as imageio
 from natsort import natsorted
 from tifffile import imread, memmap, TiffFile
 
-from celldetective.utils.experiment import movie_pattern
+from celldetective.utils.experiment import movie_pattern, position_movie_prefix
 from celldetective.utils.image_cleaning import interpolate_nan_multichannel
 from celldetective.utils.normalization import normalize_multichannel
 from celldetective import get_logger
@@ -41,7 +41,7 @@ logging.getLogger("tifffile").setLevel(logging.ERROR)
 warnings.filterwarnings("ignore", message=".*MMStack series is missing files.*")
 
 
-def locate_stack(position: str, prefix: str = "Aligned") -> np.ndarray:
+def locate_stack(position: str, prefix: Optional[str] = None) -> np.ndarray:
     """
 
     Locate and load a stack of images.
@@ -51,7 +51,8 @@ def locate_stack(position: str, prefix: str = "Aligned") -> np.ndarray:
     position : str
         The position folder within the well where the stack is located.
     prefix : str, optional
-        The prefix used to identify the stack. The default is 'Aligned'.
+        Prefix of the movie file. By default, the movie prefix of the
+        experiment of the position (``Aligned`` outside an experiment).
 
     Returns
     -------
@@ -81,6 +82,8 @@ def locate_stack(position: str, prefix: str = "Aligned") -> np.ndarray:
     if not position.endswith(os.sep):
         position += os.sep
 
+    if prefix is None:
+        prefix = position_movie_prefix(position)
     stack_path = glob(position + os.sep.join(["movie", movie_pattern(prefix)]))
     if not stack_path:
         raise FileNotFoundError(f"No movie with prefix {prefix} found...")
@@ -216,7 +219,7 @@ def _reshape_series_to_tyxc(stack: Any, axes: str) -> Any:
     return stack
 
 
-def locate_stack_lazy(position: str, prefix: str = "Aligned") -> Optional[Any]:
+def locate_stack_lazy(position: str, prefix: Optional[str] = None) -> Optional[Any]:
     """
     Lazily load the movie as a dask array shaped ``(T, Y, X, C)``.
 
@@ -235,7 +238,8 @@ def locate_stack_lazy(position: str, prefix: str = "Aligned") -> Optional[Any]:
     position : str
         The position folder containing the ``movie`` subdirectory.
     prefix : str, optional
-        The movie filename prefix. Default is ``'Aligned'``.
+        Prefix of the movie file. By default, the movie prefix of the
+        experiment of the position (``Aligned`` outside an experiment).
 
     Returns
     -------
@@ -247,6 +251,8 @@ def locate_stack_lazy(position: str, prefix: str = "Aligned") -> Optional[Any]:
     if not position.endswith(os.sep):
         position += os.sep
 
+    if prefix is None:
+        prefix = position_movie_prefix(position)
     stack_path = glob(position + os.sep.join(["movie", movie_pattern(prefix)]))
     if not stack_path:
         return None

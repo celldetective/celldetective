@@ -364,6 +364,49 @@ def get_image_shape(experiment: Union[str, Path]) -> Tuple[int, int]:
     return int(settings["shape_y"]), int(settings["shape_x"])
 
 
+def get_movie_prefix(experiment: Union[str, Path]) -> str:
+    """
+    The movie prefix of an experiment, ``movie_prefix`` in the ``MovieSettings``
+    section of its configuration file.
+
+    Parameters
+    ----------
+    experiment : str
+            The file system path to the experiment directory.
+
+    Returns
+    -------
+    str
+            The prefix that names the movie of each position.
+    """
+
+    return config_section_to_dict(get_config(experiment), "MovieSettings")["movie_prefix"]
+
+
+def position_movie_prefix(position: str) -> str:
+    """
+    The movie prefix of the experiment a position belongs to, ``Aligned`` when
+    its configuration cannot be read (e.g. a folder outside an experiment).
+
+    Parameters
+    ----------
+    position : str
+            The position folder.
+
+    Returns
+    -------
+    str
+            The prefix that names the movie of the position.
+    """
+
+    try:
+        # A position may end with several separators, "/" and os.sep mixed.
+        position = str(position).rstrip("/" + os.sep)
+        return get_movie_prefix(extract_experiment_from_position(position))
+    except Exception:
+        return "Aligned"
+
+
 def get_experiment_metadata(experiment: Union[str, Path]) -> Dict[str, Any]:
     """
     Get experiment metadata.
@@ -406,9 +449,17 @@ def get_experiment_labels(experiment: Union[str, Path]) -> Dict[str, Any]:
     for k in list(labels.keys()):
         values = labels[k].split(",")
         if nbr_of_wells != len(values):
-            values = [str(s) for s in np.linspace(0, nbr_of_wells - 1, nbr_of_wells)]
-        if np.all(np.array([s.isnumeric() for s in values])):
-            values = [float(s) for s in values]
+            # Placeholders, kept as text: the index of a well is no quantity.
+            labels.update({k: [str(s) for s in np.linspace(0, nbr_of_wells - 1, nbr_of_wells)]})
+            continue
+        # Numbers are read as such, decimals included (0.5 pM), so that a
+        # condition sorts and enters a model as a quantity, not as text.
+        try:
+            numbers = [float(s) for s in values]
+        except (TypeError, ValueError):
+            numbers = None
+        if numbers is not None and np.all(np.isfinite(numbers)):
+            values = numbers
         labels.update({k: values})
 
     return labels
@@ -1506,7 +1557,7 @@ def auto_load_number_of_frames(stack_path: str) -> Optional[int]:
 
 
 def locate_stack(
-    position: str, prefix: str = "Aligned", lazy: bool = False
+    position: str, prefix: Optional[str] = None, lazy: bool = False
 ) -> Union[np.ndarray, da.Array]:
     """
     Locate and load an image stack.
@@ -1516,7 +1567,8 @@ def locate_stack(
     position : str
         Position directory path.
     prefix : str, optional
-        Prefix of the stack file. Default is "Aligned".
+        Prefix of the stack file. By default, the movie prefix of the
+        experiment of the position (``Aligned`` outside an experiment).
     lazy : bool, optional
         If True, load lazily using dask. Default is False.
 
@@ -1531,6 +1583,8 @@ def locate_stack(
     if not position.endswith(os.sep):
         position += os.sep
 
+    if prefix is None:
+        prefix = position_movie_prefix(position)
     stack_path = glob(position + os.sep.join(["movie", movie_pattern(prefix)]))
     if not stack_path:
         raise FileNotFoundError(f"No movie with prefix {prefix} found...")

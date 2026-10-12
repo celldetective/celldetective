@@ -67,6 +67,17 @@ def _load_pair_tables(
     return df_reference, df_neighbor
 
 
+def _neighbors(cell) -> list:
+    """
+    The neighbors listed in a cell of a neighborhood column, as a list: none
+    when the cell is NaN (no neighborhood at that frame) or None. A list or an
+    array of neighbors cannot be compared to itself to find a NaN.
+    """
+    if cell is None or isinstance(cell, (float, np.floating)):
+        return []
+    return list(cell)
+
+
 def _build_neighbor_timeline(
     group: pd.DataFrame, neighborhood_description: str
 ) -> Tuple[list, list, pd.DataFrame, dict]:
@@ -83,19 +94,18 @@ def _build_neighbor_timeline(
         neighbors_at_t = neighbor_dicts[t]
         frame_t = int(frames[t])
         neighs_t: list = []
-        if not (isinstance(neighbors_at_t, float) or neighbors_at_t != neighbors_at_t):
-            for neigh in neighbors_at_t:
-                if neigh["id"] not in neighbor_ids:
-                    time_of_first_entrance[neigh["id"]] = frame_t
-                intersection_rows.append(
-                    {
-                        "frame": frame_t,
-                        "neigh_id": neigh["id"],
-                        "intersection": neigh.get("intersection", np.nan),
-                    }
-                )
-                neighbor_ids.append(neigh["id"])
-                neighs_t.append(neigh["id"])
+        for neigh in _neighbors(neighbors_at_t):
+            if neigh["id"] not in neighbor_ids:
+                time_of_first_entrance[neigh["id"]] = frame_t
+            intersection_rows.append(
+                {
+                    "frame": frame_t,
+                    "neigh_id": neigh["id"],
+                    "intersection": neigh.get("intersection", np.nan),
+                }
+            )
+            neighbor_ids.append(neigh["id"])
+            neighs_t.append(neigh["id"])
         neighbor_ids_per_t.append(neighs_t)
 
     return neighbor_ids, neighbor_ids_per_t, pd.DataFrame(intersection_rows), time_of_first_entrance
@@ -317,10 +327,9 @@ def measure_pairs(pos: str, neighborhood_protocol: dict) -> Optional[pd.DataFram
 
             neighbors = []
             neighbors_info = {}
-            if not (isinstance(neighborhood, float) or neighborhood != neighborhood):
-                for neigh in neighborhood:
-                    neighbors.append(neigh["id"])
-                    neighbors_info[neigh["id"]] = neigh.get("intersection", np.nan)
+            for neigh in _neighbors(neighborhood):
+                neighbors.append(neigh["id"])
+                neighbors_info[neigh["id"]] = neigh.get("intersection", np.nan)
 
             unique_neigh = list(np.unique(neighbors))
             logger.debug(f"unique_neigh={unique_neigh}")

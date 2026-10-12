@@ -620,7 +620,7 @@ class NeighborhoodProcess(Process):
                 if neighborhood_kwargs["mode"] == "two-pop":
                     neigh_col = f"neighborhood_2_circle_{d}_px"
                     new_neigh_col = neigh_col.replace(
-                        "_2_", f"_({population[0]}-{population[1]})_"
+                        "_2_", f"_({population[0]}-{population[1]})_", 1
                     )
                     df_A = df_A.rename(columns={neigh_col: new_neigh_col})
                 elif neighborhood_kwargs["mode"] == "self":
@@ -637,7 +637,7 @@ class NeighborhoodProcess(Process):
             or c.startswith("mean_count_")
         ]
         new_col_names = [
-            c.replace("_2_", f"_({population[0]}-{population[1]})_")
+            c.replace("_2_", f"_({population[0]}-{population[1]})_", 1)
             for c in cols_to_rename
         ]
         new_name_map = {}
@@ -857,7 +857,7 @@ class NeighborhoodProcess(Process):
                 if neighborhood_kwargs["mode"] == "two-pop":
                     neigh_col = f"neighborhood_2_contact_{d}_px"
                     new_neigh_col = neigh_col.replace(
-                        "_2_", f"_({population[0]}-{population[1]})_"
+                        "_2_", f"_({population[0]}-{population[1]})_", 1
                     )
                     df_A = df_A.rename(columns={neigh_col: new_neigh_col})
                 elif neighborhood_kwargs["mode"] == "self":
@@ -877,7 +877,7 @@ class NeighborhoodProcess(Process):
             or c.startswith("mean_count_")
         ]
         new_col_names = [
-            c.replace("_2_", f"_({population[0]}-{population[1]})_")
+            c.replace("_2_", f"_({population[0]}-{population[1]})_", 1)
             for c in cols_to_rename
         ]
         new_name_map = {}
@@ -951,14 +951,14 @@ class NeighborhoodProcess(Process):
                     neigh_type = "circle"
                     if mode == "two-pop":
                         neigh_col = f"neighborhood_2_circle_{d}_px"
-                        neigh_col = neigh_col.replace("_2_", f"_({self.protocol['population'][0]}-{self.protocol['population'][1]})_")
+                        neigh_col = neigh_col.replace("_2_", f"_({self.protocol['population'][0]}-{self.protocol['population'][1]})_", 1)
                     elif mode == "self":
                         neigh_col = f"neighborhood_self_circle_{d}_px"
                 elif self.protocol["neighborhood_type"] == "mask_contact":
                     neigh_type = "contact"
                     if mode == "two-pop":
                         neigh_col = f"neighborhood_2_contact_{d}_px"
-                        neigh_col = neigh_col.replace("_2_", f"_({self.protocol['population'][0]}-{self.protocol['population'][1]})_")
+                        neigh_col = neigh_col.replace("_2_", f"_({self.protocol['population'][0]}-{self.protocol['population'][1]})_", 1)
                     elif mode == "self":
                         neigh_col = f"neighborhood_self_contact_{d}_px"
 

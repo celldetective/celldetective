@@ -26,7 +26,16 @@ If the **MEASURE PAIRS** option is selected, all computed neighborhoods are dete
 
 If the center of mass displacements were computed for the neighbor population, an additional pair measurement computed automatically is the scalar product between the center of mass displacement vector on the neighbor cell and the cell-pair vector, as well as the cosine of the angle between the two vectors. 
 
-A unique pair is identified by four columns: ``REFERENCE_ID``, ``NEIGHBOR_ID``, ``reference_population``, and ``neighbor_population``. The pair measurements can be explored in the Table Explorer, as well as in a dedicated signal annotator viewer.
+A unique pair is identified by four columns: ``REFERENCE_ID``, ``NEIGHBOR_ID``, ``reference_population``, and ``neighbor_population``. The pair measurements can be explored in the Table Explorer, collapsed there into :ref:`contact episodes <pair_collapsing>`, and viewed in a dedicated signal annotator viewer.
+
+
+Contact hazard
+--------------
+
+Do the contacts a cell receives raise the hazard of its death? The **hazard model** of the **Analyze** tab fits a Cox model whose covariates can be the contacts each cell has received up to each frame, for one or several neighborhoods, and relates the contact episodes to the event that follows them.
+
+.. seealso::
+    :doc:`how-to-guides/advanced/relate-contacts-to-an-event` for the guide and the pitfalls of this question.
 
 
 Pair signal viewer

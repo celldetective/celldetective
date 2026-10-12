@@ -127,7 +127,7 @@ Accessible when selecting **Neighborhood** in Measurements.
 
 *   :term:`mask contact`: Detects neighbors whose boundaries are within a specific proximity.
 
-    *   **Distance [px]**: The maximum distance between cell boundaries to be considered "in contact" (often 0 for touching or small positive value for near-contact).
+    *   **Distance [px]**: How far the masks of both populations are grown outward before the contact is evaluated: two cells are in contact when their grown masks touch or overlap, so up to a gap of about twice the distance between the masks. ``0`` requires the masks to touch. The :icon:`image-check,black` viewer shows both populations grown by the distance set with its **Outer edge** slider.
 
 **General Options**
 
@@ -155,6 +155,42 @@ Accessible via **Analyze > Plot Survival**.
 
 *   **Time calibration**: Frames-to-minutes conversion.
 *   **Cmap**: Colormap for curves.
+
+.. _ref_hazard_settings:
+
+Hazard Model Settings
+---------------------
+
+Accessible via **Analyze > hazard model**, under **Survival**. See :doc:`/how-to-guides/advanced/relate-contacts-to-an-event`.
+
+**Model**
+
+*   **reference population**: Population whose event is studied; the populations with an event time (``t_*`` column) are listed.
+*   **neighborhoods**: Neighborhoods (``inclusive_count_`` columns) to fit the model for, one fit each. Default: the first one. Optional: without a neighborhood, the model only takes the measurements of the cells and the conditions of the wells, and no contact covariate.
+*   **event**: Event time column (``t_*``) of the reference population, with its ``class_*`` column. Default: ``t_death`` when present.
+*   **covariates**: ``in_contact``, ``n_neighbors``, ``weighted_neighbors`` (from the ``intermediate_count_`` column), ``cumulative_contact``, ``ongoing_contact``, the measured ``contact_<channel>_mean`` columns (0 out of contact) and the numeric measurements of the cell (area, intensities, ...; their last value on a frame where the cell is not detected). Default: ``in_contact`` and ``cumulative_contact``.
+    The conditions of the wells that differ between them (``[Labels]`` of ``config.ini``) are offered as ``<label> (each vs <value of the first well>)``: one indicator covariate per other value. A numeric condition is also offered as a continuous covariate, as ``<label>`` and ``log10(1 + <label>)``.
+*   **fit separately per**: ``none`` (default) or a condition of the wells: one fit per value, each a series of the plot.
+*   **select cells with query**: Pandas query on the reference table.
+
+**Advanced parameters** (folded by default)
+
+*   **follow from**: When each cell starts to be at risk: its **first frame** (default) or an event time column.
+*   **lag [frames]**: Frames between the exposure and the interval of time it explains. Default ``0``.
+*   **baseline per**: ``none`` (default), ``well`` or ``position``: strata of the Cox model, each with its own baseline hazard.
+*   **penalty**: L2 penalty on the coefficients. 0.5 times the sum of the squared coefficients, whatever the number of cells and frames. Default ``0.5``.
+*   **duration unit**: ``min`` (default), ``h`` or ``frame``, for ``start``, ``stop`` and the contact durations. Only used with the ratios per unit.
+*   **time calibration (frame to min)**: Duration of a frame. Default: the experiment's.
+*   **hazard ratio per standard deviation**: The ratio of each covariate that is not binary is per standard deviation, to compare covariates of different units. Default: checked.
+*   **show the long table**: Also open the table the model is fitted on, for the first neighborhood checked.
+
+**Contact episodes** (needs the pair measurements)
+
+*   **event after each contact episode**: Also relate the contact episodes of the first neighborhood to the event. The options below are shown once it is checked.
+*   **window [frames]**: The event counts when it happens within this many frames. Default ``10``.
+*   **after the**: ``end`` (default) or ``start`` of the episode.
+*   **max gap [frames]**: Contacts interrupted for up to this many frames make one episode. Default ``0``.
+*   **duration bins**: Edges of the classes of episode duration, in frames. Default ``1, 3, 6, 12, inf``.
 
 .. _ref_single_cell_measurements:
 

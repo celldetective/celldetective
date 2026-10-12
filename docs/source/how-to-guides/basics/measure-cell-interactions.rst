@@ -48,7 +48,19 @@ Set the neighborhood distances
 
 #. Under **NEIGHBORHOOD**, click the :icon:`plus,black` button to add a distance value (in pixels). You can add multiple distances to analyze different ranges simultaneously.
 
-#. (Optional) Click the :icon:`image-check,black` viewer button to preview the neighborhood radius or edge distance on your stack.
+#. (Optional) Click the :icon:`image-check,black` viewer button to preview the neighborhood radius or contact distance on your stack, then click :blue:`Add measurement` to add the value shown.
+
+   For a **MASK CONTACT** neighborhood, the viewer draws the masks of both populations, the reference population in blue and the neighbor population in orange, each in a dark shade with its edge grown outward in a light one.
+
+   .. figure:: ../../_static/figures/contact-viewer.svg
+       :width: 80%
+       :target: ../../_static/figures/contact-viewer.svg
+       :align: center
+       :alt: The mask contact viewer with both populations grown by the outer edge
+
+       **Setting a contact distance.** Targets (blue) and effectors (orange) of a synthetic movie, each grown by 4 px.
+
+   Drag the **Outer edge** slider, from ``-30`` to ``0`` px (1), to grow the edges of both populations. Two cells are in contact where their grown masks touch or overlap, like the target with three effectors docked (2); a neighbor lying inside a reference mask is always in contact. The distance added is the absolute value of the slider.
 
 #. To remove a distance, select it in the list and click the :icon:`delete,black` button.
 

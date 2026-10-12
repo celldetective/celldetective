@@ -518,6 +518,23 @@ def remove_trajectory_measurements(
     return tracks
 
 
+# Columns describing the experiment, well and position of a cell rather than
+# measured on it: kept as they are when collapsing a table.
+TABLE_METADATA_COLUMNS = [
+    "well_index",
+    "well_name",
+    "well_number",
+    "well_alias",
+    "pos_name",
+    "position",
+    "well",
+    "cell_type",
+    "concentration",
+    "antibody",
+    "pharmaceutical_agent",
+]
+
+
 def collapse_trajectories_by_status(
     df: pd.DataFrame,
     status: Optional[str] = None,
@@ -547,27 +564,18 @@ def collapse_trajectories_by_status(
         Collapsed dataframe, or None if invalid status.
     """
 
-    static_columns = [
-        "well_index",
-        "well_name",
-        "pos_name",
-        "position",
-        "well",
+    static_columns = TABLE_METADATA_COLUMNS + [
         "status",
         "t0",
         "class",
-        "cell_type",
-        "concentration",
-        "antibody",
-        "pharmaceutical_agent",
         "TRACK_ID",
-        "position",
         "neighbor_population",
         "reference_population",
         "NEIGHBOR_ID",
         "REFERENCE_ID",
         "FRAME",
     ]
+    static_columns = [c for c in static_columns if c in df.columns]
 
     if status is None or status not in list(df.columns):
         logger.warning("Invalid status selection...")
@@ -616,6 +624,98 @@ def collapse_trajectories_by_status(
     group_table = group_table.reset_index(drop=True)
 
     return group_table
+
+
+def collapse_pairs_by_episode(
+    pairs: pd.DataFrame,
+    neighborhood: str,
+    max_gap: int = 0,
+    projection: str = "mean",
+) -> pd.DataFrame:
+    """
+    Collapse a pair table into one row per contact episode.
+
+    An episode is a run of consecutive frames where the pair is in the
+    neighborhood (``status_<neighborhood> == 1``). Like the collapse of a
+    track, each measurement of the pair is reduced over the frames of the
+    episode in contact.
+
+    Parameters
+    ----------
+    pairs : pandas.DataFrame
+        Pair table, with ``REFERENCE_ID``, ``NEIGHBOR_ID``, ``FRAME`` and the
+        status column of the neighborhood; ``position`` and the populations
+        are used to tell pairs apart when present.
+    neighborhood : str
+        The neighborhood, e.g. ``neighborhood_(targets-effectors)_contact_0_px``,
+        or its ``status_`` column.
+    max_gap : int, optional
+        Contacts interrupted for up to this many frames are one episode, so
+        that a frame missed by the segmentation does not cut it. Default is 0.
+    projection : str, optional
+        Reduction of the measurements over the episode: ``mean``, ``median``,
+        ``min``, ``max``, ``sum``, ``first`` or ``last``. Default is ``mean``.
+
+    Returns
+    -------
+    pandas.DataFrame
+        One row per episode: the pair keys, ``episode`` (its rank for the
+        pair, from 1), ``t_start`` and ``t_end`` (first and last frames in
+        contact), ``duration`` (``t_end - t_start + 1`` frames, bridged gaps
+        included), ``frames_in_contact``, ``gap_before`` (frames since the
+        previous episode of the pair, NaN for the first one),
+        ``left_censored`` and ``right_censored`` (the episode touches the
+        first or last frame the pair is seen, so its duration is a lower
+        bound), the columns describing the pair and the reduced measurements.
+    """
+    if neighborhood.startswith("status_"):
+        neighborhood = neighborhood[len("status_"):]
+    status = f"status_{neighborhood}"
+    if status not in pairs.columns:
+        raise KeyError(f"Column {status} not found in the pair table.")
+
+    keys = ["position"] if "position" in pairs.columns else []
+    keys += [c for c in ("reference_population", "neighbor_population") if c in pairs.columns]
+    keys += ["REFERENCE_ID", "NEIGHBOR_ID"]
+    static = [
+        c for c in TABLE_METADATA_COLUMNS + ["reference_tracked", "neighbors_tracked"]
+        if c in pairs.columns and c not in keys
+    ]
+    # Statuses, classes and event times of neighborhoods are per pair, not
+    # measured over an episode.
+    measured = [
+        c
+        for c in pairs.select_dtypes(include="number").columns
+        if c not in keys + static + ["FRAME"]
+        and not c.startswith(("status_", "class_", "t0_", "t_"))
+    ]
+    columns = keys + static + ["episode", "t_start", "t_end", "duration", "frames_in_contact",
+                               "gap_before", "left_censored", "right_censored"] + measured
+
+    data = pairs.dropna(subset=["REFERENCE_ID", "NEIGHBOR_ID"]).sort_values(keys + ["FRAME"])
+    seen = data.groupby(keys)["FRAME"].agg(first_seen="min", last_seen="max")
+    touching = data[data[status] == 1].copy()
+    if touching.empty:
+        return pd.DataFrame(columns=columns)
+
+    # A new episode starts at the first contact of a pair or after a gap.
+    step = touching.groupby(keys)["FRAME"].diff()
+    touching["episode"] = (step.isna() | (step > max_gap + 1)).astype(int)
+    touching["episode"] = touching.groupby(keys)["episode"].cumsum()
+
+    per_episode = touching.groupby(keys + ["episode"])
+    episodes = per_episode["FRAME"].agg(t_start="min", t_end="max", frames_in_contact="size")
+    if static:
+        episodes = episodes.join(per_episode[static].first())
+    if measured:
+        episodes = episodes.join(per_episode[measured].agg(projection))
+    episodes = episodes.reset_index().merge(seen.reset_index(), on=keys)
+
+    episodes["duration"] = episodes["t_end"] - episodes["t_start"] + 1
+    episodes["gap_before"] = episodes["t_start"] - episodes.groupby(keys)["t_end"].shift() - 1
+    episodes["left_censored"] = episodes["t_start"] == episodes["first_seen"]
+    episodes["right_censored"] = episodes["t_end"] == episodes["last_seen"]
+    return episodes[columns]
 
 
 def tracks_to_btrack(

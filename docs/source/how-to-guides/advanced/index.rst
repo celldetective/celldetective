@@ -8,6 +8,7 @@ Advanced
    compute-event-duration
    create-characteristic-group-from-binary-classifications
    inject-metadata
+   relate-contacts-to-an-event
    train-a-segmentation-model-from-scratch
    train-an-event-detection-model
    transfer-a-segmentation-model
