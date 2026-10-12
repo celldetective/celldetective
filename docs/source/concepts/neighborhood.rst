@@ -15,7 +15,7 @@ A **neighborhood column** with the proper information characterizing the :term:`
 Neighborhood methods
 ~~~~~~~~~~~~~~~~~~~~
 
-**Mask-contact.** If the complete masks for the :term:`populations <cell population>` of interest are available, the most natural :term:`neighborhood` to compute is the direct contact between masks. To build a tolerance when evaluating this contact, we allow a mask dilation before contact evaluation, controlled by a distance parameter :math:`d` in pixels.
+**Mask-contact.** If the complete masks for the :term:`populations <cell population>` of interest are available, the most natural :term:`neighborhood` to compute is the direct contact between masks. To build a tolerance when evaluating this contact, the masks of both populations are grown outward by a distance :math:`d` in pixels before the contact is evaluated: two cells are in contact when their grown masks touch or overlap (8-connectivity), that is when the gap between their masks is at most about :math:`2d`. With :math:`d = 0`, the masks must touch or overlap. A neighbor lying inside a reference mask, or overlapping it, is always in contact.
 
 **Isotropic.** In the most general case, it is always possible to define an isotropic :term:`neighborhood` around the center of mass of each object in the system. The only control parameter is the circle's radius :math:`d` in pixels, which determines the largest distance between the center of mass over which two cells can be matched as neighbors.
 

@@ -121,7 +121,13 @@ General Terms
         A metric that sums the duration (in time or frames) that a specific neighbor (or any neighbor) has been present within the neighborhood of a reference cell.
 
     mask contact
-        A neighborhood definition based on the distance between the boundaries (masks) of two cells, rather than their centroids.
+        A neighborhood definition based on the distance between the boundaries (masks) of two cells, rather than their centroids. The masks of both populations are grown outward by the distance :math:`d`; two cells are in contact when their grown masks touch or overlap, so a neighbor lying inside a reference mask is always in contact. See :doc:`/concepts/neighborhood`.
+
+    contact episode
+        A run of consecutive frames during which a pair of cells is in a neighborhood, with a start, an end and a duration. See :ref:`pair_collapsing`.
+
+    hazard ratio
+        The factor by which the instantaneous risk of an event is multiplied when a covariate rises by one unit, in a Cox proportional-hazards model. A ratio above 1 means a higher risk. See :doc:`/how-to-guides/advanced/relate-contacts-to-an-event`.
 
     censoring
         In survival analysis, the condition where the event of interest has not occurred by the end of the observation period (monitor/cut-off time).

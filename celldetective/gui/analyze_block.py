@@ -16,6 +16,8 @@ from glob import glob
 
 from celldetective.gui.base.components import generic_message
 from celldetective.gui.base.utils import center_window
+from fonticon_mdi6 import MDI6
+from superqt.fonticon import icon
 
 
 class AnalysisPanel(QFrame, Styles):
@@ -102,6 +104,26 @@ class AnalysisPanel(QFrame, Styles):
         self.plot_signal_btn.clicked.connect(self.configure_plot_signals)
         self.grid.addWidget(self.plot_signal_btn)
 
+        interactions_lbl = QLabel("Interactions")
+        interactions_lbl.setStyleSheet(
+            """
+			font-weight: bold;
+			padding: 0px;
+			"""
+        )
+        self.grid.addWidget(interactions_lbl, alignment=Qt.AlignCenter)
+
+        self.contact_hazard_btn = QPushButton("contact hazard")
+        self.contact_hazard_btn.setIcon(icon(MDI6.handshake_outline, color="black"))
+        self.contact_hazard_btn.setToolTip(
+            "Relate the contacts of the reference cells to the hazard of an event,\n"
+            "such as their death, with a Cox model with time-varying contact exposure."
+        )
+        self.contact_hazard_btn.setStyleSheet(self.button_style_sheet_2)
+        self.contact_hazard_btn.setIconSize(QSize(35, 35))
+        self.contact_hazard_btn.clicked.connect(self.configure_contact_hazard)
+        self.grid.addWidget(self.contact_hazard_btn)
+
         vertical_spacer = QSpacerItem(
             20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding
         )
@@ -151,3 +173,18 @@ class AnalysisPanel(QFrame, Styles):
         else:
             generic_message("No population table could be found... Abort...")
             return None
+
+    def configure_contact_hazard(self):
+        """
+        Open the contact hazard configuration window.
+        """
+        from celldetective.gui.contact_hazard_ui import ConfigContactHazard
+
+        self.config_contact_hazard = ConfigContactHazard(self)
+        if not self.config_contact_hazard.cols_per_pop:
+            generic_message(
+                "No population has a neighborhood: compute one in the interactions block first."
+            )
+            return None
+        self.config_contact_hazard.show()
+        center_window(self.config_contact_hazard)

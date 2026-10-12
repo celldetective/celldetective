@@ -129,3 +129,42 @@ Aggregate measurements independently for each cell state or status.
     - If you have a ``status_cell_cycle`` column (with values like G1, S, G2), selecting this option with **mean** will create separate columns for each phase (e.g., ``mean_intensity_G1``, ``mean_intensity_S``).
     - You can then easily plot these against each other to see stage-specific differences.
 
+.. _pair_collapsing:
+
+Pair Collapsing
+---------------
+
+A pair table (``trajectories_pairs.csv``, written by the pair measurements) has one row per pair of cells and frame. Use **Table > Collapse pairs in neighborhood...** to collapse it in one neighborhood.
+
+.. figure:: _static/figures/pair-episodes.svg
+    :width: 100%
+    :target: _static/figures/pair-episodes.svg
+    :align: center
+    :alt: The dialog collapsing pairs by contact episode and the table of contact episodes
+
+    **Collapsing pairs into contact episodes.** Targets and effectors of a synthetic movie: each row is a run of frames during which an effector is in contact with a target.
+
+#. Select the **reference population** and the **neighborhood** (1).
+#. Choose the **collapse option** (2):
+
+   *   **Group by pair**: one row per pair, then the operations of the track collapse (global operation, @ event time, per status). Check **keep only pairs in contact** to use the frames in the neighborhood only.
+   *   **Group by reference**: the same, one row per reference cell.
+   *   **Group by contact episode**: one row per :term:`contact episode`, a run of consecutive frames during which the pair is in the neighborhood. Set **max gap [frames]** to bridge contacts interrupted for up to that many frames (a frame missed by the segmentation, say), and the **operation** (``mean``, ``median``, ``min``, ``max``, ``sum``, ``first``, ``last``) that reduces each measurement over the frames of the episode in contact.
+
+#. Click **Set** (3).
+
+The table of contact episodes opens in a new window, titled **Contact episodes:** and the neighborhood, with the episode columns after those of the pair (4). Its columns are:
+
+- the pair: ``position``, ``reference_population``, ``neighbor_population``, ``REFERENCE_ID``, ``NEIGHBOR_ID``, and the columns describing the well and the pair;
+- ``episode``: the rank of the episode for the pair, from 1;
+- ``t_start``, ``t_end``: the first and last frames in contact;
+- ``duration``: ``t_end - t_start + 1`` frames, bridged gaps included, and ``frames_in_contact``, the frames actually in contact;
+- ``gap_before``: the frames since the previous episode of the pair (empty for the first one);
+- ``left_censored``, ``right_censored``: the episode touches the first or the last frame the pair is seen, so its true duration may be longer;
+- every measurement of the pair (``distance``, ``intersection``, ``velocity``, contact-site intensities...) reduced over the episode. The statuses, classes and event times of the neighborhoods are left out.
+
+- **Example**: "How long do effectors stay on a target, and how much of its area do they cover?" Collapse by contact episode with **mean**, then plot the distribution of ``duration`` and ``reference_frac_area_intersection``, or filter out the ``right_censored`` episodes before comparing durations between wells.
+
+.. seealso::
+    :doc:`how-to-guides/advanced/relate-contacts-to-an-event` to relate the contact episodes, and the contacts as they happen, to the death of the reference cells.
+

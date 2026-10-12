@@ -14,6 +14,7 @@ from PyQt5.QtWidgets import (
     QMessageBox,
     QApplication,
     QWidget,
+    QSpinBox,
 )
 from PyQt5.QtCore import Qt, QPoint, QSize
 from PyQt5.QtGui import QBrush, QColor, QKeySequence
@@ -33,6 +34,7 @@ from celldetective.gui.base.components import (
     CelldetectiveWidget,
     CelldetectiveMainWindow,
     QHSeperationLine,
+    generic_message,
     ToolButton,
     set_disabled_reason,
     tool_strip,
@@ -52,7 +54,10 @@ from celldetective import get_logger
 from celldetective.log_manager import positionlogger
 from celldetective.utils.stats import test_2samp_generic
 from celldetective.utils.types import test_bool_array
-from celldetective.utils.data_cleaning import collapse_trajectories_by_status
+from celldetective.utils.data_cleaning import (
+    collapse_pairs_by_episode,
+    collapse_trajectories_by_status,
+)
 
 logger = get_logger(__name__)
 
@@ -910,7 +915,7 @@ class TableUI(CelldetectiveMainWindow):
         reference_hbox.addWidget(self.reference_pop_cb, 66)
         layout.addLayout(reference_hbox)
 
-        self.neigh_lbl = QLabel("neighborhod: ")
+        self.neigh_lbl = QLabel("neighborhood: ")
         self.neigh_cb = QComboBox()
         neigh_cols = [
             c.replace("status_", "")
@@ -937,6 +942,11 @@ class TableUI(CelldetectiveMainWindow):
 
         self.groupby_pair_rb = QRadioButton("Group by pair")
         self.groupby_reference_rb = QRadioButton("Group by reference")
+        self.groupby_episode_rb = QRadioButton("Group by contact episode")
+        self.groupby_episode_rb.setToolTip(
+            "One row per run of consecutive frames a pair spends in the neighborhood,\n"
+            "with its start, end and duration, and its measurements reduced over it."
+        )
         self.groupby_pair_rb.setChecked(True)
 
         groupby_hbox = QHBoxLayout()
@@ -944,6 +954,34 @@ class TableUI(CelldetectiveMainWindow):
         groupby_hbox.addWidget(self.groupby_pair_rb, (100 - 33) // 2)
         groupby_hbox.addWidget(self.groupby_reference_rb, (100 - 33) // 2)
         layout.addLayout(groupby_hbox)
+
+        episode_hbox = QHBoxLayout()
+        episode_hbox.addWidget(QLabel(""), 33)
+        episode_hbox.addWidget(self.groupby_episode_rb, 67)
+        layout.addLayout(episode_hbox)
+
+        self.episode_gap_sb = QSpinBox()
+        self.episode_gap_sb.setRange(0, 100)
+        self.episode_gap_sb.setToolTip(
+            "Contacts interrupted for up to this many frames make one episode,\n"
+            "so that a frame missed by the segmentation does not cut it."
+        )
+        self.episode_projection_cb = QComboBox()
+        self.episode_projection_cb.addItems(["mean", "median", "min", "max", "sum", "first", "last"])
+        self.episode_projection_cb.setToolTip("Reduction of the measurements over each episode.")
+        episode_options = QHBoxLayout()
+        episode_options.addWidget(QLabel("max gap [frames]: "), 33)
+        episode_options.addWidget(self.episode_gap_sb, 22)
+        episode_options.addWidget(QLabel("operation: "), 20)
+        episode_options.addWidget(self.episode_projection_cb, 25)
+        layout.addLayout(episode_options)
+        for widget in (self.episode_gap_sb, self.episode_projection_cb):
+            widget.setEnabled(False)
+            self.groupby_episode_rb.toggled.connect(widget.setEnabled)
+        # Episodes need the frames out of contact to find where they end.
+        self.groupby_episode_rb.toggled.connect(
+            lambda checked: self.contact_only_check.setEnabled(not checked)
+        )
 
         self.apply_neigh_btn = QPushButton("Set")
         self.apply_neigh_btn.setStyleSheet(self.button_style_sheet)
@@ -979,6 +1017,10 @@ class TableUI(CelldetectiveMainWindow):
                 neighbor_pop = "targets"
 
         from celldetective.neighborhood import extract_neighborhood_in_pair_table
+
+        if self.groupby_episode_rb.isChecked():
+            self.show_contact_episodes(ref_pop, neighborhood)
+            return None
 
         data = extract_neighborhood_in_pair_table(
             self.data,
@@ -1023,6 +1065,50 @@ class TableUI(CelldetectiveMainWindow):
 
         if not skip_projection:
             self.set_projection_mode_tracks()
+
+    def show_contact_episodes(self, reference_population: str, neighborhood: str) -> None:
+        """
+        Collapse the pairs of a neighborhood into contact episodes and show them.
+
+        Parameters
+        ----------
+        reference_population : str
+            Reference population of the pairs.
+        neighborhood : str
+            The neighborhood, or its status column.
+        """
+
+        pairs = self.data.loc[self.data["reference_population"] == reference_population]
+        # Without tracks, an ID names a different cell at each frame: a pair
+        # cannot be followed from one frame to the next.
+        status = neighborhood if neighborhood.startswith("status_") else f"status_{neighborhood}"
+        listed = pairs.loc[pairs[status].notna()] if status in pairs.columns else pairs
+        for flag, cells in (("reference_tracked", "reference"), ("neighbors_tracked", "neighbor")):
+            if flag in listed.columns and not np.any(listed[flag].astype(bool)):
+                generic_message(f"The {cells} cells are not tracked: they have no contact episodes.")
+                return None
+        try:
+            episodes = collapse_pairs_by_episode(
+                pairs,
+                neighborhood,
+                max_gap=self.episode_gap_sb.value(),
+                projection=self.episode_projection_cb.currentText(),
+            )
+        except Exception as e:
+            generic_message(f"The contact episodes could not be computed: {e}")
+            return None
+        if episodes.empty:
+            generic_message("No pair is ever in this neighborhood.")
+            return None
+
+        self.subtable = TableUI(
+            episodes,
+            f"Contact episodes: {neighborhood.replace('status_', '')}",
+            plot_mode="static",
+            collapse_tracks_option=False,
+        )
+        self.subtable.show()
+        self.selectNeighWidget.close()
 
     def update_neighborhoods(self) -> None:
         """
@@ -2386,7 +2472,6 @@ class TableUI(CelldetectiveMainWindow):
             QListWidget,
             QListWidgetItem,
             QDoubleSpinBox,
-            QSpinBox,
         )
 
         self.parallelCoordsParams = CelldetectiveWidget()

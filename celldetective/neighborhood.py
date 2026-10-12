@@ -746,6 +746,10 @@ def set_live_status(
     """
 
     logger.debug(f"Provided statuses: {status}...")
+    # Resolved below into the columns used; the caller's list stays as given,
+    # so that the same options can be used again.
+    if isinstance(status, list):
+        status = list(status)
     if (
         status is None
         or status == ["live_status", "live_status"]
@@ -1202,7 +1206,7 @@ def compute_neighborhood_at_position(
             if neighborhood_kwargs["mode"] == "two-pop":
                 neigh_col = f"neighborhood_2_circle_{d}_px"
                 new_neigh_col = neigh_col.replace(
-                    "_2_", f"_({population[0]}-{population[1]})_"
+                    "_2_", f"_({population[0]}-{population[1]})_", 1
                 )
                 df_A = df_A.rename(columns={neigh_col: new_neigh_col})
             elif neighborhood_kwargs["mode"] == "self":
@@ -1219,7 +1223,7 @@ def compute_neighborhood_at_position(
         or c.startswith("mean_count_")
     ]
     new_col_names = [
-        c.replace("_2_", f"_({population[0]}-{population[1]})_") for c in cols_to_rename
+        c.replace("_2_", f"_({population[0]}-{population[1]})_", 1) for c in cols_to_rename
     ]
     new_name_map = {}
     for k, c in enumerate(cols_to_rename):
@@ -2229,7 +2233,7 @@ def compute_contact_neighborhood_at_position(
             if neighborhood_kwargs["mode"] == "two-pop":
                 neigh_col = f"neighborhood_2_contact_{d}_px"
                 new_neigh_col = neigh_col.replace(
-                    "_2_", f"_({population[0]}-{population[1]})_"
+                    "_2_", f"_({population[0]}-{population[1]})_", 1
                 )
                 df_A = df_A.rename(columns={neigh_col: new_neigh_col})
             elif neighborhood_kwargs["mode"] == "self":
@@ -2246,7 +2250,7 @@ def compute_contact_neighborhood_at_position(
         or c.startswith("mean_count_")
     ]
     new_col_names = [
-        c.replace("_2_", f"_({population[0]}-{population[1]})_") for c in cols_to_rename
+        c.replace("_2_", f"_({population[0]}-{population[1]})_", 1) for c in cols_to_rename
     ]
     new_name_map = {}
     for k, c in enumerate(cols_to_rename):

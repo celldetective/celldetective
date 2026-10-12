@@ -127,7 +127,7 @@ Accessible when selecting **Neighborhood** in Measurements.
 
 *   :term:`mask contact`: Detects neighbors whose boundaries are within a specific proximity.
 
-    *   **Distance [px]**: The maximum distance between cell boundaries to be considered "in contact" (often 0 for touching or small positive value for near-contact).
+    *   **Distance [px]**: How far the masks of both populations are grown outward before the contact is evaluated: two cells are in contact when their grown masks touch or overlap, so up to a gap of about twice the distance between the masks. ``0`` requires the masks to touch. The :icon:`image-check,black` viewer shows both populations grown by the distance set with its **Outer edge** slider.
 
 **General Options**
 
@@ -155,6 +155,36 @@ Accessible via **Analyze > Plot Survival**.
 
 *   **Time calibration**: Frames-to-minutes conversion.
 *   **Cmap**: Colormap for curves.
+
+.. _ref_contact_hazard_settings:
+
+Contact Hazard Settings
+-----------------------
+
+Accessible via **Analyze > contact hazard**, under **Interactions**. See :doc:`/how-to-guides/advanced/relate-contacts-to-an-event`.
+
+**Model**
+
+*   **reference population**: Population whose event is studied; only the populations with a computed neighborhood are listed.
+*   **neighborhoods**: Neighborhoods (``inclusive_count_`` columns) to fit the model for, one fit each. Default: the first one.
+*   **event**: Event time column (``t_*``) of the reference population, with its ``class_*`` column. Default: ``t_death`` when present.
+*   **follow from**: When each cell starts to be at risk: its **first frame** (default) or an event time column.
+*   **covariates**: ``in_contact``, ``n_neighbors``, ``weighted_neighbors`` (from the ``intermediate_count_`` column), ``cumulative_contact``, ``ongoing_contact`` and the measured ``contact_<channel>_mean`` columns (0 out of contact). Default: ``in_contact`` and ``cumulative_contact``.
+*   **lag [frames]**: Frames between the exposure and the interval of time it explains. Default ``0``.
+*   **duration unit**: ``min`` (default), ``h`` or ``frame``, for ``start``, ``stop`` and the contact durations.
+*   **baseline per**: ``none`` (default), ``well`` or ``position``: strata of the Cox model, each with its own baseline hazard.
+*   **penalty**: L2 penalty on the coefficients. Default ``0.01``.
+*   **select cells with query**: Pandas query on the reference table.
+*   **time calibration (frame to min)**: Duration of a frame. Default: the experiment's.
+*   **show the long table**: Also open the table the model is fitted on, for the first neighborhood checked.
+
+**Contact episodes** (needs the pair measurements)
+
+*   **event after each contact episode**: Also relate the contact episodes of the first neighborhood to the event.
+*   **window [frames]**: The event counts when it happens within this many frames. Default ``10``.
+*   **after the**: ``end`` (default) or ``start`` of the episode.
+*   **max gap [frames]**: Contacts interrupted for up to this many frames make one episode. Default ``0``.
+*   **duration bins**: Edges of the classes of episode duration, in frames. Default ``1, 3, 6, 12, inf``.
 
 .. _ref_single_cell_measurements:
 

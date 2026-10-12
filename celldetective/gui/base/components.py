@@ -7,7 +7,6 @@ from PyQt5.QtWidgets import (
     QDialog,
     QMessageBox,
     QComboBox,
-    QToolButton,
     QMenu,
     QStylePainter,
     QStyleOptionComboBox,
@@ -570,11 +569,8 @@ class QCheckableComboBox(QComboBox):
         self.setTitle("")
         self.setModel(QStandardItemModel(self))
         self.obj = obj
-        self.toolButton = QToolButton(parent_window)
-        self.toolButton.setText("")
-        self.toolMenu = QMenu(parent_window)
-        self.toolButton.setMenu(self.toolMenu)
-        self.toolButton.setPopupMode(QToolButton.InstantPopup)
+        # Holds the check state of each item as a checkable action.
+        self.toolMenu = QMenu(self)
         self.anySelected = False
 
         self.setItemDelegate(CheckIndicatorDelegate(parent=self))

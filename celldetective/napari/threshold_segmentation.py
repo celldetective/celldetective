@@ -411,11 +411,9 @@ def combine_labels(
 def _experiment_movie_prefix(exp_dir: str) -> Optional[str]:
     """The movie prefix set in the experiment configuration, if it can be read."""
     try:
-        from celldetective.utils.experiment import get_config
-        from celldetective.utils.parsing import config_section_to_dict
+        from celldetective.utils.experiment import get_movie_prefix
 
-        settings = config_section_to_dict(get_config(exp_dir), "MovieSettings")
-        return settings.get("movie_prefix")
+        return get_movie_prefix(exp_dir)
     except Exception as e:
         logger.debug(f"Could not read the movie prefix of {exp_dir}: {e}")
         return None

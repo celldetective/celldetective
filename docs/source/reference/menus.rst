@@ -76,7 +76,7 @@ Table Explorer
 
 *   **Query...**: Filter rows using Pandas query syntax.
 *   **Collapse tracks...** (:kbd:`Ctrl+G`): Open the Track Collapsing dialog (tables of tracked cells only).
-*   **Collapse pairs in neighborhood...**: Aggregate interaction data (Pair tables only).
+*   **Collapse pairs in neighborhood...**: Collapse a pair table per pair, per reference cell or per contact episode, in one neighborhood (pair tables only). See :ref:`pair_collapsing`.
 *   **Group by frames...** (:kbd:`Ctrl+T`): Aggregate data by time frame.
 
 **Math Menu**

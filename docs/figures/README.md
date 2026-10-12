@@ -30,6 +30,9 @@ build_figures.py  one function per figure: layout and annotations
    The fluorescence figures (`capture_measurements.py`, `capture_process.py`)
    run on a copy of the `demo_adcc` demo, set in `CELLDETECTIVE_DOCS_ADCC`.
 
+   The contact figures (`capture_contacts.py`) run on a synthetic experiment
+   written by `make_contacts_experiment.py`, set in `CELLDETECTIVE_DOCS_EXP`.
+
    On Linux (X11), the windows are rendered by Qt, not grabbed from the screen,
    so a locked or busy screen does not matter; the Ubuntu title bar is drawn
    from `capture/titlebar_ubuntu.png`. Captures that pass `marks=` to `grab()`

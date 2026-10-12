@@ -4,6 +4,7 @@ Unit tests for specialized viewers in celldetective.gui.viewers.
 Covers:
 - ChannelOffsetViewer
 - CellEdgeVisualizer (ContourViewer)
+- ContactEdgeVisualizer
 - CellSizeViewer
 - ThresholdedStackVisualizer
 """
@@ -16,7 +17,10 @@ from PyQt5.QtWidgets import QLineEdit, QListWidget, QMainWindow
 from PyQt5.QtCore import Qt
 
 from celldetective.gui.viewers.channel_offset_viewer import ChannelOffsetViewer
-from celldetective.gui.viewers.contour_viewer import CellEdgeVisualizer
+from celldetective.gui.viewers.contour_viewer import (
+    CellEdgeVisualizer,
+    ContactEdgeVisualizer,
+)
 from celldetective.gui.viewers.size_viewer import CellSizeViewer
 from celldetective.gui.viewers.threshold_viewer import ThresholdedStackVisualizer
 
@@ -242,6 +246,55 @@ class TestContourViewer:
 
         # single_value_mode=True returns max abs value -> 5
         mock_list_widget.addItems.assert_called_with(["5"])
+
+
+class TestContactEdgeViewer:
+    """Tests for ContactEdgeVisualizer (mask-contact neighborhood distance)."""
+
+    @pytest.fixture
+    def neighbor_labels_3d(self):
+        labels = np.zeros((5, 100, 100), dtype=np.uint8)
+        labels[:, 40:60, 66:80] = 1  # 6 px gap to the reference square
+        return labels
+
+    def test_edges_grow_outward_for_both_populations(
+        self, qtbot, dummy_labels_3d, neighbor_labels_3d, mock_list_widget
+    ):
+        viewer = ContactEdgeVisualizer(
+            stack=dummy_labels_3d,
+            labels=dummy_labels_3d,
+            neighbor_labels=neighbor_labels_3d,
+            initial_edge=0,
+            parent_list_widget=mock_list_widget,
+        )
+        qtbot.addWidget(viewer)
+        viewer.canvas.canvas.draw_idle = MagicMock()
+
+        ref, neigh = (layer.filled(0) for layer in viewer.grown_masks())
+        # No edge: just the masks, untouched inside.
+        assert np.array_equal(ref > 0, dummy_labels_3d[0] > 0)
+        assert np.array_equal(neigh > 0, neighbor_labels_3d[0] > 0)
+
+        viewer.edge_slider.setValue(-3)
+        ref, neigh = (layer.filled(0) for layer in viewer.grown_masks())
+        # The mask stays whole, the edge lies outside it, for both populations.
+        assert np.all(ref[dummy_labels_3d[0] > 0] == 2)
+        assert ref[50, 62] == 1 and ref[50, 64] == 0
+        assert neigh[50, 63] == 1 and neigh[50, 62] == 0
+        # Grown by 3 px each, the 6 px gap closes: the grown masks touch.
+        assert ref[50, 62] > 0 and neigh[50, 63] > 0
+
+        viewer.set_measurement_in_parent_list()
+        mock_list_widget.addItems.assert_called_with(["3"])
+
+    def test_self_neighborhood_draws_one_population(self, qtbot, dummy_labels_3d):
+        viewer = ContactEdgeVisualizer(
+            stack=dummy_labels_3d, labels=dummy_labels_3d, initial_edge=2
+        )
+        qtbot.addWidget(viewer)
+        assert len(viewer.im_masks) == 1
+        assert viewer.edge_slider.value() == -2
+        assert viewer.edge_slider.maximum() == 0
 
 
 # =============================================================================
