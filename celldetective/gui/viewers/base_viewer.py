@@ -3,7 +3,15 @@ from collections import OrderedDict
 from typing import Optional, List, Tuple, Dict, Any, Union
 
 import numpy as np
-from PyQt5.QtCore import Qt, QThread, pyqtSignal, QMutex, QWaitCondition, QEvent
+from PyQt5.QtCore import (
+    Qt,
+    QThread,
+    QTimer,
+    pyqtSignal,
+    QMutex,
+    QWaitCondition,
+    QEvent,
+)
 from PyQt5.QtWidgets import (
     QHBoxLayout,
     QAction,
@@ -779,7 +787,8 @@ class StackVisualizer(CelldetectiveWidget):
     def find_label_paths(self, cell_type: str) -> List[str]:
         """
         The label images of a population for the stack on disk; an error box
-        closes the viewer when there are none.
+        closes the viewer when there are none, once it is built (the labels
+        are looked up while it is).
         """
         from glob import glob
         from natsort import natsorted
@@ -789,7 +798,7 @@ class StackVisualizer(CelldetectiveWidget):
             generic_message(
                 "No labels were found for the selected cells. Abort.", msg_type="critical"
             )
-            self.close()
+            QTimer.singleShot(0, self.close)
         return paths
 
     def check_labels(self, labels) -> np.ndarray:

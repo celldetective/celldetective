@@ -392,3 +392,37 @@ def test_viewer_initializes_from_parent_values(qtbot, dummy_data):
     assert len(current_filters) == 2
     assert current_filters[0] == ["gauss", 1.5]
     assert current_filters[1] == ["invert", 500]
+
+
+def test_spot_detection_visualizer_without_labels(qtbot, tmp_path):
+    """
+    A movie without label images shows the error and opens without failing.
+
+    Bug prevented: after the "No labels" message the viewer indexed the
+    empty list of label images and raised an IndexError.
+    """
+    from tifffile import imwrite
+
+    movie_dir = tmp_path / "W1" / "100" / "movie"
+    movie_dir.mkdir(parents=True)
+    stack_path = movie_dir / "stack.tif"
+    movie = np.ones((3, 2, 32, 32), dtype=np.uint16)
+    imwrite(stack_path, movie, imagej=True, metadata={"axes": "TCYX"})
+
+    with patch(
+        "celldetective.gui.viewers.base_viewer.generic_message"
+    ) as message:
+        viewer = SpotDetectionVisualizer(
+            stack_path=str(stack_path),
+            channel_names=["a", "b"],
+            n_channels=2,
+            cell_type="targets",
+        )
+    message.assert_called_once()
+    assert viewer.mask_paths == []
+    assert not viewer.init_label.any()
+
+    # The viewer closes once built, and is deleted with it.
+    from celldetective.gui.base.utils import is_alive
+
+    qtbot.waitUntil(lambda: not is_alive(viewer), timeout=2000)

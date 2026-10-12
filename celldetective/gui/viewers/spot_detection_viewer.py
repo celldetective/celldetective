@@ -31,6 +31,9 @@ logger = get_logger(__name__)
 
 class SpotDetectionVisualizer(StackVisualizer):
 
+    # The label images on disk, found once the stack is shown.
+    mask_paths = ()
+
     def __init__(
         self,
         parent_channel_cb: Optional[QComboBox] = None,
@@ -229,7 +232,7 @@ class SpotDetectionVisualizer(StackVisualizer):
         if not self.switch_from_channel:
             self.reset_detection()
 
-        if self.mode == "virtual" and hasattr(self, "mask_paths"):
+        if self.mode == "virtual" and self.mask_paths:
             self.init_label = imread(self.mask_paths[value])
             self.target_img = self.read_frame(self.detection_channel, value)
         elif self.mode == "direct":
@@ -289,7 +292,11 @@ class SpotDetectionVisualizer(StackVisualizer):
         # Locate virtual labels
 
         self.mask_paths = self.find_label_paths(self.cell_type)
-        self.init_label = imread(self.mask_paths[self.frame_slider.value()])
+        if self.mask_paths:
+            self.init_label = imread(self.mask_paths[self.frame_slider.value()])
+        else:
+            # The viewer closes: an empty label keeps the opening from failing.
+            self.init_label = np.zeros_like(self.init_frame)
 
     def generate_detection_channel(self):
         """Generate the detection channel selection widget."""
