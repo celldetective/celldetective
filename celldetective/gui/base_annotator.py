@@ -98,7 +98,9 @@ class BaseAnnotator(AnnotatorMixin, CelldetectiveMainWindow):
             if self.read_config:
                 self.load_annotator_config()
             self.locate_tracks()
-            self._init_base_widgets()
+            # Without trajectories the window closed: no widgets to build.
+            if self.proceed:
+                self._init_base_widgets()
 
     def _init_base_widgets(self):
         """Initialize base widgets."""
@@ -340,6 +342,7 @@ class BaseAnnotator(AnnotatorMixin, CelldetectiveMainWindow):
 
         if not os.path.exists(self.trajectories_path):
             warn("The trajectories cannot be detected.")
+            self.proceed = False
             self.close()
             return
 
@@ -409,11 +412,7 @@ class BaseAnnotator(AnnotatorMixin, CelldetectiveMainWindow):
         ):
             return
         self.df_tracks = self.df_tracks.drop(
-            columns=[
-                class_to_delete,
-                class_to_delete.replace("class", "t"),
-                class_to_delete.replace("class", "status"),
-            ],
+            columns=[class_to_delete, *event_columns(class_to_delete)],
             errors="ignore",
         )
         self.class_choice_cb.removeItem(self.class_choice_cb.findText(class_to_delete))

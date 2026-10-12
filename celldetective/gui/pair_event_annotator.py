@@ -493,12 +493,13 @@ class PairEventAnnotator(
             f"You are about to delete event class {class_to_delete}. The associated time and\nstatus will also be deleted. Do you still want to proceed?"
         ):
             return
+        time_name, status_name = event_columns(class_to_delete)
+        # The pair tables name the time t0_<event>, or t_<event> as the cells.
+        legacy_time = "t0_" + time_name[len("t_") :] if time_name.startswith("t_") else time_name
         self.df_relative = self.df_relative.drop(
-            columns=[
-                class_to_delete,
-                class_to_delete.replace("class", "t"),
-                class_to_delete.replace("class", "status"),
-            ],
+            columns=list(
+                dict.fromkeys([class_to_delete, time_name, legacy_time, status_name])
+            ),
             errors="ignore",
         )
         self.relative_class_choice_cb.removeItem(
@@ -1452,10 +1453,12 @@ class PairEventAnnotator(
             )
             frame_colors[pair, 2] = "lime"
 
-        self.pair_selection.append(
-            (self.reference_track_of_interest, self.neighbor_track_of_interest)
-        )
-        self.neighbor_selection.append(self.neighbor_track_of_interest)
+        # Highlighted again when the scatters are refreshed: selected once.
+        pair = (self.reference_track_of_interest, self.neighbor_track_of_interest)
+        if pair not in self.pair_selection:
+            self.pair_selection.append(pair)
+        if self.neighbor_track_of_interest not in self.neighbor_selection:
+            self.neighbor_selection.append(self.neighbor_track_of_interest)
         self.give_neighbor_cell_information()
         self.give_pair_information()
 
@@ -1671,6 +1674,8 @@ class PairEventAnnotator(
             + list(self.class_scatter.values())
         )
         if not self.lines_list:
+            # The midpoints of another frame or selection would stay pickable.
+            self.points.set_offsets(np.empty((0, 2)))
             return artists
 
         points = self.points_data[self.framedata]

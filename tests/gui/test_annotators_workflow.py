@@ -346,6 +346,25 @@ class TestEventAnnotatorFixes:
         assert list(after) == list(before)
 
 
+    def test_options_are_cleared_between_cells(self, event_annotator):
+        """
+        Leaving a correction unchecks its option.
+
+        Bug prevented: an auto-exclusive radio button refused to uncheck, so
+        the option of the previous cell stayed checked.
+        """
+
+        annotator = event_annotator
+        annotator.on_scatter_pick(
+            pick(annotator.status_scatter, 0, annotator.positions[0])
+        )
+        annotator.correct_btn.click()
+        assert any(button.isChecked() for button in annotator.class_options)
+
+        annotator.cancel_btn.click()
+        assert not any(button.isChecked() for button in annotator.class_options)
+
+
 class TestPairEventAnnotatorWorkflow:
 
     def test_opens_on_the_position(self, pair_annotator):

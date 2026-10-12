@@ -866,7 +866,12 @@ class EventAnnotationMixin:
 
         super().hide_annotation_buttons()
         for button in self.class_options:
+            # An auto-exclusive radio button refuses to uncheck itself: the
+            # option of the previous cell would stay checked, and submitting a
+            # cell whose class the options do not show would apply it.
+            button.setAutoExclusive(False)
             button.setChecked(False)
+            button.setAutoExclusive(True)
 
     def enable_time_of_interest(self) -> None:
         """Let the time be set only for an event."""
@@ -982,10 +987,10 @@ class AnimationMixin:
     def animation_generator(self):
         """Frame indices, looping from the current frame on."""
 
-        i = self.framedata
+        yield self.framedata
         while True:
-            yield i
-            i = (i + 1) % self.len_movie
+            # From the frame shown, which the controls move while paused.
+            yield (self.framedata + 1) % self.len_movie
 
     def build_animation_controls(self) -> QHBoxLayout:
         """

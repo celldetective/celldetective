@@ -204,6 +204,7 @@ class MeasureAnnotator(BaseAnnotator):
 
         if not os.path.exists(self.trajectories_path):
             warn("The trajectories cannot be detected.")
+            self.proceed = False
             self.close()
             return
 
@@ -211,7 +212,8 @@ class MeasureAnnotator(BaseAnnotator):
 
         # Load and prep tracks
         self.df_tracks = pd.read_csv(self.trajectories_path)
-        id_col = extract_identity_col(self.df_tracks)
+        # Found once: the cells are looked up at every frame and selection.
+        self.id_col = id_col = extract_identity_col(self.df_tracks)
         self.df_tracks = self.df_tracks.sort_values(by=[id_col, "FRAME"])
 
         # Generate missing status columns from class columns
@@ -263,6 +265,23 @@ class MeasureAnnotator(BaseAnnotator):
             + self.class_cols
             + experiment_columns(self.exp_dir),
         )
+
+    def release_resources(self) -> None:
+        """
+        Free the histogram and the stack viewer, whose frame loader would
+        otherwise keep running, with the rest of the window.
+        """
+
+        super().release_resources()
+        figure = getattr(self, "hist_fig", None)  # Absent if closed while opening.
+        if figure is not None:
+            plt.close(figure)
+        viewer = getattr(self, "viewer", None)
+        if viewer is not None:
+            try:
+                viewer.close()
+            except RuntimeError as e:  # A window may be closed twice.
+                logger.debug(f"Stack viewer already deleted: {e}")
 
     def color_states(self) -> None:
         """Color the cells by their state in the current group."""
@@ -638,8 +657,9 @@ class MeasureAnnotator(BaseAnnotator):
 
         track_id = self.track_of_interest if track_id is None else track_id
         frame = self.current_frame if frame is None else frame
-        id_col = extract_identity_col(self.df_tracks)
-        return (self.df_tracks[id_col] == track_id) & (self.df_tracks["FRAME"] == frame)
+        return (self.df_tracks[self.id_col] == track_id) & (
+            self.df_tracks["FRAME"] == frame
+        )
 
     def cell_values(self) -> List[float]:
         """Values of the chosen signals for the cell of interest, at the current frame."""
@@ -965,12 +985,11 @@ class MeasureAnnotator(BaseAnnotator):
     def extract_scatter_from_trajectories(self) -> None:
         """Extract scatter data from trajectories."""
 
-        id_col = extract_identity_col(self.df_tracks)
         frames = split_by_frame(self.df_tracks, self.len_movie)
         self.positions = [cells[["POSITION_X", "POSITION_Y"]].to_numpy() for cells in frames]
         # A copy: the colors are written to highlight the selected cell.
         self.colors = [cells[["group_color"]].to_numpy().copy() for cells in frames]
-        self.tracks = [cells[id_col].to_numpy() for cells in frames]
+        self.tracks = [cells[self.id_col].to_numpy() for cells in frames]
 
     def compute_status_and_colors(self, index: Optional[int] = None) -> None:
         """

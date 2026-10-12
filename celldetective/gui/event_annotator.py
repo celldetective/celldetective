@@ -437,7 +437,13 @@ class EventAnnotator(EventAnnotationMixin, AnimationMixin, BaseAnnotator):
                     line.set_ydata(ydata[valid])
                     line.set_color(tab10(i / 3.0))
 
-            self.configure_ylims()
+            # Fitted to the cell, before the time line spans them and the plot
+            # is drawn; to the whole table only when the cell has no value.
+            limits = signal_limits(range_values)
+            if limits is not None:
+                self.set_signal_ylim(*limits)
+            else:
+                self.configure_ylims()
 
             min_val, max_val = self.cell_ax.get_ylim()
             t0 = track[self.time_name].to_numpy()[0]
@@ -448,10 +454,6 @@ class EventAnnotator(EventAnnotationMixin, AnimationMixin, BaseAnnotator):
             self.cell_fcanvas.canvas.draw()
         except Exception as e:
             logger.warning(f"Failed to update cell plot: {e}")
-
-        limits = signal_limits(range_values)
-        if limits is not None:
-            self.set_signal_ylim(*limits)
 
     def extract_scatter_from_trajectories(self):
         """Extract scatter data from trajectories using efficient groupby."""
