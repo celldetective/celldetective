@@ -29,7 +29,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The synthetic effector-target movie can kill targets at random during their
   contacts (`death_probability`) or independently of them
   (`background_death`), to check an analysis on deaths caused, or not, by the
-  contacts.
+  contacts. With `death_delay`, a target killed by a contact goes on looking
+  alive for that many frames before it is seen dead; the frame of the lethal
+  contact is kept as `t_lethal_hit`.
+- The synthetic movie can simulate richer killing mechanisms, each an option
+  off by default: effectors that hit on their own (`per_effector_hits`) and
+  help each other (`cooperativity`) or exhaust after each kill
+  (`lethality_per_kill`), contacts that must last a few frames before they can
+  kill (`contact_maturation`), resistant targets (`resistant_fraction`), the
+  death of neighboring targets killing directly (`bystander_death`) or by
+  attracting the effectors (`recruitment`), and a delay drawn from a range
+  (`death_delay=(min, max)`). The ground truth records the cause of each
+  death, the effector that killed and the kills of each effector.
 
 ### Changed
 - The initial contrast of the image viewers, the signal and pair annotators and
