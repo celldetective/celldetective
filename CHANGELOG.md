@@ -60,6 +60,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   attracting the effectors (`recruitment`), and a delay drawn from a range
   (`death_delay=(min, max)`). The ground truth records the cause of each
   death, the effector that killed and the kills of each effector.
+- A demo notebook, `demos/synthetic_parameter_recovery.ipynb`, generates a
+  synthetic effector-target experiment and analyses it with the API alone:
+  threshold segmentation, tracking, measurements, death detection by threshold
+  and step fit, target survival, contact neighborhood, pairs, contact episodes
+  and the contact hazard. It recovers the parameters of the simulation (cell
+  numbers and sizes, motion, contact durations, the death probability per
+  contact frame, the background death rate and the delay between a lethal
+  contact and the death, found as the lag at which the contact hazard ratio
+  peaks) and sets them against the true values. Its second part detects and
+  measures each killing mechanism: cooperation from the hit rate by number of
+  effectors, maturation from the hit rate by contact age, exhaustion from the
+  kill history of each effector in the pair table, resistance with a cure
+  model on contact exposure, the death of neighbors with a target-target
+  neighborhood split by death status in adjusted Cox models, and the delay
+  range by likelihood. It needs no download; its first part runs with the
+  tests.
 
 ### Changed
 - The initial contrast of the image viewers, the signal and pair annotators and
