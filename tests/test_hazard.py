@@ -357,6 +357,23 @@ def test_contact_independent_deaths_do_not(null):
     assert summary.iloc[0]["ci_lower"] < 1 < summary.iloc[0]["ci_upper"]
 
 
+@pytest.fixture(scope="module")
+def delayed(tmp_path_factory):
+    return movie_position(tmp_path_factory.mktemp("delayed") / "Exp", death_probability=0.08, death_delay=4)
+
+
+def test_the_lag_of_the_hazard_finds_the_delay_of_the_deaths(delayed):
+    """A death seen 4 frames after its lethal contact is explained by the
+    contact 4 frames earlier: the hazard ratio peaks at that lag."""
+    _, _, reference = delayed
+    ratios = []
+    for lag in range(9):
+        tab = time_varying_table(reference, NB, "death", lag=lag)
+        _, summary = fit_hazard(tab, ["in_contact"], penalizer=0.5)
+        ratios.append(summary.iloc[0]["hazard_ratio"])
+    assert int(np.argmax(ratios)) == 4
+
+
 def test_sensitivity_over_contact_distances(causal):
     _, _, reference = causal
     neighborhoods = [NB, NB.replace("_0_px", "_2_px"), NB.replace("_0_px", "_9_px")]

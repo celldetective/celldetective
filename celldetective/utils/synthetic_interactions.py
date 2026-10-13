@@ -66,7 +66,13 @@ class SyntheticInteractions:
         Trajectories with ``TRACK_ID``, ``FRAME``, ``POSITION_X``,
         ``POSITION_Y``, ``class_id`` and ``radius``. Effectors also carry
         ``state`` (``free``, ``approach``, ``docked``) and ``docked_to``; with
-        deaths, targets carry ``status`` (1 once dead) and ``t_death``.
+        deaths, targets carry ``status`` (1 once dead), ``t_death``,
+        ``t_lethal_hit`` (the frame of the contact that killed the target, -1
+        for a death not caused by a contact, or no death), ``death_cause``
+        (``contact``, ``bystander``, ``background`` or empty), ``killer`` (the
+        effector that delivered the lethal hit, -1 if none) and
+        ``resistant``; effectors carry ``kills`` (kills so far) and
+        ``lethality`` (the factor on their hit probability).
     contacts : DataFrame
         One row per frame and pair whose masks overlap or touch:
         ``FRAME``, ``TARGET_ID``, ``EFFECTOR_ID``, ``distance`` (between
@@ -98,6 +104,8 @@ class _Effector:
     t_start: int = 0
     n_contacts: int = 0
     last_target: Optional[int] = None
+    lethality: float = 1.0
+    kills: int = 0
 
 
 def _place_targets(
@@ -179,6 +187,15 @@ def simulate_interactions(
     death_after: Optional[int] = None,
     death_probability: float = 0.0,
     background_death: float = 0.0,
+    death_delay: Union[int, Tuple[int, int]] = 0,
+    per_effector_hits: bool = False,
+    cooperativity: float = 1.0,
+    lethality_per_kill: float = 1.0,
+    contact_maturation: int = 0,
+    resistant_fraction: float = 0.0,
+    bystander_death: float = 0.0,
+    bystander_radius: float = 80.0,
+    recruitment: float = 0.0,
     combined_channel: bool = True,
     background: float = 100.0,
     foreground: float = 1000.0,
@@ -219,10 +236,53 @@ def simulate_interactions(
     death_probability : float
         Chance that a target dies after each frame it is in contact with an
         effector (dead from the next frame on): a death caused by contact, at
-        a random time.
+        a random time. With ``per_effector_hits``, the chance that each
+        docked effector delivers a lethal hit instead.
     background_death : float
         Chance that a target dies at each frame, in contact or not: deaths
         independent of the effectors.
+    death_delay : int or tuple of int
+        Frames a target killed by a contact (``death_after`` or
+        ``death_probability``) still looks alive before it is seen dead: the
+        lethal hit is decided at a frame of contact and the target is dead
+        ``death_delay`` frames later than without a delay. In the meantime it
+        cannot be killed again. A ``(min, max)`` pair draws the delay of each
+        hit uniformly between the two, included. Default 0.
+    per_effector_hits : bool
+        Each effector docked to a target hits it on its own, with its own
+        probability, instead of the target being hit with one probability
+        whatever the number of effectors on it. Needed by ``cooperativity``
+        and ``lethality_per_kill``. Default False.
+    cooperativity : float
+        With ``per_effector_hits``, how effectors docked to the same target
+        help each other: with ``k`` of them, each hits with probability
+        ``death_probability * cooperativity ** (k - 1)``. 1 (default):
+        independent effectors; above 1: synergy; below 1: interference.
+    lethality_per_kill : float
+        With ``per_effector_hits``, factor applied to an effector's hit
+        probability after each of its kills: below 1, effectors exhaust;
+        above 1, they get activated. Default 1.
+    contact_maturation : int
+        Frames an effector must have been docked before it can deliver a
+        lethal hit, as a synapse that needs time to form. Default 0.
+    resistant_fraction : float
+        Fraction of the targets (rounded) that contacts and bystander deaths
+        never kill; they can still die of the background. Default 0.
+    bystander_death : float
+        Chance, at each frame and for each dead target within
+        ``bystander_radius`` of its centre, that a live target dies from the
+        next frame on, without any contact: a direct effect of the death of
+        its neighbors. Default 0.
+    bystander_radius : float
+        Distance between centres, in pixels, within which a dead target
+        affects a live one, through ``bystander_death`` and ``recruitment``.
+    recruitment : float
+        How much dead targets attract effectors: an effector looking for a
+        target picks the one with the smallest ``distance / (1 + recruitment *
+        n_dead)``, ``n_dead`` being the number of dead targets within
+        ``bystander_radius`` of it. Targets near dead ones then receive more
+        contacts: an indirect effect of the death of their neighbors, through
+        the effectors. Default 0 (the nearest target).
     combined_channel : bool
         Add a channel showing both populations: effectors at ``foreground``
         and targets halfway between ``background`` and ``foreground``, so a
@@ -238,8 +298,10 @@ def simulate_interactions(
     -------
     SyntheticInteractions
     """
+    if not per_effector_hits and (cooperativity != 1 or lethality_per_kill != 1):
+        raise ValueError("cooperativity and lethality_per_kill need per_effector_hits=True.")
     rng = np.random.default_rng(seed)
-    deaths = death_after is not None or death_probability > 0 or background_death > 0
+    deaths = death_after is not None or death_probability > 0 or background_death > 0 or bystander_death > 0
     shape = (int(shape[0]), int(shape[1]))
     Rt, Re = float(target_radius), float(effector_radius)
     contact_d = Rt + Re - _DOCK_OVERLAP
@@ -265,6 +327,24 @@ def simulate_interactions(
 
     contact_frames = np.zeros(n_targets, dtype=int)
     t_death = np.full(n_targets, -1)
+    t_hit = np.full(n_targets, -1)
+    killer = np.full(n_targets, -1)
+    cause = np.full(n_targets, "", dtype=object)
+    resistant = np.zeros(n_targets, dtype=bool)
+    if resistant_fraction > 0:
+        resistant[rng.choice(n_targets, int(round(resistant_fraction * n_targets)), replace=False)] = True
+
+    def delay() -> int:
+        if np.ndim(death_delay) == 0:
+            return int(death_delay)
+        return int(rng.integers(death_delay[0], death_delay[1], endpoint=True))
+
+    def dead_nearby(t: int, centres: np.ndarray) -> np.ndarray:
+        """Number of targets dead at frame ``t`` within ``bystander_radius`` of each target."""
+        dead = (t_death >= 0) & (t_death <= t)
+        close = np.hypot(*(centres[:, None, :] - centres[None, :, :]).transpose(2, 0, 1)) <= bystander_radius
+        np.fill_diagonal(close, False)
+        return (close & dead[None, :]).sum(axis=1)
     t_rows, e_rows, c_rows, episodes = [], [], [], []
     movie, lbl_T, lbl_E = [], [], []
 
@@ -307,7 +387,9 @@ def simulate_interactions(
                 e.heading += rng.normal(0, 0.5)
                 if e.timer < 0:
                     choices = [k for k in range(n_targets) if k != e.last_target] or list(range(n_targets))
-                    d = [np.hypot(*(centres[k] - e.pos)) for k in choices]
+                    d = np.array([np.hypot(*(centres[k] - e.pos)) for k in choices])
+                    if recruitment > 0:
+                        d = d / (1 + recruitment * dead_nearby(t - 1, centres)[choices])
                     e.state, e.target = "approach", choices[int(np.argmin(d))]
 
             if e.state == "approach":
@@ -389,18 +471,45 @@ def simulate_interactions(
         for row in frame_contacts:
             contact_frames[row["TARGET_ID"] - 1] += 1
         if death_after is not None:
-            newly = (contact_frames >= death_after) & (t_death < 0)
-            t_death[newly] = t
+            for k in np.flatnonzero((contact_frames >= death_after) & (t_death < 0) & ~resistant):
+                t_hit[k], t_death[k], cause[k] = t, t + delay(), "contact"
         # Only draw when asked, so that a seed gives the same movie as before.
         if death_probability > 0:
-            touched = np.zeros(n_targets, dtype=bool)
-            touched[[row["TARGET_ID"] - 1 for row in frame_contacts]] = True
-            newly = touched & (t_death < 0) & (rng.random(n_targets) < death_probability)
-            # The contact comes first: the target is dead from the next frame.
+            draw = rng.random(n_targets)
+            for k in range(n_targets):
+                docked = [i for i, e in enumerate(effectors) if e.state == "docked" and e.target == k]
+                if not docked or t_death[k] >= 0 or resistant[k]:
+                    continue
+                mature = np.array([t - effectors[i].t_start >= contact_maturation for i in docked])
+                if per_effector_hits:
+                    coop = cooperativity ** (len(docked) - 1)
+                    p_hit = np.array([min(1.0, death_probability * effectors[i].lethality * coop) for i in docked])
+                    p_hit = np.where(mature, p_hit, 0.0)
+                    p_target = 1 - np.prod(1 - p_hit)
+                else:
+                    p_hit = mature.astype(float)
+                    p_target = death_probability if mature.any() else 0.0
+                if draw[k] >= p_target:
+                    continue
+                # The same draw tells which effector hit: each takes a share
+                # of [0, p_target) in proportion to its hit probability.
+                shares = np.cumsum(p_hit) / p_hit.sum() * p_target
+                i = docked[min(int(np.searchsorted(shares, draw[k], side="right")), len(docked) - 1)]
+                effectors[i].kills += 1
+                effectors[i].lethality *= lethality_per_kill
+                # The contact comes first: the target is dead from the next
+                # frame, or after the delay.
+                t_hit[k], killer[k], cause[k] = t, i + 1, "contact"
+                t_death[k] = t + 1 + delay()
+        if bystander_death > 0:
+            p_by = 1 - (1 - bystander_death) ** dead_nearby(t, centres)
+            newly = (t_death < 0) & ~resistant & (rng.random(n_targets) < p_by)
             t_death[newly] = t + 1
+            cause[newly] = "bystander"
         if background_death > 0:
             newly = (t_death < 0) & (rng.random(n_targets) < background_death)
             t_death[newly] = t
+            cause[newly] = "background"
 
         channels = [
             _render(rng, lt > 0, foreground, background, noise),
@@ -423,7 +532,8 @@ def simulate_interactions(
             e_rows.append(
                 {"TRACK_ID": i + 1, "FRAME": t, "POSITION_X": e.pos[0], "POSITION_Y": e.pos[1],
                  "class_id": i + 1, "radius": Re, "state": e.state,
-                 "docked_to": e.target + 1 if e.state == "docked" else np.nan}
+                 "docked_to": e.target + 1 if e.state == "docked" else np.nan,
+                 "kills": e.kills, "lethality": e.lethality}
             )
 
     for i, e in enumerate(effectors):
@@ -434,12 +544,20 @@ def simulate_interactions(
             )
 
     targets = pd.DataFrame(t_rows)
-    t_death[t_death >= n_frames] = -1  # killed by a contact at the last frame
+    late = t_death >= n_frames  # killed too late to be seen dead
+    t_death[late] = -1
+    t_hit[late] = -1
+    killer[late] = -1
+    cause[late] = ""
     if deaths:
         td = t_death[targets["TRACK_ID"] - 1]
         targets["status"] = ((td >= 0) & (targets["FRAME"] >= td)).astype(int)
         targets["t_death"] = np.where(td >= 0, td, -1)
         targets["class_death"] = np.where(td >= 0, 0, 1)
+        targets["t_lethal_hit"] = t_hit[targets["TRACK_ID"] - 1]
+        targets["death_cause"] = cause[targets["TRACK_ID"] - 1]
+        targets["killer"] = killer[targets["TRACK_ID"] - 1]
+        targets["resistant"] = resistant[targets["TRACK_ID"] - 1]
 
     names = [TARGET_CHANNEL, EFFECTOR_CHANNEL]
     names += [COMBINED_CHANNEL] if combined_channel else []
@@ -459,7 +577,11 @@ def simulate_interactions(
         params={"shape": shape, "n_frames": n_frames, "seed": seed, "target_radius": Rt,
                 "effector_radius": Re, "death_after": death_after,
                 "death_probability": death_probability, "background_death": background_death,
-                "combined_channel": combined_channel},
+                "death_delay": death_delay, "per_effector_hits": per_effector_hits,
+                "cooperativity": cooperativity, "lethality_per_kill": lethality_per_kill,
+                "contact_maturation": contact_maturation, "resistant_fraction": resistant_fraction,
+                "bystander_death": bystander_death, "bystander_radius": bystander_radius,
+                "recruitment": recruitment, "combined_channel": combined_channel},
     )
 
 
@@ -614,6 +736,8 @@ def main(argv: Optional[List[str]] = None) -> None:
                    help="chance a target dies at each frame it is in contact")
     p.add_argument("--background-death", type=float, default=0.0,
                    help="chance a target dies at each frame, whatever its contacts")
+    p.add_argument("--death-delay", type=int, default=0,
+                   help="frames a target killed by a contact still looks alive")
     p.add_argument("--no-combined", action="store_true", help="leave out the channel showing both populations")
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--with-labels", action="store_true", help="write true masks to skip segmentation")
@@ -623,7 +747,7 @@ def main(argv: Optional[List[str]] = None) -> None:
         shape=tuple(args.size), n_frames=args.frames, n_targets=args.targets, n_effectors=args.effectors,
         contact_durations=args.durations, death_after=args.death_after,
         death_probability=args.death_probability, background_death=args.background_death,
-        combined_channel=not args.no_combined, seed=args.seed,
+        death_delay=args.death_delay, combined_channel=not args.no_combined, seed=args.seed,
     )
     pos = write_experiment(args.path, sim, write_labels=args.with_labels, write_tables=args.with_tables)
     print(f"Wrote {pos}: {len(sim.episodes)} contact episodes, {len(sim.contacts)} contact frames.")
