@@ -74,10 +74,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A position's movie loaded without a prefix is found by the movie prefix of
   its experiment; it was looked for as `Aligned*`. Contact-site intensities,
   measured with a neighborhood or with the pairs, were left out of every
-  experiment whose movies are named otherwise.- Computing a neighborhood twice with the same options gives the same result:
+  experiment whose movies are named otherwise.
+- Computing a neighborhood twice with the same options gives the same result:
   the status options were rewritten by the first run, so that a second one
   with an inverted status inverted it again.
 - The neighborhood field of the pair collapse dialog was labelled "neighborhod".
+- A distance neighborhood within one population, computed from the GUI,
+  counted every cell as its own neighbor (and as its own closest one).
+- The counts and means of a neighborhood within one population at a distance
+  of 2 px were saved as `..._self_contact_(effectors-effectors)_px` instead of
+  `..._self_contact_2_px`, and could not be found back.
+- Computing a neighborhood again without clearing the previous ones replaces
+  it instead of writing its columns a second time under the same names.
 
 ### Documentation
 - A new guide, *How to relate contacts and other quantities to an event with a

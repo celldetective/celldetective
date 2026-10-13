@@ -799,6 +799,53 @@ def set_live_status(
     return setA, setB, status
 
 
+_COUNT_PREFIXES = (
+    "intermediate_count_",
+    "inclusive_count_",
+    "exclusive_count_",
+    "mean_count_",
+)
+
+
+def _population_column(column: str, population: List[str]) -> str:
+    """Name a two-population neighborhood column after its populations:
+    ``neighborhood_2_`` becomes ``neighborhood_(A-B)_``. Self neighborhoods
+    keep their name."""
+    if population[0] == population[1]:
+        return column
+    return column.replace(
+        "neighborhood_2_", f"neighborhood_({population[0]}-{population[1]})_", 1
+    )
+
+
+def _rename_counts_to_populations(
+    df: pd.DataFrame, population: List[str]
+) -> pd.DataFrame:
+    """Rename the count and mean columns of a two-population neighborhood
+    after its populations."""
+    counts = [c for c in df.columns if c.startswith(_COUNT_PREFIXES)]
+    return df.rename(columns={c: _population_column(c, population) for c in counts})
+
+
+def _drop_recomputed_columns(
+    df: pd.DataFrame, kind: str, distance: List[float], population: List[str]
+) -> pd.DataFrame:
+    """Drop the neighbor, count and mean columns of the neighborhoods about
+    to be computed, left by a previous run, so that computing one again
+    replaces it instead of adding a duplicate column."""
+    mode = "self" if population[0] == population[1] else "2"
+    names = [
+        _population_column(f"neighborhood_{mode}_{kind}_{d}_px", population)
+        for d in distance
+    ]
+    stale = [
+        c
+        for c in df.columns
+        if any(c == n or c.endswith("_" + n) or f"_{n}_" in c for n in names)
+    ]
+    return df.drop(columns=stale)
+
+
 def compute_attention_weight(
     dist_matrix: np.ndarray,
     cut_distance: float,
@@ -1160,6 +1207,9 @@ def compute_neighborhood_at_position(
         df_A = df_A.drop(columns=unwanted)
         unwanted = df_B.columns[df_B.columns.str.contains("neighborhood")]
         df_B = df_B.drop(columns=unwanted)
+    # Computing a neighborhood again replaces it.
+    df_A = _drop_recomputed_columns(df_A, "circle", distance, population)
+    df_B = _drop_recomputed_columns(df_B, "circle", distance, population)
 
     df_A, df_B = distance_cut_neighborhood(df_A, df_B, distance, **neighborhood_kwargs)
 
@@ -1205,30 +1255,14 @@ def compute_neighborhood_at_position(
         for td, d in zip(theta_dist, distance):
             if neighborhood_kwargs["mode"] == "two-pop":
                 neigh_col = f"neighborhood_2_circle_{d}_px"
-                new_neigh_col = neigh_col.replace(
-                    "_2_", f"_({population[0]}-{population[1]})_", 1
-                )
+                new_neigh_col = _population_column(neigh_col, population)
                 df_A = df_A.rename(columns={neigh_col: new_neigh_col})
             elif neighborhood_kwargs["mode"] == "self":
                 neigh_col = f"neighborhood_self_circle_{d}_px"
             df_B = df_B.drop(columns=[neigh_col])
         df_B.to_pickle(path_B.replace(".csv", ".pkl"))
 
-    cols_to_rename = [
-        c
-        for c in list(df_A.columns)
-        if c.startswith("intermediate_count_")
-        or c.startswith("inclusive_count_")
-        or c.startswith("exclusive_count_")
-        or c.startswith("mean_count_")
-    ]
-    new_col_names = [
-        c.replace("_2_", f"_({population[0]}-{population[1]})_", 1) for c in cols_to_rename
-    ]
-    new_name_map = {}
-    for k, c in enumerate(cols_to_rename):
-        new_name_map.update({c: new_col_names[k]})
-    df_A = df_A.rename(columns=new_name_map)
+    df_A = _rename_counts_to_populations(df_A, population)
 
     df_A.to_pickle(path_A.replace(".csv", ".pkl"))
 
@@ -2179,6 +2213,9 @@ def compute_contact_neighborhood_at_position(
         df_A = df_A.drop(columns=unwanted)
         unwanted = df_B.columns[df_B.columns.str.contains("neighborhood")]
         df_B = df_B.drop(columns=unwanted)
+    # Computing a neighborhood again replaces it.
+    df_A = _drop_recomputed_columns(df_A, "contact", distance, population)
+    df_B = _drop_recomputed_columns(df_B, "contact", distance, population)
 
     logger.debug(f"Distance: {distance} for mask contact")
     df_A, df_B = mask_contact_neighborhood(
@@ -2232,30 +2269,14 @@ def compute_contact_neighborhood_at_position(
         for td, d in zip(theta_dist, distance):
             if neighborhood_kwargs["mode"] == "two-pop":
                 neigh_col = f"neighborhood_2_contact_{d}_px"
-                new_neigh_col = neigh_col.replace(
-                    "_2_", f"_({population[0]}-{population[1]})_", 1
-                )
+                new_neigh_col = _population_column(neigh_col, population)
                 df_A = df_A.rename(columns={neigh_col: new_neigh_col})
             elif neighborhood_kwargs["mode"] == "self":
                 neigh_col = f"neighborhood_self_contact_{d}_px"
             df_B = df_B.drop(columns=[neigh_col])
         df_B.to_pickle(path_B.replace(".csv", ".pkl"))
 
-    cols_to_rename = [
-        c
-        for c in list(df_A.columns)
-        if c.startswith("intermediate_count_")
-        or c.startswith("inclusive_count_")
-        or c.startswith("exclusive_count_")
-        or c.startswith("mean_count_")
-    ]
-    new_col_names = [
-        c.replace("_2_", f"_({population[0]}-{population[1]})_", 1) for c in cols_to_rename
-    ]
-    new_name_map = {}
-    for k, c in enumerate(cols_to_rename):
-        new_name_map.update({c: new_col_names[k]})
-    df_A = df_A.rename(columns=new_name_map)
+    df_A = _rename_counts_to_populations(df_A, population)
 
     logger.debug(f"Final df_A columns: {list(df_A.columns)}")
     df_A.to_pickle(path_A.replace(".csv", ".pkl"))
