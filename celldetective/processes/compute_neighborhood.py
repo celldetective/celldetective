@@ -24,6 +24,9 @@ from celldetective.neighborhood import (
     mean_neighborhood_before_event,
     _compute_mask_contact_dist_map,
     _fill_contact_neighborhood_at_t,
+    _drop_recomputed_columns,
+    _population_column,
+    _rename_counts_to_populations,
 )
 from celldetective.utils.data_cleaning import extract_identity_col
 from celldetective.utils import COLUMN_LABELS
@@ -384,6 +387,9 @@ class NeighborhoodProcess(Process):
 
                     # compute distance matrix
                     dist_map = cdist(coordinates_A, coordinates_B, metric="euclidean")
+                    if mode == "self":
+                        # A cell is not its own neighbor.
+                        np.fill_diagonal(dist_map, 1.0e06)
 
                     if attention_weight:
                         weights, closest_A = compute_attention_weight(
@@ -570,6 +576,9 @@ class NeighborhoodProcess(Process):
             df_A = df_A.drop(columns=unwanted)
             unwanted = df_B.columns[df_B.columns.str.contains("neighborhood")]
             df_B = df_B.drop(columns=unwanted)
+        # Computing a neighborhood again replaces it.
+        df_A = _drop_recomputed_columns(df_A, "circle", distance, population)
+        df_B = _drop_recomputed_columns(df_B, "circle", distance, population)
 
         df_A, df_B = self.distance_cut_neighborhood(
             df_A, df_B, distance, **neighborhood_kwargs
@@ -619,31 +628,14 @@ class NeighborhoodProcess(Process):
             for td, d in zip(theta_dist, distance):
                 if neighborhood_kwargs["mode"] == "two-pop":
                     neigh_col = f"neighborhood_2_circle_{d}_px"
-                    new_neigh_col = neigh_col.replace(
-                        "_2_", f"_({population[0]}-{population[1]})_", 1
-                    )
+                    new_neigh_col = _population_column(neigh_col, population)
                     df_A = df_A.rename(columns={neigh_col: new_neigh_col})
                 elif neighborhood_kwargs["mode"] == "self":
                     neigh_col = f"neighborhood_self_circle_{d}_px"
                 df_B = df_B.drop(columns=[neigh_col])
             df_B.to_pickle(path_B.replace(".csv", ".pkl"))
 
-        cols_to_rename = [
-            c
-            for c in list(df_A.columns)
-            if c.startswith("intermediate_count_")
-            or c.startswith("inclusive_count_")
-            or c.startswith("exclusive_count_")
-            or c.startswith("mean_count_")
-        ]
-        new_col_names = [
-            c.replace("_2_", f"_({population[0]}-{population[1]})_", 1)
-            for c in cols_to_rename
-        ]
-        new_name_map = {}
-        for k, c in enumerate(cols_to_rename):
-            new_name_map.update({c: new_col_names[k]})
-        df_A = df_A.rename(columns=new_name_map)
+        df_A = _rename_counts_to_populations(df_A, population)
 
         df_A.to_pickle(path_A.replace(".csv", ".pkl"))
 
@@ -803,6 +795,9 @@ class NeighborhoodProcess(Process):
             df_A = df_A.drop(columns=unwanted)
             unwanted = df_B.columns[df_B.columns.str.contains("neighborhood")]
             df_B = df_B.drop(columns=unwanted)
+        # Computing a neighborhood again replaces it.
+        df_A = _drop_recomputed_columns(df_A, "contact", distance, population)
+        df_B = _drop_recomputed_columns(df_B, "contact", distance, population)
 
         logger.debug(f"Distance: {distance} for mask contact")
         df_A, df_B = self.mask_contact_neighborhood(
@@ -856,9 +851,7 @@ class NeighborhoodProcess(Process):
             for td, d in zip(theta_dist, distance):
                 if neighborhood_kwargs["mode"] == "two-pop":
                     neigh_col = f"neighborhood_2_contact_{d}_px"
-                    new_neigh_col = neigh_col.replace(
-                        "_2_", f"_({population[0]}-{population[1]})_", 1
-                    )
+                    new_neigh_col = _population_column(neigh_col, population)
                     df_A = df_A.rename(columns={neigh_col: new_neigh_col})
                 elif neighborhood_kwargs["mode"] == "self":
                     neigh_col = f"neighborhood_self_contact_{d}_px"
@@ -868,22 +861,7 @@ class NeighborhoodProcess(Process):
                 df_B = df_B.drop(columns=[neigh_col])
             df_B.to_pickle(path_B.replace(".csv", ".pkl"))
 
-        cols_to_rename = [
-            c
-            for c in list(df_A.columns)
-            if c.startswith("intermediate_count_")
-            or c.startswith("inclusive_count_")
-            or c.startswith("exclusive_count_")
-            or c.startswith("mean_count_")
-        ]
-        new_col_names = [
-            c.replace("_2_", f"_({population[0]}-{population[1]})_", 1)
-            for c in cols_to_rename
-        ]
-        new_name_map = {}
-        for k, c in enumerate(cols_to_rename):
-            new_name_map.update({c: new_col_names[k]})
-        df_A = df_A.rename(columns=new_name_map)
+        df_A = _rename_counts_to_populations(df_A, population)
 
         logger.debug(f"Final df_A columns: {list(df_A.columns)}")
         df_A.to_pickle(path_A.replace(".csv", ".pkl"))
