@@ -76,9 +76,13 @@ jobs:
             celldetective-zenodo-v3-${{ runner.os }}-py${{ matrix.python-version }}-${{ hashFiles('tests/**/*.py') }}-success-
             celldetective-zenodo-v3-${{ runner.os }}-py${{ matrix.python-version }}-${{ hashFiles('tests/**/*.py') }}-
             celldetective-zenodo-v3-${{ runner.os }}-py${{ matrix.python-version }}-
+      # pytest, not `python -m unittest`: unittest only collects TestCase
+      # classes and silently skipped every plain pytest test file. pytest runs
+      # both. The GUI tests run in the next step, one process per file. The
+      # notebook test needs the demo dataset, which is not downloaded here.
       - name: Test package
         run: |
-          python -m unittest
+          python -m pytest tests --ignore=tests/gui --deselect tests/test_notebooks.py::test_notebook_runs
       - name: Test GUI
         run: |
           python tests/run_gui_tests.py
@@ -211,9 +215,13 @@ jobs:
             celldetective-zenodo-v3-${{ runner.os }}-py${{ matrix.python-version }}-${{ hashFiles('tests/**/*.py') }}-success-
             celldetective-zenodo-v3-${{ runner.os }}-py${{ matrix.python-version }}-${{ hashFiles('tests/**/*.py') }}-
             celldetective-zenodo-v3-${{ runner.os }}-py${{ matrix.python-version }}-
+      # pytest, not `python -m unittest`: unittest only collects TestCase
+      # classes and silently skipped every plain pytest test file. pytest runs
+      # both. The GUI tests run in the next step, one process per file. The
+      # notebook test needs the demo dataset, which is not downloaded here.
       - name: Test package
         run: |
-          python -m unittest
+          python -m pytest tests --ignore=tests/gui --deselect tests/test_notebooks.py::test_notebook_runs
       - name: Test GUI
         run: |
           python tests/run_gui_tests.py
