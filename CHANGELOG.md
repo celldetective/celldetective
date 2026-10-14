@@ -76,6 +76,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   neighborhood split by death status in adjusted Cox models, and the delay
   range by likelihood. It needs no download; its first part runs with the
   tests.
+- `celldetective.attraction` tests whether effectors are drawn to the targets
+  or only meet them by chance. The null model shifts all the effector tracks
+  of a position by one random offset, wrapping around the field
+  (`shift_tracks`): the effectors keep their motion and lose any link to the
+  targets. `arrival_test` compares the fraction of free steps that end in
+  contact with that of the shifted tracks, a permutation test per position and
+  pooled; time spent in contact is not counted, so effectors that only stay
+  long on the targets do not look attracted. `approach_bias` gives, by distance
+  to the nearest target, the mean cosine between the effectors' steps and the
+  direction of that target, against the band of the shifted tracks. Both take
+  time windows, to date a recruitment that starts during the movie.
+- The synthetic movie can make effectors blind to the targets: `attraction`
+  is the chance that a wandering effector heads for a target (one value per
+  frame for a recruitment that starts during the movie), and with `capture`
+  wandering effectors dock to the targets they bump into, so that contacts
+  happen by chance alone. The demo notebook gains a third part that tells
+  blind, attracted and late-recruited effectors apart from the images.
 
 ### Changed
 - The initial contrast of the image viewers, the signal and pair annotators and

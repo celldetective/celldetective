@@ -57,6 +57,9 @@ Interactions
 .. automodule:: celldetective.relative_measurements
    :members:
 
+.. automodule:: celldetective.attraction
+   :members:
+
 Utils
 -----
 

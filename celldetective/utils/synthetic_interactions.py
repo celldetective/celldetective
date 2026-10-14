@@ -196,6 +196,8 @@ def simulate_interactions(
     bystander_death: float = 0.0,
     bystander_radius: float = 80.0,
     recruitment: float = 0.0,
+    attraction: Union[float, Sequence[float]] = 1.0,
+    capture: bool = False,
     combined_channel: bool = True,
     background: float = 100.0,
     foreground: float = 1000.0,
@@ -209,7 +211,9 @@ def simulate_interactions(
     duration in ``contact_durations`` (cycled per effector, so short and long
     contacts alternate) before it leaves. Docked effectors follow their
     target's jiggle. Free effectors are kept clear of every target and of
-    each other, so masks only touch during a docking.
+    each other, so masks only touch during a docking. ``attraction`` and
+    ``capture`` make the approach optional, down to effectors that only meet
+    targets by chance.
 
     Parameters
     ----------
@@ -283,6 +287,17 @@ def simulate_interactions(
         ``bystander_radius`` of it. Targets near dead ones then receive more
         contacts: an indirect effect of the death of their neighbors, through
         the effectors. Default 0 (the nearest target).
+    attraction : float or sequence of float
+        Chance that a wandering effector heads for a target at the end of
+        each wander phase; otherwise it wanders on for another phase. A
+        sequence gives one chance per frame, for a recruitment that builds
+        up during the movie. Default 1: every effector is drawn to a target
+        after each wander.
+    capture : bool
+        A wandering effector that bumps into a target docks to it, as it
+        would after an approach. With ``attraction=0``, effectors are blind
+        to the targets and every contact is a chance encounter: the null
+        model of an attraction test. Default False.
     combined_channel : bool
         Add a channel showing both populations: effectors at ``foreground``
         and targets halfway between ``background`` and ``foreground``, so a
@@ -300,6 +315,9 @@ def simulate_interactions(
     """
     if not per_effector_hits and (cooperativity != 1 or lethality_per_kill != 1):
         raise ValueError("cooperativity and lethality_per_kill need per_effector_hits=True.")
+    attraction_t = np.broadcast_to(np.asarray(attraction, float), (n_frames,))
+    if np.any((attraction_t < 0) | (attraction_t > 1)):
+        raise ValueError("attraction is a probability, between 0 and 1.")
     rng = np.random.default_rng(seed)
     deaths = death_after is not None or death_probability > 0 or background_death > 0 or bystander_death > 0
     shape = (int(shape[0]), int(shape[1]))
@@ -358,6 +376,12 @@ def simulate_interactions(
                     return a
         return None
 
+    def dock(e: _Effector, t_idx: int, angle: float, t: int) -> None:
+        e.state, e.target, e.dock_angle, e.t_start = "docked", t_idx, angle, t
+        e.timer = int(contact_durations[e.n_contacts % len(contact_durations)]) - 1
+        e.n_contacts += 1
+        e.pos = centres[t_idx] + contact_d * np.array([np.cos(angle), np.sin(angle)])
+
     for t in range(n_frames):
         # Targets: an Ornstein-Uhlenbeck jiggle around their rest position.
         offset = 0.6 * offset + rng.normal(0, jiggle * 0.8, offset.shape)
@@ -385,7 +409,10 @@ def simulate_interactions(
             if e.state == "free":
                 e.timer -= 1
                 e.heading += rng.normal(0, 0.5)
-                if e.timer < 0:
+                # The draw only happens below 1, so that a seed gives the same movie as before.
+                if e.timer < 0 and attraction_t[t] < 1 and rng.random() >= attraction_t[t]:
+                    e.timer = int(rng.integers(*free_frames, endpoint=True))
+                elif e.timer < 0:
                     choices = [k for k in range(n_targets) if k != e.last_target] or list(range(n_targets))
                     d = np.array([np.hypot(*(centres[k] - e.pos)) for k in choices])
                     if recruitment > 0:
@@ -399,10 +426,7 @@ def simulate_interactions(
                 if dist - effector_speed <= free_d:
                     angle = free_angle(e.target, np.arctan2(-to_t[1], -to_t[0]), e)
                     if angle is not None:
-                        e.state, e.dock_angle, e.t_start = "docked", angle, t
-                        e.timer = int(contact_durations[e.n_contacts % len(contact_durations)]) - 1
-                        e.n_contacts += 1
-                        e.pos = centres[e.target] + contact_d * np.array([np.cos(angle), np.sin(angle)])
+                        dock(e, e.target, angle, t)
                         continue
                     # Target crowded: try another one.
                     e.state, e.last_target, e.timer = "free", e.target, 1
@@ -415,6 +439,24 @@ def simulate_interactions(
                 e.heading = np.pi - e.heading
             if bounced[1]:
                 e.heading = -e.heading
+
+            if capture and e.state == "free":
+                # A chance encounter: dock to a target the step ran into. The
+                # target just left stays out of reach until the effector is
+                # clear of it, else it would dock back at once.
+                d = np.hypot(*(centres - e.pos).T)
+                if e.last_target is not None and d[e.last_target] > free_d + 2 * effector_speed:
+                    e.last_target = None
+                for k in np.argsort(d):
+                    if d[k] > free_d:
+                        break
+                    if k == e.last_target:
+                        continue
+                    to_e = e.pos - centres[k]
+                    angle = free_angle(k, np.arctan2(to_e[1], to_e[0]), e)
+                    if angle is not None:
+                        dock(e, int(k), angle, t)
+                        break
 
         # Keep moving effectors clear of targets and of each other.
         for _ in range(4):
@@ -581,7 +623,9 @@ def simulate_interactions(
                 "cooperativity": cooperativity, "lethality_per_kill": lethality_per_kill,
                 "contact_maturation": contact_maturation, "resistant_fraction": resistant_fraction,
                 "bystander_death": bystander_death, "bystander_radius": bystander_radius,
-                "recruitment": recruitment, "combined_channel": combined_channel},
+                "recruitment": recruitment, "capture": capture,
+                "attraction": float(attraction) if np.ndim(attraction) == 0 else [float(a) for a in attraction],
+                "combined_channel": combined_channel},
     )
 
 
@@ -738,6 +782,9 @@ def main(argv: Optional[List[str]] = None) -> None:
                    help="chance a target dies at each frame, whatever its contacts")
     p.add_argument("--death-delay", type=int, default=0,
                    help="frames a target killed by a contact still looks alive")
+    p.add_argument("--attraction", type=float, default=1.0,
+                   help="chance a wandering effector heads for a target after each wander phase")
+    p.add_argument("--capture", action="store_true", help="wandering effectors dock to the targets they bump into")
     p.add_argument("--no-combined", action="store_true", help="leave out the channel showing both populations")
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--with-labels", action="store_true", help="write true masks to skip segmentation")
@@ -747,7 +794,8 @@ def main(argv: Optional[List[str]] = None) -> None:
         shape=tuple(args.size), n_frames=args.frames, n_targets=args.targets, n_effectors=args.effectors,
         contact_durations=args.durations, death_after=args.death_after,
         death_probability=args.death_probability, background_death=args.background_death,
-        death_delay=args.death_delay, combined_channel=not args.no_combined, seed=args.seed,
+        death_delay=args.death_delay, attraction=args.attraction, capture=args.capture,
+        combined_channel=not args.no_combined, seed=args.seed,
     )
     pos = write_experiment(args.path, sim, write_labels=args.with_labels, write_tables=args.with_tables)
     print(f"Wrote {pos}: {len(sim.episodes)} contact episodes, {len(sim.contacts)} contact frames.")
