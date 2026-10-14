@@ -64,7 +64,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   synthetic effector-target experiment and analyses it with the API alone:
   threshold segmentation, tracking, measurements, death detection by threshold
   and step fit, target survival, contact neighborhood, pairs, contact episodes
-  and the contact hazard. It recovers the parameters of the simulation (cell
+  and the hazard model. It recovers the parameters of the simulation (cell
   numbers and sizes, motion, contact durations, the death probability per
   contact frame, the background death rate and the delay between a lethal
   contact and the death, found as the lag at which the contact hazard ratio
