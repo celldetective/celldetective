@@ -12,7 +12,6 @@ movie.
 import gc
 import json
 import os
-from glob import glob
 from typing import Any, Callable, Iterable, List, Optional, Sequence, Tuple, Union
 
 import matplotlib.pyplot as plt
@@ -52,6 +51,7 @@ from celldetective.utils.experiment import (
     extract_experiment_channels,
     get_experiment_labels,
     get_experiment_metadata,
+    get_position_movie_path,
 )
 from celldetective.utils.image_loaders import (
     _get_img_num_per_channel,
@@ -153,16 +153,33 @@ def event_columns(class_name: str) -> Tuple[str, str]:
     return f"t_{suffix}", f"status_{suffix}"
 
 
+def pair_event_columns(class_name: str, columns: Iterable[str] = ()) -> Tuple[str, str]:
+    """
+    Time and status columns of a pair event class.
+
+    The pair tables name the time ``t0_<event>``; a table naming it
+    ``t_<event>``, as the cell tables do, keeps its column.
+    """
+
+    time_name, status_name = event_columns(class_name)
+    if time_name.startswith("t_"):
+        pair_time = "t0_" + time_name[len("t_") :]
+        if pair_time in columns or time_name not in columns:
+            time_name = pair_time
+    return time_name, status_name
+
+
 def _colors(values: np.ndarray, color_of: Callable, recently_modified: bool = False) -> list:
     """The color of each value, computed once per distinct value."""
 
     palette = {}
     colors = []
     for value in values:
-        # NaN keys never match: their color is recomputed, as it is cheap and rare.
-        if value not in palette:
-            palette[value] = color_of(value, recently_modified=recently_modified)
-        colors.append(palette[value])
+        # NaN never equals itself: give all NaNs one key.
+        key = None if value != value else value
+        if key not in palette:
+            palette[key] = color_of(value, recently_modified=recently_modified)
+        colors.append(palette[key])
     return colors
 
 
@@ -569,11 +586,10 @@ class AnnotatorMixin:
             Whether a movie was found.
         """
 
-        movies = glob(self.pos + os.sep.join(["movie", f"{movie_prefix}*.tif"]))
-        if not movies:
+        self.stack_path = get_position_movie_path(self.pos, movie_prefix)
+        if self.stack_path is None:
             return False
 
-        self.stack_path = movies[0]
         self.len_movie = auto_load_number_of_frames(self.stack_path) or len_movie
         channel_names, channels = extract_experiment_channels(self.exp_dir)
         self.channel_names = np.array(channel_names)
@@ -725,7 +741,6 @@ class AnnotatorMixin:
     def set_signal_ylim(self, ymin: float, ymax: float, log_min: float) -> None:
         """Set the y-limits of the signal plot, from `log_min` in log scale."""
 
-        self.non_log_ymin, self.non_log_ymax = ymin, ymax
         self.value_magnitude = log_min
         if self.cell_ax.get_yscale() == "linear":
             self.cell_ax.set_ylim(ymin, ymax)
@@ -981,7 +996,7 @@ class AnimationMixin:
             blit=True,
             cache_frame_data=False,
         )
-        self._pick_cid = self.fig.canvas.mpl_connect("pick_event", self.on_scatter_pick)
+        self.fig.canvas.mpl_connect("pick_event", self.on_scatter_pick)
         self.fcanvas.canvas.draw()
 
     def animation_generator(self):
@@ -1065,8 +1080,8 @@ class AnimationMixin:
     def contrast_slider_action(self) -> None:
         """Recontrast the movie as the contrast slider moves."""
 
-        self.vmin, self.vmax = self.contrast_slider.value()
-        self.im.set_clim(vmin=self.vmin, vmax=self.vmax)
+        vmin, vmax = self.contrast_slider.value()
+        self.im.set_clim(vmin=vmin, vmax=vmax)
         self.fcanvas.canvas.draw_idle()
 
     def show_frame(self, framedata: int) -> None:

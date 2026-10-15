@@ -38,6 +38,7 @@ from celldetective.gui.annotator_common import (
     fit_feature_scaler,
     icon_button,
     new_class_dialog,
+    pair_event_columns,
     prefill_class,
     save_dataset,
     signal_limits,
@@ -100,7 +101,6 @@ class PairEventAnnotator(
         self.annotation_log = []
 
         self.reference_selection = []
-        self.neighbor_selection = []
         self.pair_selection = []
         self.neigh_cell_loc_t = []
         self.neigh_cell_loc_idx = []
@@ -494,11 +494,10 @@ class PairEventAnnotator(
         ):
             return
         time_name, status_name = event_columns(class_to_delete)
-        # The pair tables name the time t0_<event>, or t_<event> as the cells.
-        legacy_time = "t0_" + time_name[len("t_") :] if time_name.startswith("t_") else time_name
+        pair_time, _ = pair_event_columns(class_to_delete)
         self.df_relative = self.df_relative.drop(
             columns=list(
-                dict.fromkeys([class_to_delete, time_name, legacy_time, status_name])
+                dict.fromkeys([class_to_delete, time_name, pair_time, status_name])
             ),
             errors="ignore",
         )
@@ -525,14 +524,8 @@ class PairEventAnnotator(
         """Write new relative event class."""
 
         name = self.relative_class_name_le.text()
-        if name:
-            class_name, time_name, status_name = (
-                f"class_{name}",
-                f"t0_{name}",
-                f"status_{name}",
-            )
-        else:
-            class_name, time_name, status_name = "class", "t0", "status"
+        class_name = f"class_{name}" if name else "class"
+        time_name, status_name = pair_event_columns(class_name, self.df_relative.columns)
 
         if class_name in self.df_relative.columns and not confirm(
             "This event name already exists. If you proceed,\nall annotated data will be rewritten. Do you wish to continue?"
@@ -632,12 +625,9 @@ class PairEventAnnotator(
         if self.pair_class_name == "":
             return
 
-        self.pair_time_name, self.pair_status_name = event_columns(self.pair_class_name)
-        if self.pair_time_name.startswith("t_"):
-            # The pair tables name the time t0_<event>, or t_<event> as the cells.
-            legacy_time = "t0_" + self.pair_time_name[len("t_") :]
-            if legacy_time in self.df_relative.columns:
-                self.pair_time_name = legacy_time
+        self.pair_time_name, self.pair_status_name = pair_event_columns(
+            self.pair_class_name, self.df_relative.columns
+        )
 
         # The status is made only if missing, not to erase static classifications.
         complete_event_columns(
@@ -738,7 +728,6 @@ class PairEventAnnotator(
             self.lines_colors_class[t][selected, 2] = self.initial_lines_colors_class[t][selected, 2]
 
         # Unselect and recolor neighbor
-        self.neighbor_selection = []
         self.neighbor_track_of_interest = None
         _, _, colors_neigh, _ = self.get_neighbor_sets()
         for k, (t, idx) in enumerate(
@@ -812,7 +801,6 @@ class PairEventAnnotator(
 
         # Unselect the pair, but keep the reference
         self.pair_selection = []
-        self.neighbor_selection = []
         self.neighbor_track_of_interest = None
 
         self.refresh_scatter_from_trajectories(self.reference_population)
@@ -1187,7 +1175,6 @@ class PairEventAnnotator(
     def extract_scatter_from_lines(self):
         """Extract scatter from lines."""
 
-        self.lines_tracks = []
         self.lines_colors_status = []
         self.initial_lines_colors_status = []
         self.lines_colors_class = []
@@ -1199,7 +1186,6 @@ class PairEventAnnotator(
         ]
         for frame_pairs in split_by_frame(pairs, self.len_movie):
             data = frame_pairs.iloc[:, 1:].to_numpy()
-            self.lines_tracks.append(data[:, [0, 1]])
 
             self.initial_lines_colors_status.append(data[:, [0, 1, 2]])
             self.lines_colors_status.append(data[:, [0, 1, 2]])
@@ -1457,8 +1443,6 @@ class PairEventAnnotator(
         pair = (self.reference_track_of_interest, self.neighbor_track_of_interest)
         if pair not in self.pair_selection:
             self.pair_selection.append(pair)
-        if self.neighbor_track_of_interest not in self.neighbor_selection:
-            self.neighbor_selection.append(self.neighbor_track_of_interest)
         self.give_neighbor_cell_information()
         self.give_pair_information()
 

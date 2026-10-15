@@ -150,12 +150,7 @@ class MeasureAnnotator(BaseAnnotator):
         self.setWindowTitle("Phenotype Annotator")
 
         self.int_validator = QIntValidator()
-        self.current_alpha = 0.5
         self.value_magnitude = 1
-
-        epsilon = 0.01
-        self.observed_min_intensity = 0
-        self.observed_max_intensity = 0 + epsilon
 
         self.current_frame = 0
         self.show_fliers = False
@@ -179,13 +174,8 @@ class MeasureAnnotator(BaseAnnotator):
             elif len(self.labels) > self.len_movie:
                 self.labels = self.labels[: self.len_movie]
 
-        self.current_channel = 0
-        self.frame_lbl = QLabel("position: ")
-
         self.populate_window()
         self.changed_class()
-
-        self.previous_index = None
 
     @staticmethod
     def group_columns(columns) -> List[str]:
@@ -234,11 +224,7 @@ class MeasureAnnotator(BaseAnnotator):
             else:
                 self.df_tracks[status_col] = self.df_tracks[c]
 
-        self.class_cols = [
-            c
-            for c in self.df_tracks.columns
-            if c.startswith(("group", "status")) and c not in NON_GROUP_COLUMNS
-        ]
+        self.class_cols = self.group_columns(self.df_tracks.columns)
         if self.class_cols:
             if self.status_name not in self.class_cols:
                 self.status_name = self.class_cols[0]
@@ -399,9 +385,7 @@ class MeasureAnnotator(BaseAnnotator):
         self.viewer.frame_slider.valueChanged.connect(self.sync_frame)
         self.viewer.channel_cb.currentIndexChanged.connect(self.plot_signals)
         self.viewer.channel_cb.currentIndexChanged.connect(self._on_channel_changed)
-        self.cid_pick = self.viewer.fig.canvas.mpl_connect(
-            "pick_event", self.on_scatter_pick
-        )
+        self.viewer.fig.canvas.mpl_connect("pick_event", self.on_scatter_pick)
         self.right_panel.addWidget(self.viewer.canvas)
 
         # --- Assemble ---
@@ -415,10 +399,6 @@ class MeasureAnnotator(BaseAnnotator):
         # Force start at frame 0
         self.viewer.frame_slider.setValue(0)
         self.plot_signals()
-        self.compact_layout_main()
-
-    def compact_layout_main(self) -> None:
-        """Compact the main layout."""
         self.viewer.compact_layout()
 
     def _build_left_panel_tabs(self) -> None:

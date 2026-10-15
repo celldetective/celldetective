@@ -24,15 +24,11 @@ from celldetective.gui.gui_utils import PreprocessingLayout2
 from celldetective.measure import extract_blobs_in_image
 from celldetective.filters import filter_image
 from celldetective import get_logger
-from tifffile import imread
 
 logger = get_logger(__name__)
 
 
 class SpotDetectionVisualizer(StackVisualizer):
-
-    # The label images on disk, found once the stack is shown.
-    mask_paths = ()
 
     def __init__(
         self,
@@ -232,12 +228,21 @@ class SpotDetectionVisualizer(StackVisualizer):
         if not self.switch_from_channel:
             self.reset_detection()
 
-        if self.mode == "virtual" and self.mask_paths:
-            self.init_label = imread(self.mask_paths[value])
-            self.target_img = self.read_frame(self.detection_channel, value)
-        elif self.mode == "direct":
+        if self.label_mode == "virtual":
+            self.init_label = self.read_label(value)
+        else:
             self.init_label = self.labels[value, :, :]
-            self.target_img = self.stack[value, :, :, self.detection_channel].copy()
+        self.target_img = self.detection_frame(value)
+
+    def detection_frame(self, frame: int) -> np.ndarray:
+        """A frame of the detection channel, a copy that detection may alter."""
+
+        if self.mode == "direct":
+            return self.stack[frame, :, :, self.detection_channel].copy()
+        cached = self.frame_cache.get((self.detection_channel, frame))
+        if cached is not None:
+            return cached.copy()
+        return self.read_frame(self.detection_channel, frame)
 
     def detect_and_display_spots(self):
         """Run spot detection and update the display."""
@@ -273,30 +278,6 @@ class SpotDetectionVisualizer(StackVisualizer):
         empty_offset = np.ma.masked_array([0, 0], mask=True)
         self.spot_scat.set_offsets(empty_offset)
         self.canvas.canvas.draw()
-
-    def load_labels(self):
-        """Load cell labels."""
-
-        # Load the cell labels
-        if self.labels is not None:
-            self.labels = self.check_labels(self.labels)
-            self.mode = "direct"
-            self.init_label = self.labels[self.mid_time, :, :]
-        else:
-            self.mode = "virtual"
-            self.check_virtual_stack()
-            self.locate_labels_virtual()
-
-    def locate_labels_virtual(self):
-        """Locate virtual label files."""
-        # Locate virtual labels
-
-        self.mask_paths = self.find_label_paths(self.cell_type)
-        if self.mask_paths:
-            self.init_label = imread(self.mask_paths[self.frame_slider.value()])
-        else:
-            # The viewer closes: an empty label keeps the opening from failing.
-            self.init_label = np.zeros_like(self.init_frame)
 
     def generate_detection_channel(self):
         """Generate the detection channel selection widget."""
@@ -357,12 +338,7 @@ class SpotDetectionVisualizer(StackVisualizer):
         """
 
         self.detection_channel = value
-        if self.mode == "direct":
-            self.target_img = self.stack[-1, :, :, self.detection_channel]
-        elif self.mode == "virtual":
-            self.target_img = self.read_frame(
-                self.detection_channel, self.frame_slider.value()
-            ).astype(float)
+        self.target_img = self.detection_frame(self.current_time_index)
 
     def generate_spot_detection_params(self):
         """Generate spot detection parameter widgets."""

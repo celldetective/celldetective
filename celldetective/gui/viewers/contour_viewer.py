@@ -1,4 +1,3 @@
-from pathlib import Path
 from typing import Optional, Union, Tuple, Any
 
 import numpy as np
@@ -18,8 +17,6 @@ from collections import OrderedDict
 from celldetective.gui.gui_utils import QuickSliderLayout
 from celldetective.gui.viewers.base_viewer import StackVisualizer
 from celldetective import get_logger
-from tifffile import imread
-import re
 
 logger = get_logger(__name__)
 
@@ -141,43 +138,9 @@ class CellEdgeVisualizer(StackVisualizer):
         super().closeEvent(event)
 
     def load_labels(self):
-        """Load the cell labels."""
-        # Load the cell labels
-
-        if self.labels is not None:
-            self.labels = self.check_labels(self.labels)
-            self.label_mode = "direct"
-            self.init_label = self.labels[self.mid_time, :, :]
-        else:
-            self.label_mode = "virtual"
-            self.check_virtual_stack()
-            self.locate_labels_virtual()
-
+        """Load the cell labels and their edges."""
+        super().load_labels()
         self.compute_edge_labels()
-
-    def locate_labels_virtual(self):
-        """Locate virtual labels."""
-        # Locate virtual labels
-
-        self.mask_paths = self.find_label_paths(self.cell_type)
-
-        self.label_map = {}
-        for path in self.mask_paths:
-            # Find the last number in the filename
-            match = re.findall(r"(\d+)", Path(path).stem)
-            if match:
-                # Assume the last number is the frame index (Use direct mapping: 0000 -> 0)
-                frame_num = int(match[-1])
-                self.label_map[frame_num] = path
-
-        current_frame = self.frame_slider.value()
-        if current_frame in self.label_map:
-            self.init_label = imread(self.label_map[current_frame])
-        else:
-            if hasattr(self, "init_frame"):
-                self.init_label = np.zeros_like(self.init_frame)
-            else:
-                self.init_label = imread(self.mask_paths[0])
 
     def generate_add_to_list_btn(self):
         """Generate the add to list button."""
@@ -345,12 +308,9 @@ class CellEdgeVisualizer(StackVisualizer):
         else:
             # Cache Miss: Load Label
             if self.label_mode == "virtual":
-                if hasattr(self, "label_map") and value in self.label_map:
-                    try:
-                        self.init_label = imread(self.label_map[value])
-                    except Exception:
-                        self.init_label = np.zeros_like(self.init_frame)
-                else:
+                try:
+                    self.init_label = self.read_label(value)
+                except Exception:
                     self.init_label = np.zeros_like(self.init_frame)
             elif self.label_mode == "direct":
                 if value < len(self.labels):

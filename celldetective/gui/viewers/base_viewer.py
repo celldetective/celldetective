@@ -647,17 +647,12 @@ class StackVisualizer(CelldetectiveWidget):
         if self.lock_y_action.isChecked():
             current_ylim = self.ax_profile.get_ylim()
 
-        # ax_profile.clear() already removes every artist on the axes,
-        # including any previous profile_line. Calling profile_line.remove()
-        # afterwards raises NotImplementedError ("cannot remove artist") because
-        # the artist is already detached, so we rely on clear() alone here.
+        # clear() removes the previous profile lines.
         self.ax_profile.clear()
         dist_axis = np.arange(num_points)
-        for i, (image, color) in enumerate(sources):
+        for image, color in sources:
             profile = map_coordinates(image, coords, order=1, mode="nearest")
-            (self.profile_line,) = self.ax_profile.plot(
-                dist_axis, profile, color=color, linestyle="-", label=f"Ch{i}"
-            )
+            self.ax_profile.plot(dist_axis, profile, color=color, linestyle="-")
         style_profile_axes(self.ax_profile)
         self.ax_profile.set_xlabel(title_str, fontsize=8)
         self.ax_profile.tick_params(axis="y", which="major", labelsize=6)
@@ -783,6 +778,41 @@ class StackVisualizer(CelldetectiveWidget):
         from pathlib import Path
 
         return os.sep.join([str(Path(self.stack_path).parent.parent), f"labels_{cell_type}", "*.tif"])
+
+    def load_labels(self) -> None:
+        """The labels given, or else those on disk, read by ``locate_labels_virtual``."""
+
+        if self.labels is not None:
+            self.labels = self.check_labels(self.labels)
+            self.label_mode = "direct"
+            self.init_label = self.labels[self.mid_time, :, :]
+        else:
+            self.label_mode = "virtual"
+            self.check_virtual_stack()
+            self.locate_labels_virtual()
+
+    def locate_labels_virtual(self) -> None:
+        """Find the label images of ``cell_type`` on disk, by frame, and read the current one."""
+        import re
+        from pathlib import Path
+
+        self.mask_paths = self.find_label_paths(self.cell_type)
+        self.label_map = {}
+        for path in self.mask_paths:
+            # The last number of the name is the frame (0000 -> 0).
+            numbers = re.findall(r"(\d+)", Path(path).stem)
+            if numbers:
+                self.label_map[int(numbers[-1])] = path
+        self.init_label = self.read_label(self.current_time_index)
+
+    def read_label(self, frame: int) -> np.ndarray:
+        """The label image of a frame on disk, empty if the frame has none."""
+        from tifffile import imread
+
+        path = getattr(self, "label_map", {}).get(frame)
+        if path is None:
+            return np.zeros_like(self.init_frame)
+        return imread(path)
 
     def find_label_paths(self, cell_type: str) -> List[str]:
         """

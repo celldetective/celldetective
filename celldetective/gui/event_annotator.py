@@ -327,7 +327,7 @@ class EventAnnotator(EventAnnotationMixin, AnimationMixin, BaseAnnotator):
 
         name = self.class_name_le.text()
         target_class = f"class_{name}" if name else "class"
-        target_time = f"t_{name}" if name else "t0"
+        target_time, target_status = event_columns(target_class)
 
         if target_class in self.df_tracks.columns and not confirm(
             "This event name already exists. If you proceed,\nall annotated data will be rewritten. Do you wish to continue?"
@@ -339,7 +339,6 @@ class EventAnnotator(EventAnnotationMixin, AnimationMixin, BaseAnnotator):
         self.df_tracks.loc[:, target_time] = 0.1 if fill_option == 0 else -1
         # A rewritten class keeps its status column, which selecting it would
         # not remake: derive it from the new class and time now.
-        _, target_status = event_columns(target_class)
         write_event_status(self.df_tracks, target_class, target_time, target_status)
 
         self.class_choice_cb.clear()
@@ -348,15 +347,6 @@ class EventAnnotator(EventAnnotationMixin, AnimationMixin, BaseAnnotator):
         self.class_choice_cb.setCurrentIndex(self.class_choice_cb.findText(target_class))
 
         self.newClassWidget.close()
-
-    def cancel_selection(self):
-        """Cancel the current selection and revert color changes."""
-        super().cancel_selection()
-        try:
-            for k, (t, idx) in enumerate(zip(self.loc_t, self.loc_idx)):
-                self.colors[t][idx, 1] = self.previous_color[k][1]
-        except Exception as e:
-            logger.debug(f"Could not revert colors on cancel: {e}")
 
     def track_rows(self):
         """Rows of the track of interest."""

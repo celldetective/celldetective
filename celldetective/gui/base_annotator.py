@@ -100,11 +100,7 @@ class BaseAnnotator(AnnotatorMixin, CelldetectiveMainWindow):
             self.locate_tracks()
             # Without trajectories the window closed: no widgets to build.
             if self.proceed:
-                self._init_base_widgets()
-
-    def _init_base_widgets(self):
-        """Initialize base widgets."""
-        self._init_base_widgets_left()
+                self._init_base_widgets_left()
 
     def _init_base_widgets_left(self):
         """Initialize left panel widgets."""
@@ -483,6 +479,6 @@ class BaseAnnotator(AnnotatorMixin, CelldetectiveMainWindow):
 
         try:
             for k, (t, idx) in enumerate(zip(self.loc_t, self.loc_idx)):
-                self.colors[t][idx, 0] = self.previous_color[k][0]
+                self.colors[t][idx] = self.previous_color[k]
         except Exception as e:
             logger.debug(f"Could not revert colors on cancel: {e}")
