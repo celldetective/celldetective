@@ -1,5 +1,5 @@
 from multiprocessing import Process, Queue
-from typing import Optional, Dict, Any, List, Union, Tuple
+from typing import Optional, Dict, Any
 import logging
 import time
 import os
@@ -7,30 +7,16 @@ import os
 logger = logging.getLogger("celldetective")
 
 from celldetective.log_manager import positionlogger
-from celldetective.utils.image_loaders import locate_labels
-from celldetective.utils.data_loaders import get_position_table, get_position_pickle
 
-from tqdm import tqdm
-import numpy as np
 import pandas as pd
 from art import tprint
 
 from celldetective.neighborhood import (
-    _fill_distance_neighborhood_at_t,
-    set_live_status,
-    compute_attention_weight,
-    compute_neighborhood_metrics,
-    mean_neighborhood_after_event,
-    mean_neighborhood_before_event,
-    _compute_mask_contact_dist_map,
-    _fill_contact_neighborhood_at_t,
-    _drop_recomputed_columns,
+    _neigh_col,
     _population_column,
-    _rename_counts_to_populations,
+    compute_contact_neighborhood_at_position,
+    compute_neighborhood_at_position,
 )
-from celldetective.utils.data_cleaning import extract_identity_col
-from celldetective.utils import COLUMN_LABELS
-from scipy.spatial.distance import cdist
 from celldetective.relative_measurements import measure_pair_signals_at_position
 
 
@@ -60,8 +46,6 @@ class NeighborhoodProcess(Process):
             for key, value in process_args.items():
                 setattr(self, key, value)
 
-        self.column_labels = COLUMN_LABELS.copy()
-
         tprint("Neighborhood")
 
         if not hasattr(self, "well_progress"):
@@ -71,842 +55,67 @@ class NeighborhoodProcess(Process):
         if not hasattr(self, "measure_pairs"):
             self.measure_pairs = False
 
-        self.sum_done = 0
-        self.t0 = time.time()
+        self.frames_done = 0
+        self.t0 = None
+        # Sweeps over the frames still to come after the current one: one
+        # per distance for the circle neighborhoods, one for all the contact
+        # ones. Set in `run`.
+        self.sweeps_left = 0
 
-    def mask_contact_neighborhood(
-        self,
-        setA: pd.DataFrame,
-        setB: pd.DataFrame,
-        labelsA: List[Optional[np.ndarray]],
-        labelsB: Optional[List[Optional[np.ndarray]]],
-        distance: Union[int, List[int]],
-        mode: str = "two-pop",
-        status: Optional[List[str]] = None,
-        not_status_option: Optional[List[bool]] = None,
-        compute_cum_sum: bool = True,
-        attention_weight: bool = True,
-        symmetrize: bool = True,
-        include_dead_weight: bool = True,
-        column_labels: Dict[str, str] = {
-            "track": "TRACK_ID",
-            "time": "FRAME",
-            "x": "POSITION_X",
-            "y": "POSITION_Y",
-            "mask_id": "class_id",
-        },
-    ) -> Tuple[pd.DataFrame, pd.DataFrame]:
-        """
-        Compute the neighborhood based on mask contact.
-
-        Parameters
-        ----------
-        setA : pandas.DataFrame
-            The first set of cells.
-        setB : pandas.DataFrame
-            The second set of cells.
-        labelsA : list
-            The list of label images for setA.
-        labelsB : list
-            The list of label images for setB.
-        distance : int
-            The distance threshold.
-        mode : str
-            The mode of computation.
-        status : str
-            The status column.
-        not_status_option : str
-            The not status option.
-        compute_cum_sum : bool
-            Whether to compute the cumulative sum.
-        attention_weight : bool
-            Whether to compute the attention weight.
-        symmetrize : bool
-            Whether to symmetrize the neighborhood.
-        include_dead_weight : bool
-            Whether to include dead weight.
-        column_labels : dict
-            The column labels.
-
-        Returns
-        -------
-        setA : pandas.DataFrame
-            The first set of cells with neighborhood data.
-        setB : pandas.DataFrame
-            The second set of cells with neighborhood data.
-        """
-
-        if setA is not None and setB is not None:
-            setA, setB, status = set_live_status(setA, setB, status, not_status_option)
+    def report_frame(self, done: int, total: int) -> None:
+        """Sends the progress of the frames of the position, and an estimate of
+        the time left, to the main process."""
+        now = time.time()
+        if done == 1 and self.frames_done > 0:
+            self.sweeps_left = max(self.sweeps_left - 1, 0)
+        self.frames_done += 1
+        if self.t0 is None:
+            # The time per frame is measured from the end of the first frame,
+            # so that the loading of the tables, labels and movie, done
+            # before it, is not counted as frame time.
+            self.t0 = now
+            frame_time = "Estimating the time left..."
         else:
-            return None, None
-
-        # Check distance option
-        if not isinstance(distance, list):
-            distance = [distance]
-
-        cl = []
-        for s in [setA, setB]:
-
-            # Check whether data can be tracked
-            temp_column_labels = column_labels.copy()
-
-            id_col = extract_identity_col(s)
-            temp_column_labels.update({"track": id_col})
-            if id_col == "ID":
-                compute_cum_sum = False
-
-            cl.append(temp_column_labels)
-
-        setA = setA.loc[~setA[cl[0]["track"]].isnull(), :].copy()
-        setB = setB.loc[~setB[cl[1]["track"]].isnull(), :].copy()
-
-        if labelsB is None:
-            labelsB = [None] * len(labelsA)
-
-        for d in distance:
-            # loop over each provided distance
-            if mode == "two-pop":
-                neigh_col = f"neighborhood_2_contact_{d}_px"
-            elif mode == "self":
-                neigh_col = f"neighborhood_self_contact_{d}_px"
-            else:
-                logger.error("Please provide a valid mode between `two-pop` and `self`...")
-                return None, None
-
-            setA[neigh_col] = np.nan
-            setA[neigh_col] = setA[neigh_col].astype(object)
-
-            setB[neigh_col] = np.nan
-            setB[neigh_col] = setB[neigh_col].astype(object)
-
-            # Loop over each available timestep
-            timeline = np.unique(
-                np.concatenate(
-                    [setA[cl[0]["time"]].to_numpy(), setB[cl[1]["time"]].to_numpy()]
-                )
-            ).astype(int)
-
-            self.sum_done = 0
-            self.t0 = time.time()
-
-            for t in tqdm(timeline):
-
-                setA_t = setA.loc[setA[cl[0]["time"]] == t, :].copy()
-                setB_t = setB.loc[setB[cl[1]["time"]] == t, :].copy()
-
-                if len(setA_t) > 0 and len(setB_t) > 0:
-                    dist_map, intersection_map = _compute_mask_contact_dist_map(
-                        setA_t,
-                        setB_t,
-                        labelsA[t],
-                        labelsB[t],
-                        distance=d,
-                        mode=mode,
-                        column_labelsA=cl[0],
-                        column_labelsB=cl[1],
-                    )
-
-                    if mode == "self":
-                        np.fill_diagonal(dist_map, 1.0e06)
-
-                    d_filter = 1.0e05
-                    if attention_weight:
-                        status_A = setA_t[status[0]].to_numpy()
-                        ids_A = setA_t[cl[0]["track"]].to_numpy()
-                        weights, closest_A = compute_attention_weight(
-                            dist_map,
-                            d_filter,
-                            status_A,
-                            ids_A,
-                            axis=1,
-                            include_dead_weight=include_dead_weight,
-                        )
-                    else:
-                        weights = None
-                        closest_A = None
-
-                    _fill_contact_neighborhood_at_t(
-                        t,
-                        setA,
-                        setB,
-                        dist_map,
-                        intersection_map=intersection_map,
-                        attention_weight=attention_weight,
-                        include_dead_weight=include_dead_weight,
-                        symmetrize=symmetrize,
-                        compute_cum_sum=compute_cum_sum,
-                        weights=weights,
-                        closest_A=closest_A,
-                        neigh_col=neigh_col,
-                        column_labelsA=cl[0],
-                        column_labelsB=cl[1],
-                        statusA=status[0],
-                        statusB=status[1],
-                        d_filter=d_filter,
-                    )
-
-                self.sum_done += 1 / len(timeline) * 100
-                mean_exec_per_step = (time.time() - self.t0) / (
-                    self.sum_done * len(timeline) / 100 + 1
-                )
-                pred_time = (
-                    len(timeline) - (self.sum_done * len(timeline) / 100 + 1)
-                ) * mean_exec_per_step
-                self.queue.put(
-                    {
-                        "frame_progress": self.sum_done,
-                        "frame_time": f"Time left: {round(pred_time, 1)}s",
-                        "well_progress": self.well_progress,
-                        "pos_progress": self.pos_progress,
-                    }
-                )
-
-        return setA, setB
-
-    def distance_cut_neighborhood(
-        self,
-        setA: pd.DataFrame,
-        setB: pd.DataFrame,
-        distance: Union[float, List[float]],
-        mode: str = "two-pop",
-        status: Optional[List[str]] = None,
-        not_status_option: Optional[List[bool]] = None,
-        compute_cum_sum: bool = True,
-        attention_weight: bool = True,
-        symmetrize: bool = True,
-        include_dead_weight: bool = True,
-        column_labels: Dict[str, str] = {
-            "track": "TRACK_ID",
-            "time": "FRAME",
-            "x": "POSITION_X",
-            "y": "POSITION_Y",
-        },
-    ) -> Tuple[pd.DataFrame, pd.DataFrame]:
-        """
-        Compute the neighborhood based on distance cut.
-
-        Parameters
-        ----------
-        setA : pandas.DataFrame
-            The first set of cells.
-        setB : pandas.DataFrame
-            The second set of cells.
-        distance : int
-            The distance threshold.
-        mode : str
-            The mode of computation.
-        status : str
-            The status column.
-        not_status_option : str
-            The not status option.
-        compute_cum_sum : bool
-            Whether to compute the cumulative sum.
-        attention_weight : bool
-            Whether to compute the attention weight.
-        symmetrize : bool
-            Whether to symmetrize the neighborhood.
-        include_dead_weight : bool
-            Whether to include dead weight.
-        column_labels : dict
-            The column labels.
-
-        Returns
-        -------
-        setA : pandas.DataFrame
-            The first set of cells with neighborhood data.
-        setB : pandas.DataFrame
-            The second set of cells with neighborhood data.
-        """
-        # Check live_status option
-        if setA is not None and setB is not None:
-            setA, setB, status = set_live_status(setA, setB, status, not_status_option)
-        else:
-            return None, None
-
-        # Check distance option
-        if not isinstance(distance, list):
-            distance = [distance]
-
-        for d in distance:
-            # loop over each provided distance
-
-            if mode == "two-pop":
-                neigh_col = f"neighborhood_2_circle_{d}_px"
-            elif mode == "self":
-                neigh_col = f"neighborhood_self_circle_{d}_px"
-            else:
-                logger.error("Please provide a valid mode between `two-pop` and `self`...")
-                return None, None
-
-            cl = []
-            for s in [setA, setB]:
-
-                # Check whether data can be tracked
-                temp_column_labels = column_labels.copy()
-
-                id_col = extract_identity_col(s)
-                temp_column_labels.update({"track": id_col})
-                if id_col == "ID":
-                    compute_cum_sum = (
-                        False  # if no tracking data then cum_sum is not relevant
-                    )
-                cl.append(temp_column_labels)
-
-                # Remove nan tracks (cells that do not belong to a track)
-                s[neigh_col] = np.nan
-                s[neigh_col] = s[neigh_col].astype(object)
-                s.dropna(subset=[cl[-1]["track"]], inplace=True)
-
-            # Loop over each available timestep
-            timeline = np.unique(
-                np.concatenate(
-                    [setA[cl[0]["time"]].to_numpy(), setB[cl[1]["time"]].to_numpy()]
-                )
-            ).astype(int)
-
-            self.sum_done = 0
-            self.t0 = time.time()
-            weights = None
-            closest_A = None
-
-            for t in tqdm(timeline):
-
-                coordinates_A = setA.loc[
-                    setA[cl[0]["time"]] == t, [cl[0]["x"], cl[0]["y"]]
-                ].to_numpy()
-                ids_A = setA.loc[setA[cl[0]["time"]] == t, cl[0]["track"]].to_numpy()
-                status_A = setA.loc[setA[cl[0]["time"]] == t, status[0]].to_numpy()
-
-                coordinates_B = setB.loc[
-                    setB[cl[1]["time"]] == t, [cl[1]["x"], cl[1]["y"]]
-                ].to_numpy()
-                ids_B = setB.loc[setB[cl[1]["time"]] == t, cl[1]["track"]].to_numpy()
-
-                if len(ids_A) > 0 and len(ids_B) > 0:
-
-                    # compute distance matrix
-                    dist_map = cdist(coordinates_A, coordinates_B, metric="euclidean")
-                    if mode == "self":
-                        # A cell is not its own neighbor.
-                        np.fill_diagonal(dist_map, 1.0e06)
-
-                    if attention_weight:
-                        weights, closest_A = compute_attention_weight(
-                            dist_map,
-                            d,
-                            status_A,
-                            ids_A,
-                            axis=1,
-                            include_dead_weight=include_dead_weight,
-                        )
-
-                    _fill_distance_neighborhood_at_t(
-                        t,
-                        setA,
-                        setB,
-                        dist_map,
-                        attention_weight=attention_weight,
-                        include_dead_weight=include_dead_weight,
-                        symmetrize=symmetrize,
-                        compute_cum_sum=compute_cum_sum,
-                        weights=weights,
-                        closest_A=closest_A,
-                        neigh_col=neigh_col,
-                        column_labelsA=cl[0],
-                        column_labelsB=cl[1],
-                        statusA=status[0],
-                        statusB=status[1],
-                        distance=d,
-                    )
-
-                self.sum_done += 1 / len(timeline) * 100
-                mean_exec_per_step = (time.time() - self.t0) / (
-                    self.sum_done * len(timeline) / 100 + 1
-                )
-                pred_time = (
-                    len(timeline) - (self.sum_done * len(timeline) / 100 + 1)
-                ) * mean_exec_per_step
-                self.queue.put(
-                    {
-                        "frame_progress": self.sum_done,
-                        "frame_time": f"Time left: {round(pred_time, 1)}s",
-                        "well_progress": self.well_progress,
-                        "pos_progress": self.pos_progress,
-                    }
-                )
-
-        return setA, setB
-
-    def compute_neighborhood_at_position(
-        self,
-        pos: str,
-        distance: Union[float, List[float]],
-        population: Union[str, List[str]] = ["targets", "effectors"],
-        theta_dist: Optional[Union[float, List[float]]] = None,
-        img_shape: Tuple[int, int] = (2048, 2048),
-        return_tables: bool = False,
-        clear_neigh: bool = False,
-        event_time_col: Optional[str] = None,
-        neighborhood_kwargs: Dict[str, Any] = {
-            "mode": "two-pop",
-            "status": None,
-            "not_status_option": None,
-            "include_dead_weight": True,
-            "compute_cum_sum": False,
-            "attention_weight": True,
-            "symmetrize": True,
-        },
-    ) -> Optional[Tuple[pd.DataFrame, pd.DataFrame]]:
-        """
-        Compute the neighborhood at a specific position.
-
-        Parameters
-        ----------
-        pos : str
-            The position path.
-        distance : int
-            The distance threshold.
-        population : list
-            The population names.
-        theta_dist : list
-            The theta distance thresholds.
-        img_shape : tuple
-            The image shape.
-        return_tables : bool
-            Whether to return the tables.
-        clear_neigh : bool
-            Whether to clear previous neighborhood data.
-        event_time_col : str
-            The event time column.
-        neighborhood_kwargs : dict
-            Additional arguments for neighborhood computation.
-
-        Returns
-        -------
-        setA : pandas.DataFrame
-            The first set of cells with neighborhood data.
-        setB : pandas.DataFrame
-            The second set of cells with neighborhood data.
-        """
-
-        pos = pos.replace("\\", "/")
-        pos = rf"{pos}"
-        if not os.path.exists(pos):
-            raise FileNotFoundError(f"Position {pos} is not a valid path.")
-
-        if isinstance(population, str):
-            population = [population, population]
-
-        if not isinstance(distance, list):
-            distance = [distance]
-        if not theta_dist is None and not isinstance(theta_dist, list):
-            theta_dist = [theta_dist]
-
-        if theta_dist is None:
-            theta_dist = [0.9 * d for d in distance]
-        if len(theta_dist) != len(distance):
-            raise ValueError("Incompatible number of distances and number of edge thresholds.")
-
-        if population[0] == population[1]:
-            neighborhood_kwargs.update({"mode": "self"})
-        if population[1] != population[0]:
-            neighborhood_kwargs.update({"mode": "two-pop"})
-
-        df_A, path_A = get_position_table(
-            pos, population=population[0], return_path=True
+            time_per_frame = (now - self.t0) / (self.frames_done - 1)
+            frames_left = total - done + self.sweeps_left * total
+            frame_time = f"Time left: {round(frames_left * time_per_frame, 1)}s"
+        self.queue.put(
+            {
+                "frame_progress": done / total * 100,
+                "frame_time": frame_time,
+                "well_progress": self.well_progress,
+                "pos_progress": self.pos_progress,
+            }
         )
-        df_B, path_B = get_position_table(
-            pos, population=population[1], return_path=True
-        )
-        if df_A is None or df_B is None:
-            return None
-
-        if clear_neigh:
-            if os.path.exists(path_A.replace(".csv", ".pkl")):
-                os.remove(path_A.replace(".csv", ".pkl"))
-            if os.path.exists(path_B.replace(".csv", ".pkl")):
-                os.remove(path_B.replace(".csv", ".pkl"))
-            df_pair, pair_path = get_position_table(
-                pos, population="pairs", return_path=True
-            )
-            if df_pair is not None:
-                os.remove(pair_path)
-
-        df_A_pkl = get_position_pickle(pos, population=population[0], return_path=False)
-        df_B_pkl = get_position_pickle(pos, population=population[1], return_path=False)
-
-        if df_A_pkl is not None:
-            pkl_columns = np.array(df_A_pkl.columns)
-            neigh_columns = np.array(
-                [c.startswith("neighborhood") for c in pkl_columns]
-            )
-            cols = list(pkl_columns[neigh_columns]) + ["FRAME"]
-
-            id_col = extract_identity_col(df_A_pkl)
-            cols.append(id_col)
-            on_cols = [id_col, "FRAME"]
-
-            logger.debug(f"Recover {cols} from the pickle file...")
-            try:
-                df_A = pd.merge(df_A, df_A_pkl.loc[:, cols], how="outer", on=on_cols)
-                logger.debug(f"Merged columns: {list(df_A.columns)}")
-            except Exception as e:
-                logger.warning(f"Failure to merge pickle and csv files: {e}")
-
-        if df_B_pkl is not None and df_B is not None:
-            pkl_columns = np.array(df_B_pkl.columns)
-            neigh_columns = np.array(
-                [c.startswith("neighborhood") for c in pkl_columns]
-            )
-            cols = list(pkl_columns[neigh_columns]) + ["FRAME"]
-
-            id_col = extract_identity_col(df_B_pkl)
-            cols.append(id_col)
-            on_cols = [id_col, "FRAME"]
-
-            logger.debug(f"Recover {cols} from the pickle file...")
-            try:
-                df_B = pd.merge(df_B, df_B_pkl.loc[:, cols], how="outer", on=on_cols)
-            except Exception as e:
-                logger.warning(f"Failure to merge pickle and csv files: {e}")
-
-        if clear_neigh:
-            unwanted = df_A.columns[df_A.columns.str.contains("neighborhood")]
-            df_A = df_A.drop(columns=unwanted)
-            unwanted = df_B.columns[df_B.columns.str.contains("neighborhood")]
-            df_B = df_B.drop(columns=unwanted)
-        # Computing a neighborhood again replaces it.
-        df_A = _drop_recomputed_columns(df_A, "circle", distance, population)
-        df_B = _drop_recomputed_columns(df_B, "circle", distance, population)
-
-        df_A, df_B = self.distance_cut_neighborhood(
-            df_A, df_B, distance, **neighborhood_kwargs
-        )
-
-        if df_A is None or df_B is None or len(df_A) == 0:
-            return None
-
-        for td, d in zip(theta_dist, distance):
-
-            if neighborhood_kwargs["mode"] == "two-pop":
-                neigh_col = f"neighborhood_2_circle_{d}_px"
-
-            elif neighborhood_kwargs["mode"] == "self":
-                neigh_col = f"neighborhood_self_circle_{d}_px"
-
-            # edge_filter_A = (df_A['POSITION_X'] > td)&(df_A['POSITION_Y'] > td)&(df_A['POSITION_Y'] < (img_shape[0] - td))&(df_A['POSITION_X'] < (img_shape[1] - td))
-            # edge_filter_B = (df_B['POSITION_X'] > td)&(df_B['POSITION_Y'] > td)&(df_B['POSITION_Y'] < (img_shape[0] - td))&(df_B['POSITION_X'] < (img_shape[1] - td))
-            # df_A.loc[~edge_filter_A, neigh_col] = np.nan
-            # df_B.loc[~edge_filter_B, neigh_col] = np.nan
-
-            logger.info("Count neighborhood...")
-            df_A = compute_neighborhood_metrics(
-                df_A,
-                neigh_col,
-                metrics=["inclusive", "exclusive", "intermediate"],
-                decompose_by_status=True,
-            )
-            # if neighborhood_kwargs['symmetrize']:
-            # 	df_B = compute_neighborhood_metrics(df_B, neigh_col, metrics=['inclusive','exclusive','intermediate'], decompose_by_status=True)
-            logger.info("Done.")
-
-            if "TRACK_ID" in list(df_A.columns):
-                if not np.all(df_A["TRACK_ID"].isnull()):
-                    logger.info("Estimate average neighborhood before/after event...")
-                    df_A = mean_neighborhood_before_event(
-                        df_A, neigh_col, event_time_col
-                    )
-                    if event_time_col is not None:
-                        df_A = mean_neighborhood_after_event(
-                            df_A, neigh_col, event_time_col
-                        )
-                    logger.info("Done.")
-
-        if not population[0] == population[1]:
-            # Remove neighborhood column from neighbor table, rename with actual population name
-            for td, d in zip(theta_dist, distance):
-                if neighborhood_kwargs["mode"] == "two-pop":
-                    neigh_col = f"neighborhood_2_circle_{d}_px"
-                    new_neigh_col = _population_column(neigh_col, population)
-                    df_A = df_A.rename(columns={neigh_col: new_neigh_col})
-                elif neighborhood_kwargs["mode"] == "self":
-                    neigh_col = f"neighborhood_self_circle_{d}_px"
-                df_B = df_B.drop(columns=[neigh_col])
-            df_B.to_pickle(path_B.replace(".csv", ".pkl"))
-
-        df_A = _rename_counts_to_populations(df_A, population)
-
-        df_A.to_pickle(path_A.replace(".csv", ".pkl"))
-
-        unwanted = df_A.columns[df_A.columns.str.startswith("neighborhood_")]
-        df_A2 = df_A.drop(columns=unwanted)
-        df_A2.to_csv(path_A, index=False)
-
-        if not population[0] == population[1]:
-            unwanted = df_B.columns[df_B.columns.str.startswith("neighborhood_")]
-            df_B_csv = df_B.drop(unwanted, axis=1, inplace=False)
-            df_B_csv.to_csv(path_B, index=False)
-
-        if return_tables:
-            return df_A, df_B
-
-    def compute_contact_neighborhood_at_position(
-        self,
-        pos: str,
-        distance: Union[int, List[int]],
-        population: Union[str, List[str]] = ["targets", "effectors"],
-        theta_dist: Optional[Union[int, List[int]]] = None,
-        img_shape: Tuple[int, int] = (2048, 2048),
-        return_tables: bool = False,
-        clear_neigh: bool = False,
-        event_time_col: Optional[str] = None,
-        neighborhood_kwargs: Dict[str, Any] = {
-            "mode": "two-pop",
-            "status": None,
-            "not_status_option": None,
-            "include_dead_weight": True,
-            "compute_cum_sum": False,
-            "attention_weight": True,
-            "symmetrize": True,
-        },
-    ) -> Optional[Tuple[pd.DataFrame, pd.DataFrame]]:
-        """
-        Compute the contact neighborhood at a specific position.
-
-        Parameters
-        ----------
-        pos : str
-            The position path.
-        distance : int
-            The distance threshold.
-        population : list
-            The population names.
-        theta_dist : list
-            The theta distance thresholds.
-        img_shape : tuple
-            The image shape.
-        return_tables : bool
-            Whether to return the tables.
-        clear_neigh : bool
-            Whether to clear previous neighborhood data.
-        event_time_col : str
-            The event time column.
-        neighborhood_kwargs : dict
-            Additional arguments for neighborhood computation.
-
-        Returns
-        -------
-        setA : pandas.DataFrame
-            The first set of cells with neighborhood data.
-        setB : pandas.DataFrame
-            The second set of cells with neighborhood data.
-        """
-
-        pos = pos.replace("\\", "/")
-        pos = rf"{pos}"
-        if not os.path.exists(pos):
-            raise FileNotFoundError(f"Position {pos} is not a valid path.")
-
-        if isinstance(population, str):
-            population = [population, population]
-
-        if not isinstance(distance, list):
-            distance = [distance]
-        if not theta_dist is None and not isinstance(theta_dist, list):
-            theta_dist = [theta_dist]
-
-        if theta_dist is None:
-            theta_dist = [0 for d in distance]  # 0.9*d
-        if len(theta_dist) != len(distance):
-            raise ValueError("Incompatible number of distances and number of edge thresholds.")
-
-        if population[0] == population[1]:
-            neighborhood_kwargs.update({"mode": "self"})
-        if population[1] != population[0]:
-            neighborhood_kwargs.update({"mode": "two-pop"})
-
-        df_A, path_A = get_position_table(
-            pos, population=population[0], return_path=True
-        )
-        df_B, path_B = get_position_table(
-            pos, population=population[1], return_path=True
-        )
-        if df_A is None or df_B is None:
-            return None
-
-        if clear_neigh:
-            if os.path.exists(path_A.replace(".csv", ".pkl")):
-                os.remove(path_A.replace(".csv", ".pkl"))
-            if os.path.exists(path_B.replace(".csv", ".pkl")):
-                os.remove(path_B.replace(".csv", ".pkl"))
-            df_pair, pair_path = get_position_table(
-                pos, population="pairs", return_path=True
-            )
-            if df_pair is not None:
-                os.remove(pair_path)
-
-        df_A_pkl = get_position_pickle(pos, population=population[0], return_path=False)
-        df_B_pkl = get_position_pickle(pos, population=population[1], return_path=False)
-
-        if df_A_pkl is not None:
-            pkl_columns = np.array(df_A_pkl.columns)
-            neigh_columns = np.array(
-                [c.startswith("neighborhood") for c in pkl_columns]
-            )
-            cols = list(pkl_columns[neigh_columns]) + ["FRAME"]
-
-            id_col = extract_identity_col(df_A_pkl)
-            cols.append(id_col)
-            on_cols = [id_col, "FRAME"]
-
-            logger.debug(f"Recover {cols} from the pickle file...")
-            try:
-                df_A = pd.merge(df_A, df_A_pkl.loc[:, cols], how="outer", on=on_cols)
-                logger.debug(f"Merged columns: {list(df_A.columns)}")
-            except Exception as e:
-                logger.warning(f"Failure to merge pickle and csv files: {e}")
-
-        if df_B_pkl is not None and df_B is not None:
-            pkl_columns = np.array(df_B_pkl.columns)
-            neigh_columns = np.array(
-                [c.startswith("neighborhood") for c in pkl_columns]
-            )
-            cols = list(pkl_columns[neigh_columns]) + ["FRAME"]
-
-            id_col = extract_identity_col(df_B_pkl)
-            cols.append(id_col)
-            on_cols = [id_col, "FRAME"]
-
-            logger.debug(f"Recover {cols} from the pickle file...")
-            try:
-                df_B = pd.merge(df_B, df_B_pkl.loc[:, cols], how="outer", on=on_cols)
-            except Exception as e:
-                logger.warning(f"Failure to merge pickle and csv files: {e}")
-
-        labelsA = locate_labels(pos, population=population[0])
-        if population[1] == population[0]:
-            labelsB = None
-        else:
-            labelsB = locate_labels(pos, population=population[1])
-
-        if clear_neigh:
-            unwanted = df_A.columns[df_A.columns.str.contains("neighborhood")]
-            df_A = df_A.drop(columns=unwanted)
-            unwanted = df_B.columns[df_B.columns.str.contains("neighborhood")]
-            df_B = df_B.drop(columns=unwanted)
-        # Computing a neighborhood again replaces it.
-        df_A = _drop_recomputed_columns(df_A, "contact", distance, population)
-        df_B = _drop_recomputed_columns(df_B, "contact", distance, population)
-
-        logger.debug(f"Distance: {distance} for mask contact")
-        df_A, df_B = self.mask_contact_neighborhood(
-            df_A, df_B, labelsA, labelsB, distance, **neighborhood_kwargs
-        )
-        if df_A is None or df_B is None or len(df_A) == 0:
-            return None
-
-        for td, d in zip(theta_dist, distance):
-
-            if neighborhood_kwargs["mode"] == "two-pop":
-                neigh_col = f"neighborhood_2_contact_{d}_px"
-            elif neighborhood_kwargs["mode"] == "self":
-                neigh_col = f"neighborhood_self_contact_{d}_px"
-            else:
-                logger.error("Invalid mode...")
-                return None
-
-            df_A.loc[df_A["class_id"].isnull(), neigh_col] = np.nan
-
-            # edge_filter_A = (df_A['POSITION_X'] > td)&(df_A['POSITION_Y'] > td)&(df_A['POSITION_Y'] < (img_shape[0] - td))&(df_A['POSITION_X'] < (img_shape[1] - td))
-            # edge_filter_B = (df_B['POSITION_X'] > td)&(df_B['POSITION_Y'] > td)&(df_B['POSITION_Y'] < (img_shape[0] - td))&(df_B['POSITION_X'] < (img_shape[1] - td))
-            # df_A.loc[~edge_filter_A, neigh_col] = np.nan
-            # df_B.loc[~edge_filter_B, neigh_col] = np.nan
-
-            df_A = compute_neighborhood_metrics(
-                df_A,
-                neigh_col,
-                metrics=["inclusive", "intermediate"],
-                decompose_by_status=True,
-            )
-            if "TRACK_ID" in list(df_A.columns):
-                if not np.all(df_A["TRACK_ID"].isnull()):
-                    df_A = mean_neighborhood_before_event(
-                        df_A,
-                        neigh_col,
-                        event_time_col,
-                        metrics=["inclusive", "intermediate"],
-                    )
-                    if event_time_col is not None:
-                        df_A = mean_neighborhood_after_event(
-                            df_A,
-                            neigh_col,
-                            event_time_col,
-                            metrics=["inclusive", "intermediate"],
-                        )
-                    logger.info("Done.")
-
-        if not population[0] == population[1]:
-            # Remove neighborhood column from neighbor table, rename with actual population name
-            for td, d in zip(theta_dist, distance):
-                if neighborhood_kwargs["mode"] == "two-pop":
-                    neigh_col = f"neighborhood_2_contact_{d}_px"
-                    new_neigh_col = _population_column(neigh_col, population)
-                    df_A = df_A.rename(columns={neigh_col: new_neigh_col})
-                elif neighborhood_kwargs["mode"] == "self":
-                    neigh_col = f"neighborhood_self_contact_{d}_px"
-                else:
-                    logger.error("Invalid mode...")
-                    return None
-                df_B = df_B.drop(columns=[neigh_col])
-            df_B.to_pickle(path_B.replace(".csv", ".pkl"))
-
-        df_A = _rename_counts_to_populations(df_A, population)
-
-        logger.debug(f"Final df_A columns: {list(df_A.columns)}")
-        df_A.to_pickle(path_A.replace(".csv", ".pkl"))
-
-        unwanted = df_A.columns[df_A.columns.str.startswith("neighborhood_")]
-        df_A2 = df_A.drop(columns=unwanted)
-        df_A2.to_csv(path_A, index=False)
-
-        if not population[0] == population[1]:
-            unwanted = df_B.columns[df_B.columns.str.startswith("neighborhood_")]
-            df_B_csv = df_B.drop(unwanted, axis=1, inplace=False)
-            df_B_csv.to_csv(path_B, index=False)
-
-        if return_tables:
-            return df_A, df_B
 
     def run(self):
         """Run the neighborhood computation process."""
         self.queue.put({"status": "Computing neighborhood..."})
         logger.info("Launching the neighborhood computation...")
+        options = dict(
+            population=self.protocol["population"],
+            theta_dist=None,
+            img_shape=self.img_shape,
+            return_tables=False,
+            clear_neigh=self.protocol["clear_neigh"],
+            event_time_col=self.protocol["event_time_col"],
+            neighborhood_kwargs=self.protocol["neighborhood_kwargs"],
+            progress_callback=self.report_frame,
+        )
         if self.protocol["neighborhood_type"] == "distance_threshold":
-            self.compute_neighborhood_at_position(
-                self.pos,
-                self.protocol["distance"],
-                population=self.protocol["population"],
-                theta_dist=None,
-                img_shape=self.img_shape,
-                return_tables=False,
-                clear_neigh=self.protocol["clear_neigh"],
-                event_time_col=self.protocol["event_time_col"],
-                neighborhood_kwargs=self.protocol["neighborhood_kwargs"],
+            distances = self.protocol["distance"]
+            self.sweeps_left = len(distances) - 1 if isinstance(distances, list) else 0
+            compute_neighborhood_at_position(
+                self.pos, self.protocol["distance"], **options
             )
             logger.info("Computation done.")
         elif self.protocol["neighborhood_type"] == "mask_contact":
             logger.info("Computing contact neighborhood...")
-            self.compute_contact_neighborhood_at_position(
+            compute_contact_neighborhood_at_position(
                 self.pos,
                 self.protocol["distance"],
-                population=self.protocol["population"],
-                theta_dist=None,
-                img_shape=self.img_shape,
-                return_tables=False,
-                clear_neigh=self.protocol["clear_neigh"],
-                event_time_col=self.protocol["event_time_col"],
-                neighborhood_kwargs=self.protocol["neighborhood_kwargs"],
+                channel_names=self.protocol.get("channel_names"),
+                **options,
             )
             logger.info("Computation done.")
 
@@ -918,27 +127,15 @@ class NeighborhoodProcess(Process):
             if not isinstance(distances, list):
                 distances = [distances]
 
+            population = self.protocol["population"]
+            mode = "self" if population[0] == population[1] else "two-pop"
+            neigh_type = (
+                "circle"
+                if self.protocol["neighborhood_type"] == "distance_threshold"
+                else "contact"
+            )
             for d in distances:
-                # Construct the protocol dictionary expected by measure_pair_signals_at_position
-                if self.protocol["population"][0] == self.protocol["population"][1]:
-                    mode = "self"
-                else:
-                    mode = "two-pop"
-
-                if self.protocol["neighborhood_type"] == "distance_threshold":
-                    neigh_type = "circle"
-                    if mode == "two-pop":
-                        neigh_col = f"neighborhood_2_circle_{d}_px"
-                        neigh_col = neigh_col.replace("_2_", f"_({self.protocol['population'][0]}-{self.protocol['population'][1]})_", 1)
-                    elif mode == "self":
-                        neigh_col = f"neighborhood_self_circle_{d}_px"
-                elif self.protocol["neighborhood_type"] == "mask_contact":
-                    neigh_type = "contact"
-                    if mode == "two-pop":
-                        neigh_col = f"neighborhood_2_contact_{d}_px"
-                        neigh_col = neigh_col.replace("_2_", f"_({self.protocol['population'][0]}-{self.protocol['population'][1]})_", 1)
-                    elif mode == "self":
-                        neigh_col = f"neighborhood_self_contact_{d}_px"
+                neigh_col = _population_column(_neigh_col(mode, neigh_type, d), population)
 
                 pair_protocol = {
                     "reference": self.protocol["population"][0],

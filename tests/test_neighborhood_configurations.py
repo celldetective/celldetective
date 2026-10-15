@@ -13,9 +13,9 @@ event. The configuration grid is then swept at three levels:
   ``mask_contact_neighborhood``), where every option is observable;
 - the position-level functions, which add counts, means, column names and
   the tables written to disk;
-- the process run by the GUI, which has its own copy of the neighborhood
-  loops and must give the same tables as the library for every option the
-  GUI can set.
+- the process run by the GUI, which calls the library with the options the
+  GUI writes, reports the progress of the frames and must give the same
+  tables as the library.
 
 Targets die after 4 frames of contact (``status`` is 1 once dead). The
 effectors get a scripted ``status`` and both tables an event time
@@ -37,6 +37,7 @@ from celldetective.neighborhood import (
     compute_contact_neighborhood_at_position,
     compute_neighborhood_at_position,
     distance_cut_neighborhood,
+    extract_neighborhood_in_pair_table,
     mask_contact_neighborhood,
     set_live_status,
 )
@@ -506,6 +507,43 @@ def test_cells_outside_a_track_are_left_out(tables, labels):
         assert_column(got, col, expected)
 
 
+def test_presence_counts_past_frames_without_neighbor_cells(tables, labels):
+    """Before the neighbor population appears, the reference cells have no
+    neighborhood (NaN); the cumulated presence must skip those frames
+    instead of failing on them."""
+    tabs = {k: v.copy() for k, v in tables.items()}
+    tabs["effectors"] = tabs["effectors"][tabs["effectors"]["FRAME"] >= 3]
+    pop = ("targets", "effectors")
+    for kind in ("circle", "contact"):
+        d = DISTANCE[kind]
+        df_A, _ = run_in_memory(tabs, labels, kind, pop, d, dict(options(compute_cum_sum=True)))
+        col = raw_column(kind, pop, d)
+        assert df_A.loc[df_A["FRAME"] < 3, col].isnull().all()
+        n_checked = 0
+        for _, track in df_A.sort_values("FRAME").groupby("TRACK_ID"):
+            seen = {}
+            for neighbors in track[col]:
+                if not isinstance(neighbors, list):
+                    continue
+                for n in neighbors:
+                    seen[n["id"]] = seen.get(n["id"], 0) + 1
+                    assert n["cumulated_presence"] == seen[n["id"]]
+                    n_checked += 1
+        assert n_checked > 0
+
+
+@pytest.mark.parametrize("kind", ["circle", "contact"])
+def test_an_unknown_mode_returns_no_tables(tables, labels, kind):
+    A, B = tables["targets"].copy(), tables["effectors"].copy()
+    if kind == "circle":
+        result = distance_cut_neighborhood(A, B, 30, mode="typo")
+    else:
+        result = mask_contact_neighborhood(
+            A, B, list(labels["targets"]), list(labels["effectors"]), 2, mode="typo"
+        )
+    assert result == (None, None)
+
+
 # ---------------------------------------------------------------------------
 # Live status
 # ---------------------------------------------------------------------------
@@ -533,8 +571,14 @@ def test_live_status_options():
     assert s == ["live_status", "not_c"]
     np.testing.assert_array_equal(b["not_c"].to_numpy(float), [0, 1, 0, 1])
 
-    with pytest.raises(KeyError):
-        set_live_status(A.copy(), B.copy(), ["missing", None], [False, False])
+    # An option left to None does not invert, but past events still count.
+    a, b, s = set_live_status(A.copy(), B.copy(), ["c", None], [None, False])
+    assert s == ["c", "live_status"]
+    np.testing.assert_array_equal(a["c"].to_numpy(float), [0, 1, 1, np.nan])
+
+    for not_status in ([False, False], [True, False], None):
+        with pytest.raises(KeyError, match="not found in set A"):
+            set_live_status(A.copy(), B.copy(), ["missing", None], not_status)
     with pytest.raises(ValueError):
         set_live_status(A.copy(), B.copy(), ["c"], [False])
 
@@ -653,6 +697,19 @@ def test_rerunning_without_clearing_replaces_the_neighborhood(position, tables, 
     assert not any(c.endswith(("_x", "_y")) for c in csv.columns)
 
 
+@pytest.mark.parametrize("kind", ["circle", "contact"])
+def test_the_options_of_the_caller_are_left_as_given(position, kind):
+    """The mode follows the populations without being written back into the
+    caller's options, which are then reused for another pair."""
+    kw = {"mode": "two-pop", **options()}
+    given = dict(kw)
+    fn = compute_neighborhood_at_position if kind == "circle" else compute_contact_neighborhood_at_position
+    df_A, _ = fn(position, distance=DISTANCE[kind], population=["targets", "targets"],
+                 return_tables=True, clear_neigh=True, neighborhood_kwargs=kw)
+    assert kw == given
+    assert final_column(kind, ("targets", "targets"), DISTANCE[kind]) in df_A.columns
+
+
 # ---------------------------------------------------------------------------
 # The GUI process gives the same tables as the library
 # ---------------------------------------------------------------------------
@@ -669,7 +726,7 @@ class _Queue:
         pass
 
 
-def run_process(pos, kind, pop, distances, kw, event_time_col, measure_pairs=False):
+def run_process(pos, kind, pop, distances, kw, event_time_col, measure_pairs=False, channel_names=None):
     from celldetective.processes.compute_neighborhood import NeighborhoodProcess
 
     protocol = {
@@ -680,12 +737,15 @@ def run_process(pos, kind, pop, distances, kw, event_time_col, measure_pairs=Fal
         "event_time_col": event_time_col,
         "neighborhood_kwargs": {"mode": "self" if pop[0] == pop[1] else "two-pop", **kw},
     }
+    if channel_names is not None:
+        protocol["channel_names"] = channel_names
     queue = _Queue()
     NeighborhoodProcess(
         queue,
         process_args={"pos": pos, "protocol": protocol, "img_shape": SHAPE, "measure_pairs": measure_pairs},
     ).run()
     assert queue.items[-1] == "finished"
+    return queue
 
 
 def comparable(df):
@@ -754,3 +814,56 @@ def test_gui_process_measures_pairs_of_every_distance(tmp_path, template, tables
         assert len(expected) > 0
         rows = pairs[pairs[f"status_{final_column(kind, pop, d)}"] == 1]
         assert set(zip(rows["REFERENCE_ID"], rows["NEIGHBOR_ID"], rows["FRAME"])) == expected
+
+
+@pytest.mark.parametrize("kind", ["circle", "contact"])
+def test_gui_process_reports_the_progress_of_every_frame(tmp_path, template, tables, kind):
+    """Every frame is reported, with or without neighbor cells: once per
+    distance for the circle neighborhoods, once for all the contact ones."""
+    distances = [DISTANCE[kind], 20] if kind == "circle" else [DISTANCE[kind], 0]
+    pos = copy_position(template, tmp_path / "gui")
+    queue = run_process(pos, kind, ("targets", "effectors"), distances, options(), None)
+    progress = [m["frame_progress"] for m in queue.items if isinstance(m, dict) and "frame_progress" in m]
+    n = len(np.union1d(tables["targets"]["FRAME"], tables["effectors"]["FRAME"]))
+    sweep = [100 * (i + 1) / n for i in range(n)]
+    np.testing.assert_allclose(progress, sweep * (len(distances) if kind == "circle" else 1))
+
+
+def test_gui_process_measures_the_contact_site_intensity(tmp_path, template, sim):
+    """The channels the GUI writes for a contact neighborhood are measured at
+    the contact site, as by the library."""
+    pop, distances, channels = ("targets", "effectors"), [DISTANCE["contact"], 0], list(sim.channel_names)
+    lib = copy_position(template, tmp_path / "library")
+    gui = copy_position(template, tmp_path / "gui")
+    # The config names the movie to measure.
+    config = os.path.join(template, os.pardir, os.pardir, "config.ini")
+    for pos in (lib, gui):
+        shutil.copy(config, os.path.join(pos, os.pardir, os.pardir))
+    compute_contact_neighborhood_at_position(
+        lib, distance=distances, population=list(pop), theta_dist=None, clear_neigh=True,
+        channel_names=channels, neighborhood_kwargs=options(),
+    )
+    run_process(gui, "contact", pop, distances, options(), None, channel_names=channels)
+
+    path = f"output/tables/trajectories_{pop[0]}.csv"
+    expected, got = pd.read_csv(lib + path), pd.read_csv(gui + path)
+    for ch in channels:
+        assert got[f"contact_{ch}_mean"].notnull().any()
+    pd.testing.assert_frame_equal(comparable(got), comparable(expected), obj=path)
+
+
+@pytest.mark.parametrize("pop", POPULATIONS, ids="-".join)
+@pytest.mark.parametrize("kind", ["circle", "contact"])
+def test_pairs_of_a_neighborhood_are_found_by_distance(pop, kind):
+    """Without a key, the pair-table column is named as the neighborhood
+    was, self neighborhoods included."""
+    col = "status_" + final_column(kind, pop, 30)
+    pairs = pd.DataFrame({
+        "reference_population": [pop[0]] * 3,
+        "neighbor_population": [pop[1]] * 3,
+        col: [1, 0, 1],
+    })
+    got = extract_neighborhood_in_pair_table(
+        pairs, distance=30, reference_population=pop[0], neighbor_population=pop[1], mode=kind
+    )
+    assert list(got.index) == [0, 2]
