@@ -16,8 +16,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   1st-99.99th percentiles of the whole movie, napari the 1st-99.9th. The slider
   still reaches the brightest pixel of the frame, border included, and so does
   the fourth click of the auto contrast button.
+- The event, interaction and phenotype annotators share one implementation of
+  their movie controls, annotation options, new class dialog, export and save
+  log, and the stack viewers share their frame reading, label lookup and line
+  profile, so a fix in one window now reaches the others. Along the way:
+  - the event annotator lists numeric signals only;
+  - a status column derived by the event annotator marks the tracks of the
+    *else* class 2, as signal detection does;
+  - in an untracked phenotype table, a cell is selected by its ID and frame.
 
 ### Fixed
+- Event annotator: creating a new event class crashed (`AttributeError`).
+- Annotators (event, interaction, phenotype):
+  - submitting a cell whose class the options do not show (NaN) marked it for
+    deletion. It now changes nothing;
+  - the option of the previous cell stayed checked, and was applied when
+    submitting a cell whose class the options do not show;
+  - cancelling left the *correct* button enabled, sometimes on *submit*, which
+    then applied to the cell annotated before;
+  - rewriting an existing event class kept its old status column. The status
+    is now derived from the new class;
+  - deleting an event class left its time column behind;
+  - resuming the movie after browsing frames while paused jumped back to the
+    frame where it had paused;
+  - without trajectories, the windows were built on an already closed window.
+    The phenotype annotator is no longer shown then, and closing it stops the
+    frame loader of its viewer.
+- Interaction (pair event) annotator:
+  - `.pkl` tables could not be read;
+  - the log scale option crashed;
+  - the first and last frame buttons disabled themselves after one use;
+  - pair lines piled up on the plot frame after frame, and the line skipped
+    the first frame of the reference cell;
+  - the *Delete* and *N* shortcuts were never enabled;
+  - after an annotation, moving to the next neighbor took two clicks;
+  - a new pair event class was not selected, so the annotations went to the
+    class shown before;
+  - an invalid event time raised an error instead of falling back to *else*,
+    as in the event annotator.
+- Viewers:
+  - the spot detection viewer ran the detection twice per click on *Set*;
+  - the channel offset viewer loaded the stack twice;
+  - viewers opened on a position without label images failed while being
+    built (the spot detection viewer with an `IndexError`). They now close
+    cleanly.
+- Collapsing trajectories by status failed with recent pandas versions.
+- Rows added by trajectory extrapolation or gap interpolation had no
+  first-detection status, so the event annotator showed them with an empty
+  status before the first detection.
 - A two-population neighborhood with a 2 px distance (or a 2 px contact border)
   lost its distance from its column names: renaming the `_2_` population marker
   replaced every `_2_`, so `neighborhood_2_circle_2_px` became
