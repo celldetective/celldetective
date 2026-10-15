@@ -1,6 +1,3 @@
-import os
-from glob import glob
-from pathlib import Path
 from typing import Optional, List, Any
 import matplotlib.backend_bases
 
@@ -8,7 +5,6 @@ import numpy as np
 from PyQt5.QtCore import QSize
 from PyQt5.QtGui import QDoubleValidator
 from PyQt5.QtWidgets import (
-    QMessageBox,
     QHBoxLayout,
     QLabel,
     QComboBox,
@@ -21,16 +17,13 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QEvent
 from celldetective.gui.base.utils import center_window
 from fonticon_mdi6 import MDI6
-from natsort import natsorted
 from superqt.fonticon import icon
 
 from celldetective.gui.viewers.base_viewer import StackVisualizer
 from celldetective.gui.gui_utils import PreprocessingLayout2
-from celldetective.utils.image_loaders import load_frames
 from celldetective.measure import extract_blobs_in_image
 from celldetective.filters import filter_image
 from celldetective import get_logger
-from tifffile import imread
 
 logger = get_logger(__name__)
 
@@ -138,9 +131,6 @@ class SpotDetectionVisualizer(StackVisualizer):
         self.ax.callbacks.connect("ylim_changed", self.update_marker_sizes)
         self._axis_callbacks_connected = True
 
-        self.apply_diam_btn.clicked.connect(self.detect_and_display_spots)
-        self.apply_thresh_btn.clicked.connect(self.detect_and_display_spots)
-
         self.channel_cb.setCurrentIndex(min(self.target_channel, self.n_channels - 1))
         self.detection_channel_cb.setCurrentIndex(
             min(self.target_channel, self.n_channels - 1)
@@ -238,16 +228,21 @@ class SpotDetectionVisualizer(StackVisualizer):
         if not self.switch_from_channel:
             self.reset_detection()
 
-        if self.mode == "virtual" and hasattr(self, "mask_paths"):
-            self.init_label = imread(self.mask_paths[value])
-            self.target_img = load_frames(
-                self.img_num_per_channel[self.detection_channel, value],
-                self.stack_path,
-                normalize_input=False,
-            )[:, :, 0]
-        elif self.mode == "direct":
+        if self.label_mode == "virtual":
+            self.init_label = self.read_label(value)
+        else:
             self.init_label = self.labels[value, :, :]
-            self.target_img = self.stack[value, :, :, self.detection_channel].copy()
+        self.target_img = self.detection_frame(value)
+
+    def detection_frame(self, frame: int) -> np.ndarray:
+        """A frame of the detection channel, a copy that detection may alter."""
+
+        if self.mode == "direct":
+            return self.stack[frame, :, :, self.detection_channel].copy()
+        cached = self.frame_cache.get((self.detection_channel, frame))
+        if cached is not None:
+            return cached.copy()
+        return self.read_frame(self.detection_channel, frame)
 
     def detect_and_display_spots(self):
         """Run spot detection and update the display."""
@@ -272,16 +267,10 @@ class SpotDetectionVisualizer(StackVisualizer):
                 self.spot_sizes = np.sqrt(2) * np.array(
                     [sig for _, _, sig in blobs_filtered]
                 )
-            # radius_pts = self.spot_sizes * (self.fig.dpi / 72.0)
-            # sizes = np.pi*(radius_pts**2)
-            if len(self.spot_positions) > 0:
                 self.spot_scat.set_offsets(self.spot_positions)
-            else:
-                empty_offset = np.ma.masked_array([0, 0], mask=True)
-                self.spot_scat.set_offsets(empty_offset)
-            # self.spot_scat.set_sizes(sizes)
-            if len(self.spot_positions) > 0:
                 self.update_marker_sizes()
+            else:
+                self.spot_scat.set_offsets(np.ma.masked_array([0, 0], mask=True))
             self.canvas.canvas.draw()
 
     def reset_detection(self):
@@ -289,54 +278,6 @@ class SpotDetectionVisualizer(StackVisualizer):
         empty_offset = np.ma.masked_array([0, 0], mask=True)
         self.spot_scat.set_offsets(empty_offset)
         self.canvas.canvas.draw()
-
-    def load_labels(self):
-        """Load cell labels."""
-
-        # Load the cell labels
-        if self.labels is not None:
-
-            if isinstance(self.labels, list):
-                self.labels = np.array(self.labels)
-
-            if self.labels.ndim != 3:
-                raise ValueError("Wrong dimensions for the provided labels, expect TXY")
-            if len(self.labels) != self.stack_length:
-                raise ValueError("Labels length does not match stack length.")
-
-            self.mode = "direct"
-            self.init_label = self.labels[self.mid_time, :, :]
-        else:
-            self.mode = "virtual"
-            if not isinstance(self.stack_path, str):
-                raise TypeError("stack_path must be a string.")
-            if not self.stack_path.endswith(".tif"):
-                raise ValueError("stack_path must point to a .tif file.")
-            self.locate_labels_virtual()
-
-    def locate_labels_virtual(self):
-        """Locate virtual label files."""
-        # Locate virtual labels
-
-        labels_path = (
-            str(Path(self.stack_path).parent.parent)
-            + os.sep
-            + f"labels_{self.cell_type}"
-            + os.sep
-        )
-        self.mask_paths = natsorted(glob(labels_path + "*.tif"))
-
-        if len(self.mask_paths) == 0:
-
-            msgBox = QMessageBox()
-            msgBox.setIcon(QMessageBox.Critical)
-            msgBox.setText("No labels were found for the selected cells. Abort.")
-            msgBox.setWindowTitle("Critical")
-            msgBox.setStandardButtons(QMessageBox.Ok)
-            returnValue = msgBox.exec()
-            self.close()
-
-        self.init_label = imread(self.mask_paths[self.frame_slider.value()])
 
     def generate_detection_channel(self):
         """Generate the detection channel selection widget."""
@@ -397,16 +338,7 @@ class SpotDetectionVisualizer(StackVisualizer):
         """
 
         self.detection_channel = value
-        if self.mode == "direct":
-            self.target_img = self.stack[-1, :, :, self.detection_channel]
-        elif self.mode == "virtual":
-            self.target_img = load_frames(
-                self.img_num_per_channel[
-                    self.detection_channel, self.frame_slider.value()
-                ],
-                self.stack_path,
-                normalize_input=False,
-            ).astype(float)[:, :, 0]
+        self.target_img = self.detection_frame(self.current_time_index)
 
     def generate_spot_detection_params(self):
         """Generate spot detection parameter widgets."""
@@ -444,16 +376,12 @@ class SpotDetectionVisualizer(StackVisualizer):
     def generate_add_measurement_btn(self):
         """Generate the 'Add measurement' button."""
 
-        add_hbox = QHBoxLayout()
         self.add_measurement_btn = QPushButton("Add measurement")
         self.add_measurement_btn.clicked.connect(self.set_measurement_in_parent_list)
         self.add_measurement_btn.setIcon(icon(MDI6.plus, color="white"))
         self.add_measurement_btn.setIconSize(QSize(20, 20))
         self.add_measurement_btn.setStyleSheet(self.button_style_sheet)
-        add_hbox.addWidget(QLabel(""), 33)
-        add_hbox.addWidget(self.add_measurement_btn, 33)
-        add_hbox.addWidget(QLabel(""), 33)
-        self.settings_layout.addLayout(add_hbox)
+        self.add_centered_button(self.add_measurement_btn, layout=self.settings_layout)
 
     def show(self):
         """Show the widget and center it."""
@@ -494,28 +422,18 @@ class SpotDetectionVisualizer(StackVisualizer):
     def control_valid_parameters(self):
         """Check if parameters are valid and enable/disable buttons."""
 
-        valid_diam = False
+        valid = True
         try:
             self.diameter = float(self.spot_diam_le.text().replace(",", "."))
-            valid_diam = True
         except ValueError:
-            valid_diam = False
-
-        valid_thresh = False
+            valid = False
         try:
             self.thresh = float(self.spot_thresh_le.text().replace(",", "."))
-            valid_thresh = True
         except ValueError:
-            valid_thresh = False
+            valid = False
 
-        if valid_diam and valid_thresh:
-            self.apply_diam_btn.setEnabled(True)
-            self.apply_thresh_btn.setEnabled(True)
-            self.add_measurement_btn.setEnabled(True)
-        else:
-            self.apply_diam_btn.setEnabled(False)
-            self.apply_thresh_btn.setEnabled(False)
-            self.add_measurement_btn.setEnabled(False)
+        for button in (self.apply_diam_btn, self.apply_thresh_btn, self.add_measurement_btn):
+            button.setEnabled(valid)
 
     def set_measurement_in_parent_list(self):
         """Set the measured parameters in the parent widgets."""

@@ -1,31 +1,17 @@
-from typing import Optional
+from typing import List, Optional, Tuple
 
 from PyQt5.QtWidgets import (
     QComboBox,
     QLabel,
     QRadioButton,
-    QFileDialog,
-    QApplication,
     QPushButton,
     QVBoxLayout,
     QHBoxLayout,
-    QMessageBox,
-    QShortcut,
-    QLineEdit,
     QButtonGroup,
     QWidget,
 )
-from PyQt5.QtCore import (
-    Qt,
-    QSize,
-    QThread,
-    pyqtSignal,
-    QTimer,
-    QPoint,
-    QModelIndex,
-)
-from PyQt5.QtGui import QKeySequence, QMouseEvent, QResizeEvent, QCloseEvent
-from celldetective.gui.base.styles import Styles
+from PyQt5.QtCore import Qt, QSize
+from PyQt5.QtGui import QKeySequence
 from celldetective.gui.base.components import (
     CelldetectiveMainWindow,
     CelldetectiveWidget,
@@ -35,53 +21,57 @@ from celldetective.gui.base.utils import (
     flush_layout_events,
 )
 from superqt import QSearchableComboBox
-from celldetective.gui.base.sliders import QLabeledSlider, QLabeledDoubleRangeSlider
-from celldetective import (
-    get_software_location,
+from celldetective.gui.annotator_common import (
+    AnimationMixin,
+    AnnotatorMixin,
+    EventAnnotationMixin,
+    NON_SIGNAL_COLUMNS,
+    PAIR_COLUMNS,
+    closest_picked_index,
+    color_events,
+    complete_event_columns,
+    confirm,
+    default_dataset_name,
+    event_class_columns,
+    event_columns,
+    experiment_columns,
+    fit_feature_scaler,
+    icon_button,
+    new_class_dialog,
+    pair_event_columns,
+    prefill_class,
+    save_dataset,
+    signal_limits,
+    split_by_frame,
+    warn,
+    write_event_status,
 )
-from celldetective.utils.experiment import (
-    extract_experiment_channels,
-    get_experiment_metadata,
-    get_experiment_labels,
-)
-from celldetective.utils.image_loaders import (
-    auto_load_number_of_frames,
-    load_frames,
-    _get_img_num_per_channel,
-)
-from celldetective.gui.gui_utils import (
-    color_from_status,
-    color_from_class,
-)
-from celldetective.gui.base.figure_canvas import FigureCanvas
-from celldetective.utils.contrast import contrast_limits
-import json
+from celldetective.gui.gui_utils import color_from_status
 import numpy as np
-from superqt.fonticon import icon
 from fonticon_mdi6 import MDI6
 import os
-from glob import glob
-import matplotlib.pyplot as plt
-from matplotlib.ticker import MultipleLocator
-from tqdm import tqdm
-import gc
-from matplotlib.animation import FuncAnimation
 from matplotlib.cm import tab10
 import pandas as pd
-from sklearn.preprocessing import MinMaxScaler
 from functools import partial
 from pandas.api.types import is_numeric_dtype
 import logging
-from celldetective.log_manager import positionlogger
 
 logger = logging.getLogger("celldetective")
 
+# Signal sources of the signal choices, as ids of their button groups.
+REFERENCE, NEIGHBOR, PAIR = 0, 1, 2
 
-class PairEventAnnotator(CelldetectiveMainWindow):
+
+class PairEventAnnotator(
+    EventAnnotationMixin, AnimationMixin, AnnotatorMixin, CelldetectiveMainWindow
+):
     """
     UI to explore cell interactions.
 
     """
+
+    # The lines to the neighbors drawn on the current frame.
+    lines_list = ()
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         """
@@ -91,83 +81,40 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         ----------
         parent : QWidget, optional
             Parent widget. Default is None.
+
+        Raises
+        ------
+        ValueError
+            If the movie, the tables, the tracks or the neighborhoods are
+            missing: the caller shows the message.
         """
         super().__init__()
         self.parent_window = parent
         self.setWindowTitle("Interaction Annotator")
 
-        # These attributes should be set after super().__init__() if they depend on parent_window
-        # which might be initialized by the super call.
-        # Assuming parent_window is now accessible via self after super().__init__()
-        self.pos = self.parent_window.parent_window.pos
+        experiment = self.parent_window.parent_window
+        self.pos = experiment.pos
         self.exp_dir = self.parent_window.exp_dir
-        self.populations = self.parent_window.parent_window.populations
+        self.populations = experiment.populations
 
-        self.soft_path = get_software_location()
-        self.recently_modified = False
         self.n_signals = 3
+        self.annotation_log = []
 
         self.reference_selection = []
-        self.neighbor_selection = []
         self.pair_selection = []
-        self.neighbor_loc_t = []
-        self.neighbor_loc_idx = []
-        self.reference_loc_t = []
-        self.reference_loc_idx = []
-        self.reference_loc_t_not_picked = []
-        self.reference_loc_idx_not_picked = []
         self.neigh_cell_loc_t = []
         self.neigh_cell_loc_idx = []
+        self.selected_population = None
 
         self.reference_track_of_interest = None
         self.neighbor_track_of_interest = None
         self.value_magnitude = 1
 
-        self.cols_to_remove = [
-            "group",
-            "group_color",
-            "status",
-            "status_color",
-            "class_color",
-            "TRACK_ID",
-            "FRAME",
-            "x_anim",
-            "y_anim",
-            "t",
-            "dummy",
-            "state",
-            "generation",
-            "root",
-            "parent",
-            "class_id",
-            "class",
-            "t0",
-            "POSITION_X",
-            "POSITION_Y",
-            "position",
-            "well",
-            "well_index",
-            "well_name",
-            "pos_name",
-            "index",
-            "concentration",
-            "cell_type",
-            "antibody",
-            "pharmaceutical_agent",
-            "ID",
-            "REFERENCE_ID",
-            "NEIGHBOR_ID",
-            "reference_population",
-            "neighbor_population",
-        ]
-
-        meta = get_experiment_metadata(self.exp_dir)
-        if meta is not None:
-            self.cols_to_remove.extend(meta.keys())
-
-        labels = get_experiment_labels(self.exp_dir)
-        if labels is not None:
-            self.cols_to_remove.extend(labels.keys())
+        self.cols_to_remove = (
+            list(NON_SIGNAL_COLUMNS)
+            + list(PAIR_COLUMNS)
+            + experiment_columns(self.exp_dir)
+        )
 
         # Read instructions from target block for now...
         self.mode = "neighborhood"
@@ -177,33 +124,17 @@ class PairEventAnnotator(CelldetectiveMainWindow):
 
         center_window(self)
 
-        # Locate stack
-        self.locate_stack()
+        if not self.find_movie(experiment.movie_prefix, experiment.len_movie):
+            raise ValueError(
+                "No movie is detected in the experiment folder.\nPlease check the stack prefix..."
+            )
         self.load_annotator_config()
 
-        # Locate tracks
         self.locate_all_tracks()
         self.extract_scatter_from_trajectories()
-
-        self.neighborhood_cols = []
-        for pop in self.dataframes.keys():
-            if self.dataframes[pop] is not None:
-                self.neighborhood_cols.extend(
-                    [
-                        f"{pop}_ref_" + c
-                        for c in list(self.dataframes[pop].columns)
-                        if c.startswith("neighborhood")
-                    ]
-                )
-        logger.debug(f"The following neighborhoods were detected: neighborhood_cols={self.neighborhood_cols}...")
-        if len(self.neighborhood_cols) == 0:
-            raise ValueError(
-                "No neighborhoods detected. Please compute neighborhoods first."
-            )
-
+        self.locate_neighborhoods()
         self.locate_relative_tracks()
 
-        # Prepare stack
         self.prepare_stack()
 
         self.generate_signal_choices()
@@ -213,10 +144,8 @@ class PairEventAnnotator(CelldetectiveMainWindow):
 
         # Widget settings. Before populate_widget, which sizes the window from
         # the screen: set after it, the annotator failed to open.
-        self.screen_height = (
-            self.parent_window.parent_window.parent_window.screen_height
-        )
-        self.screen_width = self.parent_window.parent_window.parent_window.screen_width
+        self.screen_height = experiment.parent_window.screen_height
+        self.screen_width = experiment.parent_window.screen_width
         self.setMinimumWidth(800)
         self.setMinimumHeight(600)
 
@@ -226,7 +155,6 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         self.reference_pop_option_buttons[0].setChecked(True)
         self.neighbor_pop_option_buttons[1].setChecked(True)
         self.relative_pop_option_buttons[2].setChecked(True)
-        # self.plot_signals()
 
         self.give_reference_cell_information()
         self.give_neighbor_cell_information()
@@ -236,20 +164,28 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         # a little under its width, as in the other annotators.
         self.cell_fcanvas.limit_aspect(0.85)
 
-    def resizeEvent(self, event: QResizeEvent) -> None:
+    def locate_neighborhoods(self) -> None:
         """
-        Handle resize event.
+        List the neighborhoods computed for the populations.
 
-        Parameters
-        ----------
-        event : QResizeEvent
-            The resize event.
+        Raises
+        ------
+        ValueError
+            If there is none.
         """
-        super().resizeEvent(event)
-        try:
-            self.cell_fig.tight_layout()
-        except Exception as e:
-            logger.debug(f"tight_layout failed on resize: {e}")
+
+        self.neighborhood_cols = [
+            f"{pop}_ref_{c}"
+            for pop, df in self.dataframes.items()
+            if df is not None
+            for c in df.columns
+            if c.startswith("neighborhood")
+        ]
+        logger.debug(f"The following neighborhoods were detected: neighborhood_cols={self.neighborhood_cols}...")
+        if not self.neighborhood_cols:
+            raise ValueError(
+                "No neighborhoods detected. Please compute neighborhoods first."
+            )
 
     def populate_widget(self):
         """
@@ -307,21 +243,21 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         )
         self.compute_status_and_colors_pair()
 
-        self.relative_add_class_btn = QPushButton("")
-        self.relative_add_class_btn.setStyleSheet(self.button_select_all)
-        self.relative_add_class_btn.setIcon(icon(MDI6.plus, color="black"))
-        self.relative_add_class_btn.setToolTip("Add a new interaction event class")
-        self.relative_add_class_btn.setIconSize(QSize(20, 20))
+        self.relative_add_class_btn = icon_button(
+            MDI6.plus,
+            self.button_select_all,
+            tooltip="Add a new interaction event class",
+        )
         self.relative_add_class_btn.clicked.connect(
             self.create_new_relative_event_class
         )
         subclass_hbox.addWidget(self.relative_add_class_btn, 5)
 
-        self.relative_del_class_btn = QPushButton("")
-        self.relative_del_class_btn.setStyleSheet(self.button_select_all)
-        self.relative_del_class_btn.setIcon(icon(MDI6.delete, color="black"))
-        self.relative_del_class_btn.setToolTip("Delete an interaction event class")
-        self.relative_del_class_btn.setIconSize(QSize(20, 20))
+        self.relative_del_class_btn = icon_button(
+            MDI6.delete,
+            self.button_select_all,
+            tooltip="Delete an interaction event class",
+        )
         self.relative_del_class_btn.clicked.connect(self.del_relative_event_class)
         subclass_hbox.addWidget(self.relative_del_class_btn, 5)
         class_hbox.addLayout(subclass_hbox, 75)
@@ -333,7 +269,6 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         self.reference_event_choice_cb = QComboBox()
         self.cell_events_hbox.addWidget(self.reference_event_choice_cb, 75)
 
-        # if 'self' not in self.neighborhood_choice_cb.currentText():
         self.neigh_cell_events_hbox = QHBoxLayout()
         self.neigh_cell_events_hbox.setContentsMargins(0, 0, 0, 0)
         self.neigh_lab = QLabel("Event: ")
@@ -341,8 +276,6 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         self.neighbor_event_choice_cb = QComboBox()
         self.neigh_cell_events_hbox.addWidget(self.neighbor_event_choice_cb, 75)
         self.fill_class_cbs()
-
-        # self.left_panel.addLayout(self.cell_events_hbox)
 
         # Text information about selected cells
         self.cell_info_hbox = QHBoxLayout()
@@ -363,44 +296,24 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         self.left_panel.addLayout(self.cell_info_hbox)
 
         # Annotation buttons
+        self.init_event_buttons(remove_label="mark for\nsuppression")
         options_hbox = QHBoxLayout()
         options_hbox.setContentsMargins(150, 0, 50, 0)
-        self.event_btn = QRadioButton("event")
-        self.event_btn.setStyleSheet(self.button_style_sheet_2)
-        self.event_btn.toggled.connect(self.enable_time_of_interest)
-
-        self.no_event_btn = QRadioButton("no event")
-        self.no_event_btn.setStyleSheet(self.button_style_sheet_2)
-        self.no_event_btn.toggled.connect(self.enable_time_of_interest)
-
-        self.else_btn = QRadioButton("else")
-        self.else_btn.setStyleSheet(self.button_style_sheet_2)
-        self.else_btn.toggled.connect(self.enable_time_of_interest)
-
-        self.suppr_btn = QRadioButton("mark for\nsuppression")
-        self.suppr_btn.setStyleSheet(self.button_style_sheet_2)
-        self.suppr_btn.toggled.connect(self.enable_time_of_interest)
-
-        options_hbox.addWidget(self.event_btn, 25)
-        options_hbox.addWidget(self.no_event_btn, 25)
-        options_hbox.addWidget(self.else_btn, 25)
-        options_hbox.addWidget(self.suppr_btn, 25)
+        for button in self.class_options:
+            options_hbox.addWidget(button, 25)
         self.left_panel.addLayout(options_hbox)
 
         time_option_hbox = QHBoxLayout()
         time_option_hbox.setContentsMargins(100, 0, 100, 0)
-        self.time_of_interest_label = QLabel("time of interest: ")
         time_option_hbox.addWidget(self.time_of_interest_label, 30)
-        self.time_of_interest_le = QLineEdit()
         time_option_hbox.addWidget(self.time_of_interest_le, 70)
         self.left_panel.addLayout(time_option_hbox)
 
         main_action_hbox = QHBoxLayout()
         main_action_hbox.setContentsMargins(100, 0, 100, 0)
-        self.correct_btn = QPushButton("correct")
-        self.correct_btn.setIcon(icon(MDI6.redo_variant, color="white"))
-        self.correct_btn.setIconSize(QSize(20, 20))
-        self.correct_btn.setStyleSheet(self.button_style_sheet)
+        self.correct_btn = icon_button(
+            MDI6.redo_variant, self.button_style_sheet, color="white", text="correct"
+        )
         self.correct_btn.clicked.connect(self.show_annotation_buttons)
         self.correct_btn.setEnabled(False)
         main_action_hbox.addWidget(self.correct_btn)
@@ -413,47 +326,30 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         main_action_hbox.addWidget(self.cancel_btn)
         self.left_panel.addLayout(main_action_hbox)
 
-        self.annotation_btns_to_hide = [
-            self.event_btn,
-            self.no_event_btn,
-            self.else_btn,
-            self.time_of_interest_label,
-            self.time_of_interest_le,
-            self.suppr_btn,
-        ]
         self.hide_annotation_buttons()
 
-        self.del_shortcut = QShortcut(Qt.Key_Delete, self)  # QKeySequence("s")
-        self.del_shortcut.activated.connect(self.shortcut_suppr)
-        self.del_shortcut.setEnabled(False)
-
-        self.no_event_shortcut = QShortcut(QKeySequence("n"), self)  # QKeySequence("s")
-        self.no_event_shortcut.activated.connect(self.shortcut_no_event)
-        self.no_event_shortcut.setEnabled(False)
+        self.del_shortcut = self.add_selection_shortcut(Qt.Key_Delete, self.shortcut_suppr)
+        self.no_event_shortcut = self.add_selection_shortcut(
+            QKeySequence("n"), self.shortcut_no_event
+        )
 
         # Cell signals
         # Outweighs the stretch above the save button: the plot takes the room
         # until its height is capped, and only the rest goes there.
         self.left_panel.addWidget(self.cell_fcanvas, 100)
 
-        plot_buttons_hbox = QHBoxLayout()
-        plot_buttons_hbox.setContentsMargins(0, 0, 0, 0)
-        self.normalize_features_btn = QPushButton("")
-        self.normalize_features_btn.setStyleSheet(self.button_select_all)
-        self.normalize_features_btn.setIcon(
-            icon(MDI6.arrow_collapse_vertical, color="black")
+        self.normalize_features_btn = icon_button(
+            MDI6.arrow_collapse_vertical, self.button_select_all, icon_size=25
         )
-        self.normalize_features_btn.setIconSize(QSize(25, 25))
         self.normalize_features_btn.setFixedSize(QSize(30, 30))
-        # self.normalize_features_btn.setShortcut(QKeySequence('n'))
         self.normalize_features_btn.clicked.connect(self.normalize_features)
-
         self.normalized_signals = False
 
-        self.log_btn = QPushButton()
-        self.log_btn.setIcon(icon(MDI6.math_log, color="black"))
-        self.log_btn.setStyleSheet(self.button_select_all)
+        self.log_btn = icon_button(MDI6.math_log, self.button_select_all)
         self.log_btn.clicked.connect(self.switch_to_log)
+
+        self.log_toggles = [self.log_btn]
+        self.normalize_toggles = [self.normalize_features_btn]
 
         # In the toolbar of the plot rather than on a row of their own, as in
         # the phenotype annotator: the row cost the plot its height in a short
@@ -464,6 +360,8 @@ class PairEventAnnotator(CelldetectiveMainWindow):
             toolbar.addWidget(self.normalize_features_btn)
             toolbar.addWidget(self.log_btn)
         else:
+            plot_buttons_hbox = QHBoxLayout()
+            plot_buttons_hbox.setContentsMargins(0, 0, 0, 0)
             plot_buttons_hbox.addStretch(1)
             plot_buttons_hbox.addWidget(self.normalize_features_btn)
             plot_buttons_hbox.addWidget(self.log_btn)
@@ -473,26 +371,21 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         signal_choice_grid.setContentsMargins(30, 0, 70, 5)
 
         header_layout = QHBoxLayout()
-        header_layout.addWidget(QLabel("reference"), 23, alignment=Qt.AlignCenter)
-        header_layout.addWidget(QLabel("neighbor"), 23, alignment=Qt.AlignCenter)
-        header_layout.addWidget(QLabel("pair"), 23, alignment=Qt.AlignCenter)
+        for header in ("reference", "neighbor", "pair"):
+            header_layout.addWidget(QLabel(header), 23, alignment=Qt.AlignCenter)
         header_layout.addWidget(QLabel(""), 30, alignment=Qt.AlignCenter)
         signal_choice_grid.addLayout(header_layout)
 
         for i in range(self.n_signals):
-
             h_layout = QHBoxLayout()
             if i == (self.n_signals - 1):
                 h_layout.setContentsMargins(0, 0, 0, 0)
-            h_layout.addWidget(
-                self.reference_pop_option_buttons[i], 23, alignment=Qt.AlignCenter
-            )
-            h_layout.addWidget(
-                self.neighbor_pop_option_buttons[i], 23, alignment=Qt.AlignCenter
-            )
-            h_layout.addWidget(
-                self.relative_pop_option_buttons[i], 23, alignment=Qt.AlignCenter
-            )
+            for buttons in (
+                self.reference_pop_option_buttons,
+                self.neighbor_pop_option_buttons,
+                self.relative_pop_option_buttons,
+            ):
+                h_layout.addWidget(buttons[i], 23, alignment=Qt.AlignCenter)
             h_layout.addWidget(self.signal_choices[i], 30)
             signal_choice_grid.addLayout(h_layout)
 
@@ -504,11 +397,8 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         self.save_btn.clicked.connect(self.save_trajectories)
         btn_hbox.addWidget(self.save_btn, 90)
 
-        self.export_btn = QPushButton("")
-        self.export_btn.setStyleSheet(self.button_select_all)
+        self.export_btn = icon_button(MDI6.export, self.button_select_all, icon_size=25)
         self.export_btn.clicked.connect(self.export_signals)
-        self.export_btn.setIcon(icon(MDI6.export, color="black"))
-        self.export_btn.setIconSize(QSize(25, 25))
         btn_hbox.addWidget(self.export_btn, 10)
         # Room the capped plot does not take collects above the save button,
         # rather than between the rows.
@@ -516,103 +406,11 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         self.left_panel.addLayout(btn_hbox)
 
         # Animation
-        animation_buttons_box = QHBoxLayout()
-
-        self.speed_slider = QLabeledSlider(Qt.Horizontal)
-        self.speed_slider.setRange(1, 60)
-        # Convert initial interval (ms) to FPS
-        initial_fps = int(1000 / max(1, self.anim_interval))
-        self.speed_slider.setValue(initial_fps)
-        self.speed_slider.valueChanged.connect(self.update_speed)
-        self.speed_slider.setFixedWidth(200)
-        self.speed_slider.setToolTip("Adjust animation framerate (FPS)")
-
-        speed_layout = QHBoxLayout()
-        speed_layout.addWidget(QLabel("Framerate: "))
-        speed_layout.addWidget(self.speed_slider)
-
-        animation_buttons_box.addWidget(self.frame_lbl, 20, alignment=Qt.AlignLeft)
-        animation_buttons_box.addLayout(speed_layout, 20)
-
-        self.first_frame_btn = QPushButton()
-        self.first_frame_btn.clicked.connect(self.set_first_frame)
-        self.first_short = QShortcut(QKeySequence("f"), self)
-        self.first_short.activated.connect(self.set_first_frame)
-        self.first_frame_btn.setIcon(icon(MDI6.page_first, color="black"))
-        self.first_frame_btn.setStyleSheet(self.button_select_all)
-        self.first_frame_btn.setFixedSize(QSize(60, 60))
-        self.first_frame_btn.setIconSize(QSize(30, 30))
-
-        self.last_frame_btn = QPushButton()
-        self.last_frame_btn.clicked.connect(self.set_last_frame)
-        self.last_short = QShortcut(QKeySequence("l"), self)
-        self.last_short.activated.connect(self.set_last_frame)
-        self.last_frame_btn.setIcon(icon(MDI6.page_last, color="black"))
-        self.last_frame_btn.setStyleSheet(self.button_select_all)
-        self.last_frame_btn.setFixedSize(QSize(60, 60))
-        self.last_frame_btn.setIconSize(QSize(30, 30))
-
-        self.stop_btn = QPushButton()
-        self.stop_btn.clicked.connect(self.stop)
-        self.stop_btn.setIcon(icon(MDI6.stop, color="black"))
-        self.stop_btn.setStyleSheet(self.button_select_all)
-        self.stop_btn.setFixedSize(QSize(60, 60))
-        self.stop_btn.setIconSize(QSize(30, 30))
-
-        self.start_btn = QPushButton()
-        self.start_btn.clicked.connect(self.start)
-        self.start_btn.setIcon(icon(MDI6.play, color="black"))
-        self.start_btn.setFixedSize(QSize(60, 60))
-        self.start_btn.setStyleSheet(self.button_select_all)
-        self.start_btn.setIconSize(QSize(30, 30))
-        self.start_btn.hide()
-
-        self.toggle_short = QShortcut(Qt.Key_Space, self)
-        self.toggle_short.activated.connect(self.toggle_animation)
-
-        self.prev_frame_btn = QPushButton()
-        self.prev_frame_btn.clicked.connect(self.prev_frame)
-        self.prev_frame_btn.setIcon(icon(MDI6.chevron_left, color="black"))
-        self.prev_frame_btn.setStyleSheet(self.button_select_all)
-        self.prev_frame_btn.setFixedSize(QSize(60, 60))
-        self.prev_frame_btn.setIconSize(QSize(30, 30))
-        self.prev_frame_btn.setEnabled(False)
-
-        self.next_frame_btn = QPushButton()
-        self.next_frame_btn.clicked.connect(self.next_frame)
-        self.next_frame_btn.setIcon(icon(MDI6.chevron_right, color="black"))
-        self.next_frame_btn.setStyleSheet(self.button_select_all)
-        self.next_frame_btn.setFixedSize(QSize(60, 60))
-        self.next_frame_btn.setIconSize(QSize(30, 30))
-        self.next_frame_btn.setEnabled(False)
-
-        animation_buttons_box.addWidget(
-            self.first_frame_btn, 5, alignment=Qt.AlignRight
-        )
-        animation_buttons_box.addWidget(self.prev_frame_btn, 5, alignment=Qt.AlignRight)
-        animation_buttons_box.addWidget(self.stop_btn, 5, alignment=Qt.AlignRight)
-        animation_buttons_box.addWidget(self.start_btn, 5, alignment=Qt.AlignRight)
-        animation_buttons_box.addWidget(self.next_frame_btn, 5, alignment=Qt.AlignRight)
-        animation_buttons_box.addWidget(self.last_frame_btn, 5, alignment=Qt.AlignRight)
-
-        self.right_panel.addLayout(animation_buttons_box, 5)
+        self.right_panel.addLayout(self.build_animation_controls(), 5)
         self.right_panel.addWidget(self.fcanvas, 90)
-
-        if not self.rgb_mode:
-            contrast_hbox = QHBoxLayout()
-            contrast_hbox.setContentsMargins(150, 5, 150, 5)
-            self.contrast_slider = QLabeledDoubleRangeSlider()
-            # self.contrast_slider.setSingleStep(0.001)
-            # self.contrast_slider.setTickInterval(0.001)
-            self.contrast_slider.setOrientation(Qt.Horizontal)
-            value_range, limits = self._contrast
-            logger.debug(f"Contrast range: {value_range}")
-            self.contrast_slider.setRange(*value_range)
-            self.contrast_slider.setValue(limits)
-            self.contrast_slider.valueChanged.connect(self.contrast_slider_action)
-            contrast_hbox.addWidget(QLabel("contrast: "))
-            contrast_hbox.addWidget(self.contrast_slider, 90)
-            self.right_panel.addLayout(contrast_hbox, 5)
+        contrast_controls = self.build_contrast_controls()
+        if contrast_controls is not None:
+            self.right_panel.addLayout(contrast_controls, 5)
 
         main_layout.addLayout(self.left_panel, 35)
         main_layout.addLayout(self.right_panel, 65)
@@ -627,392 +425,271 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         self.resize(int(0.8 * self.screen_width), int(0.8 * self.screen_height))
         flush_layout_events(self)
 
+    # ------------------------------------------------------------------
+    # Rows of the pair table
+    # ------------------------------------------------------------------
+
+    def neighborhood_rows(self) -> pd.Series:
+        """Pairs in the current neighborhood, from the reference population."""
+
+        df = self.df_relative
+        return (~df["status_" + self.current_neighborhood].isnull()) & (
+            df["reference_population"] == self.reference_population
+        )
+
+    def population_pair_rows(self) -> pd.Series:
+        """Pairs between the reference and the neighbor populations."""
+
+        df = self.df_relative
+        return (df["reference_population"] == self.reference_population) & (
+            df["neighbor_population"] == self.neighbor_population
+        )
+
+    def selected_pair_rows(self, in_neighborhood: bool = True) -> pd.Series:
+        """Rows of the selected pair, in the current neighborhood or not."""
+
+        df = self.df_relative
+        rows = (
+            (df["REFERENCE_ID"] == self.reference_track_of_interest)
+            & (df["NEIGHBOR_ID"] == self.neighbor_track_of_interest)
+            & self.population_pair_rows()
+        )
+        if in_neighborhood:
+            rows &= ~df["status_" + self.current_neighborhood].isnull()
+        return rows
+
+    # ------------------------------------------------------------------
+    # Event classes
+    # ------------------------------------------------------------------
+
     def fill_class_cbs(self):
         """Fill class combo boxes."""
 
-        cols_to_remove = ["class_id", "class_color"]
-
-        try:
-            self.reference_event_choice_cb.disconnect()
-        except Exception as e:
-            logger.debug(f"Could not disconnect reference_event_choice_cb: {e}")
-        self.reference_event_choice_cb.clear()
-        df_reference = self.dataframes[self.reference_population]
-        reference_class_cols = [
-            c for c in list(df_reference.columns) if c.startswith("class") and c not in cols_to_remove
-        ]
-        self.reference_event_choice_cb.addItems(reference_class_cols)
-        self.reference_event_choice_cb.currentIndexChanged.connect(
-            self.compute_status_and_colors_reference
-        )
-
-        try:
-            self.neighbor_event_choice_cb.disconnect()
-        except Exception as e:
-            logger.debug(f"Could not disconnect neighbor_event_choice_cb: {e}")
-        self.neighbor_event_choice_cb.clear()
-        df_neighbors = self.dataframes[self.neighbor_population]
-        neighbor_class_cols = [
-            c for c in list(df_neighbors.columns) if c.startswith("class") and c not in cols_to_remove
-        ]
-        self.neighbor_event_choice_cb.addItems(neighbor_class_cols)
-        self.neighbor_event_choice_cb.currentIndexChanged.connect(
-            self.compute_status_and_colors_neighbor
-        )
+        for combo, population, slot in (
+            (
+                self.reference_event_choice_cb,
+                self.reference_population,
+                self.compute_status_and_colors_reference,
+            ),
+            (
+                self.neighbor_event_choice_cb,
+                self.neighbor_population,
+                self.compute_status_and_colors_neighbor,
+            ),
+        ):
+            try:
+                combo.disconnect()
+            except TypeError:
+                pass  # No connection to remove.
+            combo.clear()
+            combo.addItems(event_class_columns(self.dataframes[population].columns))
+            combo.currentIndexChanged.connect(slot)
 
     def del_relative_event_class(self):
         """Delete relative event class."""
 
-        msgBox = QMessageBox()
-        msgBox.setIcon(QMessageBox.Warning)
-        msgBox.setText(
-            f"You are about to delete event class {self.relative_class_choice_cb.currentText()}. The associated time and\nstatus will also be deleted. Do you still want to proceed?"
+        class_to_delete = self.relative_class_choice_cb.currentText()
+        if not confirm(
+            f"You are about to delete event class {class_to_delete}. The associated time and\nstatus will also be deleted. Do you still want to proceed?"
+        ):
+            return
+        time_name, status_name = event_columns(class_to_delete)
+        pair_time, _ = pair_event_columns(class_to_delete)
+        self.df_relative = self.df_relative.drop(
+            columns=list(
+                dict.fromkeys([class_to_delete, time_name, pair_time, status_name])
+            ),
+            errors="ignore",
         )
-        msgBox.setWindowTitle("Warning")
-        msgBox.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
-        returnValue = msgBox.exec()
-        if returnValue == QMessageBox.No:
-            return None
-        else:
-            class_to_delete = self.relative_class_choice_cb.currentText()
-            time_to_delete = class_to_delete.replace("class", "t")
-            status_to_delete = class_to_delete.replace("class", "status")
-            cols_to_delete = [class_to_delete, time_to_delete, status_to_delete]
-            for c in cols_to_delete:
-                try:
-                    self.df_relative = self.df_relative.drop([c], axis=1)
-                except Exception as e:
-                    logger.warning(f"Failed to drop column {c}: {e}")
-            item_idx = self.relative_class_choice_cb.findText(class_to_delete)
-            self.relative_class_choice_cb.removeItem(item_idx)
-
-    def update_cell_events(self):
-        """Update cell events."""
-
-        try:
-            self.neighbor_event_choice_cb.show()
-            self.neigh_lab.show()
-        except Exception as e:
-            logger.debug(f"Could not show neighbor event widgets: {e}")
-
-        self.reference_event_choice_cb.disconnect()
-        self.reference_event_choice_cb.clear()
-        self.reference_event_choice_cb.addItems(
-            self.class_cols_per_pop[self.reference_population]
+        self.relative_class_choice_cb.removeItem(
+            self.relative_class_choice_cb.findText(class_to_delete)
         )
-        self.reference_event_choice_cb.currentIndexChanged.connect(
-            self.compute_status_and_colors_reference
-        )
-
-        if not "self" in self.current_neighborhood:
-            self.neighbor_event_choice_cb.disconnect()
-            self.neighbor_event_choice_cb.clear()
-            self.neighbor_event_choice_cb.addItems(
-                self.class_cols_per_pop[self.neighbor_population]
-            )
-            self.neighbor_event_choice_cb.currentIndexChanged.connect(
-                self.compute_status_and_colors_reference
-            )
 
     def create_new_relative_event_class(self):
         """Create a new relative event class."""
 
-        # display qwidget to name the event
-        self.newClassWidget = CelldetectiveWidget()
-        self.newClassWidget.setWindowTitle("Create new event class")
-
-        layout = QVBoxLayout()
-        self.newClassWidget.setLayout(layout)
-        name_hbox = QHBoxLayout()
-        name_hbox.addWidget(QLabel("event name: "), 25)
-        self.relative_class_name_le = QLineEdit("event")
-        name_hbox.addWidget(self.relative_class_name_le, 75)
-        layout.addLayout(name_hbox)
-
-        class_labels = ["event", "no event", "else"]
-        layout.addWidget(QLabel("prefill: "))
-        radio_box = QHBoxLayout()
-        self.class_option_rb = [QRadioButton() for i in range(3)]
-        for i, c in enumerate(self.class_option_rb):
-            if i == 0:
-                c.setChecked(True)
-            c.setText(class_labels[i])
-            radio_box.addWidget(c, 33, alignment=Qt.AlignCenter)
-        layout.addLayout(radio_box)
-
-        btn_hbox = QHBoxLayout()
-        submit_btn = QPushButton("submit")
-        cancel_btn = QPushButton("cancel")
-        btn_hbox.addWidget(cancel_btn, 50)
-        btn_hbox.addWidget(submit_btn, 50)
-        layout.addLayout(btn_hbox)
-        submit_btn.clicked.connect(self.write_new_relative_event_class)
-        cancel_btn.clicked.connect(self.close_without_new_class)
-
-        self.newClassWidget.show()
-        center_window(self.newClassWidget)
+        (
+            self.newClassWidget,
+            self.relative_class_name_le,
+            self.class_option_rb,
+        ) = new_class_dialog(
+            "Create new event class",
+            "event name: ",
+            "event",
+            self.write_new_relative_event_class,
+            self.close_without_new_class,
+        )
 
     def write_new_relative_event_class(self):
         """Write new relative event class."""
 
-        if self.relative_class_name_le.text() == "":
-            self.relative_class = "class"
-            self.relative_time = "t0"
-            self.relative_status = "status"
-        else:
-            self.relative_class = "class_" + self.relative_class_name_le.text()
-            self.relative_status = self.relative_class.replace("class", "status")
-            self.relative_time = "t0_" + self.relative_class_name_le.text()
+        name = self.relative_class_name_le.text()
+        class_name = f"class_{name}" if name else "class"
+        time_name, status_name = pair_event_columns(class_name, self.df_relative.columns)
 
-        if self.relative_class in list(self.df_relative.columns):
+        if class_name in self.df_relative.columns and not confirm(
+            "This event name already exists. If you proceed,\nall annotated data will be rewritten. Do you wish to continue?"
+        ):
+            return
 
-            msgBox = QMessageBox()
-            msgBox.setIcon(QMessageBox.Warning)
-            msgBox.setText(
-                "This event name already exists. If you proceed,\nall annotated data will be rewritten. Do you wish to continue?"
-            )
-            msgBox.setWindowTitle("Warning")
-            msgBox.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
-            returnValue = msgBox.exec()
-            if returnValue == QMessageBox.No:
-                return None
-            else:
-                pass
+        fill_option = prefill_class(self.class_option_rb)
+        rows = self.neighborhood_rows()
+        self.df_relative.loc[rows, class_name] = fill_option
+        self.df_relative.loc[rows, time_name] = 0.1 if fill_option == 0 else -1
+        # A rewritten class keeps its status column, which selecting it would
+        # not remake: derive it from the new class and time now.
+        write_event_status(
+            self.df_relative,
+            class_name,
+            time_name,
+            status_name,
+            keys=PAIR_COLUMNS,
+            rows=rows,
+        )
 
-        fill_option = np.where([c.isChecked() for c in self.class_option_rb])[0][0]
-        self.df_relative.loc[
-            (~self.df_relative["status_" + self.current_neighborhood].isnull())
-            & (self.df_relative["reference_population"] == self.reference_population),
-            self.relative_class,
-        ] = fill_option
-        if fill_option == 0:
-            self.df_relative.loc[
-                (~self.df_relative["status_" + self.current_neighborhood].isnull())
-                & (
-                    self.df_relative["reference_population"]
-                    == self.reference_population
-                ),
-                self.relative_time,
-            ] = 0.1
-        else:
-            self.df_relative.loc[
-                (~self.df_relative["status_" + self.current_neighborhood].isnull())
-                & (
-                    self.df_relative["reference_population"]
-                    == self.reference_population
-                ),
-                self.relative_time,
-            ] = -1
-
+        # Selecting the class in the list sets the pair columns, so that the
+        # annotations go to the class shown.
         self.extract_relevant_events()
-
-        self.pair_class_name = self.relative_class
-        self.pair_time_name = self.relative_time
-        self.pair_status_name = self.relative_status
-
-        self.newClassWidget.close()
-
-    def close_without_new_class(self):
-        """Close without creating a new class."""
+        index = self.relative_class_choice_cb.findText(class_name)
+        if index >= 0:
+            self.relative_class_choice_cb.setCurrentIndex(index)
 
         self.newClassWidget.close()
+
+    def compute_cell_status(self, role: str, combo: QComboBox) -> bool:
+        """
+        Prepare the event class chosen for the reference or the neighbor cells:
+        sets ``<role>_class_name``, ``<role>_time_name`` and ``<role>_status_name``.
+
+        Parameters
+        ----------
+        role : str
+            "reference" or "neighbor".
+        combo : QComboBox
+            The event choice of the role.
+
+        Returns
+        -------
+        bool
+            Whether an event class is chosen.
+        """
+
+        population = getattr(self, f"{role}_population")
+        df = self.dataframes[population]
+        class_name = combo.currentText()
+        setattr(self, f"{role}_class_name", class_name)
+        if class_name == "":
+            return False
+
+        time_name, status_name = event_columns(class_name)
+        setattr(self, f"{role}_time_name", time_name)
+        setattr(self, f"{role}_status_name", status_name)
+
+        # The status is made only if missing, not to erase static classifications.
+        complete_event_columns(
+            df,
+            class_name,
+            time_name,
+            status_name,
+            make_status=lambda: write_event_status(
+                df, class_name, time_name, status_name
+            ),
+        )
+        color_events(df, class_name, status_name)
+        self.refresh_scatter_from_trajectories(population)
+        return True
 
     def compute_status_and_colors_reference(self):
         """Compute status and colors for reference."""
 
-        df_reference = self.dataframes[self.reference_population]
-        self.reference_class_name = self.reference_event_choice_cb.currentText()
-
-        if self.reference_class_name != "":
-
-            self.expected_reference_status = "status_"
-            suffix = self.reference_class_name.replace("class", "").replace("_", "")
-            if suffix != "":
-                self.expected_reference_status += "_" + suffix
-                self.expected_reference_time = "t_" + suffix
-            else:
-                self.expected_reference_time = "t0"
-
-            self.reference_time_name = self.expected_reference_time
-            self.reference_status_name = self.expected_reference_status
-
-            if (
-                self.reference_time_name in list(df_reference.columns)
-                and self.reference_class_name in list(df_reference.columns)
-                and not self.reference_status_name in list(df_reference.columns)
-            ):
-                # only create the status column if it does not exist to not erase static classification results
-                self.make_reference_status_column()
-            elif self.reference_time_name in list(
-                df_reference.columns
-            ) and self.reference_class_name in list(df_reference.columns):
-                # all good, do nothing
-                pass
-            else:
-                if not self.reference_status_name in list(df_reference.columns):
-                    df_reference[self.reference_status_name] = 0
-                    df_reference["status_color"] = color_from_status(0)
-                    df_reference["class_color"] = color_from_class(1)
-
-            if not self.reference_class_name in list(df_reference.columns):
-                df_reference[self.reference_class_name] = 1
-            if not self.reference_time_name in list(df_reference.columns):
-                df_reference[self.reference_time_name] = -1
-
-            df_reference["status_color"] = [
-                color_from_status(i)
-                for i in df_reference[self.reference_status_name].to_numpy()
-            ]
-            df_reference["class_color"] = [
-                color_from_class(i)
-                for i in df_reference[self.reference_class_name].to_numpy()
-            ]
-
-            self.refresh_scatter_from_trajectories(
-                self.reference_population, clear_selection=False
-            )
-
-            if self.reference_track_of_interest is not None:
-                t_reference = df_reference.loc[
-                    df_reference["TRACK_ID"] == self.reference_track_of_interest,
-                    self.reference_time_name,
-                ].values
-                if len(t_reference) > 0:
-                    t_reference = t_reference[0]
-                    ymin, ymax = self.cell_ax.get_ylim()
-                    self.line_dt_reference.set_xdata([t_reference, t_reference])
-                    self.line_dt_reference.set_ydata([ymin, ymax])
-                    self.cell_fcanvas.canvas.draw()
+        if not self.compute_cell_status("reference", self.reference_event_choice_cb):
+            return
+        if self.reference_track_of_interest is not None:
+            df_reference = self.dataframes[self.reference_population]
+            t_reference = df_reference.loc[
+                df_reference["TRACK_ID"] == self.reference_track_of_interest,
+                self.reference_time_name,
+            ].values
+            if len(t_reference) > 0:
+                self.set_time_line(self.line_dt_reference, t_reference[0])
+                self.cell_fcanvas.canvas.draw()
 
     def compute_status_and_colors_neighbor(self):
         """Compute status and colors for neighbor."""
-
-        df_neighbors = self.dataframes[self.neighbor_population]
-        self.neighbor_class_name = self.neighbor_event_choice_cb.currentText()
-
-        if self.neighbor_class_name != "":
-
-            self.expected_neighbor_status = "status_"
-            suffix = self.neighbor_class_name.replace("class", "").replace("_", "")
-            if suffix != "":
-                self.expected_neighbor_status += "_" + suffix
-                self.expected_neighbor_time = "t_" + suffix
-            else:
-                self.expected_neighbor_time = "t0"
-
-            self.neighbor_time_name = self.expected_neighbor_time
-            self.neighbor_status_name = self.expected_neighbor_status
-
-            if (
-                self.neighbor_time_name in list(df_neighbors.columns)
-                and self.neighbor_class_name in list(df_neighbors.columns)
-                and not self.neighbor_status_name in list(df_neighbors.columns)
-            ):
-                # only create the status column if it does not exist to not erase static classification results
-                self.make_neighbor_status_column()
-            elif self.neighbor_time_name in list(
-                df_neighbors.columns
-            ) and self.neighbor_class_name in list(df_neighbors.columns):
-                # all good, do nothing
-                pass
-            else:
-                if not self.neighbor_status_name in list(df_neighbors.columns):
-                    df_neighbors[self.neighbor_status_name] = 0
-                    df_neighbors["status_color"] = color_from_status(0)
-                    df_neighbors["class_color"] = color_from_class(1)
-
-            if not self.neighbor_class_name in list(df_neighbors.columns):
-                df_neighbors[self.neighbor_class_name] = 1
-            if not self.neighbor_time_name in list(df_neighbors.columns):
-                df_neighbors[self.neighbor_time_name] = -1
-
-            df_neighbors["status_color"] = [
-                color_from_status(i)
-                for i in df_neighbors[self.neighbor_status_name].to_numpy()
-            ]
-            df_neighbors["class_color"] = [
-                color_from_class(i)
-                for i in df_neighbors[self.neighbor_class_name].to_numpy()
-            ]
-
-            self.refresh_scatter_from_trajectories(self.neighbor_population)
+        self.compute_cell_status("neighbor", self.neighbor_event_choice_cb)
 
     def compute_status_and_colors_pair(self):
         """Compute status and colors for pair."""
 
         self.pair_class_name = self.relative_class_choice_cb.currentText()
+        if self.pair_class_name == "":
+            return
 
-        if self.pair_class_name != "":
+        self.pair_time_name, self.pair_status_name = pair_event_columns(
+            self.pair_class_name, self.df_relative.columns
+        )
 
-            self.pair_expected_status = "status"
-            suffix = self.pair_class_name.replace("class", "").replace("_", "", 1)
-            if suffix != "":
-                self.pair_expected_status += "_" + suffix
-                self.pair_expected_time = "t0_" + suffix
-                if not self.pair_expected_time in list(self.df_relative.columns):
-                    self.pair_expected_time = "t_" + suffix
-            else:
-                self.pair_expected_time = "t0"
+        # The status is made only if missing, not to erase static classifications.
+        complete_event_columns(
+            self.df_relative,
+            self.pair_class_name,
+            self.pair_time_name,
+            self.pair_status_name,
+            make_status=self.make_relative_status_column,
+        )
+        color_events(self.df_relative, self.pair_class_name, self.pair_status_name)
 
-            self.pair_time_name = self.pair_expected_time
-            self.pair_status_name = self.pair_expected_status
+        self.extract_scatter_from_lines()
+        self.give_pair_information()
+        self.plot_signals()
 
-            if (
-                self.pair_time_name in self.df_relative.columns
-                and self.pair_class_name in self.df_relative.columns
-                and not self.pair_status_name in self.df_relative.columns
-            ):
-                # only create the status column if it does not exist to not erase static classification results
-                self.make_relative_status_column()
-            elif (
-                self.pair_time_name in self.df_relative.columns
-                and self.pair_class_name in self.df_relative.columns
-            ):
-                # all good, do nothing
-                pass
-            else:
-                if not self.pair_status_name in self.df_relative.columns:
-                    self.df_relative[self.pair_status_name] = 0
-                    self.df_relative["status_color"] = color_from_status(0)
-                    self.df_relative["class_color"] = color_from_class(1)
+    def make_relative_status_column(self):
+        """Make relative status column."""
 
-            if not self.pair_class_name in self.df_relative.columns:
-                self.df_relative[self.pair_time_name] = 1
-            if not self.pair_time_name in self.df_relative.columns:
-                self.df_relative[self.pair_time_name] = -1
+        write_event_status(
+            self.df_relative,
+            self.pair_class_name,
+            self.pair_time_name,
+            self.pair_status_name,
+            keys=PAIR_COLUMNS,
+            rows=self.neighborhood_rows(),
+        )
 
-            self.df_relative["status_color"] = [
-                color_from_status(i)
-                for i in self.df_relative[self.pair_status_name].to_numpy()
-            ]
-            self.df_relative["class_color"] = [
-                color_from_class(i)
-                for i in self.df_relative[self.pair_class_name].to_numpy()
-            ]
+    def extract_relevant_events(self):
+        """List the pair event classes holding values for the current populations."""
 
-            self.extract_scatter_from_lines()
-            self.give_pair_information()
-            self.plot_signals()
+        try:
+            self.relative_class_choice_cb.disconnect()
+        except TypeError:
+            pass  # No connection to remove.
 
-    def contrast_slider_action(self):
-        """Recontrast the imshow as the contrast slider is moved."""
+        self.relative_class_choice_cb.clear()
 
-        self.vmin = self.contrast_slider.value()[0]
-        self.vmax = self.contrast_slider.value()[1]
-        self.im.set_clim(vmin=self.vmin, vmax=self.vmax)
-        self.fcanvas.canvas.draw_idle()
+        self.relative_class_cols = event_class_columns(self.df_relative.columns)
+        rows = self.population_pair_rows()
+        filled_class_cols = [
+            c
+            for c in self.relative_class_cols
+            if self.df_relative.loc[rows, c].notnull().any()
+        ]
+
+        if filled_class_cols:
+            self.relative_class_choice_cb.currentIndexChanged.connect(
+                self.compute_status_and_colors_pair
+            )
+            self.relative_class_choice_cb.addItems(filled_class_cols)
+            self.relative_class_choice_cb.setCurrentIndex(0)
+
+    # ------------------------------------------------------------------
+    # Selection and annotation
+    # ------------------------------------------------------------------
 
     def cancel_selection(self):
         """Cancel selection."""
 
         logger.debug("Canceling selection...")
 
-        self.hide_annotation_buttons()
-        self.correct_btn.setEnabled(False)
-        self.correct_btn.setText("correct")
-        self.cancel_btn.setEnabled(False)
-        self.correct_btn.disconnect()
-        self.correct_btn.clicked.connect(self.show_annotation_buttons)
+        self.reset_correction()
 
         self.reference_selection = []
         self.reference_track_of_interest = None
@@ -1021,158 +698,83 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         if len(self.pair_selection) > 0:
             self.cancel_pair_selection()
 
+        # Restore the colors of all the cells.
         _, _, neighbor_colors, initial_neighbor_colors = self.get_neighbor_sets()
         _, _, _, reference_colors, initial_reference_colors = self.get_reference_sets()
-
-        for k, (t, idx) in enumerate(zip(self.neighbor_loc_t, self.neighbor_loc_idx)):
-            neighbor_colors[t][idx, 0] = initial_neighbor_colors[k][0]
-            neighbor_colors[t][idx, 1] = initial_neighbor_colors[k][1]
-
-        # for (t,idx) in (zip(self.neighbor_loc_t_not_picked,self.target_loc_idx_not_picked)):
-        # 		neighbor_colors[t][idx, 0] = initial_neighbor_colors[k][0]
-        # 		neighbor_colors[t][idx, 1] = initial_neighbor_colors[k][1]
-
-        for t in range(len(neighbor_colors)):
-            for ind in range(len(neighbor_colors[t])):
-                neighbor_colors[t][ind] = initial_neighbor_colors[t][ind]
-
-        for k, (t, idx) in enumerate(zip(self.reference_loc_t, self.reference_loc_idx)):
-            reference_colors[t][idx, 0] = initial_reference_colors[k][0]
-            reference_colors[t][idx, 1] = initial_reference_colors[k][1]
-
-        for t, idx in zip(
-            self.reference_loc_t_not_picked, self.reference_loc_idx_not_picked
+        for colors, initial_colors in (
+            (neighbor_colors, initial_neighbor_colors),
+            (reference_colors, initial_reference_colors),
         ):
-            reference_colors[t][idx, 0] = initial_reference_colors[t][idx, 0]
-            reference_colors[t][idx, 1] = initial_reference_colors[t][idx, 1]
+            for frame_colors, frame_initial_colors in zip(colors, initial_colors):
+                frame_colors[:] = frame_initial_colors
 
-        for t in range(len(reference_colors)):
-            for ind in range(len(reference_colors[t])):
-                reference_colors[t][ind] = initial_reference_colors[t][ind]
-
+        # Their lines go at the next frame drawn.
         self.lines_data = {}
-        self.lines_list = []
-        self.lines_plot = []
-
         self.selected_population = None
 
-        for i in range(self.n_signals):
-            self.reference_pop_option_buttons[i].setEnabled(False)
+        for button in self.reference_pop_option_buttons:
+            button.setEnabled(False)
 
         self.plot_signals()
 
-    def hide_annotation_buttons(self):
-        """Hide annotation buttons."""
-        for a in self.annotation_btns_to_hide:
-            a.hide()
-        for b in [self.event_btn, self.no_event_btn, self.else_btn, self.suppr_btn]:
-            b.setChecked(False)
-        self.time_of_interest_label.setEnabled(False)
-        self.time_of_interest_le.setText("")
-        self.time_of_interest_le.setEnabled(False)
-
-    def enable_time_of_interest(self):
-        """Enable time of interest input if event is selected."""
-        if self.event_btn.isChecked():
-            self.time_of_interest_label.setEnabled(True)
-            self.time_of_interest_le.setEnabled(True)
-        else:
-            self.time_of_interest_label.setEnabled(False)
-            self.time_of_interest_le.setEnabled(False)
-
     def cancel_pair_selection(self):
         """Cancel pair selection."""
+
         # Unselect and recolor pair line
         self.pair_selection = []
-        for t in range(len(self.lines_colors_status)):
-            for idx in range(len(self.lines_colors_status[t])):
-                if self.lines_colors_status[t][idx, 2] == "lime":
-                    self.lines_colors_status[t][idx, 2] = (
-                        self.initial_lines_colors_status[t][idx, 2]
-                    )
-                    self.lines_colors_class[t][idx, 2] = (
-                        self.initial_lines_colors_class[t][idx, 2]
-                    )
+        for t, status_colors in enumerate(self.lines_colors_status):
+            selected = status_colors[:, 2] == "lime"
+            status_colors[selected, 2] = self.initial_lines_colors_status[t][selected, 2]
+            self.lines_colors_class[t][selected, 2] = self.initial_lines_colors_class[t][selected, 2]
 
         # Unselect and recolor neighbor
-        self.neighbor_selection = []
         self.neighbor_track_of_interest = None
         _, _, colors_neigh, _ = self.get_neighbor_sets()
         for k, (t, idx) in enumerate(
             zip(self.neigh_cell_loc_t, self.neigh_cell_loc_idx)
         ):
-            colors_neigh[t][idx, 0] = self.neigh_previous_color[k][0]
-            colors_neigh[t][idx, 1] = self.neigh_previous_color[k][1]
+            colors_neigh[t][idx, :2] = self.neigh_previous_color[k][:2]
         self.give_neighbor_cell_information()
         self.give_pair_information()
 
+        cleared = False
         for i in range(self.n_signals):
             self.neighbor_pop_option_buttons[i].setEnabled(False)
             self.relative_pop_option_buttons[i].setEnabled(False)
-            option = self.signal_pop_button_groups[i].checkedId()
-            if option != 0:
+            if self.signal_pop_button_groups[i].checkedId() != REFERENCE:
                 self.lines[i].set_xdata([])
                 self.lines[i].set_ydata([])
-
-                self.line_dt.set_xdata([])
-                self.line_dt.set_ydata([])
-
-                if self.reference_track_of_interest is None:
-                    self.line_dt_reference.set_xdata([])
-                    self.line_dt_reference.set_ydata([])
-
-                self.line_dt_neighbor.set_xdata([])
-                self.line_dt_neighbor.set_ydata([])
-
                 self.lines[i].set_label("")
+                cleared = True
+        if cleared:
+            self.clear_time_lines(reference=self.reference_track_of_interest is None)
 
-        self.correct_btn.setEnabled(False)
-        self.cancel_btn.setEnabled(False)
+        self.reset_correction()
+
+    def current_annotation(self) -> Tuple[int, float]:
+        """Class and time of the selected pair."""
+
+        pair = self.df_relative.loc[self.selected_pair_rows()]
+        return (
+            pair[self.pair_class_name].to_numpy()[0],
+            pair[self.pair_time_name].to_numpy()[0],
+        )
 
     def apply_modification(self):
         """Apply modification."""
 
-        # Plot the new time
-        t0 = -1
-        if self.event_btn.isChecked():
-            # try:
-            cclass = 0
-            t0 = float(self.time_of_interest_le.text().replace(",", "."))
-            self.line_dt.set_xdata([t0, t0])
-            self.cell_fcanvas.canvas.draw_idle()
-            # except Exception as e:
-            # 	print(e)
-            # 	t0 = -1
-            # 	cclass = 2
-
-        elif self.no_event_btn.isChecked():
-            cclass = 1
-
-        elif self.else_btn.isChecked():
-            cclass = 2
-
-        elif self.suppr_btn.isChecked():
-            cclass = 42
-
-        pair_filter = (
-            (self.df_relative["REFERENCE_ID"] == self.reference_track_of_interest)
-            & (self.df_relative["NEIGHBOR_ID"] == self.neighbor_track_of_interest)
-            & (self.df_relative["reference_population"] == self.reference_population)
-            & (self.df_relative["neighbor_population"] == self.neighbor_population)
-            & (~self.df_relative["status_" + self.current_neighborhood].isnull())
-        )
+        annotation = self.chosen_annotation()
+        if annotation is None:
+            return
+        cclass, t0 = annotation
+        pair_filter = self.selected_pair_rows()
 
         # Record the previous class/time so the log shows what actually changed
-        old_class = self.df_relative.loc[pair_filter, self.pair_class_name].to_numpy()
-        old_class = old_class[0] if len(old_class) else None
-        old_t0 = self.df_relative.loc[pair_filter, self.pair_time_name].to_numpy()
-        old_t0 = old_t0[0] if len(old_t0) else None
+        old_class, old_t0 = self.current_annotation()
 
         self.df_relative.loc[pair_filter, self.pair_class_name] = cclass
         self.df_relative.loc[pair_filter, self.pair_time_name] = t0
 
-        if not hasattr(self, "annotation_log"):
-            self.annotation_log = []
         self.annotation_log.append(
             f"REFERENCE_ID {self.reference_track_of_interest} - NEIGHBOR_ID "
             f"{self.neighbor_track_of_interest} ({self.reference_population}-"
@@ -1180,232 +782,103 @@ class PairEventAnnotator(CelldetectiveMainWindow):
             f"{self.pair_time_name} {old_t0}->{t0}"
         )
 
-        timeline = self.df_relative.loc[pair_filter, "FRAME"].to_numpy()
+        write_event_status(
+            self.df_relative,
+            self.pair_class_name,
+            self.pair_time_name,
+            self.pair_status_name,
+            keys=PAIR_COLUMNS,
+            rows=pair_filter,
+            recently_modified=True,
+        )
 
-        status = np.zeros_like(timeline)
-        if t0 > 0:
-            status[timeline >= t0] = 1.0
-        if cclass == 2:
-            status[:] = 2
-        if cclass > 2:
-            status[:] = 42
-
-        status_color = [color_from_status(s, recently_modified=True) for s in status]
-        class_color = [color_from_class(cclass, recently_modified=True)] * len(status)
-
-        self.df_relative.loc[pair_filter, self.pair_status_name] = status
-        self.df_relative.loc[pair_filter, "status_color"] = status_color
-        self.df_relative.loc[pair_filter, "class_color"] = class_color
-
-        # self.make_status_column()
         self.extract_scatter_from_lines()
         self.give_reference_cell_information()
         self.give_neighbor_cell_information()
         self.give_pair_information()
 
-        self.correct_btn.disconnect()
-        self.correct_btn.clicked.connect(self.show_annotation_buttons)
-        # self.cancel_btn.click()
+        self.reset_correction()
 
-        self.hide_annotation_buttons()
-        self.correct_btn.setEnabled(False)
-        self.correct_btn.setText("correct")
-        self.cancel_btn.setEnabled(False)
-        self.del_shortcut.setEnabled(False)
-        self.no_event_shortcut.setEnabled(False)
-
+        # Unselect the pair, but keep the reference
         self.pair_selection = []
-        self.neighbor_selection = []
         self.neighbor_track_of_interest = None
-        # but keep reference
 
-        # self.make_status_column()
         self.refresh_scatter_from_trajectories(self.reference_population)
         self.refresh_scatter_from_trajectories(self.neighbor_population)
 
         self.recolor_selection()
         self.trace_neighbors()
 
-    def locate_stack(self):
-        """Locate the target movie."""
+    # ------------------------------------------------------------------
+    # Tables
+    # ------------------------------------------------------------------
 
-        movies = glob(
-            self.pos + f"movie/{self.parent_window.parent_window.movie_prefix}*.tif"
+    def load_population_table(self, population: str) -> Optional[pd.DataFrame]:
+        """
+        The trajectories of a population, None (after a warning) if missing.
+
+        Raises
+        ------
+        ValueError
+            If the population is not tracked.
+        """
+
+        path = self.pos + os.sep.join(
+            ["output", "tables", f"trajectories_{population}.pkl"]
         )
+        if not os.path.exists(path):
+            path = path.replace(".pkl", ".csv")
+        if not os.path.exists(path):
+            warn(f"The trajectories for the {population} population cannot be detected...")
+            return None
 
-        if len(movies) == 0:
-            msgBox = QMessageBox()
-            msgBox.setIcon(QMessageBox.Warning)
-            msgBox.setText(
-                "No movies are detected in the experiment folder. Cannot load an image to test Haralick."
+        df = pd.read_pickle(path) if path.endswith(".pkl") else pd.read_csv(path)
+        if "TRACK_ID" not in df.columns:
+            raise ValueError(
+                f"The '{population}' population has not been tracked (no TRACK_ID found).\nPlease track this population before analyzing interactions."
             )
-            msgBox.setWindowTitle("Warning")
-            msgBox.setStandardButtons(QMessageBox.Ok)
-            msgBox.exec()
-            self.close()
-        else:
-            self.stack_path = movies[0]
-            self.len_movie = self.parent_window.parent_window.len_movie
-            len_movie_auto = auto_load_number_of_frames(self.stack_path)
-            if len_movie_auto is not None:
-                self.len_movie = len_movie_auto
-            exp_config = self.exp_dir + "config.ini"
-            self.channel_names, self.channels = extract_experiment_channels(
-                self.exp_dir
-            )
-            self.channel_names = np.array(self.channel_names)
-            self.channels = np.array(self.channels)
-            self.nbr_channels = len(self.channels)
+        return df
 
     def locate_all_tracks(self):
-        """Locate all tracks."""
+        """Load the trajectories of all the populations."""
 
         self.dataframes = {}
-        self.class_cols_per_pop = {}
         self.population_columns = {}
         self.MinMaxScaler_per_pop = {}
 
         for population in self.populations:
+            df = self.load_population_table(population)
+            class_cols, columns, scaler = [], [], None
 
-            population_trajectories_path = self.pos + os.sep.join(
-                ["output", "tables", f"trajectories_{population}.pkl"]
-            )
-            if not os.path.exists(population_trajectories_path):
-                population_trajectories_path = population_trajectories_path.replace(
-                    ".pkl", ".csv"
+            if df is not None:
+                df = df.sort_values(by=["TRACK_ID", "FRAME"])
+                class_cols = event_class_columns(df.columns)
+                class_name = class_cols[0] if class_cols else "class"
+                time_name, status_name = event_columns(class_name)
+                # The status is left as is, not to erase static classifications.
+                complete_event_columns(df, class_name, time_name, status_name)
+
+                # All the cells in grey until an event is chosen.
+                df["status_color"] = color_from_status(2)
+                df["class_color"] = color_from_status(2)
+
+                df = df.dropna(subset=["POSITION_X", "POSITION_Y"])
+                df["x_anim"] = (df["POSITION_X"] * self.fraction).astype(int)
+                df["y_anim"] = (df["POSITION_Y"] * self.fraction).astype(int)
+
+                columns, scaler = fit_feature_scaler(
+                    df,
+                    excluded=self.cols_to_remove + class_cols,
+                    excluded_prefixes=("t_", "neighborhood_"),
                 )
 
-            if not os.path.exists(population_trajectories_path):
-
-                msgBox = QMessageBox()
-                msgBox.setIcon(QMessageBox.Warning)
-                msgBox.setText(
-                    f"The trajectories for the {population} population cannot be detected..."
-                )
-                msgBox.setWindowTitle("Warning")
-                msgBox.setStandardButtons(QMessageBox.Ok)
-                returnValue = msgBox.exec()
-                df_population = None
-            else:
-                # Load and prep tracks
-                if population_trajectories_path.endswith(".pkl"):
-                    df_population = np.load(
-                        population_trajectories_path, allow_pickle=True
-                    )
-                else:
-                    df_population = pd.read_csv(population_trajectories_path)
-
-                if "TRACK_ID" not in df_population.columns:
-                    msgBox = QMessageBox()
-                    msgBox.setIcon(QMessageBox.Warning)
-                    msgBox.setText(
-                        f"The '{population}' population has not been tracked (no TRACK_ID found).\nPlease track this population before analyzing interactions."
-                    )
-                    msgBox.setWindowTitle("Tracking Missing")
-                    msgBox.setStandardButtons(QMessageBox.Ok)
-                    msgBox.exec()
-                    return
-
-                df_population = df_population.sort_values(by=["TRACK_ID", "FRAME"])
-
-                cols = np.array(df_population.columns)
-                class_cols = [
-                    c for c in list(df_population.columns) if c.startswith("class")
-                ]
-
-                class_cols = [c for c in class_cols if c not in ("class_id", "class_color")]
-
-                if len(class_cols) > 0:
-
-                    pop_class_name = class_cols[0]
-                    pop_expected_status = "status"
-                    suffix = pop_class_name.replace("class", "").replace("_", "")
-                    if suffix != "":
-                        pop_expected_status += "_" + suffix
-                        pop_expected_time = "t_" + suffix
-                    else:
-                        pop_expected_time = "t0"
-                    pop_time_name = pop_expected_time
-                    pop_status_name = pop_expected_status
-                else:
-                    pop_class_name = "class"
-                    pop_time_name = "t0"
-                    pop_status_name = "status"
-
-                if (
-                    pop_time_name in df_population.columns
-                    and pop_class_name in df_population.columns
-                    and not pop_status_name in df_population.columns
-                ):
-                    # only create the status column if it does not exist to not erase static classification results
-                    pass
-                    # self.make_target_status_column()
-                elif (
-                    pop_time_name in df_population.columns
-                    and pop_class_name in df_population.columns
-                ):
-                    # all good, do nothing
-                    pass
-                else:
-                    if not pop_status_name in df_population.columns:
-                        df_population[pop_status_name] = 0
-                        df_population["status_color"] = color_from_status(0)
-                        df_population["class_color"] = color_from_class(1)
-
-                if not pop_class_name in df_population.columns:
-                    df_population[pop_class_name] = 1
-                if not pop_time_name in df_population.columns:
-                    df_population[pop_time_name] = -1
-
-                df_population["status_color"] = color_from_status(2)
-                df_population["class_color"] = color_from_status(2)
-
-                df_population = df_population.dropna(
-                    subset=["POSITION_X", "POSITION_Y"]
-                )
-                df_population["x_anim"] = df_population["POSITION_X"] * self.fraction
-                df_population["y_anim"] = df_population["POSITION_Y"] * self.fraction
-                df_population["x_anim"] = df_population["x_anim"].astype(int)
-                df_population["y_anim"] = df_population["y_anim"].astype(int)
-
-                # self.reference_positions, self.reference_tracks, self.reference_colors, self.reference_initial_colors = self.extract_scatter_from_trajectories(self.reference_population)
-                # self.extract_scatter_from_target_trajectories()
-
-                tracks = df_population["TRACK_ID"].unique()
-                self.target_track_of_interest = df_population["TRACK_ID"].min()
-
-                self.loc_t = []
-                self.loc_idx = []
-                for t in range(len(tracks)):
-                    indices = np.where(tracks[t] == self.target_track_of_interest)[0]
-                    if len(indices) > 0:
-                        self.loc_t.append(t)
-                        self.loc_idx.append(indices[0])
-
-                minmax = MinMaxScaler()
-                pop_cols = list(df_population.columns)
-                cols_to_remove = [
-                    c for c in self.cols_to_remove if c in pop_cols
-                ] + class_cols
-                time_cols = [c for c in pop_cols if c.startswith("t_")]
-                cols_to_remove += time_cols
-                neigh_cols = [c for c in pop_cols if c.startswith("neighborhood_")]
-                cols_to_remove += neigh_cols
-
-                pop_cols = [c for c in pop_cols if c not in cols_to_remove]
-
-                x = df_population[pop_cols].values
-                minmax.fit(x)
-
-            self.dataframes.update({population: df_population})
-            self.class_cols_per_pop.update({population: class_cols})
-            self.population_columns.update({population: pop_cols})
-            self.MinMaxScaler_per_pop.update({population: minmax})
+            self.dataframes[population] = df
+            self.population_columns[population] = columns
+            self.MinMaxScaler_per_pop[population] = scaler
 
     def locate_relative_tracks(self):
         """Locate relative tracks."""
 
-        population = "relative"
         self.relative_trajectories_path = self.pos + os.sep.join(
             ["output", "tables", "trajectories_pairs.csv"]
         )
@@ -1416,67 +889,35 @@ class PairEventAnnotator(CelldetectiveMainWindow):
             raise ValueError(
                 "The pair measurements cannot be detected... Please measure the pairs first."
             )
-        else:
-            # Load and prep tracks
-            self.df_relative = pd.read_csv(self.relative_trajectories_path)
-            self.df_relative = self.df_relative.astype(
-                {"reference_population": str, "neighbor_population": str}
-            )
 
-            self.df_relative = self.df_relative.sort_values(
-                by=[
-                    "REFERENCE_ID",
-                    "NEIGHBOR_ID",
-                    "reference_population",
-                    "neighbor_population",
-                    "FRAME",
-                ]
-            )
-            self.relative_cols = np.array(self.df_relative.columns)
+        self.df_relative = pd.read_csv(self.relative_trajectories_path)
+        self.df_relative = self.df_relative.astype(
+            {"reference_population": str, "neighbor_population": str}
+        )
+        self.df_relative = self.df_relative.sort_values(
+            by=[
+                "REFERENCE_ID",
+                "NEIGHBOR_ID",
+                "reference_population",
+                "neighbor_population",
+                "FRAME",
+            ]
+        )
+        self.relative_cols = np.array(self.df_relative.columns)
+        self.relative_class_cols = event_class_columns(self.df_relative.columns)
 
-        self.relative_class_cols = [
-            c for c in list(self.df_relative.columns) if c.startswith("class")
-        ]
-
-        if len(self.relative_class_cols) > 0:
-            self.relative_class_name = self.relative_class_cols[0]
-            self.relative_expected_status = "status"
-            suffix = self.relative_class_name.replace("class", "").replace("_", "")
-            if suffix != "":
-                self.relative_expected_status += "_" + suffix
-                self.relative_expected_time = "t_" + suffix
-            else:
-                self.relative_expected_time = "t0_arrival"
-            self.relative_time_name = self.relative_expected_time
-            self.relative_status_name = self.relative_expected_status
-        else:
-            self.relative_class_name = "class"
-            self.relative_time_name = "t0"
-            self.relative_status_name = "status"
-
-        for col in list(self.df_relative.columns):
+        for col in self.df_relative.columns:
             if (
-                np.all(self.df_relative[col].isnull())
+                self.df_relative[col].isnull().all()
                 or self.df_relative[col].dtype == object
             ):
                 self.cols_to_remove.append(col)
 
-        self.MinMaxScaler_pairs = MinMaxScaler()
-        self.pair_columns = list(self.df_relative.columns)
-        cols_to_remove = [
-            c for c in self.cols_to_remove if c in self.pair_columns
-        ] + self.relative_class_cols
-        time_cols = [
-            c for c in self.pair_columns if c.startswith("t0_") or c.startswith("t_")
-        ]
-        cols_to_remove += time_cols
-        neigh_cols = [c for c in self.pair_columns if c.startswith("neighborhood_")]
-        cols_to_remove += neigh_cols
-
-        self.pair_columns = [c for c in self.pair_columns if c not in cols_to_remove]
-
-        x = self.df_relative[self.pair_columns].values
-        self.MinMaxScaler_pairs.fit(x)
+        self.pair_columns, self.MinMaxScaler_pairs = fit_feature_scaler(
+            self.df_relative,
+            excluded=self.cols_to_remove + self.relative_class_cols,
+            excluded_prefixes=("t0_", "t_", "neighborhood_"),
+        )
 
     def set_reference_and_neighbor_populations(self):
         """Set reference and neighbor populations."""
@@ -1489,114 +930,35 @@ class PairEventAnnotator(CelldetectiveMainWindow):
                 f"{pop}_ref_", ""
             )
 
-        self.reference_population = self.neighborhood_choice_cb.currentText().split(
-            "_"
-        )[0]
+        self.reference_population = neigh.split("_")[0]
         self.neighbor_population = self.reference_population
 
         if "_(" in self.current_neighborhood and ")_" in self.current_neighborhood:
-            self.neighbor_population = (
-                self.current_neighborhood.split("_(")[-1].split(")_")[0].split("-")[-1]
+            populations = (
+                self.current_neighborhood.split("_(")[-1].split(")_")[0].split("-")
             )
-            self.reference_population = (
-                self.current_neighborhood.split("_(")[-1].split(")_")[0].split("-")[0]
-            )
+            self.reference_population = populations[0]
+            self.neighbor_population = populations[-1]
 
         logger.debug(f"Current neighborhood: {self.current_neighborhood}; reference={self.reference_population}; neighbor={self.neighbor_population}")
 
-        idx = self.relative_class_choice_cb.findText(
-            "class_" + self.current_neighborhood
+        self.relative_class_choice_cb.setCurrentIndex(
+            self.relative_class_choice_cb.findText("class_" + self.current_neighborhood)
         )
-        if idx is not None:
-            self.relative_class_choice_cb.setCurrentIndex(idx)
 
-    def make_reference_status_column(self):
-        """Make reference status column."""
+    def neighborhood_changed(self):
+        """Handle neighborhood change."""
+        self.cancel_selection()
+        self.set_reference_and_neighbor_populations()
+        # Update reference classes and neighbor classes
+        self.extract_relevant_events()
+        self.fill_class_cbs()
+        self.extract_scatter_from_lines()
+        self.plot_signals()
 
-        df_reference = self.dataframes[self.reference_population]
-        logger.debug("Remaking the status column.")
-
-        for tid, group in df_reference.groupby("TRACK_ID"):
-
-            indices = group.index
-            t0 = group[self.reference_time_name].to_numpy()[0]
-            cclass = group[self.reference_class_name].to_numpy()[0]
-            timeline = group["FRAME"].to_numpy()
-            status = np.zeros_like(timeline)
-            if t0 > 0:
-                status[timeline >= t0] = 1.0
-            if cclass == 2:
-                status[:] = 2
-            if cclass > 2:
-                status[:] = 42
-            status_color = [color_from_status(s) for s in status]
-            class_color = [color_from_class(cclass)] * len(status)
-
-            df_reference.loc[indices, self.reference_status_name] = status
-            df_reference.loc[indices, "status_color"] = status_color
-            df_reference.loc[indices, "class_color"] = class_color
-
-    def make_relative_status_column(self):
-        """Make relative status column."""
-
-        pair_filter = self.df_relative.loc[
-            ~(self.df_relative["status_" + self.current_neighborhood].isnull())
-            & (self.df_relative["reference_population"] == self.reference_population),
-            :,
-        ]
-
-        for tid, group in pair_filter.groupby(
-            [
-                "REFERENCE_ID",
-                "NEIGHBOR_ID",
-                "reference_population",
-                "neighbor_population",
-            ]
-        ):
-
-            indices = group.index
-            t0 = group[self.pair_time_name].to_numpy()[0]
-            cclass = group[self.pair_class_name].to_numpy()[0]
-            timeline = group["FRAME"].to_numpy()
-            status = np.zeros_like(timeline)
-            if t0 > 0:
-                status[timeline >= t0] = 1.0
-            if cclass == 2:
-                status[:] = 2
-            if cclass > 2:
-                status[:] = 42
-            status_color = [color_from_status(s) for s in status]
-            class_color = [color_from_class(cclass)] * len(status)
-
-            self.df_relative.loc[indices, self.pair_status_name] = status
-            self.df_relative.loc[indices, "status_color"] = status_color
-            self.df_relative.loc[indices, "class_color"] = class_color
-
-    def make_neighbor_status_column(self):
-        """Make neighbor status column."""
-
-        df_neighbors = self.dataframes[self.neighbor_population]
-        logger.debug("Remaking the status column.")
-
-        for tid, group in df_neighbors.groupby("TRACK_ID"):
-
-            indices = group.index
-            t0 = group[self.neighbor_time_name].to_numpy()[0]
-            cclass = group[self.neighbor_class_name].to_numpy()[0]
-            timeline = group["FRAME"].to_numpy()
-            status = np.zeros_like(timeline)
-            if t0 > 0:
-                status[timeline >= t0] = 1.0
-            if cclass == 2:
-                status[:] = 2
-            if cclass > 2:
-                status[:] = 42
-            status_color = [color_from_status(s) for s in status]
-            class_color = [color_from_class(cclass)] * len(status)
-
-            df_neighbors.loc[indices, self.neighbor_status_name] = status
-            df_neighbors.loc[indices, "status_color"] = status_color
-            df_neighbors.loc[indices, "class_color"] = class_color
+    # ------------------------------------------------------------------
+    # Signals
+    # ------------------------------------------------------------------
 
     def fill_signal_choices(self):
         """Fill signal choices."""
@@ -1608,23 +970,21 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         self.relative_signals = list(self.relative_cols)
 
         self.cols_to_remove.extend(
-            [c for c in self.reference_signals if c.startswith("neighborhood")]
-        )
-        self.cols_to_remove.extend(
-            [c for c in self.neighbor_signals if c.startswith("neighborhood")]
+            c
+            for c in self.reference_signals + self.neighbor_signals
+            if c.startswith("neighborhood")
         )
 
-        for c in self.cols_to_remove:
-            if c in self.reference_signals:
-                self.reference_signals.remove(c)
-            if c in self.neighbor_signals:
-                self.neighbor_signals.remove(c)
-            if c in self.relative_signals:
-                self.relative_signals.remove(c)
+        removed = set(self.cols_to_remove)
+        for signals in (
+            self.reference_signals,
+            self.neighbor_signals,
+            self.relative_signals,
+        ):
+            signals[:] = [c for c in signals if c not in removed]
 
-        self.update_signal_choices(0)
-        self.update_signal_choices(1)
-        self.update_signal_choices(2)
+        for i in range(self.n_signals):
+            self.update_signal_choices(i)
 
     def update_signal_choices(self, index: int) -> None:
         """
@@ -1636,85 +996,80 @@ class PairEventAnnotator(CelldetectiveMainWindow):
             The index of the signal choice.
         """
 
-        self.signal_choices[index].disconnect()
+        combo = self.signal_choices[index]
+        try:
+            combo.currentIndexChanged.disconnect()
+        except TypeError:
+            pass  # No connection to remove.
 
-        current_idx = self.signal_choices[index].currentIndex()
-        if current_idx == -1:
-            current_idx = 0
+        current_idx = max(combo.currentIndex(), 0)
+        combo.clear()
+        signals = {
+            REFERENCE: self.reference_signals,
+            NEIGHBOR: self.neighbor_signals,
+            PAIR: self.relative_signals,
+        }.get(self.signal_pop_button_groups[index].checkedId())
+        if signals is not None:
+            combo.addItems(["--"] + signals)
+            combo.setCurrentIndex(current_idx)
 
-        self.signal_choices[index].clear()
-        if self.reference_pop_option_buttons[index].isChecked():
-            self.signal_choices[index].addItems(["--"] + self.reference_signals)
-            self.signal_choices[index].setCurrentIndex(current_idx)
-        if self.neighbor_pop_option_buttons[index].isChecked():
-            self.signal_choices[index].addItems(["--"] + self.neighbor_signals)
-            self.signal_choices[index].setCurrentIndex(current_idx)
-        if self.relative_pop_option_buttons[index].isChecked():
-            self.signal_choices[index].addItems(["--"] + self.relative_signals)
-            self.signal_choices[index].setCurrentIndex(current_idx)
-
-        self.signal_choices[index].currentIndexChanged.connect(self.plot_signals)
-
+        combo.currentIndexChanged.connect(self.plot_signals)
         self.plot_signals()
 
     def generate_signal_choices(self):
         """Generate signal choices."""
 
-        self.signal_choices = []
-        self.signal_labels = []
-        self.n_signals = 3
-
-        self.signal_choices = [QSearchableComboBox() for i in range(self.n_signals)]
-        self.signal_pop_button_groups = [QButtonGroup() for i in range(self.n_signals)]
+        self.signal_choices = [QSearchableComboBox() for _ in range(self.n_signals)]
+        self.signal_pop_button_groups = [QButtonGroup() for _ in range(self.n_signals)]
         self.reference_pop_option_buttons = [
-            QRadioButton() for i in range(self.n_signals)
+            QRadioButton() for _ in range(self.n_signals)
         ]
         self.neighbor_pop_option_buttons = [
-            QRadioButton() for i in range(self.n_signals)
+            QRadioButton() for _ in range(self.n_signals)
         ]
         self.relative_pop_option_buttons = [
-            QRadioButton() for i in range(self.n_signals)
+            QRadioButton() for _ in range(self.n_signals)
         ]
 
         for i in range(self.n_signals):
-
-            self.signal_pop_button_groups[i].addButton(
-                self.reference_pop_option_buttons[i], 0
-            )
-            self.signal_pop_button_groups[i].addButton(
-                self.neighbor_pop_option_buttons[i], 1
-            )
-            self.signal_pop_button_groups[i].addButton(
-                self.relative_pop_option_buttons[i], 2
-            )
-
             self.signal_choices[i].currentIndexChanged.connect(self.plot_signals)
-            self.reference_pop_option_buttons[i].toggled.connect(
-                partial(self.update_signal_choices, i)
-            )
-            self.neighbor_pop_option_buttons[i].toggled.connect(
-                partial(self.update_signal_choices, i)
-            )
-            self.relative_pop_option_buttons[i].toggled.connect(
-                partial(self.update_signal_choices, i)
-            )
+            for source, buttons in (
+                (REFERENCE, self.reference_pop_option_buttons),
+                (NEIGHBOR, self.neighbor_pop_option_buttons),
+                (PAIR, self.relative_pop_option_buttons),
+            ):
+                self.signal_pop_button_groups[i].addButton(buttons[i], source)
+                buttons[i].toggled.connect(partial(self.update_signal_choices, i))
+                buttons[i].setEnabled(False)
 
-            self.reference_pop_option_buttons[i].setEnabled(False)
-            self.neighbor_pop_option_buttons[i].setEnabled(False)
-            self.relative_pop_option_buttons[i].setEnabled(False)
+    @staticmethod
+    def set_time_line(line, t: float, ylim: Optional[Tuple[float, float]] = None) -> None:
+        """Place a vertical time line of the signal plot."""
+
+        line.set_xdata([t, t])
+        line.set_ydata(list(ylim if ylim is not None else line.axes.get_ylim()))
+
+    def clear_time_lines(self, reference: bool = True) -> None:
+        """Hide the time lines of the pair and the neighbor, and of the reference."""
+
+        lines = [self.line_dt, self.line_dt_neighbor]
+        if reference:
+            lines.append(self.line_dt_reference)
+        for line in lines:
+            line.set_xdata([])
+            line.set_ydata([])
 
     def plot_signals(self):
         """Plot signals."""
 
-        range_values = []
+        for t in list(self.cell_ax.texts):
+            t.remove()
 
         if (
             self.reference_track_of_interest is None
             and self.neighbor_track_of_interest is None
         ):
             # No cell selected, plot nothing
-            for t in self.cell_ax.texts:
-                t.remove()
             self.cell_ax.text(
                 0.5,
                 0.5,
@@ -1723,176 +1078,70 @@ class PairEventAnnotator(CelldetectiveMainWindow):
                 verticalalignment="center",
                 transform=self.cell_ax.transAxes,
             )
-            for i in range(self.n_signals):
-                self.lines[i].set_xdata([])
-                self.lines[i].set_ydata([])
-                self.lines[i].set_label("")
-
-                self.line_dt.set_xdata([])
-                self.line_dt.set_ydata([])
-
-                self.line_dt_reference.set_xdata([])
-                self.line_dt_reference.set_ydata([])
-
-                self.line_dt_neighbor.set_xdata([])
-                self.line_dt_neighbor.set_ydata([])
-
+            for line in self.lines:
+                line.set_xdata([])
+                line.set_ydata([])
+                line.set_label("")
+            self.clear_time_lines()
             self.cell_fcanvas.canvas.draw()
-            return None
-        else:
-            for t in self.cell_ax.texts:
-                t.remove()
+            return
 
-        # Plot signals
-        for i in range(self.n_signals):
+        range_values = []
+        for i, line in enumerate(self.lines):
 
-            signal = []
-            timeline = []
             signal_txt = self.signal_choices[i].currentText()
             option = self.signal_pop_button_groups[i].checkedId()
 
             n_cut = 25
+            shown = signal_txt
             if len(signal_txt) > n_cut:
-                signal_txt_to_show = signal_txt[: (n_cut - 3)] + "..."
+                shown = signal_txt[: (n_cut - 3)] + "..."
+
+            df, rows, label = None, None, ""
+            if signal_txt not in ("--", ""):
+                if option == REFERENCE and self.reference_track_of_interest is not None:
+                    df = self.dataframes[self.reference_population]
+                    rows = df["TRACK_ID"] == self.reference_track_of_interest
+                    all_values = df[signal_txt]
+                    label = f"reference ({self.reference_population}) {shown}"
+                elif option == NEIGHBOR and self.neighbor_track_of_interest is not None:
+                    df = self.dataframes[self.neighbor_population]
+                    rows = df["TRACK_ID"] == self.neighbor_track_of_interest
+                    all_values = df[signal_txt]
+                    label = f"neighbor ({self.neighbor_population}) {shown}"
+                elif (
+                    option == PAIR
+                    and self.reference_track_of_interest is not None
+                    and self.neighbor_track_of_interest is not None
+                ):
+                    df = self.df_relative
+                    rows = self.selected_pair_rows(in_neighborhood=False)
+                    all_values = df.loc[self.population_pair_rows(), signal_txt]
+                    label = f"pair {shown}"
+
+            if df is None:
+                timeline, signal = [], []
             else:
-                signal_txt_to_show = signal_txt
+                timeline = df.loc[rows, "FRAME"].to_numpy()
+                signal = df.loc[rows, signal_txt].to_numpy()
+                range_values.extend(all_values.values)
 
-            if (
-                option == 0
-                and self.reference_track_of_interest is not None
-                and signal_txt != "--"
-                and signal_txt != ""
-            ):
+            line.set_label(label)
+            line.set_xdata(timeline)
+            line.set_ydata(signal)
+            line.set_color(tab10(i / float(self.n_signals)))
 
-                df_reference = self.dataframes[self.reference_population]
-
-                self.lines[i].set_label(
-                    f"reference ({self.reference_population}) " + signal_txt_to_show
-                )
-
-                signal = df_reference.loc[
-                    df_reference["TRACK_ID"] == self.reference_track_of_interest,
-                    signal_txt,
-                ].to_numpy()
-                timeline = df_reference.loc[
-                    df_reference["TRACK_ID"] == self.reference_track_of_interest,
-                    "FRAME",
-                ].to_numpy()
-                range_values.extend(df_reference.loc[:, signal_txt].values)
-
-            elif (
-                option == 1
-                and self.neighbor_track_of_interest is not None
-                and signal_txt != "--"
-                and signal_txt != ""
-            ):
-
-                df_neighbor = self.dataframes[self.neighbor_population]
-                self.lines[i].set_label(
-                    f"neighbor ({self.neighbor_population}) " + signal_txt_to_show
-                )
-
-                signal = df_neighbor.loc[
-                    df_neighbor["TRACK_ID"] == self.neighbor_track_of_interest,
-                    signal_txt,
-                ].to_numpy()
-                timeline = df_neighbor.loc[
-                    df_neighbor["TRACK_ID"] == self.neighbor_track_of_interest, "FRAME"
-                ].to_numpy()
-                range_values.extend(df_neighbor.loc[:, signal_txt].values)
-
-            elif (
-                option == 2
-                and self.reference_track_of_interest is not None
-                and self.neighbor_track_of_interest is not None
-                and signal_txt != "--"
-                and signal_txt != ""
-            ):
-                self.lines[i].set_label(f"pair " + signal_txt_to_show)
-                signal = self.df_relative.loc[
-                    (
-                        self.df_relative["REFERENCE_ID"]
-                        == self.reference_track_of_interest
-                    )
-                    & (
-                        self.df_relative["NEIGHBOR_ID"]
-                        == self.neighbor_track_of_interest
-                    )
-                    & (
-                        self.df_relative["reference_population"]
-                        == self.reference_population
-                    )
-                    & (
-                        self.df_relative["neighbor_population"]
-                        == self.neighbor_population
-                    ),
-                    signal_txt,
-                ].to_numpy()
-                timeline = self.df_relative.loc[
-                    (
-                        self.df_relative["REFERENCE_ID"]
-                        == self.reference_track_of_interest
-                    )
-                    & (
-                        self.df_relative["NEIGHBOR_ID"]
-                        == self.neighbor_track_of_interest
-                    )
-                    & (
-                        self.df_relative["reference_population"]
-                        == self.reference_population
-                    )
-                    & (
-                        self.df_relative["neighbor_population"]
-                        == self.neighbor_population
-                    ),
-                    "FRAME",
-                ].to_numpy()
-                range_values.extend(
-                    self.df_relative.loc[
-                        (
-                            self.df_relative["reference_population"]
-                            == self.reference_population
-                        )
-                        & (
-                            self.df_relative["neighbor_population"]
-                            == self.neighbor_population
-                        ),
-                        signal_txt,
-                    ].values
-                )
-            else:
-                self.lines[i].set_label("")
-
-            self.lines[i].set_xdata(timeline)
-            self.lines[i].set_ydata(signal)
-            self.lines[i].set_color(tab10(i / float(self.n_signals)))
-
-        # self.configure_ylims()
-        if len(range_values) > 0:
-            range_values = np.array(pd.to_numeric(range_values, errors='coerce'), dtype=float)
-            if len(range_values[range_values == range_values]) > 0:
-                if len(range_values[range_values > 0]) > 0:
-                    self.value_magnitude = np.nanpercentile(range_values, 1)
-                else:
-                    self.value_magnitude = 1
-                self.non_log_ymin = 0.98 * np.nanmin(range_values)
-                self.non_log_ymax = np.nanmax(range_values) * 1.02
-                if self.cell_ax.get_yscale() == "linear":
-                    self.cell_ax.set_ylim(self.non_log_ymin, self.non_log_ymax)
-                else:
-                    self.cell_ax.set_ylim(self.value_magnitude, self.non_log_ymax)
+        limits = signal_limits(pd.to_numeric(range_values, errors="coerce"))
+        if limits is not None:
+            self.set_signal_ylim(*limits)
 
         df_reference = self.dataframes[self.reference_population]
         t_reference = df_reference.loc[
             df_reference["TRACK_ID"] == self.reference_track_of_interest,
             self.reference_time_name,
         ].values
-
         if len(t_reference) > 0:
-            t_reference = t_reference[0]
-            ymin, ymax = self.cell_ax.get_ylim()
-            self.line_dt_reference.set_xdata([t_reference, t_reference])
-            self.line_dt_reference.set_ydata([ymin, ymax])
+            self.set_time_line(self.line_dt_reference, t_reference[0])
 
         if (
             self.reference_track_of_interest is not None
@@ -1900,75 +1149,43 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         ):
             t0 = (
                 self.df_relative.loc[
-                    (
-                        self.df_relative["REFERENCE_ID"]
-                        == self.reference_track_of_interest
-                    )
-                    & (
-                        self.df_relative["NEIGHBOR_ID"]
-                        == self.neighbor_track_of_interest
-                    )
-                    & (
-                        self.df_relative["reference_population"]
-                        == self.reference_population
-                    )
-                    & (
-                        self.df_relative["neighbor_population"]
-                        == self.neighbor_population
-                    ),
-                    self.pair_time_name,
+                    self.selected_pair_rows(in_neighborhood=False), self.pair_time_name
                 ]
                 .dropna()
                 .values
             )
+            if len(t0) > 0:
+                self.set_time_line(self.line_dt, t0[0])
 
             df_neighbor = self.dataframes[self.neighbor_population]
             t_neighbor = df_neighbor.loc[
                 df_neighbor["TRACK_ID"] == self.neighbor_track_of_interest,
                 self.neighbor_time_name,
             ].values
-
-            if len(t0) > 0:
-                t0 = t0[0]
-                ymin, ymax = self.cell_ax.get_ylim()
-                self.line_dt.set_xdata([t0, t0])
-                self.line_dt.set_ydata([ymin, ymax])
-
             if len(t_neighbor) > 0:
-                t_neighbor = t_neighbor[0]
-                ymin, ymax = self.cell_ax.get_ylim()
-                self.line_dt_neighbor.set_xdata([t_neighbor, t_neighbor])
-                self.line_dt_neighbor.set_ydata([ymin, ymax])
+                self.set_time_line(self.line_dt_neighbor, t_neighbor[0])
 
         self.cell_ax.legend(fontsize=8)
         self.cell_fcanvas.canvas.draw()
 
+    # ------------------------------------------------------------------
+    # Scatters
+    # ------------------------------------------------------------------
+
     def extract_scatter_from_lines(self):
         """Extract scatter from lines."""
 
-        self.lines_list = []
-        self.lines_tracks = []
         self.lines_colors_status = []
         self.initial_lines_colors_status = []
         self.lines_colors_class = []
         self.initial_lines_colors_class = []
 
-        for t in np.arange(self.len_movie):
-
-            # Append frame_positions to self.line_positions
-            neigh_at_time_filter = (
-                (self.df_relative["FRAME"] == t)
-                & (~self.df_relative["status_" + self.current_neighborhood].isnull())
-                & (
-                    self.df_relative["reference_population"]
-                    == self.reference_population
-                )
-            )
-            data = self.df_relative.loc[
-                neigh_at_time_filter,
-                ["REFERENCE_ID", "NEIGHBOR_ID", "status_color", "class_color"],
-            ].to_numpy()
-            self.lines_tracks.append(data[:, [0, 1]])
+        pairs = self.df_relative.loc[
+            self.neighborhood_rows(),
+            ["FRAME", "REFERENCE_ID", "NEIGHBOR_ID", "status_color", "class_color"],
+        ]
+        for frame_pairs in split_by_frame(pairs, self.len_movie):
+            data = frame_pairs.iloc[:, 1:].to_numpy()
 
             self.initial_lines_colors_status.append(data[:, [0, 1, 2]])
             self.lines_colors_status.append(data[:, [0, 1, 2]])
@@ -1988,9 +1205,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         for population in self.dataframes.keys():
             self.refresh_scatter_from_trajectories(population)
 
-    def refresh_scatter_from_trajectories(
-        self, population: str, clear_selection: bool = True
-    ) -> None:
+    def refresh_scatter_from_trajectories(self, population: str) -> None:
         """
         Refresh scatter from trajectories.
 
@@ -1998,8 +1213,6 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         ----------
         population : str
             The population to refresh.
-        clear_selection : bool, optional
-            Whether to clear selection.
         """
 
         df = self.dataframes[population]
@@ -2010,297 +1223,51 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         initial_colors = []
 
         if df is not None:
+            for t, cells in enumerate(split_by_frame(df, self.len_movie)):
+                positions.append(cells[["x_anim", "y_anim"]].to_numpy())
+                # Copies: both are written (selection highlight, restore), and
+                # under copy-on-write pandas hands out read-only arrays.
+                cell_colors = cells[["class_color", "status_color"]].to_numpy()
+                colors.append(cell_colors.copy())
+                initial_colors.append(cell_colors.copy())
+                tracks.append(cells["TRACK_ID"].to_numpy())
+                timeline.append(t)
 
-            for t in np.arange(self.len_movie):
+        self.tracks[population] = tracks
+        self.timeline[population] = timeline
+        self.positions[population] = positions
+        self.colors[population] = colors
+        self.initial_colors[population] = initial_colors
 
-                positions.append(
-                    df.loc[df["FRAME"] == t, ["x_anim", "y_anim"]].to_numpy()
-                )
-                colors.append(
-                    df.loc[df["FRAME"] == t, ["class_color", "status_color"]].to_numpy()
-                )
-                initial_colors.append(
-                    df.loc[df["FRAME"] == t, ["class_color", "status_color"]].to_numpy()
-                )
-                try:
-                    tracks.append(df.loc[df["FRAME"] == t, "TRACK_ID"].to_numpy())
-                    timeline.append(t)
-                except KeyError:
-                    tracks.append(df.loc[df["FRAME"] == t, "ID"].to_numpy())
-                    timeline.append(t)
-
-        self.tracks.update({population: tracks})
-        self.timeline.update({population: timeline})
-        self.positions.update({population: positions})
-        self.colors.update({population: colors})
-        self.initial_colors.update({population: initial_colors})
-
-        if self.reference_track_of_interest is not None:
-            # self.recolor_selection()
-            # self.trace_neighbors()
+        if (
+            self.reference_track_of_interest is not None
+            and self.neighbor_track_of_interest is not None
+        ):
             self.highlight_the_pair()
 
-    def load_annotator_config(self):
-        """Load settings from config or set default values."""
+    def release_resources(self) -> None:
+        """Free the tables, with the rest of the window."""
 
-        self.rgb_mode = False
-        self.log_option = False
-        self.percentile_mode = True
-        self.target_channels = [[self.channel_names[0], 0.01, 99.99]]
-        self.fraction = 0.25
-        self.anim_interval = 33
-
-        logger.debug("Reading instructions...")
-        if os.path.exists(self.instructions_path):
-            with open(self.instructions_path, "r") as f:
-                instructions = json.load(f)
-            logger.debug(f"Reading instructions: {instructions}")
-            self.rgb_mode = instructions.get("rgb_mode", self.rgb_mode)
-            self.percentile_mode = instructions.get("percentile_mode", self.percentile_mode)
-            self.target_channels = instructions.get("channels", self.target_channels)
-            self.fraction = float(instructions.get("fraction", self.fraction))
-            self.log_option = instructions.get("log", self.log_option)
-
-    def prepare_stack(self, progress_callback: Optional[callable] = None) -> None:
-        """
-        Load the stack images.
-
-        Parameters
-        ----------
-        progress_callback : callable, optional
-            Callback for progress updates.
-        """
-        self.img_num_channels = _get_img_num_per_channel(
-            self.channels, self.len_movie, self.nbr_channels
-        )
-        self.stack = []
-        for ch in tqdm(self.target_channels, desc="channel"):
-            target_ch_name = ch[0]
-            if self.percentile_mode:
-                normalize_kwargs = {"percentiles": (ch[1], ch[2]), "values": None}
-            else:
-                normalize_kwargs = {"values": (ch[1], ch[2]), "percentiles": None}
-
-            if self.rgb_mode:
-                normalize_kwargs.update({"amplification": 255.0, "clip": True})
-
-            chan = []
-            indices = self.img_num_channels[
-                self.channels[np.where(self.channel_names == target_ch_name)][0]
-            ]
-            for t in tqdm(range(len(indices)), desc="FRAME"):
-                if self.rgb_mode:
-                    f = load_frames(
-                        indices[t],
-                        self.stack_path,
-                        scale=self.fraction,
-                        normalize_input=True,
-                        normalize_kwargs=normalize_kwargs,
-                    )
-                    f = f.astype(np.uint8)
-                else:
-                    f = load_frames(
-                        indices[t],
-                        self.stack_path,
-                        scale=self.fraction,
-                        normalize_input=False,
-                    )
-                chan.append(f[:, :, 0])
-
-            self.stack.append(chan)
-
-        self.stack = np.array(self.stack)
-        if self.rgb_mode:
-            self.stack = np.moveaxis(self.stack, 0, -1)
-        else:
-            self.stack = self.stack[0]
-            if self.log_option:
-                self.stack[
-                    np.where((self.stack > 0.0) & (self.stack == self.stack))
-                ] = np.log(
-                    self.stack[
-                        np.where((self.stack > 0.0)) & (self.stack == self.stack)
-                    ]
-                )
-
-        logger.debug(f"Loaded stack of shape: {self.stack.shape}.")
-
-    def neighborhood_changed(self):
-        """Handle neighborhood change."""
-        self.cancel_selection()
-        self.set_reference_and_neighbor_populations()
-        # Update reference classes and neighbor classes
-        self.extract_relevant_events()
-        self.fill_class_cbs()
-
-        self.update_cell_events()
-        self.extract_scatter_from_lines()
-        # self.draw_frame(self.framedata)
-        self.plot_signals()
-
-    def extract_relevant_events(self):
-        """Extract relevant events for the current pair."""
-        if self.reference_population != self.neighbor_population:
-            pattern = "_2_"
-        else:
-            pattern = "_self_"
-
-        try:
-            self.relative_class_choice_cb.disconnect()
-        except Exception as e:
-            logger.debug(f"Could not disconnect relative_class_choice_cb: {e}")
-
-        self.relative_class_choice_cb.clear()
-
-        cols = list(self.df_relative.columns)
-        self.relative_class_cols = [c for c in cols if c.startswith("class")]
-        for c in ["class_color", "class_id"]:
-            if c in self.relative_class_cols:
-                self.relative_class_cols.remove(c)
-
-        # Keep only valid classes for which there are values
-        self.new_relative_class_cols = []
-        for c in self.relative_class_cols:
-            if (
-                ~self.df_relative.loc[
-                    (
-                        self.df_relative["reference_population"]
-                        == self.reference_population
-                    )
-                    & (
-                        self.df_relative["neighbor_population"]
-                        == self.neighbor_population
-                    ),
-                    c,
-                ]
-                .isnull()
-                .all()
-            ):
-                self.new_relative_class_cols.append(c)
-
-        if len(self.new_relative_class_cols) > 0:
-            self.relative_class = self.new_relative_class_cols[0]
-            self.relative_class_choice_cb.currentIndexChanged.connect(
-                self.compute_status_and_colors_pair
-            )
-            self.relative_class_choice_cb.addItems(self.new_relative_class_cols)
-            idx = self.relative_class_choice_cb.findText(self.relative_class)
-            self.relative_class_choice_cb.setCurrentIndex(idx)
-
-    def update_speed(self):
-        """Update animation speed."""
-        fps = self.speed_slider.value()
-        # Convert FPS to interval in ms
-        # FPS = 1000 / interval_ms => interval_ms = 1000 / FPS
-        val = int(1000 / max(1, fps))
-
-        self.anim_interval = val
-        logger.debug(f"Speed slider moved. FPS: {fps} -> Interval: {val} ms. Updating animation interval.")
-
-        if hasattr(self, "anim") and self.anim and hasattr(self.anim, "event_source") and self.anim.event_source:
-            try:
-                self.anim._interval = self.anim_interval
-                self.anim.event_source.interval = self.anim_interval
-                if self.stop_btn.isVisible():  # if currently playing
-                    self.anim.event_source.stop()
-                    self.anim.event_source.start()
-            except Exception as e:
-                logger.debug(f"Error updating animation interval: {e}")
-
-    def closeEvent(self, event: QCloseEvent) -> None:
-        """
-        Handle close event.
-
-        Parameters
-        ----------
-        event : QCloseEvent
-            The close event.
-        """
-        try:
-            self.stop()
-        except Exception as e:
-            logger.debug(f"Could not stop annotator cleanly: {e}")
-
-        # Stop and delete animation to break reference cycles
-        if hasattr(self, "anim") and self.anim:
-            try:
-                self.anim.event_source.stop()
-            except Exception as e:
-                logger.debug(f"Could not stop animation event source: {e}")
-            del self.anim
-
-        # Close matplotlib figures
-        if hasattr(self, "fig"):
-            try:
-                plt.close(self.fig)
-            except Exception as e:
-                logger.debug(f"Could not close figure: {e}")
-
-        if hasattr(self, "cell_fig"):
-            try:
-                plt.close(self.cell_fig)
-            except Exception as e:
-                logger.debug(f"Could not close cell figure: {e}")
-
-        # Delete large objects
-        if hasattr(self, "stack"):
-            del self.stack
-
-        if hasattr(self, "dataframes"):
-            self.dataframes.clear()
-
+        super().release_resources()
+        self.dataframes.clear()
+        # A window may be closed twice.
         if hasattr(self, "df_relative"):
             del self.df_relative
 
-        gc.collect()
-        super().closeEvent(event)
-
-    def animation_generator(self):
-        """
-        Generator yielding frame indices for the animation,
-        starting from the current self.framedata.
-        """
-        i = self.framedata
-        while True:
-            yield i
-            i += 1
-            if i >= self.len_movie:
-                i = 0
-
     def looped_animation(self):
-        """
-        Load an image.
+        """Show the movie with the cells of each population marked, playing in a loop."""
 
-        """
-
-        self.framedata = 0
-
-        self.fig, self.ax = plt.subplots(tight_layout=True)
-        self.fcanvas = FigureCanvas(self.fig, interactive=True)
-        self.ax.clear()
-
-        if not hasattr(self, "lines"):
-            self.lines_data = {}
-
-        if self.rgb_mode:
-            # Matplotlib ignores the limits of an RGB image.
-            self.im = self.ax.imshow(self.stack[0])
-        else:
-            # Kept for the contrast slider.
-            self._contrast = contrast_limits(self.stack)
-            _, (vmin, vmax) = self._contrast
-            self.im = self.ax.imshow(self.stack[0], cmap="gray", vmin=vmin, vmax=vmax)
+        self.create_movie_axes()
+        self.lines_data = {}
 
         self.status_scatter = {}
         self.class_scatter = {}
 
-        n_pops = len(list(self.dataframes.keys()))
         markers = ["x", "+", "*", ".", "X"]
-        while len(markers) < n_pops:
+        while len(markers) < len(self.dataframes):
             markers = markers * 2
 
-        for i, pop in enumerate(self.dataframes.keys()):
-            df = self.dataframes[pop]
+        for i, (pop, df) in enumerate(self.dataframes.items()):
             if df is not None:
                 status_scatter = self.ax.scatter(
                     self.positions[pop][0][:, 0],
@@ -2311,7 +1278,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
                     pickradius=150,
                     zorder=10,
                     marker=markers[i],
-                )  # marker="x",
+                )
                 class_scatter = self.ax.scatter(
                     self.positions[pop][0][:, 0],
                     self.positions[pop][0][:, 1],
@@ -2324,80 +1291,30 @@ class PairEventAnnotator(CelldetectiveMainWindow):
             else:
                 status_scatter = self.ax.scatter(
                     [], [], s=50, picker=True, pickradius=10, marker=markers[i]
-                )  # marker="x",
+                )
                 class_scatter = self.ax.scatter(
                     [], [], marker="o", facecolors="none", s=200
                 )
-            self.status_scatter.update({pop: status_scatter})
-            self.class_scatter.update({pop: class_scatter})
+            self.status_scatter[pop] = status_scatter
+            self.class_scatter[pop] = class_scatter
 
         self.points = self.ax.scatter(
             [], [], marker="$\\Join$", s=100, picker=True, pickradius=10, zorder=10
-        )  # picker=True, pickradius=10
-
-        self.ax.set_xticks([])
-        self.ax.set_yticks([])
-        self.ax.set_aspect("equal")
-
-        self.fig.set_facecolor("none")  # or 'None'
-        self.fig.canvas.setStyleSheet("background-color: black;")
-
-        self.anim = FuncAnimation(
-            self.fig,
-            self.draw_frame,
-            frames=self.animation_generator,
-            interval=self.anim_interval,  # in ms
-            blit=True,
-            cache_frame_data=False,
         )
-
-        self.fig.canvas.mpl_connect("pick_event", self.on_scatter_pick)
-        self.fcanvas.canvas.draw()
+        self.start_animation()
 
     def create_cell_signal_canvas(self):
-        """Create the canvas for plotting signals."""
-        self.cell_fig, self.cell_ax = plt.subplots()
-        self.cell_fcanvas = FigureCanvas(self.cell_fig, interactive=True)
-        self.cell_ax.clear()
+        """Create the canvas for plotting signals, with the time of each cell."""
 
-        spacing = 0.5
-        minorLocator = MultipleLocator(1)
-        self.cell_ax.xaxis.set_minor_locator(minorLocator)
-        self.cell_ax.xaxis.set_major_locator(MultipleLocator(5))
-        self.cell_ax.grid(which="major")
-        self.cell_ax.set_xlabel("time [frame]")
-        self.cell_ax.set_ylabel("signal")
-
-        self.cell_fig.set_facecolor("none")  # or 'None'
-        self.cell_fig.canvas.setStyleSheet("background-color: transparent;")
-
-        self.lines = [
-            self.cell_ax.plot(
-                [np.linspace(0, self.len_movie - 1, self.len_movie)],
-                [np.zeros((self.len_movie))],
-            )[0]
-            for i in range(len(self.signal_choices))
-        ]
-        for i in range(len(self.lines)):
-
-            self.lines[i].set_label(f"signal {i}")
-
+        super().create_cell_signal_canvas()
         min_val, max_val = self.cell_ax.get_ylim()
-        (self.line_dt,) = self.cell_ax.plot(
-            [-1, -1], [min_val, max_val], c="k", linestyle="--"
-        )
         (self.line_dt_reference,) = self.cell_ax.plot(
             [-1, -1], [min_val, max_val], c="tab:blue", linestyle="--"
         )
         (self.line_dt_neighbor,) = self.cell_ax.plot(
             [-1, -1], [min_val, max_val], c="tab:red", linestyle="--"
         )
-
-        self.cell_ax.set_xlim(0, self.len_movie)
-        self.cell_ax.legend(fontsize=8)
         self.cell_fcanvas.canvas.draw()
-
-        # self.plot_signals()
 
     def on_scatter_pick(self, event: "matplotlib.backend_bases.PickEvent") -> None:
         """
@@ -2410,12 +1327,12 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         """
         self.identify_closest_marker(event)
 
-        _, tracks, _, _, _ = self.get_reference_sets()
-
         if self.selected_population == self.reference_population:
 
-            if self.index is not None:
-                toi = tracks[self.framedata][self.index]
+            _, tracks, _, _, _ = self.get_reference_sets()
+            if self.index is None:
+                return
+            toi = tracks[self.framedata][self.index]
 
             if len(self.reference_selection) == 0:
 
@@ -2432,85 +1349,67 @@ class PairEventAnnotator(CelldetectiveMainWindow):
                 self.recolor_selection()
                 self.trace_neighbors()
 
-                for i in range(self.n_signals):
-                    self.reference_pop_option_buttons[i].setEnabled(True)
+                for button in self.reference_pop_option_buttons:
+                    button.setEnabled(True)
 
                 self.plot_signals()
 
-            elif (
-                len(self.reference_selection) > 0
-                and toi in self.reference_selection
-                and not self.pair_selected
-            ):
-
+            elif toi in self.reference_selection and not self.pair_selected:
                 self.cancel_btn.click()
                 self.cancel_selection()
 
             elif (
-                len(self.reference_selection) > 0
-                and toi in self.neighbors
+                toi in self.neighbors
                 and self.neighbor_population == self.reference_population
                 and not self.pair_selected
             ):
-                if len(self.pair_selection) == 0:
-                    self.neighbor_track_of_interest = toi
-                    self.highlight_the_pair()
-                else:
-                    self.cancel_pair_selection()
+                self.pick_neighbor(toi)
             else:
                 logger.debug("One cell already selected, skip.")
+
         elif len(self.reference_selection) > 0 and not self.pair_selected:
 
             logger.debug("Picking a cell from the neighbor population...")
             _, tracks, _, _ = self.get_neighbor_sets()
-            if self.index is not None:
-                toi = tracks[self.framedata][self.index]
-
-            if toi in self.neighbors and len(self.reference_selection) > 0:
-                if len(self.pair_selection) == 0:
-                    self.neighbor_track_of_interest = toi
-                    logger.debug("Highlighting pair.")
-                    self.highlight_the_pair()
-                else:
-                    logger.debug("Canceling pair selection.")
-                    self.cancel_pair_selection()
+            if self.index is None:
+                return
+            toi = tracks[self.framedata][self.index]
+            if toi in self.neighbors:
+                self.pick_neighbor(toi)
             else:
                 self.cancel_pair_selection()
 
         if self.pair_selected and len(self.reference_selection) > 0:
 
             logger.debug("A pair has been selected.")
-            artist = event.artist
-
             if self.index is not None and len(self.pair_selection) == 0:
-
                 try:
-                    selected_point = artist.get_offsets()[self.index]
+                    selected_point = event.artist.get_offsets()[self.index]
                 except Exception as e:
                     logger.warning(f"Failed to get selected point offsets: {e}")
                     return
 
-                if len(self.pair_selection) == 0 and (
-                    (selected_point[0], selected_point[1]) in self.connections.keys()
-                ):
-
-                    connect = self.connections[(selected_point[0], selected_point[1])]
-                    self.neighbor_track_of_interest = connect[0][1]
+                connection = self.connections.get(
+                    (selected_point[0], selected_point[1])
+                )
+                if connection is not None:
+                    self.neighbor_track_of_interest = connection[0][1]
                     self.highlight_the_pair()
-
-                elif len(self.pair_selection) == 1:
-                    logger.debug("Pair selection larger than one, canceling pair selection...")
-                    self.cancel_pair_selection()
                 else:
-                    logger.debug("Unhandled pair selection state; canceling.")
                     self.cancel_pair_selection()
             else:
-                logger.debug(f"Pair-pick else #1: pair_selection={len(self.pair_selection)}, index={self.index}")
                 self.cancel_pair_selection()
-        else:
-            logger.debug("Pair-pick else #2: no pair selected and no reference.")
 
         logger.debug(f"pair_selection={self.pair_selection}")
+
+    def pick_neighbor(self, track: int) -> None:
+        """Select the pair with a neighbor, or unselect the pair selected."""
+
+        if len(self.pair_selection) == 0:
+            self.neighbor_track_of_interest = track
+            self.highlight_the_pair()
+        else:
+            self.cancel_pair_selection()
 
     def highlight_the_pair(self):
         """Highlight the selected pair."""
@@ -2522,8 +1421,8 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         self.neigh_cell_loc_t = []
         self.neigh_previous_color = []
 
-        for t in range(len(tracks)):
-            indices_picked = np.where(tracks[t] == self.neighbor_track_of_interest)[0]
+        for t, frame_tracks in enumerate(tracks):
+            indices_picked = np.where(frame_tracks == self.neighbor_track_of_interest)[0]
             if len(indices_picked) > 0:
                 self.neigh_cell_loc_t.append(t)
                 self.neigh_cell_loc_idx.append(indices_picked[0])
@@ -2533,32 +1432,17 @@ class PairEventAnnotator(CelldetectiveMainWindow):
             colors[t][idx] = "lime"
 
         # 2) identify the pair line and recolor it
-        for t in range(self.len_movie):
+        for frame_colors in self.lines_colors_status + self.lines_colors_class:
+            ids = frame_colors[:, :2].astype(float)
+            pair = (ids[:, 0] == self.reference_track_of_interest) & (
+                ids[:, 1] == self.neighbor_track_of_interest
+            )
+            frame_colors[pair, 2] = "lime"
 
-            self.lines_colors_status[t][:, :2] = self.lines_colors_status[t][
-                :, :2
-            ].astype(float)
-            indices1 = np.where(
-                (self.lines_colors_status[t][:, 0] == self.reference_track_of_interest)
-                & (self.lines_colors_status[t][:, 1] == self.neighbor_track_of_interest)
-            )[0]
-
-            self.lines_colors_class[t][:, :2] = self.lines_colors_class[t][
-                :, :2
-            ].astype(float)
-            indices2 = np.where(
-                (self.lines_colors_class[t][:, 0] == self.reference_track_of_interest)
-                & (self.lines_colors_class[t][:, 1] == self.neighbor_track_of_interest)
-            )[0]
-
-            self.lines_colors_status[t][indices1, 2] = "lime"
-            self.lines_colors_class[t][indices2, 2] = "lime"
-            # Maybe do the symmetrical neighborhood when same populations?
-
-        self.pair_selection.append(
-            tuple([self.reference_track_of_interest, self.neighbor_track_of_interest])
-        )
-        self.neighbor_selection.append(self.neighbor_track_of_interest)
+        # Highlighted again when the scatters are refreshed: selected once.
+        pair = (self.reference_track_of_interest, self.neighbor_track_of_interest)
+        if pair not in self.pair_selection:
+            self.pair_selection.append(pair)
         self.give_neighbor_cell_information()
         self.give_pair_information()
 
@@ -2570,8 +1454,7 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         self.plot_signals()
 
         # Allow pair annotation
-        self.correct_btn.setEnabled(True)
-        self.cancel_btn.setEnabled(True)
+        self.enable_correction()
 
     def get_neighbor_sets(self):
         """
@@ -2607,116 +1490,67 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         )
 
     def trace_neighbors(self):
-        """Trace neighbors of the selected cell."""
+        """Trace the lines from the selected cell to its neighbors."""
         self.lines_data = {}
         self.points_data = {}
         self.connections = {}
         self.line_connections = {}
 
-        positions, tracks, colors, _ = self.get_neighbor_sets()
+        positions, tracks, _, _ = self.get_neighbor_sets()
         _, tracks_reference, _, _, _ = self.get_reference_sets()
 
-        # Look for neighbors
         for neigh in self.neighbors:
-
-            self.neighbor_loc_t = []
-            self.neighbor_loc_idx = []
-
-            for t in range(len(tracks)):
-                indices = np.where(tracks[t] == neigh)[0]
-                indices_reference = np.where(
+            for t, frame_tracks in enumerate(tracks):
+                indices = np.where(frame_tracks == neigh)[0]
+                if len(indices) == 0 or not np.any(
                     tracks_reference[t] == self.reference_track_of_interest
-                )[0]
-                if len(indices) > 0 and len(indices_reference) > 0:
-                    self.neighbor_loc_t.append(t)
-                    self.neighbor_loc_idx.append(indices[0])
-
-            self.neighbor_previous_color = []
-            for t, idx in zip(self.neighbor_loc_t, self.neighbor_loc_idx):
+                ):
+                    continue
 
                 t_ref_idx = np.where(self.reference_timeline == t)[0]
-                if t_ref_idx:
-                    t_ref_idx = t_ref_idx[0]
+                if len(t_ref_idx) == 0:
+                    continue
+                t_ref_idx = t_ref_idx[0]
 
-                    neigh_x = positions[t][idx, 0]
-                    neigh_y = positions[t][idx, 1]
-                    x_m_point = (self.reference_x[t_ref_idx] + neigh_x) / 2
-                    y_m_point = (self.reference_y[t_ref_idx] + neigh_y) / 2
+                ref_x = self.reference_x[t_ref_idx]
+                ref_y = self.reference_y[t_ref_idx]
+                neigh_x, neigh_y = positions[t][indices[0]]
+                midpoint = ((ref_x + neigh_x) / 2, (ref_y + neigh_y) / 2)
 
-                    if t not in self.lines_data.keys():
-                        self.lines_data[t] = [
-                            (
-                                [self.reference_x[t_ref_idx], neigh_x],
-                                [self.reference_y[t_ref_idx], neigh_y],
-                            )
-                        ]
-                        self.points_data[t] = [(x_m_point, y_m_point)]
-                    else:
-                        self.lines_data[t].append(
-                            (
-                                [self.reference_x[t_ref_idx], neigh_x],
-                                [self.reference_y[t_ref_idx], neigh_y],
-                            )
-                        )
-                        self.points_data[t].append((x_m_point, y_m_point))
+                self.lines_data.setdefault(t, []).append(
+                    ([ref_x, neigh_x], [ref_y, neigh_y])
+                )
+                self.points_data.setdefault(t, []).append(midpoint)
 
-                    self.connections[(x_m_point, y_m_point)] = [
-                        (self.reference_track_of_interest, neigh)
-                    ]
-                    self.line_connections[
-                        (
-                            self.reference_x[t_ref_idx],
-                            neigh_x,
-                            self.reference_y[t_ref_idx],
-                            neigh_y,
-                        )
-                    ] = [(self.reference_track_of_interest, neigh)]
-
-                    self.neighbor_previous_color.append(colors[t][idx].copy())
+                pair = [(self.reference_track_of_interest, neigh)]
+                self.connections[midpoint] = pair
+                self.line_connections[(ref_x, neigh_x, ref_y, neigh_y)] = pair
 
     def recolor_selection(self):
-        """Recolor the selected cell and its neighbors."""
+        """Recolor the selected cell, and all the other reference cells in black."""
         positions, tracks, timelines, colors, init_colors = self.get_reference_sets()
 
-        self.reference_loc_t = []
-        self.reference_loc_idx = []
-        self.reference_loc_t_not_picked = []
-        self.reference_loc_idx_not_picked = []
-
-        for t in range(len(tracks)):
-
-            indices_picked = np.where(tracks[t] == self.reference_track_of_interest)[0]
-            indices_not_picked = np.where(
-                tracks[t] != self.reference_track_of_interest
-            )[0]
-            self.reference_loc_t_not_picked.append(t)
-            self.reference_loc_idx_not_picked.append(indices_not_picked)
-            if len(indices_picked) > 0:
-                self.reference_loc_t.append(t)
-                self.reference_loc_idx.append(indices_picked[0])
-
-        self.reference_previous_color = []
-        self.reference_not_picked_initial_colors = []
         self.reference_x = []
         self.reference_y = []
         self.reference_timeline = []
 
-        # Recolor selected cell
-        for t, idx in zip(self.reference_loc_t, self.reference_loc_idx):
-            self.reference_x.append(positions[t][idx, 0])
-            self.reference_y.append(positions[t][idx, 1])
-            self.reference_timeline.append(timelines[t])
-            self.reference_previous_color.append(colors[t][idx].copy())
-            colors[t][idx] = "lime"
-        self.reference_timeline = np.array(self.reference_timeline)
+        for t, frame_tracks in enumerate(tracks):
+            picked = frame_tracks == self.reference_track_of_interest
 
-        # Recolor all other cells in black
-        for t, idx in zip(
-            self.reference_loc_t_not_picked, self.reference_loc_idx_not_picked
-        ):
-            self.reference_not_picked_initial_colors.append(colors[t][idx].copy())
-            init_colors[t][idx] = colors[t][idx].copy()
-            colors[t][idx] = "black"
+            indices_picked = np.where(picked)[0]
+            if len(indices_picked) > 0:
+                idx = indices_picked[0]
+                self.reference_x.append(positions[t][idx, 0])
+                self.reference_y.append(positions[t][idx, 1])
+                self.reference_timeline.append(timelines[t])
+                colors[t][idx] = "lime"
+
+            # Remember the colors of the other cells, then blacken them
+            not_picked = np.where(~picked)[0]
+            init_colors[t][not_picked] = colors[t][not_picked].copy()
+            colors[t][not_picked] = "black"
+
+        self.reference_timeline = np.array(self.reference_timeline)
 
     def get_neighbors_of_selected_cell(self, selected_cell: int) -> None:
         """
@@ -2727,18 +1561,13 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         selected_cell : int
             The ID of the selected cell.
         """
-        self.neighbors = self.df_relative.loc[
-            (self.df_relative["REFERENCE_ID"] == selected_cell)
-            & (~self.df_relative["status_" + self.current_neighborhood].isnull())
-            & (self.df_relative["reference_population"] == self.reference_population),
-            "NEIGHBOR_ID",
-        ]
-        self.neighbors = np.unique(self.neighbors)
-
-        # if len(self.neighbors)>0:
-        # 	first_neighbor = np.min(self.neighbors)
-        # 	self.neighbor_track_of_interest = first_neighbor
-        # else:
+        self.neighbors = np.unique(
+            self.df_relative.loc[
+                (self.df_relative["REFERENCE_ID"] == selected_cell)
+                & self.neighborhood_rows(),
+                "NEIGHBOR_ID",
+            ]
+        )
         self.neighbor_track_of_interest = None
 
     def identify_closest_marker(
@@ -2753,210 +1582,31 @@ class PairEventAnnotator(CelldetectiveMainWindow):
             The pick event.
         """
         ind = event.ind
-        label = event.artist.get_label()
-
-        # Identify the nature of the selected object (target/effector/pair)
-        self.pair_selected = False
-
         populations = list(self.dataframes.keys())
 
-        number = int(label.split("_child")[1])
+        # The artists are numbered in their order of creation: the image, then
+        # two scatters per population, then the pair midpoints.
+        number = int(event.artist.get_label().split("_child")[1])
+        self.pair_selected = number > len(populations) * 2
 
-        if number > len(populations) * 2:
+        if self.pair_selected:
             logger.debug("A pair is selected...")
-            self.pair_selected = True
             self.selected_population = None
-        else:
-            self.selected_population = populations[(number - 1) // 2]
+            self.index = ind[0] if len(ind) > 0 else None
+            return
 
-        if self.selected_population is not None:
-            positions = self.positions[self.selected_population]
-
-            if len(ind) == 1:
-                self.index = ind[0]
-            elif len(ind) > 1:
-                # More than one point in vicinity
-                try:
-                    datax, datay = [positions[self.framedata][i, 0] for i in ind], [
-                        positions[self.framedata][i, 1] for i in ind
-                    ]
-                    msx, msy = event.mouseevent.xdata, event.mouseevent.ydata
-                    dist = np.sqrt(
-                        (np.array(datax) - msx) ** 2 + (np.array(datay) - msy) ** 2
-                    )
-                    self.index = ind[np.argmin(dist)]
-                except Exception as e:
-                    logger.warning(f"Failed to find closest marker: {e}")
-            else:
-                self.index = None
-        else:
-            # Pair midpoint marker clicked: update self.index from this event
-            # so it is valid for the self.points scatter (which may be small).
-            if len(ind) == 1:
-                self.index = ind[0]
-            elif len(ind) > 1:
-                self.index = ind[0]
-            else:
-                self.index = None
-
-    def show_annotation_buttons(self):
-        """Show annotation buttons."""
-        for a in self.annotation_btns_to_hide:
-            a.show()
-
-        cclass = self.df_relative.loc[
-            (self.df_relative["REFERENCE_ID"] == self.reference_track_of_interest)
-            & (self.df_relative["NEIGHBOR_ID"] == self.neighbor_track_of_interest)
-            & (self.df_relative["reference_population"] == self.reference_population)
-            & (self.df_relative["neighbor_population"] == self.neighbor_population)
-            & (~self.df_relative["status_" + self.current_neighborhood].isnull()),
-            self.pair_class_name,
-        ].to_numpy()[0]
-        t0 = self.df_relative.loc[
-            (self.df_relative["REFERENCE_ID"] == self.reference_track_of_interest)
-            & (self.df_relative["NEIGHBOR_ID"] == self.neighbor_track_of_interest)
-            & (self.df_relative["reference_population"] == self.reference_population)
-            & (self.df_relative["neighbor_population"] == self.neighbor_population)
-            & (~self.df_relative["status_" + self.current_neighborhood].isnull()),
-            self.pair_time_name,
-        ].to_numpy()[0]
-
-        if cclass == 0:
-            self.event_btn.setChecked(True)
-            self.time_of_interest_le.setText(str(t0))
-        elif cclass == 1:
-            self.no_event_btn.setChecked(True)
-        elif cclass == 2:
-            self.else_btn.setChecked(True)
-        elif cclass > 2:
-            self.suppr_btn.setChecked(True)
-
-        self.enable_time_of_interest()
-        self.correct_btn.setText("submit")
-
-        self.correct_btn.disconnect()
-        self.correct_btn.clicked.connect(self.apply_modification)
-
-    def shortcut_suppr(self):
-        """Trigger suppress action via shortcut."""
-        self.correct_btn.click()
-        self.suppr_btn.click()
-        self.correct_btn.click()
-
-    def shortcut_no_event(self):
-        """Trigger no event action via shortcut."""
-        self.correct_btn.click()
-        self.no_event_btn.click()
-        self.correct_btn.click()
-
-    def configure_ylims(self):
-        """Configure y-limits for plots."""
+        self.selected_population = populations[(number - 1) // 2]
         try:
-            min_values = []
-            max_values = []
-            for i in range(len(self.signal_choices)):
-                signal = self.signal_choices[i].currentText()
-                if signal == "--":
-                    continue
-                else:
-                    if i == 0:
-                        if self.reference_button1.isChecked():
-                            df_ref = self.dataframes[self.reference_population]
-                            maxx_target = np.nanpercentile(
-                                df_ref.loc[:, signal].to_numpy().flatten(), 99
-                            )
-                            minn_target = np.nanpercentile(
-                                df_ref.loc[:, signal].to_numpy().flatten(), 1
-                            )
-                            min_values.append(minn_target)
-                            max_values.append(maxx_target)
-                        if self.neighbor_button1.isChecked():
-                            df_neigh = self.dataframes[self.neighbor_population]
-                            maxx_target = np.nanpercentile(
-                                df_neigh.loc[:, signal].to_numpy().flatten(), 99
-                            )
-                            minn_target = np.nanpercentile(
-                                df_neigh.loc[:, signal].to_numpy().flatten(), 1
-                            )
-                            min_values.append(minn_target)
-                            max_values.append(maxx_target)
-                        if self.relative_button1.isChecked():
-                            maxx_relative = np.nanpercentile(
-                                self.df_relative.loc[:, signal].to_numpy().flatten(), 99
-                            )
-                            minn_relative = np.nanpercentile(
-                                self.df_relative.loc[:, signal].to_numpy().flatten(), 1
-                            )
-                            min_values.append(minn_relative)
-                            max_values.append(maxx_relative)
-                    elif i == 1:
-                        if self.reference_button2.isChecked():
-                            df_ref = self.dataframes[self.reference_population]
-                            maxx_effector = np.nanpercentile(
-                                df_ref.loc[:, signal].to_numpy().flatten(), 99
-                            )
-                            minn_effector = np.nanpercentile(
-                                df_ref.loc[:, signal].to_numpy().flatten(), 1
-                            )
-                            min_values.append(minn_effector)
-                            max_values.append(maxx_effector)
-                        if self.neighbor_button2.isChecked():
-                            df_neigh = self.dataframes[self.neighbor_population]
-                            maxx_effector = np.nanpercentile(
-                                df_neigh.loc[:, signal].to_numpy().flatten(), 99
-                            )
-                            minn_effector = np.nanpercentile(
-                                df_neigh.loc[:, signal].to_numpy().flatten(), 1
-                            )
-                            min_values.append(minn_effector)
-                            max_values.append(maxx_effector)
-                        if self.relative_button2.isChecked():
-                            maxx_relative = np.nanpercentile(
-                                self.df_relative.loc[:, signal].to_numpy().flatten(), 99
-                            )
-                            minn_relative = np.nanpercentile(
-                                self.df_relative.loc[:, signal].to_numpy().flatten(), 1
-                            )
-                            min_values.append(minn_relative)
-                            max_values.append(maxx_relative)
-                    else:
-                        if self.reference_button3.isChecked():
-                            df_ref = self.dataframes[self.reference_population]
-                            maxx_relative = np.nanpercentile(
-                                df_ref.loc[:, signal].to_numpy().flatten(), 99
-                            )
-                            minn_relative = np.nanpercentile(
-                                df_ref.loc[:, signal].to_numpy().flatten(), 1
-                            )
-                            min_values.append(minn_relative)
-                            max_values.append(maxx_relative)
-                        if self.neighbor_button3.isChecked():
-                            df_neigh = self.dataframes[self.neighbor_population]
-
-                            maxx_relative = np.nanpercentile(
-                                df_neigh.loc[:, signal].to_numpy().flatten(), 99
-                            )
-                            minn_relative = np.nanpercentile(
-                                df_neigh.loc[:, signal].to_numpy().flatten(), 1
-                            )
-                            min_values.append(minn_relative)
-                            max_values.append(maxx_relative)
-                        if self.relative_button3.isChecked():
-                            maxx_relative = np.nanpercentile(
-                                self.df_relative.loc[:, signal].to_numpy().flatten(), 99
-                            )
-                            minn_relative = np.nanpercentile(
-                                self.df_relative.loc[:, signal].to_numpy().flatten(), 1
-                            )
-                            min_values.append(minn_relative)
-                            max_values.append(maxx_relative)
-
-            if len(min_values) > 0:
-                self.cell_ax.set_ylim(np.amin(min_values), np.amax(max_values))
+            self.index = closest_picked_index(
+                ind,
+                self.positions[self.selected_population][self.framedata],
+                event.mouseevent,
+            )
         except Exception as e:
-            logger.warning(f"Failed to update signal plot y-limits: {e}")
+            logger.warning(f"Failed to find closest marker: {e}")
+            self.index = None
 
-    def draw_frame(self, framedata: int) -> None:
+    def draw_frame(self, framedata: int) -> List:
         """
         Update plot elements at each timestep of the loop.
 
@@ -2970,208 +1620,108 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         self.frame_lbl.setText(f"frame: {self.framedata}")
         self.im.set_array(self.stack[self.framedata])
 
-        for pop in self.dataframes.keys():
-            df = self.dataframes[pop]
-            if df is not None:
-                self.status_scatter[pop].set_visible(True)
-                self.status_scatter[pop].set_picker(True)
-                self.status_scatter[pop].set_offsets(
-                    self.positions[pop][self.framedata]
-                )
-                self.status_scatter[pop].set_color(
-                    self.colors[pop][self.framedata][:, 1]
-                )
+        for pop, df in self.dataframes.items():
+            if df is None:
+                continue
+            positions = self.positions[pop][self.framedata]
+            colors = self.colors[pop][self.framedata]
+            self.status_scatter[pop].set_visible(True)
+            self.status_scatter[pop].set_picker(True)
+            self.status_scatter[pop].set_offsets(positions)
+            self.status_scatter[pop].set_color(colors[:, 1])
+            self.class_scatter[pop].set_visible(True)
+            self.class_scatter[pop].set_offsets(positions)
+            self.class_scatter[pop].set_edgecolor(colors[:, 0])
 
-                self.class_scatter[pop].set_visible(True)
-                self.class_scatter[pop].set_offsets(self.positions[pop][self.framedata])
-                self.class_scatter[pop].set_edgecolor(
-                    self.colors[pop][self.framedata][:, 0]
-                )
-
+        # The lines of the previous frame would otherwise pile up on the axes.
+        for line in self.lines_list:
+            line.remove()
         self.lines_list = []
 
-        for key in self.lines_data:
+        for x_coords, y_coords in self.lines_data.get(self.framedata, []):
+            class_colors = self.lines_colors_class[self.framedata]
+            pair = self.line_connections[
+                x_coords[0], x_coords[1], y_coords[0], y_coords[1]
+            ][0]
+            this_pair = class_colors[
+                (class_colors[:, 0] == pair[0]) & (class_colors[:, 1] == pair[1])
+            ]
+            if len(this_pair) > 0:
+                (line,) = self.ax.plot(
+                    x_coords, y_coords, alpha=1, linewidth=2, color=this_pair[0][2]
+                )
+                self.lines_list.append(line)
 
-            if key == self.framedata:
+        artists = (
+            [self.im]
+            + list(self.status_scatter.values())
+            + list(self.class_scatter.values())
+        )
+        if not self.lines_list:
+            # The midpoints of another frame or selection would stay pickable.
+            self.points.set_offsets(np.empty((0, 2)))
+            return artists
 
-                for line in self.lines_data[key]:
+        points = self.points_data[self.framedata]
+        status_colors = self.lines_colors_status[self.framedata]
+        colors = []
+        for point in points:
+            reference, neighbor = self.connections[point][0]
+            match = status_colors[
+                (status_colors[:, 0] == reference) & (status_colors[:, 1] == neighbor)
+            ]
+            colors.append(match[0][2] if len(match) > 0 else "black")
+        self.points.set_offsets(points)
+        self.points.set_color(colors)
 
-                    x_coords, y_coords = line
-                    pair = self.line_connections[
-                        x_coords[0], x_coords[1], y_coords[0], y_coords[1]
-                    ]
-                    this_frame = self.lines_colors_class[self.framedata]
+        return artists + self.lines_list + [self.points]
 
-                    this_pair = this_frame[
-                        (this_frame[:, 0] == pair[0][0])
-                        & (this_frame[:, 1] == pair[0][1])
-                    ]
-                    if len(this_pair) > 0:
-                        c = this_pair[0][2]
-                        self.lines_plot = self.ax.plot(
-                            x_coords, y_coords, alpha=1, linewidth=2, color=c
-                        )
-                        self.lines_list.append(self.lines_plot[0])
-
-                        self.points.set_offsets(self.points_data[key])
-                        colors_at_this_frame = self.lines_colors_status[self.framedata]
-                        colors = []
-                        if len(colors_at_this_frame) > 0:
-                            for point in self.points_data[key]:
-                                match = colors_at_this_frame[
-                                    (
-                                        colors_at_this_frame[:, 0]
-                                        == self.connections[point[0], point[1]][0][0]
-                                    )
-                                    & (
-                                        colors_at_this_frame[:, 1]
-                                        == self.connections[point[0], point[1]][0][1]
-                                    )
-                                ]
-                                if len(match) > 0:
-                                    colors.append(match[0][2])
-                                else:
-                                    colors.append("black")
-                        else:
-                            colors = ["black"] * len(self.points_data[key])
-                        self.points.set_color(colors)
-
-        if self.lines_list:
-            return (
-                [self.im]
-                + [self.status_scatter[p] for p in self.status_scatter.keys()]
-                + [self.class_scatter[p] for p in self.status_scatter.keys()]
-                + self.lines_list
-                + [self.points]
-            )
-        else:
-            return (
-                [
-                    self.im,
-                ]
-                + [self.status_scatter[p] for p in self.status_scatter.keys()]
-                + [self.class_scatter[p] for p in self.status_scatter.keys()]
-            )
-
-    def stop(self):
-        """Stop animation."""
-        # # On stop we disconnect all of our events.
-        self.stop_btn.hide()
-        self.start_btn.show()
-        self.anim.pause()
-        self.prev_frame_btn.setEnabled(True)
-        self.next_frame_btn.setEnabled(True)
-        self.stop_btn.clicked.connect(self.start)
-
-    def start(self):
-        """
-        Starts interactive animation.
-        """
-        self.start_btn.hide()
-        self.stop_btn.show()
-
-        self.prev_frame_btn.setEnabled(False)
-        self.next_frame_btn.setEnabled(False)
-
-        self.anim.resume()
-        self.stop_btn.clicked.connect(self.stop)
-
-    def toggle_animation(self):
-        """Toggle animation (play/pause)."""
-        if self.stop_btn.isVisible():
-            self.stop()
-        else:
-            self.start()
-
-    def next_frame(self):
-        """Go to next frame."""
-        self.framedata += 1
-        if self.framedata >= self.len_movie:
-            self.framedata = 0
-        self.draw_frame(self.framedata)
-        self.fcanvas.canvas.draw()
-
-    def prev_frame(self):
-        """Go to previous frame."""
-        self.framedata -= 1
-        if self.framedata < 0:
-            self.framedata = self.len_movie - 1
-        self.draw_frame(self.framedata)
-        self.fcanvas.canvas.draw()
+    # ------------------------------------------------------------------
+    # Information, saving and export
+    # ------------------------------------------------------------------
 
     def give_reference_cell_information(self):
         """Display information about the selected reference cell."""
-        df_reference = self.dataframes[self.reference_population]
+
         if self.reference_track_of_interest is not None:
-            reference_cell_selected = f"Ref #{self.reference_track_of_interest}\n"
-            reference_cell_population = f"Pop: {self.reference_population}\n"
-            # reference_cell_class = f"class: {df_reference[df_reference['TRACK_ID']==self.reference_track_of_interest, self.reference_event_choice_cb.currentText()].values[0]}\n"
-            # reference_cell_time = f"time of interest: {df_reference[df_reference['TRACK_ID']==self.reference_track_of_interest, ''].values[0]}\n"
-            self.reference_cell_info.setText(
-                reference_cell_selected + reference_cell_population
-            )
+            selected = f"Ref #{self.reference_track_of_interest}\n"
         else:
-            reference_cell_selected = f"Ref: None\n"
-            reference_cell_population = f"Pop: {self.reference_population}\n"
-            self.reference_cell_info.setText(
-                reference_cell_selected + reference_cell_population
-            )
+            selected = "Ref: None\n"
+        self.reference_cell_info.setText(
+            f"{selected}Pop: {self.reference_population}\n"
+        )
 
     def give_neighbor_cell_information(self):
         """Display information about the selected neighbor cell."""
+
         if self.neighbor_track_of_interest is not None:
-            neighbor_cell_selected = f"Neigh #{self.neighbor_track_of_interest}\n"
-            neighbor_cell_population = f"Pop: {self.neighbor_population}\n"
-            # neighbor_cell_time = f"time of interest: {self.df_relative.loc[(self.df_relative['REFERENCE_ID']==self.reference_track_of_interest)&(self.df_relative['NEIGHBOR_ID']==self.neighbor_track_of_interest), self.pair_time_name].to_numpy()[0]}\n"
-            # neighbor_cell_class = f"class: {self.df_relative.loc[(self.df_relative['REFERENCE_ID']==self.reference_track_of_interest)&(self.df_relative['NEIGHBOR_ID']==self.neighbor_track_of_interest), self.pair_class_name].to_numpy()[0]}\n"
-            self.neighbor_cell_info.setText(
-                neighbor_cell_selected + neighbor_cell_population
-            )  # neighbor_cell_class+neighbor_cell_time
+            selected = f"Neigh #{self.neighbor_track_of_interest}\n"
         else:
-            neighbor_cell_selected = f"Neigh: None\n"
-            neighbor_cell_population = f"Pop: {self.neighbor_population}\n"
-            self.neighbor_cell_info.setText(
-                neighbor_cell_selected + neighbor_cell_population
-            )
+            selected = "Neigh: None\n"
+        self.neighbor_cell_info.setText(
+            f"{selected}Pop: {self.neighbor_population}\n"
+        )
 
     def give_pair_information(self):
         """Display information about the selected pair."""
+
         if (
-            self.neighbor_track_of_interest is not None
-            and self.reference_track_of_interest is not None
+            self.neighbor_track_of_interest is None
+            or self.reference_track_of_interest is None
         ):
-            pair_selected = f"Pair: ({self.reference_track_of_interest},{self.neighbor_track_of_interest})\n"
-            pair_populations = ""  # f"populations: ({self.reference_population}, {self.neighbor_population})\n"
+            self.pair_info.setText("Pair: None\n")
+            return
+
+        pair_selected = f"Pair: ({self.reference_track_of_interest},{self.neighbor_track_of_interest})\n"
+        pair_subset = self.df_relative.loc[self.selected_pair_rows()]
+        if len(pair_subset) > 0:
             current_class = self.relative_class_choice_cb.currentText()
-            pair_filter = (
-                (self.df_relative["REFERENCE_ID"] == self.reference_track_of_interest)
-                & (self.df_relative["NEIGHBOR_ID"] == self.neighbor_track_of_interest)
-                & (self.df_relative["reference_population"] == self.reference_population)
-                & (self.df_relative["neighbor_population"] == self.neighbor_population)
-                & (~self.df_relative["status_" + self.current_neighborhood].isnull())
-            )
-            pair_subset = self.df_relative.loc[pair_filter]
-            if len(pair_subset) > 0:
-                pair_class = f"Event class: {pair_subset[current_class].values[0]}\n"
-                pair_time = f"Time: {pair_subset[self.pair_time_name].values[0]}\n"
-            else:
-                pair_class = "Event class: N/A\n"
-                pair_time = "Time: N/A\n"
-            self.pair_info.setText(
-                pair_selected + pair_populations + pair_class + pair_time
-            )
+            pair_class = f"Event class: {pair_subset[current_class].values[0]}\n"
+            pair_time = f"Time: {pair_subset[self.pair_time_name].values[0]}\n"
         else:
-            pair_selected = f"Pair: None\n"
-            pair_populations = ""  # f"populations: ({self.reference_population}, {self.neighbor_population})\n"
-            self.pair_info.setText(pair_selected + pair_populations)
-
-    # def hide_neighbor_cell_info(self):
-    # neighbor_cell_selected.hide()
-    # neighbor_cell_population.hide()
-
-    def hide_target_cell_info(self):
-        """Hide target cell information."""
-        self.target_cell_info.setText("")
+            pair_class = "Event class: N/A\n"
+            pair_time = "Time: N/A\n"
+        self.pair_info.setText(pair_selected + pair_class + pair_time)
 
     def save_trajectories(self):
         """Save relative trajectories."""
@@ -3185,208 +1735,68 @@ class PairEventAnnotator(CelldetectiveMainWindow):
         )
         self.df_relative.to_csv(self.relative_trajectories_path, index=False)
         logger.info("Relative table saved.")
-        with positionlogger(self.pos, filename=f"log_{self.mode}.txt"):
-            logger.info("PAIR EVENT ANNOTATION (manual)")
-            logger.info(f"relative_class_name: {self.relative_class_name}")
-            for entry in getattr(self, "annotation_log", []):
-                logger.info(f"modified {entry}")
-        self.annotation_log = []
-
-    def set_last_frame(self):
-        """Set the last frame of the animation."""
-        self.last_frame_btn.setEnabled(False)
-        self.last_frame_btn.disconnect()
-
-        self.last_key = len(self.stack) - 1
-        while len(np.where(self.stack[self.last_key].flatten() == 0)[0]) > 0.99 * len(
-            self.stack[self.last_key].flatten()
-        ):
-            self.last_key -= 1
-        logger.debug(f"Last frame is {len(self.stack) - 1}; last not black is {self.last_key}")
-        self.anim._drawn_artists = self.draw_frame(self.last_key)
-        self.anim._drawn_artists = sorted(
-            self.anim._drawn_artists, key=lambda x: x.get_zorder()
+        self.write_annotation_log(
+            "PAIR EVENT ANNOTATION (manual)",
+            f"relative_class_name: {self.relative_class_name}",
         )
-        for a in self.anim._drawn_artists:
-            a.set_visible(True)
-
-        self.fig.canvas.draw()
-        self.anim.event_source.stop()
-
-        # self.cell_plot.draw()
-        self.stop_btn.hide()
-        self.start_btn.show()
-        self.stop_btn.clicked.connect(self.start)
-        self.start_btn.setShortcut(QKeySequence("l"))
-
-    def set_first_frame(self):
-        """Set the first frame of the animation."""
-        self.first_frame_btn.setEnabled(False)
-        self.first_frame_btn.disconnect()
-
-        self.first_key = 0
-        logger.debug("First frame is 0.")
-        self.anim._drawn_artists = self.draw_frame(0)
-        self.anim._drawn_artists = sorted(
-            self.anim._drawn_artists, key=lambda x: x.get_zorder()
-        )
-        for a in self.anim._drawn_artists:
-            a.set_visible(True)
-
-        self.fig.canvas.draw()
-        self.anim.event_source.stop()
-
-        # self.cell_plot.draw()
-        self.stop_btn.hide()
-        self.start_btn.show()
-        self.stop_btn.clicked.connect(self.start)
-        self.start_btn.setShortcut(QKeySequence("f"))
 
     def export_signals(self):
         """Export signals to a .npy file."""
-        auto_dataset_name = (
-            self.pos.split(os.sep)[-4] + "_" + self.pos.split(os.sep)[-2] + ".npy"
-        )
 
         if self.normalized_signals:
             self.normalize_features_btn.click()
 
+        pair_filter = self.population_pair_rows() & self.neighborhood_rows()
+        df_reference = self.dataframes[self.reference_population]
+        df_neighbor = self.dataframes[self.neighbor_population]
+
+        def cell_signals(df, track, prefix):
+            cell = df.loc[df["TRACK_ID"] == track]
+            return {
+                prefix + col: cell[col].to_numpy()
+                for col in cell.columns
+                if not col.startswith("neighborhood") and is_numeric_dtype(cell[col])
+            }
+
         training_set = []
-
-        pair_filter = (
-            (self.df_relative["reference_population"] == self.reference_population)
-            & (self.df_relative["neighbor_population"] == self.neighbor_population)
-            & (~self.df_relative["status_" + self.current_neighborhood].isnull())
-        )
-
-        for pair, group in self.df_relative.loc[pair_filter, :].groupby(
-            ["REFERENCE_ID", "NEIGHBOR_ID"]
-        ):
-
-            signals = {}
-
-            time_of_interest = group[self.pair_time_name].values[0]
-            cclass = group[self.pair_class_name].values[0]
+        for (reference_cell, neighbor_cell), group in self.df_relative.loc[
+            pair_filter
+        ].groupby(["REFERENCE_ID", "NEIGHBOR_ID"]):
+            signals = {
+                "time_of_interest": group[self.pair_time_name].values[0],
+                "class": group[self.pair_class_name].values[0],
+                "neighborhood_of_interest": self.current_neighborhood,
+                "reference_population": self.reference_population,
+                "neighbor_population": self.neighbor_population,
+            }
             signals.update(
                 {
-                    "time_of_interest": time_of_interest,
-                    "class": cclass,
-                    "neighborhood_of_interest": self.current_neighborhood,
-                    "reference_population": self.reference_population,
-                    "neighbor_population": self.neighbor_population,
+                    "pair_" + col: group[col].to_numpy()
+                    for col in group.columns
+                    if is_numeric_dtype(group[col])
                 }
             )
-
-            # Pair signals
-            reference_cell = pair[0]
-            neighbor_cell = pair[1]
-            for col in list(group.columns):
-                if is_numeric_dtype(group[col]):
-                    signals.update({"pair_" + col: group[col].to_numpy()})
-
-            # Reference signals
-            df_reference = self.dataframes[self.reference_population]
-            reference_filter = df_reference["TRACK_ID"] == reference_cell
-            for col in list(df_reference.columns):
-                if not col.startswith("neighborhood") and is_numeric_dtype(
-                    df_reference.loc[reference_filter, col]
-                ):
-                    signals.update(
-                        {
-                            "reference_"
-                            + col: df_reference.loc[reference_filter, col].to_numpy()
-                        }
-                    )
-
-            # Reference signals
-            df_neighbor = self.dataframes[self.neighbor_population]
-            neighbor_filter = df_neighbor["TRACK_ID"] == neighbor_cell
-            for col in list(df_neighbor.columns):
-                if not col.startswith("neighborhood") and is_numeric_dtype(
-                    df_neighbor.loc[neighbor_filter, col]
-                ):
-                    signals.update(
-                        {
-                            "neighbor_"
-                            + col: df_neighbor.loc[neighbor_filter, col].to_numpy()
-                        }
-                    )
-
+            signals.update(cell_signals(df_reference, reference_cell, "reference_"))
+            signals.update(cell_signals(df_neighbor, neighbor_cell, "neighbor_"))
             training_set.append(signals)
 
-        pathsave = QFileDialog.getSaveFileName(
-            self, "Select file name", self.exp_dir + auto_dataset_name, ".npy"
-        )[0]
-        if pathsave != "":
-            if not pathsave.endswith(".npy"):
-                pathsave += ".npy"
-            try:
-                np.save(pathsave, training_set)
-                logger.info(f"File successfully written in {pathsave}.")
-            except Exception as e:
-                logger.error(f"Failed to write file {pathsave}: {e}")
+        save_dataset(self, training_set, self.exp_dir + default_dataset_name(self.pos))
 
     def normalize_features(self):
         """Normalize features."""
-        if not self.normalized_signals:
-            for pop in self.dataframes.keys():
-                df_pop = self.dataframes[pop]
+
+        transform = "inverse_transform" if self.normalized_signals else "transform"
+        for pop, df_pop in self.dataframes.items():
+            if df_pop is not None:
                 cols = self.population_columns[pop]
-                if df_pop is not None:
-                    df_pop[cols] = self.MinMaxScaler_per_pop[pop].transform(
-                        df_pop[cols].values
-                    )
-                    self.dataframes.update({pop: df_pop})
+                scaler = self.MinMaxScaler_per_pop[pop]
+                df_pop[cols] = getattr(scaler, transform)(df_pop[cols].values)
 
-            if self.df_relative is not None:
-                self.df_relative[self.pair_columns] = self.MinMaxScaler_pairs.transform(
-                    self.df_relative[self.pair_columns].values
-                )
+        if self.df_relative is not None:
+            self.df_relative[self.pair_columns] = getattr(
+                self.MinMaxScaler_pairs, transform
+            )(self.df_relative[self.pair_columns].values)
 
-            self.normalized_signals = True
-            self.normalize_features_btn.setIcon(
-                icon(MDI6.arrow_collapse_vertical, color="#1565c0")
-            )
-        else:
-            for pop in self.dataframes.keys():
-                df_pop = self.dataframes[pop]
-                cols = self.population_columns[pop]
-                if df_pop is not None:
-                    df_pop[cols] = self.MinMaxScaler_per_pop[pop].inverse_transform(
-                        df_pop[cols].values
-                    )
-                    self.dataframes.update({pop: df_pop})
-            if self.df_relative is not None:
-                self.df_relative[self.pair_columns] = (
-                    self.MinMaxScaler_pairs.inverse_transform(
-                        self.df_relative[self.pair_columns].values
-                    )
-                )
-
-            self.normalized_signals = False
-            self.normalize_features_btn.setIcon(
-                icon(MDI6.arrow_collapse_vertical, color="black")
-            )
-
+        self.normalized_signals = not self.normalized_signals
+        self.show_normalized()
         self.plot_signals()
-        self.normalize_features_btn.setIconSize(QSize(25, 25))
-
-    def switch_to_log(self):
-        """
-        Better would be to create a log(quantity) and plot it...
-        """
-
-        try:
-            if self.cell_ax.get_yscale() == "linear":
-                ymin, ymax = self.cell_ax.get_ylim()
-                self.cell_ax.set_yscale("log")
-                self.log_btn.setIcon(icon(MDI6.math_log, color="#1565c0"))
-                self.cell_ax.set_ylim(self.value_magnitude, ymax)
-            else:
-                self.cell_ax.set_yscale("linear")
-                self.log_btn.setIcon(icon(MDI6.math_log, color="black"))
-        except Exception as e:
-            logger.warning(f"Failed to toggle log scale: {e}")
-
-        # self.cell_ax.autoscale()
-        self.cell_fcanvas.canvas.draw_idle()

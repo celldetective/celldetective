@@ -962,7 +962,9 @@ class ProcessPanel(ControlPanelBlock, Styles):
             test = self.parent_window.locate_selected_position()
             if test:
                 self.measure_annotator = MeasureAnnotator(self)
-                self.measure_annotator.show()
+                # Closed already if the movie or the trajectories are missing.
+                if self.measure_annotator.proceed:
+                    self.measure_annotator.show()
         else:
             # Multi position explorer: redirect to TableUI with progress bar
             self.view_table_ui()
