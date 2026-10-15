@@ -17,6 +17,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   still reaches the brightest pixel of the frame, border included, and so does
   the fourth click of the auto contrast button.
 
+### Fixed
+- A two-population neighborhood with a 2 px distance (or a 2 px contact border)
+  lost its distance from its column names: renaming the `_2_` population marker
+  replaced every `_2_`, so `neighborhood_2_circle_2_px` became
+  `neighborhood_(targets-effectors)_circle_(targets-effectors)_px`, and the
+  neighborhood could not be found again by the pair tables, plots and
+  annotators. Tables already computed with a 2 px distance keep the wrong names
+  until the neighborhood is computed again.
+
 ## [1.6.5] - 2026-10-05
 
 ### Added

@@ -580,6 +580,19 @@ class TestComputeNeighborhoodAtPosition:
         )
         assert not (position / "output" / "tables" / "trajectories_targets.pkl").exists()
 
+    def test_a_2_px_distance_keeps_its_distance_in_the_column_names(self, position):
+        """Regression: the rename of the `_2_` population marker replaced every
+        `_2_`, so a 2 px distance became `..._circle_(targets-effectors)_px`."""
+        compute_neighborhood_at_position(
+            str(position), 2, population=["targets", "effectors"],
+            neighborhood_kwargs=neighborhood_kwargs(),
+        )
+        csv, pkl = read_tables(position, "targets")
+        name = "neighborhood_(targets-effectors)_circle_2_px"
+        assert csv[f"inclusive_count_{name}"].tolist() == [0, 0, 0, 0]
+        assert name in pkl.columns
+        assert not any("_circle_(" in c for c in csv.columns)
+
 
 TWO_POP_CONTACT = "neighborhood_(targets-effectors)_contact_3_px"
 
@@ -603,6 +616,18 @@ class TestComputeContactNeighborhoodAtPosition:
         assert csv[f"mean_count_inclusive_{TWO_POP_CONTACT}"].tolist() == [1, 1, 0, 0]
         assert not any(c.startswith("neighborhood_") for c in csv.columns)
         assert TWO_POP_CONTACT in pkl.columns
+
+    def test_a_2_px_border_keeps_its_distance_in_the_column_names(self, position):
+        """Regression: same `_2_` rename bug as the distance neighborhood."""
+        compute_contact_neighborhood_at_position(
+            str(position), 2, population=["targets", "effectors"],
+            neighborhood_kwargs=neighborhood_kwargs(),
+        )
+        csv, pkl = read_tables(position, "targets")
+        name = "neighborhood_(targets-effectors)_contact_2_px"
+        assert csv.set_index(["TRACK_ID", "FRAME"])[f"inclusive_count_{name}"].tolist() == [1, 1, 0, 0]
+        assert name in pkl.columns
+        assert not any("_contact_(" in c for c in csv.columns)
 
     def test_contact_site_intensity_is_measured_from_the_movie(self, position):
         """With channel_names, the movie is loaded and the contact strip of target 1
