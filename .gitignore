@@ -176,3 +176,6 @@ docs/figures/preview/
 
 # Written by setuptools-scm at build time
 celldetective/_version.py
+
+# training outputs written by the tests
+tests/ExperimentTest/temp/
