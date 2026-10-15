@@ -579,12 +579,13 @@ def collapse_trajectories_by_status(
     df_sections = []
     for s in unique_statuses:
         subtab = df.loc[df[status] == s, :]
-        op = getattr(subtab.groupby(groupby_columns), projection)
-        subtab_projected = op(subtab.groupby(groupby_columns))
-        frame_duration = subtab.groupby(groupby_columns).size().to_numpy()
+        grouped = subtab.groupby(groupby_columns)
+        # The text columns are dropped: the static ones are added back below.
+        subtab_projected = getattr(grouped, projection)(numeric_only=True)
+        frame_duration = grouped.size().to_numpy()
         for c in static_columns:
             try:
-                subtab_projected[c] = subtab.groupby(groupby_columns)[c].apply(
+                subtab_projected[c] = grouped[c].apply(
                     lambda x: x.unique()[0]
                 )
             except Exception as e:
