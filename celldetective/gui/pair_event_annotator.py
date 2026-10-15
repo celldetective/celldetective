@@ -28,7 +28,6 @@ from celldetective.gui.annotator_common import (
     NON_SIGNAL_COLUMNS,
     PAIR_COLUMNS,
     closest_picked_index,
-    color_events,
     complete_event_columns,
     confirm,
     default_dataset_name,
@@ -44,8 +43,8 @@ from celldetective.gui.annotator_common import (
     signal_limits,
     split_by_frame,
     warn,
-    write_event_status,
 )
+from celldetective.utils.event_status import color_events, write_event_status
 from celldetective.gui.gui_utils import color_from_status
 import numpy as np
 from fonticon_mdi6 import MDI6

@@ -6,10 +6,7 @@ import pandas as pd
 
 from celldetective.log_manager import get_logger, positionlogger
 from celldetective.tracking import clean_trajectories
-from celldetective.utils.color_mappings import (
-    color_from_status,
-    color_from_class,
-)
+from celldetective.utils.event_status import write_event_status
 from celldetective.utils.event_detection import _prep_event_detection_model
 from celldetective.utils.signal_windowing import predict_events_sliding_window
 from celldetective.utils import COLUMN_LABELS
@@ -223,41 +220,13 @@ class SignalAnalysisProcess(Process):
                 lambda x: times_recast[track_to_idx[x]] if x in track_to_idx else 0
             )
 
-            # Generate Status/Color columns
-            # This is complex to vectorize due to time dependency (t >= t0).
-            # We can iterate group-wise again or use vectorized pandas ops
-
-            # For status generation, we stick to the loop as in original code, but maybe optimize?
-            # Original code iterates groupby. Let's do that for safety and correctness.
-
-            for tid, group in trajectories.groupby(self.column_labels["track"]):
-                indices = group.index
-                t0 = group[time_col].iloc[0]
-                cclass = group[class_col].iloc[0]
-                timeline = group[self.column_labels["time"]].to_numpy()
-                status = np.zeros_like(timeline)
-
-                if t0 > 0:
-                    status[timeline >= t0] = 1.0
-                if cclass == 2:
-                    status[:] = 2
-                if cclass > 2:
-                    status[:] = 42
-
-                # Color mapping is slow if done element-wise.
-                # But color_from_status returns list/string.
-                # Let's just assign status first.
-                trajectories.loc[indices, status_col] = status
-
-            # Status colors
-            # Optimization: define color map and map values
-            # status_color = [color_from_status(s) for s in status]
-            # applying function on column is faster
-            trajectories["status_color"] = trajectories[status_col].apply(
-                color_from_status
-            )
-            trajectories["class_color"] = trajectories[class_col].apply(
-                color_from_class
+            write_event_status(
+                trajectories,
+                class_col,
+                time_col,
+                status_col,
+                keys=self.column_labels["track"],
+                frame_name=self.column_labels["time"],
             )
 
             trajectories = trajectories.sort_values(

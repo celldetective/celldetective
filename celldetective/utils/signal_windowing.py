@@ -31,10 +31,12 @@ import numpy as np
 
 # Track-level class encoding (one value per track), matching the encoding used
 # throughout Celldetective's event detection: 0 = event observed (with a valid
-# time), 1 = no event observed, 2 = else / left-censored.
+# time), 1 = no event observed, 2 = else / left-censored, 42 = marked for
+# deletion.
 EVENT = 0
 NO_EVENT = 1
 ELSE = 2  # left-censored / miscellaneous (e.g. event already happened, or n/a)
+DELETED = 42
 
 
 def predict_events_sliding_window(

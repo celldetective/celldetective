@@ -15,7 +15,6 @@ from typing import Tuple, Any
 from celldetective.gui.annotator_common import (
     AnimationMixin,
     EventAnnotationMixin,
-    color_events,
     complete_event_columns,
     confirm,
     event_class_columns,
@@ -23,8 +22,8 @@ from celldetective.gui.annotator_common import (
     prefill_class,
     signal_limits,
     split_by_frame,
-    write_event_status,
 )
+from celldetective.utils.event_status import color_events, write_event_status
 from celldetective.gui.base_annotator import BaseAnnotator
 import logging
 from celldetective.gui.base.threads import start_tracked

@@ -33,7 +33,7 @@ from celldetective.utils.data_loaders import get_position_table, get_position_pi
 from celldetective.tracking import clean_trajectories, interpolate_nan_properties
 import matplotlib.pyplot as plt
 from natsort import natsorted
-from celldetective.utils.color_mappings import color_from_status, color_from_class
+from celldetective.utils.event_status import write_event_status
 from celldetective.utils.signal_windowing import predict_events_sliding_window
 from math import floor
 from scipy.optimize import curve_fit
@@ -220,25 +220,14 @@ def analyze_signals(
             trajectories.loc[indices, time_col] = times_recast[i]
         logger.info("Signal analysis done.")
 
-        for tid, group in trajectories.groupby(column_labels["track"]):
-
-            indices = group.index
-            t0 = group[time_col].to_numpy()[0]
-            cclass = group[class_col].to_numpy()[0]
-            timeline = group[column_labels["time"]].to_numpy()
-            status = np.zeros_like(timeline)
-            if t0 > 0:
-                status[timeline >= t0] = 1.0
-            if cclass == 2:
-                status[:] = 2
-            if cclass > 2:
-                status[:] = 42
-            status_color = [color_from_status(s) for s in status]
-            class_color = [color_from_class(cclass)] * len(status)
-
-            trajectories.loc[indices, status_col] = status
-            trajectories.loc[indices, "status_color"] = pd.Series(status_color, index=indices)
-            trajectories.loc[indices, "class_color"] = pd.Series(class_color, index=indices)
+        write_event_status(
+            trajectories,
+            class_col,
+            time_col,
+            status_col,
+            keys=column_labels["track"],
+            frame_name=column_labels["time"],
+        )
 
         if plot_outcome:
             fig, ax = plt.subplots(1, len(selected_signals), figsize=(10, 5))

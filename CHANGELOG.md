@@ -21,8 +21,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   log, and the stack viewers share their frame reading, label lookup and line
   profile, so a fix in one window now reaches the others. Along the way:
   - the event annotator lists numeric signals only;
-  - a status column derived by the event annotator marks the tracks of the
-    *else* class 2, as signal detection does;
   - in an untracked phenotype table, a cell is selected by its ID and frame.
 
 ### Fixed
@@ -60,6 +58,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - viewers opened on a position without label images failed while being
     built (the spot detection viewer with an `IndexError`). They now close
     cleanly.
+- A cell of class 2 (the event happened before the acquisition) has a status
+  of 1 from its first frame. Signal detection wrote a status of 2, and the
+  event annotator wrote 0 when it rebuilt the status column. Tables already
+  classified keep their status until the events are detected or annotated
+  again.
+- Shifting event times in the interactive signal viewer rebuilt the status
+  from the time alone, so a cell without an event (time -1) got a status of 1
+  throughout. The status now follows the class as everywhere else.
 - Collapsing trajectories by status failed with recent pandas versions.
 - Rows added by trajectory extrapolation or gap interpolation had no
   first-detection status, so the event annotator showed them with an empty

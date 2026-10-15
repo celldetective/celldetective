@@ -23,11 +23,11 @@ from celldetective.gui.base.components import (
     CelldetectiveMainWindow,
 )
 from celldetective.gui.gui_utils import ExportPlotBtn
+from celldetective.utils.event_status import color_events
 from celldetective.gui.annotator_common import (
     AnnotatorMixin,
     NON_SIGNAL_COLUMNS,
     closest_picked_index,
-    color_events,
     complete_event_columns,
     confirm,
     default_dataset_name,

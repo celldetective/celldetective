@@ -12,7 +12,7 @@ movie.
 import gc
 import json
 import os
-from typing import Any, Callable, Iterable, List, Optional, Sequence, Tuple, Union
+from typing import Any, Callable, Iterable, List, Optional, Sequence, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -45,7 +45,6 @@ from celldetective.gui.base.figure_canvas import FigureCanvas
 from celldetective.gui.base.sliders import QLabeledDoubleRangeSlider, QLabeledSlider
 from celldetective.gui.base.styles import CELLDETECTIVE_BLUE
 from celldetective.gui.base.utils import center_window
-from celldetective.gui.gui_utils import color_from_class, color_from_status
 from celldetective.utils.contrast import contrast_limits
 from celldetective.utils.experiment import (
     extract_experiment_channels,
@@ -58,6 +57,7 @@ from celldetective.utils.image_loaders import (
     auto_load_number_of_frames,
     load_frames,
 )
+from celldetective.utils.signal_windowing import DELETED, ELSE, EVENT, NO_EVENT
 
 logger = get_logger(__name__)
 
@@ -107,9 +107,6 @@ PAIR_COLUMNS = (
 
 # Columns starting with "class" that are not event classes.
 NON_EVENT_CLASS_COLUMNS = ("class_id", "class_color")
-
-# Event classes.
-EVENT, NO_EVENT, ELSE, DELETED = 0, 1, 2, 42
 
 # Color of the icon of a toggled plot option (log scale, normalization).
 ACTIVE_ICON_COLOR = CELLDETECTIVE_BLUE
@@ -169,69 +166,6 @@ def pair_event_columns(class_name: str, columns: Iterable[str] = ()) -> Tuple[st
     return time_name, status_name
 
 
-def _colors(values: np.ndarray, color_of: Callable, recently_modified: bool = False) -> list:
-    """The color of each value, computed once per distinct value."""
-
-    palette = {}
-    colors = []
-    for value in values:
-        # NaN never equals itself: give all NaNs one key.
-        key = None if value != value else value
-        if key not in palette:
-            palette[key] = color_of(value, recently_modified=recently_modified)
-        colors.append(palette[key])
-    return colors
-
-
-def write_event_status(
-    df: pd.DataFrame,
-    class_name: str,
-    time_name: str,
-    status_name: str,
-    keys: Union[str, Sequence[str]] = "TRACK_ID",
-    rows: Optional[pd.Series] = None,
-    recently_modified: bool = False,
-) -> None:
-    """
-    Fill the status column of an event class, and the status and class colors,
-    from the class and time of each track: 0 before the event, 1 from it on, 2
-    for the "else" class and 42 for a cell marked for deletion.
-
-    Parameters
-    ----------
-    df : pandas.DataFrame
-        The table, modified in place.
-    class_name, time_name, status_name : str
-        The columns of the event class.
-    keys : str or sequence of str, optional
-        The columns identifying a track, or a pair.
-    rows : pandas.Series of bool, optional
-        The rows to fill, all of them by default.
-    recently_modified : bool, optional
-        Whether to color the cells as just annotated.
-    """
-
-    keys = [keys] if isinstance(keys, str) else list(keys)
-    subset = df if rows is None else df.loc[rows]
-    subset = subset.dropna(subset=keys)
-    groups = subset.groupby(keys, sort=False)
-    t0 = groups[time_name].transform("first").to_numpy()
-    cclass = groups[class_name].transform("first").to_numpy()
-    frames = subset["FRAME"].to_numpy()
-
-    status = np.where((t0 > 0) & (frames >= t0), 1.0, 0.0)
-    status[cclass == ELSE] = ELSE
-    status[cclass > ELSE] = DELETED
-
-    df.loc[subset.index, status_name] = status
-    df.loc[subset.index, "status_color"] = _colors(
-        status, color_from_status, recently_modified
-    )
-    df.loc[subset.index, "class_color"] = _colors(
-        cclass, color_from_class, recently_modified
-    )
-
-
 def complete_event_columns(
     df: pd.DataFrame,
     class_name: str,
@@ -272,12 +206,6 @@ def complete_event_columns(
         df[class_name] = NO_EVENT
     if time_name not in df.columns:
         df[time_name] = -1
-
-
-def color_events(df: pd.DataFrame, class_name: str, status_name: str) -> None:
-    """Color the cells of the table by their status and class."""
-    df["status_color"] = _colors(df[status_name].to_numpy(), color_from_status)
-    df["class_color"] = _colors(df[class_name].to_numpy(), color_from_class)
 
 
 def fit_feature_scaler(

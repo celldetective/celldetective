@@ -20,6 +20,7 @@ from celldetective.gui.base.figure_canvas import FigureCanvas
 import os
 from celldetective import get_logger
 from celldetective.log_manager import positionlogger
+from celldetective.utils.event_status import event_status
 from celldetective.utils.parsing import population_from_table_name
 from celldetective.gui.annotator_common import NON_EVENT_CLASS_COLUMNS
 
@@ -335,11 +336,12 @@ class InteractiveEventViewer(QDialog, Styles):
         self.df.loc[mask, self.time_col] += step
 
         if self.status_col and self.status_col in self.df.columns:
-            # status is 1 if time >= t0, else 0
-            self.df.loc[mask, self.status_col] = (
-                self.df.loc[mask, self.time_axis_col]
-                >= self.df.loc[mask, self.time_col]
-            ).astype(int)
+            rows = self.df.loc[mask]
+            self.df.loc[mask, self.status_col] = event_status(
+                rows[self.class_col].to_numpy(),
+                rows[self.time_col].to_numpy(),
+                rows[self.time_axis_col].to_numpy(),
+            )
 
         self.plot_signals()
         self.notify_update()
