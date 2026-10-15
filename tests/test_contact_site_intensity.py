@@ -4,6 +4,11 @@ Tests for contact-site intensity measurement:
   - _measure_contact_intensity_at_t (per-frame writer)
   - mask_contact_neighborhood with intensity_images / channel_names
   - _measure_contact_site_intensity (pair-table helper)
+
+Geometry used throughout: cell A fills the left half of a 60x60 image
+(columns 0-29), cell B the right half (columns 30-59). Dilating B by
+``border`` pixels (cross-shaped structuring element) reaches columns
+``30 - border`` to 29 of A, so the contact zone is exactly that vertical strip.
 """
 
 import numpy as np
@@ -18,6 +23,9 @@ from celldetective.neighborhood import (
 from celldetective.relative_measurements import _measure_contact_site_intensity
 
 
+STATS = ("mean", "max", "std")
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -30,6 +38,13 @@ def make_adjacent_labels(size=60, gap=0):
     lA[:, :mid - gap] = 1
     lB[:, mid + gap:] = 2
     return lA, lB
+
+
+def expected_strip(size, border):
+    """The contact zone of A facing B for two adjacent half-image cells."""
+    zone = np.zeros((size, size), dtype=bool)
+    zone[:, size // 2 - border:size // 2] = True
+    return zone
 
 
 def make_intensity(size=60, n_channels=2, seed=0):
@@ -61,34 +76,45 @@ def make_cell_dfs(ids_A, ids_B, mask_ids_A, mask_ids_B, frame=0):
     return dfA, dfB
 
 
+def assert_stats_match_zone(values, image, zone, channel_names):
+    """``values[contact_{ch}_{stat}]`` equals the stat of ``image`` over ``zone``."""
+    for ch_idx, ch in enumerate(channel_names):
+        pixels = image[..., ch_idx][zone].astype(float)
+        np.testing.assert_allclose(values[f"contact_{ch}_mean"], pixels.mean(), rtol=1e-6)
+        np.testing.assert_allclose(values[f"contact_{ch}_max"], pixels.max(), rtol=1e-6)
+        np.testing.assert_allclose(values[f"contact_{ch}_std"], pixels.std(), rtol=1e-5, atol=1e-7)
+
+
 # ---------------------------------------------------------------------------
 # _contact_site_mask
 # ---------------------------------------------------------------------------
 
 class TestContactSiteMask:
 
-    def test_returns_pixels_inside_cell_A(self):
+    @pytest.mark.parametrize("border", [1, 3, 8], ids=["border1", "border3", "border8"])
+    def test_zone_is_the_strip_of_A_within_border_of_B(self, border):
+        """The zone is boolean, shaped like the input, inside cell A, non-empty
+        for adjacent cells, and exactly ``border`` columns wide (so a larger
+        border always gives a larger zone; border=1 keeps only the boundary column)."""
         lA, lB = make_adjacent_labels()
-        zone = _contact_site_mask(lA, lB, mask_id_A=1, mask_id_B=2, border=3)
-        # every True pixel must belong to cell A
-        assert np.all(lA[zone] == 1), "Contact zone contains pixels outside cell A"
+        zone = _contact_site_mask(lA, lB, mask_id_A=1, mask_id_B=2, border=border)
 
-    def test_zone_nonempty_for_adjacent_cells(self):
-        lA, lB = make_adjacent_labels()
-        zone = _contact_site_mask(lA, lB, mask_id_A=1, mask_id_B=2, border=3)
+        assert zone.dtype == bool
+        assert zone.shape == lA.shape
+        assert np.all(lA[zone] == 1), "Contact zone contains pixels outside cell A"
         assert zone.sum() > 0, "Contact zone should be non-empty for adjacent cells"
+        np.testing.assert_array_equal(zone, expected_strip(60, border))
+
+    def test_output_shape_follows_a_non_default_image_size(self):
+        lA, lB = make_adjacent_labels(size=40)
+        zone = _contact_site_mask(lA, lB, mask_id_A=1, mask_id_B=2, border=3)
+        assert zone.shape == lA.shape
+        np.testing.assert_array_equal(zone, expected_strip(40, 3))
 
     def test_zone_empty_for_distant_cells(self):
         lA, lB = make_adjacent_labels(gap=20)
         zone = _contact_site_mask(lA, lB, mask_id_A=1, mask_id_B=2, border=3)
         assert zone.sum() == 0, "Contact zone should be empty when cells are far apart"
-
-    def test_border_zero_gives_only_overlapping_pixels(self):
-        lA, lB = make_adjacent_labels(gap=0)
-        zone = _contact_site_mask(lA, lB, mask_id_A=1, mask_id_B=2, border=1)
-        # border=1 means at least the cells must share a border pixel
-        # result is restricted to lA pixels within 1 px of lB
-        assert np.all(lA[zone] == 1)
 
     def test_self_contact_mode(self):
         """Pass labelsB=None: both cells live in labelsA."""
@@ -98,22 +124,7 @@ class TestContactSiteMask:
         zone = _contact_site_mask(lAB, None, mask_id_A=1, mask_id_B=3, border=3)
         assert zone.sum() > 0
         assert np.all(lAB[zone] == 1)
-
-    def test_larger_border_gives_larger_zone(self):
-        lA, lB = make_adjacent_labels()
-        z3 = _contact_site_mask(lA, lB, mask_id_A=1, mask_id_B=2, border=3)
-        z8 = _contact_site_mask(lA, lB, mask_id_A=1, mask_id_B=2, border=8)
-        assert z8.sum() >= z3.sum(), "Larger border should give equal or larger contact zone"
-
-    def test_output_shape_matches_input(self):
-        lA, lB = make_adjacent_labels(size=40)
-        zone = _contact_site_mask(lA, lB, mask_id_A=1, mask_id_B=2, border=3)
-        assert zone.shape == lA.shape
-
-    def test_zone_is_boolean(self):
-        lA, lB = make_adjacent_labels()
-        zone = _contact_site_mask(lA, lB, mask_id_A=1, mask_id_B=2, border=3)
-        assert zone.dtype == bool
+        np.testing.assert_array_equal(zone, expected_strip(60, 3))
 
 
 # ---------------------------------------------------------------------------
@@ -138,67 +149,43 @@ class TestMeasureContactIntensityAtT:
         self.dfA, self.dfB = make_cell_dfs([1], [2], [1], [2], frame=0)
         # Initialize contact intensity columns
         for ch in ("ch0", "ch1"):
-            for stat in ("mean", "max", "std"):
+            for stat in STATS:
                 self.dfA[f"contact_{ch}_{stat}"] = np.nan
 
-    def _build_dist_map(self):
-        """Fake dist_map: cell A (row 0) is close to cell B (col 0)."""
-        dist = np.array([[5.0]])  # within contact threshold
-        return dist
-
-    def test_columns_written_for_contact_pair(self):
-        dist_map = self._build_dist_map()
+    def _measure(self, dist_map, border, channels=("ch0", "ch1")):
         _measure_contact_intensity_at_t(
             0, self.dfA, self.dfA, self.dfB,
             self.lA, self.lB,
-            self.intensity, ["ch0", "ch1"],
-            dist_map, border=3,
+            self.intensity, list(channels),
+            dist_map, border=border,
             column_labelsA=self.cl, column_labelsB=self.cl,
         )
+        return self.dfA.iloc[0]
+
+    @pytest.mark.parametrize("border", [3, 5], ids=["border3", "border5"])
+    def test_contact_pair_gets_the_stats_of_the_contact_zone(self, border):
+        """A pair in contact (distance 5 < 1e5) gets, for every channel, the
+        mean/max/std of the pixels in the contact strip: finite, mean between
+        0 and max, std >= 0, and exactly 0.9/0.9/0 on the uniform channel 0."""
+        row = self._measure(np.array([[5.0]]), border)
+
         for ch in ("ch0", "ch1"):
-            for stat in ("mean", "max", "std"):
-                val = self.dfA.iloc[0][f"contact_{ch}_{stat}"]
-                assert np.isfinite(val), f"contact_{ch}_{stat} should be finite after contact"
+            for stat in STATS:
+                assert np.isfinite(row[f"contact_{ch}_{stat}"]), f"contact_{ch}_{stat} should be finite after contact"
+            assert 0.0 <= row[f"contact_{ch}_mean"] <= row[f"contact_{ch}_max"]
+            assert row[f"contact_{ch}_std"] >= 0
+
+        np.testing.assert_allclose(row["contact_ch0_mean"], 0.9, rtol=1e-6)
+        np.testing.assert_allclose(row["contact_ch0_max"], 0.9, rtol=1e-6)
+        assert row["contact_ch0_std"] == pytest.approx(0.0, abs=1e-7)
+        assert_stats_match_zone(row, self.intensity, expected_strip(self.size, border), ["ch0", "ch1"])
 
     def test_no_contact_leaves_nan(self):
         # dist_map = 1e6 means no contact
-        dist_map = np.array([[1.0e6]])
-        _measure_contact_intensity_at_t(
-            0, self.dfA, self.dfA, self.dfB,
-            self.lA, self.lB,
-            self.intensity, ["ch0", "ch1"],
-            dist_map, border=3,
-            column_labelsA=self.cl, column_labelsB=self.cl,
-        )
+        row = self._measure(np.array([[1.0e6]]), border=3)
         for ch in ("ch0", "ch1"):
-            for stat in ("mean", "max", "std"):
-                assert np.isnan(self.dfA.iloc[0][f"contact_{ch}_{stat}"])
-
-    def test_mean_bounded_by_min_max(self):
-        dist_map = self._build_dist_map()
-        _measure_contact_intensity_at_t(
-            0, self.dfA, self.dfA, self.dfB,
-            self.lA, self.lB,
-            self.intensity, ["ch0"],
-            dist_map, border=5,
-            column_labelsA=self.cl, column_labelsB=self.cl,
-        )
-        mean_val = self.dfA.iloc[0]["contact_ch0_mean"]
-        max_val  = self.dfA.iloc[0]["contact_ch0_max"]
-        min_val  = 0.0  # minimum possible
-        assert mean_val <= max_val
-        assert mean_val >= min_val
-
-    def test_std_nonnegative(self):
-        dist_map = self._build_dist_map()
-        _measure_contact_intensity_at_t(
-            0, self.dfA, self.dfA, self.dfB,
-            self.lA, self.lB,
-            self.intensity, ["ch0"],
-            dist_map, border=5,
-            column_labelsA=self.cl, column_labelsB=self.cl,
-        )
-        assert self.dfA.iloc[0]["contact_ch0_std"] >= 0
+            for stat in STATS:
+                assert np.isnan(row[f"contact_{ch}_{stat}"])
 
 
 # ---------------------------------------------------------------------------
@@ -232,7 +219,10 @@ class TestMaskContactNeighborhoodWithIntensity:
         self.dfA = pd.DataFrame(rows_A)
         self.dfB = pd.DataFrame(rows_B)
 
-    def test_contact_intensity_columns_created(self):
+    def test_contact_intensity_written_alongside_the_neighborhood(self):
+        """With intensity images, every contact_{ch}_{stat} column is created,
+        holds finite values in [0, 1] equal to the stats of the 5-px contact
+        strip, and the contact neighborhood column is still populated."""
         dfA_out, _ = mask_contact_neighborhood(
             self.dfA.copy(), self.dfB.copy(),
             self.labelsA, self.labelsB,
@@ -241,23 +231,23 @@ class TestMaskContactNeighborhoodWithIntensity:
             channel_names=self.channel_names,
         )
         for ch in self.channel_names:
-            for stat in ("mean", "max", "std"):
+            for stat in STATS:
                 col = f"contact_{ch}_{stat}"
                 assert col in dfA_out.columns, f"Missing column: {col}"
+            non_nan = dfA_out[f"contact_{ch}_mean"].dropna()
+            assert len(non_nan) > 0, f"Expected at least some finite values in contact_{ch}_mean"
+            assert np.all(np.isfinite(non_nan)), f"Non-finite values found in contact_{ch}_mean"
+            assert np.all(non_nan >= 0.0)
+            assert np.all(non_nan <= 1.0)
 
-    def test_contact_intensity_values_finite(self):
-        dfA_out, _ = mask_contact_neighborhood(
-            self.dfA.copy(), self.dfB.copy(),
-            self.labelsA, self.labelsB,
-            distance=5,
-            intensity_images=self.intensity_images,
-            channel_names=self.channel_names,
-        )
-        for ch in self.channel_names:
-            col = f"contact_{ch}_mean"
-            non_nan = dfA_out[col].dropna()
-            assert len(non_nan) > 0, f"Expected at least some finite values in {col}"
-            assert np.all(np.isfinite(non_nan)), f"Non-finite values found in {col}"
+        zone = expected_strip(self.size, 5)
+        for _, row in dfA_out.iterrows():
+            assert_stats_match_zone(row, self.intensity_images[0], zone, self.channel_names)
+
+        neigh_cols = [c for c in dfA_out.columns if c.startswith("neighborhood")]
+        assert len(neigh_cols) > 0, "Neighborhood column missing"
+        for neighs in dfA_out["neighborhood_2_contact_5_px"]:
+            assert [n["id"] for n in neighs] == [2]
 
     def test_no_intensity_images_no_contact_columns(self):
         """Without intensity_images, no contact_* columns should appear."""
@@ -270,31 +260,6 @@ class TestMaskContactNeighborhoodWithIntensity:
         )
         contact_cols = [c for c in dfA_out.columns if c.startswith("contact_")]
         assert len(contact_cols) == 0
-
-    def test_neighborhood_column_still_populated(self):
-        """Contact neighborhood column must still be populated alongside intensity."""
-        dfA_out, _ = mask_contact_neighborhood(
-            self.dfA.copy(), self.dfB.copy(),
-            self.labelsA, self.labelsB,
-            distance=5,
-            intensity_images=self.intensity_images,
-            channel_names=self.channel_names,
-        )
-        neigh_cols = [c for c in dfA_out.columns if c.startswith("neighborhood")]
-        assert len(neigh_cols) > 0, "Neighborhood column missing"
-
-    def test_mean_bounded_by_image_range(self):
-        dfA_out, _ = mask_contact_neighborhood(
-            self.dfA.copy(), self.dfB.copy(),
-            self.labelsA, self.labelsB,
-            distance=5,
-            intensity_images=self.intensity_images,
-            channel_names=self.channel_names,
-        )
-        for ch in self.channel_names:
-            vals = dfA_out[f"contact_{ch}_mean"].dropna()
-            assert np.all(vals >= 0.0)
-            assert np.all(vals <= 1.0)
 
 
 # ---------------------------------------------------------------------------
@@ -310,7 +275,7 @@ class TestMeasureContactSiteIntensity:
         lA, lB = make_adjacent_labels(size)
         self.lA = lA
         self.lB = lB
-        # Two channels: first channel bright on left half, second on right
+        # Two channels: first bright everywhere, second dim everywhere
         self.img = np.stack(
             [rng.uniform(0.8, 1.0, (size, size)),  # bright everywhere
              rng.uniform(0.0, 0.2, (size, size))],  # dim everywhere
@@ -318,22 +283,23 @@ class TestMeasureContactSiteIntensity:
         ).astype(np.float32)
         self.channel_names = ["bright", "dim"]
 
-    def test_returns_all_stat_keys(self):
+    @pytest.mark.parametrize("border", [3, 5], ids=["border3", "border5"])
+    def test_adjacent_cells_give_the_stats_of_the_contact_zone(self, border):
+        """Every contact_{ch}_{stat} key is returned with a finite value,
+        mean <= max, std >= 0, the bright channel above the dim one, and the
+        values equal the stats of the contact strip."""
         result = _measure_contact_site_intensity(
-            self.lA, self.lB, 1, 2, self.img, self.channel_names, border=3
+            self.lA, self.lB, 1, 2, self.img, self.channel_names, border=border
         )
         for ch in self.channel_names:
-            for stat in ("mean", "max", "std"):
-                assert f"contact_{ch}_{stat}" in result, f"Missing key contact_{ch}_{stat}"
-
-    def test_adjacent_cells_give_finite_values(self):
-        result = _measure_contact_site_intensity(
-            self.lA, self.lB, 1, 2, self.img, self.channel_names, border=3
-        )
-        for ch in self.channel_names:
-            assert np.isfinite(result[f"contact_{ch}_mean"])
-            assert np.isfinite(result[f"contact_{ch}_max"])
-            assert np.isfinite(result[f"contact_{ch}_std"])
+            for stat in STATS:
+                key = f"contact_{ch}_{stat}"
+                assert key in result, f"Missing key {key}"
+                assert np.isfinite(result[key])
+            assert result[f"contact_{ch}_mean"] <= result[f"contact_{ch}_max"]
+            assert result[f"contact_{ch}_std"] >= 0.0
+        assert result["contact_bright_mean"] > result["contact_dim_mean"]
+        assert_stats_match_zone(result, self.img, expected_strip(60, border), self.channel_names)
 
     def test_distant_cells_give_nan(self):
         lA, lB = make_adjacent_labels(60, gap=20)  # 20-px gap
@@ -343,33 +309,23 @@ class TestMeasureContactSiteIntensity:
         for ch in self.channel_names:
             assert np.isnan(result[f"contact_{ch}_mean"])
 
-    def test_mean_leq_max(self):
-        result = _measure_contact_site_intensity(
-            self.lA, self.lB, 1, 2, self.img, self.channel_names, border=5
-        )
-        for ch in self.channel_names:
-            assert result[f"contact_{ch}_mean"] <= result[f"contact_{ch}_max"]
-
-    def test_std_nonnegative(self):
-        result = _measure_contact_site_intensity(
-            self.lA, self.lB, 1, 2, self.img, self.channel_names, border=5
-        )
-        for ch in self.channel_names:
-            assert result[f"contact_{ch}_std"] >= 0.0
-
     def test_none_labelsB_uses_labelsA(self):
-        """Self-contact: labelsB=None should fall back to labelsA without error."""
+        """Self-contact: labelsB=None falls back to labelsA. With both cells in
+        one image the result equals passing that image twice; with the partner
+        absent from labelsA, every stat is NaN and nothing raises."""
+        lAB = self.lA + self.lB
+        self_result = _measure_contact_site_intensity(
+            lAB, None, 1, 2, self.img, self.channel_names, border=3
+        )
+        explicit = _measure_contact_site_intensity(
+            lAB, lAB, 1, 2, self.img, self.channel_names, border=3
+        )
+        assert self_result == pytest.approx(explicit)
+        assert np.isfinite(self_result["contact_bright_mean"])
+
         result = _measure_contact_site_intensity(
             self.lA, None, 1, 2, self.img, self.channel_names, border=3
         )
-        # With the same label image for both, result may be NaN (cell 2 not in lA),
-        # but the function must not raise
         assert isinstance(result, dict)
         assert len(result) == len(self.channel_names) * 3
-
-    def test_bright_channel_mean_higher(self):
-        """The 'bright' channel contact mean should exceed the 'dim' channel mean."""
-        result = _measure_contact_site_intensity(
-            self.lA, self.lB, 1, 2, self.img, self.channel_names, border=5
-        )
-        assert result["contact_bright_mean"] > result["contact_dim_mean"]
+        assert all(np.isnan(v) for v in result.values())

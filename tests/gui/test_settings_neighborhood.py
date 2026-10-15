@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 from PyQt5 import QtWidgets, QtCore
 from PyQt5.QtWidgets import QApplication
 from celldetective.gui.settings._settings_neighborhood import SettingsNeighborhood
+from celldetective.neighborhood import compute_neighborhood_at_position
 
 
 @pytest.fixture(autouse=True)
@@ -21,10 +22,7 @@ def process_events_after_test(qtbot):
     yield
     qtbot.wait(10)
     QApplication.processEvents()
-from celldetective.neighborhood import (
-    compute_neighborhood_at_position,
-    compute_contact_neighborhood_at_position,
-)
+
 
 # Define a delay for UI interactions
 INTERACTION_TIME = 100
@@ -278,38 +276,7 @@ class TestIO:
         assert settings_neighborhood.clear_previous_btn.isChecked()
         assert settings_neighborhood.cumulated_presence_btn.isChecked()
 
-        # Validate status CBs - add robustness
-        # Force fill if the text matching expectation is not found or empty
-        target_ref_status = "status_Active"
-        if (
-            settings_neighborhood.reference_population_status_cb.findText(
-                target_ref_status
-            )
-            == -1
-        ):
-            settings_neighborhood.fill_cbs_of_reference_population()
-
-        idx = settings_neighborhood.reference_population_status_cb.findText(
-            target_ref_status
-        )
-        if idx != -1:
-            settings_neighborhood.reference_population_status_cb.setCurrentIndex(idx)
-
-        target_neigh_status = "status_Live"
-        if (
-            settings_neighborhood.neighbor_population_status_cb.findText(
-                target_neigh_status
-            )
-            == -1
-        ):
-            settings_neighborhood.fill_cbs_of_neighbor_population()
-
-        idx = settings_neighborhood.neighbor_population_status_cb.findText(
-            target_neigh_status
-        )
-        if idx != -1:
-            settings_neighborhood.neighbor_population_status_cb.setCurrentIndex(idx)
-
+        # The status combos must be restored by the load itself.
         assert (
             settings_neighborhood.reference_population_status_cb.currentText()
             == "status_Active"
@@ -391,11 +358,6 @@ class TestProcessingValidity:
         # compute_neighborhood_metrics adds 'inclusive_count', 'mean_count', etc.
         # compute_neighborhood_at_position renames them at the end.
 
-        # Example expected: 'inclusive_count_(targets-effectors)_20_px'
-        expected_col = "inclusive_count_(targets-effectors)_20_px"
-        # Note: The exact naming depends on decomposition by status.
-        # If status was None, it's simpler.
-
-        # We kept defaults, so status might be None.
-        # Let's check for at least some inclusive count
-        assert any("inclusive_count" in c for c in df_targets.columns)
+        # The counts are renamed after the two populations chosen in the widget.
+        expected_col = "inclusive_count_neighborhood_(targets-effectors)_circle_20_px"
+        assert expected_col in df_targets.columns
