@@ -33,6 +33,8 @@ from PyQt5 import QtCore
 from PyQt5.QtWidgets import QApplication
 from PyQt5.QtGui import QCloseEvent
 
+from celldetective.gui.base.components import CelldetectiveMainWindow
+
 from celldetective import get_software_location
 
 
@@ -542,7 +544,7 @@ class TestEventAnnotatorAnimationControls:
             annotator.draw_frame = MagicMock()
             annotator.animation_generator = MagicMock()
 
-            with patch("celldetective.gui.event_annotator.FuncAnimation"):
+            with patch("celldetective.gui.annotator_common.FuncAnimation"):
                 annotator.update_speed()
 
             # FPS 30 -> interval = 1000/30 ≈ 33ms
@@ -581,8 +583,8 @@ class TestEventAnnotatorCloseEvent:
 
             event = QCloseEvent()
 
-            with patch("celldetective.gui.event_annotator.plt"):
-                with patch.object(EventAnnotator.__bases__[0], "closeEvent"):
+            with patch("celldetective.gui.annotator_common.plt"):
+                with patch.object(CelldetectiveMainWindow, "closeEvent"):
                     EventAnnotator.closeEvent(annotator, event)
 
             mock_anim.event_source.stop.assert_called_once()
@@ -609,8 +611,8 @@ class TestEventAnnotatorCloseEvent:
 
             event = QCloseEvent()
 
-            with patch("celldetective.gui.event_annotator.plt"):
-                with patch.object(EventAnnotator.__bases__[0], "closeEvent"):
+            with patch("celldetective.gui.annotator_common.plt"):
+                with patch.object(CelldetectiveMainWindow, "closeEvent"):
                     EventAnnotator.closeEvent(annotator, event)
             # closeEvent deletes stack and df_tracks - verify by checking
             # the del statements in the source code (the actual deletion
@@ -654,6 +656,42 @@ class TestEventAnnotatorStatusColors:
                     assert row["status"] == 1.0
                 else:
                     assert row["status"] == 0.0
+
+
+class TestEventAnnotatorNewClass:
+    """Test the creation of an event class from the new class dialog."""
+
+    @pytest.mark.parametrize("prefill, expected_time", [(0, 0.1), (1, -1), (2, -1)])
+    def test_write_new_event_class_prefills_columns(
+        self, qtbot, sample_df_tracks, prefill, expected_time
+    ):
+        """
+        Submitting the dialog adds class_<name> and t_<name>, prefilled with the
+        chosen class, and selects the new class.
+
+        Bug prevented: the method was dropped from EventAnnotator, so submitting
+        the dialog raised an AttributeError.
+        """
+        from PyQt5.QtWidgets import QComboBox, QLineEdit, QRadioButton
+        from celldetective.gui.event_annotator import EventAnnotator
+
+        with patch.object(
+            EventAnnotator, "__init__", lambda self, *args, **kwargs: None
+        ):
+            annotator = EventAnnotator(None)
+            annotator.df_tracks = sample_df_tracks.copy()
+            annotator.class_choice_cb = QComboBox()
+            annotator.class_name_le = QLineEdit("lysis")
+            annotator.class_option_rb = [QRadioButton() for _ in range(3)]
+            annotator.class_option_rb[prefill].setChecked(True)
+            annotator.newClassWidget = MagicMock()
+
+            annotator.write_new_event_class()
+
+            assert (annotator.df_tracks["class_lysis"] == prefill).all()
+            assert (annotator.df_tracks["t_lysis"] == expected_time).all()
+            assert annotator.class_choice_cb.currentText() == "class_lysis"
+            annotator.newClassWidget.close.assert_called_once()
 
 
 # =============================================================================

@@ -21,8 +21,14 @@ import os
 from celldetective import get_logger
 from celldetective.log_manager import positionlogger
 from celldetective.utils.parsing import population_from_table_name
+from celldetective.gui.annotator_common import NON_EVENT_CLASS_COLUMNS
 
 logger = get_logger(__name__)
+
+
+def class_color(cclass) -> str:
+    """Color of a track by its class: no event in blue, else in yellow, events in red."""
+    return {1: "tab:blue", 2: "yellow"}.get(cclass, "tab:red")
 
 
 class InteractiveEventViewer(QDialog, Styles):
@@ -116,7 +122,7 @@ class InteractiveEventViewer(QDialog, Styles):
             # Check for labeled events
             # Find all columns starting with class_
             for c in cols:
-                if c.startswith("class_") and c not in ["class_id", "class_color"]:
+                if c.startswith("class_") and c not in NON_EVENT_CLASS_COLUMNS:
                     suffix = c[len("class_") :]
                     # Avoid duplication if label was provided but somehow not matched above
                     if suffix == self.event_label:
@@ -140,7 +146,7 @@ class InteractiveEventViewer(QDialog, Styles):
                         c
                         for c in cols
                         if c.startswith("class")
-                        and c not in ["class_id", "class_color"]
+                        and c not in NON_EVENT_CLASS_COLUMNS
                     ),
                     "class",
                 ),
@@ -174,29 +180,24 @@ class InteractiveEventViewer(QDialog, Styles):
                 self.signal_name = None
 
         if self.signal_name is None:
-            excluded = {
-                "class_id",
-                "class_color",
-                "None",
-                self.track_col,
-                self.time_axis_col,
-            }
-            for info in self.event_types.values():
-                excluded.update(info.values())
-
             candidates = [
                 c
-                for c in cols
-                if c not in excluded
-                and pd.api.types.is_numeric_dtype(self.df[c])
-                and not c.startswith("class")
-                and not c.startswith("t_")
-                and not c.startswith("status")
+                for c in self.signal_columns()
+                if not c.startswith(("class", "t_", "status"))
             ]
-            if candidates:
-                self.signal_name = candidates[0]
-            else:
-                self.signal_name = cols[0]
+            self.signal_name = candidates[0] if candidates else cols[0]
+
+    def signal_columns(self) -> list:
+        """The numeric columns that are not identities, times or annotations."""
+
+        excluded = {*NON_EVENT_CLASS_COLUMNS, "None", self.track_col, self.time_axis_col}
+        for info in self.event_types.values():
+            excluded.update(v for v in info.values() if v)
+        return [
+            c
+            for c in self.df.columns
+            if c not in excluded and pd.api.types.is_numeric_dtype(self.df[c])
+        ]
 
     def set_active_event_type(self, type_name: str) -> None:
         """
@@ -233,22 +234,7 @@ class InteractiveEventViewer(QDialog, Styles):
         top_layout.addWidget(QLabel("Signal:"))
         self.signal_combo = QComboBox()
 
-        # Populate signal combo
-        excluded = {
-            "class_id",
-            "class_color",
-            "None",
-            self.track_col,
-            self.time_axis_col,
-        }
-        for info in self.event_types.values():
-            excluded.update({v for k, v in info.items() if v})
-
-        candidates = [
-            c
-            for c in self.df.columns
-            if c not in excluded and pd.api.types.is_numeric_dtype(self.df[c])
-        ]
+        candidates = self.signal_columns()
         self.signal_combo.addItems(candidates)
         if self.signal_name in candidates:
             self.signal_combo.setCurrentText(self.signal_name)
@@ -263,30 +249,22 @@ class InteractiveEventViewer(QDialog, Styles):
         self.event_filter_combo.currentTextChanged.connect(self.plot_signals)
         top_layout.addWidget(self.event_filter_combo)
 
-        self.event_btn = QPushButton("Event")
-        self.event_btn.clicked.connect(lambda: self.set_class(0))
-        top_layout.addWidget(self.event_btn)
+        def class_button(label, class_val):
+            button = QPushButton(label)
+            button.setStyleSheet(self.button_style_sheet_2)
+            button.clicked.connect(lambda: self.set_class(class_val))
+            top_layout.addWidget(button)
+            return button
 
-        self.reject_btn = QPushButton("No Event")
-        self.reject_btn.clicked.connect(lambda: self.set_class(1))
-        top_layout.addWidget(self.reject_btn)
-
-        self.else_btn = QPushButton("Left-censored/Else")
-        self.else_btn.clicked.connect(lambda: self.set_class(2))
-        top_layout.addWidget(self.else_btn)
-
-        self.delete_btn = QPushButton("Delete")
-        self.delete_btn.clicked.connect(lambda: self.set_class(3))
-        top_layout.addWidget(self.delete_btn)
+        self.event_btn = class_button("Event", 0)
+        self.reject_btn = class_button("No Event", 1)
+        self.else_btn = class_button("Left-censored/Else", 2)
+        self.delete_btn = class_button("Delete", 3)
 
         self.save_btn = QPushButton("Save Changes")
+        self.save_btn.setStyleSheet(self.button_style_sheet)
         self.save_btn.clicked.connect(self.save_changes)
         top_layout.addWidget(self.save_btn)
-
-        for btn in [self.event_btn, self.reject_btn, self.else_btn, self.delete_btn]:
-            btn.setStyleSheet(self.button_style_sheet_2)
-        for btn in [self.save_btn]:
-            btn.setStyleSheet(self.button_style_sheet)
 
         layout.addLayout(top_layout)
 
@@ -336,43 +314,35 @@ class InteractiveEventViewer(QDialog, Styles):
         event : QKeyEvent
             The key event.
         """
-        if not self.selected_tracks:
+        # Shifting a curve left increases its t0, right decreases it.
+        steps = {Qt.Key_Left: 0.5, Qt.Key_Right: -0.5}
+        if not self.selected_tracks or event.key() not in steps:
             super().keyPressEvent(event)
             return
+        self.shift_selected_times(steps[event.key()])
 
-        step = 0.5
+    def shift_selected_times(self, step: float) -> None:
+        """
+        Shift the event time of the selected tracks, and their status with it.
+
+        Parameters
+        ----------
+        step : float
+            The shift of the event time, in frames.
+        """
+
         mask = self.df[self.track_col].isin(self.selected_tracks)
+        self.df.loc[mask, self.time_col] += step
 
-        if event.key() == Qt.Key_Left:
-            # Shift curve LEFT: Increase t0 -> x decreases
-            self.df.loc[mask, self.time_col] += step
+        if self.status_col and self.status_col in self.df.columns:
+            # status is 1 if time >= t0, else 0
+            self.df.loc[mask, self.status_col] = (
+                self.df.loc[mask, self.time_axis_col]
+                >= self.df.loc[mask, self.time_col]
+            ).astype(int)
 
-            # Recompute status if column exists
-            if self.status_col and self.status_col in self.df.columns:
-                # status is 1 if time >= t0, else 0
-                self.df.loc[mask, self.status_col] = (
-                    self.df.loc[mask, self.time_axis_col]
-                    >= self.df.loc[mask, self.time_col]
-                ).astype(int)
-
-            self.plot_signals()
-            self.notify_update()
-        elif event.key() == Qt.Key_Right:
-            # Shift curve RIGHT: Decrease t0 -> x increases
-            self.df.loc[mask, self.time_col] -= step
-
-            # Recompute status if column exists
-            if self.status_col and self.status_col in self.df.columns:
-                # status is 1 if time >= t0, else 0
-                self.df.loc[mask, self.status_col] = (
-                    self.df.loc[mask, self.time_axis_col]
-                    >= self.df.loc[mask, self.time_col]
-                ).astype(int)
-
-            self.plot_signals()
-            self.notify_update()
-        else:
-            super().keyPressEvent(event)
+        self.plot_signals()
+        self.notify_update()
 
     def plot_signals(self, id: Optional[int] = None) -> None:
         """
@@ -386,6 +356,7 @@ class InteractiveEventViewer(QDialog, Styles):
         self.fig.clf()
         self.ax = self.fig.add_subplot(111)
         self.lines = {}  # map line -> track_id
+        self.line_colors = {}  # map line -> color of its class
 
         # Filter based on combo box
         filter_choice = self.event_filter_combo.currentText()
@@ -401,36 +372,22 @@ class InteractiveEventViewer(QDialog, Styles):
         else:
             valid_mask = ~self.df[self.class_col].isin([1, 3])
 
-        if not valid_mask.any():
-            # If nothing left, show empty or message?
-            pass
+        tracks = self.df.loc[valid_mask, self.track_col].unique()
+        shown = self.df[self.df[self.track_col].isin(tracks)]
 
-        tracks = self.df[valid_mask][self.track_col].unique()
-
-        for tid in tracks:
-            group = self.df[self.df[self.track_col] == tid]
+        for tid, group in shown.groupby(self.track_col, sort=False):
             t0 = group[self.time_col].iloc[0]
-            # Handle NaN t0 if necessary
             if pd.isna(t0):
                 continue
 
-            time = group[self.time_axis_col].values
-            signal = group[self.signal_name].values
-
-            # Center time
-            x = time - t0
-
-            # Color coding
-            # Class 0: Blue, Class 1: Gray, Class 2: Orange
-            c_val = group[self.class_col].iloc[0]
-            color = "tab:red"
-            if c_val == 1:
-                color = "tab:blue"
-            elif c_val == 2:
-                color = "yellow"
-
-            (line,) = self.ax.plot(x, signal, picker=True, alpha=0.95, color=color)
+            # Time centered on the event
+            x = group[self.time_axis_col].values - t0
+            color = class_color(group[self.class_col].iloc[0])
+            (line,) = self.ax.plot(
+                x, group[self.signal_name].values, picker=True, alpha=0.95, color=color
+            )
             self.lines[line] = tid
+            self.line_colors[line] = color
 
             # Highlight if selected (persist selection)
             if tid in self.selected_tracks:
@@ -491,20 +448,7 @@ class InteractiveEventViewer(QDialog, Styles):
                 line.set_color("red")
                 line.set_alpha(1.0)
             else:
-                # Reset color based on class
-                # Need to look up class again or store it in line metadata?
-                # Just redraw is safer/easier or lookup df
-                # Optimization: store class in lines map? self.lines[line] = (tid, class)
-                # For now just set to blue/orange heuristic
-                c_val = self.df.loc[
-                    self.df[self.track_col] == tid, self.class_col
-                ].iloc[0]
-                color = "tab:red"
-                if c_val == 1:
-                    color = "tab:blue"
-                elif c_val == 2:
-                    color = "yellow"
-                line.set_color(color)
+                line.set_color(self.line_colors[line])
                 line.set_alpha(0.5)
 
         self.canvas.draw()
@@ -538,12 +482,6 @@ class InteractiveEventViewer(QDialog, Styles):
         self.info_label.setText(f"Set {count} tracks to Class {class_val}.")
 
         self.notify_update()
-
-    def reject_selection(self) -> None:
-        """
-        Mark selected tracks as 'No Event' (Class 1).
-        """
-        self.set_class(1)
 
     def save_changes(self):
         """
