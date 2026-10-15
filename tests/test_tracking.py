@@ -393,6 +393,26 @@ class TestFirstDetection(unittest.TestCase):
         res = write_first_detection_class(df.copy(), img_shape=(100, 100))
         self.assertEqual(res["class_firstdetection"].iloc[0], 2)
 
+    def test_status_survives_extrapolation(self):
+        # Pre-extrapolated rows (before the first detection) must get a status of 0,
+        # not NaN, and the frame of the event onwards a status of 1.
+        df = pd.DataFrame(
+            {
+                "TRACK_ID": 0,
+                "FRAME": [5, 6, 7],
+                "POSITION_X": 50.0,
+                "POSITION_Y": 50.0,
+                "class_id": 1.0,
+            }
+        )
+        res = write_first_detection_class(df, img_shape=(100, 100))
+        res = clean_trajectories(res, extrapolate_tracks_pre=True)
+        self.assertEqual(list(res["FRAME"]), list(range(8)))
+        self.assertFalse(res["status_firstdetection"].isna().any())
+        self.assertEqual(
+            list(res["status_firstdetection"]), [0, 0, 0, 0, 1, 1, 1, 1]
+        )
+
 
 class TestCleanTrajectories(unittest.TestCase):
     def test_clean_pipeline(self):

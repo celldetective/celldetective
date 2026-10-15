@@ -667,6 +667,13 @@ def clean_trajectories(
 
             trajectories.loc[indices, "class_firstdetection"] = class_values
             trajectories.loc[indices, "t_firstdetection"] = t_values
+            if "status_firstdetection" in trajectories.columns:
+                # Rows added by extrapolation/interpolation have no status yet:
+                # rebuild it from t_firstdetection, as write_first_detection_class does.
+                timeline = track_group[column_labels["time"]].to_numpy()
+                trajectories.loc[indices, "status_firstdetection"] = np.where(
+                    timeline < t_values, 0.0, 1.0
+                )
 
     return trajectories
 
