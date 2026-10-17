@@ -742,7 +742,8 @@ def run_process(pos, kind, pop, distances, kw, event_time_col, measure_pairs=Fal
     queue = _Queue()
     NeighborhoodProcess(
         queue,
-        process_args={"pos": pos, "protocol": protocol, "img_shape": SHAPE, "measure_pairs": measure_pairs},
+        process_args={"batch_structure": {0: {"positions": [pos]}}, "protocols": [protocol], "img_shape": SHAPE,
+                      "measure_pairs": measure_pairs},
     ).run()
     assert queue.items[-1] == "finished"
     return queue

@@ -112,6 +112,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the reference population was drawn.
 
 ### Fixed
+- Computing neighborhoods over several wells or positions runs in one
+  progress window, whose well, position and frame bars advance through the
+  whole batch, instead of a window closed and reopened for each position and
+  neighborhood.
 - Measuring pairs no longer fails with "The truth value of an array with more
   than one element is ambiguous" when the neighbor lists of a table come back
   as arrays, with or without tracks.

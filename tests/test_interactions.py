@@ -669,10 +669,44 @@ def run_process(pos, **protocol):
     full.update(protocol)
     NeighborhoodProcess(
         queue,
-        process_args={"pos": pos, "protocol": full, "img_shape": SHAPE, "measure_pairs": True},
+        process_args={"batch_structure": {0: {"positions": [pos]}}, "protocols": [full], "img_shape": SHAPE,
+                      "measure_pairs": True},
     ).run()
     assert queue.items[-1] == "finished"
     return pd.read_csv(os.path.join(pos, "output", "tables", "trajectories_pairs.csv"))
+
+
+def test_process_runs_a_batch_in_one_window(tmp_path, sim):
+    # Two wells of one position each and two protocols, in one process: every
+    # position gets both neighborhoods, the well and position bars only move
+    # forward, and the process ends once, at the end of the batch.
+    from celldetective.processes.compute_neighborhood import NeighborhoodProcess
+    from celldetective.utils.synthetic_interactions import write_experiment
+
+    wells = write_experiment(str(tmp_path / "Batch"), [[sim], [sim]], write_labels=True, write_tables=True)
+    protocols = [
+        {"population": ["targets", "effectors"], "neighborhood_type": "mask_contact", "distance": [0],
+         "clear_neigh": True, "event_time_col": None, "neighborhood_kwargs": kwargs()},
+        {"population": ["targets", "effectors"], "neighborhood_type": "distance_threshold", "distance": [30],
+         "clear_neigh": False, "event_time_col": None, "neighborhood_kwargs": kwargs()},
+    ]
+    queue = _Queue()
+    NeighborhoodProcess(
+        queue,
+        process_args={"batch_structure": {k: {"positions": w} for k, w in enumerate(wells)},
+                      "protocols": protocols, "img_shape": SHAPE},
+    ).run()
+
+    assert queue.items.count("finished") == 1 and queue.items[-1] == "finished"
+    for key in ("well_progress", "pos_progress"):
+        values = [m[key] for m in queue.items if isinstance(m, dict) and key in m]
+        assert values[-1] == 100
+    wells_seen = [m["well_progress"] for m in queue.items if isinstance(m, dict) and "well_progress" in m]
+    assert wells_seen == sorted(wells_seen)
+    for pos in (p for w in wells for p in w):
+        df = pd.read_pickle(os.path.join(pos, "output", "tables", "trajectories_targets.pkl"))
+        assert CONTACT_0 in df.columns
+        assert CIRCLE_30 in df.columns
 
 
 def test_process_contact_neighborhood_and_pairs(position, sim):

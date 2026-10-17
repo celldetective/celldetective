@@ -1,6 +1,5 @@
 import json
 import os
-from glob import glob
 
 import numpy as np
 from PyQt5.QtCore import QSize, Qt
@@ -19,7 +18,6 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
 )
 from fonticon_mdi6 import MDI6
-from natsort import natsorted
 from superqt.fonticon import icon
 from typing import Optional
 
@@ -37,7 +35,6 @@ from celldetective.gui.base.styles import Styles, DANGER_COLOR
 from celldetective.gui.base.utils import center_window
 from celldetective.gui.base.help_panel import HelpButton, open_help, open_help_menu
 from celldetective.utils.data_loaders import load_experiment_tables
-from celldetective.utils.experiment import extract_position_name
 from celldetective.utils.model_getters import get_pair_signal_models_list
 from celldetective import get_logger
 import pandas as pd
@@ -574,8 +571,6 @@ class NeighPanel(ControlPanelBlock, Styles):
         # self.freeze()
         # QApplication.setOverrideCursor(Qt.WaitCursor)
 
-        loop_iter = 0
-
         if self.parent_window.position_list.isMultipleSelection():
             msgBox = QMessageBox()
             msgBox.setIcon(QMessageBox.Question)
@@ -588,91 +583,42 @@ class NeighPanel(ControlPanelBlock, Styles):
             if returnValue == QMessageBox.No:
                 return None
 
-        total_wells = len(self.well_index)
-        for i, w_idx in enumerate(self.well_index):
+        # The positions of every selected well, so that the neighborhoods are
+        # computed in one process and one progress window.
+        batch_structure = self.collect_batch_structure()
+        positions = [p for well in batch_structure.values() for p in well["positions"]]
 
-            well_progress = round(i / total_wells * 100)
+        for pos in positions:
+            os.makedirs(pos + os.sep.join(["output", "tables"]) + os.sep, exist_ok=True)
 
-            pos = self.parent_window.positions[w_idx]
-            pos_indices = self.parent_window.position_list.getSelectedIndices()
+        if self.neigh_action.isChecked() and self.protocols:
+            process_args = {
+                "batch_structure": batch_structure,
+                "protocols": self.protocols,
+                "img_shape": self.parent_window.image_shape,
+                "log_file": getattr(self.parent_window.parent_window, "log_file", None),
+                "measure_pairs": self.measure_pairs_action.isChecked(),
+            }
+            self.job = ProgressWindow(
+                NeighborhoodProcess,
+                parent_window=self,
+                title="Neighborhood",
+                process_args=process_args,
+            )
+            if self.job.exec_() == QDialog.Rejected:
+                return None
 
-            well = self.parent_window.wells[w_idx]
+        for pos in positions:
+            if self.measure_pairs_action.isChecked() and not self.neigh_action.isChecked():
+                rel_measure_at_position(pos)
 
-            total_positions = len(pos_indices)
-
-            # Optimization: Glob once per well - REMOVED as per user's instruction
-            # all_well_positions = natsorted(
-            #     glob(
-            #         well
-            #         + f"{os.path.split(well)[-1].replace('W','').replace(os.sep,'')}*{os.sep}"
-            #     )
-            # )
-
-            for j, pos_idx in enumerate(pos_indices):
-
-                pos_progress = round(j / total_positions * 100)
-
-                # if pos_idx < len(all_well_positions): # REMOVED as per user's instruction
-                #     self.pos = all_well_positions[pos_idx] # REMOVED as per user's instruction
-                # else: # REMOVED as per user's instruction
-                #     continue # REMOVED as per user's instruction
-                self.pos = natsorted(
-                    glob(
-                        well
-                        + f"{os.path.split(well)[-1].replace('W','').replace(os.sep,'')}*{os.sep}"
-                    )
-                )[pos_idx]
-                self.pos_name = extract_position_name(self.pos)
-                logger.info(f"Position {self.pos}...\nLoading stack movie...")
-
-                if not os.path.exists(self.pos + "output" + os.sep):
-                    os.mkdir(self.pos + "output" + os.sep)
-                if not os.path.exists(
-                    self.pos + os.sep.join(["output", "tables"]) + os.sep
-                ):
-                    os.mkdir(self.pos + os.sep.join(["output", "tables"]) + os.sep)
-
-                if self.neigh_action.isChecked():
-                    for protocol in self.protocols:
-
-                        process_args = {
-                            "pos": self.pos,
-                            "pos_name": self.pos_name,
-                            "protocol": protocol,
-                            "img_shape": self.parent_window.image_shape,
-                            "log_file": getattr(
-                                self.parent_window.parent_window, "log_file", None
-                            ),
-                            "well_progress": well_progress,
-                            "pos_progress": pos_progress,
-                            "measure_pairs": self.measure_pairs_action.isChecked(),
-                        }  # "n_threads": self.n_threads
-                        self.job = ProgressWindow(
-                            NeighborhoodProcess,
-                            parent_window=self,
-                            title="Neighborhood",
-                            process_args=process_args,
-                        )
-                        result = self.job.exec_()
-                        if result == QDialog.Accepted:
-                            pass
-                        elif result == QDialog.Rejected:
-                            return None
-
-                if (
-                    self.measure_pairs_action.isChecked()
-                    and not self.neigh_action.isChecked()
-                ):
-                    rel_measure_at_position(self.pos)
-
-                if self.signal_analysis_action.isChecked():
-
-                    analyze_pair_signals_at_position(
-                        self.pos,
-                        self.pair_signal_models_list.currentText(),
-                        use_gpu=self.parent_window.parent_window.use_gpu,
-                        populations=self.parent_window.populations,
-                    )
+            if self.signal_analysis_action.isChecked():
+                analyze_pair_signals_at_position(
+                    pos,
+                    self.pair_signal_models_list.currentText(),
+                    use_gpu=self.parent_window.parent_window.use_gpu,
+                    populations=self.parent_window.populations,
+                )
 
         self.parent_window.update_position_options()
         for action in [

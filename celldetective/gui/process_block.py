@@ -1843,39 +1843,6 @@ class ProcessPanel(ControlPanelBlock, Styles):
             self.job._ProgressWindow__runner.signals.result.connect(on_table_loaded)
             self.job.exec_()
 
-    def collect_batch_structure(self) -> Dict[int, Dict[str, Any]]:
-        """
-        List the positions selected in the control panel, grouped by well.
-
-        Returns
-        -------
-        dict
-            Maps the well index to its name and the paths of the selected positions.
-        """
-
-        batch_structure = {}
-
-        pos_indices = self.parent_window.position_list.getSelectedIndices()
-
-        for w_idx in self.well_index:
-            well = self.parent_window.wells[w_idx]
-
-            batch_structure[w_idx] = {"well_name": well, "positions": []}
-
-            all_well_positions = self.parent_window.position_paths[w_idx]
-            for pos_idx in pos_indices:
-                if pos_idx < len(all_well_positions):
-                    pos = all_well_positions[pos_idx]
-                else:
-                    logger.warning(
-                        f"Position index {pos_idx} out of range for well {well}"
-                    )
-                    continue
-
-                batch_structure[w_idx]["positions"].append(pos)
-
-        return batch_structure
-
     def load_available_tables(self) -> None:
         """
         Load the tables of the selected wells/positions from the control Panel for the population of interest
