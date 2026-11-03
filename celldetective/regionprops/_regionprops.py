@@ -249,12 +249,27 @@ class CustomRegionProps(RegionProperties):
         """
         if self._intensity_image is None:
             raise AttributeError("No intensity image specified.")
+        return self._intensity_image[self.slice]
+
+    def _image_intensity_double(self) -> np.ndarray:
+        """
+        Get the masked intensity image, from which scikit-image computes weighted properties.
+
+        ``image_intensity`` is left unmasked for custom measurements, but the weighted
+        centroid and moments read this method and describe the cell alone: the pixels
+        outside the mask are zero, as in scikit-image, whatever their value (even NaN).
+
+        Returns
+        -------
+        ndarray
+            Intensity image in double precision, zero outside of the mask.
+        """
         image = (
             self.image
             if not self._multichannel
             else np.expand_dims(self.image, self._ndim)
         )
-        return self._intensity_image[self.slice]
+        return np.where(image, self.image_intensity.astype(np.float64, copy=False), 0.0)
 
 
 def regionprops(
