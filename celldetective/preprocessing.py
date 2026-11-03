@@ -164,6 +164,10 @@ def _selected_positions(well_path: str, position_indices) -> np.ndarray:
     return positions[indices[~missing]]
 
 
+class UnfittableBackgroundError(ValueError):
+    """Too few background pixels are left in a frame to fit a background surface."""
+
+
 def _output_path(stack_path: str, prefix: Optional[str]) -> str:
     """Stack a correction writes from ``stack_path``: ``<prefix>_<file>``, or itself if None."""
     path, file = os.path.split(stack_path)
@@ -200,20 +204,64 @@ def already_corrected_movies(
         ``(stack_path, output_name)`` for each such movie: the stack that would be read, and
         the name of the stack that would be written next to it.
     """
+    return [
+        (stack_path, os.path.basename(_output_path(stack_path, "Corrected")))
+        for _, stack_path in _selected_movies(experiment, well_option, position_option)
+        if os.path.basename(stack_path).startswith("Corrected_")
+    ]
+
+
+def first_step_outputs(
+    experiment: str,
+    well_option: Union[str, int, List[Union[str, int]]] = "*",
+    position_option: Union[str, int, List[Union[str, int]]] = "*",
+) -> Dict[str, str]:
+    """
+    Stack that the first correction of a chain will write for each selected position.
+
+    To be read before the first correction runs: its output can then match the movie prefix.
+
+    Parameters
+    ----------
+    experiment : str
+        Path to the experiment.
+    well_option, position_option : str, int, or list of int, optional
+        Selection of wells and positions, as in the corrections. Defaults to all.
+
+    Returns
+    -------
+    dict
+        The path of the stack for each position that holds a movie, to pass as ``source_stacks``
+        to the next corrections of the chain.
+    """
+    return {
+        str(position): _output_path(stack_path, "Corrected")
+        for position, stack_path in _selected_movies(
+            experiment, well_option, position_option
+        )
+    }
+
+
+def _selected_movies(experiment: str, well_option, position_option):
+    """Yield ``(position, stack_path)`` for each selected position holding a movie."""
     movie_prefix = _configured_movie_prefix(experiment)
-    found = []
     for _, _, positions in _iter_wells(
         experiment, well_option, position_option, show_progress=False
     ):
         for position in positions:
             stack_path = get_position_movie_path(position, prefix=movie_prefix)
-            if stack_path is None:
-                continue
-            if os.path.basename(stack_path).startswith("Corrected_"):
-                found.append(
-                    (stack_path, os.path.basename(_output_path(stack_path, "Corrected")))
-                )
-    return found
+            if stack_path is not None:
+                yield position, stack_path
+
+
+def _position_stack(
+    position: str, movie_prefix: Optional[str], source_stacks: Optional[Dict[str, str]]
+) -> Optional[str]:
+    """Stack to read for a position: its ``source_stacks`` entry in a chain, else by prefix."""
+    if source_stacks is None:
+        return get_position_movie_path(position, prefix=movie_prefix)
+    stack_path = source_stacks.get(str(position))
+    return stack_path if stack_path is not None and os.path.exists(stack_path) else None
 
 
 def _check_operation(operation: str) -> None:
@@ -231,17 +279,19 @@ def _iter_movies(
     progress_callback: Optional[Callable] = None,
     show_progress: bool = True,
     stage: str = "correcting",
+    source_stacks: Optional[Dict[str, str]] = None,
 ):
     """
     Yield ``(pos_path, stack_path, stack_length)`` for each position that holds a movie.
 
     ``stack_length`` is read from the movie, or ``len_movie`` if it cannot be. Positions without
     a movie are skipped with a warning. The position progress is reported, under ``stage``, once
-    each position is done.
+    each position is done. ``source_stacks`` gives the stack of each position in a chain of
+    corrections, instead of ``movie_prefix``.
     """
     total = len(positions)
     for pidx, pos_path in enumerate(tqdm(positions, disable=not show_progress)):
-        stack_path = get_position_movie_path(pos_path, prefix=movie_prefix)
+        stack_path = _position_stack(pos_path, movie_prefix, source_stacks)
         if stack_path is None:
             logger.warning(f"No stack could be found in {pos_path}... Skip...")
         else:
@@ -456,6 +506,7 @@ def _estimate_well_background(
     fix_nan: bool = False,
     progress_callback: Optional[Callable] = None,
     show_progress: bool = False,
+    source_stacks: Optional[Dict[str, str]] = None,
 ) -> Optional[np.ndarray]:
     """
     Background of a well, estimated from its positions (see `estimate_background_per_condition`).
@@ -485,6 +536,7 @@ def _estimate_well_background(
         progress_callback=progress_callback,
         show_progress=show_progress,
         stage="estimating",
+        source_stacks=source_stacks,
     ):
         # Called with no progress to report, only to know whether to stop.
         if progress_callback is not None and progress_callback() is False:
@@ -626,6 +678,7 @@ def correct_background_model_free(
     progress_callback: Optional[Callable] = None,
     subset_indices: Optional[List[int]] = None,
     preview_frames: Optional[int] = None,
+    source_stacks: Optional[Dict[str, str]] = None,
     **kwargs: Any,
 ) -> Optional[List[np.ndarray]]:
     """
@@ -685,6 +738,10 @@ def correct_background_model_free(
             A callback function to be called at each step of the process (default is None).
     subset_indices : list of int, optional
             Absolute frame indices (IFDs) to correct for a preview, never exported.
+    source_stacks : dict, optional
+            In a chain of corrections, the stack to read for each position (see
+            `first_step_outputs`). A position it does not hold is skipped. Defaults to the movie
+            selected by the prefix.
     preview_frames : int, optional
             For a preview, the number of frames to correct, spread over each movie (see
             `preview_frame_indices`). Ignored if ``subset_indices`` is given.
@@ -729,7 +786,7 @@ def correct_background_model_free(
         well_name, _ = extract_well_name_and_number(well_path)
 
         # Nothing to correct, as in the empty folders of an uneven plate: not a failure.
-        if not any(get_position_movie_path(p, prefix=movie_prefix) for p in positions):
+        if not any(_position_stack(p, movie_prefix, source_stacks) for p in positions):
             logger.info(f"No movie to correct in well {well_name}... Skipping...")
             continue
 
@@ -737,9 +794,10 @@ def correct_background_model_free(
             progress_callback(status="Reconstructing background...")
 
         try:
-            # From all the positions of the well, not only those to correct.
+            # From all the positions of the well, not only those to correct. In a chain, only
+            # those of this run hold the output of the previous step: others may be stale.
             background = _estimate_well_background(
-                get_positions_in_well(well_path),
+                positions if source_stacks is not None else get_positions_in_well(well_path),
                 len_movie,
                 movie_prefix,
                 channel_index,
@@ -752,6 +810,7 @@ def correct_background_model_free(
                 fix_nan=fix_nan,
                 progress_callback=progress_callback,
                 show_progress=show_progress_per_pos,
+                source_stacks=source_stacks,
             )
         except Exception as e:
             logger.error(
@@ -774,6 +833,7 @@ def correct_background_model_free(
             len_movie,
             progress_callback=progress_callback,
             show_progress=show_progress_per_pos,
+            source_stacks=source_stacks,
         ):
             logger.info(
                 f"Applying the correction to position {extract_position_name(pos_path)}..."
@@ -1264,7 +1324,7 @@ def _fit_surface(
     )
 
     if np.count_nonzero(weights_fit) < len(initial_values):
-        raise ValueError(
+        raise UnfittableBackgroundError(
             "Too few background pixels are left to fit the background: "
             "the threshold is too low, or the field too dense."
         )
@@ -1406,6 +1466,7 @@ def correct_background_model(
     progress_callback: Optional[Callable] = None,
     downsample: int = 10,
     subset_indices: Optional[List[int]] = None,
+    source_stacks: Optional[Dict[str, str]] = None,
     **kwargs: Any,
 ) -> Optional[List[np.ndarray]]:
     """
@@ -1453,6 +1514,10 @@ def correct_background_model(
             The downsampling factor to reduce the number of points used for fitting (default is 10).
     subset_indices : list of int, optional
             Absolute frame indices (IFDs) to correct for a preview, never exported.
+    source_stacks : dict, optional
+            In a chain of corrections, the stack to read for each position (see
+            `first_step_outputs`). A position it does not hold is skipped. Defaults to the movie
+            selected by the prefix.
     **kwargs : Any
             Ignored.
 
@@ -1492,6 +1557,7 @@ def correct_background_model(
             len_movie,
             progress_callback=progress_callback,
             show_progress=show_progress_per_pos,
+            source_stacks=source_stacks,
         ):
             logger.info(
                 f"Applying the correction to position {extract_position_name(pos_path)}..."
@@ -1843,6 +1909,7 @@ def correct_channel_offset(
     movie_prefix: Optional[str] = None,
     export_prefix: str = "Corrected",
     progress_callback: Optional[Callable] = None,
+    source_stacks: Optional[Dict[str, str]] = None,
     **kwargs: Any,
 ) -> Optional[List[np.ndarray]]:
     """
@@ -1879,6 +1946,10 @@ def correct_channel_offset(
             The prefix for exported corrected stacks (default is 'Corrected').
     progress_callback : callable, optional
             A callback function to be called at each step of the process (default is None).
+    source_stacks : dict, optional
+            In a chain of corrections, the stack to read for each position (see
+            `first_step_outputs`). A position it does not hold is skipped. Defaults to the movie
+            selected by the prefix.
     **kwargs : Any
             Additional keyword arguments.
 
@@ -1906,6 +1977,7 @@ def correct_channel_offset(
             len_movie,
             progress_callback=progress_callback,
             show_progress=show_progress_per_pos,
+            source_stacks=source_stacks,
         ):
             logger.info(
                 f"Applying the correction to position {extract_position_name(pos_path)}..."
@@ -2060,6 +2132,7 @@ def register_stacks(
     movie_prefix: Optional[str] = None,
     export_prefix: str = "Corrected",
     progress_callback: Optional[Callable] = None,
+    source_stacks: Optional[Dict[str, str]] = None,
 ) -> Optional[List[np.ndarray]]:
     """
     Register the stacks of an experiment against their own drift.
@@ -2112,6 +2185,10 @@ def register_stacks(
             overwritten.
     progress_callback : callable, optional
             A callback function to be called at each step of the process (default is None).
+    source_stacks : dict, optional
+            In a chain of corrections, the stack to read for each position (see
+            `first_step_outputs`). A position it does not hold is skipped. Defaults to the movie
+            selected by the prefix.
 
     Returns
     -------
@@ -2137,6 +2214,7 @@ def register_stacks(
             len_movie,
             progress_callback=progress_callback,
             show_progress=show_progress_per_pos,
+            source_stacks=source_stacks,
         ):
             logger.info(
                 f"Registering position {extract_position_name(pos_path)} on channel {target_channel}..."

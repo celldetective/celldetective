@@ -392,6 +392,7 @@ class MeasurementProcess(Process):
                         haralick_options=self.haralick_options,
                         verbose=False,
                         normalisation_list=self.background_correction,
+                        frame=t,
                         spot_detection=self.spot_detection,
                     )
                     if self.trajectories is None:

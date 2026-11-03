@@ -50,7 +50,7 @@ from celldetective.utils.data_cleaning import (
     remove_trajectory_measurements,
 )
 from celldetective.utils.image_cleaning import interpolate_nan
-from celldetective.preprocessing import field_correction
+from celldetective.preprocessing import UnfittableBackgroundError, field_correction
 from celldetective.log_manager import get_logger
 import pandas as pd
 
@@ -448,8 +448,13 @@ def _apply_image_normalization(
     label: np.ndarray,
     normalisation_list: list,
     channels,
+    frame: Optional[int] = None,
 ) -> None:
     """Apply per-channel background correction in-place.
+
+    A frame whose background cannot be fitted is skipped for that channel with a warning: the
+    channel is set to NaN, so that its intensities are missing rather than uncorrected, and the
+    cells keep their rows and their other measurements.
 
     Parameters
     ----------
@@ -462,6 +467,8 @@ def _apply_image_normalization(
         'target_channel', 'correction_type', and model/distance/clip params.
     channels : list or array-like
         Channel names matching the last axis of *img*.
+    frame : int, optional
+        Frame being measured, named in the warning of a skipped correction.
     """
     channels_list = list(channels) if not isinstance(channels, list) else channels
     for norm in normalisation_list:
@@ -480,13 +487,21 @@ def _apply_image_normalization(
                 clip=norm["clip"],
             )
         else:
-            img[:, :, ind] = field_correction(
-                img[:, :, ind].copy(),
-                threshold=norm["threshold_on_std"],
-                operation=norm["operation"],
-                model=norm["model"],
-                clip=norm["clip"],
-            )
+            try:
+                img[:, :, ind] = field_correction(
+                    img[:, :, ind].copy(),
+                    threshold=norm["threshold_on_std"],
+                    operation=norm["operation"],
+                    model=norm["model"],
+                    clip=norm["clip"],
+                )
+            except UnfittableBackgroundError as e:
+                where = "this frame" if frame is None else f"frame {frame}"
+                logger.warning(
+                    f"Background correction skipped for {where}, channel '{target}': {e} "
+                    "The intensities of this channel are NaN in this frame."
+                )
+                img[:, :, ind] = np.nan
 
 
 def _get_border_suffix(d) -> str:
@@ -523,6 +538,7 @@ def measure_features(
     haralick_options: Optional[Dict[str, Any]] = None,
     verbose: bool = True,
     normalisation_list: Optional[List[Dict[str, Any]]] = None,
+    frame: Optional[int] = None,
     radial_intensity: Optional[Any] = None,
     radial_channel: Optional[Any] = None,
     spot_detection: Optional[Dict[str, Any]] = None,
@@ -548,6 +564,8 @@ def measure_features(
             If True, warnings will be logged.
     normalisation_list : list of dict, optional
             List of normalization operations to apply.
+    frame : int, optional
+            Frame being measured, named in the warning of a skipped correction.
     radial_intensity : Any, optional
             Deprecated/Unused parameter.
     radial_channel : Any, optional
@@ -596,7 +614,7 @@ def measure_features(
             df_spots = _run_spot_detection(img, label, spot_detection, channels)
 
         if normalisation_list:
-            _apply_image_normalization(img, label, normalisation_list, channels)
+            _apply_image_normalization(img, label, normalisation_list, channels, frame)
 
     # Initialize extra properties list and name check list
     extra = []  # Ensure 'extra' is defined regardless of import success

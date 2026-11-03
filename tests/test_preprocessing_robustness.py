@@ -1,12 +1,20 @@
 """What the corrections do when a run goes wrong, and when a movie is not what it seems."""
 
+import os
+from pathlib import Path
+
 import numpy as np
+import pandas as pd
 import pytest
 import tifffile
 
 import celldetective.preprocessing as preprocessing
+from celldetective.extra_properties import intensity_radial_gradient
+from celldetective.measure import measure_features
 from celldetective.preprocessing import (
+    UnfittableBackgroundError,
     already_corrected_movies,
+    first_step_outputs,
     correct_background_model,
     correct_background_model_free,
     correct_channel_offset,
@@ -131,6 +139,61 @@ def test_chain_step_reads_what_the_first_step_wrote(tmp_path):
     source = get_position_movie_path(str(movie_dir.parent), "Corrected_sample")
 
     assert source == str(movie_dir / "Corrected_sample.tif")
+
+
+def test_chain_reads_the_exact_stack_of_the_first_step_with_an_empty_prefix(tmp_path):
+    # "Corrected_*" would select the stale stack, which sorts first.
+    exp_dir, (movie_dir,) = write_experiment(tmp_path, [1], prefix="")
+    (movie_dir / "sample.tif").rename(movie_dir / "Alpha.tif")
+    sources = first_step_outputs(exp_dir)
+    assert [Path(s).name for s in sources.values()] == ["Corrected_Alpha.tif"]
+    _offset(exp_dir)
+    stale = movie_dir / "Corrected_Corrected_Alpha.tif"
+    stale.write_bytes((movie_dir / "Alpha.tif").read_bytes())
+    stale_bytes = stale.read_bytes()
+
+    _offset(exp_dir, movie_prefix="Corrected", export_prefix=None, source_stacks=sources)
+
+    assert stale.read_bytes() == stale_bytes
+    assert sorted(f.name for f in movie_dir.iterdir() if f.suffix == ".tif") == [
+        "Alpha.tif",
+        "Corrected_Alpha.tif",
+        "Corrected_Corrected_Alpha.tif",
+    ]
+
+
+def test_chained_model_free_ignores_the_stale_stack_of_another_position(tmp_path):
+    exp_dir, (kept, stale) = write_experiment(tmp_path, [2])
+    for movie_dir, level in ((kept, 7.0), (stale, 1000.0)):
+        tifffile.imwrite(
+            movie_dir / "Corrected_sample.tif",
+            np.full((3, FIELD, FIELD), level, dtype=np.float32),
+            imagej=True,
+            metadata={"axes": "TYX"},
+        )
+    position = str(kept.parent) + os.sep
+
+    (corrected,) = correct_background_model_free(
+        exp_dir,
+        position_option=[0],
+        target_channel="Channel1",
+        operation="subtract",
+        movie_prefix="Corrected",
+        source_stacks={position: str(kept / "Corrected_sample.tif")},
+        return_stacks=True,
+        **QUIET,
+    )
+
+    # With the stale position in the median, the background would not be the 7 of this one.
+    np.testing.assert_allclose(corrected, 0.0, atol=1e-5)
+
+
+def test_a_position_without_a_source_stack_is_skipped(tmp_path):
+    exp_dir, movie_dirs = write_experiment(tmp_path, [2], frames=1)
+
+    _offset(exp_dir, source_stacks={})
+
+    assert not [f for d in movie_dirs for f in d.glob("Corrected_*")]
 
 
 # ------------------------------------------------------------------ uneven wells
@@ -366,6 +429,48 @@ def test_division_by_a_background_below_zero_is_nan():
     np.testing.assert_allclose(
         corrected[background > 0], (image / background)[background > 0]
     )
+
+
+def test_measurement_skips_an_unfittable_frame_and_says_which(monkeypatch):
+    warned = []
+    monkeypatch.setattr("celldetective.measure.logger.warning", warned.append)
+    image = 100 + np.random.default_rng(0).normal(0, 5, (FIELD, FIELD, 2))
+    label = np.zeros((FIELD, FIELD), dtype=int)
+    label[20:30, 20:30] = 1
+    norm = dict(
+        correction_type="fit",
+        target_channel="first",
+        threshold_on_std=0.0,
+        operation="divide",
+        model="paraboloid",
+        clip=False,
+    )
+
+    measure = dict(features=["area", "intensity_mean"], channels=["first", "second"])
+
+    skipped = measure_features(
+        image.copy(), label, normalisation_list=[norm], frame=4, **measure
+    )
+    fitted = measure_features(
+        image.copy(), label, normalisation_list=[dict(norm, threshold_on_std=1000)], **measure
+    )
+    # The frames are concatenated at the end of a measurement.
+    table = pd.concat([fitted, skipped], ignore_index=True)
+
+    assert any("frame 4, channel 'first'" in message for message in warned)
+    assert table["area"].tolist() == [100, 100]
+    assert table["first_mean"].notna().tolist() == [True, False]
+    assert table["second_mean"].iloc[1] == pytest.approx(image[20:30, 20:30, 1].mean())
+
+
+def test_radial_gradient_of_an_empty_channel_is_missing():
+    mask = np.ones((9, 9), dtype=bool)
+
+    assert np.isnan(intensity_radial_gradient(mask, np.full((9, 9), np.nan))).all()
+
+
+def test_unfittable_background_is_a_value_error():
+    assert issubclass(UnfittableBackgroundError, ValueError)
 
 
 # ------------------------------------------------------------------ surfaces

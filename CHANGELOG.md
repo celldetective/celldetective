@@ -37,8 +37,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Submit warns before correcting a stack that a previous correction wrote, as
     an empty movie prefix or the prefix `Corrected_` selects on a re-run, and shows
     the name of the new stack. The correction runs only if accepted;
-  - the steps after the first read the stack the first step wrote, rather than
-    any stack starting with `Corrected`;
+  - the steps after the first read, position by position, the stack the first step
+    wrote, rather than any stack starting with `Corrected`. A model-free step of a
+    chain estimates its background from the positions of the run only, not from
+    stacks left by an earlier run;
   - wells with different numbers of positions: applying to all positions reaches
     every position of every well, instead of raising an error or leaving positions
     out silently;
@@ -46,8 +48,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     a threshold leaving no background pixel, which the fit answered with its
     starting values and the model-free correction with a stack of NaN; a well whose
     background could not be estimated, reported once the other wells are done;
-    an unknown operation or model. A measurement with a fit background correction
-    stops on such a frame too, rather than dividing by the starting values of the fit;
+    an unknown operation or model;
+  - a measurement with a fit background correction skips a frame whose background
+    cannot be fitted, with a warning naming the frame and channel, rather than dividing
+    by the starting values of the fit. The intensities of that channel are NaN in
+    that frame, and the cells keep their rows and their other measurements;
   - a division by a fitted background that is not positive gives NaN there;
   - `correct_background_model` uses its `activation_protocol`, which it logged but
     ignored;

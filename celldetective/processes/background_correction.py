@@ -74,6 +74,7 @@ class BackgroundCorrectionProcess(Process):
         movie_prefix = getattr(self, "movie_prefix", None)
         export_prefix = getattr(self, "export_prefix", "Corrected")
         correction_type = getattr(self, "correction_type", "model")
+        source_stacks = getattr(self, "source_stacks", None)
 
         # Timestamps for estimation
         self.t0_well = time.time()
@@ -218,6 +219,7 @@ class BackgroundCorrectionProcess(Process):
                     show_progress_per_pos=False,
                     movie_prefix=movie_prefix,
                     export_prefix=export_prefix,
+                    source_stacks=source_stacks,
                     progress_callback=progress_callback,
                     subset_indices=getattr(self, "subset_indices", None),
                     preview_frames=getattr(self, "preview_frames", None),
@@ -236,6 +238,7 @@ class BackgroundCorrectionProcess(Process):
                     show_progress_per_pos=False,
                     movie_prefix=movie_prefix,
                     export_prefix=export_prefix,
+                    source_stacks=source_stacks,
                     progress_callback=progress_callback,
                     correction_horizontal=getattr(self, "correction_horizontal", 0),
                     correction_vertical=getattr(self, "correction_vertical", 0),
@@ -255,6 +258,7 @@ class BackgroundCorrectionProcess(Process):
                     show_progress_per_pos=False,
                     movie_prefix=movie_prefix,
                     export_prefix=export_prefix,
+                    source_stacks=source_stacks,
                     progress_callback=progress_callback,
                     # register_stacks owns the defaults of the options left out.
                     **{
@@ -289,6 +293,7 @@ class BackgroundCorrectionProcess(Process):
                     show_progress_per_pos=False,
                     movie_prefix=movie_prefix,
                     export_prefix=export_prefix,
+                    source_stacks=source_stacks,
                     progress_callback=progress_callback,
                     downsample=getattr(self, "downsample", 10),
                     subset_indices=getattr(self, "subset_indices", None),

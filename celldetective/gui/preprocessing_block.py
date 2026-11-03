@@ -23,10 +23,7 @@ from celldetective.gui.base.control_panel_block import ControlPanelBlock
 from celldetective.gui.base.styles import Styles
 from celldetective.gui.base.help_panel import HelpButton, open_help, open_help_menu
 from celldetective.gui.gui_utils import generic_message
-from celldetective.preprocessing import (
-    _configured_movie_prefix,
-    already_corrected_movies,
-)
+from celldetective.preprocessing import already_corrected_movies, first_step_outputs
 from celldetective.gui.layouts import (
     BackgroundFitCorrectionLayout,
     BackgroundModelFreeCorrectionLayout,
@@ -214,8 +211,9 @@ class PreprocessingPanel(ControlPanelBlock, Styles):
             logger.info("Preprocessing cancelled: the movies are already corrected.")
             return None
 
-        # The steps after the first read what the first one wrote, not any "Corrected" stack.
-        chained_prefix = "Corrected_" + _configured_movie_prefix(self.exp_dir)
+        # The steps after the first read, position by position, what the first one writes. Known
+        # from now only: once written, those stacks can themselves match the movie prefix.
+        source_stacks = first_step_outputs(self.exp_dir, well_option, position_option)
 
         for k, correction_protocol in enumerate(self.protocol_layout.protocols):
 
@@ -223,7 +221,7 @@ class PreprocessingPanel(ControlPanelBlock, Styles):
             export_prefix = "Corrected"
             if k > 0:
                 # switch source stack to cumulate multi-channel preprocessing
-                movie_prefix = chained_prefix
+                movie_prefix = "Corrected"
                 export_prefix = None
 
             correction_type = correction_protocol["correction_type"]
@@ -246,6 +244,8 @@ class PreprocessingPanel(ControlPanelBlock, Styles):
                 "export": True,
                 "return_stacks": False,
             }
+            if k > 0:
+                process_args["source_stacks"] = source_stacks
             if correction_type in ("model-free", "fit"):
                 process_args["activation_protocol"] = [["gauss", 2], ["std", 4]]
             process_args.update(correction_protocol)

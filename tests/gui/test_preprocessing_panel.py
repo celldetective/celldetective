@@ -1,5 +1,6 @@
 """Submit of the preprocessing panel: scope, the warning on corrected movies, and the chain."""
 
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -166,7 +167,9 @@ def test_chain_reads_the_stack_of_the_first_step(experiment, launched, answers, 
 
     first, second = launched
     assert (first["movie_prefix"], first["export_prefix"]) == (None, "Corrected")
-    assert (second["movie_prefix"], second["export_prefix"]) == ("Corrected_sample", None)
+    assert second["export_prefix"] is None
+    assert "source_stacks" not in first
+    assert [Path(s).name for s in second["source_stacks"].values()] == ["Corrected_sample.tif"]
 
 
 def test_empty_protocol_list_asks_nothing_about_the_movies(experiment, launched, answers, qtbot):

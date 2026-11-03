@@ -329,6 +329,7 @@ def measure_index(indices: List[int]) -> None:
                 haralick_options=haralick_options,
                 verbose=False,
                 normalisation_list=background_correction,
+                frame=t,
                 spot_detection=spot_detection,
             )
             if trajectories is None:
