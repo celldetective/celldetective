@@ -265,6 +265,7 @@ class BackgroundCorrectionProcess(Process):
                             "upsample_factor",
                             "reference",
                             "downscale",
+                            "highpass_sigma",
                         )
                         if hasattr(self, key)
                     },

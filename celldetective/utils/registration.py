@@ -12,6 +12,10 @@ The correlation region is a disk of a given radius around the image centre, so t
 setting applies to every position of a batch. Everything outside the disk (vignetting, dust on
 the edge of the field, stitching or illumination artefacts) is ignored. Without a radius, the
 taper is applied separately along each axis over the full frame.
+
+Uneven illumination is fixed to the camera, not to the sample, so it pulls the correlation peak
+toward a null shift. Frames can be flattened first by subtracting a wide Gaussian blur of
+themselves, which leaves the structures that move with the sample.
 """
 
 from typing import Optional, Tuple
@@ -142,6 +146,36 @@ def prepare_for_correlation(frame: np.ndarray, window: np.ndarray) -> np.ndarray
     return centred * window
 
 
+def flatten_illumination(frame: np.ndarray, sigma: float) -> np.ndarray:
+    """
+    Remove what varies slowly across a frame, by subtracting its Gaussian blur.
+
+    Parameters
+    ----------
+    frame : numpy.ndarray
+        2D image. NaN pixels stay NaN, and do not spread into their surroundings.
+    sigma : float
+        Standard deviation of the blur in pixels. Structures much wider than this are removed.
+
+    Returns
+    -------
+    numpy.ndarray
+        The flattened frame.
+    """
+
+    from scipy.ndimage import gaussian_filter
+
+    frame = np.asarray(frame, dtype=float)
+    finite = np.isfinite(frame)
+    if np.all(finite):
+        return frame - gaussian_filter(frame, sigma)
+    # Normalized convolution: the blur only averages over the pixels that are known.
+    blurred = gaussian_filter(np.where(finite, frame, 0.0), sigma)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        blurred = blurred / gaussian_filter(finite.astype(float), sigma)
+    return frame - blurred
+
+
 def has_signal(frame: np.ndarray) -> bool:
     """Return True if ``frame`` has finite values that are not all equal."""
     return bool(np.any(np.isfinite(frame))) and np.nanmax(frame) != np.nanmin(frame)
@@ -152,6 +186,7 @@ def estimate_shift(
     moving: np.ndarray,
     window: np.ndarray,
     upsample_factor: int = 10,
+    highpass_sigma: Optional[float] = None,
 ) -> np.ndarray:
     """
     Estimate the translation that registers ``moving`` onto ``reference``.
@@ -166,6 +201,9 @@ def estimate_shift(
         Weights from :func:`tukey_window`.
     upsample_factor : int, optional
         Sub-pixel precision is ``1 / upsample_factor`` pixel. Default is 10.
+    highpass_sigma : float, optional
+        Flatten the frames with this blur first (see :func:`flatten_illumination`). None or 0
+        (default) leaves them as they are.
 
     Returns
     -------
@@ -179,12 +217,18 @@ def estimate_shift(
         return np.zeros(2)
 
     return _shift_between_spectra(
-        _spectrum(reference, window), _spectrum(moving, window), upsample_factor
+        _spectrum(reference, window, highpass_sigma),
+        _spectrum(moving, window, highpass_sigma),
+        upsample_factor,
     )
 
 
-def _spectrum(frame: np.ndarray, window: np.ndarray) -> np.ndarray:
+def _spectrum(
+    frame: np.ndarray, window: np.ndarray, highpass_sigma: Optional[float] = None
+) -> np.ndarray:
     """Fourier transform of the prepared frame, computed once per frame."""
+    if highpass_sigma:
+        frame = flatten_illumination(frame, highpass_sigma)
     return np.fft.fft2(prepare_for_correlation(frame, window))
 
 
@@ -209,6 +253,7 @@ def estimate_drift(
     reference: str = "previous",
     upsample_factor: int = 10,
     progress_callback=None,
+    highpass_sigma: Optional[float] = None,
 ) -> np.ndarray:
     """
     Estimate the shift of every frame of a single-channel sequence.
@@ -229,6 +274,9 @@ def estimate_drift(
         Sub-pixel precision factor passed to :func:`estimate_shift`. Default is 10.
     progress_callback : callable, optional
         Called as ``progress_callback(iter=k)`` after each frame.
+    highpass_sigma : float, optional
+        Flatten the frames with this blur first (see :func:`flatten_illumination`). None or 0
+        (default) leaves them as they are.
 
     Returns
     -------
@@ -255,10 +303,10 @@ def estimate_drift(
             shifts.append(shifts[-1] if shifts else np.zeros(2))
         elif anchor is None:
             # Every frame before the first one with signal has a zero shift.
-            anchor = _spectrum(frame, window)
+            anchor = _spectrum(frame, window, highpass_sigma)
             shifts.append(np.zeros(2))
         else:
-            spectrum = _spectrum(frame, window)
+            spectrum = _spectrum(frame, window, highpass_sigma)
             step = _shift_between_spectra(anchor, spectrum, upsample_factor)
             if reference == "first":
                 shifts.append(step)

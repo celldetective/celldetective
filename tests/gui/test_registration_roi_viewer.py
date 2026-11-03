@@ -31,6 +31,15 @@ def options_layout(qtbot):
     return RegistrationOptionsLayout(parent)
 
 
+def test_flattening_goes_into_the_protocol(options_layout):
+    assert options_layout.generate_instructions()
+    assert options_layout.instructions["highpass_sigma"] == 20
+
+    options_layout.highpass_le.setText("0")
+    assert options_layout.generate_instructions()
+    assert options_layout.instructions["highpass_sigma"] == 0
+
+
 def test_roi_viewer_matches_registration_window_and_sets_parent(
     qtbot, stack_path, options_layout
 ):

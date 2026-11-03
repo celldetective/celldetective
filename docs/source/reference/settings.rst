@@ -433,6 +433,7 @@ The drift is estimated on one channel by Fourier phase cross-correlation and the
 *   **Tukey α**: Fraction of the disk smoothly faded to zero at its edge, between ``0`` (no taper) and ``1`` (Hann window). Default ``0.25``.
 *   **Upsampling**: Sub-pixel precision factor: shifts are measured to 1/upsampling of a pixel (default ``10``).
 *   **Downscale**: Block-averaging factor applied to the registration channel before the correlation; the rescaled shift is applied at full resolution (default ``1``, no downscaling).
+*   **Flatten**: Radius (in pixels) of the Gaussian blur subtracted from the registration channel before the correlation, so that uneven illumination does not hide the drift. ``0`` disables it (default ``20``).
 *   **Reference**: ``previous`` correlates each frame with the previous one and accumulates the shifts (default); ``first`` correlates each frame with the first frame.
 
 .. _ref_signal_settings:

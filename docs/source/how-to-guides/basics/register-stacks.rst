@@ -38,6 +38,7 @@ Set up the registration
 
    *   **Upsampling**: the shift is measured to 1/*upsampling* of a pixel (default ``10``).
    *   **Downscale**: estimate the drift on a reduced image (block averaging), which is faster on large frames. The shift is applied at full resolution (default ``1``, no downscaling).
+   *   **Flatten**: subtract a Gaussian blur of this radius, in pixels, from the registration channel before the correlation, so that uneven illumination does not hide the drift (default ``20``, ``0`` to disable). It is slower on large frames, unless they are downscaled.
    *   **Reference**: ``previous`` correlates each frame with the one before and adds up the shifts, which follows slow changes of the sample; ``first`` correlates every frame with the first one, which does not accumulate errors but fails when the field changes a lot over the movie.
 
 #. Press :icon:`plus,#1565c0` :blue:`Add correction`. The registration is added to the list of corrections to apply.

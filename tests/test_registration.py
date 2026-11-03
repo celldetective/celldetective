@@ -9,6 +9,7 @@ from celldetective.preprocessing import register_single_stack, register_stacks
 from celldetective.utils.registration import (
     downscale_frame,
     estimate_drift,
+    flatten_illumination,
     estimate_shift,
     tukey_window,
 )
@@ -187,6 +188,59 @@ def test_register_single_stack_rejects_factor_below_one(tmp_path, parameter):
             nbr_channels=2,
             **{parameter: 0},
         )
+
+
+def _faint_drift_under_uneven_illumination():
+    """Faint texture drifting by 20 px under an illumination fixed to the camera."""
+    size = 256
+    margin = 30
+    texture = _texture(seed=3, size=size + 2 * margin) * 0.1
+    yy, xx = np.mgrid[:size, :size]
+    illumination = 100 + 400 * (
+        1 - 0.5 * ((yy - size / 2) ** 2 + (xx - size / 2) ** 2) / (size / 2) ** 2
+    )
+    rng = np.random.default_rng(1)
+    drifts = range(0, 21, 2)
+    frames = [
+        texture[margin + d : margin + d + size, margin : margin + size]
+        + illumination
+        + rng.normal(0, 3, (size, size))
+        for d in drifts
+    ]
+    return frames, tukey_window((size, size), alpha=0.25)
+
+
+def test_flattening_recovers_a_drift_that_illumination_hides():
+    frames, window = _faint_drift_under_uneven_illumination()
+
+    plain = estimate_drift(frames, window)
+    flattened = estimate_drift(frames, window, highpass_sigma=20)
+
+    assert abs(plain[-1, 0] - 20) > 5
+    assert flattened[-1, 0] == pytest.approx(20, abs=1)
+
+
+def test_flatten_illumination_removes_a_gradient_and_keeps_nans():
+    yy, xx = np.mgrid[:128, :128]
+    frame = 2.0 * xx + 3.0 * yy
+    frame[40:45, 40:45] = np.nan
+
+    flattened = flatten_illumination(frame, 10)
+
+    assert np.array_equal(np.isnan(flattened), np.isnan(frame))
+    # A plane is its own blur, away from the border and from the unknown pixels.
+    assert np.nanmax(np.abs(flattened[70:100, 70:100])) < 0.1
+
+
+def test_flattening_still_bridges_a_blank_frame():
+    frames = _drifting_crops(DRIFTS)
+    frames[2] = np.zeros_like(frames[2])
+    window = tukey_window((FIELD, FIELD), alpha=0.25)
+
+    shifts = estimate_drift(frames, window, highpass_sigma=20)
+
+    np.testing.assert_allclose(shifts[2], shifts[1])
+    np.testing.assert_allclose(shifts[-1], DRIFTS[-1], atol=0.3)
 
 
 def test_downscale_frame_block_average():

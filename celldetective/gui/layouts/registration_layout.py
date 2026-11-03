@@ -118,6 +118,19 @@ class RegistrationOptionsLayout(QVBoxLayout, Styles):
             "Faster on large images. 1 = no downscaling."
         )
 
+        self.highpass_lbl = QLabel("Flatten: ")
+        self.highpass_le = ThresholdLineEdit(
+            init_value=20,
+            connected_buttons=[self.add_correction_btn],
+            placeholder="blur radius in pixels, 0 to disable",
+            bottom=0.0,
+        )
+        self.highpass_le.setToolTip(
+            "Subtract a Gaussian blur of this radius (pixels) from the registration channel\n"
+            "before the correlation, so that uneven illumination does not hide the drift.\n"
+            "Slower on large images, unless downscaled. 0 = disabled."
+        )
+
         self.reference_lbl = QLabel("Reference: ")
         self.reference_cb = QComboBox()
         self.reference_cb.addItems(["previous", "first"])
@@ -139,6 +152,7 @@ class RegistrationOptionsLayout(QVBoxLayout, Styles):
             (self.alpha_lbl, self.alpha_le),
             (self.upsample_lbl, self.upsample_le),
             (self.downscale_lbl, self.downscale_le),
+            (self.highpass_lbl, self.highpass_le),
             (self.reference_lbl, self.reference_cb),
         ]:
             hbox = QHBoxLayout()
@@ -177,7 +191,8 @@ class RegistrationOptionsLayout(QVBoxLayout, Styles):
         alpha = self.alpha_le.get_threshold()
         upsample = self.upsample_le.get_threshold()
         downscale = self.downscale_le.get_threshold()
-        if alpha is None or upsample is None or downscale is None:
+        highpass = self.highpass_le.get_threshold()
+        if alpha is None or upsample is None or downscale is None or highpass is None:
             return False
         valid_radius, radius = self.radius_le.value_or_warn()
         if not valid_radius:
@@ -199,6 +214,7 @@ class RegistrationOptionsLayout(QVBoxLayout, Styles):
             "tukey_alpha": alpha,
             "upsample_factor": int(upsample),
             "downscale": int(downscale),
+            "highpass_sigma": highpass,
             "reference": self.reference_cb.currentText(),
         }
         return True

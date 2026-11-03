@@ -2052,6 +2052,7 @@ def register_stacks(
     upsample_factor: int = 10,
     reference: Literal["previous", "first"] = "previous",
     downscale: int = 1,
+    highpass_sigma: Optional[float] = 20.0,
     show_progress_per_well: bool = True,
     show_progress_per_pos: bool = True,
     export: bool = False,
@@ -2092,6 +2093,10 @@ def register_stacks(
     downscale : int, optional
             Estimate the drift on the registration channel reduced by this factor, then apply
             the rescaled shifts at full resolution. 1 (default) disables downscaling.
+    highpass_sigma : float, optional
+            Flatten the registration channel before the correlation, by subtracting a Gaussian
+            blur of this standard deviation in pixels, so that uneven illumination does not pull
+            the drift toward zero (default 20). None or 0 disables it.
     show_progress_per_well : bool, optional
             Whether to show progress for each well (default is True).
     show_progress_per_pos : bool, optional
@@ -2146,6 +2151,7 @@ def register_stacks(
                 upsample_factor=upsample_factor,
                 reference=reference,
                 downscale=downscale,
+                highpass_sigma=highpass_sigma,
                 export=export,
                 prefix=export_prefix,
                 return_stacks=return_stacks,
@@ -2165,6 +2171,7 @@ def register_stacks(
                         "upsample_factor": upsample_factor,
                         "reference": reference,
                         "downscale": downscale,
+                        "highpass_sigma": highpass_sigma,
                         "movie_prefix": movie_prefix,
                         "export_prefix": export_prefix,
                     },
@@ -2210,6 +2217,7 @@ def register_single_stack(
     upsample_factor: int = 10,
     reference: Literal["previous", "first"] = "previous",
     downscale: int = 1,
+    highpass_sigma: Optional[float] = 20.0,
     export: bool = False,
     prefix: Optional[str] = "Corrected",
     return_stacks: bool = True,
@@ -2244,6 +2252,9 @@ def register_single_stack(
             Block-averaging factor applied to the registration channel before the correlation.
             The shifts are multiplied back by it and applied to the full-resolution stack.
             1 (default) disables downscaling.
+    highpass_sigma : float, optional
+            Standard deviation in full-scale pixels of the Gaussian blur subtracted from the
+            registration channel before the correlation (default 20). None or 0 disables it.
     export : bool, optional
             Whether to export the registered stack (default is False).
     prefix : str, optional
@@ -2314,6 +2325,7 @@ def register_single_stack(
         # keep the requested precision in full-scale pixels
         upsample_factor=upsample_factor * downscale,
         progress_callback=drift_progress,
+        highpass_sigma=highpass_sigma / downscale if highpass_sigma else None,
     ) * downscale
     logger.info(
         f"Estimated drift: max |dy|={np.abs(shifts[:, 0]).max():.2f} px, max |dx|={np.abs(shifts[:, 1]).max():.2f} px"

@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- Stack registration flattens the registration channel before the correlation, by
+  subtracting a Gaussian blur of 20 pixels. Uneven illumination, fixed to the camera,
+  made it underestimate the drift of faint structures. The shifts of existing workflows
+  can change slightly: set **Flatten** to `0` for the previous estimate. It adds to
+  the time per frame, about 0.75 s at 2048 px without downscaling.
 - The initial contrast of the image viewers, the signal and pair annotators and
   napari leaves out a border of 5% of the frame on each side, where
   registration leaves zeros that dragged the lower bound (and the slider range)
