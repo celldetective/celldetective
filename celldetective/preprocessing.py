@@ -138,12 +138,90 @@ def _iter_wells(
     for k, well_path in enumerate(tqdm(wells[well_indices], disable=not show_progress)):
         if progress_callback:
             progress_callback(level="well", iter=k, total=total)
-        positions = get_positions_in_well(well_path)[position_indices]
-        if isinstance(positions[0], np.ndarray):
-            positions = positions[0]
-        yield well_indices[k], well_path, positions
+        yield well_indices[k], well_path, _selected_positions(well_path, position_indices)
         if progress_callback:
             progress_callback(level="well", iter=k + 1, total=total)
+
+
+def _selected_positions(well_path: str, position_indices) -> np.ndarray:
+    """
+    Positions of a well at ``position_indices`` (None for all of them).
+
+    Wells can hold different numbers of positions: an index past the end of this well is left
+    out with a warning, so that it does not stop the correction of the other wells.
+    """
+    positions = get_positions_in_well(well_path)
+    if position_indices is None:
+        return positions
+    indices = np.atleast_1d(position_indices).astype(int)
+    missing = indices >= len(positions)
+    if np.any(missing):
+        logger.warning(
+            f"Well {extract_well_name_and_number(well_path)[0]} holds {len(positions)} "
+            f"position(s): positions {sorted(indices[missing].tolist())} "
+            "do not exist there and are skipped..."
+        )
+    return positions[indices[~missing]]
+
+
+def _output_path(stack_path: str, prefix: Optional[str]) -> str:
+    """Stack a correction writes from ``stack_path``: ``<prefix>_<file>``, or itself if None."""
+    path, file = os.path.split(stack_path)
+    return os.sep.join([path, file if prefix is None else "_".join([prefix, file])])
+
+
+def _configured_movie_prefix(experiment: str) -> str:
+    """Movie prefix of the experiment configuration."""
+    return config_section_to_dict(get_config(experiment), "MovieSettings")["movie_prefix"]
+
+
+def already_corrected_movies(
+    experiment: str,
+    well_option: Union[str, int, List[Union[str, int]]] = "*",
+    position_option: Union[str, int, List[Union[str, int]]] = "*",
+) -> List[tuple]:
+    """
+    Find the movies a correction would read although a previous correction wrote them.
+
+    This happens when the movie prefix selects the corrected stacks: an empty prefix takes
+    any stack, and a guide asks to set the prefix to ``Corrected_`` once the movies are
+    corrected. A new correction then applies on top of the previous one.
+
+    Parameters
+    ----------
+    experiment : str
+        Path to the experiment.
+    well_option, position_option : str, int, or list of int, optional
+        Selection of wells and positions, as in the corrections. Defaults to all.
+
+    Returns
+    -------
+    list of tuple
+        ``(stack_path, output_name)`` for each such movie: the stack that would be read, and
+        the name of the stack that would be written next to it.
+    """
+    movie_prefix = _configured_movie_prefix(experiment)
+    found = []
+    for _, _, positions in _iter_wells(
+        experiment, well_option, position_option, show_progress=False
+    ):
+        for position in positions:
+            stack_path = get_position_movie_path(position, prefix=movie_prefix)
+            if stack_path is None:
+                continue
+            if os.path.basename(stack_path).startswith("Corrected_"):
+                found.append(
+                    (stack_path, os.path.basename(_output_path(stack_path, "Corrected")))
+                )
+    return found
+
+
+def _check_operation(operation: str) -> None:
+    """Refuse a background correction operation that does not exist."""
+    if operation not in ("divide", "subtract"):
+        raise ValueError(
+            f"Unknown operation {operation!r}: it must be 'divide' or 'subtract'."
+        )
 
 
 def _iter_movies(
@@ -195,8 +273,9 @@ def _write_frames(
     n_frames : int
         Number of frames in ``frames``.
     stack_path : str
-        Source stack. The frames are written next to it as ``<prefix>_<file>``, or over it
-        through a temporary file if ``prefix`` is None.
+        Source stack. The frames are written next to it as ``<prefix>_<file>``, or over it if
+        ``prefix`` is None. Either way they go through a temporary file, so an interrupted
+        correction leaves any stack already there intact, and no truncated stack.
     prefix : str or None
         Prefix of the exported file.
     export : bool
@@ -211,30 +290,33 @@ def _write_frames(
     """
     import tifffile.tifffile as tiff
 
-    path, file = os.path.split(stack_path)
-    output_path = os.sep.join(
-        [path, file if prefix is None else "_".join([prefix, file])]
-    )
-    write_path = os.sep.join([path, "temp_" + file]) if prefix is None else output_path
+    output_path = _output_path(stack_path, prefix)
+    # Not ending in .tif: left behind by a killed process, no movie prefix can select it.
+    write_path = output_path + ".tmp"
     writer = (
         tiff.TiffWriter(write_path, bigtiff=True, imagej=True)
         if export
         else nullcontext()
     )
     stack = None
-    with writer as tif:
-        for t, frame in enumerate(frames):
-            if return_stacks:
-                if stack is None:
-                    stack = np.empty((n_frames,) + frame.shape, dtype=np.float32)
-                stack[t] = frame
-            if export:
-                tif.write(
-                    np.moveaxis(frame, -1, 0).astype(np.float32, copy=False),
-                    contiguous=True,
-                )
-    if export and prefix is None:
-        os.replace(write_path, output_path)
+    try:
+        with writer as tif:
+            for t, frame in enumerate(frames):
+                if return_stacks:
+                    if stack is None:
+                        stack = np.empty((n_frames,) + frame.shape, dtype=np.float32)
+                    stack[t] = frame
+                if export:
+                    tif.write(
+                        np.moveaxis(frame, -1, 0).astype(np.float32, copy=False),
+                        contiguous=True,
+                    )
+        if export:
+            os.replace(write_path, output_path)
+    except BaseException:
+        if export and os.path.exists(write_path):
+            os.remove(write_path)
+        raise
     return stack
 
 
@@ -387,7 +469,8 @@ def _estimate_well_background(
     ------
     ValueError
         If no position holds a frame to estimate the background from: the median of nothing
-        is a scalar NaN, which would correct every pixel to NaN.
+        is a scalar NaN, which would correct every pixel to NaN. Likewise if the threshold
+        masks every pixel.
     """
     logger.info(
         f"Reconstruct a background from positions: {[extract_position_name(p) for p in positions]}..."
@@ -445,6 +528,19 @@ def _estimate_well_background(
         raise ValueError("no position to estimate the background from")
 
     background = np.nanmedian(background_per_position, axis=0).astype(float)
+    # The border is never masked (the filters are unreliable there), so it says nothing.
+    interior = unpad(background, edge)
+    if not np.any(np.isfinite(interior)):
+        raise ValueError(
+            "every pixel is masked as non-background: the threshold is too low, "
+            "or the frames are blank"
+        )
+    unknown = np.mean(np.isnan(interior))
+    if unknown > 0.5:
+        logger.warning(
+            f"The background is unknown over {unknown:.0%} of the frame: check the threshold, "
+            "or estimate it from more frames or positions..."
+        )
     if progress_callback:
         progress_callback(image_preview=background)
     if offset is not None:
@@ -600,10 +696,12 @@ def correct_background_model_free(
     list of numpy.ndarray, optional
             A list of corrected image stacks if `return_stacks` is True.
 
-    Notes
-    -----
-    The function uses several helper functions, including `interpret_wells_and_positions`,
-    `estimate_background_per_condition`, and `apply_background_to_stack`.
+    Raises
+    ------
+    ValueError
+            If the operation does not exist.
+    RuntimeError
+            Once the other wells are done, if the background of a well could not be estimated.
 
     Examples
     --------
@@ -614,10 +712,12 @@ def correct_background_model_free(
 
     """
 
+    _check_operation(operation)
     len_movie, movie_prefix, channel_index, nbr_channels = _correction_inputs(
         experiment, target_channel, movie_prefix
     )
     stacks = []
+    skipped_wells = []
 
     for _, well_path, positions in _iter_wells(
         experiment,
@@ -627,6 +727,11 @@ def correct_background_model_free(
         show_progress=show_progress_per_well,
     ):
         well_name, _ = extract_well_name_and_number(well_path)
+
+        # Nothing to correct, as in the empty folders of an uneven plate: not a failure.
+        if not any(get_position_movie_path(p, prefix=movie_prefix) for p in positions):
+            logger.info(f"No movie to correct in well {well_name}... Skipping...")
+            continue
 
         if progress_callback:
             progress_callback(status="Reconstructing background...")
@@ -652,10 +757,11 @@ def correct_background_model_free(
             logger.error(
                 f'Background could not be estimated due to error "{e}"... Skipping well {well_name}...'
             )
+            skipped_wells.append(f"{well_name}: {e}")
             continue
         if background is None:
             logger.info("Background correction cancelled.")
-            break
+            return stacks if return_stacks else None
 
         if progress_callback:
             progress_callback(
@@ -725,6 +831,12 @@ def correct_background_model_free(
             else:
                 del corrected_stack
             collect()
+
+    if skipped_wells:
+        raise RuntimeError(
+            "The background could not be estimated, these wells were not corrected: "
+            + "; ".join(skipped_wells)
+        )
 
     if return_stacks:
         return stacks
@@ -913,9 +1025,7 @@ def apply_background_to_stack(
             logger.error("stack length not provided")
             return None
 
-    if operation not in ("divide", "subtract"):
-        logger.error("Operation not supported... Abort.")
-        return None
+    _check_operation(operation)
 
     background = np.asarray(background, dtype=float)
     if fix_nan:
@@ -1122,10 +1232,61 @@ def plane(
     return a * x + b * y + c
 
 
+def _fit_surface(
+    image: np.ndarray,
+    surface: Callable,
+    initial_values: Dict[str, float],
+    cell_masks: Optional[np.ndarray],
+    edge_exclusion: Optional[int],
+    downsample: int,
+) -> np.ndarray:
+    """
+    Fit ``surface`` to the image by least squares, over the pixels that are not masked.
+
+    Raises
+    ------
+    ValueError
+        If too few pixels are left to fit the surface. Weighted to nothing, the fit would
+        otherwise return its starting values as if it had worked.
+    """
+    from lmfit import Parameters, Model
+
+    xx, yy = np.meshgrid(np.arange(image.shape[1]), np.arange(image.shape[0]))
+    weights = np.ones_like(xx, dtype=float)
+    if cell_masks is not None:
+        weights[np.where(cell_masks > 0)] = 0.0
+
+    # Downsample for faster fitting
+    step = max(int(downsample), 1)
+    image_fit, xx_fit, yy_fit, weights_fit = (
+        (a if edge_exclusion is None else unpad(a, edge_exclusion))[::step, ::step]
+        for a in (image, xx, yy, weights)
+    )
+
+    if np.count_nonzero(weights_fit) < len(initial_values):
+        raise ValueError(
+            "Too few background pixels are left to fit the background: "
+            "the threshold is too low, or the field too dense."
+        )
+
+    params = Parameters()
+    for name, value in initial_values.items():
+        params.add(name, value=value)
+    model = Model(surface, independent_vars=["x", "y"])
+    result = model.fit(
+        image_fit, x=xx_fit, y=yy_fit, weights=weights_fit, params=params, max_nfev=3000
+    )
+    del model
+    collect()
+
+    return surface(xx, yy, **result.params)
+
+
 def fit_plane(
     image: np.ndarray,
     cell_masks: Optional[np.ndarray] = None,
     edge_exclusion: Optional[int] = None,
+    downsample: int = 1,
 ) -> np.ndarray:
     """
     Fit a plane to the given image data.
@@ -1144,6 +1305,9 @@ def fit_plane(
             will be excluded from the fitting process (default is None).
     edge_exclusion : int, optional
             The size of the edge to exclude from the fitting process (default is None).
+    downsample : int, optional
+            The downsampling factor to reduce the number of points used for fitting.
+            Default is 1, all the points.
 
     Returns
     -------
@@ -1162,37 +1326,9 @@ def fit_plane(
     plane : The plane function used for fitting.
     """
 
-    data = np.empty(image.shape)
-    x = np.arange(0, image.shape[1])
-    y = np.arange(0, image.shape[0])
-    xx, yy = np.meshgrid(x, y)
-
-    from lmfit import Parameters, Model
-
-    params = Parameters()
-    params.add("a", value=1)
-    params.add("b", value=1)
-    params.add("c", value=1)
-
-    model = Model(plane, independent_vars=["x", "y"])
-
-    weights = np.ones_like(xx, dtype=float)
-    if cell_masks is not None:
-        weights[np.where(cell_masks > 0)] = 0.0
-
-    if edge_exclusion is not None:
-        xx = unpad(xx, edge_exclusion)
-        yy = unpad(yy, edge_exclusion)
-        weights = unpad(weights, edge_exclusion)
-        image = unpad(image, edge_exclusion)
-
-    result = model.fit(image, x=xx, y=yy, weights=weights, params=params, max_nfev=3000)
-    del model
-    collect()
-
-    xx, yy = np.meshgrid(x, y)
-
-    return plane(xx, yy, **result.params)
+    return _fit_surface(
+        image, plane, dict(a=1, b=1, c=1), cell_masks, edge_exclusion, downsample
+    )
 
 
 def fit_paraboloid(
@@ -1241,55 +1377,14 @@ def fit_paraboloid(
     paraboloid : The paraboloid function used for fitting.
     """
 
-    data = np.empty(image.shape)
-    x = np.arange(0, image.shape[1])
-    y = np.arange(0, image.shape[0])
-    xx, yy = np.meshgrid(x, y)
-
-    from lmfit import Parameters, Model
-
-    params = Parameters()
-    params.add("a", value=1.0e-05)
-    params.add("b", value=1.0e-05)
-    params.add("c", value=1.0e-06)
-    params.add("d", value=0.01)
-    params.add("e", value=0.01)
-    params.add("g", value=100)
-
-    model = Model(paraboloid, independent_vars=["x", "y"])
-
-    weights = np.ones_like(xx, dtype=float)
-    if cell_masks is not None:
-        weights[np.where(cell_masks > 0)] = 0.0
-
-    if edge_exclusion is not None:
-        xx = unpad(xx, edge_exclusion)
-        yy = unpad(yy, edge_exclusion)
-        weights = unpad(weights, edge_exclusion)
-        image = unpad(image, edge_exclusion)
-
-    # Downsample for faster fitting
-    if downsample > 1:
-        image_fit = image[::downsample, ::downsample]
-        xx_fit = xx[::downsample, ::downsample]
-        yy_fit = yy[::downsample, ::downsample]
-        weights_fit = weights[::downsample, ::downsample]
-    else:
-        image_fit = image
-        xx_fit = xx
-        yy_fit = yy
-        weights_fit = weights
-
-    result = model.fit(
-        image_fit, x=xx_fit, y=yy_fit, weights=weights_fit, params=params, max_nfev=3000
+    return _fit_surface(
+        image,
+        paraboloid,
+        dict(a=1.0e-05, b=1.0e-05, c=1.0e-06, d=0.01, e=0.01, g=100),
+        cell_masks,
+        edge_exclusion,
+        downsample,
     )
-
-    del model
-    collect()
-
-    xx, yy = np.meshgrid(x, y)
-
-    return paraboloid(xx, yy, **result.params)
 
 
 def correct_background_model(
@@ -1378,6 +1473,7 @@ def correct_background_model(
     fit_and_apply_model_background_to_stack : Function to fit and apply background correction to an image stack.
     """
 
+    _check_operation(operation)
     len_movie, movie_prefix, channel_index, nbr_channels = _correction_inputs(
         experiment, target_channel, movie_prefix
     )
@@ -1410,6 +1506,7 @@ def correct_background_model(
                 operation=operation,
                 clip=clip,
                 export=export,
+                activation_protocol=activation_protocol,
                 prefix=export_prefix,
                 return_stacks=return_stacks,
                 progress_callback=progress_callback,
@@ -1618,6 +1715,8 @@ def field_correction(
     - Next, it fits a background model to the image using the specified model.
     - Depending on the operation specified, it either divides or subtracts the background from the image.
     - If `clip` is True and operation is 'subtract', negative values in the corrected image are clipped to 0.
+    - A division is NaN where the fitted background is not positive: the ratio means nothing there.
+    - A ValueError is raised if the operation does not exist or too few background pixels are left to fit.
     - If `return_bg` is True, the function returns a tuple containing the corrected image and the background.
 
     See Also
@@ -1626,36 +1725,46 @@ def field_correction(
     threshold_image : Function to apply thresholding to an image.
     """
 
+    _check_operation(operation)
     target_copy = img.copy().astype(float)
     if np.percentile(target_copy.flatten(), 99.9) == 0.0:
+        # A blank frame: nothing was fitted.
+        if return_bg:
+            return target_copy, np.full(target_copy.shape, np.nan)
         return target_copy
 
     edge = estimate_unreliable_edge(activation_protocol)
     mask = _non_background_mask(target_copy, threshold, activation_protocol, edge).astype(
         int
     )
+    masked_fraction = np.mean(unpad(mask, edge))
+    if masked_fraction > 0.75:
+        # On simulated cells the fit held up to 66% of the pixels masked, and failed at 89%.
+        logger.warning(
+            f"{masked_fraction:.0%} of the frame is masked as non-background: the fitted "
+            "background may be unreliable. Check the threshold, or consider a model-free correction."
+        )
     background = fit_background_model(
         img, cell_masks=mask, model=model, edge_exclusion=edge, downsample=downsample
     )
 
     if operation == "divide":
-        correction = np.divide(img, background, where=background == background)
-        correction[background != background] = np.nan
-        correction[img != img] = np.nan
-        fill_val = 1.0
-
-    elif operation == "subtract":
-        correction = np.subtract(img, background, where=background == background)
-        correction[background != background] = np.nan
-        correction[img != img] = np.nan
-        fill_val = 0.0
+        positive = background > 0
+        if not np.all(positive):
+            logger.warning(
+                f"The fitted background is not positive over {np.mean(~positive):.1%} of "
+                "the frame: the division is NaN there..."
+            )
+        correction = np.full(img.shape, np.nan)
+        np.divide(img, background, out=correction, where=positive)
+    else:
+        correction = np.subtract(img, background)
         if clip:
             correction[correction <= 0.0] = 0.0
 
     if return_bg:
-        return correction.copy(), background
-    else:
-        return correction.copy()
+        return correction, background
+    return correction
 
 
 def fit_background_model(
@@ -1686,8 +1795,13 @@ def fit_background_model(
 
     Returns
     -------
-    numpy.ndarray or None
-            The fitted background model as a numpy array if successful, otherwise None.
+    numpy.ndarray
+            The fitted background model.
+
+    Raises
+    ------
+    ValueError
+            If the model does not exist, or too few pixels are left to fit it.
 
     Notes
     -----
@@ -1701,23 +1815,18 @@ def fit_background_model(
     fit_plane : Function to fit a plane model to an image.
     """
 
-    bg: Optional[np.ndarray] = None
-    if model == "paraboloid":
-        bg = fit_paraboloid(
+    fits = {"paraboloid": fit_paraboloid, "plane": fit_plane}
+    if model not in fits:
+        raise ValueError(f"Unknown model {model!r}: it must be one of {sorted(fits)}.")
+    return np.asarray(
+        fits[model](
             img.astype(float),
             cell_masks=cell_masks,
             edge_exclusion=edge_exclusion,
             downsample=downsample,
-        ).astype(float)
-    elif model == "plane":
-        bg = fit_plane(
-            img.astype(float), cell_masks=cell_masks, edge_exclusion=edge_exclusion
-        ).astype(float)
-
-    if bg is not None:
-        bg = np.array(bg)
-
-    return bg
+        ),
+        dtype=float,
+    )
 
 
 def correct_channel_offset(
@@ -1956,9 +2065,9 @@ def register_stacks(
 
     For each selected position, the drift is estimated on ``target_channel`` by Fourier phase
     cross-correlation of Tukey-windowed frames (see :mod:`celldetective.utils.registration`),
-    then the same shift is applied to every channel of the frame. The shifts are written next to
-    the stack as ``<export_prefix>_<movie>_registration_shifts.csv`` (``<movie>_registration_shifts.csv``
-    if the source stack is overwritten).
+    then the same shift is applied to every channel of the frame. When exporting, the shifts are
+    written next to the stack as ``<export_prefix>_<movie>_registration_shifts.csv``
+    (``<movie>_registration_shifts.csv`` if the source stack is overwritten).
 
     Parameters
     ----------
@@ -2044,20 +2153,22 @@ def register_stacks(
             )
 
             logger.info("Registration successful.")
-            _log_preprocessing_step(
-                pos_path,
-                "registration",
-                {
-                    "target_channel": target_channel,
-                    "radius": radius,
-                    "tukey_alpha": tukey_alpha,
-                    "upsample_factor": upsample_factor,
-                    "reference": reference,
-                    "downscale": downscale,
-                    "movie_prefix": movie_prefix,
-                    "export_prefix": export_prefix,
-                },
-            )
+            # Only what was written to the position.
+            if export:
+                _log_preprocessing_step(
+                    pos_path,
+                    "registration",
+                    {
+                        "target_channel": target_channel,
+                        "radius": radius,
+                        "tukey_alpha": tukey_alpha,
+                        "upsample_factor": upsample_factor,
+                        "reference": reference,
+                        "downscale": downscale,
+                        "movie_prefix": movie_prefix,
+                        "export_prefix": export_prefix,
+                    },
+                )
             if return_stacks:
                 stacks.append(registered_stack)
             else:
@@ -2208,20 +2319,6 @@ def register_single_stack(
         f"Estimated drift: max |dy|={np.abs(shifts[:, 0]).max():.2f} px, max |dx|={np.abs(shifts[:, 1]).max():.2f} px"
     )
 
-    path, file = os.path.split(stack_path)
-    # Named after the output movie, so registrations with different prefixes keep their shifts.
-    output_file = file if prefix is None else "_".join([prefix, file])
-    output_path = os.sep.join([path, output_file])
-    shifts_path = os.path.splitext(output_path)[0] + "_registration_shifts.csv"
-    np.savetxt(
-        shifts_path,
-        np.column_stack([np.arange(stack_length), shifts]),
-        delimiter=",",
-        header="FRAME,SHIFT_Y,SHIFT_X",
-        comments="",
-        fmt=["%d", "%.4f", "%.4f"],
-    )
-
     def registered_frames():
         for t in range(stack_length):
             if progress_callback:
@@ -2238,6 +2335,23 @@ def register_single_stack(
                 frames[:, :, c] = _shift_frame(frames[:, :, c], shifts[t])
             yield frames
 
-    return _write_frames(
+    registered = _write_frames(
         registered_frames(), stack_length, stack_path, prefix, export, return_stacks
     )
+
+    if export:
+        # Named after the output movie, so registrations with different prefixes keep their shifts.
+        shifts_path = (
+            os.path.splitext(_output_path(stack_path, prefix))[0]
+            + "_registration_shifts.csv"
+        )
+        np.savetxt(
+            shifts_path,
+            np.column_stack([np.arange(stack_length), shifts]),
+            delimiter=",",
+            header="FRAME,SHIFT_Y,SHIFT_X",
+            comments="",
+            fmt=["%d", "%.4f", "%.4f"],
+        )
+
+    return registered

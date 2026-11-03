@@ -54,7 +54,13 @@ def test_channel_offset_shifts_target_channel_only(experiment):
     "correct",
     [
         lambda exp, **kw: correct_background_model(
-            exp, target_channel="Channel1", model="plane", operation="subtract", **kw
+            exp,
+            target_channel="Channel1",
+            model="plane",
+            operation="subtract",
+            # Above the texture: the default masks the whole field, and nothing is left to fit.
+            threshold_on_std=1000,
+            **kw,
         ),
         lambda exp, **kw: correct_background_model_free(
             exp, target_channel="Channel1", mode="tiles", operation="subtract", **kw
@@ -72,7 +78,7 @@ def test_overwriting_correction_replaces_source_without_leftovers(experiment, co
     exp_dir, movie_dir, source = experiment
     correct(exp_dir, export=True, export_prefix=None, **QUIET)
 
-    assert not list(movie_dir.glob("temp_*"))
+    assert not list(movie_dir.glob("*.tmp"))
     assert not list(movie_dir.glob("Corrected_*"))
     overwritten = tifffile.imread(movie_dir / "sample.tif")
     assert overwritten.shape == source.shape

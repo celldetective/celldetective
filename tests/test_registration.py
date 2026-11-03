@@ -138,6 +138,7 @@ def test_register_single_stack_aligns_all_channels(tmp_path):
         nbr_channels=2,
         radius=50,
         return_stacks=True,
+        export=True,
     )
     assert registered.shape == (len(DRIFTS), FIELD, FIELD, 2)
 
@@ -165,6 +166,7 @@ def test_register_single_stack_bridges_blank_frame_read_from_disk(tmp_path):
         nbr_channels=2,
         radius=50,
         return_stacks=True,
+        export=True,
     )
 
     shifts = np.loadtxt(
@@ -207,6 +209,7 @@ def test_downscaled_registration_applies_full_scale_shifts(tmp_path, downscale):
         radius=50,
         downscale=downscale,
         return_stacks=True,
+        export=True,
     )
     assert registered.shape == (len(DRIFTS), FIELD, FIELD, 2)
 

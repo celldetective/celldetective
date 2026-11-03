@@ -24,6 +24,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - in an untracked phenotype table, a cell is selected by its ID and frame.
 
 ### Fixed
+- Preprocessing:
+  - a cancelled or failed correction no longer leaves a truncated `Corrected_`
+    stack, nor loses the previous one: every stack is written through a temporary
+    file. A cancelled correction can leave this `.tif.tmp` file in the movie folder:
+    no movie prefix selects it, and it can be deleted;
+  - Submit warns before correcting a stack that a previous correction wrote, as
+    an empty movie prefix or the prefix `Corrected_` selects on a re-run, and shows
+    the name of the new stack. The correction runs only if accepted;
+  - the steps after the first read the stack the first step wrote, rather than
+    any stack starting with `Corrected`;
+  - wells with different numbers of positions: applying to all positions reaches
+    every position of every well, instead of raising an error or leaving positions
+    out silently;
+  - errors now stop the correction with a message, where they looked like success:
+    a threshold leaving no background pixel, which the fit answered with its
+    starting values and the model-free correction with a stack of NaN; a well whose
+    background could not be estimated, reported once the other wells are done;
+    an unknown operation or model. A measurement with a fit background correction
+    stops on such a frame too, rather than dividing by the starting values of the fit;
+  - a division by a fitted background that is not positive gives NaN there;
+  - `correct_background_model` uses its `activation_protocol`, which it logged but
+    ignored;
+  - the plane fit honours `downsample`, which it ignored;
+  - `register_stacks` writes its shifts and log only when exporting, and the shifts
+    only once the stack is written.
+- `get_position_movie_path` picks the same movie on every file system when several
+  match the prefix: the first one by name.
 - Event annotator: creating a new event class crashed (`AttributeError`).
 - Annotators (event, interaction, phenotype):
   - submitting a cell whose class the options do not show (NaN) marked it for

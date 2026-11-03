@@ -22,6 +22,11 @@ from celldetective import get_software_location
 from celldetective.gui.base.control_panel_block import ControlPanelBlock
 from celldetective.gui.base.styles import Styles
 from celldetective.gui.base.help_panel import HelpButton, open_help, open_help_menu
+from celldetective.gui.gui_utils import generic_message
+from celldetective.preprocessing import (
+    _configured_movie_prefix,
+    already_corrected_movies,
+)
 from celldetective.gui.layouts import (
     BackgroundFitCorrectionLayout,
     BackgroundModelFreeCorrectionLayout,
@@ -176,6 +181,10 @@ class PreprocessingPanel(ControlPanelBlock, Styles):
         elif returnValue == QMessageBox.Yes:
             self.parent_window.well_list.selectAll()
             self.parent_window.position_list.selectAll()
+            # With several wells, the position list is the one of the first well: "all" must
+            # not be sent as its indices, since wells can hold different numbers of positions.
+            well_option = "*"
+            position_option = "*"
         elif returnValue == QMessageBox.No:
             msgBox2 = QMessageBox()
             msgBox2.setIcon(QMessageBox.Question)
@@ -191,14 +200,22 @@ class PreprocessingPanel(ControlPanelBlock, Styles):
                 return None
             if returnValue == QMessageBox.No:
                 return None
+            well_option = self.parent_window.well_list.getSelectedIndices()
+            position_option = self.parent_window.position_list.getSelectedIndices()
+            if not well_option or not position_option:
+                generic_message("Please select at least one well and one position.", "warning")
+                return None
 
         logger.info("Proceed with correction...")
 
-        # if self.parent_window.well_list.currentText()=='*':
-        # 	well_option = "*"
-        # else:
-        well_option = self.parent_window.well_list.getSelectedIndices()
-        position_option = self.parent_window.position_list.getSelectedIndices()
+        if self.protocol_layout.protocols and not self.confirm_correcting_corrected_movies(
+            well_option, position_option
+        ):
+            logger.info("Preprocessing cancelled: the movies are already corrected.")
+            return None
+
+        # The steps after the first read what the first one wrote, not any "Corrected" stack.
+        chained_prefix = "Corrected_" + _configured_movie_prefix(self.exp_dir)
 
         for k, correction_protocol in enumerate(self.protocol_layout.protocols):
 
@@ -206,7 +223,7 @@ class PreprocessingPanel(ControlPanelBlock, Styles):
             export_prefix = "Corrected"
             if k > 0:
                 # switch source stack to cumulate multi-channel preprocessing
-                movie_prefix = "Corrected"
+                movie_prefix = chained_prefix
                 export_prefix = None
 
             correction_type = correction_protocol["correction_type"]
@@ -245,6 +262,48 @@ class PreprocessingPanel(ControlPanelBlock, Styles):
                 logger.info(f"{CORRECTION_TITLES[correction_type]} cancelled.")
                 return None
         logger.info("Done.")
+
+    def confirm_correcting_corrected_movies(self, well_option, position_option) -> bool:
+        """
+        Warn if the movie prefix selects stacks that a previous correction wrote.
+
+        Parameters
+        ----------
+        well_option, position_option : str or list of int
+            Selection of wells and positions.
+
+        Returns
+        -------
+        bool
+            True if there is nothing to warn about or the user accepts correcting them again.
+        """
+
+        movies = already_corrected_movies(self.exp_dir, well_option, position_option)
+        if not movies:
+            return True
+
+        names = sorted({(os.path.basename(path), output) for path, output in movies})
+        examples = "\n\n".join(
+            f"Reads: {name}\nWrites: {output}" for name, output in names[:3]
+        )
+        if len(names) > 3:
+            examples += f"\n\n... and {len(names) - 3} more."
+
+        msgBox = QMessageBox()
+        msgBox.setIcon(QMessageBox.Warning)
+        msgBox.setWindowTitle("Already corrected")
+        msgBox.setText(
+            f"{len(movies)} selected position(s) would read a stack that a previous "
+            "correction wrote, and correct it a second time."
+        )
+        msgBox.setInformativeText(
+            f"{examples}\n\nTo correct the raw movies instead, cancel and "
+            "change the movie prefix of the experiment."
+        )
+        msgBox.setStandardButtons(QMessageBox.Yes | QMessageBox.Cancel)
+        msgBox.button(QMessageBox.Yes).setText("Correct again")
+        msgBox.setDefaultButton(QMessageBox.Cancel)
+        return msgBox.exec() == QMessageBox.Yes
 
     def locate_image(self):
         """

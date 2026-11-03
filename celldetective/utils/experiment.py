@@ -999,7 +999,8 @@ def get_position_movie_path(pos: str, prefix: str = "") -> Optional[str]:
 
     if not pos.endswith(os.sep):
         pos += os.sep
-    movies = glob(pos + os.sep.join(["movie", movie_pattern(prefix)]))
+    # Sorted: the order of glob depends on the file system.
+    movies = sorted(glob(pos + os.sep.join(["movie", movie_pattern(prefix)])))
     if len(movies) > 0:
         stack_path = movies[0]
     else:
