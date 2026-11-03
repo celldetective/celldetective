@@ -51,8 +51,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     an unknown operation or model;
   - a measurement with a fit background correction skips a frame whose background
     cannot be fitted, with a warning naming the frame and channel, rather than dividing
-    by the starting values of the fit. The intensities of that channel are NaN in
-    that frame, and the cells keep their rows and their other measurements;
+    by the starting values of the fit. That channel is measured uncorrected in that
+    frame;
   - a division by a fitted background that is not positive gives NaN there;
   - `correct_background_model` uses its `activation_protocol`, which it logged but
     ignored;
