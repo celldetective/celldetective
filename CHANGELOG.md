@@ -24,6 +24,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - in an untracked phenotype table, a cell is selected by its ID and frame.
 
 ### Fixed
+- The weighted centroid and moments (`centroid_weighted`, `moments_weighted` and
+  the properties derived from them) included the pixels of the bounding box outside
+  the cell, since `CustomRegionProps` stopped masking the intensity image in 1.3.9.
+  They now describe the cell alone, so their values change. These properties are
+  not offered in the measurement settings: this concerns instruction files and
+  Python use. Custom measurements still receive the raw crop.
 - Event annotator: creating a new event class crashed (`AttributeError`).
 - Annotators (event, interaction, phenotype):
   - submitting a cell whose class the options do not show (NaN) marked it for
