@@ -211,57 +211,56 @@ class PreprocessingPanel(ControlPanelBlock, Styles):
             logger.info("Preprocessing cancelled: the movies are already corrected.")
             return None
 
+        corrections = [
+            protocol
+            for protocol in self.protocol_layout.protocols
+            if protocol["correction_type"] in CORRECTION_TITLES
+        ]
+        if not corrections:
+            return None
+
         # The steps after the first read, position by position, what the first one writes. Known
         # from now only: once written, those stacks can themselves match the movie prefix.
         source_stacks = None
-        if len(self.protocol_layout.protocols) > 1:
+        if len(corrections) > 1:
             source_stacks = first_step_outputs(self.exp_dir, well_option, position_option)
 
-        for k, correction_protocol in enumerate(self.protocol_layout.protocols):
-
-            movie_prefix = None
-            export_prefix = "Corrected"
-            if k > 0:
-                # For the log: source_stacks selects what this step reads.
-                movie_prefix = "Corrected"
-                export_prefix = None
-
-            correction_type = correction_protocol["correction_type"]
-            if correction_type not in CORRECTION_TITLES:
-                continue
-            logger.info(
-                f"{CORRECTION_TITLES[correction_type]}; {movie_prefix=} {export_prefix=} {correction_protocol=}"
-            )
-            from celldetective.gui.workers import ProgressWindow
-            from celldetective.processes.background_correction import (
-                BackgroundCorrectionProcess,
-            )
-
-            process_args = {
+        steps = []
+        for k, correction_protocol in enumerate(corrections):
+            title = CORRECTION_TITLES[correction_protocol["correction_type"]]
+            logger.info(f"Step {k + 1}: {title}; {correction_protocol=}")
+            step = {
                 "exp_dir": self.exp_dir,
                 "well_option": well_option,
                 "position_option": position_option,
-                "movie_prefix": movie_prefix,
-                "export_prefix": export_prefix,
+                # For the log after the first: source_stacks selects what the step reads.
+                "movie_prefix": "Corrected" if k > 0 else None,
+                "export_prefix": None if k > 0 else "Corrected",
                 "export": True,
                 "return_stacks": False,
                 "source_stacks": source_stacks if k > 0 else None,
+                "step_title": title,
             }
-            if correction_type in ("model-free", "fit"):
-                process_args["activation_protocol"] = [["gauss", 2], ["std", 4]]
-            process_args.update(correction_protocol)
+            if correction_protocol["correction_type"] in ("model-free", "fit"):
+                step["activation_protocol"] = [["gauss", 2], ["std", 4]]
+            step.update(correction_protocol)
+            steps.append(step)
 
-            self.job = ProgressWindow(
-                BackgroundCorrectionProcess,
-                parent_window=None,
-                title=CORRECTION_TITLES[correction_type],
-                position_info=False,
-                process_args=process_args,
-            )
-            result = self.job.exec_()
-            if result == QDialog.Rejected:
-                logger.info(f"{CORRECTION_TITLES[correction_type]} cancelled.")
-                return None
+        from celldetective.gui.workers import ProgressWindow
+        from celldetective.processes.background_correction import (
+            BackgroundCorrectionProcess,
+        )
+
+        self.job = ProgressWindow(
+            BackgroundCorrectionProcess,
+            parent_window=None,
+            title=steps[0]["step_title"] if len(steps) == 1 else "Preprocessing",
+            position_info=False,
+            process_args={"steps": steps},
+        )
+        if self.job.exec_() == QDialog.Rejected:
+            logger.info("Preprocessing cancelled.")
+            return None
         logger.info("Done.")
 
     def confirm_correcting_corrected_movies(self, well_option, position_option) -> bool:

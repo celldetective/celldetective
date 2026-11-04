@@ -49,12 +49,12 @@ def _panel(experiment_dir, protocols):
 
 @pytest.fixture
 def launched(monkeypatch):
-    """The process arguments of each step, without running them."""
+    """The title and steps of each window, without running them."""
     runs = []
 
     class Window:
         def __init__(self, process, parent_window=None, title="", position_info=True, process_args=None):
-            runs.append(process_args)
+            runs.append(SimpleNamespace(title=title, steps=process_args["steps"]))
 
         def exec_(self):
             return QDialog.Accepted
@@ -123,8 +123,8 @@ def test_all_positions_are_not_sent_as_the_indices_of_the_first_well(
 
     PreprocessingPanel.launch_preprocessing(_panel(experiment_dir, [dict(OFFSET)]))
 
-    assert launched[0]["well_option"] == "*"
-    assert launched[0]["position_option"] == "*"
+    assert launched[0].steps[0]["well_option"] == "*"
+    assert launched[0].steps[0]["position_option"] == "*"
 
 
 def test_selected_positions_are_sent_as_selected(experiment, launched, answers, qtbot):
@@ -134,8 +134,8 @@ def test_selected_positions_are_sent_as_selected(experiment, launched, answers, 
 
     PreprocessingPanel.launch_preprocessing(_panel(experiment_dir, [dict(OFFSET)]))
 
-    assert launched[0]["well_option"] == [0]
-    assert launched[0]["position_option"] == [0]
+    assert launched[0].steps[0]["well_option"] == [0]
+    assert launched[0].steps[0]["position_option"] == [0]
 
 
 def test_empty_selection_warns_and_runs_nothing(experiment, launched, answers, monkeypatch, qtbot):
@@ -165,11 +165,38 @@ def test_chain_reads_the_stack_of_the_first_step(experiment, launched, answers, 
         _panel(experiment_dir, [dict(OFFSET), dict(OFFSET)])
     )
 
-    first, second = launched
+    (window,) = launched
+    assert window.title == "Preprocessing"
+    first, second = window.steps
     assert (first["movie_prefix"], first["export_prefix"]) == (None, "Corrected")
     assert second["export_prefix"] is None
     assert first["source_stacks"] is None
     assert [Path(s).name for s in second["source_stacks"].values()] == ["Corrected_sample.tif"]
+
+
+def test_a_single_correction_keeps_its_title(experiment, launched, answers, qtbot):
+    experiment_dir, _ = experiment
+    write_config(experiment_dir, "sample")
+    answers.queue += [QMessageBox.Yes]
+
+    PreprocessingPanel.launch_preprocessing(_panel(experiment_dir, [dict(OFFSET)]))
+
+    assert launched[0].title == "Offset Correction"
+
+
+def test_an_unknown_correction_does_not_take_the_place_of_the_first(
+    experiment, launched, answers, qtbot
+):
+    experiment_dir, _ = experiment
+    write_config(experiment_dir, "sample")
+    answers.queue += [QMessageBox.Yes]
+
+    PreprocessingPanel.launch_preprocessing(
+        _panel(experiment_dir, [{"correction_type": "unknown"}, dict(OFFSET)])
+    )
+
+    (step,) = launched[0].steps
+    assert step["export_prefix"] == "Corrected"
 
 
 def test_empty_protocol_list_asks_nothing_about_the_movies(experiment, launched, answers, qtbot):

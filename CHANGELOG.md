@@ -16,6 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   is not positive gives NaN.
 
 ### Changed
+- A list of preprocessing corrections runs in one progress window, as the process
+  panel does, instead of one per correction. The status names the step, and the top
+  bar shows the progress over the whole list.
 - Stack registration flattens the registration channel before the correlation, by
   subtracting a Gaussian blur of 20 pixels. Uneven illumination, fixed to the camera,
   made it underestimate the drift of faint structures. The shifts of existing workflows
