@@ -819,10 +819,12 @@ def measure_features(
     df_props["class_id"] = df_props["class_id"].astype(float)
 
     if normalisation_list and img is not None:
+        # Over the cells: a local correction leaves its NaN there, and the rest of the frame as is.
+        measured = label > 0 if np.any(label) else np.ones_like(label, dtype=bool)
         df_props.attrs["skipped_channels"] = [
             channel
             for k, channel in enumerate(channels)
-            if np.all(np.isnan(img[:, :, k]))
+            if np.all(np.isnan(img[:, :, k][measured]))
         ]
 
     return df_props
@@ -1303,20 +1305,21 @@ def local_normalisation(
         The locally normalized image.
     """
 
-    for index, cell in enumerate(np.unique(labels)):
+    backgrounds = dict(
+        zip(background_intensity["label"], background_intensity[measurement])
+    )
+    for cell in np.unique(labels):
         if cell == 0:
             continue
+        pixels = labels == cell
+        # A cell enclosed by others has no surroundings to measure: its background is unknown.
+        background = float(backgrounds.get(cell, np.nan))
         if operation == "subtract":
-            image[np.where(labels == cell)] = image[np.where(labels == cell)].astype(
-                float
-            ) - background_intensity[measurement][index - 1].astype(float)
+            image[pixels] = image[pixels].astype(float) - background
         elif operation == "divide":
-            background = background_intensity[measurement][index - 1].astype(float)
             # As the other corrections: the ratio means nothing without a positive background.
-            image[np.where(labels == cell)] = (
-                image[np.where(labels == cell)].astype(float) / background
-                if background > 0
-                else np.nan
+            image[pixels] = (
+                image[pixels].astype(float) / background if background > 0 else np.nan
             )
     if clip:
         image[image <= 0.0] = 0.0
@@ -1361,7 +1364,7 @@ def normalise_by_cell(
         The normalized image.
     """
 
-    if offset:
+    if offset and operation == "divide":
         image = image.astype(float) - offset
 
     try:

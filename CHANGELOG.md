@@ -40,6 +40,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - in an untracked phenotype table, a cell is selected by its ID and frame.
 
 ### Fixed
+- Local background correction at measurement time: a cell enclosed by others, with no
+  surroundings to measure, gets NaN instead of stopping the measurement. A frame where the
+  correction leaves every cell NaN no longer keeps the values of an earlier measurement.
 - Preprocessing:
   - a cancelled or failed correction no longer leaves a truncated `Corrected_`
     stack, nor loses the previous one: every stack is written through a temporary

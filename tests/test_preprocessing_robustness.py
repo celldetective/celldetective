@@ -221,6 +221,17 @@ def test_model_free_background_is_built_once_per_well_from_all_positions(
     assert calls == [2, 2]
 
 
+def test_chained_model_free_names_the_stack_of_an_unprocessed_position(tmp_path, monkeypatch):
+    exp_dir, (kept, other) = write_experiment(tmp_path, [2], prefix="")
+    write_movie(other / "Corrected_sample.tif", np.full((3, FIELD, FIELD), 1000.0))
+    warned = []
+    monkeypatch.setattr(preprocessing.logger, "warning", warned.append)
+
+    preprocessing._well_background_stacks(exp_dir, str(kept.parent.parent), {})
+
+    assert any("Corrected_sample.tif" in message for message in warned)
+
+
 def test_a_position_without_a_source_stack_is_skipped(tmp_path):
     exp_dir, movie_dirs = write_experiment(tmp_path, [2], frames=1)
 
@@ -798,6 +809,53 @@ def test_local_correction_with_a_black_level_leaves_a_subtraction_unchanged():
     with_offset = normalise_by_cell(image, label, offset=BLACK_LEVEL)
 
     assert with_offset[25, 25] == pytest.approx(200.0)
+
+
+def test_local_subtraction_with_a_black_level_leaves_the_rest_of_the_frame_unchanged():
+    image, label = _cell_on_a_flat_background()
+
+    without = normalise_by_cell(image, label, clip=True)
+    with_offset = normalise_by_cell(image, label, clip=True, offset=BLACK_LEVEL)
+
+    np.testing.assert_array_equal(with_offset, without)
+
+
+def test_local_correction_of_a_cell_enclosed_by_another_is_nan():
+    image, label = _cell_on_a_flat_background()
+    label[23:27, 23:27] = 2
+    label[2:8, 2:8] = 3
+    image[label == 3] = BLACK_LEVEL + 400.0
+
+    corrected = normalise_by_cell(image, label)
+
+    assert np.isnan(corrected[25, 25])
+    assert corrected[21, 21] == pytest.approx(200.0)
+    assert corrected[5, 5] == pytest.approx(300.0)
+
+
+def test_a_local_correction_that_blanks_every_cell_skips_the_channel():
+    image, label = _cell_on_a_flat_background()
+    norm = dict(
+        correction_type="local",
+        target_channel="first",
+        distance=5,
+        model="median",
+        operation="divide",
+        clip=False,
+        offset=10_000,
+    )
+
+    table = measure_features(
+        image[..., np.newaxis],
+        label,
+        features=["intensity_mean"],
+        channels=["first"],
+        normalisation_list=[norm],
+    )
+    positions = pd.DataFrame({"class_id": [1.0], "first_mean": [123.0]})
+
+    assert table.attrs["skipped_channels"] == ["first"]
+    assert blank_skipped_channels(positions, table, ["first"])["first_mean"].isna().all()
 
 
 def test_local_black_level_above_the_background_is_nan():

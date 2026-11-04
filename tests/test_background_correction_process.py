@@ -158,6 +158,20 @@ def test_status_says_which_step_runs(experiment):
     assert "[Step 2/2] Second" in statuses
 
 
+def test_each_step_starts_with_empty_position_and_frame_bars(experiment):
+    exp_dir, _ = experiment
+
+    messages = _run_steps(
+        exp_dir,
+        *_chained(exp_dir, dict(OFFSET, step_title="First"), dict(OFFSET, step_title="Second")),
+    )
+
+    (start,) = [
+        m for m in messages if isinstance(m, dict) and m.get("status") == "[Step 2/2] Second"
+    ]
+    assert (start["pos_progress"], start["frame_progress"]) == (0, 0)
+
+
 def test_options_of_a_step_do_not_reach_the_next(experiment, monkeypatch):
     received = []
     monkeypatch.setattr(
@@ -178,6 +192,8 @@ def test_a_failed_step_stops_the_list(experiment):
     assert _statuses(messages).count("error") == 1
     assert "finished" not in _statuses(messages)
     assert not (movie_dir / "Corrected_sample.tif").exists()
+    (error,) = [m for m in messages if isinstance(m, dict) and m.get("status") == "error"]
+    assert error["message"].startswith("[Step 1/2] ")
 
 
 def test_chain_corrects_the_stack_of_the_first_step_in_place(experiment):

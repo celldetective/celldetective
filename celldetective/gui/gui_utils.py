@@ -1061,18 +1061,23 @@ class CameraOffsetLineEdit(NumberLineEdit):
             "Only used by a division: a subtraction cancels it."
         )
 
-    def value_or_warn(self) -> Tuple[bool, Optional[float]]:
+    def value(self) -> Optional[float]:
         """
-        Read the value, with a warning if it is invalid.
+        Read the value.
 
         Returns
         -------
-        tuple
-            Whether the value is valid, and the value: None if the field is disabled.
+        float or None
+            The value, or None if the field is disabled or empty.
+
+        Raises
+        ------
+        ValueError
+            If the field is enabled and does not hold a valid number.
         """
         if not self.isEnabled():
-            return True, None
-        return super().value_or_warn()
+            return None
+        return super().value()
 
 
 class ThresholdLineEdit(NumberLineEdit):

@@ -205,18 +205,16 @@ class PreprocessingPanel(ControlPanelBlock, Styles):
 
         logger.info("Proceed with correction...")
 
-        if self.protocol_layout.protocols and not self.confirm_correcting_corrected_movies(
-            well_option, position_option
-        ):
-            logger.info("Preprocessing cancelled: the movies are already corrected.")
-            return None
-
         corrections = [
             protocol
             for protocol in self.protocol_layout.protocols
             if protocol["correction_type"] in CORRECTION_TITLES
         ]
         if not corrections:
+            return None
+
+        if not self.confirm_correcting_corrected_movies(well_option, position_option):
+            logger.info("Preprocessing cancelled: the movies are already corrected.")
             return None
 
         # The steps after the first read, position by position, what the first one writes. Known

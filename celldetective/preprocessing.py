@@ -525,8 +525,8 @@ def _well_background_stacks(
             if stack_path is not None:
                 logger.warning(
                     f"Position {extract_position_name(position)} was not processed by the "
-                    "previous step: its background is estimated from its movie. Select the "
-                    "whole well if that step changed this channel."
+                    f"previous step: its background is estimated from {os.path.basename(stack_path)}. "
+                    "Select the whole well if that step changed this channel."
                 )
         if stack_path is not None:
             stacks[str(position)] = stack_path

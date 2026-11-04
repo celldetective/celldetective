@@ -32,6 +32,8 @@ def test_invalid_offset_is_ignored_while_it_is_unavailable(layout, warnings):
 
     assert layout.generate_instructions()
     assert warnings == []
+    assert layout.camera_offset_le.value() is None
+    assert layout.camera_offset_le.value_or_none() is None
 
 
 def test_offset_goes_into_the_protocol(layout):

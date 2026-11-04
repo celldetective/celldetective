@@ -2,15 +2,8 @@ from multiprocessing import Process, Queue
 from typing import Optional, Dict, Any
 import time
 import os
-from pathlib import PurePath, Path
 from tifffile import imwrite
 from celldetective import get_logger
-from celldetective.utils.experiment import extract_experiment_channels
-from celldetective.utils.image_loaders import _get_img_num_per_channel
-from celldetective.utils.parsing import (
-    config_section_to_dict,
-    _extract_channel_indices_from_config,
-)
 
 logger = get_logger(__name__)
 
@@ -43,8 +36,6 @@ class _CorrectionStep:
             setattr(self, key, value)
         self.step_index = step_index
         self.step_count = step_count
-        self.sum_done = 0
-        self.t0 = time.time()
 
     def _label(self, text: str) -> str:
         """Prefix a message with the step, in a list of corrections."""
@@ -67,32 +58,14 @@ class _CorrectionStep:
         """
         logger.info("Start background correction process...")
 
-        try:
-            # Load config to get movie length for progress estimation
-            self.config = PurePath(self.exp_dir, Path("config.ini"))
-            self.len_movie = int(
-                config_section_to_dict(self.config, "MovieSettings")["len_movie"]
-            )
-            self.nbr_channels = len(extract_experiment_channels(self.exp_dir)[0])
-            channel_indices = _extract_channel_indices_from_config(
-                self.config, [self.target_channel]
-            )
-            self.img_num_channels = _get_img_num_per_channel(
-                channel_indices, int(self.len_movie), self.nbr_channels
-            )
-
-            logger.info("Process initialized.")
-
-        except Exception as e:
-            logger.error(f"Error initializing process: {e}")
-            self.queue.put("error")
-            return False
-
         if self.step_count > 1:
             self.queue.put(
                 {
                     "status": self._label(getattr(self, "step_title", "Correcting...")),
                     "well_progress": self._overall_progress(0),
+                    # Those of the previous step are full.
+                    "pos_progress": 0,
+                    "frame_progress": 0,
                 }
             )
 
@@ -105,7 +78,6 @@ class _CorrectionStep:
         # Timestamps for estimation
         self.t0_well = time.time()
         self.t0_pos = time.time()  # resets per well
-        self.count_pos = 0  # pos processed in current well
 
         def progress_callback(**kwargs):
             """
@@ -156,11 +128,8 @@ class _CorrectionStep:
 
                 # Reset pos timer for new well
                 self.t0_pos = current_time
-                self.count_pos = 0
 
             elif level == "position":
-
-                self.count_pos = iteration
 
                 current_stage = getattr(self, "current_stage", None)
                 reset_timer = False
@@ -309,7 +278,7 @@ class _CorrectionStep:
 
         except Exception as e:
             logger.error(f"Error in background correction process: {e}")
-            self.queue.put({"status": "error", "message": str(e)})
+            self.queue.put({"status": "error", "message": self._label(str(e))})
             return False
 
         return True
