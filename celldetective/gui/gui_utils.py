@@ -1044,13 +1044,35 @@ class RadiusLineEdit(NumberLineEdit):
 
 
 class CameraOffsetLineEdit(NumberLineEdit):
-    """Camera black level of the background corrections, 0 by default."""
+    """
+    Camera black level of the background corrections, 0 by default.
+
+    A subtraction cancels it, so a layout disables the field when it has no effect. A disabled
+    field reads as None, whatever it holds.
+    """
 
     INVALID = "The offset must be a number, or empty."
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__("0", *args, **kwargs)
         self.setPlaceholderText("camera black level")
+        self.setToolTip(
+            "Camera black level, taken off the image and the background.\n"
+            "Only used by a division: a subtraction cancels it."
+        )
+
+    def value_or_warn(self) -> Tuple[bool, Optional[float]]:
+        """
+        Read the value, with a warning if it is invalid.
+
+        Returns
+        -------
+        tuple
+            Whether the value is valid, and the value: None if the field is disabled.
+        """
+        if not self.isEnabled():
+            return True, None
+        return super().value_or_warn()
 
 
 class ThresholdLineEdit(NumberLineEdit):

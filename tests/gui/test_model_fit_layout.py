@@ -14,7 +14,28 @@ def layout(qtbot):
     return BackgroundFitCorrectionLayout(SimpleNamespace(parent_window=experiment))
 
 
+def test_offset_is_only_available_for_a_division(layout):
+    layout.camera_offset_le.setText("100")
+    assert not layout.camera_offset_le.isEnabled()
+    assert layout.generate_instructions()
+    assert layout.instructions["offset"] is None
+
+    layout.operation_layout.divide_btn.click()
+    assert layout.camera_offset_le.isEnabled()
+
+    layout.operation_layout.subtract_btn.click()
+    assert not layout.camera_offset_le.isEnabled()
+
+
+def test_invalid_offset_is_ignored_while_it_is_unavailable(layout, warnings):
+    layout.camera_offset_le.setText("-")
+
+    assert layout.generate_instructions()
+    assert warnings == []
+
+
 def test_offset_goes_into_the_protocol(layout):
+    layout.operation_layout.divide_btn.click()
     assert layout.generate_instructions()
     assert layout.instructions["offset"] == 0
 
@@ -24,12 +45,14 @@ def test_offset_goes_into_the_protocol(layout):
 
 
 def test_empty_offset_means_none(layout):
+    layout.operation_layout.divide_btn.click()
     layout.camera_offset_le.setText("")
     assert layout.generate_instructions()
     assert layout.instructions["offset"] is None
 
 
 def test_invalid_offset_is_rejected(layout, warnings):
+    layout.operation_layout.divide_btn.click()
     layout.camera_offset_le.setText("-")
 
     assert not layout.generate_instructions()
@@ -77,6 +100,8 @@ def test_local_correction_rejects_an_empty_distance(local_layout, warnings):
 
 
 def test_local_correction_takes_the_offset(local_layout):
+    assert not local_layout.camera_offset_le.isEnabled()
+    local_layout.operation_layout.divide_btn.click()
     local_layout.camera_offset_le.setText("100,5")
 
     assert local_layout.generate_instructions()

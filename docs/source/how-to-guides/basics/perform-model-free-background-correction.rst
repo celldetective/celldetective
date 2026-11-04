@@ -28,9 +28,9 @@ Correction protocol
 
 #. If the edges of the field are dark (e.g. a diaphragm close to the camera black level), set a fit radius so that the coefficient is optimized only over a disk centred on the image. Click on the :icon:`image-check,black` next to it to tune the radius on a frame of the current position: the shaded pixels are left out of the fit, but still corrected. Leave it empty to fit over the full frame.
 
-#. Set the black level of the image in offset (e.g. minimum pixel value observed if the microscope side port shutter or light source shutter is closed).
-
 #. Tick the ``Divide`` option.
+
+#. Set the black level of the image in offset (e.g. minimum pixel value observed if the microscope side port shutter or light source shutter is closed).
 
 #. Click on the :icon:`eye-outline,black` button to preview the correction on five frames spread over the movie of the current position. A division leaves a few diverging values that stretch the contrast: click the auto contrast button (:icon:`contrast-box,black`) at the end of the contrast slider, once or twice, to peel them off (see :ref:`ref_image_viewers`).
 

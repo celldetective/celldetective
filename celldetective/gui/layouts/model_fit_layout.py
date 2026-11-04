@@ -156,6 +156,8 @@ class BackgroundFitCorrectionLayout(QGridLayout, Styles):
 
         self.operation_layout = OperationLayout()
         self.addLayout(self.operation_layout, 5, 0, 1, 3)
+        self.operation_layout.divide_btn.toggled.connect(self.camera_offset_le.setEnabled)
+        self.camera_offset_le.setEnabled(self.operation_layout.divide_btn.isChecked())
 
         correction_layout = QHBoxLayout()
         correction_layout.addWidget(self.add_correction_btn, 95)

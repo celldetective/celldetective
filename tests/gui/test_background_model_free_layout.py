@@ -17,7 +17,23 @@ def layout(qtbot):
     return BackgroundModelFreeCorrectionLayout(parent)
 
 
+def test_offset_is_available_when_it_matters(layout):
+    assert not layout.camera_offset_le.isEnabled()
+    assert layout.correction_parameters()["offset"] is None
+
+    layout.operation_layout.divide_btn.click()
+    assert layout.camera_offset_le.isEnabled()
+
+    layout.operation_layout.subtract_btn.click()
+    assert not layout.camera_offset_le.isEnabled()
+
+    # A coefficient scales the background only: the subtraction no longer cancels the offset.
+    layout.regress_cb.setChecked(True)
+    assert layout.camera_offset_le.isEnabled()
+
+
 def test_protocol_and_preview_share_the_camera_offset(layout):
+    layout.operation_layout.divide_btn.click()
     layout.camera_offset_le.setText("100,5")
     layout.add_correction_btn.click()
 
@@ -27,6 +43,7 @@ def test_protocol_and_preview_share_the_camera_offset(layout):
 
 
 def test_invalid_offset_is_rejected(layout, warnings):
+    layout.operation_layout.divide_btn.click()
     layout.camera_offset_le.setText("-")
     layout.add_correction_btn.click()
     assert layout.parent_window.protocols == []
@@ -39,6 +56,7 @@ def test_background_qc_shows_the_background_as_applied(layout, monkeypatch):
         "celldetective.preprocessing.estimate_background_per_condition",
         lambda experiment, **kwargs: received.update(kwargs) or [],
     )
+    layout.operation_layout.divide_btn.click()
     layout.camera_offset_le.setText("100,5")
     layout.interpolate_check.setChecked(True)
     monkeypatch.setattr(

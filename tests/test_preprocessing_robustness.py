@@ -831,6 +831,51 @@ def test_measurement_passes_the_black_level_to_the_local_correction():
     assert table["first_mean"].iloc[0] == pytest.approx(3.0)
 
 
+def _corrected_brighter_frame(tmp_path, **options):
+    """Model-free subtraction of a frame 3 % brighter than the frame of the background."""
+    exp_dir, (movie_dir,) = write_experiment(tmp_path, [1], frames=2)
+    illumination = 100 + 100 * np.mgrid[:FIELD, :FIELD][1] / FIELD
+    write_movie(
+        movie_dir / "sample.tif",
+        BLACK_LEVEL + np.stack([illumination, 1.03 * illumination]),
+    )
+    (corrected,) = correct_background_model_free(
+        exp_dir,
+        target_channel="Channel1",
+        operation="subtract",
+        threshold_on_std=1000,
+        frame_range=[0, 1],
+        return_stacks=True,
+        **options,
+        **QUIET,
+    )
+    return np.squeeze(corrected)[1]
+
+
+OPTIMIZED = dict(optimize_option=True, opt_coef_range=[0.95, 1.05])
+
+
+def test_subtraction_optimized_for_each_frame_removes_a_brighter_background(tmp_path):
+    plain = _corrected_brighter_frame(tmp_path / "plain", offset=BLACK_LEVEL)
+    optimized = _corrected_brighter_frame(
+        tmp_path / "optimized", offset=BLACK_LEVEL, **OPTIMIZED
+    )
+
+    assert np.nanmedian(plain) == pytest.approx(0.03 * 150, rel=0.05)
+    assert np.nanmax(np.abs(optimized)) < 0.1
+
+
+def test_optimized_subtraction_depends_on_the_black_level(tmp_path):
+    without = _corrected_brighter_frame(tmp_path / "without", **OPTIMIZED)
+    corrected = _corrected_brighter_frame(
+        tmp_path / "with", offset=BLACK_LEVEL, **OPTIMIZED
+    )
+
+    # Without it, the coefficient cannot follow the illumination across the frame.
+    assert np.nanmax(np.abs(corrected)) < 0.1
+    assert np.nanmax(np.abs(without)) > 1
+
+
 def test_paraboloid_recovers_a_known_illumination_under_cells():
     illumination, cells, image = _simulated_field()
 

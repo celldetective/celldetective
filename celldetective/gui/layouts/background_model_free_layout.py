@@ -253,6 +253,9 @@ class BackgroundModelFreeCorrectionLayout(QGridLayout, Styles):
 
         self.operation_layout = OperationLayout()
         self.addLayout(self.operation_layout, 9, 0, 1, 3)
+        self.operation_layout.divide_btn.toggled.connect(self.activate_offset)
+        self.regress_cb.toggled.connect(self.activate_offset)
+        self.activate_offset()
 
         self.addWidget(self.interpolate_check, 10, 0, 1, 1)
 
@@ -474,6 +477,13 @@ class BackgroundModelFreeCorrectionLayout(QGridLayout, Styles):
         elif self.tiles_rb.isChecked():
             for wg in self.time_range_options:
                 wg.setEnabled(False)
+
+    def activate_offset(self):
+        """Enable the offset if it matters: a subtraction only cancels it with no coefficient."""
+
+        self.camera_offset_le.setEnabled(
+            self.operation_layout.divide_btn.isChecked() or self.regress_cb.isChecked()
+        )
 
     def activate_coef_options(self):
         """Enable or disable coefficient options based on regression checkbox."""

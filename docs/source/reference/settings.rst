@@ -386,7 +386,7 @@ Accessible via the **Preprocessing** module.
     *   **Divide**: Divide the image by the background (flat-field correction).
 
 *   **Clip**: (Subtract mode only) Clip negative values to zero after subtraction.
-*   **Offset**: Camera black level. Taken off both the image and the background, by the model fit, the model-free and the local corrections alike: a division gives ``(image - offset) / (background - offset)``, and a subtraction is unchanged.
+*   **Offset**: Camera black level. Taken off both the image and the background, by the model fit, the model-free and the local corrections alike: a division gives ``(image - offset) / (background - offset)``. A subtraction cancels it, so the field is only available for a division, or for a model-free correction optimized for each frame.
 *   **Interpolate NaNs**: Fill missing or NaN pixels using neighboring values.
 
 **Background Correction**

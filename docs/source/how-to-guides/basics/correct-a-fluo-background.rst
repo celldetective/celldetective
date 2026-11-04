@@ -26,7 +26,7 @@ Correction protocol
 
 #. Do not clip.
 
-#. To divide by the background instead, set the **Offset** to the black level of the camera, so that the ratio does not keep it. A subtraction does not depend on it.
+#. To divide by the background instead, tick the divide operation and set the **Offset** to the black level of the camera, so that the ratio does not keep it. The field is grayed out for a subtraction, which does not depend on it.
 
 See :py:func:`celldetective.preprocessing.field_correction` to understand what the threshold represents.
 See :py:func:`celldetective.preprocessing.paraboloid` for a definition of the paraboloid model.

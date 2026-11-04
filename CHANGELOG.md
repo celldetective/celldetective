@@ -10,8 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - The fit and local background corrections take the camera black level, as the
   model-free correction does: a division gives `(image - offset) / (background - offset)`,
-  and a subtraction is unchanged. The offset defaults to 0 in the interface, and also
-  applies to a fit correction at measurement time. A local division by a background that
+  and a subtraction is unchanged, so the field is only available for a division, or for
+  a model-free correction optimized for each frame. The offset defaults to 0 in the
+  interface, and also applies to a fit correction at measurement time. A local division by a background that
   is not positive gives NaN.
 
 ### Changed
