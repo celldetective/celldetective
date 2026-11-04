@@ -8,10 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- The fit background correction takes the camera black level, as the model-free
-  correction does: a division gives `(image - offset) / (background - offset)`, and a
-  subtraction is unchanged. The offset defaults to 0 in the interface, and also applies to
-  a fit correction at measurement time.
+- The fit and local background corrections take the camera black level, as the
+  model-free correction does: a division gives `(image - offset) / (background - offset)`,
+  and a subtraction is unchanged. The offset defaults to 0 in the interface, and also
+  applies to a fit correction at measurement time. A local division by a background that
+  is not positive gives NaN.
 
 ### Changed
 - Stack registration flattens the registration channel before the correlation, by
@@ -45,8 +46,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     the name of the new stack. The correction runs only if accepted;
   - the steps after the first read, position by position, the stack the first step
     wrote, rather than any stack starting with `Corrected`. A model-free step of a
-    chain estimates its background from the positions of the run only, not from
-    stacks left by an earlier run;
+    chain estimates its background once per well from all its positions, reading the
+    movie of a position the first step did not process, with a warning;
   - wells with different numbers of positions: applying to all positions reaches
     every position of every well, instead of raising an error or leaving positions
     out silently;

@@ -492,6 +492,47 @@ def estimate_background_per_condition(
     return backgrounds
 
 
+def _well_background_stacks(
+    experiment: str, well_path: str, source_stacks: Dict[str, str]
+) -> Dict[str, str]:
+    """
+    Stack of every position of a well, to estimate its background in a chain of corrections.
+
+    The background always comes from the whole well. A position the previous step did not
+    process has no stack of that step, so its movie is read instead, with a warning: if that
+    step changed the channel, the two are not on the same scale.
+
+    Parameters
+    ----------
+    experiment : str
+        Path to the experiment.
+    well_path : str
+        Path to the well.
+    source_stacks : dict
+        The stack the previous step wrote for each position it processed.
+
+    Returns
+    -------
+    dict
+        The path of the stack for each position of the well that has one.
+    """
+    movie_prefix = _configured_movie_prefix(experiment)
+    stacks = {}
+    for position in get_positions_in_well(well_path):
+        stack_path = _position_stack(position, None, source_stacks)
+        if stack_path is None:
+            stack_path = get_position_movie_path(position, prefix=movie_prefix)
+            if stack_path is not None:
+                logger.warning(
+                    f"Position {extract_position_name(position)} was not processed by the "
+                    "previous step: its background is estimated from its movie. Select the "
+                    "whole well if that step changed this channel."
+                )
+        if stack_path is not None:
+            stacks[str(position)] = stack_path
+    return stacks
+
+
 def _estimate_well_background(
     positions,
     len_movie: float,
@@ -740,8 +781,9 @@ def correct_background_model_free(
             Absolute frame indices (IFDs) to correct for a preview, never exported.
     source_stacks : dict, optional
             In a chain of corrections, the stack to read for each position (see
-            `first_step_outputs`). A position it does not hold is skipped. Defaults to the movie
-            selected by the prefix.
+            `first_step_outputs`). A position it does not hold is not corrected, but its movie
+            still counts in the background of the well. Defaults to the movie selected by the
+            prefix.
     preview_frames : int, optional
             For a preview, the number of frames to correct, spread over each movie (see
             `preview_frame_indices`). Ignored if ``subset_indices`` is given.
@@ -794,10 +836,9 @@ def correct_background_model_free(
             progress_callback(status="Reconstructing background...")
 
         try:
-            # From all the positions of the well, not only those to correct. In a chain, only
-            # those of this run have a stack to read.
+            # Once per well, from all its positions, not only those to correct.
             background = _estimate_well_background(
-                positions if source_stacks is not None else get_positions_in_well(well_path),
+                get_positions_in_well(well_path),
                 len_movie,
                 movie_prefix,
                 channel_index,
@@ -810,7 +851,11 @@ def correct_background_model_free(
                 fix_nan=fix_nan,
                 progress_callback=progress_callback,
                 show_progress=show_progress_per_pos,
-                source_stacks=source_stacks,
+                source_stacks=(
+                    None
+                    if source_stacks is None
+                    else _well_background_stacks(experiment, well_path, source_stacks)
+                ),
             )
         except Exception as e:
             logger.error(

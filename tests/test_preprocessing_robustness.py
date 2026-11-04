@@ -9,7 +9,11 @@ import pytest
 import tifffile
 
 import celldetective.preprocessing as preprocessing
-from celldetective.measure import blank_skipped_channels, measure_features
+from celldetective.measure import (
+    blank_skipped_channels,
+    measure_features,
+    normalise_by_cell,
+)
 from celldetective.regionprops import regionprops_table
 from celldetective.preprocessing import (
     already_corrected_movies,
@@ -161,25 +165,60 @@ def test_chain_reads_the_exact_stack_of_the_first_step_with_an_empty_prefix(tmp_
     ]
 
 
-def test_chained_model_free_ignores_the_stale_stack_of_another_position(tmp_path):
-    exp_dir, (kept, stale) = write_experiment(tmp_path, [2])
-    for movie_dir, level in ((kept, 7.0), (stale, 1000.0)):
+def test_chained_model_free_uses_the_movie_of_an_unprocessed_position(tmp_path, monkeypatch):
+    exp_dir, (kept, other) = write_experiment(tmp_path, [2])
+    for movie_dir, level in ((kept, 7.0), (other, 1000.0)):
         write_movie(movie_dir / "Corrected_sample.tif", np.full((3, FIELD, FIELD), level))
+    write_movie(other / "sample.tif", np.full((3, FIELD, FIELD), 101.0))
     position = str(kept.parent) + os.sep
+    warned = []
+    monkeypatch.setattr(preprocessing.logger, "warning", warned.append)
 
     (corrected,) = correct_background_model_free(
         exp_dir,
         position_option=[0],
         target_channel="Channel1",
         operation="subtract",
+        threshold_on_std=1000,
         movie_prefix="Corrected",
         source_stacks={position: str(kept / "Corrected_sample.tif")},
         return_stacks=True,
         **QUIET,
     )
 
-    # With the stale position in the median, the background would not be the 7 of this one.
-    np.testing.assert_allclose(corrected, 0.0, atol=1e-5)
+    # The median of the well is that of 7 and of the movie at 101, not of the stale 1000.
+    np.testing.assert_allclose(np.nanmedian(corrected), 7 - 54, atol=1e-3)
+    assert any("not processed by the previous step" in message for message in warned)
+
+
+@pytest.mark.parametrize("chained", [False, True])
+def test_model_free_background_is_built_once_per_well_from_all_positions(
+    tmp_path, monkeypatch, chained
+):
+    exp_dir, movie_dirs = write_experiment(tmp_path, [2, 2], frames=1)
+    sources = first_step_outputs(exp_dir) if chained else None
+    if chained:
+        _offset(exp_dir)
+    calls = []
+    estimate = preprocessing._estimate_well_background
+
+    def spy(positions, *args, **kwargs):
+        calls.append(len(positions))
+        return estimate(positions, *args, **kwargs)
+
+    monkeypatch.setattr(preprocessing, "_estimate_well_background", spy)
+
+    correct_background_model_free(
+        exp_dir,
+        position_option=[0],
+        target_channel="Channel1",
+        operation="subtract",
+        threshold_on_std=1000,
+        source_stacks=sources,
+        **QUIET,
+    )
+
+    assert calls == [2, 2]
 
 
 def test_a_position_without_a_source_stack_is_skipped(tmp_path):
@@ -732,6 +771,64 @@ def test_measurement_uses_the_black_level():
 
     truth = np.mean((illumination + cells)[bright] / illumination[bright])
     assert table["first_mean"].iloc[0] == pytest.approx(truth, rel=0.02)
+
+
+def _cell_on_a_flat_background():
+    """A cell at 300 over a background of 100, both above the black level."""
+    image = np.full((FIELD, FIELD), BLACK_LEVEL + 100.0)
+    label = np.zeros((FIELD, FIELD), dtype=int)
+    label[20:30, 20:30] = 1
+    image[label == 1] = BLACK_LEVEL + 300.0
+    return image, label
+
+
+def test_local_correction_takes_the_black_level():
+    image, label = _cell_on_a_flat_background()
+
+    corrected = normalise_by_cell(image, label, operation="divide", offset=BLACK_LEVEL)
+    biased = normalise_by_cell(image, label, operation="divide")
+
+    assert corrected[25, 25] == pytest.approx(3.0)
+    assert biased[25, 25] == pytest.approx(700 / 500)
+
+
+def test_local_correction_with_a_black_level_leaves_a_subtraction_unchanged():
+    image, label = _cell_on_a_flat_background()
+
+    with_offset = normalise_by_cell(image, label, offset=BLACK_LEVEL)
+
+    assert with_offset[25, 25] == pytest.approx(200.0)
+
+
+def test_local_black_level_above_the_background_is_nan():
+    image, label = _cell_on_a_flat_background()
+
+    corrected = normalise_by_cell(image, label, operation="divide", offset=10_000)
+
+    assert np.isnan(corrected[25, 25])
+
+
+def test_measurement_passes_the_black_level_to_the_local_correction():
+    image, label = _cell_on_a_flat_background()
+    norm = dict(
+        correction_type="local",
+        target_channel="first",
+        distance=5,
+        model="median",
+        operation="divide",
+        clip=False,
+        offset=BLACK_LEVEL,
+    )
+
+    table = measure_features(
+        image[..., np.newaxis],
+        label,
+        features=["intensity_mean"],
+        channels=["first"],
+        normalisation_list=[norm],
+    )
+
+    assert table["first_mean"].iloc[0] == pytest.approx(3.0)
 
 
 def test_paraboloid_recovers_a_known_illumination_under_cells():

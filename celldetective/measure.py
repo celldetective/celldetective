@@ -488,6 +488,7 @@ def _apply_image_normalization(
                 model=norm["model"],
                 operation=norm["operation"],
                 clip=norm["clip"],
+                offset=norm.get("offset"),
             )
         else:
             try:
@@ -1310,9 +1311,13 @@ def local_normalisation(
                 float
             ) - background_intensity[measurement][index - 1].astype(float)
         elif operation == "divide":
-            image[np.where(labels == cell)] = image[np.where(labels == cell)].astype(
-                float
-            ) / background_intensity[measurement][index - 1].astype(float)
+            background = background_intensity[measurement][index - 1].astype(float)
+            # As the other corrections: the ratio means nothing without a positive background.
+            image[np.where(labels == cell)] = (
+                image[np.where(labels == cell)].astype(float) / background
+                if background > 0
+                else np.nan
+            )
     if clip:
         image[image <= 0.0] = 0.0
 
@@ -1326,6 +1331,7 @@ def normalise_by_cell(
     model: str = "median",
     operation: str = "subtract",
     clip: bool = False,
+    offset: Optional[float] = None,
 ) -> np.ndarray:
     """
     Normalizes an image based on the local background around each cell.
@@ -1344,12 +1350,19 @@ def normalise_by_cell(
         The normalization operation ("subtract" or "divide"). Default is "subtract".
     clip : bool, optional
         Whether to clip the normalized values. Default is False.
+    offset : float, optional
+        Camera black level, taken off both the image and the local background, as in the other
+        background corrections: a division gives (image - offset) / (background - offset). A
+        subtraction is unchanged. Defaults to None, no offset.
 
     Returns
     -------
     ndarray
         The normalized image.
     """
+
+    if offset:
+        image = image.astype(float) - offset
 
     try:
         import celldetective.extra_properties as extra_props

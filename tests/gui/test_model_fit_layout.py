@@ -76,6 +76,8 @@ def test_local_correction_rejects_an_empty_distance(local_layout, warnings):
     assert len(warnings) == 1
 
 
-def test_local_correction_has_no_offset_to_set(local_layout):
-    assert local_layout.offset_lbl.isHidden()
-    assert local_layout.camera_offset_le.isHidden()
+def test_local_correction_takes_the_offset(local_layout):
+    local_layout.camera_offset_le.setText("100,5")
+
+    assert local_layout.generate_instructions()
+    assert local_layout.instructions["offset"] == pytest.approx(100.5)
