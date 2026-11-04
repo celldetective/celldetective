@@ -4,10 +4,12 @@ import os
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 import pytest
 import tifffile
 
 import celldetective.preprocessing as preprocessing
+from celldetective.extra_properties import intensity_radial_gradient
 from celldetective.measure import measure_features
 from celldetective.preprocessing import (
     UnfittableBackgroundError,
@@ -449,12 +451,22 @@ def test_measurement_skips_an_unfittable_frame_and_says_which(monkeypatch):
     skipped = measure_features(
         image.copy(), label, normalisation_list=[norm], frame=4, **measure
     )
+    fitted = measure_features(
+        image.copy(), label, normalisation_list=[dict(norm, threshold_on_std=1000)], **measure
+    )
+    # The frames are concatenated at the end of a measurement.
+    table = pd.concat([fitted, skipped], ignore_index=True)
 
     assert any("frame 4, channel 'first'" in message for message in warned)
-    assert skipped["area"].iloc[0] == 100
-    for channel, index in (("first", 0), ("second", 1)):
-        uncorrected = image[20:30, 20:30, index].mean()
-        assert skipped[f"{channel}_mean"].iloc[0] == pytest.approx(uncorrected)
+    assert table["area"].tolist() == [100, 100]
+    assert table["first_mean"].notna().tolist() == [True, False]
+    assert table["second_mean"].iloc[1] == pytest.approx(image[20:30, 20:30, 1].mean())
+
+
+def test_radial_gradient_of_an_empty_channel_is_missing():
+    mask = np.ones((9, 9), dtype=bool)
+
+    assert np.isnan(intensity_radial_gradient(mask, np.full((9, 9), np.nan))).all()
 
 
 def test_unfittable_background_is_a_value_error():

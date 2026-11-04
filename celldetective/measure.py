@@ -452,8 +452,9 @@ def _apply_image_normalization(
 ) -> None:
     """Apply per-channel background correction in-place.
 
-    A frame whose background cannot be fitted keeps its original pixels in that channel, with a
-    warning.
+    A frame whose background cannot be fitted is skipped for that channel with a warning: the
+    channel is set to NaN, so that its intensities are missing rather than uncorrected, and the
+    cells keep their rows and their other measurements.
 
     Parameters
     ----------
@@ -498,8 +499,9 @@ def _apply_image_normalization(
                 where = "this frame" if frame is None else f"frame {frame}"
                 logger.warning(
                     f"Background correction skipped for {where}, channel '{target}': {e} "
-                    "The intensities of this channel are uncorrected in this frame."
+                    "The intensities of this channel are NaN in this frame."
                 )
+                img[:, :, ind] = np.nan
 
 
 def _get_border_suffix(d) -> str:
