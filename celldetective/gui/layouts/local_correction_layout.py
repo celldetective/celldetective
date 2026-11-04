@@ -58,6 +58,9 @@ class LocalCorrectionLayout(BackgroundFitCorrectionLayout):
         # Local correction does not fit a model: no downsampling.
         self.downsample_lbl.hide()
         self.downsample_le.hide()
+        # Nor does it use a black level: it is measured around each cell.
+        self.offset_lbl.hide()
+        self.camera_offset_le.hide()
 
     def check_mask_existence(self, population: str) -> bool:
         """Check if masks exist for the given population."""
@@ -112,8 +115,20 @@ class LocalCorrectionLayout(BackgroundFitCorrectionLayout):
             )
             self.viewer.show()
 
-    def generate_instructions(self):
-        """Generate the instructions dictionary."""
+    def generate_instructions(self) -> bool:
+        """
+        Generate the instructions dictionary.
+
+        Returns
+        -------
+        bool
+            False if the distance is invalid, in which case a warning is shown.
+        """
+
+        # None once the field warned it is invalid.
+        distance = self.threshold_le.get_threshold()
+        if distance is None:
+            return False
 
         if self.operation_layout.subtract_btn.isChecked():
             operation = "subtract"
@@ -133,7 +148,8 @@ class LocalCorrectionLayout(BackgroundFitCorrectionLayout):
             "target_channel": self.channels_cb.currentText(),
             "correction_type": "local",
             "model": self.models_cb.currentText(),
-            "distance": int(self.threshold_le.get_threshold()),
+            "distance": int(distance),
             "operation": operation,
             "clip": clip,
         }
+        return True

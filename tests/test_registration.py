@@ -190,6 +190,17 @@ def test_register_single_stack_rejects_factor_below_one(tmp_path, parameter):
         )
 
 
+def test_register_single_stack_rejects_a_negative_flattening(tmp_path):
+    _, movie_dir = _write_experiment(tmp_path)
+    with pytest.raises(ValueError, match="negative"):
+        register_single_stack(
+            str(movie_dir / "sample.tif"),
+            registration_channel_index=0,
+            nbr_channels=2,
+            highpass_sigma=-1,
+        )
+
+
 def _faint_drift_under_uneven_illumination():
     """Faint texture drifting by 20 px under an illumination fixed to the camera."""
     size = 256

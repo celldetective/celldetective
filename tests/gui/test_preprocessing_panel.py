@@ -168,7 +168,7 @@ def test_chain_reads_the_stack_of_the_first_step(experiment, launched, answers, 
     first, second = launched
     assert (first["movie_prefix"], first["export_prefix"]) == (None, "Corrected")
     assert second["export_prefix"] is None
-    assert "source_stacks" not in first
+    assert first["source_stacks"] is None
     assert [Path(s).name for s in second["source_stacks"].values()] == ["Corrected_sample.tif"]
 
 

@@ -74,7 +74,6 @@ class BackgroundCorrectionProcess(Process):
         movie_prefix = getattr(self, "movie_prefix", None)
         export_prefix = getattr(self, "export_prefix", "Corrected")
         correction_type = getattr(self, "correction_type", "model")
-        source_stacks = getattr(self, "source_stacks", None)
 
         # Timestamps for estimation
         self.t0_well = time.time()
@@ -194,14 +193,24 @@ class BackgroundCorrectionProcess(Process):
                 self.queue.put(data)
 
         try:
+            common = dict(
+                well_option=self.well_option,
+                position_option=self.position_option,
+                target_channel=self.target_channel,
+                export=export,
+                return_stacks=return_stacks,
+                show_progress_per_well=False,
+                show_progress_per_pos=False,
+                movie_prefix=movie_prefix,
+                export_prefix=export_prefix,
+                source_stacks=getattr(self, "source_stacks", None),
+                progress_callback=progress_callback,
+            )
             if correction_type == "model-free":
                 from celldetective.preprocessing import correct_background_model_free
 
                 corrected_stacks = correct_background_model_free(
                     self.exp_dir,
-                    well_option=self.well_option,
-                    position_option=self.position_option,
-                    target_channel=self.target_channel,
                     mode=getattr(self, "mode", "timeseries"),
                     threshold_on_std=self.threshold_on_std,
                     frame_range=getattr(self, "frame_range", [0, 5]),
@@ -211,16 +220,9 @@ class BackgroundCorrectionProcess(Process):
                     operation=self.operation,
                     clip=self.clip,
                     offset=getattr(self, "offset", None),
-                    export=export,
-                    return_stacks=return_stacks,
                     fix_nan=getattr(self, "fix_nan", False),
                     activation_protocol=self.activation_protocol,
-                    show_progress_per_well=False,
-                    show_progress_per_pos=False,
-                    movie_prefix=movie_prefix,
-                    export_prefix=export_prefix,
-                    source_stacks=source_stacks,
-                    progress_callback=progress_callback,
+                    **common,
                     subset_indices=getattr(self, "subset_indices", None),
                     preview_frames=getattr(self, "preview_frames", None),
                 )
@@ -229,17 +231,7 @@ class BackgroundCorrectionProcess(Process):
 
                 corrected_stacks = correct_channel_offset(
                     self.exp_dir,
-                    well_option=self.well_option,
-                    position_option=self.position_option,
-                    target_channel=self.target_channel,
-                    export=export,
-                    return_stacks=return_stacks,
-                    show_progress_per_well=False,
-                    show_progress_per_pos=False,
-                    movie_prefix=movie_prefix,
-                    export_prefix=export_prefix,
-                    source_stacks=source_stacks,
-                    progress_callback=progress_callback,
+                    **common,
                     correction_horizontal=getattr(self, "correction_horizontal", 0),
                     correction_vertical=getattr(self, "correction_vertical", 0),
                     **self.kwargs if hasattr(self, "kwargs") else {},
@@ -249,17 +241,7 @@ class BackgroundCorrectionProcess(Process):
 
                 corrected_stacks = register_stacks(
                     self.exp_dir,
-                    well_option=self.well_option,
-                    position_option=self.position_option,
-                    target_channel=self.target_channel,
-                    export=export,
-                    return_stacks=return_stacks,
-                    show_progress_per_well=False,
-                    show_progress_per_pos=False,
-                    movie_prefix=movie_prefix,
-                    export_prefix=export_prefix,
-                    source_stacks=source_stacks,
-                    progress_callback=progress_callback,
+                    **common,
                     # register_stacks owns the defaults of the options left out.
                     **{
                         key: getattr(self, key)
@@ -279,24 +261,15 @@ class BackgroundCorrectionProcess(Process):
 
                 corrected_stacks = correct_background_model(
                     self.exp_dir,
-                    well_option=self.well_option,
-                    position_option=self.position_option,
-                    target_channel=self.target_channel,
                     model=self.model,
                     threshold_on_std=self.threshold_on_std,
                     operation=self.operation,
                     clip=self.clip,
-                    export=export,
-                    return_stacks=return_stacks,
                     activation_protocol=self.activation_protocol,
-                    show_progress_per_well=False,
-                    show_progress_per_pos=False,
-                    movie_prefix=movie_prefix,
-                    export_prefix=export_prefix,
-                    source_stacks=source_stacks,
-                    progress_callback=progress_callback,
+                    **common,
                     downsample=getattr(self, "downsample", 10),
                     subset_indices=getattr(self, "subset_indices", None),
+                    offset=getattr(self, "offset", None),
                 )
 
             if return_stacks and corrected_stacks and len(corrected_stacks) > 0:

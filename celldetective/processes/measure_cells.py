@@ -26,6 +26,7 @@ from art import tprint
 from typing import Optional, Union, Dict, Any, List
 import gc
 from celldetective.measure import (
+    blank_skipped_channels,
     measure_features,
     measure_isotropic_intensity,
     center_of_mass_to_abs_coordinates,
@@ -405,6 +406,10 @@ class MeasurementProcess(Process):
                             "x": self.column_labels["x"],
                             "y": self.column_labels["y"],
                         }
+                    else:
+                        positions_at_t = blank_skipped_channels(
+                            positions_at_t, feature_table, self.channel_names
+                        )
                     feature_table.rename(
                         columns={
                             "centroid-1": "POSITION_X",

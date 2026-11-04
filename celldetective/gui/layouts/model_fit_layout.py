@@ -2,13 +2,11 @@ from typing import Optional
 
 import numpy as np
 from PyQt5.QtCore import QSize, QThread, pyqtSignal
-from PyQt5.QtGui import QIntValidator
 from PyQt5.QtWidgets import (
     QGridLayout,
     QLabel,
     QComboBox,
     QPushButton,
-    QLineEdit,
     QHBoxLayout,
     QSpacerItem,
     QSizePolicy,
@@ -20,7 +18,7 @@ from superqt.fonticon import icon
 
 from celldetective.gui.base.components import CelldetectiveProgressDialog, ToolButton
 from celldetective.gui.base.styles import Styles
-from celldetective.gui.gui_utils import ThresholdLineEdit
+from celldetective.gui.gui_utils import CameraOffsetLineEdit, ThresholdLineEdit
 from celldetective.gui.layouts.operation_layout import OperationLayout
 from celldetective.preprocessing import correct_background_model
 from celldetective.processes.background_correction import BackgroundCorrectionProcess
@@ -114,8 +112,15 @@ class BackgroundFitCorrectionLayout(QGridLayout, Styles):
         self.downsample_lbl.setToolTip(
             "Factor by which to downsample the image for fitting (for speed)."
         )
-        self.downsample_le = QLineEdit("10")
-        self.downsample_le.setValidator(QIntValidator())
+        self.downsample_le = ThresholdLineEdit(
+            init_value=10,
+            placeholder="downsampling factor",
+            value_type="int",
+            bottom=1,
+        )
+
+        self.offset_lbl = QLabel("Offset: ")
+        self.camera_offset_le = CameraOffsetLineEdit()
 
     def add_to_layout(self):
         """Add widgets to the layout."""
@@ -144,16 +149,21 @@ class BackgroundFitCorrectionLayout(QGridLayout, Styles):
         downsample_layout.addWidget(self.downsample_le, 75)
         self.addLayout(downsample_layout, 3, 0, 1, 3)
 
+        offset_layout = QHBoxLayout()
+        offset_layout.addWidget(self.offset_lbl, 25)
+        offset_layout.addWidget(self.camera_offset_le, 75)
+        self.addLayout(offset_layout, 4, 0, 1, 3)
+
         self.operation_layout = OperationLayout()
-        self.addLayout(self.operation_layout, 4, 0, 1, 3)
+        self.addLayout(self.operation_layout, 5, 0, 1, 3)
 
         correction_layout = QHBoxLayout()
         correction_layout.addWidget(self.add_correction_btn, 95)
         correction_layout.addWidget(self.corrected_stack_viewer, 5)
-        self.addLayout(correction_layout, 5, 0, 1, 3)
+        self.addLayout(correction_layout, 6, 0, 1, 3)
 
         verticalSpacer = QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
-        self.addItem(verticalSpacer, 6, 0, 1, 3)
+        self.addItem(verticalSpacer, 7, 0, 1, 3)
 
     def add_instructions_to_parent_list(self):
         """Add instructions to the parent protocol list."""
@@ -175,12 +185,21 @@ class BackgroundFitCorrectionLayout(QGridLayout, Styles):
         Returns
         -------
         bool
-            False if the threshold is invalid, in which case a warning is shown.
+            False if the threshold, offset or downsampling is invalid, in which case a warning
+            is shown.
         """
 
         # None once the field warned it is invalid.
         threshold = self.threshold_le.get_threshold()
         if threshold is None:
+            return False
+
+        valid_offset, offset = self.camera_offset_le.value_or_warn()
+        if not valid_offset:
+            return False
+
+        downsample = self.downsample_le.get_threshold()
+        if downsample is None:
             return False
 
         if self.operation_layout.subtract_btn.isChecked():
@@ -203,7 +222,8 @@ class BackgroundFitCorrectionLayout(QGridLayout, Styles):
             "threshold_on_std": threshold,
             "operation": operation,
             "clip": clip,
-            "downsample": int(self.downsample_le.text()),
+            "offset": offset,
+            "downsample": downsample,
         }
         return True
 
@@ -254,23 +274,8 @@ class BackgroundFitCorrectionLayout(QGridLayout, Styles):
             if returnValue == QMessageBox.Ok:
                 return None
 
-        # None once the field warned it is invalid.
-        threshold = self.threshold_le.get_threshold()
-        if threshold is None:
+        if not self.generate_instructions():
             return None
-
-        if self.operation_layout.subtract_btn.isChecked():
-            operation = "subtract"
-        else:
-            operation = "divide"
-
-        if (
-            self.operation_layout.clip_btn.isChecked()
-            and self.operation_layout.subtract_btn.isChecked()
-        ):
-            clip = True
-        else:
-            clip = False
 
         self.attr_parent.locate_image()
         self.set_target_channel()
@@ -288,16 +293,11 @@ class BackgroundFitCorrectionLayout(QGridLayout, Styles):
                 subset_indices = [midpoint * n_channels]
 
         process_args = {
+            **self.instructions,
             "exp_dir": self.attr_parent.exp_dir,
             "well_option": self.attr_parent.well_list.getSelectedIndices(),
             "position_option": self.attr_parent.position_list.getSelectedIndices(),
-            "target_channel": self.channels_cb.currentText(),
-            "model": self.models_cb.currentText(),
-            "threshold_on_std": threshold,
-            "operation": operation,
-            "clip": clip,
             "activation_protocol": [["gauss", 2], ["std", 4]],
-            "downsample": int(self.downsample_le.text()),
             "subset_indices": subset_indices,
         }
 
@@ -423,6 +423,7 @@ class PreviewWorker(QThread):
                 activation_protocol=self.process_args["activation_protocol"],
                 downsample=self.process_args["downsample"],
                 subset_indices=self.process_args["subset_indices"],
+                offset=self.process_args["offset"],
                 show_progress_per_well=False,
                 show_progress_per_pos=False,
             )

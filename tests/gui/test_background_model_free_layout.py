@@ -17,16 +17,6 @@ def layout(qtbot):
     return BackgroundModelFreeCorrectionLayout(parent)
 
 
-@pytest.fixture
-def warnings(monkeypatch):
-    shown = []
-    monkeypatch.setattr(
-        "celldetective.gui.gui_utils.generic_message",
-        lambda *args, **kwargs: shown.append(args),
-    )
-    return shown
-
-
 def test_protocol_and_preview_share_the_camera_offset(layout):
     layout.camera_offset_le.setText("100,5")
     layout.add_correction_btn.click()

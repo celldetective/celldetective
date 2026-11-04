@@ -30,7 +30,7 @@ from celldetective.gui.base.components import (
 )
 from celldetective.gui.base.styles import Styles
 from celldetective.gui.gui_utils import (
-    NumberLineEdit,
+    CameraOffsetLineEdit,
     QuickSliderLayout,
     RadiusLineEdit,
     ThresholdLineEdit,
@@ -247,10 +247,7 @@ class BackgroundModelFreeCorrectionLayout(QGridLayout, Styles):
 
         offset_layout = QHBoxLayout()
         offset_layout.addWidget(QLabel("Offset: "), 25)
-        self.camera_offset_le = NumberLineEdit(
-            "0", invalid="The offset must be a number, or empty."
-        )
-        self.camera_offset_le.setPlaceholderText("camera black level")
+        self.camera_offset_le = CameraOffsetLineEdit()
         offset_layout.addWidget(self.camera_offset_le, 75)
         self.addLayout(offset_layout, 8, 0, 1, 3)
 

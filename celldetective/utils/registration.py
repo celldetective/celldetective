@@ -186,7 +186,6 @@ def estimate_shift(
     moving: np.ndarray,
     window: np.ndarray,
     upsample_factor: int = 10,
-    highpass_sigma: Optional[float] = None,
 ) -> np.ndarray:
     """
     Estimate the translation that registers ``moving`` onto ``reference``.
@@ -201,9 +200,6 @@ def estimate_shift(
         Weights from :func:`tukey_window`.
     upsample_factor : int, optional
         Sub-pixel precision is ``1 / upsample_factor`` pixel. Default is 10.
-    highpass_sigma : float, optional
-        Flatten the frames with this blur first (see :func:`flatten_illumination`). None or 0
-        (default) leaves them as they are.
 
     Returns
     -------
@@ -217,14 +213,14 @@ def estimate_shift(
         return np.zeros(2)
 
     return _shift_between_spectra(
-        _spectrum(reference, window, highpass_sigma),
-        _spectrum(moving, window, highpass_sigma),
+        _spectrum(reference, window),
+        _spectrum(moving, window),
         upsample_factor,
     )
 
 
 def _spectrum(
-    frame: np.ndarray, window: np.ndarray, highpass_sigma: Optional[float] = None
+    frame: np.ndarray, window: np.ndarray, highpass_sigma: float = 0.0
 ) -> np.ndarray:
     """Fourier transform of the prepared frame, computed once per frame."""
     if highpass_sigma:
@@ -253,7 +249,7 @@ def estimate_drift(
     reference: str = "previous",
     upsample_factor: int = 10,
     progress_callback=None,
-    highpass_sigma: Optional[float] = None,
+    highpass_sigma: float = 0.0,
 ) -> np.ndarray:
     """
     Estimate the shift of every frame of a single-channel sequence.
@@ -275,7 +271,7 @@ def estimate_drift(
     progress_callback : callable, optional
         Called as ``progress_callback(iter=k)`` after each frame.
     highpass_sigma : float, optional
-        Flatten the frames with this blur first (see :func:`flatten_illumination`). None or 0
+        Flatten the frames with this blur first (see :func:`flatten_illumination`). 0
         (default) leaves them as they are.
 
     Returns

@@ -9,10 +9,9 @@ import pytest
 import tifffile
 
 import celldetective.preprocessing as preprocessing
-from celldetective.extra_properties import intensity_radial_gradient
-from celldetective.measure import measure_features
+from celldetective.measure import blank_skipped_channels, measure_features
+from celldetective.regionprops import regionprops_table
 from celldetective.preprocessing import (
-    UnfittableBackgroundError,
     already_corrected_movies,
     first_step_outputs,
     correct_background_model,
@@ -25,7 +24,7 @@ from celldetective.preprocessing import (
     register_stacks,
 )
 from celldetective.utils.experiment import get_position_movie_path
-from tests.preprocessing_helpers import FIELD, write_experiment
+from tests.preprocessing_helpers import FIELD, write_experiment, write_movie
 
 QUIET = dict(show_progress_per_well=False, show_progress_per_pos=False)
 
@@ -165,12 +164,7 @@ def test_chain_reads_the_exact_stack_of_the_first_step_with_an_empty_prefix(tmp_
 def test_chained_model_free_ignores_the_stale_stack_of_another_position(tmp_path):
     exp_dir, (kept, stale) = write_experiment(tmp_path, [2])
     for movie_dir, level in ((kept, 7.0), (stale, 1000.0)):
-        tifffile.imwrite(
-            movie_dir / "Corrected_sample.tif",
-            np.full((3, FIELD, FIELD), level, dtype=np.float32),
-            imagej=True,
-            metadata={"axes": "TYX"},
-        )
+        write_movie(movie_dir / "Corrected_sample.tif", np.full((3, FIELD, FIELD), level))
     position = str(kept.parent) + os.sep
 
     (corrected,) = correct_background_model_free(
@@ -303,12 +297,7 @@ def test_threshold_masking_everything_is_reported_and_writes_nothing(tmp_path):
 def test_skipped_well_is_reported_after_correcting_the_others(tmp_path):
     exp_dir, movie_dirs = write_experiment(tmp_path, [1, 1])
     # The first well has nothing to estimate from: its only frames are blank.
-    tifffile.imwrite(
-        movie_dirs[0] / "sample.tif",
-        np.zeros((3, FIELD, FIELD), dtype=np.float32),
-        imagej=True,
-        metadata={"axes": "TYX"},
-    )
+    write_movie(movie_dirs[0] / "sample.tif", np.zeros((3, FIELD, FIELD)))
 
     with pytest.raises(RuntimeError, match="W1"):
         correct_background_model_free(
@@ -365,12 +354,7 @@ def test_well_without_a_selected_position_estimates_nothing(tmp_path, monkeypatc
 
 def test_cancelling_after_a_skipped_well_is_not_reported_as_failed(tmp_path):
     exp_dir, movie_dirs = write_experiment(tmp_path, [1, 1])
-    tifffile.imwrite(
-        movie_dirs[0] / "sample.tif",
-        np.zeros((3, FIELD, FIELD), dtype=np.float32),
-        imagej=True,
-        metadata={"axes": "TYX"},
-    )
+    write_movie(movie_dirs[0] / "sample.tif", np.zeros((3, FIELD, FIELD)))
     asked = []
 
     def cancel_at_the_second_well(**kwargs):
@@ -463,14 +447,165 @@ def test_measurement_skips_an_unfittable_frame_and_says_which(monkeypatch):
     assert table["second_mean"].iloc[1] == pytest.approx(image[20:30, 20:30, 1].mean())
 
 
-def test_radial_gradient_of_an_empty_channel_is_missing():
-    mask = np.ones((9, 9), dtype=bool)
+def _unfittable_normalisation():
+    return dict(
+        correction_type="fit",
+        target_channel="first",
+        threshold_on_std=0.0,
+        operation="divide",
+        model="paraboloid",
+        clip=False,
+    )
 
-    assert np.isnan(intensity_radial_gradient(mask, np.full((9, 9), np.nan))).all()
+
+def test_a_second_correction_of_a_skipped_channel_is_skipped_too():
+    image = 100 + np.random.default_rng(0).normal(0, 5, (FIELD, FIELD, 2))
+    label = np.zeros((FIELD, FIELD), dtype=int)
+    label[20:30, 20:30] = 1
+    norm = _unfittable_normalisation()
+
+    table = measure_features(
+        image,
+        label,
+        features=["area", "intensity_mean"],
+        channels=["first", "second"],
+        normalisation_list=[norm, dict(norm, threshold_on_std=1000)],
+    )
+
+    assert "first_mean" not in table.columns
+    assert table["area"].tolist() == [100]
 
 
-def test_unfittable_background_is_a_value_error():
-    assert issubclass(UnfittableBackgroundError, ValueError)
+def test_an_integer_image_can_skip_its_correction():
+    image = (100 + np.random.default_rng(0).normal(0, 5, (FIELD, FIELD, 2))).astype(np.uint16)
+    label = np.zeros((FIELD, FIELD), dtype=int)
+    label[20:30, 20:30] = 1
+
+    table = measure_features(
+        image,
+        label,
+        features=["area", "intensity_mean"],
+        channels=["first", "second"],
+        normalisation_list=[_unfittable_normalisation()],
+    )
+
+    assert "first_mean" not in table.columns
+    assert table["second_mean"].iloc[0] == pytest.approx(image[20:30, 20:30, 1].mean())
+
+
+def test_measurement_uses_the_downsampling_of_the_correction(monkeypatch):
+    received = {}
+
+    def fake_correction(img, **kwargs):
+        received.update(kwargs)
+        return img
+
+    monkeypatch.setattr("celldetective.measure.field_correction", fake_correction)
+    label = np.zeros((FIELD, FIELD), dtype=int)
+    label[20:30, 20:30] = 1
+
+    measure_features(
+        np.ones((FIELD, FIELD, 1)),
+        label,
+        features=["area"],
+        channels=["first"],
+        normalisation_list=[dict(_unfittable_normalisation(), downsample=3)],
+    )
+
+    assert received["downsample"] == 3
+
+
+@pytest.mark.parametrize("target_channel", [None, "first"])
+def test_a_cell_with_nothing_to_measure_keeps_the_shape_of_the_others(target_channel):
+    # Unknown pixels, as a correction leaves them, entirely cover the first cell.
+    image = np.ones((FIELD, FIELD, 1))
+    image[:15, :15, 0] = np.nan
+    label = np.zeros((FIELD, FIELD), dtype=int)
+    label[5:10, 5:10] = 1
+    label[20:30, 20:30] = 2
+
+    if target_channel is None:
+
+        def two_values(regionmask, intensity_image):
+            return float(intensity_image[regionmask].mean()), 2.0
+
+    else:
+
+        def two_values(regionmask, intensity_image, target_channel=target_channel):
+            return float(intensity_image[regionmask].mean()), 2.0
+
+    table = regionprops_table(
+        label,
+        intensity_image=image,
+        properties=["label"],
+        extra_properties=(two_values,),
+        channel_names=["first"],
+    )
+
+    values = np.array([v for k, v in table.items() if k != "label"])
+    assert values.shape == (2, 2)
+    assert np.isnan(values[:, 0]).all()
+    assert values[:, 1].tolist() == [1.0, 2.0]
+
+
+def test_skipped_channel_leaves_no_value_of_an_earlier_measurement():
+    image = 100 + np.random.default_rng(0).normal(0, 5, (FIELD, FIELD, 2))
+    label = np.zeros((FIELD, FIELD), dtype=int)
+    label[20:30, 20:30] = 1
+    norm = dict(
+        correction_type="fit",
+        target_channel="adhesion",
+        threshold_on_std=0.0,
+        operation="divide",
+        model="paraboloid",
+        clip=False,
+    )
+    channels = ["adhesion", "adhesion_channel"]
+    table = measure_features(
+        image.copy(),
+        label,
+        features=["intensity_mean"],
+        channels=channels,
+        normalisation_list=[norm],
+    )
+    earlier = pd.DataFrame(
+        {
+            "class_id": [1.0],
+            "POSITION_X": [25.0],
+            "adhesion_mean": [7.0],
+            "adhesion_channel_mean": [8.0],
+        }
+    )
+
+    positions = blank_skipped_channels(earlier, table, channels)
+    merged = positions.merge(table, how="outer", on="class_id", suffixes=("_delme", ""))
+
+    assert merged["adhesion_mean"].isna().all()
+    assert merged["POSITION_X"].iloc[0] == 25.0
+    measured = image[20:30, 20:30, 1].mean()
+    assert merged["adhesion_channel_mean"].iloc[0] == pytest.approx(measured)
+
+
+def test_an_empty_channel_never_reaches_a_custom_measurement():
+    def fragile(regionmask, intensity_image):
+        assert not np.isnan(intensity_image).all()
+        return float(intensity_image[regionmask].mean()), 2.0
+
+    image = np.ones((FIELD, FIELD, 2))
+    image[:, :, 0] = np.nan
+    label = np.zeros((FIELD, FIELD), dtype=int)
+    label[20:30, 20:30] = 1
+
+    table = regionprops_table(
+        label,
+        intensity_image=image,
+        properties=["label"],
+        extra_properties=(fragile,),
+        channel_names=["first", "second"],
+    )
+
+    assert np.isnan(list(table.values())[1:]).sum() == 2
+    assert sorted(v[0] for v in table.values() if np.isfinite(v[0])) == [1.0, 1.0, 2.0]
 
 
 # ------------------------------------------------------------------ surfaces
@@ -487,6 +622,116 @@ def _simulated_field(size=256):
     for cy, cx in rng.uniform(0, size, (40, 2)):
         cells += 300 * np.exp(-((yy - cy) ** 2 + (xx - cx) ** 2) / (2 * 6**2))
     return illumination, cells, illumination + cells + rng.normal(0, 3, (size, size))
+
+
+BLACK_LEVEL = 400
+
+
+def test_black_level_gives_the_true_ratio():
+    illumination, cells, image = _simulated_field()
+    raw = image + BLACK_LEVEL
+    bright = cells > 100
+    truth = np.mean((illumination + cells)[bright] / illumination[bright])
+
+    corrected = field_correction(raw, threshold=8, offset=BLACK_LEVEL)
+    biased = field_correction(raw, threshold=8)
+
+    assert corrected[bright].mean() == pytest.approx(truth, rel=0.02)
+    assert biased[bright].mean() < truth * 0.9
+
+
+def test_black_level_does_not_wrap_an_unsigned_image():
+    image = _simulated_field()[2] + BLACK_LEVEL
+    unsigned = np.clip(image, 0, None).astype(np.uint16)
+    unsigned[100, 100] = BLACK_LEVEL - 100
+
+    corrected = field_correction(unsigned, threshold=8, offset=BLACK_LEVEL)
+
+    assert corrected[100, 100] < 0
+
+
+def test_black_level_leaves_a_subtraction_unchanged():
+    image = _simulated_field()[2]
+    common = dict(threshold=8, operation="subtract")
+
+    np.testing.assert_allclose(
+        field_correction(image, offset=BLACK_LEVEL, **common),
+        field_correction(image, **common),
+    )
+
+
+def test_background_is_returned_as_applied():
+    image = _simulated_field()[2]
+
+    _, background = field_correction(image, threshold=8, return_bg=True)
+    _, applied = field_correction(image, threshold=8, return_bg=True, offset=BLACK_LEVEL)
+
+    np.testing.assert_allclose(applied, background - BLACK_LEVEL)
+
+
+def test_black_level_above_the_background_is_nan():
+    image = _simulated_field()[2]
+
+    corrected = field_correction(image, threshold=8, offset=10_000)
+
+    assert np.isnan(corrected).all()
+
+
+def test_fit_and_model_free_agree_with_the_same_black_level(tmp_path):
+    exp_dir, movie_dirs = write_experiment(tmp_path, [5], frames=1)
+    rng = np.random.default_rng(0)
+    yy, xx = np.mgrid[:FIELD, :FIELD]
+    illumination = 300 + 100 * (1 - ((yy - 32) ** 2 + (xx - 32) ** 2) / 32**2)
+    blob = lambda cy, cx: 600 * np.exp(-((yy - cy) ** 2 + (xx - cx) ** 2) / (2 * 3**2))
+    places = [(22, 22), (22, 42), (42, 22), (42, 42), (32, 32)]
+    for movie_dir, place in zip(movie_dirs, places):
+        raw = BLACK_LEVEL + illumination + blob(*place) + rng.normal(0, 1, (FIELD, FIELD))
+        write_movie(movie_dir / "sample.tif", raw[np.newaxis])
+    common = dict(
+        position_option=[0],
+        target_channel="Channel1",
+        threshold_on_std=8,
+        operation="divide",
+        offset=BLACK_LEVEL,
+        return_stacks=True,
+        **QUIET,
+    )
+
+    (fit,) = correct_background_model(exp_dir, downsample=1, **common)
+    (model_free,) = correct_background_model_free(exp_dir, mode="tiles", **common)
+
+    fit, model_free = np.squeeze(fit), np.squeeze(model_free)
+    peak = illumination[22, 22] + 600
+    assert fit[22, 22] == pytest.approx(peak / illumination[22, 22], rel=0.03)
+    assert model_free[22, 22] == pytest.approx(fit[22, 22], rel=0.03)
+    # Away from the cell, both are at 1 as the ratio should be.
+    assert np.nanmedian(np.abs(fit[50:, 50:] - model_free[50:, 50:])) < 0.03
+
+
+def test_measurement_uses_the_black_level():
+    illumination, cells, image = _simulated_field()
+    label = (cells > 100).astype(int)
+    bright = label == 1
+    norm = dict(
+        correction_type="fit",
+        target_channel="first",
+        threshold_on_std=8,
+        operation="divide",
+        model="paraboloid",
+        clip=False,
+        offset=BLACK_LEVEL,
+    )
+
+    table = measure_features(
+        (image + BLACK_LEVEL)[..., np.newaxis],
+        label,
+        features=["intensity_mean"],
+        channels=["first"],
+        normalisation_list=[norm],
+    )
+
+    truth = np.mean((illumination + cells)[bright] / illumination[bright])
+    assert table["first_mean"].iloc[0] == pytest.approx(truth, rel=0.02)
 
 
 def test_paraboloid_recovers_a_known_illumination_under_cells():

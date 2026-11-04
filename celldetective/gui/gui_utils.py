@@ -1043,6 +1043,16 @@ class RadiusLineEdit(NumberLineEdit):
         self.setPlaceholderText("full frame")
 
 
+class CameraOffsetLineEdit(NumberLineEdit):
+    """Camera black level of the background corrections, 0 by default."""
+
+    INVALID = "The offset must be a number, or empty."
+
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__("0", *args, **kwargs)
+        self.setPlaceholderText("camera black level")
+
+
 class ThresholdLineEdit(NumberLineEdit):
     """
     A custom QLineEdit widget to manage and validate threshold values.

@@ -44,6 +44,18 @@ def _run(exp_dir, **protocol):
     return queue.messages
 
 
+def test_fit_receives_the_offset(experiment, monkeypatch):
+    received = {}
+    monkeypatch.setattr(
+        "celldetective.preprocessing.correct_background_model",
+        lambda *args, **kwargs: received.update(kwargs),
+    )
+
+    _run(experiment[0], **FIT, offset=50.0)
+
+    assert received["offset"] == 50.0
+
+
 def _statuses(messages):
     return [m["status"] for m in messages if isinstance(m, dict) and "status" in m]
 

@@ -86,6 +86,73 @@ _require_intensity_image = (
 )
 
 
+def _blank_measurement(func, mask, channel):
+    """
+    NaN in the shape of what a custom function returns, for a channel holding only NaN.
+
+    All the cells of a table need the same shape, but such a channel must not reach the function:
+    the shape is read from a call on a blank channel of zeros, or taken as a scalar if that fails.
+
+    Parameters
+    ----------
+    func : callable
+        Custom measurement, called with the mask and one channel.
+    mask : numpy.ndarray
+        Mask of the cell.
+    channel : numpy.ndarray
+        Intensity crop of the channel.
+
+    Returns
+    -------
+    float, tuple or numpy.ndarray
+        NaN, in the form the function returns.
+    """
+    try:
+        with np.errstate(all="ignore"):
+            probe = func(mask, np.zeros_like(channel))
+    except Exception:
+        return np.nan
+    if isinstance(probe, tuple):
+        return (np.nan,) * len(probe)
+    return np.full(np.shape(probe), np.nan)
+
+
+def _measure_channels(func, mask, intensity):
+    """
+    Measure each channel with a custom function, NaN for a channel holding only NaN.
+
+    Such a channel has nothing to measure (e.g. a measurement skipped its background
+    correction in this frame), and a custom function may not survive it.
+
+    Parameters
+    ----------
+    func : callable
+        Custom measurement, called with the mask and one channel.
+    mask : numpy.ndarray
+        Mask of the cell.
+    intensity : numpy.ndarray
+        Intensity crop, channels last.
+
+    Returns
+    -------
+    numpy.ndarray
+        The values of the channels, stacked on the last axis.
+    """
+    values = [
+        None
+        if np.all(np.isnan(intensity[..., channel]))
+        else func(mask, intensity[..., channel])
+        for channel in range(intensity.shape[-1])
+    ]
+    measured = next((value for value in values if value is not None), None)
+    blank = (
+        _blank_measurement(func, mask, intensity[..., 0])
+        if measured is None
+        else np.full(np.shape(measured), np.nan)
+    )
+    return np.stack([blank if value is None else value for value in values], axis=-1)
+
+
 class CustomRegionProps(RegionProperties):
     """
     From https://github.com/scikit-image/scikit-image/blob/main/skimage/measure/_regionprops.py with a modification to not mask the intensity image itself before measurements
@@ -181,7 +248,13 @@ class CustomRegionProps(RegionProperties):
                             # O(1) lookup instead of O(n) list.index()
                             idx = self._channel_name_to_idx.get(default_channel, -1)
                             if idx >= 0:
-                                res = func(self.image, self.image_intensity[..., idx])
+                                channel = self.image_intensity[..., idx]
+                                # Nothing to measure in a channel of NaN: its slot stays NaN.
+                                res = (
+                                    _blank_measurement(func, self.image, channel)
+                                    if np.all(np.isnan(channel))
+                                    else func(self.image, channel)
+                                )
                                 if isinstance(res, tuple):
                                     len_output = len(res)
                                 else:
@@ -204,11 +277,7 @@ class CustomRegionProps(RegionProperties):
 
                             return np.stack(multichannel_list, axis=-1)
                         else:
-                            multichannel_list = [
-                                func(self.image, self.image_intensity[..., i])
-                                for i in range(self._intensity_image.shape[-1])
-                            ]
-                            return np.stack(multichannel_list, axis=-1)
+                            return _measure_channels(func, self.image, self.image_intensity)
                     else:
                         return func(self.image, self.image_intensity)
                 else:

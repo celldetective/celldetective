@@ -25,6 +25,7 @@ from celldetective.utils.data_cleaning import (
 )
 from celldetective.measure import (
     drop_tonal_features,
+    blank_skipped_channels,
     measure_features,
     measure_isotropic_intensity,
     center_of_mass_to_abs_coordinates,
@@ -335,6 +336,10 @@ def measure_index(indices: List[int]) -> None:
             if trajectories is None:
                 positions_at_t = _extract_coordinates_from_features(
                     feature_table, timepoint=t
+                )
+            else:
+                positions_at_t = blank_skipped_channels(
+                    positions_at_t, feature_table, channel_names
                 )
             feature_table.rename(
                 columns={"centroid-1": "POSITION_X", "centroid-0": "POSITION_Y"},

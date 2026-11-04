@@ -584,16 +584,12 @@ def intensity_radial_gradient(
     Notes
     -----
     - If the `intensity_image` contains NaN values, they are interpolated using `interpolate_nan()`.
-      If it holds nothing else, the three values are NaN.
     - The Euclidean distance transform (`distance_transform_edt`) is used to compute the distance
       of each pixel from the edge.
     - The x-values for the linear fit are reversed so that the origin is at the center.
     - A warning suppression is applied to ignore messages about poorly conditioned polynomial fits.
 
     """
-
-    if np.all(np.isnan(intensity_image)):
-        return np.nan, np.nan, np.nan
 
     if np.any(intensity_image != intensity_image):
         intensity_image = interpolate_nan(intensity_image.copy())

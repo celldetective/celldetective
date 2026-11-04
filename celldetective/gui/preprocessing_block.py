@@ -213,14 +213,16 @@ class PreprocessingPanel(ControlPanelBlock, Styles):
 
         # The steps after the first read, position by position, what the first one writes. Known
         # from now only: once written, those stacks can themselves match the movie prefix.
-        source_stacks = first_step_outputs(self.exp_dir, well_option, position_option)
+        source_stacks = None
+        if len(self.protocol_layout.protocols) > 1:
+            source_stacks = first_step_outputs(self.exp_dir, well_option, position_option)
 
         for k, correction_protocol in enumerate(self.protocol_layout.protocols):
 
             movie_prefix = None
             export_prefix = "Corrected"
             if k > 0:
-                # switch source stack to cumulate multi-channel preprocessing
+                # For the log: source_stacks selects what this step reads.
                 movie_prefix = "Corrected"
                 export_prefix = None
 
@@ -243,9 +245,8 @@ class PreprocessingPanel(ControlPanelBlock, Styles):
                 "export_prefix": export_prefix,
                 "export": True,
                 "return_stacks": False,
+                "source_stacks": source_stacks if k > 0 else None,
             }
-            if k > 0:
-                process_args["source_stacks"] = source_stacks
             if correction_type in ("model-free", "fit"):
                 process_args["activation_protocol"] = [["gauss", 2], ["std", 4]]
             process_args.update(correction_protocol)

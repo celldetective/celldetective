@@ -16,6 +16,13 @@ def write_config(experiment_dir, prefix="sample", frames=3):
     )
 
 
+def write_movie(path, stack):
+    """Write a ``TYX`` stack as ImageJ does, the format of the movies."""
+    tifffile.imwrite(
+        path, np.asarray(stack, dtype=np.float32), imagej=True, metadata={"axes": "TYX"}
+    )
+
+
 def write_experiment(tmp_path, positions_per_well, frames=3, prefix="sample"):
     """
     An experiment with noisy flat movies named ``sample.tif``.
@@ -33,12 +40,7 @@ def write_experiment(tmp_path, positions_per_well, frames=3, prefix="sample"):
             movie_dir = experiment_dir / f"W{w}" / f"{w}{p:02d}" / "movie"
             movie_dir.mkdir(parents=True)
             stack = 100 + rng.normal(0, 1, (frames, FIELD, FIELD))
-            tifffile.imwrite(
-                movie_dir / "sample.tif",
-                stack.astype(np.float32),
-                imagej=True,
-                metadata={"axes": "TYX"},
-            )
+            write_movie(movie_dir / "sample.tif", stack)
             movie_dirs.append(movie_dir)
     write_config(experiment_dir, prefix, frames)
     return str(experiment_dir) + "/", movie_dirs

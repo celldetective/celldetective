@@ -795,7 +795,7 @@ def correct_background_model_free(
 
         try:
             # From all the positions of the well, not only those to correct. In a chain, only
-            # those of this run hold the output of the previous step: others may be stale.
+            # those of this run have a stack to read.
             background = _estimate_well_background(
                 positions if source_stacks is not None else get_positions_in_well(well_path),
                 len_movie,
@@ -1467,6 +1467,7 @@ def correct_background_model(
     downsample: int = 10,
     subset_indices: Optional[List[int]] = None,
     source_stacks: Optional[Dict[str, str]] = None,
+    offset: Optional[float] = None,
     **kwargs: Any,
 ) -> Optional[List[np.ndarray]]:
     """
@@ -1518,6 +1519,10 @@ def correct_background_model(
             In a chain of corrections, the stack to read for each position (see
             `first_step_outputs`). A position it does not hold is skipped. Defaults to the movie
             selected by the prefix.
+    offset : float, optional
+            Camera black level, taken off both the image and the fitted background, as in the
+            model-free correction: a division gives (image - offset) / (background - offset). A
+            subtraction is unchanged. Defaults to None, no offset.
     **kwargs : Any
             Ignored.
 
@@ -1578,6 +1583,7 @@ def correct_background_model(
                 progress_callback=progress_callback,
                 downsample=downsample,
                 subset_indices=subset_indices,
+                offset=offset,
             )
             logger.info("Correction successful.")
             # Only what was written to the position: a preview leaves its data unchanged.
@@ -1590,6 +1596,7 @@ def correct_background_model(
                         "model": model,
                         "operation": operation,
                         "clip": clip,
+                        "offset": offset,
                         "threshold_on_std": threshold_on_std,
                         "activation_protocol": activation_protocol,
                         "downsample": downsample,
@@ -1623,6 +1630,7 @@ def fit_and_apply_model_background_to_stack(
     progress_callback: Optional[Callable] = None,
     downsample: int = 10,
     subset_indices: Optional[List[int]] = None,
+    offset: Optional[float] = None,
 ) -> Optional[np.ndarray]:
     """
     Fit and apply a background correction model to an image stack.
@@ -1652,6 +1660,10 @@ def fit_and_apply_model_background_to_stack(
             Whether to clip the corrected image to ensure non-negative values (default is False).
     export : bool, optional
             Whether to export the corrected image stack (default is False).
+    offset : float, optional
+            Camera black level, taken off both the image and the fitted background, as in the
+            model-free correction: a division gives (image - offset) / (background - offset). A
+            subtraction is unchanged. Defaults to None, no offset.
     activation_protocol : list of list, optional
             The activation protocol consisting of filters and their respective parameters (default is [['gauss',2],['std',4]]).
     prefix : str, optional
@@ -1712,6 +1724,7 @@ def fit_and_apply_model_background_to_stack(
                 clip=clip,
                 activation_protocol=activation_protocol,
                 downsample=downsample,
+                offset=offset,
             )
             yield frames
 
@@ -1742,6 +1755,7 @@ def field_correction(
     return_bg: bool = False,
     activation_protocol: List[List[Any]] = [["gauss", 2], ["std", 4]],
     downsample: int = 10,
+    offset: Optional[float] = None,
 ) -> Union[np.ndarray, tuple[np.ndarray, np.ndarray]]:
     """
     Apply field correction to an image.
@@ -1768,6 +1782,10 @@ def field_correction(
             The activation protocol consisting of filters and their respective parameters (default is [['gauss',2],['std',4]]).
     downsample : int, optional
             The downsampling factor to reduce the number of points used for fitting (default is 10).
+    offset : float, optional
+            Camera black level, taken off both the image and the fitted background, as in the
+            model-free correction: a division gives (image - offset) / (background - offset). A
+            subtraction is unchanged. Defaults to None, no offset.
 
     Returns
     -------
@@ -1783,7 +1801,7 @@ def field_correction(
     - If `clip` is True and operation is 'subtract', negative values in the corrected image are clipped to 0.
     - A division is NaN where the fitted background is not positive: the ratio means nothing there.
     - A ValueError is raised if the operation does not exist or too few background pixels are left to fit.
-    - If `return_bg` is True, the function returns a tuple containing the corrected image and the background.
+    - If `return_bg` is True, the function returns a tuple containing the corrected image and the background as applied, offset taken off.
 
     See Also
     --------
@@ -1813,6 +1831,10 @@ def field_correction(
     background = fit_background_model(
         img, cell_masks=mask, model=model, edge_exclusion=edge, downsample=downsample
     )
+    if offset:
+        background = background - offset
+        # As floats: below the black level, an unsigned image would wrap around.
+        img = target_copy - offset
 
     if operation == "divide":
         positive = background > 0
@@ -2124,7 +2146,7 @@ def register_stacks(
     upsample_factor: int = 10,
     reference: Literal["previous", "first"] = "previous",
     downscale: int = 1,
-    highpass_sigma: Optional[float] = 20.0,
+    highpass_sigma: float = 20.0,
     show_progress_per_well: bool = True,
     show_progress_per_pos: bool = True,
     export: bool = False,
@@ -2169,7 +2191,7 @@ def register_stacks(
     highpass_sigma : float, optional
             Flatten the registration channel before the correlation, by subtracting a Gaussian
             blur of this standard deviation in pixels, so that uneven illumination does not pull
-            the drift toward zero (default 20). None or 0 disables it.
+            the drift toward zero (default 20). 0 disables it.
     show_progress_per_well : bool, optional
             Whether to show progress for each well (default is True).
     show_progress_per_pos : bool, optional
@@ -2295,7 +2317,7 @@ def register_single_stack(
     upsample_factor: int = 10,
     reference: Literal["previous", "first"] = "previous",
     downscale: int = 1,
-    highpass_sigma: Optional[float] = 20.0,
+    highpass_sigma: float = 20.0,
     export: bool = False,
     prefix: Optional[str] = "Corrected",
     return_stacks: bool = True,
@@ -2332,7 +2354,7 @@ def register_single_stack(
             1 (default) disables downscaling.
     highpass_sigma : float, optional
             Standard deviation in full-scale pixels of the Gaussian blur subtracted from the
-            registration channel before the correlation (default 20). None or 0 disables it.
+            registration channel before the correlation (default 20). 0 disables it.
     export : bool, optional
             Whether to export the registered stack (default is False).
     prefix : str, optional
@@ -2364,6 +2386,10 @@ def register_single_stack(
     if upsample_factor < 1:
         raise ValueError(
             f"The upsampling factor must be at least 1, got {upsample_factor}."
+        )
+    if highpass_sigma < 0:
+        raise ValueError(
+            f"The flattening radius cannot be negative, got {highpass_sigma}."
         )
 
     stack_length_auto = auto_load_number_of_frames(stack_path)
@@ -2403,7 +2429,7 @@ def register_single_stack(
         # keep the requested precision in full-scale pixels
         upsample_factor=upsample_factor * downscale,
         progress_callback=drift_progress,
-        highpass_sigma=highpass_sigma / downscale if highpass_sigma else None,
+        highpass_sigma=highpass_sigma / downscale,
     ) * downscale
     logger.info(
         f"Estimated drift: max |dy|={np.abs(shifts[:, 0]).max():.2f} px, max |dx|={np.abs(shifts[:, 1]).max():.2f} px"

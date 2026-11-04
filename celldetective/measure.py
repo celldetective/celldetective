@@ -477,6 +477,9 @@ def _apply_image_normalization(
             logger.warning(f"Normalization target '{target}' not found in channels.")
             continue
         ind = channels_list.index(target)
+        if np.all(np.isnan(img[:, :, ind])):
+            # An earlier correction of this list skipped the channel in this frame.
+            continue
         if norm["correction_type"] == "local":
             img[:, :, ind] = normalise_by_cell(
                 img[:, :, ind].copy(),
@@ -494,6 +497,8 @@ def _apply_image_normalization(
                     operation=norm["operation"],
                     model=norm["model"],
                     clip=norm["clip"],
+                    offset=norm.get("offset"),
+                    downsample=norm.get("downsample", 10),
                 )
             except UnfittableBackgroundError as e:
                 where = "this frame" if frame is None else f"frame {frame}"
@@ -502,6 +507,40 @@ def _apply_image_normalization(
                     "The intensities of this channel are NaN in this frame."
                 )
                 img[:, :, ind] = np.nan
+
+
+def blank_skipped_channels(
+    positions: pd.DataFrame, feature_table: pd.DataFrame, channels
+) -> pd.DataFrame:
+    """
+    Clear what an earlier measurement left in the channels this frame skipped.
+
+    All-NaN columns are dropped from the table of a frame, so a merge with the positions would
+    otherwise keep the earlier values of a channel whose correction was skipped.
+
+    Parameters
+    ----------
+    positions : pandas.DataFrame
+        The rows of this frame in the table of the position. Modified in place.
+    feature_table : pandas.DataFrame
+        The table of this frame from :func:`measure_features`.
+    channels : list or array-like
+        Channel names. A column belongs to the longest name it starts with, so ``adhesion_mean``
+        is not taken from ``adhesion_channel_mean``.
+
+    Returns
+    -------
+    pandas.DataFrame
+        The positions, with the columns of the skipped channels set to NaN.
+    """
+    skipped = feature_table.attrs.get("skipped_channels", [])
+    if not skipped:
+        return positions
+    for column in positions.columns:
+        owners = [channel for channel in channels if str(column).startswith(f"{channel}_")]
+        if owners and max(owners, key=len) in skipped:
+            positions[column] = np.nan
+    return positions
 
 
 def _get_border_suffix(d) -> str:
@@ -614,6 +653,9 @@ def measure_features(
             df_spots = _run_spot_detection(img, label, spot_detection, channels)
 
         if normalisation_list:
+            # A correction gives fractions and NaN, which an integer image cannot hold.
+            if not np.issubdtype(img.dtype, np.floating):
+                img = img.astype(float)
             _apply_image_normalization(img, label, normalisation_list, channels, frame)
 
     # Initialize extra properties list and name check list
@@ -774,6 +816,13 @@ def measure_features(
 
     df_props.rename(columns={"label": "class_id"}, inplace=True)
     df_props["class_id"] = df_props["class_id"].astype(float)
+
+    if normalisation_list and img is not None:
+        df_props.attrs["skipped_channels"] = [
+            channel
+            for k, channel in enumerate(channels)
+            if np.all(np.isnan(img[:, :, k]))
+        ]
 
     return df_props
 

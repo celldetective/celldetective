@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- The fit background correction takes the camera black level, as the model-free
+  correction does: a division gives `(image - offset) / (background - offset)`, and a
+  subtraction is unchanged. The offset defaults to 0 in the interface, and also applies to
+  a fit correction at measurement time.
+
 ### Changed
 - Stack registration flattens the registration channel before the correlation, by
   subtracting a Gaussian blur of 20 pixels. Uneven illumination, fixed to the camera,
@@ -52,7 +58,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - a measurement with a fit background correction skips a frame whose background
     cannot be fitted, with a warning naming the frame and channel, rather than dividing
     by the starting values of the fit. The intensities of that channel are NaN in
-    that frame, and the cells keep their rows and their other measurements;
+    that frame, including over the values of an earlier measurement, and the cells keep
+    their rows and their other measurements;
+  - a measurement with a fit background correction uses its **Downsample**, which it
+    ignored;
+  - **Add correction** on the **Local** tab of the measurements, which did nothing;
   - a division by a fitted background that is not positive gives NaN there;
   - `correct_background_model` uses its `activation_protocol`, which it logged but
     ignored;

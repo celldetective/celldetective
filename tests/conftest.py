@@ -5,6 +5,17 @@ from tqdm import tqdm
 
 
 @pytest.fixture
+def warnings(monkeypatch):
+    """The warnings the number fields of the interface show, instead of a dialog."""
+    shown = []
+    monkeypatch.setattr(
+        "celldetective.gui.gui_utils.generic_message",
+        lambda *args, **kwargs: shown.append(args),
+    )
+    return shown
+
+
+@pytest.fixture
 def write_stacks():
     """
     Return a writer for the stacks of an experiment.
