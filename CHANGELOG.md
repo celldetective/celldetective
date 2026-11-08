@@ -130,6 +130,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Survival from a reference event counted cells whose reference was not
   observed but kept a time, such as a cell entering the field of view from the
   side. They are now left out of it; their own event time is kept.
+- A cell that appeared inside the field of view already past the condition, on
+  its first frame, was left out of survival from its arrival. It now counts as
+  an event one frame after it, a change faster than the time resolution.
 
 ### Removed
 - `celldetective.measure.write_first_detection_class`, an unused copy of
