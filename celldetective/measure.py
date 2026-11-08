@@ -1501,9 +1501,11 @@ def _start_event_classification(
 
     hidden = pd.Series(False, index=df.index)
     in_scope = pd.Series(True, index=df.index)
-    if "t_firstdetection" in df.columns:
+    if {"t_firstdetection", "status_firstdetection"} & set(df.columns):
         # Extrapolated rows before the first detection, with or without a pre-event.
-        hidden |= df["FRAME"] <= df["t_firstdetection"]
+        from celldetective.utils.event_status import first_observed_frames
+
+        hidden |= df["FRAME"] < first_observed_frames(df, _track_keys(df))
     if pre_event is not None:
         hidden |= df["FRAME"] <= df["t_" + pre_event]
         in_scope = df["class_" + pre_event] != NO_EVENT

@@ -29,6 +29,7 @@ from collections import Counter
 from lifelines import KaplanMeierFitter
 
 from celldetective.log_manager import get_logger
+from celldetective.utils.event_status import first_observed_frames
 from celldetective.utils.signal_windowing import EVENT
 
 logger = get_logger(__name__)
@@ -241,6 +242,8 @@ def compute_survival(
       values for each track.
     - If `t_reference` is provided, the analysis assumes left-censoring and will use `t_reference` as the origin time for
       each track.
+    - Without a reference (time 0 is the first frame of the movie), a cell whose first detection is not observed and
+      which appears after that frame entered the field of view from the side, and is left out.
     - The function calls `switch_to_events` to determine the event occurrences and their associated survival times.
     - A Kaplan-Meier estimator (`KaplanMeierFitter`) is fitted to the data to compute the survival curve.
 
@@ -272,6 +275,15 @@ def compute_survival(
         t_reference = None
         left_censored = False
         first_detections = None
+
+    if t_reference is None and not pairs and "class_firstdetection" in cols:
+        # Time 0 is the first frame of the movie, and a cell entering the field of
+        # view later, from the side, was not followed from it.
+        from_the_side = (df["class_firstdetection"] != EVENT) & (
+            first_observed_frames(df, groupby_cols) > 0
+        )
+        keep = ~from_the_side.groupby([df[c] for c in groupby_cols]).max().values
+        classes, event_times, max_times = classes[keep], event_times[keep], max_times[keep]
 
     if t_reference is not None:
         left_censored = True

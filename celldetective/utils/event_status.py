@@ -54,9 +54,9 @@ def event_status(cclass: np.ndarray, t0: np.ndarray, frames: np.ndarray) -> np.n
 
     - Class 0 (event): 0 before the event time, 1 from it on.
     - Class 1 (no event): 0 throughout.
-    - Class 2 ("else", no usable event time): with a time, the step at that
-      time, as for a transition seen at the first observed frame; without one
-      (time -1), NaN throughout, since the cell may be left-censored or unusable.
+    - Class 2 ("else", no usable event time): NaN throughout (time -1), since the
+      cell may be left-censored or unusable. Tables written before Decision-0028
+      can hold a class 2 cell with a time, which gets the step at that time.
     - 42 for a cell marked for deletion, and NaN for a cell with no class.
     """
 
@@ -141,11 +141,17 @@ def first_observed_frames(
     """
     The first frame where each row's cell (or pair) is observed: the first frame
     of its track, or the first detection when rows were extrapolated before it
-    (``t_firstdetection`` is the last frame without the cell).
+    (``t_firstdetection`` is the last frame without the cell). A cell entering from
+    the side has no such time, and ``status_firstdetection`` says from when it is
+    present.
     """
 
     groups = df.groupby(list(keys), sort=False)
     first = groups[frame_name].transform("min").to_numpy(dtype=float)
+    if "status_firstdetection" in df.columns:
+        present = df[frame_name].where(df["status_firstdetection"] == 1)
+        seen = present.groupby([df[k] for k in keys], sort=False).transform("min")
+        first = np.fmax(first, seen.to_numpy(dtype=float))
     if "t_firstdetection" in df.columns:
         detected = groups["t_firstdetection"].transform("first").to_numpy(dtype=float)
         after = np.where(detected >= 0, detected + 1, -np.inf)
@@ -191,7 +197,11 @@ def resolve_unobserved_events(
 
     keys = _as_keys(keys)
     columns = [frame_name, class_name, time_name]
-    columns += [c for c in ("t_firstdetection", "class_firstdetection") if c in df.columns]
+    columns += [
+        c
+        for c in ("t_firstdetection", "class_firstdetection", "status_firstdetection")
+        if c in df.columns
+    ]
     subset = _track_columns(df, keys, columns, rows)
     if subset.empty:
         return 0

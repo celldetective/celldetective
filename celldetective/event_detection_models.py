@@ -2513,17 +2513,23 @@ def _first_observed_frame(sample) -> float:
     The first frame where the cell (or pair) of a training sample is observed:
     the first frame of its track, or the first detection when rows were
     extrapolated before it (``t_firstdetection`` is the last frame without the
-    cell), as `celldetective.utils.event_status.first_observed_frames` reads it.
+    cell, ``status_firstdetection`` says from when a cell entering from the side
+    is present), as `celldetective.utils.event_status.first_observed_frames` reads it.
     0 when the sample has no timeline.
     """
 
     for name in ("FRAME", "pair_FRAME"):
         frames = sample.get(name) if isinstance(sample, dict) else None
         if frames is not None and np.size(frames) > 0:
-            first = float(np.nanmin(np.asarray(frames, dtype=float)))
+            frames = np.asarray(frames, dtype=float).ravel()
+            first = float(np.nanmin(frames))
             break
     else:
         return 0.0
+
+    present = np.asarray(sample.get("status_firstdetection", np.nan), dtype=float).ravel()
+    if present.size == frames.size and (present == 1).any():
+        first = max(first, float(np.nanmin(frames[present == 1])))
 
     detected = np.asarray(sample.get("t_firstdetection", np.nan), dtype=float).ravel()
     detected = detected[~np.isnan(detected)]

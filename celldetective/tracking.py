@@ -670,9 +670,13 @@ def clean_trajectories(
             if "status_firstdetection" in trajectories.columns:
                 # Rows added by extrapolation/interpolation have no status yet:
                 # rebuild it from t_firstdetection, as write_first_detection_class does.
+                # Without a time, the status of the observed rows says from when the
+                # cell is present.
                 timeline = track_group[column_labels["time"]].to_numpy()
-                trajectories.loc[indices, "status_firstdetection"] = np.where(
-                    timeline < t_values, 0.0, 1.0
+                trajectories.loc[indices, "status_firstdetection"] = (
+                    np.where(timeline < t_values, 0.0, 1.0)
+                    if t_values >= 0
+                    else track_group["status_firstdetection"].ffill().fillna(0.0).to_numpy()
                 )
 
     return trajectories
@@ -1479,6 +1483,8 @@ def write_first_detection_class(
         *   `'t_firstdetection'`: The adjusted first detection time (in frame units):
             *   `-1`: Indicates no valid detection or detection near the edge.
             *   A float value representing the adjusted first detection time otherwise.
+        *   `'status_firstdetection'`: 1 from the first detection time on, and 0 before. For a cell near the edge,
+            which has no time, 1 from the first frame where it is present.
 
     Notes
     -----
@@ -1505,7 +1511,8 @@ def write_first_detection_class(
 
         if np.any(detection == detection):
 
-            t_first = timeline[detection == detection][0]
+            first_seen = timeline[detection == detection][0]
+            t_first = first_seen
             x_first = positions_x[detection == detection][0]
             y_first = positions_y[detection == detection][0]
 
@@ -1528,8 +1535,11 @@ def write_first_detection_class(
                 t_first = float(t_first) - float(dt)
 
             if edge_test:
+                # The cell entered from the side: the time it arrived is unknown.
+                # The status still says from which frame it is present.
                 cclass = 2
-                # switch to class 2 but keep time/status information
+                t_first = -1
+                status[timeline < first_seen] = 0.0
         else:
             t_first = -1
             cclass = 2
