@@ -1552,6 +1552,23 @@ def write_first_detection_class(
     return df
 
 
+def write_first_detection_status(df: pd.DataFrame, frame_name: str = "FRAME") -> None:
+    """
+    Fill ``status_firstdetection`` from ``t_firstdetection``, for a table that has
+    the first detection but not its status. The class and time are kept: they were
+    written with the image shape, which the edge check needs.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        The table, modified in place.
+    frame_name : str, optional
+        The column of the frame.
+    """
+
+    df["status_firstdetection"] = np.where(df[frame_name] < df["t_firstdetection"], 0.0, 1.0)
+
+
 if __name__ == "__main__":
     track_at_position(
         "/home/limozin/Documents/Experiments/MinimumJan/W4/401",

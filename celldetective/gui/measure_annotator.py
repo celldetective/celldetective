@@ -213,14 +213,10 @@ class MeasureAnnotator(BaseAnnotator):
             status_col = c.replace("class_", "status_")
             if status_col in self.df_tracks.columns:
                 continue
-            if c == "class_firstdetection":
-                try:
-                    from celldetective.tracking import write_first_detection_class
+            if c == "class_firstdetection" and "t_firstdetection" in self.df_tracks.columns:
+                from celldetective.tracking import write_first_detection_status
 
-                    self.df_tracks = write_first_detection_class(self.df_tracks)
-                except Exception as e:
-                    logger.error(f"Could not generate status_firstdetection: {e}")
-                    self.df_tracks[status_col] = self.df_tracks[c]
+                write_first_detection_status(self.df_tracks)
             else:
                 self.df_tracks[status_col] = self.df_tracks[c]
 
