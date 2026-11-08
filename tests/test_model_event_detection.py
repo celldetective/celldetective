@@ -125,6 +125,28 @@ def test_process_matches_the_library(tmp_path):
     assert any("frame_progress" in m for m in queue if isinstance(m, dict))
 
 
+def test_training_event_at_first_frame_is_class_2():
+    """An annotated event at or before frame 0 trains as class 2, like a shifted
+    one in augmentation (Decision-0023)."""
+
+    pytest.importorskip("tensorflow")
+    from types import SimpleNamespace
+
+    from celldetective.event_detection_models import SignalDetectionModel
+
+    dataset = [
+        {"FRAME": np.arange(10), "PI": np.ones(10), "class": 0, "time_of_interest": 0.0},
+        {"FRAME": np.arange(10), "PI": np.ones(10), "class": 0, "time_of_interest": 4.0},
+        {"FRAME": np.arange(10), "PI": np.ones(10), "class": 1, "time_of_interest": 3.0},
+    ]
+    owner = SimpleNamespace(n_channels=1, model_signal_length=16, channel_option=["PI"])
+    _, classes, times = SignalDetectionModel.cast_signals_into_training_data(
+        owner, dataset, ["PI"], 10
+    )
+    assert classes.tolist() == [2, 0, 1]
+    assert times.tolist() == [-1, 4, -1]
+
+
 @pytest.mark.parametrize("outcome", ["done", "missing", "fails"])
 def test_pair_process_reports_its_end(tmp_path, monkeypatch, outcome):
     """Pair event detection runs in a process that tells the progress window
@@ -164,3 +186,15 @@ def test_pair_process_reports_its_end(tmp_path, monkeypatch, outcome):
     else:
         assert queue[-1] == {"status": "finished"}
         assert logged == (outcome == "done")
+
+
+def test_event_at_first_frame_of_track_is_class_2():
+    """A model reading a track that is already past the event when it starts
+    sees a step from the padding: the change was not observed (Decision-0023)."""
+
+    df = tracks()
+    df = df.loc[(df["TRACK_ID"] != 5) | (df["FRAME"] >= 12)].copy()  # starts at its event
+    out, _, (cls, t, status) = detect_events_with_model(df, StubModel(config()))
+    assert per_track(out, cls) == {3: 1, 5: 2, 7: 0}
+    assert per_track(out, t) == {3: -1, 5: 12, 7: 5}
+    assert out.loc[out["TRACK_ID"] == 5, status].eq(1).all()

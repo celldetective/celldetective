@@ -83,3 +83,28 @@ def test_event_status_of_each_class():
     assert np.isnan(status[12:16]).all()
     assert status[16:20].tolist() == [42] * 4
     assert np.isnan(status[20:]).all()
+
+
+def test_event_at_first_observed_frame_is_class_2():
+    """Decision-0023 on every route: an event at or before the first frame where
+    the cell is observed becomes class 2, with that frame as time."""
+
+    from celldetective.utils.event_status import resolve_unobserved_events
+
+    df = pd.DataFrame(
+        {
+            "TRACK_ID": np.repeat([1, 2, 3, 4], 4),
+            "FRAME": [3, 4, 5, 6] * 3 + [0, 1, 2, 3],
+            "class": np.repeat([0, 0, 1, 0], 4),
+            "t0": np.repeat([3.0, 5.0, -1.0, 1.0], 4),
+            # track 4 was extrapolated before its detection at frame 2
+            "t_firstdetection": np.repeat([-1.0, -1.0, -1.0, 1.0], 4),
+        }
+    )
+    assert resolve_unobserved_events(df, "class", "t0") == 2
+
+    first = df.groupby("TRACK_ID")[["class", "t0"]].first()
+    assert first.loc[1].tolist() == [2, 3]  # event at its first frame
+    assert first.loc[2].tolist() == [0, 5]  # observed change, kept
+    assert first.loc[3].tolist() == [1, -1]
+    assert first.loc[4].tolist() == [2, 2]  # at its detection, not its first row
