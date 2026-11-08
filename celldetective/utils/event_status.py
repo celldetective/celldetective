@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 
 from celldetective.utils.color_mappings import color_from_class, color_from_status
-from celldetective.utils.signal_windowing import DELETED, ELSE
+from celldetective.utils.signal_windowing import DELETED, ELSE, NO_EVENT
 
 
 def colors_of(values: np.ndarray, color_of: Callable, recently_modified: bool = False) -> list:
@@ -30,13 +30,26 @@ def color_events(df: pd.DataFrame, class_name: str, status_name: str) -> None:
 
 def event_status(cclass: np.ndarray, t0: np.ndarray, frames: np.ndarray) -> np.ndarray:
     """
-    The status of each cell from the class and time of its track: 0 before the
-    event, 1 from it on, 1 throughout for the "else" class (the event happened
-    before the acquisition) and 42 for a cell marked for deletion.
+    The status of each cell from the class and time of its track.
+
+    - Class 0 (event): 0 before the event time, 1 from it on.
+    - Class 1 (no event): 0 throughout.
+    - Class 2 ("else", no usable event time): with a time, the step at that
+      time, as for a transition seen at the first observed frame; without one
+      (time -1), NaN throughout, since the cell may be left-censored or unusable.
+    - 42 for a cell marked for deletion, and NaN for a cell with no class.
     """
 
-    after = ((t0 > 0) & (frames >= t0)) | (cclass == ELSE)
-    return np.where(cclass > ELSE, DELETED, after.astype(float))
+    cclass = np.asarray(cclass, dtype=float)
+    t0 = np.asarray(t0, dtype=float)
+    frames = np.asarray(frames, dtype=float)
+
+    has_time = t0 >= 0
+    status = ((cclass != NO_EVENT) & has_time & (frames >= t0)).astype(float)
+    status[(cclass == ELSE) & ~has_time] = np.nan
+    status[np.isnan(cclass)] = np.nan
+    status[cclass > ELSE] = DELETED
+    return status
 
 
 def write_event_status(
