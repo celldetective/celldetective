@@ -12,8 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - the `status_` column is the step built from the class and time, as for
     events found by a model, for every event type. The per-frame result of the
     condition is kept in `inst_status_` (transient events already did this);
-  - a cell positive from its first observed frame is class 2 with that frame as
-    time, unless its arrival was observed: it is then an event with the time of
+  - a cell positive from its first observed frame is class 2 with no event
+    time (-1) and an empty status, unless its arrival was observed: it is then an event with the time of
     its first detection. Frames before the first detection (extrapolated rows)
     are no longer read as negative;
   - a poor fit no longer leaves the cell class 2 and positive throughout: the
@@ -23,7 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Event detection with a model, for cells and pairs, and the event and pair
   annotators apply the same rule as events found from conditions: an event at
   or before the first frame where the cell (or pair) is observed is class 2,
-  with that frame as time. The annotators warn when they apply it to a
+  with no event time. The annotators warn when they apply it to a
   correction.
 - A signal detection model records the frame interval of its training sets,
   which the event annotator now writes into the sets it exports. Detecting
@@ -87,10 +87,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     built (the spot detection viewer with an `IndexError`). They now close
     cleanly.
 - The status of a class 2 cell ("else": no usable event time) is now the same
-  wherever it is written. Without a time, it is empty (NaN), since the cell may
-  have changed before it was observed or have an unusable track. With a time
-  (a cell positive from its first observed frame), it is 0 before it and 1 from
-  it on. Signal detection wrote a status of 2, and the event annotator wrote 0
+  wherever it is written: empty (NaN), since the cell may have changed before
+  it was observed or have an unusable track. Unique-state classification keeps
+  a status of 1 for a positive cell, from its first observed frame. Signal
+  detection wrote a status of 2, and the event annotator wrote 0
   when it rebuilt the status column. Tables already classified keep their
   status until the events are detected or annotated again.
 - An event at frame 0 kept a status of 0 throughout and was left out of

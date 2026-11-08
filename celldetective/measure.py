@@ -1580,14 +1580,14 @@ def _write_track_outcomes(
 
 def _event_outcome(t0: float, first_frame: float, arrival: float) -> Tuple[int, float]:
     """An event at ``t0``. A transition at or before the first observed frame was
-    not observed: class 2 at that frame (Decision-0023), unless that frame is the
+    not observed: class 2, with no onset (Decision-0023), unless that frame is the
     observed arrival of the cell (``arrival``, NaN otherwise). The change was then
     faster than a frame: an event with the onset of the arrival."""
 
     if t0 <= first_frame:
         if arrival == arrival:
             return EVENT, float(arrival)
-        return ELSE, float(first_frame)
+        return ELSE, -1.0
     return EVENT, float(t0)
 
 
@@ -1698,8 +1698,8 @@ def estimate_time(
             Updated DataFrame with the event time in the column replacing 'class' with 't', and the class updated:
 
             - a good fit (R² above the threshold) placed after the first observed frame gives class 0 and that time;
-            - a good fit at or before the first observed frame gives class 2, with the first observed frame as time:
-              the transition was not observed;
+            - a good fit at or before the first observed frame gives class 2 and time -1: the transition was not
+              observed;
             - if that first frame is the observed first detection of the cell, class 0 with its time instead: the change
               was faster than a frame;
             - a poor or failed fit gives class 2 and time -1.
@@ -1815,7 +1815,7 @@ def classify_transient_events(
     Classify transient events in the dataset.
 
     The widest peak of the status gives the event, at its onset. An onset at or before the first observed frame
-    gives class 2, with that frame as time: the onset was not observed. If that frame is the observed first detection
+    gives class 2 and time -1: the onset was not observed. If that frame is the observed first detection
     of the cell, it is an event with the time of the first detection.
 
     Parameters
@@ -1898,8 +1898,8 @@ def classify_irreversible_events(
             DataFrame with updated classifications for irreversible events, with the following outcomes:
 
             - Status 0 at every observed frame: class 1 (no event).
-            - Status 1 at every observed frame: class 2, with the first observed frame as time (the event happened
-              before the cell was observed). If that frame is the observed first detection of the cell, class 0 with
+            - Status 1 at every observed frame: class 2 and time -1 (the event happened before the cell was observed, at
+              an unknown time). If that frame is the observed first detection of the cell, class 0 with
               the time of the first detection: the change was faster than a frame.
             - A mix: the time is fitted with a step function. A good fit gives class 0, or class 2 if it falls at or
               before the first observed frame.
@@ -1929,7 +1929,7 @@ def classify_irreversible_events(
     outcomes.loc[negative] = [NO_EVENT, -1.0]
     arrival = summary.loc[positive, "arrival"]
     outcomes.loc[positive, "class"] = np.where(arrival.notna(), EVENT, ELSE)
-    outcomes.loc[positive, "time"] = arrival.fillna(summary.loc[positive, "first_frame"])
+    outcomes.loc[positive, "time"] = arrival.fillna(-1.0)
 
     mixed = summary.index[~negative & ~positive]
     fitted = _fit_event_times(

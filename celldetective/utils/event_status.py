@@ -163,8 +163,8 @@ def resolve_unobserved_events(
 ) -> int:
     """
     Make class 2 every event placed at or before the first frame where the cell
-    is observed, with that frame as time (Decision-0023): the change itself was
-    not observed. Used by event detection with a model and by the annotators,
+    is observed, with time -1 (Decision-0023): the change itself was not observed,
+    and the time column only holds onsets. Used by event detection with a model and by the annotators,
     through `write_resolved_event_status`. An event at the observed arrival of
     the cell stays an event, with the onset of that arrival. The condition route applies the same
     rule as it places each change (``measure._event_outcome``), from the first
@@ -214,7 +214,7 @@ def resolve_unobserved_events(
         return 0
     index = subset.index[unobserved]
     df.loc[index, class_name] = ELSE
-    df.loc[index, time_name] = first[unobserved]
+    df.loc[index, time_name] = -1.0
     return int(subset.loc[index, keys].drop_duplicates().shape[0])
 
 

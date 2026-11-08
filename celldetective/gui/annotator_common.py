@@ -328,7 +328,7 @@ def confirm(text: str) -> bool:
 UNOBSERVED_WARNING = (
     "The event time is at or before the first frame where {what} is observed, "
     "so the change itself was not observed. It was recorded as class 2 "
-    "(no usable event time), with that frame as time."
+    "(no usable event time), with no event time."
 )
 
 

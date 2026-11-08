@@ -30,7 +30,7 @@ How the sigmoid fitting works
 The classification condition is evaluated at each time point, producing a binary signal per cell. Only the frames where the cell is observed are read: from its first detection, or after the pre-event if one is set.
 
 *   A **completely null** signal → no event detected (class 1).
-*   A **completely positive** signal → the event occurred before the cell was first observed (class 2). If the arrival of the cell was observed (first detection of class 0), the change was faster than a frame: an event (class 0) with the time of the first detection.
+*   A **completely positive** signal → the event occurred before the cell was first observed (class 2, no event time and an empty status; the per-frame result stays in ``inst_status_``). If the arrival of the cell was observed (first detection of class 0), the change was faster than a frame: an event (class 0) with the time of the first detection.
 *   A **sigmoid-like switch** → a transition. The time of event is extracted by fitting a sigmoid. An :math:`R^2` above the threshold (0.5 by default) validates the fit (class 0). A fit at or before the first observed frame means the transition was not observed (class 2).
 *   A **poor fit** → the cell is classified by its median state: no event (class 1) if mostly negative, otherwise "else" (class 2) with no event time, for manual correction.
 
