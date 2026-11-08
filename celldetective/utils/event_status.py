@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 
 from celldetective.utils.color_mappings import color_from_class, color_from_status
-from celldetective.utils.signal_windowing import DELETED, ELSE, NO_EVENT
+from celldetective.utils.signal_windowing import DELETED, ELSE, EVENT, NO_EVENT
 
 
 def event_columns(class_name: str) -> Tuple[str, str]:
@@ -102,9 +102,8 @@ def write_event_status(
         The column of the frame.
     """
 
-    keys = [keys] if isinstance(keys, str) else list(keys)
-    subset = df if rows is None else df.loc[rows]
-    subset = subset.dropna(subset=keys)
+    keys = _as_keys(keys)
+    subset = _track_columns(df, keys, [frame_name, class_name, time_name], rows)
     groups = subset.groupby(keys, sort=False)
     t0 = groups[time_name].transform("first").to_numpy()
     cclass = groups[class_name].transform("first").to_numpy()
@@ -119,3 +118,126 @@ def write_event_status(
     df.loc[subset.index, "class_color"] = colors_of(
         cclass, color_from_class, recently_modified
     )
+
+
+def _as_keys(keys: Union[str, Sequence[str]]) -> list:
+    return [keys] if isinstance(keys, str) else list(keys)
+
+
+def _track_columns(
+    df: pd.DataFrame, keys: list, columns: list, rows: Optional[pd.Series] = None
+) -> pd.DataFrame:
+    """The rows (all by default) with a track key, and only the columns read:
+    tables can be wide, and a full copy of them is costly."""
+
+    columns = keys + [c for c in columns if c not in keys]
+    subset = df.loc[:, columns] if rows is None else df.loc[rows, columns]
+    return subset.dropna(subset=keys)
+
+
+def first_observed_frames(
+    df: pd.DataFrame, keys: Sequence[str], frame_name: str = "FRAME"
+) -> np.ndarray:
+    """
+    The first frame where each row's cell (or pair) is observed: the first frame
+    of its track, or the first detection when rows were extrapolated before it
+    (``t_firstdetection`` is the last frame without the cell).
+    """
+
+    groups = df.groupby(list(keys), sort=False)
+    first = groups[frame_name].transform("min").to_numpy(dtype=float)
+    if "t_firstdetection" in df.columns:
+        detected = groups["t_firstdetection"].transform("first").to_numpy(dtype=float)
+        after = np.where(detected >= 0, detected + 1, -np.inf)
+        first = np.maximum(first, after)
+    return first
+
+
+def resolve_unobserved_events(
+    df: pd.DataFrame,
+    class_name: str,
+    time_name: str,
+    keys: Union[str, Sequence[str]] = "TRACK_ID",
+    frame_name: str = "FRAME",
+    rows: Optional[pd.Series] = None,
+) -> int:
+    """
+    Make class 2 every event placed at or before the first frame where the cell
+    is observed, with that frame as time (Decision-0023): the change itself was
+    not observed. Used by event detection with a model and by the annotators,
+    through `write_resolved_event_status`. The condition route applies the same
+    rule as it places each change (``measure._event_outcome``), from the first
+    frame after its pre-event.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        The table, modified in place.
+    class_name, time_name : str
+        The class and time columns of the event.
+    keys : str or sequence of str, optional
+        The columns identifying a track, or a pair.
+    frame_name : str, optional
+        The column of the frame.
+    rows : pandas.Series of bool, optional
+        The rows to check, all of them by default.
+
+    Returns
+    -------
+    int
+        The number of tracks made class 2.
+    """
+
+    keys = _as_keys(keys)
+    columns = [frame_name, class_name, time_name]
+    if "t_firstdetection" in df.columns:
+        columns.append("t_firstdetection")
+    subset = _track_columns(df, keys, columns, rows)
+    if subset.empty:
+        return 0
+    first = first_observed_frames(subset, keys, frame_name)
+    unobserved = (subset[class_name].to_numpy() == EVENT) & (
+        subset[time_name].to_numpy(dtype=float) <= first
+    )
+    if not unobserved.any():
+        return 0
+    index = subset.index[unobserved]
+    df.loc[index, class_name] = ELSE
+    df.loc[index, time_name] = first[unobserved]
+    return int(subset.loc[index, keys].drop_duplicates().shape[0])
+
+
+def write_resolved_event_status(
+    df: pd.DataFrame,
+    class_name: str,
+    time_name: str,
+    status_name: str,
+    keys: Union[str, Sequence[str]] = "TRACK_ID",
+    frame_name: str = "FRAME",
+    rows: Optional[pd.Series] = None,
+    recently_modified: bool = False,
+) -> int:
+    """
+    Make class 2 the events that were not observed (`resolve_unobserved_events`),
+    then fill the status from class and time (`write_event_status`).
+
+    Returns
+    -------
+    int
+        The number of tracks made class 2.
+    """
+
+    n_unobserved = resolve_unobserved_events(
+        df, class_name, time_name, keys=keys, frame_name=frame_name, rows=rows
+    )
+    write_event_status(
+        df,
+        class_name,
+        time_name,
+        status_name,
+        keys=keys,
+        rows=rows,
+        recently_modified=recently_modified,
+        frame_name=frame_name,
+    )
+    return n_unobserved

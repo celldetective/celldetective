@@ -82,7 +82,7 @@ from tensorflow.keras.models import clone_model, load_model
 from tensorflow.keras.losses import MeanSquaredError
 
 from celldetective.utils.dataset_helpers import compute_weights, train_test_split
-from celldetective.utils.signal_windowing import truncate_training_signals
+from celldetective.utils.signal_windowing import ELSE, EVENT, truncate_training_signals
 from celldetective.utils.plots.regression import regression_plot
 from celldetective.log_manager import get_logger
 
@@ -1863,7 +1863,18 @@ class SignalDetectionModel(object):
 
         # Correct absurd times of interest
         times_of_interest[np.nonzero(classes)] = -1
-        times_of_interest[(times_of_interest <= 0.0)] = -1
+        # An event at or before the first frame where the cell (or pair) is
+        # observed was not observed: class 2, as random_time_shift does for a
+        # shifted event, and as inference does (Decision-0023).
+        first_frames = np.array([_first_observed_frame(s) for s in signal_dataset])
+        unobserved = (classes == EVENT) & (times_of_interest <= first_frames)
+        if np.any(unobserved):
+            logger.info(
+                f"{int(np.sum(unobserved))} annotated event(s) at or before the first "
+                f"observed frame were relabelled class 2."
+            )
+        classes[unobserved] = ELSE
+        times_of_interest[unobserved] = -1
 
         # Enforce the model window on the annotations, exactly as inference does:
         # signals longer than the model window are truncated to it, and any event
@@ -2469,6 +2480,30 @@ def normalize_signal_set(
             signal_set[i, z, k] = 0.0
 
     return signal_set
+
+
+def _first_observed_frame(sample) -> float:
+    """
+    The first frame where the cell (or pair) of a training sample is observed:
+    the first frame of its track, or the first detection when rows were
+    extrapolated before it (``t_firstdetection`` is the last frame without the
+    cell), as `celldetective.utils.event_status.first_observed_frames` reads it.
+    0 when the sample has no timeline.
+    """
+
+    for name in ("FRAME", "pair_FRAME"):
+        frames = sample.get(name) if isinstance(sample, dict) else None
+        if frames is not None and np.size(frames) > 0:
+            first = float(np.nanmin(np.asarray(frames, dtype=float)))
+            break
+    else:
+        return 0.0
+
+    detected = np.asarray(sample.get("t_firstdetection", np.nan), dtype=float).ravel()
+    detected = detected[~np.isnan(detected)]
+    if detected.size and detected[0] >= 0:
+        first = max(first, float(detected[0]) + 1)
+    return first
 
 
 def pad_to_model_length(signal_set: np.ndarray, model_signal_length: int) -> np.ndarray:

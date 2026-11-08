@@ -57,7 +57,7 @@ from celldetective.utils.image_loaders import (
     auto_load_number_of_frames,
     load_frames,
 )
-from celldetective.utils.event_status import event_columns
+from celldetective.utils.event_status import event_columns, write_resolved_event_status
 from celldetective.utils.signal_windowing import DELETED, ELSE, EVENT, NO_EVENT
 
 logger = get_logger(__name__)
@@ -321,6 +321,15 @@ def confirm(text: str) -> bool:
     box.setWindowTitle("Warning")
     box.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
     return box.exec() != QMessageBox.No
+
+
+# Shown when a submitted event lies at or before the first observed frame
+# (Decision-0023).
+UNOBSERVED_WARNING = (
+    "The event time is at or before the first frame where {what} is observed, "
+    "so the change itself was not observed. It was recorded as class 2 "
+    "(no usable event time), with that frame as time."
+)
 
 
 def warn(text: str) -> None:
@@ -756,6 +765,39 @@ class EventAnnotationMixin:
 
     The window implements :meth:`current_annotation` and ``apply_modification``.
     """
+
+    def write_annotation_status(
+        self,
+        df: pd.DataFrame,
+        class_name: str,
+        time_name: str,
+        status_name: str,
+        rows: pd.Series,
+        subject: str,
+        what: str,
+        keys: Sequence[str] = ("TRACK_ID",),
+    ) -> None:
+        """
+        Fill the status of the annotated ``rows`` from their class and time. An
+        event at or before the first observed frame is made class 2 first
+        (Decision-0023), which is logged under ``subject`` and shown as a
+        warning about ``what``.
+        """
+
+        if write_resolved_event_status(
+            df,
+            class_name,
+            time_name,
+            status_name,
+            keys=keys,
+            rows=rows,
+            recently_modified=True,
+        ):
+            self.annotation_log.append(
+                f"{subject}: made class 2, event at or before the first observed "
+                f"frame of {what}"
+            )
+            warn(UNOBSERVED_WARNING.format(what=what))
 
     def init_event_buttons(self, remove_label: str = "remove") -> None:
         """Create the annotation options."""

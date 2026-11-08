@@ -37,7 +37,7 @@ from celldetective.utils import COLUMN_LABELS
 from celldetective.utils.event_status import (
     event_class_of_label,
     event_columns,
-    write_event_status,
+    write_resolved_event_status,
 )
 from celldetective.utils.signal_windowing import predict_events_sliding_window
 from math import floor
@@ -101,6 +101,16 @@ def _select_model_signals(
             raise ValueError(f"No signal matches with the requirements of the model {required_signals}. Please pass the signals manually with the argument selected_signals or add measurements. Abort.")
         selected.append(candidates[0])
     return selected
+
+
+def _log_unobserved(n_unobserved: int, what: str) -> None:
+    """Log how many tracks (or pairs) were made class 2 for an unobserved event."""
+
+    if n_unobserved:
+        logger.info(
+            f"{n_unobserved} {what}(s) with an event at or before their first "
+            f"observed frame were made class 2: the change was not observed."
+        )
 
 
 def event_columns_of_model(config: dict) -> Tuple[str, str, str]:
@@ -217,13 +227,16 @@ def detect_events_with_model(
     n_missing = trajectories.loc[trajectories[class_col].isna(), track_col].nunique()
     if n_missing:
         logger.warning(f"{n_missing} track(s) removed by cleaning were left without a class.")
-    write_event_status(
-        trajectories,
-        class_col,
-        time_col,
-        status_col,
-        keys=track_col,
-        frame_name=time_col_name,
+    _log_unobserved(
+        write_resolved_event_status(
+            trajectories,
+            class_col,
+            time_col,
+            status_col,
+            keys=track_col,
+            frame_name=time_col_name,
+        ),
+        "track",
     )
 
     if added_none:
@@ -744,8 +757,11 @@ def analyze_pair_signals(
         c for c in ("reference_population", "neighbor_population")
         if c in trajectories_pairs.columns
     ]
-    write_event_status(
-        trajectories_pairs, class_col, time_col, status_col, keys=keys
+    _log_unobserved(
+        write_resolved_event_status(
+            trajectories_pairs, class_col, time_col, status_col, keys=keys
+        ),
+        "pair",
     )
 
     return trajectories_pairs

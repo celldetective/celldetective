@@ -379,14 +379,14 @@ class EventAnnotator(EventAnnotationMixin, AnimationMixin, BaseAnnotator):
             f"TRACK_ID {self.track_of_interest}: {self.class_name} {old_class}->{cclass}, "
             f"{self.time_name} {old_t0}->{t0}"
         )
-
-        write_event_status(
+        self.write_annotation_status(
             self.df_tracks,
             self.class_name,
             self.time_name,
             self.status_name,
             rows=track_mask,
-            recently_modified=True,
+            subject=f"TRACK_ID {self.track_of_interest}",
+            what="the cell",
         )
 
         self.extract_scatter_from_trajectories()

@@ -784,15 +784,18 @@ class PairEventAnnotator(
             f"{self.neighbor_population}): {self.pair_class_name} {old_class}->{cclass}, "
             f"{self.pair_time_name} {old_t0}->{t0}"
         )
-
-        write_event_status(
+        self.write_annotation_status(
             self.df_relative,
             self.pair_class_name,
             self.pair_time_name,
             self.pair_status_name,
-            keys=PAIR_COLUMNS,
             rows=pair_filter,
-            recently_modified=True,
+            subject=(
+                f"REFERENCE_ID {self.reference_track_of_interest} - NEIGHBOR_ID "
+                f"{self.neighbor_track_of_interest}"
+            ),
+            what="the pair",
+            keys=PAIR_COLUMNS,
         )
 
         self.extract_scatter_from_lines()
