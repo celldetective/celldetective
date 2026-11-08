@@ -32,7 +32,6 @@ from celldetective.gui.annotator_common import (
     confirm,
     default_dataset_name,
     event_class_columns,
-    event_columns,
     experiment_columns,
     fit_feature_scaler,
     icon_button,
@@ -44,7 +43,12 @@ from celldetective.gui.annotator_common import (
     split_by_frame,
     warn,
 )
-from celldetective.utils.event_status import color_events, write_event_status
+from celldetective.utils.event_status import (
+    color_events,
+    event_class_of_label,
+    event_columns,
+    write_event_status,
+)
 from celldetective.gui.gui_utils import color_from_status
 import numpy as np
 from fonticon_mdi6 import MDI6
@@ -523,7 +527,7 @@ class PairEventAnnotator(
         """Write new relative event class."""
 
         name = self.relative_class_name_le.text()
-        class_name = f"class_{name}" if name else "class"
+        class_name = event_class_of_label(name)
         time_name, status_name = pair_event_columns(class_name, self.df_relative.columns)
 
         if class_name in self.df_relative.columns and not confirm(
@@ -534,7 +538,7 @@ class PairEventAnnotator(
         fill_option = prefill_class(self.class_option_rb)
         rows = self.neighborhood_rows()
         self.df_relative.loc[rows, class_name] = fill_option
-        self.df_relative.loc[rows, time_name] = 0.1 if fill_option == 0 else -1
+        self.df_relative.loc[rows, time_name] = -1
         # A rewritten class keeps its status column, which selecting it would
         # not remake: derive it from the new class and time now.
         write_event_status(
@@ -780,15 +784,18 @@ class PairEventAnnotator(
             f"{self.neighbor_population}): {self.pair_class_name} {old_class}->{cclass}, "
             f"{self.pair_time_name} {old_t0}->{t0}"
         )
-
-        write_event_status(
+        self.write_annotation_status(
             self.df_relative,
             self.pair_class_name,
             self.pair_time_name,
             self.pair_status_name,
-            keys=PAIR_COLUMNS,
             rows=pair_filter,
-            recently_modified=True,
+            subject=(
+                f"REFERENCE_ID {self.reference_track_of_interest} - NEIGHBOR_ID "
+                f"{self.neighbor_track_of_interest}"
+            ),
+            what="the pair",
+            keys=PAIR_COLUMNS,
         )
 
         self.extract_scatter_from_lines()
@@ -1745,6 +1752,15 @@ class PairEventAnnotator(
         if self.normalized_signals:
             self.normalize_features_btn.click()
 
+        from celldetective.utils.experiment import get_temporal_calibration
+
+        # Recorded so that a model trained on this set knows its frame rate.
+        try:
+            frame_to_min = get_temporal_calibration(self.exp_dir)
+        except Exception as e:
+            logger.warning(f"The frame interval of the experiment could not be read: {e}")
+            frame_to_min = None
+
         pair_filter = self.population_pair_rows() & self.neighborhood_rows()
         df_reference = self.dataframes[self.reference_population]
         df_neighbor = self.dataframes[self.neighbor_population]
@@ -1777,6 +1793,8 @@ class PairEventAnnotator(
             )
             signals.update(cell_signals(df_reference, reference_cell, "reference_"))
             signals.update(cell_signals(df_neighbor, neighbor_cell, "neighbor_"))
+            if frame_to_min is not None:
+                signals["frame_to_min"] = frame_to_min
             training_set.append(signals)
 
         save_dataset(self, training_set, self.exp_dir + default_dataset_name(self.pos))

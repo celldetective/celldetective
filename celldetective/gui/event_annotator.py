@@ -18,12 +18,16 @@ from celldetective.gui.annotator_common import (
     complete_event_columns,
     confirm,
     event_class_columns,
-    event_columns,
     prefill_class,
     signal_limits,
     split_by_frame,
 )
-from celldetective.utils.event_status import color_events, write_event_status
+from celldetective.utils.event_status import (
+    color_events,
+    event_class_of_label,
+    event_columns,
+    write_event_status,
+)
 from celldetective.gui.base_annotator import BaseAnnotator
 import logging
 from celldetective.gui.base.threads import start_tracked
@@ -325,7 +329,7 @@ class EventAnnotator(EventAnnotationMixin, AnimationMixin, BaseAnnotator):
         """Add the event class named in the new class dialog, prefilled as chosen."""
 
         name = self.class_name_le.text()
-        target_class = f"class_{name}" if name else "class"
+        target_class = event_class_of_label(name)
         target_time, target_status = event_columns(target_class)
 
         if target_class in self.df_tracks.columns and not confirm(
@@ -335,7 +339,7 @@ class EventAnnotator(EventAnnotationMixin, AnimationMixin, BaseAnnotator):
 
         fill_option = prefill_class(self.class_option_rb)
         self.df_tracks.loc[:, target_class] = fill_option
-        self.df_tracks.loc[:, target_time] = 0.1 if fill_option == 0 else -1
+        self.df_tracks.loc[:, target_time] = -1
         # A rewritten class keeps its status column, which selecting it would
         # not remake: derive it from the new class and time now.
         write_event_status(self.df_tracks, target_class, target_time, target_status)
@@ -375,14 +379,14 @@ class EventAnnotator(EventAnnotationMixin, AnimationMixin, BaseAnnotator):
             f"TRACK_ID {self.track_of_interest}: {self.class_name} {old_class}->{cclass}, "
             f"{self.time_name} {old_t0}->{t0}"
         )
-
-        write_event_status(
+        self.write_annotation_status(
             self.df_tracks,
             self.class_name,
             self.time_name,
             self.status_name,
             rows=track_mask,
-            recently_modified=True,
+            subject=f"TRACK_ID {self.track_of_interest}",
+            what="the cell",
         )
 
         self.extract_scatter_from_trajectories()

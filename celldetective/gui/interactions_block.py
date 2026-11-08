@@ -562,7 +562,7 @@ class NeighPanel(ControlPanelBlock, Styles):
         """
         from celldetective.gui.workers import ProgressWindow
         from celldetective.processes.compute_neighborhood import NeighborhoodProcess
-        from celldetective.signals import analyze_pair_signals_at_position
+        from celldetective.processes.detect_pair_events import PairSignalAnalysisProcess
         from celldetective.relative_measurements import rel_measure_at_position
 
         # if self.parent_window.well_list.currentText().startswith('Multiple'):
@@ -667,12 +667,22 @@ class NeighPanel(ControlPanelBlock, Styles):
 
                 if self.signal_analysis_action.isChecked():
 
-                    analyze_pair_signals_at_position(
-                        self.pos,
-                        self.pair_signal_models_list.currentText(),
-                        use_gpu=self.parent_window.parent_window.use_gpu,
-                        populations=self.parent_window.populations,
+                    self.job = ProgressWindow(
+                        PairSignalAnalysisProcess,
+                        parent_window=self,
+                        title="Pair events",
+                        process_args={
+                            "pos": self.pos,
+                            "model_name": self.pair_signal_models_list.currentText(),
+                            "use_gpu": self.parent_window.parent_window.use_gpu,
+                            "populations": self.parent_window.populations,
+                            "well_progress": well_progress,
+                            "pos_progress": pos_progress,
+                        },
                     )
+                    result = self.job.exec_()
+                    if result == QDialog.Rejected:
+                        return None
 
         self.parent_window.update_position_options()
         for action in [

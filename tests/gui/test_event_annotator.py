@@ -661,9 +661,9 @@ class TestEventAnnotatorStatusColors:
 class TestEventAnnotatorNewClass:
     """Test the creation of an event class from the new class dialog."""
 
-    @pytest.mark.parametrize("prefill, expected_time", [(0, 0.1), (1, -1), (2, -1)])
+    @pytest.mark.parametrize("prefill", [1, 2])
     def test_write_new_event_class_prefills_columns(
-        self, qtbot, sample_df_tracks, prefill, expected_time
+        self, qtbot, sample_df_tracks, prefill
     ):
         """
         Submitting the dialog adds class_<name> and t_<name>, prefilled with the
@@ -682,14 +682,14 @@ class TestEventAnnotatorNewClass:
             annotator.df_tracks = sample_df_tracks.copy()
             annotator.class_choice_cb = QComboBox()
             annotator.class_name_le = QLineEdit("lysis")
-            annotator.class_option_rb = [QRadioButton() for _ in range(3)]
-            annotator.class_option_rb[prefill].setChecked(True)
+            annotator.class_option_rb = [QRadioButton() for _ in range(2)]
+            annotator.class_option_rb[prefill - 1].setChecked(True)
             annotator.newClassWidget = MagicMock()
 
             annotator.write_new_event_class()
 
             assert (annotator.df_tracks["class_lysis"] == prefill).all()
-            assert (annotator.df_tracks["t_lysis"] == expected_time).all()
+            assert (annotator.df_tracks["t_lysis"] == -1).all()
             assert annotator.class_choice_cb.currentText() == "class_lysis"
             annotator.newClassWidget.close.assert_called_once()
 

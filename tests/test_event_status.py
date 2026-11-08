@@ -7,8 +7,8 @@ from celldetective.utils.event_status import colors_of, event_status, write_even
 
 
 def test_status_follows_the_class_and_time():
-    """0 before the event and 1 from it on; class 2 (event before the
-    acquisition) is 1 throughout, a deleted cell 42."""
+    """0 before the event and 1 from it on; class 2 (no usable event time)
+    without a time is NaN throughout, a deleted cell 42."""
 
     frames = [0, 1, 2, 3]
     df = pd.DataFrame(
@@ -22,12 +22,10 @@ def test_status_follows_the_class_and_time():
     write_event_status(df, "class", "t0", "status")
 
     status = df.groupby("TRACK_ID")["status"].apply(list).to_dict()
-    assert status == {
-        1: [0, 0, 1, 1],
-        2: [0, 0, 0, 0],
-        3: [1, 1, 1, 1],
-        4: [42, 42, 42, 42],
-    }
+    assert status[1] == [0, 0, 1, 1]
+    assert status[2] == [0, 0, 0, 0]
+    assert np.isnan(status[3]).all()
+    assert status[4] == [42, 42, 42, 42]
 
 
 def test_status_with_custom_columns_and_rows():
@@ -71,11 +69,89 @@ def test_colors_of_groups_nans():
 
 
 def test_event_status_of_each_class():
-    """The rule shared by signal detection, the annotators and the viewer."""
+    """The rule shared by signal detection, the annotators and the viewer.
 
-    frames = np.array([0, 1, 2, 3] * 4)
-    cclass = np.repeat([0, 1, 2, 42], 4)
-    t0 = np.repeat([1.5, -1.0, -1.0, -1.0], 4)
-    assert event_status(cclass, t0, frames).tolist() == (
-        [0, 0, 1, 1] + [0] * 4 + [1] * 4 + [42] * 4
+    Class 2 steps at its time when it has one (a transition at the first
+    observed frame, Decision-0023), and is NaN without one (Decision-0020).
+    A cell with no class has no status."""
+
+    frames = np.array([0, 1, 2, 3] * 6)
+    cclass = np.repeat([0, 1, 2, 2, 42, np.nan], 4)
+    t0 = np.repeat([1.5, -1.0, 1.0, -1.0, -1.0, 2.0], 4)
+    status = event_status(cclass, t0, frames)
+    assert status[:12].tolist() == [0, 0, 1, 1] + [0] * 4 + [0, 1, 1, 1]
+    assert np.isnan(status[12:16]).all()
+    assert status[16:20].tolist() == [42] * 4
+    assert np.isnan(status[20:]).all()
+
+
+def test_event_at_first_observed_frame_is_class_2():
+    """Decision-0023 on every route: an event at or before the first frame where
+    the cell is observed becomes class 2, with no onset (time -1)."""
+
+    from celldetective.utils.event_status import resolve_unobserved_events
+
+    df = pd.DataFrame(
+        {
+            "TRACK_ID": np.repeat([1, 2, 3, 4], 4),
+            "FRAME": [3, 4, 5, 6] * 3 + [0, 1, 2, 3],
+            "class": np.repeat([0, 0, 1, 0], 4),
+            "t0": np.repeat([3.0, 5.0, -1.0, 1.0], 4),
+            # track 4 was extrapolated before its detection at frame 2
+            "t_firstdetection": np.repeat([-1.0, -1.0, -1.0, 1.0], 4),
+        }
     )
+    assert resolve_unobserved_events(df, "class", "t0") == 2
+
+    first = df.groupby("TRACK_ID")[["class", "t0"]].first()
+    assert first.loc[1].tolist() == [2, -1]  # event at its first frame
+    assert first.loc[2].tolist() == [0, 5]  # observed change, kept
+    assert first.loc[3].tolist() == [1, -1]
+    assert first.loc[4].tolist() == [2, -1]  # at its detection, not its first row
+
+
+def test_event_at_an_observed_arrival_keeps_its_class():
+    """An event at the first observed frame of a cell whose arrival was observed
+    is an event at that arrival, and resolving it again changes nothing."""
+
+    from celldetective.utils.event_status import resolve_unobserved_events
+
+    df = pd.DataFrame(
+        {
+            "TRACK_ID": np.repeat([1, 2], 4),
+            "FRAME": list(range(10, 14)) * 2,
+            "class": 0,
+            "t0": 10.0,
+            "class_firstdetection": np.repeat([0, 2], 4),
+            "t_firstdetection": 9.0,
+        }
+    )
+    assert resolve_unobserved_events(df, "class", "t0") == 1
+    first = df.groupby("TRACK_ID")[["class", "t0"]].first()
+    assert first.loc[1].tolist() == [0, 9]  # arrival observed
+    assert first.loc[2].tolist() == [2, -1]  # entered from the side
+
+    assert resolve_unobserved_events(df, "class", "t0") == 0
+    assert df.groupby("TRACK_ID")["t0"].first().loc[1] == 9
+
+
+def test_first_observed_frame_of_a_cell_entering_from_the_side():
+    """Its first detection has no time, and its status says from when it is
+    present, as a change at that frame is not observed."""
+
+    from celldetective.utils.event_status import resolve_unobserved_events
+
+    frames = np.arange(20)
+    df = pd.DataFrame(
+        {
+            "TRACK_ID": 1,
+            "FRAME": frames,
+            "class": 0,
+            "t0": 10.0,
+            "class_firstdetection": 2,
+            "t_firstdetection": -1.0,
+            "status_firstdetection": (frames >= 10).astype(float),
+        }
+    )
+    assert resolve_unobserved_events(df, "class", "t0") == 1
+    assert df["class"].eq(2).all() and df["t0"].eq(-1).all()

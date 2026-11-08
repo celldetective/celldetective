@@ -1,14 +1,10 @@
 from multiprocessing import Process, Queue
 from typing import Optional, Dict, Any
 import os
-import numpy as np
 import pandas as pd
 
 from celldetective.log_manager import get_logger, positionlogger
-from celldetective.tracking import clean_trajectories
-from celldetective.utils.event_status import write_event_status
 from celldetective.utils.event_detection import _prep_event_detection_model
-from celldetective.utils.signal_windowing import predict_events_sliding_window
 from celldetective.utils import COLUMN_LABELS
 
 logger = get_logger(__name__)
@@ -92,143 +88,43 @@ class SignalAnalysisProcess(Process):
                 )
                 return
 
-            # --- Logic adapted from analyze_signals to include progress ---
+            # Imported here: celldetective.signals loads matplotlib and scipy.
+            from celldetective.signals import (
+                detect_events_with_model,
+                experiment_frame_interval,
+            )
 
-            # Configuration checks (similar to analyze_signals)
             if model is None:
-                # This path handles if model instance wasn't passed (fallback, though unified_process should pass it)
+                # Fallback, though unified_process passes the model
                 if hasattr(self, "signal_model_instance"):
                     model = self.signal_model_instance
                 else:
-                    # Lazy load if needed
                     model = _prep_event_detection_model(
                         self.model_name, use_gpu=self.use_gpu
                     )
 
-            config = model.config
-            required_signals = config["channels"]
-            model_signal_length = config["model_signal_length"]
-
-            # Channel selection logic
-            available_signals = list(trajectories.columns)
-            selected_signals = config.get("selected_channels", None)
-
-            if selected_signals is None:
-                selected_signals = []
-                for s in required_signals:
-                    priority_cols = [a for a in available_signals if a == s]
-                    second_priority_cols = [
-                        a for a in available_signals if a.startswith(s) and a != s
-                    ]
-                    third_priority_cols = [
-                        a for a in available_signals if s in a and not a.startswith(s)
-                    ]
-                    candidates = (
-                        priority_cols + second_priority_cols + third_priority_cols
-                    )
-
-                    if len(candidates) > 0:
-                        selected_signals.append(candidates[0])
-                    else:
-                        logger.error(f"No match for signal {s} in {available_signals}")
-                        raise ValueError(f"Missing required channel: {s}")
-
-            # Preprocessing
-            trajectories_clean = clean_trajectories(
-                trajectories,
-                interpolate_na=True,
-                interpolate_position_gaps=True,
-                column_labels=self.column_labels,
-            )
-
-            max_signal_size = (
-                int(trajectories_clean[self.column_labels["time"]].max()) + 2
-            )
-            if max_signal_size > model_signal_length:
-                logger.info(
-                    f"Signals are longer than the model window ({max_signal_size} > "
-                    f"{model_signal_length} frames) for position {self.pos}: "
-                    f"scanning each track with overlapping windows and keeping the "
-                    f"earliest detected event."
-                )
-
-            tracks = trajectories_clean[self.column_labels["track"]].unique()
-            signals = np.zeros((len(tracks), max_signal_size, len(selected_signals)))
-
-            # Progress loop for signal extraction
-            total_tracks = len(tracks)
-
-            for i, (tid, group) in enumerate(
-                trajectories_clean.groupby(self.column_labels["track"])
-            ):
-
-                # Report progress
-                progress = ((i + 1) / total_tracks) * 100
+            def report(i: int, n: int) -> None:
                 self.queue.put(
                     {
-                        "frame_progress": progress,  # Reusing frame_progress key for UI compatibility
-                        "frame_time": f"Extracting signals: {i+1}/{total_tracks}",
+                        "frame_progress": i / n * 100,  # frame_progress key for UI compatibility
+                        "frame_time": f"Extracting signals: {i}/{n}",
                     }
                 )
+                if i == n:
+                    self.queue.put({"frame_time": "Predicting events..."})
 
-                frames = group[self.column_labels["time"]].to_numpy().astype(int)
-                for j, col in enumerate(selected_signals):
-                    signal = group[col].to_numpy()
-                    signals[i, frames, j] = signal
-                    signals[i, max(frames) :, j] = signal[-1]
-
-            # Prediction
-            self.queue.put({"frame_time": "Predicting events..."})
-            if max_signal_size > model_signal_length:
-                classes, times_recast = predict_events_sliding_window(
-                    model, signals, model_signal_length
+            trajectories, selected_signals, (class_col, time_col, status_col) = (
+                detect_events_with_model(
+                    trajectories,
+                    model,
+                    column_labels=self.column_labels,
+                    interpolate_na=True,
+                    progress=report,
+                    frame_to_min=experiment_frame_interval(self.pos),
                 )
-            else:
-                classes = model.predict_class(signals)
-                times_recast = model.predict_time_of_interest(signals)
-
-            # Assign results
-            try:
-                label = config.get("label", "")
-                if label == "":
-                    label = None
-            except (KeyError, AttributeError):
-                label = None
-
-            if label is None:
-                class_col = "class"
-                time_col = "t0"
-                status_col = "status"
-            else:
-                class_col = "class_" + label
-                time_col = "t_" + label
-                status_col = "status_" + label
+            )
 
             self.queue.put({"frame_time": "Saving results..."})
-
-            # Vectorized assignment is faster than loop, but let's stick to safe logic
-            # We need to map track_id to result index. 'tracks' array indices align with 'signals' indices
-            track_to_idx = {t: i for i, t in enumerate(tracks)}
-
-            # Map predictions to original dataframe
-            # Using map is much faster than iterating if possible, but let's do safe iteration for now or efficient mapping
-            # Actually, let's use the track ID map
-            trajectories[class_col] = trajectories[self.column_labels["track"]].map(
-                lambda x: classes[track_to_idx[x]] if x in track_to_idx else 0
-            )
-            trajectories[time_col] = trajectories[self.column_labels["track"]].map(
-                lambda x: times_recast[track_to_idx[x]] if x in track_to_idx else 0
-            )
-
-            write_event_status(
-                trajectories,
-                class_col,
-                time_col,
-                status_col,
-                keys=self.column_labels["track"],
-                frame_name=self.column_labels["time"],
-            )
-
             trajectories = trajectories.sort_values(
                 by=[self.column_labels["track"], self.column_labels["time"]]
             )

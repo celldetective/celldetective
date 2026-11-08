@@ -670,9 +670,13 @@ def clean_trajectories(
             if "status_firstdetection" in trajectories.columns:
                 # Rows added by extrapolation/interpolation have no status yet:
                 # rebuild it from t_firstdetection, as write_first_detection_class does.
+                # Without a time, the status of the observed rows says from when the
+                # cell is present.
                 timeline = track_group[column_labels["time"]].to_numpy()
-                trajectories.loc[indices, "status_firstdetection"] = np.where(
-                    timeline < t_values, 0.0, 1.0
+                trajectories.loc[indices, "status_firstdetection"] = (
+                    np.where(timeline < t_values, 0.0, 1.0)
+                    if t_values >= 0
+                    else track_group["status_firstdetection"].ffill().fillna(0.0).to_numpy()
                 )
 
     return trajectories
@@ -756,9 +760,14 @@ def interpolate_nan_properties(
         interpolate_per_track
     )
 
-    if track_label in trajectories.index.names:
+    # The group keys become index levels: drop them (or restore them as columns),
+    # also when several columns identify a track (pairs), or grouping the result
+    # by them again is ambiguous.
+    labels = [track_label] if isinstance(track_label, str) else list(track_label)
+    if all(label in trajectories.index.names for label in labels):
         trajectories = trajectories.reset_index(
-            level=0, drop=track_label in trajectories.columns
+            level=labels,
+            drop=all(label in trajectories.columns for label in labels),
         )
 
     return trajectories
@@ -1474,6 +1483,8 @@ def write_first_detection_class(
         *   `'t_firstdetection'`: The adjusted first detection time (in frame units):
             *   `-1`: Indicates no valid detection or detection near the edge.
             *   A float value representing the adjusted first detection time otherwise.
+        *   `'status_firstdetection'`: 1 from the first detection time on, and 0 before. For a cell near the edge,
+            which has no time, 1 from the first frame where it is present.
 
     Notes
     -----
@@ -1500,7 +1511,8 @@ def write_first_detection_class(
 
         if np.any(detection == detection):
 
-            t_first = timeline[detection == detection][0]
+            first_seen = timeline[detection == detection][0]
+            t_first = first_seen
             x_first = positions_x[detection == detection][0]
             y_first = positions_y[detection == detection][0]
 
@@ -1518,13 +1530,16 @@ def write_first_detection_class(
                 t_first = -1
                 cclass = 2
             else:
+                # The time of appearance is the last frame without the cell, so
+                # a cell first seen at frame 1 appeared at time 0, a valid time.
                 t_first = float(t_first) - float(dt)
-                if t_first == 0:
-                    t_first += 0.01
 
             if edge_test:
+                # The cell entered from the side: the time it arrived is unknown.
+                # The status still says from which frame it is present.
                 cclass = 2
-                # switch to class 2 but keep time/status information
+                t_first = -1
+                status[timeline < first_seen] = 0.0
         else:
             t_first = -1
             cclass = 2
@@ -1535,6 +1550,23 @@ def write_first_detection_class(
         df.loc[indices, "status_firstdetection"] = status
 
     return df
+
+
+def write_first_detection_status(df: pd.DataFrame, frame_name: str = "FRAME") -> None:
+    """
+    Fill ``status_firstdetection`` from ``t_firstdetection``, for a table that has
+    the first detection but not its status. The class and time are kept: they were
+    written with the image shape, which the edge check needs.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        The table, modified in place.
+    frame_name : str, optional
+        The column of the frame.
+    """
+
+    df["status_firstdetection"] = np.where(df[frame_name] < df["t_firstdetection"], 0.0, 1.0)
 
 
 if __name__ == "__main__":

@@ -203,8 +203,8 @@ class ClassifierWidget(CelldetectiveWidget):
         self.prereq_event_cb.setEnabled(False)
 
         self.r2_slider = QLabeledDoubleSlider()
-        self.r2_slider.setValue(0.75)
         self.r2_slider.setRange(0, 1)
+        self.r2_slider.setValue(0.5)
         self.r2_slider.setSingleStep(0.01)
         self.r2_slider.setOrientation(Qt.Horizontal)
         self.r2_label = QLabel("R2 tolerance:")

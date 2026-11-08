@@ -57,6 +57,7 @@ from celldetective.utils.image_loaders import (
     auto_load_number_of_frames,
     load_frames,
 )
+from celldetective.utils.event_status import event_columns, write_resolved_event_status
 from celldetective.utils.signal_windowing import DELETED, ELSE, EVENT, NO_EVENT
 
 logger = get_logger(__name__)
@@ -134,20 +135,6 @@ def event_class_columns(columns: Iterable[str]) -> List[str]:
         for c in columns
         if c.startswith("class") and c not in NON_EVENT_CLASS_COLUMNS
     ]
-
-
-def event_columns(class_name: str) -> Tuple[str, str]:
-    """
-    Time and status columns of an event class.
-
-    ``class_<event>`` goes with ``t_<event>`` and ``status_<event>``, ``class``
-    with ``t0`` and ``status``.
-    """
-
-    suffix = class_name.removeprefix("class").removeprefix("_")
-    if not suffix:
-        return "t0", "status"
-    return f"t_{suffix}", f"status_{suffix}"
 
 
 def pair_event_columns(class_name: str, columns: Iterable[str] = ()) -> Tuple[str, str]:
@@ -336,6 +323,15 @@ def confirm(text: str) -> bool:
     return box.exec() != QMessageBox.No
 
 
+# Shown when a submitted event lies at or before the first observed frame
+# (Decision-0023).
+UNOBSERVED_WARNING = (
+    "The event time is at or before the first frame where {what} is observed, "
+    "so the change itself was not observed. It was recorded as class 2 "
+    "(no usable event time), with no event time."
+)
+
+
 def warn(text: str) -> None:
     """Show (and log) a warning box."""
     generic_message(text, msg_type="warning")
@@ -363,7 +359,8 @@ def new_class_dialog(
     on_submit, on_cancel : callable
         Slots of the submit and cancel buttons.
     prefill : bool, optional
-        Whether to offer to prefill the class with event, no event or else.
+        Whether to offer to prefill the class with no event or else. An event
+        needs a time, which only an annotation can give.
 
     Returns
     -------
@@ -372,7 +369,7 @@ def new_class_dialog(
     name_le : QLineEdit
         The name field.
     prefill_options : list of QRadioButton
-        The prefill options, event first (empty without `prefill`).
+        The prefill options, no event first (empty without `prefill`).
     """
 
     widget = CelldetectiveWidget()
@@ -390,9 +387,9 @@ def new_class_dialog(
     if prefill:
         layout.addWidget(QLabel("prefill: "))
         radio_box = QHBoxLayout()
-        for label in ("event", "no event", "else"):
+        for label in ("no event", "else"):
             option = QRadioButton(label)
-            radio_box.addWidget(option, 33, alignment=Qt.AlignCenter)
+            radio_box.addWidget(option, 50, alignment=Qt.AlignCenter)
             prefill_options.append(option)
         prefill_options[0].setChecked(True)
         layout.addLayout(radio_box)
@@ -413,7 +410,7 @@ def new_class_dialog(
 
 def prefill_class(prefill_options: Sequence[QRadioButton]) -> int:
     """The class chosen in the prefill options of :func:`new_class_dialog`."""
-    return [option.isChecked() for option in prefill_options].index(True)
+    return [option.isChecked() for option in prefill_options].index(True) + NO_EVENT
 
 
 def default_dataset_name(pos: str, suffix: str = "") -> str:
@@ -769,6 +766,39 @@ class EventAnnotationMixin:
 
     The window implements :meth:`current_annotation` and ``apply_modification``.
     """
+
+    def write_annotation_status(
+        self,
+        df: pd.DataFrame,
+        class_name: str,
+        time_name: str,
+        status_name: str,
+        rows: pd.Series,
+        subject: str,
+        what: str,
+        keys: Sequence[str] = ("TRACK_ID",),
+    ) -> None:
+        """
+        Fill the status of the annotated ``rows`` from their class and time. An
+        event at or before the first observed frame is made class 2 first
+        (Decision-0023), which is logged under ``subject`` and shown as a
+        warning about ``what``.
+        """
+
+        if write_resolved_event_status(
+            df,
+            class_name,
+            time_name,
+            status_name,
+            keys=keys,
+            rows=rows,
+            recently_modified=True,
+        ):
+            self.annotation_log.append(
+                f"{subject}: made class 2, event at or before the first observed "
+                f"frame of {what}"
+            )
+            warn(UNOBSERVED_WARNING.format(what=what))
 
     def init_event_buttons(self, remove_label: str = "remove") -> None:
         """Create the annotation options."""

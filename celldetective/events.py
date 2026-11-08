@@ -24,7 +24,15 @@ Dependencies
 from typing import List, Optional, Tuple, Sequence
 import numpy as np
 import pandas as pd
+from collections import Counter
+
 from lifelines import KaplanMeierFitter
+
+from celldetective.log_manager import get_logger
+from celldetective.utils.event_status import first_observed_frames
+from celldetective.utils.signal_windowing import EVENT
+
+logger = get_logger(__name__)
 
 
 def switch_to_events(
@@ -97,13 +105,19 @@ def switch_to_events(
         origin_times = np.zeros_like(max_times)
         left_censored = False
 
+    dropped = Counter()
     for c, t, mt, ot in zip(classes, event_times, max_times, origin_times):
+        n_kept = len(events)
+        # A time of 0 is a valid event time, and a survival time of 0 is kept.
+        # Whether a change at the first observed frame was really observed is
+        # decided upstream (Decision-0023), not here.
+        is_event = c == EVENT and t >= 0
 
         if left_censored:
 
             if ot >= 0.0 and ot == ot:
                 # origin time is larger than zero, no censorship
-                if c == 0 and t > 0:
+                if is_event:
 
                     delta_t = t - ot
 
@@ -120,7 +134,7 @@ def switch_to_events(
                                 pass
                         else:
                             # still event
-                            if delta_t > 0:
+                            if delta_t >= 0:
                                 events.append(1)
                                 survival_times.append(delta_t)
                             else:
@@ -128,7 +142,7 @@ def switch_to_events(
                                 pass
                     else:
                         # standard mode
-                        if delta_t > 0:
+                        if delta_t >= 0:
                             events.append(1)
                             survival_times.append(delta_t)
                         else:
@@ -151,7 +165,7 @@ def switch_to_events(
                 pass
 
         else:
-            if c == 0 and t > 0:
+            if is_event:
                 if cut_observation_time is not None:
                     if t > cut_observation_time:
                         events.append(0)
@@ -169,6 +183,18 @@ def switch_to_events(
                 survival_times.append(mt - ot)
             else:
                 pass
+
+        if len(events) == n_kept:
+            dropped[str(c)] += 1
+
+    if dropped:
+        logger.info(
+            "Survival leaves out %d cells (class: count): %s. Class 2 has no usable "
+            "event time; other cells are left out when their origin is unknown "
+            "(left-censored) or falls after their event or end of observation.",
+            sum(dropped.values()),
+            dict(dropped),
+        )
 
     if FrameToMin is not None:
         survival_times = [s * FrameToMin for s in survival_times]
@@ -216,6 +242,8 @@ def compute_survival(
       values for each track.
     - If `t_reference` is provided, the analysis assumes left-censoring and will use `t_reference` as the origin time for
       each track.
+    - Without a reference (time 0 is the first frame of the movie), a cell whose first detection is not observed and
+      which appears after that frame entered the field of view from the side, and is left out.
     - The function calls `switch_to_events` to determine the event occurrences and their associated survival times.
     - A Kaplan-Meier estimator (`KaplanMeierFitter`) is fitted to the data to compute the survival curve.
 
@@ -248,11 +276,30 @@ def compute_survival(
         left_censored = False
         first_detections = None
 
+    if t_reference is None and not pairs and "class_firstdetection" in cols:
+        # Time 0 is the first frame of the movie, and a cell entering the field of
+        # view later, from the side, was not followed from it.
+        from_the_side = (df["class_firstdetection"] != EVENT) & (
+            first_observed_frames(df, groupby_cols) > 0
+        )
+        keep = ~from_the_side.groupby([df[c] for c in groupby_cols]).max().values
+        classes, event_times, max_times = classes[keep], event_times[keep], max_times[keep]
+
     if t_reference is not None:
         left_censored = True
         if t_reference not in cols:
             raise KeyError("The reference time cannot be found in the dataframe...")
         first_detections = df.groupby(groupby_cols)[t_reference].max().values
+
+        # A reference event that was not observed gives no origin, even with a
+        # time: a cell entering the field of view from the side keeps the time of
+        # its first detection, but that is not when it arrived.
+        reference_class = (
+            "class" if t_reference == "t0" else t_reference.replace("t_", "class_", 1)
+        )
+        if reference_class in cols:
+            observed = df.groupby(groupby_cols)[reference_class].min().values == EVENT
+            first_detections = np.where(observed, first_detections, -1.0)
 
     events, survival_times = switch_to_events(
         classes,
