@@ -91,3 +91,36 @@ def test_survival_from_an_unreliable_first_detection_is_left_out():
 def test_survival_from_the_start_of_the_movie_keeps_every_cell():
     ks = compute_survival(spreading_table(), "class_spread", "t_spread", t_reference=0)
     assert ks.durations.tolist() == [30.0, 30.0]
+
+
+def test_transition_within_a_frame_of_an_observed_arrival_is_a_fast_event():
+    """A cell that appears inside the field of view, already past the condition
+    on its first frame, changed faster than the time resolution: class 2 at its
+    first frame, counted as an event one frame after the time of its arrival."""
+
+    events, durations = switch_to_events(
+        [2], [10.0], [39], origin_times=[9.0], left_censored=True
+    )
+    assert events == [1] and durations == [1.0]
+
+
+def test_other_class_2_cells_stay_out_of_survival():
+    # no usable time; an arrival not observed; first frame long after the arrival
+    # (hidden by a pre-event).
+    events, durations = switch_to_events(
+        [2, 2, 2], [-1.0, 0.0, 20.0], [39, 39, 39], origin_times=[9.0, -1.0, 9.0],
+        left_censored=True,
+    )
+    assert events == [] and durations == []
+
+
+def test_fast_event_needs_a_reference():
+    events, durations = switch_to_events([2], [1.0], [39], left_censored=False)
+    assert events == [] and durations == []
+
+
+def test_fast_event_is_converted_to_minutes():
+    events, durations = switch_to_events(
+        [2], [10.0], [39], origin_times=[9.0], left_censored=True, FrameToMin=5
+    )
+    assert events == [1] and durations == [5.0]
