@@ -339,7 +339,7 @@ class EventAnnotator(EventAnnotationMixin, AnimationMixin, BaseAnnotator):
 
         fill_option = prefill_class(self.class_option_rb)
         self.df_tracks.loc[:, target_class] = fill_option
-        self.df_tracks.loc[:, target_time] = 0.1 if fill_option == 0 else -1
+        self.df_tracks.loc[:, target_time] = -1
         # A rewritten class keeps its status column, which selecting it would
         # not remake: derive it from the new class and time now.
         write_event_status(self.df_tracks, target_class, target_time, target_status)

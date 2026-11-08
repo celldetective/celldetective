@@ -538,7 +538,7 @@ class PairEventAnnotator(
         fill_option = prefill_class(self.class_option_rb)
         rows = self.neighborhood_rows()
         self.df_relative.loc[rows, class_name] = fill_option
-        self.df_relative.loc[rows, time_name] = 0.1 if fill_option == 0 else -1
+        self.df_relative.loc[rows, time_name] = -1
         # A rewritten class keeps its status column, which selecting it would
         # not remake: derive it from the new class and time now.
         write_event_status(

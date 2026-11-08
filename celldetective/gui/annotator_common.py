@@ -359,7 +359,8 @@ def new_class_dialog(
     on_submit, on_cancel : callable
         Slots of the submit and cancel buttons.
     prefill : bool, optional
-        Whether to offer to prefill the class with event, no event or else.
+        Whether to offer to prefill the class with no event or else. An event
+        needs a time, which only an annotation can give.
 
     Returns
     -------
@@ -368,7 +369,7 @@ def new_class_dialog(
     name_le : QLineEdit
         The name field.
     prefill_options : list of QRadioButton
-        The prefill options, event first (empty without `prefill`).
+        The prefill options, no event first (empty without `prefill`).
     """
 
     widget = CelldetectiveWidget()
@@ -386,9 +387,9 @@ def new_class_dialog(
     if prefill:
         layout.addWidget(QLabel("prefill: "))
         radio_box = QHBoxLayout()
-        for label in ("event", "no event", "else"):
+        for label in ("no event", "else"):
             option = QRadioButton(label)
-            radio_box.addWidget(option, 33, alignment=Qt.AlignCenter)
+            radio_box.addWidget(option, 50, alignment=Qt.AlignCenter)
             prefill_options.append(option)
         prefill_options[0].setChecked(True)
         layout.addLayout(radio_box)
@@ -409,7 +410,7 @@ def new_class_dialog(
 
 def prefill_class(prefill_options: Sequence[QRadioButton]) -> int:
     """The class chosen in the prefill options of :func:`new_class_dialog`."""
-    return [option.isChecked() for option in prefill_options].index(True)
+    return [option.isChecked() for option in prefill_options].index(True) + NO_EVENT
 
 
 def default_dataset_name(pos: str, suffix: str = "") -> str:
