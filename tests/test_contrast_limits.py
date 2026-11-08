@@ -43,7 +43,7 @@ class TestContrastLimits:
         array = _stack(seed=1)
         expected = _get_contrast_limits(array)
         got = _get_contrast_limits(da.from_array(array, chunks=(1, 32, 32, 2)))
-        assert got == pytest.approx(expected)
+        assert np.asarray(got) == pytest.approx(np.asarray(expected))
 
     def test_the_limits_are_plain_floats(self):
         limits = _get_contrast_limits(da.from_array(_stack(), chunks=(1, 32, 32, 2)))
