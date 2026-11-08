@@ -1518,9 +1518,9 @@ def write_first_detection_class(
                 t_first = -1
                 cclass = 2
             else:
+                # The time of appearance is the last frame without the cell, so
+                # a cell first seen at frame 1 appeared at time 0, a valid time.
                 t_first = float(t_first) - float(dt)
-                if t_first == 0:
-                    t_first += 0.01
 
             if edge_test:
                 cclass = 2

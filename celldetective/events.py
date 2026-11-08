@@ -24,7 +24,13 @@ Dependencies
 from typing import List, Optional, Tuple, Sequence
 import numpy as np
 import pandas as pd
+from collections import Counter
+
 from lifelines import KaplanMeierFitter
+
+from celldetective.log_manager import get_logger
+
+logger = get_logger(__name__)
 
 
 def switch_to_events(
@@ -97,13 +103,19 @@ def switch_to_events(
         origin_times = np.zeros_like(max_times)
         left_censored = False
 
+    dropped = Counter()
     for c, t, mt, ot in zip(classes, event_times, max_times, origin_times):
+        n_kept = len(events)
+        # A time of 0 is a valid event time, and a survival time of 0 is kept.
+        # Whether a change at the first observed frame was really observed is
+        # decided upstream (Decision-0023), not here.
+        is_event = c == 0 and t >= 0
 
         if left_censored:
 
             if ot >= 0.0 and ot == ot:
                 # origin time is larger than zero, no censorship
-                if c == 0 and t > 0:
+                if is_event:
 
                     delta_t = t - ot
 
@@ -120,7 +132,7 @@ def switch_to_events(
                                 pass
                         else:
                             # still event
-                            if delta_t > 0:
+                            if delta_t >= 0:
                                 events.append(1)
                                 survival_times.append(delta_t)
                             else:
@@ -128,7 +140,7 @@ def switch_to_events(
                                 pass
                     else:
                         # standard mode
-                        if delta_t > 0:
+                        if delta_t >= 0:
                             events.append(1)
                             survival_times.append(delta_t)
                         else:
@@ -151,7 +163,7 @@ def switch_to_events(
                 pass
 
         else:
-            if c == 0 and t > 0:
+            if is_event:
                 if cut_observation_time is not None:
                     if t > cut_observation_time:
                         events.append(0)
@@ -169,6 +181,18 @@ def switch_to_events(
                 survival_times.append(mt - ot)
             else:
                 pass
+
+        if len(events) == n_kept:
+            dropped[str(c)] += 1
+
+    if dropped:
+        logger.info(
+            "Survival leaves out %d cells (class: count): %s. Class 2 has no usable "
+            "event time; other cells are left out when their origin is unknown "
+            "(left-censored) or falls after their event or end of observation.",
+            sum(dropped.values()),
+            dict(dropped),
+        )
 
     if FrameToMin is not None:
         survival_times = [s * FrameToMin for s in survival_times]
