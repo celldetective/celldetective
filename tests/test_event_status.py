@@ -133,3 +133,25 @@ def test_event_at_an_observed_arrival_keeps_its_class():
 
     assert resolve_unobserved_events(df, "class", "t0") == 0
     assert df.groupby("TRACK_ID")["t0"].first().loc[1] == 9
+
+
+def test_first_observed_frame_of_a_cell_entering_from_the_side():
+    """Its first detection has no time, and its status says from when it is
+    present, as a change at that frame is not observed."""
+
+    from celldetective.utils.event_status import resolve_unobserved_events
+
+    frames = np.arange(20)
+    df = pd.DataFrame(
+        {
+            "TRACK_ID": 1,
+            "FRAME": frames,
+            "class": 0,
+            "t0": 10.0,
+            "class_firstdetection": 2,
+            "t_firstdetection": -1.0,
+            "status_firstdetection": (frames >= 10).astype(float),
+        }
+    )
+    assert resolve_unobserved_events(df, "class", "t0") == 1
+    assert df["class"].eq(2).all() and df["t0"].eq(-1).all()

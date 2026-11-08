@@ -255,3 +255,21 @@ def test_already_positive_on_the_first_frame_stays_class_2():
     df = classify_irreversible_events(df, "class_e")
     assert per_track(df, "class_e")[1] == 2
     assert per_track(df, "t_e")[1] == -1
+
+
+def test_rows_before_a_cell_entering_from_the_side_are_not_read():
+    """A cell entering from the side has no first detection time: its first
+    detection status says from which frame it is present, so a change at that
+    frame is not an observed transition."""
+
+    df = pd.DataFrame({"TRACK_ID": 1, "FRAME": np.arange(N_FRAMES)})
+    df["status_e"] = (df["FRAME"] >= 10).astype(float)
+    df["class_e"] = df["status_e"]
+    df["class_firstdetection"] = 2
+    df["t_firstdetection"] = -1.0
+    df["status_firstdetection"] = (df["FRAME"] >= 10).astype(float)
+    out = classify_irreversible_events(df, "class_e")
+    assert per_track(out, "class_e")[1] == 2
+    assert per_track(out, "t_e")[1] == -1
+    assert np.isnan(out["status_e"]).all()
+    assert out["inst_status_e"].tolist() == df["status_e"].tolist()

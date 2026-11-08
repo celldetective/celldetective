@@ -252,3 +252,17 @@ def test_training_event_at_an_observed_arrival_stays_an_event():
     )
     assert classes.tolist() == [0]
     assert times.tolist() == [9]
+
+
+def test_training_sample_entering_from_the_side():
+    """No first detection time: the status says where the sample is first seen."""
+
+    from celldetective.event_detection_models import _first_observed_frame
+
+    frames = np.arange(20)
+    sample = {
+        "FRAME": frames,
+        "t_firstdetection": np.full(20, -1.0),
+        "status_firstdetection": (frames >= 10).astype(float),
+    }
+    assert _first_observed_frame(sample) == 10

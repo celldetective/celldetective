@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 
 from celldetective.events import compute_survival, switch_to_events
-from celldetective.tracking import write_first_detection_class
+from celldetective.tracking import clean_trajectories, write_first_detection_class
 
 
 def one_track(first_frame, n_frames=6):
@@ -59,7 +59,7 @@ def test_survival_accepts_time_0():
 def spreading_table():
     """Two cells spreading at frame 30, seen from frame 10: one appeared inside
     the field of view, the other entered it from the side (first detection class 2,
-    its time kept)."""
+    its time kept, as in tables written before Decision-0031)."""
 
     rows = []
     for tid, first_class in [(1, 0), (2, 2)]:
@@ -88,9 +88,51 @@ def test_survival_from_an_unreliable_first_detection_is_left_out():
     assert ks.durations.tolist() == [21.0]
 
 
-def test_survival_from_the_start_of_the_movie_keeps_every_cell():
+def test_survival_from_the_start_of_the_movie_leaves_out_side_entries():
     ks = compute_survival(spreading_table(), "class_spread", "t_spread", t_reference=0)
-    assert ks.durations.tolist() == [30.0, 30.0]
+    assert ks.durations.tolist() == [30.0]
+
+
+def test_survival_from_the_start_keeps_cells_on_the_first_frame():
+    """Present on the first frame, class 2, but the movie is the reference: only
+    a cell entering later, from the side, is left out."""
+
+    frames = np.arange(40)
+    rows = [
+        # On the first frame, then spreading.
+        pd.DataFrame({"TRACK_ID": 1, "class_firstdetection": 2, "t_firstdetection": -1.0,
+                      "status_firstdetection": 1.0, "FRAME": frames}),
+        # Entered from the side at frame 10, rows extrapolated before it.
+        pd.DataFrame({"TRACK_ID": 2, "class_firstdetection": 2, "t_firstdetection": -1.0,
+                      "status_firstdetection": (frames >= 10).astype(float), "FRAME": frames}),
+    ]
+    df = pd.concat(rows).assign(position="p", class_spread=0, t_spread=30.0)
+    ks = compute_survival(df, "class_spread", "t_spread", t_reference=0)
+    assert ks.durations.tolist() == [30.0]
+    assert ks.event_observed.tolist() == [1]
+
+
+def test_cell_entering_from_the_side_has_no_first_detection_time():
+    """Class 2, time -1, and a status that says from when it is present, also
+    once the rows before it are extrapolated."""
+
+    df = pd.DataFrame(
+        {
+            "TRACK_ID": 0,
+            "FRAME": [5, 6, 7],
+            "POSITION_X": 5.0,
+            "POSITION_Y": 50.0,
+            "class_id": 1.0,
+        }
+    )
+    written = write_first_detection_class(df, img_shape=(100, 100))
+    assert written["class_firstdetection"].unique().tolist() == [2]
+    assert written["t_firstdetection"].unique().tolist() == [-1]
+
+    res = clean_trajectories(written, extrapolate_tracks_pre=True)
+    assert res["FRAME"].tolist() == list(range(8))
+    assert res["t_firstdetection"].unique().tolist() == [-1]
+    assert res["status_firstdetection"].tolist() == [0] * 5 + [1] * 3
 
 
 def test_event_at_its_arrival_has_a_duration_of_0():
