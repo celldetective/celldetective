@@ -1958,12 +1958,10 @@ def _percentile_classes(
     stat_col: str,
     tracks: pd.Index,
     percentile: float,
-    first_frames: Optional[pd.Series] = None,
 ) -> pd.DataFrame:
     """
-    Class 1 for a track whose status percentile rounds up to 0, class 2 for one that rounds up to 1. With
-    ``first_frames``, a class 2 track takes its first observed frame as time (a state held since the cell was
-    first observed); without, time -1 (no usable time).
+    Class 1 for a track whose status percentile rounds up to 0, class 2 for one that rounds up to 1. The time is
+    -1 for both: neither has an onset.
     """
 
     rows = _of_tracks(observed, keys, tracks)
@@ -1972,8 +1970,6 @@ def _percentile_classes(
     outcomes = pd.DataFrame(index=tracks, columns=["class", "time"], dtype=float)
     outcomes["class"] = np.where(positive, ELSE, NO_EVENT)
     outcomes["time"] = -1.0
-    if first_frames is not None:
-        outcomes.loc[positive, "time"] = first_frames.reindex(tracks)[positive]
     return outcomes
 
 
@@ -2003,11 +1999,11 @@ def classify_unique_states(
             DataFrame with updated classification for each track and corresponding time:
 
             - Cells with percentile values that round up to 0 (negative) are classified as 1, time -1.
-            - Cells with percentile values that round up to 1 (positive) are classified as 2, with the first observed
-              frame as time: the state was reached before the cell was observed.
+            - Cells with percentile values that round up to 1 (positive) are classified as 2, time -1: a state has no
+              onset.
             - Cells with nothing observed are classified as 2, time -1.
 
-            The status is the step from class and time, and the per-frame result of the condition is kept as
+            The status of a class 2 cell is empty (NaN), and the per-frame result of the condition is kept as
             ``inst_<status>``.
 
     Example
@@ -2022,9 +2018,7 @@ def classify_unique_states(
     )
     observed = _observed_rows(df, keys, stat_col, in_scope)
     summary = _observed_tracks(observed, keys, stat_col)
-    outcomes = _percentile_classes(
-        observed, keys, stat_col, summary.index, percentile, summary["first_frame"]
-    )
+    outcomes = _percentile_classes(observed, keys, stat_col, summary.index, percentile)
     _write_track_outcomes(df, keys, outcomes, class_attr, time_attr)
     _finalize_event_status(df, keys, class_attr, stat_col, pre_event)
     return df
