@@ -26,13 +26,12 @@ Copyright © 2022 Laboratoire Adhesion et Inflammation
 Authored by R. Torro, K. Dervanova, L. Limozin
 """
 
-from typing import Any, Dict, List, Optional, Tuple, Union, Literal
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union, Literal
 import math
 import numpy as np
 import os
 import subprocess
 import sys
-from math import ceil
 from functools import reduce
 from inspect import getmembers, isfunction
 from celldetective.gui.base.utils import pretty_table
@@ -52,6 +51,7 @@ from celldetective.utils.data_cleaning import (
 from celldetective.utils.image_cleaning import interpolate_nan
 from celldetective.preprocessing import field_correction
 from celldetective.log_manager import get_logger
+from celldetective.utils.signal_windowing import ELSE, EVENT, NO_EVENT
 import pandas as pd
 
 logger = get_logger(__name__)
@@ -1502,6 +1502,204 @@ def blob_detection(
     return detections
 
 
+def _track_keys(df: pd.DataFrame) -> List[str]:
+    """The columns identifying a track: the position too, when there is one."""
+
+    if "TRACK_ID" not in df.columns:
+        raise KeyError("Please provide tracked data...")
+    return ["position", "TRACK_ID"] if "position" in df.columns else ["TRACK_ID"]
+
+
+def _by_track(df: pd.DataFrame, keys: List[str]):
+    """Group by track, with scalar group keys when a single column identifies it."""
+
+    return df.groupby(keys[0] if len(keys) == 1 else keys)
+
+
+def _check_pre_event(df: pd.DataFrame, pre_event: Optional[str]) -> None:
+    """Raise if the columns of the pre-event are missing."""
+
+    if pre_event is None:
+        return
+    if "t_" + pre_event not in df.columns:
+        raise KeyError("Pre-event time does not seem to be a valid column in the DataFrame...")
+    if "class_" + pre_event not in df.columns:
+        raise KeyError("Pre-event class does not seem to be a valid column in the DataFrame...")
+
+
+def _start_event_classification(
+    df: pd.DataFrame, class_attr: str, pre_event: Optional[str]
+) -> Tuple[str, str, pd.Series]:
+    """
+    Prepare a table whose status column holds the per-frame result of a
+    condition: keep it as ``inst_<status>``, and set the working status to NaN
+    where the cell is not observed (up to the first detection, which leaves out
+    extrapolated rows, and up to the pre-event if there is one). Every track
+    starts as class 2 with time -1; a track whose pre-event never happened gets
+    no class.
+
+    Returns the status and time columns, and the rows of tracks to classify.
+    """
+
+    _check_pre_event(df, pre_event)
+    stat_col = class_attr.replace("class", "status")
+    time_attr = class_attr.replace("class", "t")
+    df["inst_" + stat_col] = df[stat_col].copy()
+
+    hidden = pd.Series(False, index=df.index)
+    in_scope = pd.Series(True, index=df.index)
+    if "t_firstdetection" in df.columns:
+        # Extrapolated rows before the first detection, with or without a pre-event.
+        hidden |= df["FRAME"] <= df["t_firstdetection"]
+    if pre_event is not None:
+        hidden |= df["FRAME"] <= df["t_" + pre_event]
+        in_scope = df["class_" + pre_event] != NO_EVENT
+        hidden |= ~in_scope
+
+    df.loc[hidden, stat_col] = np.nan
+    df[class_attr] = np.where(in_scope, ELSE, np.nan)
+    df[time_attr] = -1.0
+    return stat_col, time_attr, in_scope
+
+
+def _observed_rows(
+    df: pd.DataFrame, keys: List[str], stat_col: str, rows: pd.Series
+) -> pd.DataFrame:
+    """The ``rows`` with a valid status, with only the columns the classifiers read."""
+
+    return df.loc[rows, keys + ["FRAME", stat_col]].dropna(subset=[stat_col])
+
+
+def _of_tracks(observed: pd.DataFrame, keys: List[str], tracks: pd.Index) -> pd.DataFrame:
+    """The rows of ``observed`` that belong to ``tracks``."""
+
+    if len(keys) == 1:
+        return observed.loc[observed[keys[0]].isin(tracks)]
+    return observed.loc[pd.MultiIndex.from_frame(observed[keys]).isin(tracks)]
+
+
+def _observed_tracks(
+    observed: pd.DataFrame, keys: List[str], stat_col: str
+) -> pd.DataFrame:
+    """Per track of ``observed`` (see `_observed_rows`), its status range and first
+    observed frame."""
+
+    groups = _by_track(observed, keys)
+    return pd.DataFrame(
+        {
+            "min": groups[stat_col].min(),
+            "max": groups[stat_col].max(),
+            "first_frame": groups["FRAME"].min(),
+        }
+    )
+
+
+def _write_track_outcomes(
+    df: pd.DataFrame,
+    keys: List[str],
+    outcomes: pd.DataFrame,
+    class_attr: str,
+    time_attr: str,
+) -> None:
+    """Write the class and time of each track of ``outcomes`` (indexed by track,
+    with ``class`` and ``time`` columns) to all its rows."""
+
+    if outcomes.empty:
+        return
+    row_keys = (
+        pd.MultiIndex.from_frame(df[keys]) if len(keys) > 1 else pd.Index(df[keys[0]])
+    )
+    aligned = outcomes.reindex(row_keys)
+    hit = aligned["class"].notna().to_numpy()
+    df.loc[hit, class_attr] = aligned["class"].to_numpy()[hit]
+    df.loc[hit, time_attr] = aligned["time"].to_numpy()[hit]
+
+
+def _event_outcome(t0: float, first_frame: float) -> Tuple[int, float]:
+    """An event at ``t0``, or class 2 at the first observed frame when the
+    transition was at or before it and so not observed (Decision-0023)."""
+
+    if t0 <= first_frame:
+        return ELSE, float(first_frame)
+    return EVENT, float(t0)
+
+
+def _finalize_event_status(
+    df: pd.DataFrame,
+    keys: List[str],
+    class_attr: str,
+    stat_col: str,
+    pre_event: Optional[str] = None,
+) -> None:
+    """
+    Rebuild the status from the class and time of each track (Decision-0021),
+    and leave it NaN before the pre-event. ``df`` is modified in place.
+    """
+
+    from celldetective.utils.event_status import write_event_status
+
+    write_event_status(
+        df, class_attr, class_attr.replace("class", "t"), stat_col, keys=keys
+    )
+    if pre_event is not None:
+        df.loc[df["FRAME"] <= df["t_" + pre_event], stat_col] = np.nan
+
+
+def _fit_step_time(
+    timeline: np.ndarray, status: np.ndarray, func: Callable, r2_threshold: float
+) -> Optional[float]:
+    """The time of a step fitted to a status, or None if the fit fails or its R²
+    is not above the threshold."""
+
+    from scipy.optimize import curve_fit
+    from sklearn.metrics import r2_score
+
+    try:
+        popt, pcov = curve_fit(
+            func,
+            timeline.astype(int),
+            status,
+            p0=[max(timeline) // 2, 0.8],
+            maxfev=100000,
+        )
+        r2 = r2_score(status, [func(t, *popt) for t in timeline])
+    except Exception as e:
+        logger.warning(e)
+        return None
+    return popt[0] if r2 > float(r2_threshold) else None
+
+
+def _fit_event_times(
+    observed: pd.DataFrame,
+    keys: List[str],
+    stat_col: str,
+    tracks: pd.Index,
+    first_frames: pd.Series,
+    r2_threshold: float,
+    max_time: float,
+    model: str = "step_function",
+) -> pd.DataFrame:
+    """Class and time of the ``tracks`` from a step fit of their valid status
+    (``observed``, see `_observed_rows`). A fitted time is capped at
+    ``max_time - 1``. A failed or poor fit gives class 2 and time -1."""
+
+    from celldetective.utils.maths import step_function
+
+    func = step_function if model == "step_function" else eval(model)
+    outcomes = {}
+    for tid, group in _by_track(_of_tracks(observed, keys, tracks), keys):
+        t0 = _fit_step_time(
+            group["FRAME"].to_numpy(), group[stat_col].to_numpy(), func, r2_threshold
+        )
+        if t0 is None:
+            outcomes[tid] = (ELSE, -1.0)
+        else:
+            outcomes[tid] = _event_outcome(min(t0, max_time - 1), first_frames[tid])
+    return pd.DataFrame.from_dict(
+        outcomes, orient="index", columns=["class", "time"]
+    ).reindex(tracks)
+
+
 def estimate_time(
     df: pd.DataFrame,
     class_attr: str,
@@ -1510,7 +1708,7 @@ def estimate_time(
     r2_threshold: float = 0.5,
 ) -> pd.DataFrame:
     """
-    Estimate the timing of an event for cells based on classification status and fit a model to the observed status signal.
+    Estimate the time of an event by fitting a model to the status of each cell of interest.
 
     Parameters
     ----------
@@ -1528,83 +1726,42 @@ def estimate_time(
     Returns
     -------
     pandas.DataFrame
-            Updated DataFrame with estimated event timing added in a column replacing 'class' with 't',
-            and reclassification of cells based on the model fit.
+            Updated DataFrame with the event time in the column replacing 'class' with 't', and the class updated:
+
+            - a good fit (R² above the threshold) placed after the first observed frame gives class 0 and that time;
+            - a good fit at or before the first observed frame gives class 2, with the first observed frame as time:
+              the transition was not observed;
+            - a poor or failed fit gives class 2 and time -1.
 
     Notes
     -----
-    - The function assumes that cells are grouped by a unique identifier ('TRACK_ID') and sorted by time ('FRAME').
-    - If the model provides a poor fit (R² < r2_threshold), the class of interest is set to 2.0 and timing (-1).
+    - Cells are grouped by 'TRACK_ID' (and 'position' when present); rows with a NaN status are not fitted.
+    - Cells whose valid status is 0 throughout, 1 throughout, or that have none, are left unchanged: there is no
+      transition to fit (a step fitted to a constant signal is a perfect, meaningless fit).
     - The function supports different models that can be passed as the `model` parameter, which are evaluated using `eval()`.
 
     Example
     -------
     >>> df = estimate_time(df, 'class', model='step_function', class_of_interest=[2], r2_threshold=0.6)
-
     """
 
-    cols = list(df.columns)
-    if "TRACK_ID" not in cols:
-        raise KeyError("Please provide tracked data...")
-    if "position" in cols:
-        sort_cols = ["position", "TRACK_ID"]
-    else:
-        sort_cols = ["TRACK_ID"]
-
-    df = df.sort_values(by=sort_cols, ignore_index=True)
-    df = df.reset_index(drop=True)
-    max_time = df["FRAME"].max()
-
-    for tid, group in df.loc[df[class_attr].isin(class_of_interest)].groupby(sort_cols):
-
-        indices = group.index
-        status_col = class_attr.replace("class", "status")
-
-        group_clean = group.dropna(subset=[status_col])
-        status_signal = group_clean[status_col].values
-        if np.all(np.array(status_signal) == 1):
-            continue
-
-        timeline = group_clean["FRAME"].values
-        frames = group_clean["FRAME"].to_numpy()
-        status_values = group_clean[status_col].to_numpy()
-        t_first = group["t_firstdetection"].to_numpy()[0]
-
-        try:
-            from scipy.optimize import curve_fit
-            from sklearn.metrics import r2_score
-            from celldetective.utils.maths import step_function
-
-            if model == "step_function":
-                func = step_function
-            else:
-                func = eval(model)
-
-            popt, pcov = curve_fit(
-                func,
-                timeline.astype(int),
-                status_signal,
-                p0=[max(timeline) // 2, 0.8],
-                maxfev=100000,
-            )
-            values = [func(t, *popt) for t in timeline]
-            r2 = r2_score(status_signal, values)
-        except Exception as e:
-            logger.warning(e)
-            df.loc[indices, class_attr] = 2.0
-            df.loc[indices, class_attr.replace("class", "t")] = -1
-            continue
-
-        if r2 > float(r2_threshold):
-            t0 = popt[0]
-            if t0 >= max_time:
-                t0 = max_time - 1
-            df.loc[indices, class_attr.replace("class", "t")] = t0
-            df.loc[indices, class_attr] = 0.0
-        else:
-            df.loc[indices, class_attr.replace("class", "t")] = -1
-            df.loc[indices, class_attr] = 2.0
-
+    keys = _track_keys(df)
+    df = df.sort_values(by=keys, ignore_index=True, kind="stable")
+    status_col = class_attr.replace("class", "status")
+    observed = _observed_rows(df, keys, status_col, df[class_attr].isin(class_of_interest))
+    summary = _observed_tracks(observed, keys, status_col)
+    to_fit = summary.index[(summary["min"] < 1) & (summary["max"] > 0)]
+    outcomes = _fit_event_times(
+        observed,
+        keys,
+        status_col,
+        to_fit,
+        summary["first_frame"],
+        r2_threshold,
+        df["FRAME"].max(),
+        model,
+    )
+    _write_track_outcomes(df, keys, outcomes, class_attr, class_attr.replace("class", "t"))
     return df
 
 
@@ -1625,6 +1782,7 @@ def interpret_track_classification(
     ----------
     df : pandas.DataFrame
             DataFrame containing tracked cell data, including a classification attribute column and other necessary columns.
+            On entry, the class column (or the status column, if present) holds the per-frame result of the condition.
     class_attr : str
             Column name for the classification attribute (e.g., 'class') used to determine the state of cells.
     irreversible_event : bool, optional
@@ -1645,46 +1803,25 @@ def interpret_track_classification(
     Returns
     -------
     pandas.DataFrame
-            DataFrame with updated classifications for cell trajectories:
-
-            - If `irreversible_event` is True, it classifies irreversible events using the `classify_irreversible_events` function.
-            - If `unique_state` is True, it classifies unique states using the `classify_unique_states` function.
+            DataFrame with the class, time and status of each track. The status is the step built from class and time
+            (`write_event_status`), and the per-frame result of the condition is kept as ``inst_<status>``.
 
     Raises
     ------
-    AssertionError
+    KeyError
             If the 'TRACK_ID' column is missing in the input DataFrame.
-
-    Notes
-    -----
-    - The function assumes that the input DataFrame contains a column for tracking cells (`TRACK_ID`) and possibly a 'position' column.
-    - The classification behavior depends on the `irreversible_event` and `unique_state` flags:
-
-            - When `irreversible_event` is True, the function classifies events that are considered irreversible.
-            - When `unique_state` is True (and `irreversible_event` is False), it classifies unique states using a 50th percentile threshold.
 
     Example
     -------
     >>> df = interpret_track_classification(df, 'class', irreversible_event=True, r2_threshold=0.7)
-
     """
 
-    cols = list(df.columns)
-
-    if "TRACK_ID" not in cols:
+    if "TRACK_ID" not in df.columns:
         raise KeyError("Please provide tracked data...")
-    if "position" in cols:
-        sort_cols = ["position", "TRACK_ID"]
-    else:
-        sort_cols = ["TRACK_ID"]
-    if class_attr.replace("class", "status") not in cols:
+    if class_attr.replace("class", "status") not in df.columns:
         df.loc[:, class_attr.replace("class", "status")] = df.loc[:, class_attr]
 
     if irreversible_event:
-        unique_state = False
-
-    if irreversible_event:
-
         df = classify_irreversible_events(
             df,
             class_attr,
@@ -1692,13 +1829,9 @@ def interpret_track_classification(
             percentile_recovery=percentile_recovery,
             pre_event=pre_event,
         )
-
     elif unique_state:
-
         df = classify_unique_states(df, class_attr, percentile=50, pre_event=pre_event)
-
     elif transient_event:
-
         df = classify_transient_events(df, class_attr, pre_event=pre_event)
 
     return df
@@ -1709,6 +1842,9 @@ def classify_transient_events(
 ) -> pd.DataFrame:
     """
     Classify transient events in the dataset.
+
+    The widest peak of the status gives the event, at its onset. An onset at or before the first observed frame
+    gives class 2, with that frame as time: the onset was not observed.
 
     Parameters
     ----------
@@ -1722,104 +1858,38 @@ def classify_transient_events(
     Returns
     -------
     pandas.DataFrame
-            DataFrame with updated classifications for transient events.
+            DataFrame with updated classifications for transient events. The status is the step from class and time,
+            and the per-frame result of the condition is kept as ``inst_<status>``.
     """
 
+    from scipy.signal import find_peaks, peak_widths
+
     df = data.copy()
-    cols = list(df.columns)
+    keys = _track_keys(df)
+    df = df.sort_values(by=keys + ["FRAME"])
+    stat_col, time_attr, in_scope = _start_event_classification(
+        df, class_attr, pre_event
+    )
 
-    # Control input
-    if "TRACK_ID" not in cols:
-        raise KeyError("Please provide tracked data...")
-    if "position" in cols:
-        sort_cols = ["position", "TRACK_ID"]
-        df = df.sort_values(by=sort_cols + ["FRAME"])
-    else:
-        sort_cols = ["TRACK_ID"]
-        df = df.sort_values(by=sort_cols + ["FRAME"])
-    if pre_event is not None:
-        if "t_" + pre_event not in cols:
-            raise KeyError("Pre-event time does not seem to be a valid column in the DataFrame...")
-        if "class_" + pre_event not in cols:
-            raise KeyError("Pre-event class does not seem to be a valid column in the DataFrame...")
-
-    stat_col = class_attr.replace("class", "status")
-    continuous_stat_col = stat_col.replace("status_", "smooth_status_")
-    df[continuous_stat_col] = df[stat_col].copy()
-
-    for tid, track in df.groupby(sort_cols):
-
-        indices = track[class_attr].index
-
-        if pre_event is not None:
-
-            if track["class_" + pre_event].values[0] == 1:
-                df.loc[indices, class_attr] = np.nan
-                df.loc[indices, stat_col] = np.nan
-                continue
-            else:
-                # pre-event took place (if left-censored took place at time -1)
-                t_pre_event = track["t_" + pre_event].values[0]
-                indices_pre = track.loc[track["FRAME"] <= t_pre_event, class_attr].index
-                df.loc[indices_pre, stat_col] = (
-                    np.nan
-                )  # set to NaN all statuses before pre-event
-                track.loc[track["FRAME"] <= t_pre_event, stat_col] = np.nan
-                track.loc[track["FRAME"] <= t_pre_event, continuous_stat_col] = np.nan
-
-        status = track[stat_col].to_numpy()
+    outcomes = {}
+    for tid, track in _by_track(_observed_rows(df, keys, stat_col, in_scope), keys):
         timeline = track["FRAME"].to_numpy()
-        timeline_safe = timeline[status == status]
-        status_safe = list(status[status == status])
+        # A 0 on each side lets find_peaks see a pulse already on at the first
+        # frame, or still on at the last one.
+        status = np.concatenate([[0.0], track[stat_col].to_numpy(), [0.0]])
+        peaks, _ = find_peaks(status)
+        if len(peaks) == 0:
+            outcomes[tid] = (NO_EVENT, -1.0)
+            continue
+        widths, _, left, _ = peak_widths(status, peaks, rel_height=1)
+        # The base of the widest peak is its last 0; the onset is the next frame.
+        onset = int(np.floor(left[np.argmax(widths)]))
+        outcomes[tid] = _event_outcome(timeline[onset], timeline[0])
 
-        from scipy.signal import find_peaks, peak_widths
-
-        peaks, _ = find_peaks(status_safe)
-        widths, _, left, right = peak_widths(status_safe, peaks, rel_height=1)
-        minimum_weight = 0
-
-        if len(peaks) > 0:
-            idx = np.argmax(widths)
-            peak = peaks[idx]
-            width = widths[idx]
-            if width >= minimum_weight:
-                left = left[idx]
-                right = right[idx]
-                left = timeline_safe[int(left)]
-                right = timeline_safe[int(right)]
-
-                df.loc[indices, class_attr] = 0
-                t0 = left  # take onset + (right - left)/2.0
-                df.loc[indices, class_attr.replace("class_", "t_")] = t0
-                df.loc[
-                    track.loc[track[stat_col].isnull(), class_attr].index,
-                    continuous_stat_col,
-                ] = np.nan
-                df.loc[
-                    track.loc[track["FRAME"] < t0, class_attr].index,
-                    continuous_stat_col,
-                ] = 0
-                df.loc[
-                    track.loc[track["FRAME"] >= t0, class_attr].index,
-                    continuous_stat_col,
-                ] = 1
-            else:
-                df.loc[indices, class_attr] = 1
-                df.loc[indices, class_attr.replace("class_", "t_")] = -1
-                df.loc[indices, continuous_stat_col] = 0
-        else:
-            df.loc[indices, class_attr] = 1
-            df.loc[indices, class_attr.replace("class_", "t_")] = -1
-            df.loc[indices, continuous_stat_col] = 0
-
-    # restate NaN for out of scope timepoints
-    df.loc[df[stat_col].isnull(), continuous_stat_col] = np.nan
-    if "inst_" + stat_col in list(df.columns):
-        df = df.drop(columns=["inst_" + stat_col])
-    df = df.rename(columns={stat_col: "inst_" + stat_col})
-    df = df.rename(columns={continuous_stat_col: stat_col})
+    outcomes = pd.DataFrame.from_dict(outcomes, orient="index", columns=["class", "time"])
+    _write_track_outcomes(df, keys, outcomes, class_attr, time_attr)
+    _finalize_event_status(df, keys, class_attr, stat_col, pre_event)
     logger.info("Classes:\n%s", df.loc[df["FRAME"] == 0, class_attr].value_counts())
-
     return df
 
 
@@ -1832,6 +1902,8 @@ def classify_irreversible_events(
 ) -> pd.DataFrame:
     """
     Classify irreversible events in a tracked dataset based on the status of cells and transitions.
+
+    Only observed frames are read: after the pre-event if there is one, from the first detection otherwise.
 
     Parameters
     ----------
@@ -1851,109 +1923,82 @@ def classify_irreversible_events(
     pandas.DataFrame
             DataFrame with updated classifications for irreversible events, with the following outcomes:
 
-            - Cells with all 0s in the status column are classified as 1 (no event).
-            - Cells with all 1s are classified as 2 (event already occurred).
-            - Cells with a mix of 0s and 1s are classified as 2 (ambiguous, possible transition).
-            - For cells classified as 2, the time of the event is estimated using the `estimate_time` function. If successful they are reclassified as 0 (event).
-            - The classification for cells still classified as 2 is revisited using a 95th percentile threshold.
+            - Status 0 at every observed frame: class 1 (no event).
+            - Status 1 at every observed frame: class 2, with the first observed frame as time (the event happened
+              before the cell was observed).
+            - A mix: the time is fitted with a step function. A good fit gives class 0, or class 2 if it falls at or
+              before the first observed frame.
+            - A poor fit is revisited by the median status (`percentile_recovery`): class 1 if negative, class 2 with
+              time -1 (no usable time) if positive.
+            - Nothing observed: class 2, time -1.
 
-    Notes
-    -----
-    - The function assumes that cells are grouped by a unique identifier (`TRACK_ID`) and sorted by position or ID.
-    - The classification is based on the `stat_col` derived from `class_attr` (status column).
-    - Cells with no event (all 0s in the status column) are assigned a class value of 1.
-    - Cells with irreversible events (all 1s in the status column) are assigned a class value of 2.
-    - Cells with transitions (a mix of 0s and 1s) are classified as 2 and their event times are estimated. When successful they are reclassified as 0.
-    - After event classification, the function reclassifies leftover ambiguous cases (class 2) using the `classify_unique_states` function.
+            The status is the step from class and time, and the per-frame result of the condition is kept as
+            ``inst_<status>``.
 
     Example
     -------
     >>> df = classify_irreversible_events(df, 'class', r2_threshold=0.7)
-
     """
 
     df = data.copy()
-    cols = list(df.columns)
-
-    # Control input
-    if "TRACK_ID" not in cols:
-        raise KeyError("Please provide tracked data...")
-    if "position" in cols:
-        sort_cols = ["position", "TRACK_ID"]
-    else:
-        sort_cols = ["TRACK_ID"]
-    if pre_event is not None:
-        if "t_" + pre_event not in cols:
-            raise KeyError("Pre-event time does not seem to be a valid column in the DataFrame...")
-        if "class_" + pre_event not in cols:
-            raise KeyError("Pre-event class does not seem to be a valid column in the DataFrame...")
-
-    stat_col = class_attr.replace("class", "status")
-
-    for tid, track in df.groupby(sort_cols):
-
-        indices = track[class_attr].index
-
-        if pre_event is not None:
-            if track["class_" + pre_event].values[0] == 1:
-                df.loc[indices, class_attr] = np.nan
-                df.loc[indices, stat_col] = np.nan
-                continue
-            else:
-                # pre-event took place (if left-censored took place at time -1)
-                t_pre_event = track["t_" + pre_event].values[0]
-                indices_pre = track.loc[track["FRAME"] <= t_pre_event, class_attr].index
-                df.loc[indices_pre, stat_col] = (
-                    np.nan
-                )  # set to NaN all statuses before pre-event
-                track.loc[track["FRAME"] <= t_pre_event, stat_col] = np.nan
-        else:
-            # set state to 0 before first detection
-            t_firstdetection = track["t_firstdetection"].values[0]
-            indices_pre_detection = track.loc[
-                track["FRAME"] <= t_firstdetection, class_attr
-            ].index
-            track.loc[indices_pre_detection, stat_col] = 0.0
-            df.loc[indices_pre_detection, stat_col] = 0.0
-
-        # The non-NaN part of track (post pre-event)
-        track_valid = track.dropna(subset=[stat_col], inplace=False)
-        status_values = track_valid[stat_col].to_numpy()
-
-        if np.all([s == 0 for s in status_values]):
-            # all negative to condition, event not observed
-            df.loc[indices, class_attr] = 1
-        elif np.all([s == 1 for s in status_values]):
-            # all positive, event already observed (left-censored)
-            df.loc[indices, class_attr] = 2
-        else:
-            # ambiguity, possible transition, use `unique_state` technique after
-            df.loc[indices, class_attr] = 2
-
-    logger.info("Number of cells per class after the initial pass: %s",
-                df.loc[df["FRAME"] == 0, class_attr].value_counts().to_dict())
-
-    df.loc[df[class_attr] != 2, class_attr.replace("class", "t")] = -1
-    # Try to fit time on class 2 cells (ambiguous)
-    df = estimate_time(
-        df,
-        class_attr,
-        model="step_function",
-        class_of_interest=[2],
-        r2_threshold=r2_threshold,
+    keys = _track_keys(df)
+    stat_col, time_attr, in_scope = _start_event_classification(
+        df, class_attr, pre_event
     )
 
-    logger.info("Number of cells per class after conditional signal fit: %s",
-                df.loc[df["FRAME"] == 0, class_attr].value_counts().to_dict())
+    observed = _observed_rows(df, keys, stat_col, in_scope)
+    summary = _observed_tracks(observed, keys, stat_col)
+    negative = summary["max"] == 0
+    positive = summary["min"] == 1
+    outcomes = pd.DataFrame(index=summary.index, columns=["class", "time"], dtype=float)
+    outcomes.loc[negative] = [NO_EVENT, -1.0]
+    outcomes.loc[positive, "class"] = ELSE
+    outcomes.loc[positive, "time"] = summary.loc[positive, "first_frame"]
 
-    # Revisit class 2 cells to classify as neg/pos with percentile tolerance
-    df.loc[df[class_attr] == 2, :] = classify_unique_states(
-        df.loc[df[class_attr] == 2, :].copy(), class_attr, percentile_recovery
+    mixed = summary.index[~negative & ~positive]
+    fitted = _fit_event_times(
+        observed, keys, stat_col, mixed, summary["first_frame"], r2_threshold,
+        df["FRAME"].max(),
     )
-    logger.info("Number of cells per class after recovery pass (median state): %s",
-                df.loc[df["FRAME"] == 0, class_attr].value_counts().to_dict())
+    outcomes.loc[mixed] = fitted
 
+    # Revisit the poor fits by their median status
+    failed = fitted.index[fitted["time"] < 0]
+    recovered = _percentile_classes(observed, keys, stat_col, failed, percentile_recovery)
+    outcomes.loc[failed] = recovered
+
+    logger.info(
+        "Tracks per outcome: %d no event, %d positive throughout, %d fitted, %d revisited by their median state.",
+        int(negative.sum()), int(positive.sum()), len(mixed) - len(failed), len(failed),
+    )
+    _write_track_outcomes(df, keys, outcomes, class_attr, time_attr)
+    _finalize_event_status(df, keys, class_attr, stat_col, pre_event)
     return df
+
+
+def _percentile_classes(
+    observed: pd.DataFrame,
+    keys: List[str],
+    stat_col: str,
+    tracks: pd.Index,
+    percentile: float,
+    first_frames: Optional[pd.Series] = None,
+) -> pd.DataFrame:
+    """
+    Class 1 for a track whose status percentile rounds up to 0, class 2 for one that rounds up to 1. With
+    ``first_frames``, a class 2 track takes its first observed frame as time (a state held since the cell was
+    first observed); without, time -1 (no usable time).
+    """
+
+    rows = _of_tracks(observed, keys, tracks)
+    perc = _by_track(rows, keys)[stat_col].quantile(percentile / 100).reindex(tracks)
+    positive = np.ceil(perc) >= 1
+    outcomes = pd.DataFrame(index=tracks, columns=["class", "time"], dtype=float)
+    outcomes["class"] = np.where(positive, ELSE, NO_EVENT)
+    outcomes["time"] = -1.0
+    if first_frames is not None:
+        outcomes.loc[positive, "time"] = first_frames.reindex(tracks)[positive]
+    return outcomes
 
 
 def classify_unique_states(
@@ -1972,81 +2017,40 @@ def classify_unique_states(
     class_attr : str
             Column name for the classification attribute (e.g., 'class') used to update the classification of cell states.
     percentile : int, optional
-            Percentile value used to classify the status attribute within the valid frames (default is median).
+            Percentile value used to classify the status attribute within the observed frames (default is median).
     pre_event : str, optional
             Name of a pre-event class to consider. Default is None.
 
     Returns
     -------
     pandas.DataFrame
-            DataFrame with updated classification for each track and corresponding time (if applicable).
-            The classification is updated based on the calculated percentile:
+            DataFrame with updated classification for each track and corresponding time:
 
-            - Cells with percentile values that round to 0 (negative to classification) are classified as 1.
-            - Cells with percentile values that round to 1 (positive to classification) are classified as 2.
-            - If classification is not applicable (NaN), time (`class_attr.replace('class', 't')`) is set to -1.
+            - Cells with percentile values that round up to 0 (negative) are classified as 1, time -1.
+            - Cells with percentile values that round up to 1 (positive) are classified as 2, with the first observed
+              frame as time: the state was reached before the cell was observed.
+            - Cells with nothing observed are classified as 2, time -1.
 
-    Notes
-    -----
-    - The function assumes that cells are grouped by a unique identifier ('TRACK_ID') and sorted by position or ID.
-    - The classification is based on the `stat_col` derived from `class_attr` (status column).
-    - NaN values in the status column are excluded from the percentile calculation.
-    - For each track, the classification is assigned according to the rounded percentile value.
-    - Time (`class_attr.replace('class', 't')`) is set to -1 when the cell state is classified.
+            The status is the step from class and time, and the per-frame result of the condition is kept as
+            ``inst_<status>``.
 
     Example
     -------
     >>> df = classify_unique_states(df, 'class', percentile=75)
-
     """
 
-    cols = list(df.columns)
-    if "TRACK_ID" not in cols:
-        raise KeyError("Please provide tracked data...")
-    if "position" in cols:
-        sort_cols = ["position", "TRACK_ID"]
-    else:
-        sort_cols = ["TRACK_ID"]
-
-    if pre_event is not None:
-        if "t_" + pre_event not in cols:
-            raise KeyError("Pre-event time does not seem to be a valid column in the DataFrame...")
-        if "class_" + pre_event not in cols:
-            raise KeyError("Pre-event class does not seem to be a valid column in the DataFrame...")
-
-    stat_col = class_attr.replace("class", "status")
-
-    for tid, track in df.groupby(sort_cols):
-
-        indices = track[class_attr].index
-
-        if pre_event is not None:
-            if track["class_" + pre_event].values[0] == 1:
-                df.loc[indices, class_attr] = np.nan
-                df.loc[indices, stat_col] = np.nan
-                df.loc[indices, stat_col.replace("status_", "t_")] = -1
-                continue
-            else:
-                t_pre_event = track["t_" + pre_event].values[0]
-                indices_pre = track.loc[track["FRAME"] <= t_pre_event, class_attr].index
-                df.loc[indices_pre, stat_col] = np.nan
-                track.loc[track["FRAME"] <= t_pre_event, stat_col] = np.nan
-
-        # Post pre-event track
-        track_valid = track.dropna(subset=[stat_col], inplace=False)
-        status_values = track_valid[stat_col].to_numpy()
-        frames = track_valid["FRAME"].to_numpy()
-        t_first = track["t_firstdetection"].to_numpy()[0]
-        perc_status = np.nanpercentile(status_values[frames >= t_first], percentile)
-
-        if perc_status == perc_status:
-            c = ceil(perc_status)
-            if c == 0:
-                df.loc[indices, class_attr] = 1
-                df.loc[indices, class_attr.replace("class", "t")] = -1
-            elif c == 1:
-                df.loc[indices, class_attr] = 2
-                df.loc[indices, class_attr.replace("class", "t")] = -1
+    df = df.copy()
+    keys = _track_keys(df)
+    stat_col, time_attr, in_scope = _start_event_classification(
+        df, class_attr, pre_event
+    )
+    observed = _observed_rows(df, keys, stat_col, in_scope)
+    summary = _observed_tracks(observed, keys, stat_col)
+    outcomes = _percentile_classes(
+        observed, keys, stat_col, summary.index, percentile, summary["first_frame"]
+    )
+    _write_track_outcomes(df, keys, outcomes, class_attr, time_attr)
+    _finalize_event_status(df, keys, class_attr, stat_col, pre_event)
     return df
 
 
