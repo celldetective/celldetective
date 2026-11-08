@@ -1,9 +1,8 @@
 """Events found from a condition: class, time and status of each track.
 
 Class 0 is an event observed after the first observed frame, 1 no event, and 2
-no usable event time (Decision-0020): with the first observed frame as time when
-the cell is positive from it (Decision-0023), with time -1 and a NaN status when
-the track cannot be resolved. The status is always the step from class and time,
+no usable event time (Decision-0020), always with time -1 and a NaN status: the
+time column only holds onsets (Decision-0023). The status is always the step from class and time,
 and the per-frame result of the condition is kept as ``inst_status_*``
 (Decision-0021).
 """
@@ -72,17 +71,17 @@ class TestIrreversible:
         times = per_track(classified, "t_e")
         assert times[1] == -1
         assert times[2] == pytest.approx(8, abs=1)
-        assert times[3] == 0  # first observed frame
+        assert times[3] == -1  # positive from the start: no onset
         assert times[4] == -1
-        assert times[5] == 5  # first detection, not the extrapolated rows
+        assert times[5] == -1  # first detection, not the extrapolated rows
 
     def test_status_is_the_step(self, classified):
         t2 = per_track(classified, "t_e")[2]
         expected = [float(f >= t2) for f in range(N_FRAMES)]
         assert status_of(classified, 2) == expected
         assert status_of(classified, 1) == [0.0] * N_FRAMES
-        assert status_of(classified, 3) == [1.0] * N_FRAMES
-        assert status_of(classified, 5) == step(5)
+        assert np.isnan(status_of(classified, 3)).all()
+        assert np.isnan(status_of(classified, 5)).all()
         assert np.isnan(status_of(classified, 4)).all()
 
     def test_condition_kept_per_frame(self, classified):
@@ -129,7 +128,7 @@ def test_transient():
     df = tracks_table({1: pulse, 2: [0.0] * N_FRAMES, 3: from_start})
     out = classify_transient_events(df, "class_e")
     assert per_track(out, "class_e") == {1: 0, 2: 1, 3: 2}
-    assert per_track(out, "t_e") == {1: 6, 2: -1, 3: 0}
+    assert per_track(out, "t_e") == {1: 6, 2: -1, 3: -1}
     assert "inst_status_e" in out.columns
 
 
@@ -149,7 +148,7 @@ def test_transient_pulse_on_at_the_end():
     df = tracks_table({1: [0.0] * 15 + [1.0] * 5, 2: [1.0] * N_FRAMES})
     out = classify_transient_events(df, "class_e")
     assert per_track(out, "class_e") == {1: 0, 2: 2}
-    assert per_track(out, "t_e") == {1: 15, 2: 0}
+    assert per_track(out, "t_e") == {1: 15, 2: -1}
 
 
 def test_pre_event_also_hides_rows_before_first_detection():
@@ -161,7 +160,7 @@ def test_pre_event_also_hides_rows_before_first_detection():
     df["t_pre"] = -1.0
     out = classify_irreversible_events(df, "class_e", pre_event="pre")
     assert per_track(out, "class_e") == {1: 2}
-    assert per_track(out, "t_e") == {1: 5}
+    assert per_track(out, "t_e") == {1: -1}
 
 
 def test_fit_at_first_frame_is_class_2(monkeypatch):
@@ -181,7 +180,7 @@ def test_fit_at_first_frame_is_class_2(monkeypatch):
     df["class_e"] = 2
     out = estimate_time(df, "class_e", r2_threshold=-np.inf)
     assert per_track(out, "class_e") == {1: 2}
-    assert per_track(out, "t_e") == {1: 3}
+    assert per_track(out, "t_e") == {1: -1}
 
 
 def test_poor_fit_has_no_usable_time():
@@ -246,7 +245,7 @@ def test_already_positive_after_an_unreliable_arrival_stays_class_2():
 
     df = classify_irreversible_events(arrival_table(first_detection_class=2), "class_e")
     assert per_track(df, "class_e")[1] == 2
-    assert per_track(df, "t_e")[1] == 10
+    assert per_track(df, "t_e")[1] == -1
 
 
 def test_already_positive_on_the_first_frame_stays_class_2():
@@ -255,4 +254,4 @@ def test_already_positive_on_the_first_frame_stays_class_2():
     df["class_e"] = 1.0
     df = classify_irreversible_events(df, "class_e")
     assert per_track(df, "class_e")[1] == 2
-    assert per_track(df, "t_e")[1] == 0
+    assert per_track(df, "t_e")[1] == -1

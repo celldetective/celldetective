@@ -87,7 +87,7 @@ def test_event_status_of_each_class():
 
 def test_event_at_first_observed_frame_is_class_2():
     """Decision-0023 on every route: an event at or before the first frame where
-    the cell is observed becomes class 2, with that frame as time."""
+    the cell is observed becomes class 2, with no onset (time -1)."""
 
     from celldetective.utils.event_status import resolve_unobserved_events
 
@@ -104,10 +104,10 @@ def test_event_at_first_observed_frame_is_class_2():
     assert resolve_unobserved_events(df, "class", "t0") == 2
 
     first = df.groupby("TRACK_ID")[["class", "t0"]].first()
-    assert first.loc[1].tolist() == [2, 3]  # event at its first frame
+    assert first.loc[1].tolist() == [2, -1]  # event at its first frame
     assert first.loc[2].tolist() == [0, 5]  # observed change, kept
     assert first.loc[3].tolist() == [1, -1]
-    assert first.loc[4].tolist() == [2, 2]  # at its detection, not its first row
+    assert first.loc[4].tolist() == [2, -1]  # at its detection, not its first row
 
 
 def test_event_at_an_observed_arrival_keeps_its_class():
@@ -129,7 +129,7 @@ def test_event_at_an_observed_arrival_keeps_its_class():
     assert resolve_unobserved_events(df, "class", "t0") == 1
     first = df.groupby("TRACK_ID")[["class", "t0"]].first()
     assert first.loc[1].tolist() == [0, 9]  # arrival observed
-    assert first.loc[2].tolist() == [2, 10]  # entered from the side
+    assert first.loc[2].tolist() == [2, -1]  # entered from the side
 
     assert resolve_unobserved_events(df, "class", "t0") == 0
     assert df.groupby("TRACK_ID")["t0"].first().loc[1] == 9

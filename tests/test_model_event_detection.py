@@ -196,8 +196,8 @@ def test_event_at_first_frame_of_track_is_class_2():
     df = df.loc[(df["TRACK_ID"] != 5) | (df["FRAME"] >= 12)].copy()  # starts at its event
     out, _, (cls, t, status) = detect_events_with_model(df, StubModel(config()))
     assert per_track(out, cls) == {3: 1, 5: 2, 7: 0}
-    assert per_track(out, t) == {3: -1, 5: 12, 7: 5}
-    assert out.loc[out["TRACK_ID"] == 5, status].eq(1).all()
+    assert per_track(out, t) == {3: -1, 5: -1, 7: 5}
+    assert out.loc[out["TRACK_ID"] == 5, status].isna().all()
 
 
 def test_warning_on_another_frame_rate(monkeypatch):
