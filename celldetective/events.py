@@ -29,6 +29,7 @@ from collections import Counter
 from lifelines import KaplanMeierFitter
 
 from celldetective.log_manager import get_logger
+from celldetective.utils.signal_windowing import EVENT
 
 logger = get_logger(__name__)
 
@@ -277,6 +278,16 @@ def compute_survival(
         if t_reference not in cols:
             raise KeyError("The reference time cannot be found in the dataframe...")
         first_detections = df.groupby(groupby_cols)[t_reference].max().values
+
+        # A reference event that was not observed gives no origin, even with a
+        # time: a cell entering the field of view from the side keeps the time of
+        # its first detection, but that is not when it arrived.
+        reference_class = (
+            "class" if t_reference == "t0" else t_reference.replace("t_", "class_", 1)
+        )
+        if reference_class in cols:
+            observed = df.groupby(groupby_cols)[reference_class].min().values == EVENT
+            first_detections = np.where(observed, first_detections, -1.0)
 
     events, survival_times = switch_to_events(
         classes,

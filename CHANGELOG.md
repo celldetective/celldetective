@@ -127,6 +127,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   annotators. Tables already computed with a 2 px distance keep the wrong names
   until the neighborhood is computed again.
 
+- Survival from a reference event counted cells whose reference was not
+  observed but kept a time, such as a cell entering the field of view from the
+  side. They are now left out of it; their own event time is kept.
+
 ### Removed
 - `celldetective.measure.write_first_detection_class`, an unused copy of
   `celldetective.tracking.write_first_detection_class` with another convention.
