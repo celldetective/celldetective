@@ -123,3 +123,44 @@ def test_process_matches_the_library(tmp_path):
     for column in ["class_death", "t_death", "status_death"]:
         assert np.allclose(from_process[column], from_library[column], equal_nan=True)
     assert any("frame_progress" in m for m in queue if isinstance(m, dict))
+
+
+@pytest.mark.parametrize("outcome", ["done", "missing", "fails"])
+def test_pair_process_reports_its_end(tmp_path, monkeypatch, outcome):
+    """Pair event detection runs in a process that tells the progress window
+    when it ends, skips a position whose tables are missing without logging an
+    analysis, and reports a failure."""
+
+    import celldetective.signals as signals
+    from celldetective.processes.detect_pair_events import PairSignalAnalysisProcess
+
+    pos = str(tmp_path) + os.sep
+    calls = []
+
+    def analyze(pos, model, use_gpu=True, populations=None):
+        calls.append((pos, model, populations))
+        if outcome == "fails":
+            raise ValueError("model failed")
+        if outcome == "missing":
+            return None
+        return pos + "output/tables/trajectories_pairs.csv"
+
+    monkeypatch.setattr(signals, "analyze_pair_signals_at_position", analyze)
+
+    class Queue(list):
+        put = list.append
+
+    queue = Queue()
+    process = PairSignalAnalysisProcess(
+        queue=queue,
+        process_args={"pos": pos, "model_name": "m", "populations": ["a", "b"]},
+    )
+    process.run()
+
+    assert calls == [(pos, "m", ["a", "b"])]
+    logged = os.path.exists(os.path.join(pos, "log_pairs.txt"))
+    if outcome == "fails":
+        assert queue[-1] == {"status": "error", "message": "model failed"}
+    else:
+        assert queue[-1] == {"status": "finished"}
+        assert logged == (outcome == "done")
