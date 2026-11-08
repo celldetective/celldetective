@@ -8,6 +8,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- Events found from conditions (*Classify data*, `classify_tracks_from_query`):
+  - the `status_` column is the step built from the class and time, as for
+    events found by a model, for every event type. The per-frame result of the
+    condition is kept in `inst_status_` (transient events already did this);
+  - a cell positive from its first observed frame is class 2 with that frame as
+    time, instead of an event at its arrival. Frames before the first detection
+    (extrapolated rows) are no longer read as negative;
+  - a poor fit no longer leaves the cell class 2 and positive throughout: the
+    median check makes it class 1, or class 2 with no event time and no status;
+  - the default R² threshold of the GUI is 0.5, as in the library (it was
+    0.75).
+- Event detection with a model, for cells and pairs, and the event and pair
+  annotators apply the same rule as events found from conditions: an event at
+  or before the first frame where the cell (or pair) is observed is class 2,
+  with that frame as time. The annotators warn when they apply it to a
+  correction.
+- A signal detection model records the frame interval of its training sets,
+  which the event annotator now writes into the sets it exports. Detecting
+  events in an experiment with another frame interval logs a warning, and so
+  does reading a model input from a column that only contains its name.
+  Models trained before are not checked.
+- Survival counts an event at time 0, and a survival time of 0, instead of
+  leaving them out; it logs how many cells it leaves out, by class.
+- A cell first seen at frame 1 has a first-detection time of 0, the last frame
+  without it, as for any later appearance (it was set to 0.01).
+- Pair event detection runs in its own process with a progress window, like
+  single-cell event detection, instead of freezing the window.
 - The initial contrast of the image viewers, the signal and pair annotators and
   napari leaves out a border of 5% of the frame on each side, where
   registration leaves zeros that dragged the lower bound (and the slider range)
@@ -58,11 +85,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - viewers opened on a position without label images failed while being
     built (the spot detection viewer with an `IndexError`). They now close
     cleanly.
-- A cell of class 2 (the event happened before the acquisition) has a status
-  of 1 from its first frame. Signal detection wrote a status of 2, and the
-  event annotator wrote 0 when it rebuilt the status column. Tables already
-  classified keep their status until the events are detected or annotated
-  again.
+- The status of a class 2 cell ("else": no usable event time) is now the same
+  wherever it is written. Without a time, it is empty (NaN), since the cell may
+  have changed before it was observed or have an unusable track. With a time
+  (a cell positive from its first observed frame), it is 0 before it and 1 from
+  it on. Signal detection wrote a status of 2, and the event annotator wrote 0
+  when it rebuilt the status column. Tables already classified keep their
+  status until the events are detected or annotated again.
+- An event at frame 0 kept a status of 0 throughout and was left out of
+  survival without notice. A transition at or before a cell's first observed
+  frame is now class 2 in events found from conditions, and an event annotated
+  at or before the first observed frame of its track is class 2 in training
+  sets.
+- Transient events found from conditions missed a pulse still on at the last
+  frame, and a cell positive throughout, and made them class 1 (no event).
+- Pair event detection did not write the status column of the pairs, and
+  failed on the pair table: interpolating its missing values kept the pair
+  keys as both index levels and columns.
+- `estimate_time` fitted a step to tracks with status 0 throughout, and made
+  them events near the last frame. They are now left unchanged.
+- `analyze_signals` with `plot_outcome=True` failed on a model with an empty
+  channel, before writing the table.
+- Training sets exported from the pair event annotator now record the frame
+  interval, as those of the single-cell annotator do.
+- Signal detection from the process panel gave a track removed by cleaning a
+  false event at frame 0, and could not run a model with an empty channel. It
+  now shares one implementation with `analyze_signals`: such a track gets no
+  class.
 - Shifting event times in the interactive signal viewer rebuilt the status
   from the time alone, so a cell without an event (time -1) got a status of 1
   throughout. The status now follows the class as everywhere else.
@@ -77,6 +126,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   neighborhood could not be found again by the pair tables, plots and
   annotators. Tables already computed with a 2 px distance keep the wrong names
   until the neighborhood is computed again.
+
+### Removed
+- `celldetective.measure.write_first_detection_class`, an unused copy of
+  `celldetective.tracking.write_first_detection_class` with another convention.
 
 ## [1.6.5] - 2026-10-05
 
