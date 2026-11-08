@@ -57,6 +57,7 @@ from celldetective.utils.image_loaders import (
     auto_load_number_of_frames,
     load_frames,
 )
+from celldetective.utils.event_status import event_columns
 from celldetective.utils.signal_windowing import DELETED, ELSE, EVENT, NO_EVENT
 
 logger = get_logger(__name__)
@@ -134,20 +135,6 @@ def event_class_columns(columns: Iterable[str]) -> List[str]:
         for c in columns
         if c.startswith("class") and c not in NON_EVENT_CLASS_COLUMNS
     ]
-
-
-def event_columns(class_name: str) -> Tuple[str, str]:
-    """
-    Time and status columns of an event class.
-
-    ``class_<event>`` goes with ``t_<event>`` and ``status_<event>``, ``class``
-    with ``t0`` and ``status``.
-    """
-
-    suffix = class_name.removeprefix("class").removeprefix("_")
-    if not suffix:
-        return "t0", "status"
-    return f"t_{suffix}", f"status_{suffix}"
 
 
 def pair_event_columns(class_name: str, columns: Iterable[str] = ()) -> Tuple[str, str]:

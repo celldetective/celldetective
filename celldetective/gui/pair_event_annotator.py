@@ -32,7 +32,6 @@ from celldetective.gui.annotator_common import (
     confirm,
     default_dataset_name,
     event_class_columns,
-    event_columns,
     experiment_columns,
     fit_feature_scaler,
     icon_button,
@@ -44,7 +43,12 @@ from celldetective.gui.annotator_common import (
     split_by_frame,
     warn,
 )
-from celldetective.utils.event_status import color_events, write_event_status
+from celldetective.utils.event_status import (
+    color_events,
+    event_class_of_label,
+    event_columns,
+    write_event_status,
+)
 from celldetective.gui.gui_utils import color_from_status
 import numpy as np
 from fonticon_mdi6 import MDI6
@@ -523,7 +527,7 @@ class PairEventAnnotator(
         """Write new relative event class."""
 
         name = self.relative_class_name_le.text()
-        class_name = f"class_{name}" if name else "class"
+        class_name = event_class_of_label(name)
         time_name, status_name = pair_event_columns(class_name, self.df_relative.columns)
 
         if class_name in self.df_relative.columns and not confirm(

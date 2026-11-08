@@ -20,7 +20,11 @@ from celldetective.gui.base.figure_canvas import FigureCanvas
 import os
 from celldetective import get_logger
 from celldetective.log_manager import positionlogger
-from celldetective.utils.event_status import event_status
+from celldetective.utils.event_status import (
+    event_class_of_label,
+    event_columns,
+    event_status,
+)
 from celldetective.utils.parsing import population_from_table_name
 from celldetective.gui.annotator_common import NON_EVENT_CLASS_COLUMNS
 
@@ -98,10 +102,8 @@ class InteractiveEventViewer(QDialog, Styles):
         # If explicit label is provided, prioritize it
         if self.event_label is not None:
             label = self.event_label
-            if label == "":  # No label
-                c_col, t_col, s_col = "class", "t0", "status"
-            else:
-                c_col, t_col, s_col = f"class_{label}", f"t_{label}", f"status_{label}"
+            c_col = event_class_of_label(label)
+            t_col, s_col = event_columns(c_col)
 
             if c_col in cols and t_col in cols:
                 self.event_types[label if label else "Default"] = {

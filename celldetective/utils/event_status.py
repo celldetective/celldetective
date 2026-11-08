@@ -3,13 +3,33 @@ Status column of an event class, derived from the class and time of each
 track. Shared by signal detection and the annotators.
 """
 
-from typing import Callable, Optional, Sequence, Union
+from typing import Callable, Optional, Sequence, Tuple, Union
 
 import numpy as np
 import pandas as pd
 
 from celldetective.utils.color_mappings import color_from_class, color_from_status
 from celldetective.utils.signal_windowing import DELETED, ELSE, NO_EVENT
+
+
+def event_columns(class_name: str) -> Tuple[str, str]:
+    """
+    Time and status columns of an event class.
+
+    ``class_<event>`` goes with ``t_<event>`` and ``status_<event>``, ``class``
+    with ``t0`` and ``status``.
+    """
+
+    suffix = class_name.removeprefix("class").removeprefix("_")
+    if not suffix:
+        return "t0", "status"
+    return f"t_{suffix}", f"status_{suffix}"
+
+
+def event_class_of_label(label: Optional[str]) -> str:
+    """The class column of an event label: ``class_<label>``, or ``class`` without one."""
+
+    return f"class_{label}" if label else "class"
 
 
 def colors_of(values: np.ndarray, color_of: Callable, recently_modified: bool = False) -> list:

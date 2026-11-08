@@ -33,14 +33,19 @@ from celldetective.utils.data_loaders import get_position_table, get_position_pi
 from celldetective.tracking import clean_trajectories, interpolate_nan_properties
 import matplotlib.pyplot as plt
 from natsort import natsorted
-from celldetective.utils.event_status import write_event_status
+from celldetective.utils import COLUMN_LABELS
+from celldetective.utils.event_status import (
+    event_class_of_label,
+    event_columns,
+    write_event_status,
+)
 from celldetective.utils.signal_windowing import predict_events_sliding_window
 from math import floor
 from scipy.optimize import curve_fit
 import pandas as pd
 from pandas.api.types import is_numeric_dtype
 from scipy.stats import median_abs_deviation
-from typing import List, Optional, Union, Dict, Tuple, Literal
+from typing import Callable, List, Optional, Union, Dict, Tuple, Literal
 import logging
 
 logger = logging.getLogger("celldetective")
@@ -68,6 +73,162 @@ def _extract_config_label(config: dict) -> Optional[str]:
         return None if label == "" else label
     except KeyError:
         return None
+
+
+def _select_model_signals(
+    available_signals: List[str],
+    required_signals: List[str],
+    selected_signals: Optional[List[str]] = None,
+) -> List[str]:
+    """
+    The columns passed to a model, one per required signal. Without an explicit
+    choice, the first column that matches the name of the required signal is
+    taken: an exact match, then a column starting with it, then one containing it.
+    """
+
+    if selected_signals is not None:
+        if len(selected_signals) != len(required_signals):
+            raise ValueError(f"Mismatch between the number of required signals {required_signals} and the provided signals {selected_signals}... Abort.")
+        return list(selected_signals)
+
+    selected = []
+    for s in required_signals:
+        priority_cols = [a for a in available_signals if a == s]
+        second_priority_cols = [a for a in available_signals if a.startswith(s) and a != s]
+        third_priority_cols = [a for a in available_signals if s in a and not a.startswith(s)]
+        candidates = priority_cols + second_priority_cols + third_priority_cols
+        if len(candidates) == 0:
+            raise ValueError(f"No signal matches with the requirements of the model {required_signals}. Please pass the signals manually with the argument selected_signals or add measurements. Abort.")
+        selected.append(candidates[0])
+    return selected
+
+
+def event_columns_of_model(config: dict) -> Tuple[str, str, str]:
+    """The class, time and status columns a model writes, from its label."""
+
+    class_col = event_class_of_label(_extract_config_label(config))
+    return (class_col, *event_columns(class_col))
+
+
+def _predict_events(model, signals: np.ndarray, window: int) -> Tuple[np.ndarray, np.ndarray]:
+    """Class and time of each signal, scanning with sliding windows when the
+    signals are longer than the model window."""
+
+    if signals.shape[1] > window:
+        logger.info(
+            f"Signals are longer than the model window ({signals.shape[1]} > "
+            f"{window} frames): scanning each track with overlapping windows and "
+            f"keeping the earliest detected event."
+        )
+        return predict_events_sliding_window(model, signals, window)
+    classes = model.predict_class(signals)
+    return classes, model.predict_time_of_interest(signals)
+
+
+def detect_events_with_model(
+    trajectories: pd.DataFrame,
+    model,
+    selected_signals: Optional[List[str]] = None,
+    column_labels: Optional[Dict[str, str]] = None,
+    interpolate_na: bool = True,
+    progress: Optional[Callable[[int, int], None]] = None,
+) -> Tuple[pd.DataFrame, List[str], Tuple[str, str, str]]:
+    """
+    Detect events in single-cell tracks with a loaded signal detection model.
+
+    Shared by `analyze_signals` and the signal analysis process. The signals are
+    cleaned, laid out on the frame axis, predicted (with sliding windows when the
+    tracks are longer than the model window) and written back by track ID.
+
+    Parameters
+    ----------
+    trajectories : pandas.DataFrame
+        The tracks, with the measurements the model reads.
+    model : SignalDetectionModel
+        A loaded model, with its ``config``.
+    selected_signals : list of str, optional
+        The columns to pass to the model, one per required signal. By default,
+        the model's ``selected_channels`` if it has some, otherwise the columns
+        matching the required signals by name.
+    column_labels : dict, optional
+        The track, time and position columns, `COLUMN_LABELS` by default.
+    interpolate_na : bool, optional
+        Whether to interpolate missing values and position gaps before prediction.
+    progress : callable, optional
+        Called as ``progress(i, n)`` after the signals of track ``i`` of ``n`` are read.
+
+    Returns
+    -------
+    (pandas.DataFrame, list of str, (str, str, str))
+        The tracks with the class, time and status columns, the columns passed to
+        the model, and the names of the class, time and status columns. A track
+        removed by cleaning gets no class (NaN) and time -1.
+    """
+
+    column_labels = column_labels or COLUMN_LABELS
+    config = model.config
+    required_signals = config["channels"]
+    model_signal_length = config["model_signal_length"]
+
+    added_none = False
+    if "selected_channels" in config:
+        # The model's own choice of columns takes precedence, as before.
+        selected_signals = config["selected_channels"]
+    if selected_signals is not None and any(s == "None" for s in selected_signals):
+        if "None" not in trajectories.columns:
+            trajectories["None"] = 0.0
+            added_none = True
+    selected_signals = _select_model_signals(
+        list(trajectories.columns), required_signals, selected_signals
+    )
+    logger.info(f"The following channels will be passed to the model: {selected_signals}")
+
+    track_col, time_col_name = column_labels["track"], column_labels["time"]
+    trajectories_clean = clean_trajectories(
+        trajectories,
+        interpolate_na=interpolate_na,
+        interpolate_position_gaps=interpolate_na,
+        column_labels=column_labels,
+    )
+
+    max_signal_size = int(trajectories_clean[time_col_name].max()) + 2
+    # Unique columns: a model may read the same column twice (several "None"
+    # channels), which a duplicated label would widen on selection.
+    read_cols = list(dict.fromkeys([track_col, time_col_name, *selected_signals]))
+    groups = trajectories_clean[read_cols].groupby(track_col)
+    tracks = list(groups.groups)
+    signals = np.zeros((len(tracks), max_signal_size, len(selected_signals)))
+    for i, (tid, group) in enumerate(groups):
+        frames = group[time_col_name].to_numpy().astype(int)
+        values = group[selected_signals].to_numpy()
+        signals[i, frames, :] = values
+        signals[i, frames.max() :, :] = values[-1]
+        if progress is not None:
+            progress(i + 1, len(tracks))
+
+    classes, times = _predict_events(model, signals, model_signal_length)
+
+    class_col, time_col, status_col = event_columns_of_model(config)
+    class_of = dict(zip(tracks, np.asarray(classes, dtype=float)))
+    time_of = dict(zip(tracks, np.asarray(times, dtype=float)))
+    track_ids = trajectories[track_col]
+    trajectories[class_col] = track_ids.map(class_of)
+    trajectories[time_col] = track_ids.map(time_of).fillna(-1.0)
+    n_missing = trajectories.loc[trajectories[class_col].isna(), track_col].nunique()
+    if n_missing:
+        logger.warning(f"{n_missing} track(s) removed by cleaning were left without a class.")
+    write_event_status(
+        trajectories,
+        class_col,
+        time_col,
+        status_col,
+        keys=track_col,
+        frame_name=time_col_name,
+    )
+
+    if added_none:
+        trajectories = trajectories.drop(columns=["None"])
+    return trajectories, selected_signals, (class_col, time_col, status_col)
 
 
 def analyze_signals(
@@ -132,106 +293,28 @@ def analyze_signals(
     """
     from celldetective.event_detection_models import SignalDetectionModel
 
-    complete_path, model_config_path = _resolve_signal_model_paths(model, path=model_path)
-
-    available_signals = list(trajectories.columns)
-
-    with open(model_config_path) as f:
-        config = json.load(f)
-    required_signals = config["channels"]
-    if "selected_channels" in config:
-        selected_signals = config["selected_channels"]
-        if np.any([s == "None" for s in selected_signals]):
-            trajectories["None"] = 0.0
-    model_signal_length = config["model_signal_length"]
-    label = _extract_config_label(config)
-
-    if selected_signals is None:
-        selected_signals = []
-        for s in required_signals:
-            priority_cols = [a for a in available_signals if a == s]
-            second_priority_cols = [
-                a for a in available_signals if a.startswith(s) and a != s
-            ]
-            third_priority_cols = [
-                a for a in available_signals if s in a and not a.startswith(s)
-            ]
-            candidates = priority_cols + second_priority_cols + third_priority_cols
-            if len(candidates) == 0:
-                raise ValueError(f"No signal matches with the requirements of the model {required_signals}. Please pass the signals manually with the argument selected_signals or add measurements. Abort.")
-            logger.info(
-                f"Selecting the first time series among: {candidates} for input requirement {s}..."
-            )
-            selected_signals.append(candidates[0])
-    else:
-        if len(selected_signals) != len(required_signals):
-            raise ValueError(f"Mismatch between the number of required signals {required_signals} and the provided signals {selected_signals}... Abort.")
-
-    logger.info(f"The following channels will be passed to the model: {selected_signals}")
-    trajectories_clean = clean_trajectories(
-        trajectories,
-        interpolate_na=interpolate_na,
-        interpolate_position_gaps=interpolate_na,
-        column_labels=column_labels,
-    )
-
-    max_signal_size = int(trajectories_clean[column_labels["time"]].max()) + 2
-
-    tracks = trajectories_clean[column_labels["track"]].unique()
-    signals = np.zeros((len(tracks), max_signal_size, len(selected_signals)))
-
-    for i, (tid, group) in enumerate(
-        trajectories_clean.groupby(column_labels["track"])
-    ):
-        frames = group[column_labels["time"]].to_numpy().astype(int)
-        for j, col in enumerate(selected_signals):
-            signal = group[col].to_numpy()
-            signals[i, frames, j] = signal
-            signals[i, max(frames) :, j] = signal[-1]
+    complete_path, _ = _resolve_signal_model_paths(model, path=model_path)
 
     model = SignalDetectionModel(pretrained=complete_path)
     if not model.pretrained is None:
 
-        if max_signal_size > model_signal_length:
-            logger.info(
-                f"Signals are longer than the model window ({max_signal_size} > "
-                f"{model_signal_length} frames): scanning each track with "
-                f"overlapping windows and keeping the earliest detected event."
+        trajectories, selected_signals, (class_col, time_col, _) = (
+            detect_events_with_model(
+                trajectories,
+                model,
+                selected_signals=selected_signals,
+                column_labels=column_labels,
+                interpolate_na=interpolate_na,
             )
-            classes, times_recast = predict_events_sliding_window(
-                model, signals, model_signal_length
-            )
-        else:
-            classes = model.predict_class(signals)
-            times_recast = model.predict_time_of_interest(signals)
-
-        if label is None:
-            class_col = "class"
-            time_col = "t0"
-            status_col = "status"
-        else:
-            class_col = "class_" + label
-            time_col = "t_" + label
-            status_col = "status_" + label
-
-        for i, (tid, group) in enumerate(trajectories.groupby(column_labels["track"])):
-            indices = group.index
-            trajectories.loc[indices, class_col] = classes[i]
-            trajectories.loc[indices, time_col] = times_recast[i]
-        logger.info("Signal analysis done.")
-
-        write_event_status(
-            trajectories,
-            class_col,
-            time_col,
-            status_col,
-            keys=column_labels["track"],
-            frame_name=column_labels["time"],
         )
+        logger.info("Signal analysis done.")
 
         if plot_outcome:
             fig, ax = plt.subplots(1, len(selected_signals), figsize=(10, 5))
             for i, s in enumerate(selected_signals):
+                if s not in trajectories.columns:
+                    # An empty channel of the model ("None"), dropped once read.
+                    continue
                 for k, (tid, group) in enumerate(
                     trajectories.groupby(column_labels["track"])
                 ):
@@ -272,8 +355,6 @@ def analyze_signals(
             plt.pause(3)
             plt.close()
 
-    if "None" in list(trajectories.columns):
-        trajectories = trajectories.drop(columns=["None"])
     return trajectories
 
 

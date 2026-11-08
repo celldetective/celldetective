@@ -18,12 +18,16 @@ from celldetective.gui.annotator_common import (
     complete_event_columns,
     confirm,
     event_class_columns,
-    event_columns,
     prefill_class,
     signal_limits,
     split_by_frame,
 )
-from celldetective.utils.event_status import color_events, write_event_status
+from celldetective.utils.event_status import (
+    color_events,
+    event_class_of_label,
+    event_columns,
+    write_event_status,
+)
 from celldetective.gui.base_annotator import BaseAnnotator
 import logging
 from celldetective.gui.base.threads import start_tracked
@@ -325,7 +329,7 @@ class EventAnnotator(EventAnnotationMixin, AnimationMixin, BaseAnnotator):
         """Add the event class named in the new class dialog, prefilled as chosen."""
 
         name = self.class_name_le.text()
-        target_class = f"class_{name}" if name else "class"
+        target_class = event_class_of_label(name)
         target_time, target_status = event_columns(target_class)
 
         if target_class in self.df_tracks.columns and not confirm(

@@ -23,7 +23,7 @@ from celldetective.gui.base.components import (
     CelldetectiveMainWindow,
 )
 from celldetective.gui.gui_utils import ExportPlotBtn
-from celldetective.utils.event_status import color_events
+from celldetective.utils.event_status import color_events, event_columns
 from celldetective.gui.annotator_common import (
     AnnotatorMixin,
     NON_SIGNAL_COLUMNS,
@@ -32,7 +32,6 @@ from celldetective.gui.annotator_common import (
     confirm,
     default_dataset_name,
     event_class_columns,
-    event_columns,
     experiment_columns,
     fit_feature_scaler,
     icon_button,
