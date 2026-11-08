@@ -165,7 +165,8 @@ def resolve_unobserved_events(
     Make class 2 every event placed at or before the first frame where the cell
     is observed, with that frame as time (Decision-0023): the change itself was
     not observed. Used by event detection with a model and by the annotators,
-    through `write_resolved_event_status`. The condition route applies the same
+    through `write_resolved_event_status`. An event at the observed arrival of
+    the cell stays an event, with the onset of that arrival. The condition route applies the same
     rule as it places each change (``measure._event_outcome``), from the first
     frame after its pre-event.
 
@@ -190,8 +191,7 @@ def resolve_unobserved_events(
 
     keys = _as_keys(keys)
     columns = [frame_name, class_name, time_name]
-    if "t_firstdetection" in df.columns:
-        columns.append("t_firstdetection")
+    columns += [c for c in ("t_firstdetection", "class_firstdetection") if c in df.columns]
     subset = _track_columns(df, keys, columns, rows)
     if subset.empty:
         return 0
@@ -199,6 +199,17 @@ def resolve_unobserved_events(
     unobserved = (subset[class_name].to_numpy() == EVENT) & (
         subset[time_name].to_numpy(dtype=float) <= first
     )
+    if {"t_firstdetection", "class_firstdetection"} <= set(subset.columns):
+        # The first observed frame is the observed arrival of the cell: the change
+        # was faster than a frame, an event with the onset of the arrival.
+        detected = subset["t_firstdetection"].to_numpy(dtype=float)
+        arrived = (
+            unobserved
+            & (subset["class_firstdetection"].to_numpy() == EVENT)
+            & (detected + 1 == first)
+        )
+        df.loc[subset.index[arrived], time_name] = detected[arrived]
+        unobserved &= ~arrived
     if not unobserved.any():
         return 0
     index = subset.index[unobserved]

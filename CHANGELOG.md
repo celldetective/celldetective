@@ -13,8 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     events found by a model, for every event type. The per-frame result of the
     condition is kept in `inst_status_` (transient events already did this);
   - a cell positive from its first observed frame is class 2 with that frame as
-    time, instead of an event at its arrival. Frames before the first detection
-    (extrapolated rows) are no longer read as negative;
+    time, unless its arrival was observed: it is then an event with the time of
+    its first detection. Frames before the first detection (extrapolated rows)
+    are no longer read as negative;
   - a poor fit no longer leaves the cell class 2 and positive throughout: the
     median check makes it class 1, or class 2 with no event time and no status;
   - the default R² threshold of the GUI is 0.5, as in the library (it was
@@ -131,8 +132,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   observed but kept a time, such as a cell entering the field of view from the
   side. They are now left out of it; their own event time is kept.
 - A cell that appeared inside the field of view already past the condition, on
-  its first frame, was left out of survival from its arrival. It now counts as
-  an event one frame after it, a change faster than the time resolution.
+  its first frame, could be left out of survival from its arrival. It is now an
+  event at its arrival, a change faster than the time resolution, with a survival
+  time of 0.
 
 ### Removed
 - `celldetective.measure.write_first_detection_class`, an unused copy of

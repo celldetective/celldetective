@@ -29,7 +29,7 @@ from collections import Counter
 from lifelines import KaplanMeierFitter
 
 from celldetective.log_manager import get_logger
-from celldetective.utils.signal_windowing import ELSE, EVENT
+from celldetective.utils.signal_windowing import EVENT
 
 logger = get_logger(__name__)
 
@@ -84,8 +84,6 @@ def switch_to_events(
       the same length.
     - This function is particularly useful in preparing time-to-event data for survival analysis models, especially when
       dealing with censored data and needing to adjust time units.
-    - With an origin, a class 2 cell whose time is within one frame of its origin counts as an event of that
-      duration: the change was faster than the time resolution. Other class 2 cells are left out.
 
     Examples
     --------
@@ -113,11 +111,6 @@ def switch_to_events(
         # Whether a change at the first observed frame was really observed is
         # decided upstream (Decision-0023), not here.
         is_event = c == EVENT and t >= 0
-        if left_censored and c == ELSE and t >= 0 and ot >= 0 and t - ot <= 1:
-            # Class 2 at the frame right after an observed arrival: the change
-            # took less than a frame, a fast event at the limit of the time
-            # resolution, not a change that happened before observation.
-            is_event = True
 
         if left_censored:
 

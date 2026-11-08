@@ -1878,6 +1878,12 @@ class SignalDetectionModel(object):
         # shifted event, and as inference does (Decision-0023).
         first_frames = np.array([_first_observed_frame(s) for s in signal_dataset])
         unobserved = (classes == EVENT) & (times_of_interest <= first_frames)
+        # Unless that frame is the observed arrival: faster than a frame, an
+        # event with the onset of the arrival, as inference does.
+        arrivals = np.array([_observed_arrival(s) for s in signal_dataset])
+        arrived = unobserved & (arrivals + 1 == first_frames)
+        times_of_interest[arrived] = arrivals[arrived]
+        unobserved &= ~arrived
         if np.any(unobserved):
             logger.info(
                 f"{int(np.sum(unobserved))} annotated event(s) at or before the first "
@@ -2524,6 +2530,19 @@ def _first_observed_frame(sample) -> float:
     if detected.size and detected[0] >= 0:
         first = max(first, float(detected[0]) + 1)
     return first
+
+
+def _observed_arrival(sample) -> float:
+    """The onset of a training sample's first detection when it was observed
+    (class 0), NaN otherwise."""
+
+    if not isinstance(sample, dict):
+        return np.nan
+    classes = np.asarray(sample.get("class_firstdetection", np.nan), dtype=float).ravel()
+    times = np.asarray(sample.get("t_firstdetection", np.nan), dtype=float).ravel()
+    if classes.size and times.size and classes[0] == EVENT and times[0] >= 0:
+        return float(times[0])
+    return np.nan
 
 
 def pad_to_model_length(signal_set: np.ndarray, model_signal_length: int) -> np.ndarray:
