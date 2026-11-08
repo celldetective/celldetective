@@ -198,3 +198,37 @@ def test_event_at_first_frame_of_track_is_class_2():
     assert per_track(out, cls) == {3: 1, 5: 2, 7: 0}
     assert per_track(out, t) == {3: -1, 5: 12, 7: 5}
     assert out.loc[out["TRACK_ID"] == 5, status].eq(1).all()
+
+
+def test_warning_on_another_frame_rate(monkeypatch):
+    import celldetective.signals as signals
+
+    warnings = []
+    monkeypatch.setattr(signals.logger, "warning", warnings.append)
+
+    signals.warn_on_frame_interval_mismatch(config(frame_to_min=5.0), 5.0)
+    signals.warn_on_frame_interval_mismatch(config(frame_to_min=[2.0, 5.0]), 5.02)
+    signals.warn_on_frame_interval_mismatch(config(), 1.0)  # older model, not checked
+    signals.warn_on_frame_interval_mismatch(config(frame_to_min=5.0), None)
+    assert warnings == []
+
+    signals.warn_on_frame_interval_mismatch(config(frame_to_min=5.0), 1.0)
+    assert len(warnings) == 1 and "5.0" in warnings[0] and "1.0" in warnings[0]
+
+
+def test_warning_on_a_channel_matched_by_part_of_its_name(monkeypatch):
+    import celldetective.signals as signals
+
+    warnings = []
+    monkeypatch.setattr(signals.logger, "warning", warnings.append)
+    assert signals._select_model_signals(["PI_intensity_mean"], ["PI"]) == ["PI_intensity_mean"]
+    assert signals._select_model_signals(["PI"], ["PI"]) == ["PI"]
+    assert len(warnings) == 1 and "PI_intensity_mean" in warnings[0]
+
+
+def test_training_records_the_frame_interval():
+    pytest.importorskip("tensorflow")
+    from celldetective.event_detection_models import _frame_intervals_of
+
+    assert _frame_intervals_of([{"frame_to_min": 5}, {"frame_to_min": 5.0}, {}]) == {5.0}
+    assert _frame_intervals_of([{"class": 0}]) == set()
