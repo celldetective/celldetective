@@ -232,3 +232,23 @@ def test_training_records_the_frame_interval():
 
     assert _frame_intervals_of([{"frame_to_min": 5}, {"frame_to_min": 5.0}, {}]) == {5.0}
     assert _frame_intervals_of([{"class": 0}]) == set()
+
+
+def test_training_event_at_an_observed_arrival_stays_an_event():
+    """As at inference: faster than a frame, an event at the arrival."""
+
+    pytest.importorskip("tensorflow")
+    from types import SimpleNamespace
+
+    from celldetective.event_detection_models import SignalDetectionModel
+
+    sample = {
+        "FRAME": np.arange(10, 20), "PI": np.ones(10), "class": 0, "time_of_interest": 10.0,
+        "class_firstdetection": np.zeros(10), "t_firstdetection": np.full(10, 9.0),
+    }
+    owner = SimpleNamespace(n_channels=1, model_signal_length=32, channel_option=["PI"])
+    _, classes, times = SignalDetectionModel.cast_signals_into_training_data(
+        owner, [sample], ["PI"], 20
+    )
+    assert classes.tolist() == [0]
+    assert times.tolist() == [9]

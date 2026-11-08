@@ -108,3 +108,28 @@ def test_event_at_first_observed_frame_is_class_2():
     assert first.loc[2].tolist() == [0, 5]  # observed change, kept
     assert first.loc[3].tolist() == [1, -1]
     assert first.loc[4].tolist() == [2, 2]  # at its detection, not its first row
+
+
+def test_event_at_an_observed_arrival_keeps_its_class():
+    """An event at the first observed frame of a cell whose arrival was observed
+    is an event at that arrival, and resolving it again changes nothing."""
+
+    from celldetective.utils.event_status import resolve_unobserved_events
+
+    df = pd.DataFrame(
+        {
+            "TRACK_ID": np.repeat([1, 2], 4),
+            "FRAME": list(range(10, 14)) * 2,
+            "class": 0,
+            "t0": 10.0,
+            "class_firstdetection": np.repeat([0, 2], 4),
+            "t_firstdetection": 9.0,
+        }
+    )
+    assert resolve_unobserved_events(df, "class", "t0") == 1
+    first = df.groupby("TRACK_ID")[["class", "t0"]].first()
+    assert first.loc[1].tolist() == [0, 9]  # arrival observed
+    assert first.loc[2].tolist() == [2, 10]  # entered from the side
+
+    assert resolve_unobserved_events(df, "class", "t0") == 0
+    assert df.groupby("TRACK_ID")["t0"].first().loc[1] == 9

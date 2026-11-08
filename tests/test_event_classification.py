@@ -208,3 +208,51 @@ def test_classify_tracks_from_query():
     assert (first["class_death"] == 0).all()
     assert np.allclose(first["t_death"], 7, atol=1)
     assert set(out["status_death"].unique()) == {0.0, 1.0}
+
+
+def arrival_table(first_detection_class=0, t_first=9.0, start=0):
+    """One cell positive on every frame from its first detection at frame 10.
+    With ``start`` 0, the rows before it are extrapolated."""
+
+    df = pd.DataFrame({"TRACK_ID": 1, "FRAME": np.arange(start, N_FRAMES)})
+    df["status_e"] = (df["FRAME"] >= 10).astype(float)
+    df["class_e"] = df["status_e"]
+    df["class_firstdetection"] = first_detection_class
+    df["t_firstdetection"] = t_first
+    return df
+
+
+@pytest.mark.parametrize("start", [0, 10])
+def test_already_positive_at_an_observed_arrival_is_an_event_at_it(start):
+    """Faster than a frame: the event shares the time of the first detection."""
+
+    df = classify_irreversible_events(arrival_table(start=start), "class_e")
+    assert per_track(df, "class_e")[1] == 0
+    assert per_track(df, "t_e")[1] == 9
+    observed = df.loc[df["FRAME"] >= 10, "status_e"]
+    assert observed.eq(1).all()
+
+
+def test_transient_at_an_observed_arrival_is_an_event_at_it():
+    df = arrival_table()
+    df.loc[df["FRAME"] >= 15, ["status_e", "class_e"]] = 0.0
+    df = classify_transient_events(df, "class_e")
+    assert per_track(df, "class_e")[1] == 0
+    assert per_track(df, "t_e")[1] == 9
+
+
+def test_already_positive_after_an_unreliable_arrival_stays_class_2():
+    """Entering from the side: the first detection was not observed."""
+
+    df = classify_irreversible_events(arrival_table(first_detection_class=2), "class_e")
+    assert per_track(df, "class_e")[1] == 2
+    assert per_track(df, "t_e")[1] == 10
+
+
+def test_already_positive_on_the_first_frame_stays_class_2():
+    df = arrival_table(first_detection_class=2, t_first=-1.0)
+    df["status_e"] = 1.0
+    df["class_e"] = 1.0
+    df = classify_irreversible_events(df, "class_e")
+    assert per_track(df, "class_e")[1] == 2
+    assert per_track(df, "t_e")[1] == 0
