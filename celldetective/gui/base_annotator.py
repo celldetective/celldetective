@@ -436,11 +436,22 @@ class BaseAnnotator(AnnotatorMixin, CelldetectiveMainWindow):
         if self.normalized_signals:
             self.normalize_features_btn.click()
 
+        from celldetective.utils.experiment import get_temporal_calibration
+
+        # Recorded so that a model trained on this set knows its frame rate.
+        try:
+            frame_to_min = get_temporal_calibration(self.exp_dir)
+        except Exception as e:
+            logger.warning(f"The frame interval of the experiment could not be read: {e}")
+            frame_to_min = None
+
         training_set = []
         for _, track in self.df_tracks.groupby("TRACK_ID"):
             signals = {c: track[c].to_numpy() for c in track.columns}
             signals["time_of_interest"] = track[self.time_name].to_numpy()[0]
             signals["class"] = track[self.class_name].to_numpy()[0]
+            if frame_to_min is not None:
+                signals["frame_to_min"] = frame_to_min
             training_set.append(signals)
 
         save_dataset(self, training_set, self.exp_dir + default_dataset_name(self.pos))

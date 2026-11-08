@@ -6,7 +6,7 @@ import argparse
 import os
 import sys
 from art import tprint
-from celldetective.signals import analyze_signals
+from celldetective.signals import analyze_signals, experiment_frame_interval
 from celldetective.utils import COLUMN_LABELS
 import pandas as pd
 import logging
@@ -57,7 +57,7 @@ with positionlogger(pos, filename=f'log_{mode}.txt'):
 	logger.info("SIGNAL ANALYSIS")
 	logger.info(f"signal model: {model}")
 
-trajectories = analyze_signals(trajectories.copy(), model, interpolate_na=True, selected_signals=None, column_labels = column_labels, plot_outcome=True,output_dir=pos+'output/')
+trajectories = analyze_signals(trajectories.copy(), model, interpolate_na=True, selected_signals=None, column_labels = column_labels, plot_outcome=True,output_dir=pos+'output/', frame_to_min=experiment_frame_interval(pos))
 trajectories = trajectories.sort_values(by=[column_labels['track'], column_labels['time']])
 trajectories.to_csv(pos+os.sep.join(['output','tables', table_name]), index=False)
 

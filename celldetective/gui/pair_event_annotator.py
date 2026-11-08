@@ -1752,6 +1752,15 @@ class PairEventAnnotator(
         if self.normalized_signals:
             self.normalize_features_btn.click()
 
+        from celldetective.utils.experiment import get_temporal_calibration
+
+        # Recorded so that a model trained on this set knows its frame rate.
+        try:
+            frame_to_min = get_temporal_calibration(self.exp_dir)
+        except Exception as e:
+            logger.warning(f"The frame interval of the experiment could not be read: {e}")
+            frame_to_min = None
+
         pair_filter = self.population_pair_rows() & self.neighborhood_rows()
         df_reference = self.dataframes[self.reference_population]
         df_neighbor = self.dataframes[self.neighbor_population]
@@ -1784,6 +1793,8 @@ class PairEventAnnotator(
             )
             signals.update(cell_signals(df_reference, reference_cell, "reference_"))
             signals.update(cell_signals(df_neighbor, neighbor_cell, "neighbor_"))
+            if frame_to_min is not None:
+                signals["frame_to_min"] = frame_to_min
             training_set.append(signals)
 
         save_dataset(self, training_set, self.exp_dir + default_dataset_name(self.pos))

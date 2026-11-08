@@ -792,6 +792,13 @@ class SignalDetectionModel(object):
             "normalization_values": self.normalization_values,
             "normalization_clip": self.normalization_clip,
         }
+        # The frame interval of the training sets, when they record it, so that
+        # inference can warn on another frame rate.
+        intervals = sorted(getattr(self, "frame_intervals", set()))
+        if len(intervals) == 1:
+            config_input["frame_to_min"] = intervals[0]
+        elif intervals:
+            config_input["frame_to_min"] = intervals
         json_string = json.dumps(config_input)
         with open(
             os.sep.join([self.model_folder, "config_input.json"]), "w"
@@ -1590,12 +1597,14 @@ class SignalDetectionModel(object):
         self.x_set = []
         self.y_time_set = []
         self.y_class_set = []
+        self.frame_intervals = set()
 
         if isinstance(self.list_of_sets[0], str):
             # Case 1: a list of npy files to be loaded
             for s in self.list_of_sets:
 
                 signal_dataset = self.load_set(s)
+                self.frame_intervals.update(_frame_intervals_of(signal_dataset))
                 selected_signals, max_length = self.find_best_signal_match(
                     signal_dataset
                 )
@@ -1616,6 +1625,7 @@ class SignalDetectionModel(object):
             # Case 2: a list of sets (already loaded)
             for signal_dataset in self.list_of_sets:
 
+                self.frame_intervals.update(_frame_intervals_of(signal_dataset))
                 selected_signals, max_length = self.find_best_signal_match(
                     signal_dataset
                 )
@@ -2480,6 +2490,16 @@ def normalize_signal_set(
             signal_set[i, z, k] = 0.0
 
     return signal_set
+
+
+def _frame_intervals_of(signal_dataset) -> set:
+    """The frame intervals (minutes) recorded in the samples of a training set."""
+
+    return {
+        float(sample["frame_to_min"])
+        for sample in signal_dataset
+        if isinstance(sample, dict) and sample.get("frame_to_min") is not None
+    }
 
 
 def _first_observed_frame(sample) -> float:

@@ -89,7 +89,10 @@ class SignalAnalysisProcess(Process):
                 return
 
             # Imported here: celldetective.signals loads matplotlib and scipy.
-            from celldetective.signals import detect_events_with_model
+            from celldetective.signals import (
+                detect_events_with_model,
+                experiment_frame_interval,
+            )
 
             if model is None:
                 # Fallback, though unified_process passes the model
@@ -117,6 +120,7 @@ class SignalAnalysisProcess(Process):
                     column_labels=self.column_labels,
                     interpolate_na=True,
                     progress=report,
+                    frame_to_min=experiment_frame_interval(self.pos),
                 )
             )
 

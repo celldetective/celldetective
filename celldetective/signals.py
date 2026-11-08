@@ -99,6 +99,12 @@ def _select_model_signals(
         candidates = priority_cols + second_priority_cols + third_priority_cols
         if len(candidates) == 0:
             raise ValueError(f"No signal matches with the requirements of the model {required_signals}. Please pass the signals manually with the argument selected_signals or add measurements. Abort.")
+        if candidates[0] != s:
+            logger.warning(
+                f"No column is named {s!r}, which the model reads: {candidates[0]!r} is "
+                f"used, the first of {candidates}. Map the channels explicitly if it "
+                f"is not the right measurement."
+            )
         selected.append(candidates[0])
     return selected
 
@@ -111,6 +117,42 @@ def _log_unobserved(n_unobserved: int, what: str) -> None:
             f"{n_unobserved} {what}(s) with an event at or before their first "
             f"observed frame were made class 2: the change was not observed."
         )
+
+
+def warn_on_frame_interval_mismatch(config: dict, frame_to_min: Optional[float]) -> None:
+    """
+    Warn when the experiment's frame interval differs from the one the model was
+    trained at (``frame_to_min`` in its config). A model sees frames, not
+    minutes, so at another frame rate its event times and detections can be off
+    without error. Models trained before the interval was recorded are not checked.
+    """
+
+    trained = config.get("frame_to_min")
+    if trained is None or frame_to_min is None:
+        return
+    trained = trained if isinstance(trained, list) else [trained]
+    if not any(np.isclose(frame_to_min, t, rtol=0.01) for t in trained):
+        logger.warning(
+            f"This model was trained on movies with {trained} min between frames, "
+            f"and this experiment has {frame_to_min} min. Its event times and "
+            f"detections may be unreliable: check them, or retrain the model."
+        )
+
+
+def experiment_frame_interval(pos: str) -> Optional[float]:
+    """The time between frames, in minutes, of the experiment of a position, or
+    None if it cannot be read."""
+
+    from celldetective.utils.experiment import (
+        extract_experiment_from_position,
+        get_temporal_calibration,
+    )
+
+    try:
+        return get_temporal_calibration(extract_experiment_from_position(pos))
+    except Exception as e:
+        logger.debug(f"No frame interval for {pos}: {e}")
+        return None
 
 
 def event_columns_of_model(config: dict) -> Tuple[str, str, str]:
@@ -142,6 +184,7 @@ def detect_events_with_model(
     column_labels: Optional[Dict[str, str]] = None,
     interpolate_na: bool = True,
     progress: Optional[Callable[[int, int], None]] = None,
+    frame_to_min: Optional[float] = None,
 ) -> Tuple[pd.DataFrame, List[str], Tuple[str, str, str]]:
     """
     Detect events in single-cell tracks with a loaded signal detection model.
@@ -166,6 +209,9 @@ def detect_events_with_model(
         Whether to interpolate missing values and position gaps before prediction.
     progress : callable, optional
         Called as ``progress(i, n)`` after the signals of track ``i`` of ``n`` are read.
+    frame_to_min : float, optional
+        The experiment's time between frames, in minutes. When given, a warning
+        is logged if the model was trained at another one.
 
     Returns
     -------
@@ -177,6 +223,7 @@ def detect_events_with_model(
 
     column_labels = column_labels or COLUMN_LABELS
     config = model.config
+    warn_on_frame_interval_mismatch(config, frame_to_min)
     required_signals = config["channels"]
     model_signal_length = config["model_signal_length"]
 
@@ -258,6 +305,7 @@ def analyze_signals(
     },
     plot_outcome: bool = False,
     output_dir: Optional[str] = None,
+    frame_to_min: Optional[float] = None,
 ) -> pd.DataFrame:
     """
     Analyzes signals from trajectory data using a specified signal detection model and configuration.
@@ -284,6 +332,9 @@ def analyze_signals(
             If True, generates and saves a plot of the signal analysis outcome (default is False).
     output_dir : str, optional
             The directory where the outcome plot will be saved. Required if `plot_outcome` is True (default is None).
+    frame_to_min : float, optional
+            The experiment's time between frames, in minutes. When given, a warning is logged if the model was trained
+            at another one (default is None).
     model_path : str, optional
             Path to the model directory. If None, it uses the default model location. Default is None.
 
@@ -318,6 +369,7 @@ def analyze_signals(
                 selected_signals=selected_signals,
                 column_labels=column_labels,
                 interpolate_na=interpolate_na,
+                frame_to_min=frame_to_min,
             )
         )
         logger.info("Signal analysis done.")
@@ -508,6 +560,7 @@ def analyze_pair_signals_at_position(
         dataframes[reference_population],
         dataframes[neighbor_population],
         model=model,
+        frame_to_min=experiment_frame_interval(pos),
     )
     table = pos + os.sep.join(["output", "tables", f"trajectories_pairs.csv"])
     df.to_csv(table, index=False)
@@ -531,6 +584,7 @@ def analyze_pair_signals(
         "x": "POSITION_X",
         "y": "POSITION_Y",
     },
+    frame_to_min: Optional[float] = None,
 ) -> pd.DataFrame:
     """
     Analyzes signals for pairs of cells using a specified model.
@@ -609,6 +663,7 @@ def analyze_pair_signals(
 
     with open(model_config_path) as f:
         config = json.load(f)
+    warn_on_frame_interval_mismatch(config, frame_to_min)
     required_signals = config["channels"]
 
     if selected_signals is None:
