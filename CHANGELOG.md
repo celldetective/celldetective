@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- A cell entering the field of view from the side has no first detection time
+  (-1, still class 2). `status_firstdetection` says from which frame it is
+  present. It is also left out of survival from the start of the movie, as it
+  already was from its first detection.
+- The measurement annotator no longer rebuilds a missing first detection without
+  the image shape, which made cells entering from the side look observed. It
+  only fills the status.
+- The new event dialog of the annotators no longer offers to prefill "event",
+  which wrote the same invented time (0.1) on every cell.
 - Events found from conditions (*Classify data*, `classify_tracks_from_query`):
   - the `status_` column is the step built from the class and time, as for
     events found by a model, for every event type. The per-frame result of the
@@ -88,8 +97,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     cleanly.
 - The status of a class 2 cell ("else": no usable event time) is now the same
   wherever it is written: empty (NaN), since the cell may have changed before
-  it was observed or have an unusable track. Unique-state classification keeps
-  a status of 1 for a positive cell, from its first observed frame. Signal
+  it was observed or have an unusable track. This includes a positive unique
+  state, which has no onset: its per-frame result stays in `inst_status_`. Signal
   detection wrote a status of 2, and the event annotator wrote 0
   when it rebuilt the status column. Tables already classified keep their
   status until the events are detected or annotated again.

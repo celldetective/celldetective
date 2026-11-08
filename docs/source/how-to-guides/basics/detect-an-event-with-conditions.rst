@@ -36,6 +36,10 @@ The classification condition is evaluated at each time point, producing a binary
 
 The ``status_`` column then follows from the class and time: 0 before the event and 1 from it on, and empty for an "else" cell with no event time. The per-frame result of the condition is kept in the ``inst_status_`` column.
 
+.. note::
+
+    An event time is the onset of the event, and how it is placed depends on the event. A first detection is the last frame without the cell, a fitted transition falls between two frames, and a transient event starts on its first positive frame. A cell that changes as it appears therefore has a survival time of 0, and the next possible values are about 1.5 frames for a fit and 2 for a transient event, with none in between.
+
 .. figure:: ../../_static/classify.gif
     :width: 400px
     :align: center
