@@ -4,7 +4,7 @@ first seen at frame 1 appeared at time 0, a valid time."""
 import numpy as np
 import pandas as pd
 
-from celldetective.events import switch_to_events
+from celldetective.events import compute_survival, switch_to_events
 from celldetective.tracking import write_first_detection_class
 
 
@@ -54,3 +54,40 @@ def test_survival_accepts_time_0():
         [0], [2.0], [10], origin_times=[2.0], left_censored=True
     )
     assert events == [1] and durations == [0.0]
+
+
+def spreading_table():
+    """Two cells spreading at frame 30, seen from frame 10: one appeared inside
+    the field of view, the other entered it from the side (first detection class 2,
+    its time kept)."""
+
+    rows = []
+    for tid, first_class in [(1, 0), (2, 2)]:
+        for frame in range(40):
+            rows.append(
+                {
+                    "position": "p",
+                    "TRACK_ID": tid,
+                    "FRAME": frame,
+                    "class_firstdetection": first_class,
+                    "t_firstdetection": 9.0,
+                    "class_spread": 0,
+                    "t_spread": 30.0,
+                }
+            )
+    return pd.DataFrame(rows)
+
+
+def test_survival_from_an_unreliable_first_detection_is_left_out():
+    """A cell entering from the side keeps its spreading time, but its first
+    detection was not observed, so it has no duration from it."""
+
+    ks = compute_survival(
+        spreading_table(), "class_spread", "t_spread", t_reference="t_firstdetection"
+    )
+    assert ks.durations.tolist() == [21.0]
+
+
+def test_survival_from_the_start_of_the_movie_keeps_every_cell():
+    ks = compute_survival(spreading_table(), "class_spread", "t_spread", t_reference=0)
+    assert ks.durations.tolist() == [30.0, 30.0]
