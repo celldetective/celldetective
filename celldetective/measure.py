@@ -322,53 +322,6 @@ def measure(
     return measurements
 
 
-def write_first_detection_class(
-    tab: pd.DataFrame,
-    column_labels: Dict[str, str] = {
-        "track": "TRACK_ID",
-        "time": "FRAME",
-        "x": "POSITION_X",
-        "y": "POSITION_Y",
-    },
-) -> pd.DataFrame:
-    """
-    Identifies and records the first detection time and class for each track.
-
-    Parameters
-    ----------
-    tab : pandas.DataFrame
-        The dataframe containing tracking data.
-    column_labels : dict, optional
-        Dictionary mapping internal column names to dataframe column names.
-        Default is {"track": "TRACK_ID", "time": "FRAME", "x": "POSITION_X", "y": "POSITION_Y"}.
-
-    Returns
-    -------
-    pandas.DataFrame
-        The dataframe with added columns 'class_firstdetection' and 't_firstdetection'.
-    """
-
-    tab = tab.sort_values(by=[column_labels["track"], column_labels["time"]])
-    if "area" in tab.columns:
-        for tid, track_group in tab.groupby(column_labels["track"]):
-            indices = track_group.index
-            area = track_group["area"].values
-            timeline = track_group[column_labels["time"]].values
-            if np.any(~np.isnan(area)):
-                t_first = timeline[~np.isnan(area)][0]
-                cclass = 1
-                if t_first == 0:
-                    t_first = 0
-                    cclass = 2
-            else:
-                t_first = -1
-                cclass = 2
-
-            tab.loc[indices, "class_firstdetection"] = cclass
-            tab.loc[indices, "t_firstdetection"] = t_first
-    return tab
-
-
 def drop_tonal_features(features: List[str]) -> List[str]:
     """
     Removes features related to intensity from a list of feature names.
