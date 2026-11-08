@@ -756,9 +756,14 @@ def interpolate_nan_properties(
         interpolate_per_track
     )
 
-    if track_label in trajectories.index.names:
+    # The group keys become index levels: drop them (or restore them as columns),
+    # also when several columns identify a track (pairs), or grouping the result
+    # by them again is ambiguous.
+    labels = [track_label] if isinstance(track_label, str) else list(track_label)
+    if all(label in trajectories.index.names for label in labels):
         trajectories = trajectories.reset_index(
-            level=0, drop=track_label in trajectories.columns
+            level=labels,
+            drop=all(label in trajectories.columns for label in labels),
         )
 
     return trajectories

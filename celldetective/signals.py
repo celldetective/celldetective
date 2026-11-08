@@ -433,7 +433,7 @@ def analyze_pair_signals_at_position(
     model: str,
     use_gpu: bool = True,
     populations: List[str] = ["targets", "effectors"],
-) -> None:
+) -> Optional[str]:
     """
     Analyzes pair signals at a position using a specified model.
 
@@ -450,8 +450,8 @@ def analyze_pair_signals_at_position(
 
     Returns
     -------
-    None
-        Results are saved to CSV.
+    str or None
+        The path of the pair table written, or None if a table it needs is missing.
     """
 
     pos = pos.replace("\\", "/")
@@ -499,7 +499,7 @@ def analyze_pair_signals_at_position(
     table = pos + os.sep.join(["output", "tables", f"trajectories_pairs.csv"])
     df.to_csv(table, index=False)
 
-    return None
+    return table
 
 
 def analyze_pair_signals(
@@ -597,7 +597,6 @@ def analyze_pair_signals(
     with open(model_config_path) as f:
         config = json.load(f)
     required_signals = config["channels"]
-    label = _extract_config_label(config)
 
     if selected_signals is None:
         selected_signals = []
@@ -710,32 +709,19 @@ def analyze_pair_signals(
     model = SignalDetectionModel(pretrained=complete_path)
     logger.debug(f"Signal shape: {signals.shape}")
 
-    if max_signal_size > model_signal_length:
-        logger.info(
-            f"Pair signals are longer than the model window ({max_signal_size} > "
-            f"{model_signal_length} frames): scanning each pair with overlapping "
-            f"windows and keeping the earliest detected event."
-        )
-        classes, times_recast = predict_events_sliding_window(
-            model, signals, model_signal_length
-        )
-    else:
-        classes = model.predict_class(signals)
-        times_recast = model.predict_time_of_interest(signals)
+    classes, times_recast = _predict_events(model, signals, model_signal_length)
 
-    if label is None:
-        class_col = "pair_class"
-        time_col = "pair_t0"
-        status_col = "pair_status"
-    else:
-        class_col = "pair_class_" + label
-        time_col = "pair_t_" + label
-        status_col = "pair_status_" + label
+    class_col, time_col, status_col = event_columns_of_model(config)
 
-    for i, (pair, group) in enumerate(trajectories_pairs.groupby(pair_groupby_cols)):
-        indices = group.index
-        trajectories_pairs.loc[indices, class_col] = classes[i]
-        trajectories_pairs.loc[indices, time_col] = times_recast[i]
+    # Results go to their pair by key, as the signals were built from the
+    # cleaned table.
+    results = pd.DataFrame(
+        {"class": classes, "time": times_recast}, index=pair_tracks.index
+    ).reindex(pd.MultiIndex.from_frame(trajectories_pairs[pair_groupby_cols]))
+    trajectories_pairs["pair_" + class_col] = results["class"].to_numpy(dtype=float)
+    trajectories_pairs["pair_" + time_col] = (
+        results["time"].fillna(-1.0).to_numpy(dtype=float)
+    )
     logger.info("Pair signal analysis done.")
 
     # At the end rename cols again
@@ -752,6 +738,15 @@ def analyze_pair_signals(
         c for c in list(trajectories_pairs.columns) if c.startswith("Unnamed")
     ]
     trajectories_pairs = trajectories_pairs.drop(columns=invalid_cols)
+
+    # The status follows from class and time, as for single cells.
+    keys = [c.replace("pair_", "") for c in pair_groupby_cols] + [
+        c for c in ("reference_population", "neighbor_population")
+        if c in trajectories_pairs.columns
+    ]
+    write_event_status(
+        trajectories_pairs, class_col, time_col, status_col, keys=keys
+    )
 
     return trajectories_pairs
 
