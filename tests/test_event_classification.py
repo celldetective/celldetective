@@ -108,15 +108,15 @@ def test_pre_event_hides_frames_before_it():
 
 
 def test_unique_state():
-    """A positive state is held since the cell was first observed: class 2,
-    status 1 from the first observed frame."""
+    """A state has no onset: a positive cell is class 2 with no event time and no
+    status, and the per-frame result stays in inst_status."""
 
     df = tracks_table({1: [0.0] * N_FRAMES, 2: [1.0] * 15 + [0.0] * 5})
     out = classify_unique_states(df, "class_e")
     assert per_track(out, "class_e") == {1: 1, 2: 2}
-    assert per_track(out, "t_e") == {1: -1, 2: 0}
-    assert status_of(out, 2) == [1.0] * N_FRAMES
-    assert "inst_status_e" in out.columns
+    assert per_track(out, "t_e") == {1: -1, 2: -1}
+    assert np.isnan(status_of(out, 2)).all()
+    assert out.loc[out["TRACK_ID"] == 2, "inst_status_e"].tolist()[:15] == [1.0] * 15
 
 
 def test_transient():
