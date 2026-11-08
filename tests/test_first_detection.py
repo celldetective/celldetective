@@ -151,3 +151,23 @@ def test_class_2_cells_stay_out_of_survival():
         left_censored=True,
     )
     assert events == [] and durations == []
+
+
+def test_missing_first_detection_status_keeps_class_and_time():
+    """A table with a first detection but no status: the status comes from the
+    time, and the class, which the edge check gave, is not recomputed."""
+
+    from celldetective.tracking import write_first_detection_status
+
+    df = pd.DataFrame(
+        {
+            "TRACK_ID": 1,
+            "FRAME": np.arange(6),
+            "class_firstdetection": 2,
+            "t_firstdetection": 2.0,
+        }
+    )
+    write_first_detection_status(df)
+    assert df["class_firstdetection"].unique().tolist() == [2]
+    assert df["t_firstdetection"].unique().tolist() == [2.0]
+    assert df["status_firstdetection"].tolist() == [0, 0, 1, 1, 1, 1]
