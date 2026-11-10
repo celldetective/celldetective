@@ -21,6 +21,7 @@ import warnings
 import numpy as np
 from tifffile import imwrite
 
+from tests.bioformats_ome import write_bioformats_ome
 from celldetective.utils.image_loaders import (
     _get_img_num_per_channel,
     _load_frames_to_segment,
@@ -50,6 +51,35 @@ class _ListHandler(logging.Handler):
 
     def emit(self, record):
         self.records.append(record)
+
+
+def _is_reported(call, errors=(ValueError, FileExistsError, FileNotFoundError)):
+    """Whether ``call`` refuses (raises one of ``errors``), warns, or logs a
+    warning on the celldetective logger. Any of the three counts."""
+    logger = logging.getLogger("celldetective")
+    handler = _ListHandler()
+    logger.addHandler(handler)
+    try:
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            try:
+                call()
+            except errors:
+                return True
+    finally:
+        logger.removeHandler(handler)
+    return bool(caught) or any(r.levelno >= logging.WARNING for r in handler.records)
+
+
+def _tczyx(n_t, n_c, n_z=1, offset=0):
+    """A ``(T, C, Z, Y, X)`` movie whose pixels hold
+    ``offset + 100 * z + 10 * t + c + 1``."""
+    data = np.zeros((n_t, n_c, n_z, H, W), dtype=np.uint16)
+    for t in range(n_t):
+        for c in range(n_c):
+            for z in range(n_z):
+                data[t, c, z] = offset + 100 * z + 10 * t + c + 1
+    return data
 
 
 def _value(t, c):
@@ -159,25 +189,21 @@ class TestSeveralMatchingMovies(_TmpDirCase):
                 imagej=True,
                 metadata={"axes": "TYX"},
             )
-        # Refusing the folder, a warning or a logged warning all count.
-        logger = logging.getLogger("celldetective")
-        handler = _ListHandler()
-        logger.addHandler(handler)
-        try:
-            with warnings.catch_warnings(record=True) as caught:
-                warnings.simplefilter("always")
-                try:
-                    locate_stack(pos, prefix="Aligned")
-                except (ValueError, FileExistsError):
-                    return
-        finally:
-            logger.removeHandler(handler)
-        reported = [str(w.message) for w in caught] + [
-            r.getMessage() for r in handler.records if r.levelno >= logging.WARNING
-        ]
         self.assertTrue(
-            reported, "two movies match the prefix and one was picked silently"
+            _is_reported(lambda: locate_stack(pos, prefix="Aligned")),
+            "two movies match the prefix and one was picked silently",
         )
+
+    def test_bioformats_extension_is_found(self):
+        """Bio-Formats names its files ``.ome.tiff`` by default."""
+        pos, movie = _make_position_dir(self.tmpdir, "ome_tiff_ext")
+        imwrite(
+            os.path.join(movie, "Aligned.ome.tiff"),
+            np.ones((2, H, W), dtype=np.uint16),
+            ome=True,
+            metadata={"axes": "TYX"},
+        )
+        self.assertEqual(locate_stack(pos, prefix="Aligned").shape, (2, H, W, 1))
 
 
 class TestCompressedLazy(_TmpDirCase):
@@ -263,6 +289,95 @@ class TestUnreadableFrameInSegmentation(_TmpDirCase):
             ctx.exception,
             AttributeError,
             "load failure surfaced as an AttributeError on None",
+        )
+
+
+def _loops_match_stack(test, pos, path, n_channels):
+    """Assert the loops read every frame of ``path`` as ``locate_stack``."""
+    stack = locate_stack(pos, prefix="Aligned")
+    len_movie = auto_load_number_of_frames(path)
+    img_nums = _get_img_num_per_channel(list(range(n_channels)), len_movie, n_channels)
+    for t in range(stack.shape[0]):
+        frame = load_frames(img_nums[:, t].tolist(), path, normalize_input=False)
+        test.assertIsNotNone(frame, f"frame {t} could not be read by the loops")
+        np.testing.assert_array_equal(
+            frame[0, 0, :],
+            stack[t, 0, 0, :],
+            err_msg=f"frame {t}: the loops and the viewer disagree",
+        )
+
+
+class TestBioformatsChannelFirst(_TmpDirCase):
+    """IMG-1 on a real-world layout: Bio-Formats with ``DimensionOrder``
+    ``XYZTC`` (as in the OME sample ``tubhiswt-4D``) stores channel by
+    channel."""
+
+    def test_xyztc(self):
+        pos, movie = _make_position_dir(self.tmpdir, "bf_xyztc")
+        path = os.path.join(movie, "Aligned.ome.tif")
+        write_bioformats_ome(path, [_tczyx(4, 2)], "XYZTC")
+        _loops_match_stack(self, pos, path, 2)
+
+
+class TestBioformatsLazy(_TmpDirCase):
+    """IMG-5: Bio-Formats writes an IFD between planes, so even an
+    uncompressed file is not one contiguous block and is never read lazily."""
+
+    def test_uncompressed_bioformats_loads_lazily(self):
+        pos, movie = _make_position_dir(self.tmpdir, "bf_lazy")
+        write_bioformats_ome(
+            os.path.join(movie, "Aligned.ome.tif"), [_tczyx(4, 2)], "XYZCT"
+        )
+        stack = locate_stack_lazy(pos, prefix="Aligned")
+        self.assertIsNotNone(stack, "uncompressed Bio-Formats file not opened lazily")
+        self.assertEqual(stack.shape, (4, H, W, 2))
+
+
+class TestBioformatsMultiFile(_TmpDirCase):
+    """IMG-9: a multi-file OME-TIFF set (one file per channel) is read whole
+    by ``locate_stack``, but the loops read the pages of the first file only,
+    and a missing file of the set is filled with zeros without a word."""
+
+    def test_loops_read_the_whole_set(self):
+        pos, movie = _make_position_dir(self.tmpdir, "bf_multifile")
+        files = write_bioformats_ome(
+            os.path.join(movie, "Aligned.ome.tif"),
+            [_tczyx(4, 2)],
+            "XYZTC",
+            one_file_per_channel=True,
+        )
+        _loops_match_stack(self, pos, sorted(files)[0], 2)
+
+    def test_missing_file_is_reported(self):
+        pos, movie = _make_position_dir(self.tmpdir, "bf_multifile_missing")
+        files = write_bioformats_ome(
+            os.path.join(movie, "Aligned.ome.tif"),
+            [_tczyx(4, 2)],
+            "XYZTC",
+            one_file_per_channel=True,
+        )
+        os.remove(sorted(files)[1])
+        self.assertTrue(
+            _is_reported(lambda: locate_stack(pos, prefix="Aligned")),
+            "channel 1 of the set is missing and was replaced by zeros silently",
+        )
+
+
+class TestBioformatsMultiPosition(_TmpDirCase):
+    """IMG-10: an OME-TIFF holding several positions (one ``Image`` each, as
+    bfconvert writes a multi-position acquisition) loads the first position
+    only, silently."""
+
+    def test_other_positions_are_reported(self):
+        pos, movie = _make_position_dir(self.tmpdir, "bf_multiposition")
+        write_bioformats_ome(
+            os.path.join(movie, "Aligned.ome.tif"),
+            [_tczyx(4, 2), _tczyx(4, 2, offset=1000)],
+            "XYZCT",
+        )
+        self.assertTrue(
+            _is_reported(lambda: locate_stack(pos, prefix="Aligned")),
+            "the second position of the file was dropped silently",
         )
 
 

@@ -29,6 +29,7 @@ from celldetective.utils.image_loaders import (
     locate_stack_lazy,
 )
 from celldetective.utils.io import save_tiff_imagej_compatible
+from tests.bioformats_ome import write_bioformats_ome
 
 H, W = 8, 8
 N_T, N_C = 4, 3
@@ -246,6 +247,45 @@ class TestSingleIFDCache(_TmpDirCase):
         os.utime(path, ns=(st.st_atime_ns, st.st_mtime_ns + 10**9))
         frame = load_frames(N_C + 1, path, normalize_input=False)
         np.testing.assert_array_equal(frame[..., 0], second[1, 1])
+
+
+class TestBioformatsOME(_TmpDirCase):
+    """OME-TIFFs laid out as Bio-Formats writes them (see
+    ``tests/bioformats_ome.py``) that store each time point's channels
+    together: ``DimensionOrder`` ``XYZCT`` (the order of the OME
+    ``bioformats-artificial`` samples) and ``XYCZT``. Both the viewer and
+    the loops read them correctly."""
+
+    def _check(self, name, dimension_order):
+        pos, movie = _make_position_dir(self.tmpdir, name)
+        path = os.path.join(movie, "Aligned.ome.tif")
+        tczyx = _tcyx()[:, :, np.newaxis]
+        write_bioformats_ome(path, [tczyx], dimension_order)
+
+        stack = locate_stack(pos, prefix="Aligned")
+        np.testing.assert_array_equal(stack, _expected_tyxc())
+        self.assertEqual(auto_load_number_of_frames(path), N_T)
+
+        img_nums = _get_img_num_per_channel(list(range(N_C)), N_T, N_C)
+        for t in range(N_T):
+            frame = load_frames(img_nums[:, t].tolist(), path, normalize_input=False)
+            np.testing.assert_array_equal(frame, stack[t], err_msg=f"frame {t}")
+
+    def test_xyzct(self):
+        self._check("bf_xyzct", "XYZCT")
+
+    def test_xyczt(self):
+        self._check("bf_xyczt", "XYCZT")
+
+    def test_first_position_of_a_multi_position_file(self):
+        pos, movie = _make_position_dir(self.tmpdir, "bf_multiposition")
+        tczyx = _tcyx()[:, :, np.newaxis]
+        write_bioformats_ome(
+            os.path.join(movie, "Aligned.ome.tif"), [tczyx, tczyx + 1000], "XYZCT"
+        )
+        np.testing.assert_array_equal(
+            locate_stack(pos, prefix="Aligned"), _expected_tyxc()
+        )
 
 
 if __name__ == "__main__":
