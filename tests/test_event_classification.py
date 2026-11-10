@@ -191,6 +191,40 @@ def test_poor_fit_has_no_usable_time():
     assert per_track(out, "t_e") == {1: -1}
 
 
+def test_bare_class_column_writes_the_same_columns_as_a_model():
+    """``class`` goes with ``t0`` and ``status``, as `event_columns` says."""
+
+    df = tracks_table({1: [0.0] * 8 + [1.0] * (N_FRAMES - 8)}).rename(
+        columns={"class_e": "class", "status_e": "status"}
+    )
+    out = classify_irreversible_events(df, "class")
+    assert per_track(out, "class") == {1: 0}
+    assert abs(per_track(out, "t0")[1] - 8) <= 1
+    assert "t" not in out.columns
+    assert "inst_status" in out.columns
+
+
+def test_times_on_noisy_conditions():
+    """A condition that flickers on 5% of the frames still gives every cell its
+    event, within about a frame."""
+
+    rng = np.random.default_rng(0)
+    n_frames = 60
+    truth = {tid: int(t) for tid, t in enumerate(rng.integers(15, 45, 40))}
+    statuses = {}
+    for tid, t_event in truth.items():
+        status = (np.arange(n_frames) >= t_event).astype(float)
+        flips = rng.random(n_frames) < 0.05
+        status[flips] = 1 - status[flips]
+        statuses[tid] = status.tolist()
+
+    out = classify_irreversible_events(tracks_table(statuses), "class_e", r2_threshold=0.5)
+    assert set(per_track(out, "class_e").values()) == {0}
+    errors = [abs(per_track(out, "t_e")[tid] - t) for tid, t in truth.items()]
+    assert np.median(errors) <= 1
+    assert max(errors) <= 4
+
+
 def test_classify_tracks_from_query():
     """From a query to class, time and step status, over two positions."""
 

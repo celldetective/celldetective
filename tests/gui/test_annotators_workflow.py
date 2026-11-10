@@ -643,3 +643,32 @@ class TestInteractiveEventViewerWorkflow:
             viewer.save_changes()
         saved = read_table(position, "targets")
         assert set(saved["class_lysis"]) == {0}
+
+    def shift_and_save(self, viewer, steps):
+        """Shift track 0, whose event is at frame 2, then save."""
+
+        viewer.selected_tracks = {0}
+        for step in steps:
+            viewer.shift_selected_times(step)
+        with patch(
+            "celldetective.gui.interactive_timeseries_viewer.QMessageBox.information"
+        ) as information:
+            viewer.save_changes()
+        return information.call_args[0][2]
+
+    def test_time_shifted_to_the_first_frame_is_class_2_on_saving(self, viewer, position):
+        """Decision-0023 applies when the table is saved."""
+
+        message = self.shift_and_save(viewer, [-0.5] * 4)
+        assert "class 2" in message
+        track0 = read_table(position, "targets").query("TRACK_ID == 0")
+        assert set(track0["class_lysis"]) == {2}
+        assert set(track0["t_lysis"]) == {-1}
+        assert track0["status_lysis"].isna().all()
+
+    def test_time_shifted_past_the_first_frame_and_back_stays_an_event(self, viewer, position):
+        message = self.shift_and_save(viewer, [-0.5] * 6 + [0.5] * 6)
+        assert "class 2" not in message
+        track0 = read_table(position, "targets").query("TRACK_ID == 0")
+        assert set(track0["class_lysis"]) == {0}
+        assert set(track0["t_lysis"]) == {2.0}

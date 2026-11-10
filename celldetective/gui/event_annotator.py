@@ -13,6 +13,7 @@ import numpy as np
 from matplotlib.cm import tab10
 from typing import Tuple, Any
 from celldetective.gui.annotator_common import (
+    UNOBSERVED_WARNING,
     AnimationMixin,
     EventAnnotationMixin,
     complete_event_columns,
@@ -21,6 +22,7 @@ from celldetective.gui.annotator_common import (
     prefill_class,
     signal_limits,
     split_by_frame,
+    warn,
 )
 from celldetective.utils.event_status import (
     color_events,
@@ -613,6 +615,14 @@ class EventAnnotator(EventAnnotationMixin, AnimationMixin, BaseAnnotator):
             self.normalize_features_btn.click()
         if self.selection:
             self.cancel_selection()
+
+        # Times shifted in the interactive viewer share this table.
+        if self.plotter is not None and self.plotter.resolve_shifted_times():
+            self.annotation_log.append(
+                "interactive viewer: shifted events at or before the first observed "
+                "frame made class 2"
+            )
+            warn(UNOBSERVED_WARNING.format(what="a track shifted in the viewer"))
 
         self.df_tracks = self.df_tracks.drop(
             self.df_tracks[self.df_tracks[self.class_name] > 2].index

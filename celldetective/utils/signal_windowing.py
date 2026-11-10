@@ -174,3 +174,31 @@ def truncate_training_signals(
         classes[mask] = NO_EVENT
     times[mask] = -1.0
     return signals, classes, times, int(np.count_nonzero(mask))
+
+
+#: Recorded as ``padding`` in the ``config_input.json`` of a model trained with
+#: the first and last values repeated outside each track. Models without it were
+#: trained with zeros and read zeros before a track.
+PADDING_EDGE = "edge"
+
+
+def hold_track_edges(signal: np.ndarray, frames: np.ndarray) -> None:
+    """
+    Repeat, in place, the first value of a track before it and the last one after it.
+
+    Parameters
+    ----------
+    signal : ndarray
+        One channel of a track laid out on the frame axis.
+    frames : ndarray
+        The frames where the track is observed. Missing values at its ends are
+        skipped: the nearest measured value is repeated over them.
+    """
+
+    observed = np.flatnonzero(~np.isnan(signal[int(np.min(frames)) : int(np.max(frames)) + 1]))
+    if len(observed) == 0:
+        return
+    start = int(np.min(frames)) + int(observed[0])
+    end = int(np.min(frames)) + int(observed[-1])
+    signal[:start] = signal[start]
+    signal[end + 1 :] = signal[end]

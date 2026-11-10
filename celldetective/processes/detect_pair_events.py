@@ -15,6 +15,8 @@ class PairSignalAnalysisProcess(Process):
     model_name: Optional[str] = None
     use_gpu: bool = True
     populations: List[str] = ["targets", "effectors"]
+    reference_population: Optional[str] = None
+    neighbor_population: Optional[str] = None
     well_progress: float = 0
     pos_progress: float = 0
 
@@ -32,7 +34,8 @@ class PairSignalAnalysisProcess(Process):
             The queue to communicate with the main process.
         process_args : dict
             ``pos``, ``model_name``, and optionally ``use_gpu``, ``populations``,
-            ``well_progress`` and ``pos_progress``.
+            ``reference_population``, ``neighbor_population``, ``well_progress``
+            and ``pos_progress``.
         """
 
         super().__init__()
@@ -53,26 +56,28 @@ class PairSignalAnalysisProcess(Process):
                 "pos_progress": self.pos_progress,
             }
         )
-        try:
-            table = analyze_pair_signals_at_position(
-                self.pos,
-                self.model_name,
-                use_gpu=self.use_gpu,
-                populations=self.populations,
-            )
+        # The whole run goes to the position's log, with its warnings.
+        with positionlogger(self.pos, filename="log_pairs.txt"):
+            logger.info("PAIR SIGNAL ANALYSIS")
+            logger.info(f"signal model: {self.model_name}")
+            try:
+                table = analyze_pair_signals_at_position(
+                    self.pos,
+                    self.model_name,
+                    use_gpu=self.use_gpu,
+                    populations=self.populations,
+                    reference_population=self.reference_population,
+                    neighbor_population=self.neighbor_population,
+                )
+            except Exception as e:
+                logger.error(f"Error in PairSignalAnalysisProcess: {e}", exc_info=True)
+                self.queue.put({"status": "error", "message": str(e)})
+                return
             if table is None:
                 # A table it needs is missing: skip the position, as before, and
                 # let a batch go on with the next one.
                 logger.warning(f"Pair event detection skipped for {self.pos}: a table is missing.")
                 self.queue.put({"status": "Skipped: a table is missing"})
-            else:
-                with positionlogger(self.pos, filename="log_pairs.txt"):
-                    logger.info("PAIR SIGNAL ANALYSIS")
-                    logger.info(f"signal model: {self.model_name}")
-        except Exception as e:
-            logger.error(f"Error in PairSignalAnalysisProcess: {e}", exc_info=True)
-            self.queue.put({"status": "error", "message": str(e)})
-            return
         self.queue.put({"status": "finished"})
 
     def end_process(self) -> None:

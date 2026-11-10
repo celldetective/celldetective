@@ -159,8 +159,12 @@ def test_pair_process_reports_its_end(tmp_path, monkeypatch, outcome):
     pos = str(tmp_path) + os.sep
     calls = []
 
-    def analyze(pos, model, use_gpu=True, populations=None):
+    def analyze(
+        pos, model, use_gpu=True, populations=None,
+        reference_population=None, neighbor_population=None,
+    ):
         calls.append((pos, model, populations))
+        signals.logger.warning("a warning of the analysis")
         if outcome == "fails":
             raise ValueError("model failed")
         if outcome == "missing":
@@ -180,12 +184,200 @@ def test_pair_process_reports_its_end(tmp_path, monkeypatch, outcome):
     process.run()
 
     assert calls == [(pos, "m", ["a", "b"])]
-    logged = os.path.exists(os.path.join(pos, "log_pairs.txt"))
+    with open(os.path.join(pos, "log_pairs.txt")) as log:
+        logged = log.read()
+    assert "PAIR SIGNAL ANALYSIS" in logged and "a warning of the analysis" in logged
     if outcome == "fails":
         assert queue[-1] == {"status": "error", "message": "model failed"}
+        assert "model failed" in logged
     else:
         assert queue[-1] == {"status": "finished"}
-        assert logged == (outcome == "done")
+        assert ("a table is missing" in logged) == (outcome == "missing")
+
+
+def use_stub_model(monkeypatch, tmp_path, model_config):
+    """`analyze_signals` and `analyze_pair_signals` load this model by name."""
+
+    import json
+
+    import celldetective.event_detection_models as models
+    import celldetective.signals as signals
+
+    path = tmp_path / "config_input.json"
+    path.write_text(json.dumps(model_config))
+
+    def load(pretrained=None):
+        model = StubModel(model_config)
+        model.pretrained = pretrained
+        return model
+
+    monkeypatch.setattr(models, "SignalDetectionModel", load)
+    monkeypatch.setattr(
+        signals, "_resolve_signal_model_paths", lambda *a, **k: (str(tmp_path), str(path))
+    )
+
+
+def test_analyze_signals(monkeypatch, tmp_path):
+    from celldetective.signals import analyze_signals
+
+    use_stub_model(monkeypatch, tmp_path, config())
+    out = analyze_signals(tracks(), "stub")
+    assert per_track(out, "class_death") == {3: 1, 5: 0, 7: 0}
+    assert per_track(out, "t_death") == {3: -1, 5: 12, 7: 5}
+
+
+def pair_rows(reference, neighbor, t_event):
+    return [
+        {"REFERENCE_ID": 1, "NEIGHBOR_ID": 2, "FRAME": frame,
+         "reference_population": reference, "neighbor_population": neighbor,
+         "PI": float(frame >= t_event)}
+        for frame in range(20)
+    ]
+
+
+def single_cells(track):
+    return pd.DataFrame(
+        {"TRACK_ID": track, "FRAME": range(20), "POSITION_X": 1.0, "POSITION_Y": 1.0}
+    )
+
+
+def analyze_pairs(pairs):
+    from celldetective.signals import analyze_pair_signals
+
+    return analyze_pair_signals(pairs, single_cells(1), single_cells(2), "stub")
+
+
+def per_combination(df, column):
+    groups = df.groupby(["reference_population", "neighbor_population"])
+    return groups[column].first().to_dict()
+
+
+def test_analyze_pair_signals_applies_the_model_to_its_populations(monkeypatch, tmp_path):
+    """The same IDs in another combination are other cells: they are not read
+    through the tables of this model, and keep what they had."""
+
+    use_stub_model(
+        monkeypatch, tmp_path,
+        config(reference_population="targets", neighbor_population="effectors"),
+    )
+    pairs = pd.DataFrame(
+        pair_rows("targets", "effectors", 5) + pair_rows("effectors", "targets", 12)
+    )
+    out = analyze_pairs(pairs)
+
+    times = per_combination(out, "t_death")
+    assert times == {("targets", "effectors"): 5, ("effectors", "targets"): -1}
+    other = out["reference_population"] == "effectors"
+    assert out.loc[other, "class_death"].isna().all()
+    assert out.loc[other, "status_death"].isna().all()
+    assert out.loc[~other, "class_death"].eq(0).all()
+
+
+def test_analyze_pair_signals_keeps_the_results_of_other_populations(monkeypatch, tmp_path):
+    use_stub_model(
+        monkeypatch, tmp_path,
+        config(reference_population="targets", neighbor_population="effectors"),
+    )
+    pairs = pd.DataFrame(
+        pair_rows("targets", "effectors", 5) + pair_rows("effectors", "targets", 12)
+    )
+    earlier = pairs["reference_population"] == "effectors"
+    pairs["class_death"] = np.where(earlier, 0.0, np.nan)
+    pairs["t_death"] = np.where(earlier, 12.0, -1.0)
+    out = analyze_pairs(pairs)
+    assert per_combination(out, "t_death") == {
+        ("targets", "effectors"): 5, ("effectors", "targets"): 12,
+    }
+    assert out.loc[earlier].sort_values("FRAME")["status_death"].tolist() == [0.0] * 12 + [1.0] * 8
+
+
+def test_analyze_pair_signals_without_recorded_populations(monkeypatch, tmp_path):
+    """Each combination still gets its own signal and prediction, with a warning."""
+
+    import celldetective.signals as signals
+
+    use_stub_model(monkeypatch, tmp_path, config())
+    warnings = []
+    monkeypatch.setattr(signals.logger, "warning", warnings.append)
+    out = analyze_pairs(
+        pd.DataFrame(pair_rows("targets", "effectors", 5) + pair_rows("effectors", "targets", 12))
+    )
+    assert per_combination(out, "t_death") == {
+        ("targets", "effectors"): 5, ("effectors", "targets"): 12,
+    }
+    assert any("several combinations" in w for w in warnings)
+
+
+def test_analyze_pair_signals_on_populations_chosen_by_the_user(monkeypatch, tmp_path):
+    """A model can be deployed on other populations: those pairs are predicted, the
+    pairs it was trained on are left alone, and a warning asks to check the traces."""
+
+    import celldetective.signals as signals
+
+    use_stub_model(
+        monkeypatch, tmp_path,
+        config(reference_population="targets", neighbor_population="effectors"),
+    )
+    warnings = []
+    monkeypatch.setattr(signals.logger, "warning", warnings.append)
+    pairs = pd.DataFrame(
+        pair_rows("targets", "effectors", 5) + pair_rows("effectors", "targets", 12)
+    )
+    out = signals.analyze_pair_signals(
+        pairs, single_cells(1), single_cells(2), "stub",
+        reference_population="effectors", neighbor_population="targets",
+    )
+    assert per_combination(out, "t_death") == {
+        ("targets", "effectors"): -1, ("effectors", "targets"): 12,
+    }
+    assert any("look like" in w for w in warnings)
+
+
+@pytest.mark.parametrize(
+    "chosen, expected",
+    [
+        ({}, ("targets", "effectors")),
+        (
+            {"reference_population": "macrophages", "neighbor_population": "targets"},
+            ("macrophages", "targets"),
+        ),
+    ],
+)
+def test_pair_detection_at_a_position_reads_the_tables_of_the_populations(
+    monkeypatch, tmp_path, chosen, expected
+):
+    import celldetective.signals as signals
+
+    use_stub_model(
+        monkeypatch, tmp_path,
+        config(reference_population="targets", neighbor_population="effectors"),
+    )
+    (tmp_path / "output" / "tables").mkdir(parents=True)
+    monkeypatch.setattr(signals, "get_position_pickle", lambda pos, population: population)
+    monkeypatch.setattr(signals, "get_position_table", lambda pos, population: pd.DataFrame())
+    monkeypatch.setattr(signals, "experiment_frame_interval", lambda pos: 1.0)
+    seen = {}
+
+    def record(pairs, reference, neighbor, **kwargs):
+        seen.update(tables=(reference, neighbor), kwargs=kwargs)
+        return pd.DataFrame()
+
+    monkeypatch.setattr(signals, "analyze_pair_signals", record)
+    signals.analyze_pair_signals_at_position(
+        str(tmp_path), "stub", populations=["targets", "effectors", "macrophages"], **chosen
+    )
+    assert seen["tables"] == expected
+    assert (seen["kwargs"]["reference_population"], seen["kwargs"]["neighbor_population"]) == expected
+
+
+def test_analyze_pair_signals_with_no_pair_of_its_populations(monkeypatch, tmp_path):
+    use_stub_model(
+        monkeypatch, tmp_path,
+        config(reference_population="targets", neighbor_population="effectors"),
+    )
+    pairs = pd.DataFrame(pair_rows("effectors", "targets", 12))
+    out = analyze_pairs(pairs)
+    pd.testing.assert_frame_equal(out, pairs)
 
 
 def test_event_at_first_frame_of_track_is_class_2():
@@ -198,6 +390,34 @@ def test_event_at_first_frame_of_track_is_class_2():
     assert per_track(out, cls) == {3: 1, 5: 2, 7: 0}
     assert per_track(out, t) == {3: -1, 5: -1, 7: 5}
     assert out.loc[out["TRACK_ID"] == 5, status].isna().all()
+
+
+def test_training_repeats_the_first_and_last_values_of_a_track():
+    from types import SimpleNamespace
+
+    from celldetective.event_detection_models import SignalDetectionModel
+
+    dataset = [
+        {"FRAME": np.arange(3, 7), "PI": np.array([5.0, 6.0, 7.0, 8.0]), "class": 1, "time_of_interest": -1.0},
+    ]
+    owner = SimpleNamespace(n_channels=1, model_signal_length=16, channel_option=["PI"])
+    signals, _, _ = SignalDetectionModel.cast_signals_into_training_data(owner, dataset, ["PI"], 10)
+    assert signals[0, :, 0].tolist() == [5, 5, 5, 5, 6, 7, 8, 8, 8, 8]
+
+
+@pytest.mark.parametrize("padding", [None, "edge"])
+def test_padding_before_a_track_follows_the_model(padding):
+    """A model trained with the edges repeated reads them; older models were
+    trained with zeros and keep reading zeros before a track."""
+
+    df = tracks()
+    df = df.loc[(df["TRACK_ID"] != 5) | (df["FRAME"] >= 12)].copy()  # starts at frame 12
+    extra = {} if padding is None else {"padding": padding}
+    model = StubModel(config(**extra))
+    detect_events_with_model(df, model)
+    track5 = model.seen[0][1, :, 0]
+    assert track5[12] != 0
+    assert np.all(track5[:12] == (track5[12] if padding else 0))
 
 
 def test_warning_on_another_frame_rate(monkeypatch):
