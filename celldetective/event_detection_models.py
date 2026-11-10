@@ -82,7 +82,13 @@ from tensorflow.keras.models import clone_model, load_model
 from tensorflow.keras.losses import MeanSquaredError
 
 from celldetective.utils.dataset_helpers import compute_weights, train_test_split
-from celldetective.utils.signal_windowing import ELSE, EVENT, truncate_training_signals
+from celldetective.utils.signal_windowing import (
+    ELSE,
+    EVENT,
+    PADDING_EDGE,
+    hold_track_edges,
+    truncate_training_signals,
+)
 from celldetective.utils.plots.regression import regression_plot
 from celldetective.log_manager import get_logger
 
@@ -791,6 +797,7 @@ class SignalDetectionModel(object):
             "normalization_percentile": self.normalization_percentile,
             "normalization_values": self.normalization_values,
             "normalization_clip": self.normalization_clip,
+            "padding": PADDING_EDGE,
         }
         # The frame interval of the training sets, when they record it, so that
         # inference can warn on another frame rate.
@@ -1863,6 +1870,8 @@ class SignalDetectionModel(object):
                     signals_recast[k, timeline, i] = signal_dataset[k][
                         selected_signals[i]
                     ]
+                    if len(timeline) > 0:
+                        hold_track_edges(signals_recast[k, :, i], timeline)
                 except KeyError:
                     logger.warning(
                         f"Attribute {selected_signals[i]!r} matched to {self.channel_option[i]!r} not found in annotation."

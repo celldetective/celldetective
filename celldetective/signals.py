@@ -37,9 +37,15 @@ from celldetective.utils import COLUMN_LABELS
 from celldetective.utils.event_status import (
     event_class_of_label,
     event_columns,
+    resolve_unobserved_events,
+    write_event_status,
     write_resolved_event_status,
 )
-from celldetective.utils.signal_windowing import predict_events_sliding_window
+from celldetective.utils.signal_windowing import (
+    PADDING_EDGE,
+    hold_track_edges,
+    predict_events_sliding_window,
+)
 from math import floor
 from scipy.optimize import curve_fit
 import pandas as pd
@@ -107,6 +113,40 @@ def _select_model_signals(
             )
         selected.append(candidates[0])
     return selected
+
+
+def _pairs_read_by_model(
+    pairs: pd.DataFrame,
+    reference_population: Optional[str],
+    neighbor_population: Optional[str],
+) -> pd.Series:
+    """
+    The rows of a pair table a model applies to: the reference and neighbor
+    populations of this run, whose tables it is given. With no population named,
+    the model is applied to every row, and a warning says so when the table holds
+    several combinations, since it then reads only the tables it was given.
+    """
+
+    in_scope = pd.Series(True, index=pairs.index)
+    population_columns = []
+    for side, population in (("reference", reference_population), ("neighbor", neighbor_population)):
+        column = f"pair_{side}_population"
+        if column not in pairs.columns:
+            continue
+        population_columns.append(column)
+        if population is not None:
+            in_scope &= pairs[column] == population
+    if (
+        in_scope.all()
+        and population_columns
+        and len(pairs[population_columns].drop_duplicates()) > 1
+    ):
+        logger.warning(
+            "This model does not record the populations it was trained on, and the "
+            "pair table holds several combinations: it is applied to each of them, "
+            "reading the reference and neighbor tables it was given."
+        )
+    return in_scope
 
 
 def _log_unobserved(n_unobserved: int, what: str) -> None:
@@ -260,6 +300,9 @@ def detect_events_with_model(
         values = group[selected_signals].to_numpy()
         signals[i, frames, :] = values
         signals[i, frames.max() :, :] = values[-1]
+        if config.get("padding") == PADDING_EDGE:
+            for j in range(signals.shape[-1]):
+                hold_track_edges(signals[i, :, j], frames)
         if progress is not None:
             progress(i + 1, len(tracks))
 
@@ -498,6 +541,8 @@ def analyze_pair_signals_at_position(
     model: str,
     use_gpu: bool = True,
     populations: List[str] = ["targets", "effectors"],
+    reference_population: Optional[str] = None,
+    neighbor_population: Optional[str] = None,
 ) -> Optional[str]:
     """
     Analyzes pair signals at a position using a specified model.
@@ -512,6 +557,10 @@ def analyze_pair_signals_at_position(
         Whether to use GPU acceleration. Default is True.
     populations : list of str, optional
         List of population names involved in the pair analysis. Default is ["targets", "effectors"].
+    reference_population, neighbor_population : str, optional
+        The populations to apply the model to, for instance on pairs whose time
+        series look like those it was trained on. Default is the populations
+        recorded with the model.
 
     Returns
     -------
@@ -540,16 +589,16 @@ def analyze_pair_signals_at_position(
     with open(model_config_path) as f:
         model_config = json.load(f)
 
-    reference_population = model_config["reference_population"]
-    neighbor_population = model_config["neighbor_population"]
+    reference_population = reference_population or model_config["reference_population"]
+    neighbor_population = neighbor_population or model_config["neighbor_population"]
 
-    if dataframes[reference_population] is None:
+    if dataframes.get(reference_population) is None:
         logger.error(
             f"No tabulated data can be found for the reference population ({reference_population})... Abort..."
         )
         return None
 
-    if dataframes[neighbor_population] is None:
+    if dataframes.get(neighbor_population) is None:
         logger.error(
             f"No tabulated data can be found for the neighbor population ({neighbor_population})... Abort..."
         )
@@ -561,6 +610,8 @@ def analyze_pair_signals_at_position(
         dataframes[neighbor_population],
         model=model,
         frame_to_min=experiment_frame_interval(pos),
+        reference_population=reference_population,
+        neighbor_population=neighbor_population,
     )
     table = pos + os.sep.join(["output", "tables", f"trajectories_pairs.csv"])
     df.to_csv(table, index=False)
@@ -585,6 +636,8 @@ def analyze_pair_signals(
         "y": "POSITION_Y",
     },
     frame_to_min: Optional[float] = None,
+    reference_population: Optional[str] = None,
+    neighbor_population: Optional[str] = None,
 ) -> pd.DataFrame:
     """
     Analyzes signals for pairs of cells using a specified model.
@@ -611,6 +664,10 @@ def analyze_pair_signals(
         Directory to save output plots. Default is None.
     column_labels : dict, optional
         Dictionary mapping column names.
+    reference_population, neighbor_population : str, optional
+        The populations to apply the model to, which must be those of
+        `trajectories_reference` and `trajectories_neighbors`. Default is the
+        populations recorded with the model.
 
     Returns
     -------
@@ -623,6 +680,7 @@ def analyze_pair_signals(
         model, path=model_path, pairs=True
     )
 
+    original_pairs = trajectories_pairs
     trajectories_pairs = trajectories_pairs.rename(columns=lambda x: "pair_" + x)
     trajectories_reference = trajectories_reference.rename(
         columns=lambda x: "reference_" + x
@@ -631,10 +689,12 @@ def analyze_pair_signals(
         columns=lambda x: "neighbor_" + x
     )
 
-    if "pair_position" in list(trajectories_pairs.columns):
-        pair_groupby_cols = ["pair_position", "pair_REFERENCE_ID", "pair_NEIGHBOR_ID"]
-    else:
-        pair_groupby_cols = ["pair_REFERENCE_ID", "pair_NEIGHBOR_ID"]
+    # The same two IDs can be paired in several population combinations.
+    pair_groupby_cols = [
+        c
+        for c in ("pair_position", "pair_reference_population", "pair_neighbor_population")
+        if c in trajectories_pairs.columns
+    ] + ["pair_REFERENCE_ID", "pair_NEIGHBOR_ID"]
 
     if "reference_position" in list(trajectories_reference.columns):
         reference_groupby_cols = ["reference_position", "reference_TRACK_ID"]
@@ -665,6 +725,24 @@ def analyze_pair_signals(
         config = json.load(f)
     warn_on_frame_interval_mismatch(config, frame_to_min)
     required_signals = config["channels"]
+
+    reference_population = reference_population or config.get("reference_population")
+    neighbor_population = neighbor_population or config.get("neighbor_population")
+    trained_on = (config.get("reference_population"), config.get("neighbor_population"))
+    if None not in trained_on and trained_on != (reference_population, neighbor_population):
+        logger.warning(
+            f"This model was trained on {trained_on[0]}-{trained_on[1]} pairs and is "
+            f"applied to {reference_population}-{neighbor_population} pairs: check that "
+            f"their time series look like those it was trained on."
+        )
+
+    in_scope = _pairs_read_by_model(trajectories_pairs, reference_population, neighbor_population)
+    if not in_scope.any():
+        logger.warning(
+            f"No {reference_population}-{neighbor_population} pair in this table: "
+            f"nothing to detect."
+        )
+        return original_pairs
 
     if selected_signals is None:
         selected_signals = []
@@ -698,7 +776,7 @@ def analyze_pair_signals(
         trajectories_neighbors, track_label=neighbor_groupby_cols
     )
     trajectories_pairs_clean = interpolate_nan_properties(
-        trajectories_pairs, track_label=pair_groupby_cols
+        trajectories_pairs.loc[in_scope], track_label=pair_groupby_cols
     )
     logger.debug(f"Pair table columns: {list(trajectories_pairs_clean.columns)}")
 
@@ -716,15 +794,11 @@ def analyze_pair_signals(
         trajectories_pairs_clean.groupby(pair_groupby_cols)
     ):
 
-        if "pair_position" not in list(trajectories_pairs_clean.columns):
-            pos_mode = False
-            reference_cell = pair[0]
-            neighbor_cell = pair[1]
-        else:
-            pos_mode = True
-            reference_cell = pair[1]
-            neighbor_cell = pair[2]
-            pos = pair[0]
+        key = dict(zip(pair_groupby_cols, pair))
+        reference_cell = key["pair_REFERENCE_ID"]
+        neighbor_cell = key["pair_NEIGHBOR_ID"]
+        pos_mode = "pair_position" in key
+        pos = key.get("pair_position")
 
         if (
             pos_mode
@@ -753,6 +827,8 @@ def analyze_pair_signals(
                 if len(pair_frames) > 0:
                     signals[i, pair_frames, j] = signal
                     signals[i, int(max(pair_frames)) :, j] = signal[-1]
+                    if config.get("padding") == PADDING_EDGE:
+                        hold_track_edges(signals[i, :, j], pair_frames)
             elif col.startswith("reference_"):
                 signal = trajectories_reference_clean.loc[
                     reference_filter, col
@@ -763,6 +839,8 @@ def analyze_pair_signals(
                 if len(timeline) > 0:
                     signals[i, timeline, j] = signal
                     signals[i, int(max(timeline)) :, j] = signal[-1]
+                    if config.get("padding") == PADDING_EDGE:
+                        hold_track_edges(signals[i, :, j], timeline)
             elif col.startswith("neighbor_"):
                 signal = trajectories_neighbors_clean.loc[
                     neighbor_filter, col
@@ -773,6 +851,8 @@ def analyze_pair_signals(
                 if len(timeline) > 0:
                     signals[i, timeline, j] = signal
                     signals[i, int(max(timeline)) :, j] = signal[-1]
+                    if config.get("padding") == PADDING_EDGE:
+                        hold_track_edges(signals[i, :, j], timeline)
 
     model = SignalDetectionModel(pretrained=complete_path)
     logger.debug(f"Signal shape: {signals.shape}")
@@ -785,9 +865,14 @@ def analyze_pair_signals(
     # cleaned table.
     results = pd.DataFrame(
         {"class": classes, "time": times_recast}, index=pair_tracks.index
-    ).reindex(pd.MultiIndex.from_frame(trajectories_pairs[pair_groupby_cols]))
-    trajectories_pairs["pair_" + class_col] = results["class"].to_numpy(dtype=float)
-    trajectories_pairs["pair_" + time_col] = (
+    ).reindex(pd.MultiIndex.from_frame(trajectories_pairs.loc[in_scope, pair_groupby_cols]))
+    # Pairs of other populations keep what they had.
+    if "pair_" + class_col not in trajectories_pairs.columns:
+        trajectories_pairs["pair_" + class_col] = np.nan
+    if "pair_" + time_col not in trajectories_pairs.columns:
+        trajectories_pairs["pair_" + time_col] = -1.0
+    trajectories_pairs.loc[in_scope, "pair_" + class_col] = results["class"].to_numpy(dtype=float)
+    trajectories_pairs.loc[in_scope, "pair_" + time_col] = (
         results["time"].fillna(-1.0).to_numpy(dtype=float)
     )
     logger.info("Pair signal analysis done.")
@@ -808,16 +893,14 @@ def analyze_pair_signals(
     trajectories_pairs = trajectories_pairs.drop(columns=invalid_cols)
 
     # The status follows from class and time, as for single cells.
-    keys = [c.replace("pair_", "") for c in pair_groupby_cols] + [
-        c for c in ("reference_population", "neighbor_population")
-        if c in trajectories_pairs.columns
-    ]
+    keys = [c.replace("pair_", "") for c in pair_groupby_cols]
     _log_unobserved(
-        write_resolved_event_status(
-            trajectories_pairs, class_col, time_col, status_col, keys=keys
+        resolve_unobserved_events(
+            trajectories_pairs, class_col, time_col, keys=keys, rows=in_scope
         ),
         "pair",
     )
+    write_event_status(trajectories_pairs, class_col, time_col, status_col, keys=keys)
 
     return trajectories_pairs
 

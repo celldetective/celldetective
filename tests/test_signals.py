@@ -1,3 +1,4 @@
+import json
 import unittest
 import numpy as np
 import os
@@ -147,6 +148,8 @@ class TestTrainSignalModel(unittest.TestCase):
             learning_rate=0.01,
             show_plots=False,
         )
+        with open(os.path.join("temp", "None", "config_input.json")) as f:
+            self.assertEqual(json.load(f)["padding"], "edge")
         shutil.rmtree("temp")
 
 

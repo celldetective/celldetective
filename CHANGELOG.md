@@ -43,6 +43,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   leaving them out; it logs how many cells it leaves out, by class.
 - A cell first seen at frame 1 has a first-detection time of 0, the last frame
   without it, as for any later appearance (it was set to 0.01).
+- Event detection models now learn and read tracks with their first and last
+  values repeated outside the track, instead of zeros. The choice is recorded
+  in the model (`padding` in `config_input.json`). Models trained before keep
+  the padding they had, so existing results do not change until a model is
+  retrained.
 - Pair event detection runs in its own process with a progress window, like
   single-cell event detection, instead of freezing the window.
 - The initial contrast of the image viewers, the signal and pair annotators and
@@ -60,7 +65,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - the event annotator lists numeric signals only;
   - in an untracked phenotype table, a cell is selected by its ID and frame.
 
+- Events found from conditions on a bare `class` column write `t0`, as every
+  other route does (it was `t`).
+- Saving a table with event times shifted in the interactive signal viewer makes
+  class 2 those left at or before the first observed frame, as the annotators do
+  for a correction. It is applied on saving, so that a time shifted past the
+  first frame and back stays an event.
+
 ### Fixed
+- Pair event detection kept apart the same two track IDs paired in different
+  populations, and now applies a model to one reference and neighbor population,
+  whose tables it reads: by default those it was trained on, or others chosen in
+  the interactions panel, with a warning to check that the time series look
+  similar. Pairs of other populations keep what they had. A model that does not
+  record its populations is applied to every combination, with a warning.
+- `log_pairs.txt` now holds the warnings and errors of a pair run, not only its
+  header lines.
 - Event annotator: creating a new event class crashed (`AttributeError`).
 - Annotators (event, interaction, phenotype):
   - submitting a cell whose class the options do not show (NaN) marked it for

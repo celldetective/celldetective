@@ -23,6 +23,7 @@ from celldetective.log_manager import positionlogger
 from celldetective.utils.event_status import (
     event_class_of_label,
     event_columns,
+    resolve_unobserved_events,
     event_status,
 )
 from celldetective.utils.parsing import population_from_table_name
@@ -76,6 +77,7 @@ class InteractiveEventViewer(QDialog, Styles):
         self.event_label = event_label
         self.callback = callback
         self.selected_tracks = set()
+        self.shifted_tracks = set()
         self.setWindowTitle("Interactive Event Viewer")
         self.resize(800, 600)
 
@@ -336,6 +338,14 @@ class InteractiveEventViewer(QDialog, Styles):
 
         mask = self.df[self.track_col].isin(self.selected_tracks)
         self.df.loc[mask, self.time_col] += step
+        self.shifted_tracks |= self.selected_tracks
+        self._rewrite_status(mask)
+
+        self.plot_signals()
+        self.notify_update()
+
+    def _rewrite_status(self, mask: pd.Series) -> None:
+        """Fill the status of the rows from their class and time."""
 
         if self.status_col and self.status_col in self.df.columns:
             rows = self.df.loc[mask]
@@ -345,8 +355,32 @@ class InteractiveEventViewer(QDialog, Styles):
                 rows[self.time_axis_col].to_numpy(),
             )
 
-        self.plot_signals()
-        self.notify_update()
+    def resolve_shifted_times(self) -> int:
+        """
+        Make class 2 the shifted events left at or before the first observed frame
+        (Decision-0023). This is done on saving, not on each key press, so that a
+        time moved past the first frame and back stays an event.
+
+        Returns
+        -------
+        int
+            The number of tracks made class 2.
+        """
+
+        if not self.shifted_tracks:
+            return 0
+        mask = self.df[self.track_col].isin(self.shifted_tracks)
+        n_unobserved = resolve_unobserved_events(
+            self.df,
+            self.class_col,
+            self.time_col,
+            keys=self.track_col,
+            frame_name=self.time_axis_col,
+            rows=mask,
+        )
+        self._rewrite_status(mask)
+        self.shifted_tracks.clear()
+        return n_unobserved
 
     def plot_signals(self, id: Optional[int] = None) -> None:
         """
@@ -492,6 +526,10 @@ class InteractiveEventViewer(QDialog, Styles):
         Save the changes to the CSV file.
         """
         try:
+            n_unobserved = self.resolve_shifted_times()
+            if n_unobserved:
+                self.plot_signals()
+                self.notify_update()
             self.df.to_csv(self.table_path, index=False)
             table_name = os.path.basename(self.table_path)
             pos_dir = os.path.dirname(
@@ -501,6 +539,12 @@ class InteractiveEventViewer(QDialog, Styles):
             with positionlogger(pos_dir, filename=f"log_{mode}.txt"):
                 logger.info("TIMESERIES MANUAL EDIT")
                 logger.info(f"table: {table_name}")
-            QMessageBox.information(self, "Saved", "Table saved successfully.")
+            message = "Table saved successfully."
+            if n_unobserved:
+                message += (
+                    f"\n{n_unobserved} track(s) shifted to or before their first "
+                    f"observed frame were made class 2, with no event time."
+                )
+            QMessageBox.information(self, "Saved", message)
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Could not save table: {e}")

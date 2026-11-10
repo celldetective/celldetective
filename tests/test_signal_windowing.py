@@ -12,12 +12,19 @@ import numpy as np
 import pytest
 
 from celldetective.utils.signal_windowing import (
+    hold_track_edges,
     predict_events_sliding_window,
     truncate_training_signals,
     EVENT,
     NO_EVENT,
     ELSE,
 )
+
+
+def test_hold_track_edges_repeats_the_nearest_measured_value():
+    signal = np.array([0.0, 0.0, np.nan, 2.0, 3.0, np.nan, 0.0, 0.0])
+    hold_track_edges(signal, np.arange(2, 6))
+    assert signal.tolist() == [2, 2, 2, 2, 3, 3, 3, 3]
 
 
 class _FakeModel:

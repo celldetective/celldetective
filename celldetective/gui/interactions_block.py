@@ -45,6 +45,9 @@ import pandas as pd
 logger = get_logger(__name__)
 
 
+AS_TRAINED = "as trained"
+
+
 class NeighPanel(ControlPanelBlock, Styles):
 
     def __init__(self, parent_window: QMainWindow) -> None:
@@ -255,6 +258,24 @@ class NeighPanel(ControlPanelBlock, Styles):
         )
 
         pair_signal_model_vbox.addLayout(pair_model_zoo_layout)
+
+        # A model can be deployed on populations other than those it was trained on.
+        pair_populations_layout = QHBoxLayout()
+        pair_populations_layout.setSpacing(4)
+        self.pair_population_lists = {}
+        for side in ("reference", "neighbor"):
+            pair_populations_layout.addWidget(QLabel(f"{side.capitalize()}:"))
+            population_list = QComboBox()
+            population_list.addItems([AS_TRAINED, *self.parent_window.populations])
+            population_list.setEnabled(False)
+            population_list.setToolTip(
+                f"The {side} population to apply the model to. Choose another "
+                "population than the one the model was trained on only if the time "
+                "series look similar."
+            )
+            pair_populations_layout.addWidget(population_list, 1)
+            self.pair_population_lists[side] = population_list
+        pair_signal_model_vbox.addLayout(pair_populations_layout)
 
         signal_layout.addLayout(pair_signal_model_vbox)
         self.grid_contents.addLayout(signal_layout, 7, 0, 1, 4)
@@ -551,10 +572,16 @@ class NeighPanel(ControlPanelBlock, Styles):
         """
         Enable or disable the signal model list based on the checkbox state.
         """
-        if self.signal_analysis_action.isChecked():
-            self.pair_signal_models_list.setEnabled(True)
-        else:
-            self.pair_signal_models_list.setEnabled(False)
+        enabled = self.signal_analysis_action.isChecked()
+        self.pair_signal_models_list.setEnabled(enabled)
+        for population_list in self.pair_population_lists.values():
+            population_list.setEnabled(enabled)
+
+    def chosen_pair_population(self, side: str) -> Optional[str]:
+        """The population chosen for a side of the pairs, None to keep the model's."""
+
+        text = self.pair_population_lists[side].currentText()
+        return None if text == AS_TRAINED else text
 
     def process_neighborhood(self):
         """
@@ -676,6 +703,8 @@ class NeighPanel(ControlPanelBlock, Styles):
                             "model_name": self.pair_signal_models_list.currentText(),
                             "use_gpu": self.parent_window.parent_window.use_gpu,
                             "populations": self.parent_window.populations,
+                            "reference_population": self.chosen_pair_population("reference"),
+                            "neighbor_population": self.chosen_pair_population("neighbor"),
                             "well_progress": well_progress,
                             "pos_progress": pos_progress,
                         },

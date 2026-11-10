@@ -1494,9 +1494,10 @@ def _start_event_classification(
     Returns the status and time columns, and the rows of tracks to classify.
     """
 
+    from celldetective.utils.event_status import event_columns
+
     _check_pre_event(df, pre_event)
-    stat_col = class_attr.replace("class", "status")
-    time_attr = class_attr.replace("class", "t")
+    time_attr, stat_col = event_columns(class_attr)
     df["inst_" + stat_col] = df[stat_col].copy()
 
     hidden = pd.Series(False, index=df.index)
@@ -1605,11 +1606,9 @@ def _finalize_event_status(
     and leave it NaN before the pre-event. ``df`` is modified in place.
     """
 
-    from celldetective.utils.event_status import write_event_status
+    from celldetective.utils.event_status import event_columns, write_event_status
 
-    write_event_status(
-        df, class_attr, class_attr.replace("class", "t"), stat_col, keys=keys
-    )
+    write_event_status(df, class_attr, event_columns(class_attr)[0], stat_col, keys=keys)
     if pre_event is not None:
         df.loc[df["FRAME"] <= df["t_" + pre_event], stat_col] = np.nan
 
@@ -1697,7 +1696,7 @@ def estimate_time(
     Returns
     -------
     pandas.DataFrame
-            Updated DataFrame with the event time in the column replacing 'class' with 't', and the class updated:
+            Updated DataFrame with the event time in the time column of the class (`event_columns`), and the class updated:
 
             - a good fit (R² above the threshold) placed after the first observed frame gives class 0 and that time;
             - a good fit at or before the first observed frame gives class 2 and time -1: the transition was not
@@ -1720,7 +1719,9 @@ def estimate_time(
 
     keys = _track_keys(df)
     df = df.sort_values(by=keys, ignore_index=True, kind="stable")
-    status_col = class_attr.replace("class", "status")
+    from celldetective.utils.event_status import event_columns
+
+    time_col, status_col = event_columns(class_attr)
     observed = _observed_rows(df, keys, status_col, df[class_attr].isin(class_of_interest))
     summary = _observed_tracks(observed, keys, status_col)
     to_fit = summary.index[(summary["min"] < 1) & (summary["max"] > 0)]
@@ -1734,7 +1735,7 @@ def estimate_time(
         df["FRAME"].max(),
         model,
     )
-    _write_track_outcomes(df, keys, outcomes, class_attr, class_attr.replace("class", "t"))
+    _write_track_outcomes(df, keys, outcomes, class_attr, time_col)
     return df
 
 
@@ -1791,8 +1792,11 @@ def interpret_track_classification(
 
     if "TRACK_ID" not in df.columns:
         raise KeyError("Please provide tracked data...")
-    if class_attr.replace("class", "status") not in df.columns:
-        df.loc[:, class_attr.replace("class", "status")] = df.loc[:, class_attr]
+    from celldetective.utils.event_status import event_columns
+
+    status_col = event_columns(class_attr)[1]
+    if status_col not in df.columns:
+        df.loc[:, status_col] = df.loc[:, class_attr]
 
     if irreversible_event:
         df = classify_irreversible_events(
