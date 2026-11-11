@@ -1,5 +1,5 @@
-import gc
 import json
+import math
 import os
 from concurrent.futures import ThreadPoolExecutor
 from glob import glob
@@ -7,11 +7,10 @@ from typing import Callable, Optional, List, Union, Tuple, Dict, Any
 
 import numpy as np
 from celldetective.utils.io import save_tiff_imagej_compatible
-from imageio import v2 as imageio
 from natsort import natsorted
 from tifffile import imread, memmap, TiffFile
 
-from celldetective.utils.experiment import movie_pattern
+from celldetective.utils.experiment import get_position_movie_path
 from celldetective.utils.image_cleaning import interpolate_nan_multichannel
 from celldetective.utils.normalization import normalize_multichannel
 from celldetective import get_logger
@@ -20,19 +19,30 @@ import logging
 import threading
 import warnings
 
-# Serializes the native image-decode path of :func:`load_frames`. ``imageio``/
-# ``tifffile`` decoding and ``warnings.catch_warnings`` both mutate process-global
+# Serializes the native image-decode path of :func:`load_frames`. ``tifffile``
+# decoding and ``warnings.catch_warnings`` both mutate process-global
 # state and are not thread-safe; without this lock a background prefetch thread
 # (e.g. the viewer's StackLoader) decoding the same stack concurrently with the
 # main thread corrupts the heap and triggers a Windows access violation
 # (0xC0000005). The lock is process-local, so multiprocessing workers are
 # unaffected, and decoding is not a threaded hot path, so contention is negligible.
-_DECODE_LOCK = threading.Lock()
+# Reentrant: _read_images takes it for the page reads of a lazy stack, and load_frames
+# already holds it when it calls _read_images.
+_DECODE_LOCK = threading.RLock()
 
 # Page shape of the stacks read by memory map, by absolute path, with the (modification
 # time, size) it was read at: the read by page index, bound to fail on them, is only tried
 # once per file, and a file replaced since is probed again.
 _MEMMAP_PAGE_SHAPES: Dict[str, tuple] = {}
+
+# Page plan of the stacks read, by absolute path, with the (modification time, size)
+# it was built at (see _get_page_plan). The oldest are dropped past _MAX_PAGE_PLANS:
+# the plan of a multi-file set holds a reference per plane.
+_PAGE_PLANS: Dict[str, tuple] = {}
+_MAX_PAGE_PLANS = 64
+
+# Axes stored inside a page: the image plane and the samples of an RGB page.
+_PAGE_AXES = "YXS"
 
 logger = get_logger(__name__)
 
@@ -69,7 +79,12 @@ def locate_stack(position: str, prefix: str = "Aligned") -> np.ndarray:
     It assumes that the stack is stored in a directory named 'movie' within the specified position.
     The function loads the stack as a NumPy array and reshapes it to ``(T, Y, X, C)`` using
     TIFF metadata (ImageJ or OME-TIFF axes) when available, falling back to shape heuristics
-    otherwise. Both ``.tif`` and ``.ome.tif`` files are supported.
+    otherwise. ``.tif``, ``.tiff``, ``.ome.tif`` and ``.ome.tiff`` files are found; when
+    several match the prefix, the first in natural order is used, with a warning.
+
+    A movie with both Z and time keeps its time points: the slices of each are
+    reduced to their maximum intensity projection, with a warning. Without a time axis,
+    the Z slices are taken as frames.
 
     Examples
     --------
@@ -78,40 +93,29 @@ def locate_stack(position: str, prefix: str = "Aligned") -> np.ndarray:
 
     """
 
-    if not position.endswith(os.sep):
-        position += os.sep
-
-    stack_path = glob(position + os.sep.join(["movie", movie_pattern(prefix)]))
-    if not stack_path:
+    stack_path = get_position_movie_path(position, prefix)
+    if stack_path is None:
         raise FileNotFoundError(f"No movie with prefix {prefix} found...")
 
-    file_path = stack_path[0].replace("\\", "/")
+    file_path = stack_path.replace("\\", "/")
 
-    # --- Try metadata-aware loading via TiffFile.series ---
+    # --- Metadata-aware loading via TiffFile.series ---
     try:
         stack = _load_stack_from_series(file_path)
         if stack is not None:
             return stack
     except Exception as e:
-        logger.debug(f"Metadata-aware loading failed, falling back to heuristics: {e}")
+        logger.debug(f"Metadata-aware loading failed, reading the pages as frames: {e}")
 
-    # --- Fallback: raw imread + shape heuristics ---
-    stack = imread(file_path)
-    stack_length = auto_load_number_of_frames(file_path)
-
-    if stack.ndim == 4:
-        stack = np.moveaxis(stack, 1, -1)
-    elif stack.ndim == 3:
-        if min(stack.shape) != stack_length:
-            channel_axis = np.argmin(stack.shape)
-            if channel_axis != (stack.ndim - 1):
-                stack = np.moveaxis(stack, channel_axis, -1)
-            stack = stack[np.newaxis, :, :, :]
-        else:
-            stack = stack[:, :, :, np.newaxis]
-    elif stack.ndim == 2:
-        stack = stack[np.newaxis, :, :, np.newaxis]
-
+    # --- Fallback: the pages with the axis rule of a plain stack (see _to_tzc),
+    # read without the OME metadata, which may be what failed ---
+    plan = _get_page_plan(file_path)
+    with TiffFile(file_path, is_ome=False) as tif:
+        series = tif.series[0]
+        stack = series.asarray()
+        # The plan may come from the OME metadata, which this series ignores.
+        axes = _series_read_axes(series, plan, file_path)
+    stack = _reshape_series_to_tyxc(stack, axes)
     return stack
 
 
@@ -119,8 +123,11 @@ def _load_stack_from_series(file_path: str) -> Optional[np.ndarray]:
     """
     Load a TIFF stack using ``TiffFile.series[0]`` metadata.
 
-    Uses the axis labels embedded in ImageJ or OME-TIFF metadata to
-    deterministically reshape the data to ``(T, Y, X, C)``.
+    Uses the axis labels embedded in ImageJ or OME-TIFF metadata (or the
+    shape tifffile gives a plain TIFF) to deterministically reshape the data
+    to ``(T, Y, X, C)``. What cannot be read (other positions, missing files of
+    a multi-file set, Z projected) is reported once with a warning, when the
+    page plan of the file is built (see :func:`_get_page_plan`).
 
     Parameters
     ----------
@@ -143,9 +150,84 @@ def _load_stack_from_series(file_path: str) -> Optional[np.ndarray]:
         if "Y" not in axes or "X" not in axes:
             return None
 
+        plan = _get_page_plan(file_path, tif=tif)
+        # The cached plan may have been built without the OME metadata.
+        axes = _series_read_axes(series, plan, file_path)
         stack = series.asarray()
 
     return _reshape_series_to_tyxc(stack, axes)
+
+
+def _to_tzc(stack: Any, axes: str) -> Tuple[Any, str, List[Tuple[str, int]]]:
+    """
+    Reorder an array given in ``axes`` order to ``T, Z, C`` followed by the
+    page axes (``Y``, ``X``, ``S``) it has, in their order.
+
+    This is the one rule giving each axis its role, shared by the readers of
+    whole stacks and by the page plan of :func:`load_frames`, so that they
+    agree on what a frame and a channel are:
+
+    - time is the ``T`` axis; without one, the Z slices are taken as frames,
+      and without either, the first generic axis (``Q``, ``I``) of a plain
+      stack of pages;
+    - channels are the ``C`` axis; without one, the next generic axis (a
+      plain ``(T, C, Y, X)`` stack). A ``C`` axis with neither time nor Z may
+      have been relabelled time before (see :func:`_effective_axes`);
+    - ``S`` (the samples of RGB pages) is kept, to be merged into the channels;
+    - any other axis is reduced to its first index.
+
+    Works on NumPy and dask arrays.
+
+    Parameters
+    ----------
+    stack : ndarray or dask.array.Array
+        The array in ``axes`` order.
+    axes : str
+        Its axis labels.
+
+    Returns
+    -------
+    stack : ndarray or dask.array.Array
+        The reordered array.
+    order : str
+        Its axis labels, ``'TZC'`` followed by its page axes.
+    dropped : list of (str, int)
+        The axes reduced to their first index, with their size, when larger than 1.
+    """
+
+    axes = axes.upper()
+    if "T" not in axes and "Z" in axes:
+        axes = axes.replace("Z", "T")
+    # The generic axes of a plain stack (tifffile labels the leading axes of a
+    # TIFF without ImageJ or OME metadata ``Q``), in order: time, then channels.
+    # Generic axes of size 1 (tifffile pads a plain array with them) take no role.
+    for role in "TC":
+        if role not in axes:
+            for i, a in enumerate(axes):
+                if a in "QI" and stack.shape[i] > 1:
+                    axes = axes[:i] + role + axes[i + 1 :]
+                    break
+
+    index, kept, dropped = [], "", []
+    for i, a in enumerate(axes):
+        if a in "TZC" + _PAGE_AXES and a not in kept:
+            index.append(slice(None))
+            kept += a
+        else:
+            index.append(0)
+            if stack.shape[i] > 1:
+                dropped.append((a, int(stack.shape[i])))
+    stack = stack[tuple(index)]
+
+    for a in "CZT":
+        if a not in kept:
+            stack = np.expand_dims(stack, 0)
+            kept = a + kept
+    order = "TZC" + "".join(a for a in kept if a in _PAGE_AXES)
+    perm = [kept.index(a) for a in order]
+    if perm != list(range(len(perm))):
+        stack = np.transpose(stack, perm)
+    return stack, order, dropped
 
 
 def _reshape_series_to_tyxc(stack: Any, axes: str) -> Any:
@@ -154,7 +236,9 @@ def _reshape_series_to_tyxc(stack: Any, axes: str) -> Any:
 
     Works on both NumPy and dask arrays (every operation used here dispatches
     through NumPy's protocol), so the eager and lazy loaders share identical
-    reshape logic.
+    reshape logic. The axes get their role from :func:`_to_tzc`; when the
+    movie has both Z and time, each time point is the maximum intensity
+    projection of its slices, and the samples of RGB pages are channels.
 
     Parameters
     ----------
@@ -169,66 +253,520 @@ def _reshape_series_to_tyxc(stack: Any, axes: str) -> Any:
         Stack reshaped to ``(T, Y, X, C)``.
     """
 
-    axes = axes.upper()
-
-    # heuristic to fix missing T axis
-    if "T" not in axes:
-        if "C" in axes and stack.shape[axes.index("C")] > 5:
-            # C is likely T
-            axes = axes.replace("C", "T")
-        elif "Z" in axes and stack.shape[axes.index("Z")] > 5:
-            # Z is likely T
-            axes = axes.replace("Z", "T")
-
-    # Build target axis order: move whatever we have into (T, Y, X, C)
-    # Add missing axes as singletons first
-    if "T" not in axes:
-        stack = np.expand_dims(stack, 0)
-        axes = "T" + axes
-    if "C" not in axes:
-        stack = np.expand_dims(stack, axis=axes.index("X") + 1)
-        axes = axes[: axes.index("X") + 1] + "C" + axes[axes.index("X") + 1 :]
-
-    # Drop Z if present (collapse into T or just squeeze)
-    if "Z" in axes:
-        z_idx = axes.index("Z")
-        if stack.shape[z_idx] == 1:
-            stack = np.squeeze(stack, axis=z_idx)
-            axes = axes.replace("Z", "")
-        else:
-            # Merge Z into T (treat Z-slices as frames)
-            t_idx = axes.index("T")
-            z_idx = axes.index("Z")
-            # Move Z next to T, then merge
-            stack = np.moveaxis(stack, z_idx, t_idx + 1)
-            new_shape = list(stack.shape)
-            new_shape[t_idx] = new_shape[t_idx] * new_shape[t_idx + 1]
-            del new_shape[t_idx + 1]
-            stack = stack.reshape(new_shape)
-            axes = axes.replace("Z", "")
-
-    # Reorder remaining axes to TYXC
-    target = "TYXC"
-    if axes != target:
-        perm = [axes.index(a) for a in target]
-        stack = np.transpose(stack, perm)
-
+    stack, order, _ = _to_tzc(stack, axes)
+    if stack.shape[1] > 1:
+        stack = stack.max(axis=1)
+    else:
+        stack = stack[:, 0]
+    # Now T, C and the page axes.
+    page = order[3:]
+    perm = [0, 2 + page.index("Y"), 2 + page.index("X"), 1]
+    if "S" in page:
+        perm.append(2 + page.index("S"))
+    stack = np.transpose(stack, perm)
+    if "S" in page:
+        n_t, n_y, n_x, n_c, n_s = stack.shape
+        stack = stack.reshape((n_t, n_y, n_x, n_c * n_s))
     return stack
+
+
+class _PagePlan:
+    """
+    Where every image of a movie is stored, for :func:`load_frames`.
+
+    The analysis loops number images as if the channels were interleaved
+    within each time point, in one file: image ``t * n_channels + c`` is
+    channel ``c`` of frame ``t`` (see :func:`_get_img_num_per_channel`). The
+    plan maps that number to the planes holding it, in the order and the
+    files the metadata gives, with the roles of :func:`_to_tzc`.
+
+    Attributes
+    ----------
+    positions : ndarray
+        ``(T, Z, C)`` positions of the planes in the series.
+    refs : list or None
+        The file and page index of each position, ``None`` for a plane of a
+        file that could not be read. ``None`` when every position is the page
+        of the same index in the file read.
+    files : set of str
+        The files holding the movie (several for a multi-file OME-TIFF set),
+        normalized for comparison.
+    n_samples : int
+        Samples per page (3 for RGB), each a channel.
+    page_axes : str
+        The axes of a page, e.g. ``'YX'`` or ``'YXS'``.
+    page_shape : tuple
+        The shape of a page.
+    dtype : numpy.dtype
+        The pixel type.
+    axes, series_shape : str, tuple
+        Axes and shape of the series.
+    contiguous : bool
+        Whether the series is one uncompressed block, which can be memory-mapped.
+    identity : bool
+        Whether image ``k`` is page ``k`` of the file: the plan is then not
+        needed and pages are read as they always were.
+    """
+
+    def __init__(
+        self,
+        positions,
+        refs,
+        files,
+        n_samples,
+        page_axes,
+        page_shape,
+        dtype,
+        axes,
+        series_shape,
+        contiguous,
+    ):
+        self.positions = positions
+        self.refs = refs
+        self.files = files
+        self.n_samples = n_samples
+        self.page_axes = page_axes
+        self.page_shape = page_shape
+        self.dtype = dtype
+        self.axes = axes
+        self.series_shape = series_shape
+        self.contiguous = contiguous
+        # (path, version) of the config.ini whose channels chose the axes, if any.
+        self.config_dep = None
+        self.identity = (
+            refs is None
+            and n_samples == 1
+            and positions.shape[1] == 1
+            and np.array_equal(positions.reshape(-1), np.arange(positions.size))
+        )
+
+    @property
+    def n_frames(self) -> int:
+        return int(self.positions.shape[0])
+
+    @property
+    def n_channels(self) -> int:
+        return int(self.positions.shape[2] * self.n_samples)
+
+    @property
+    def yx_shape(self) -> Tuple[int, int]:
+        return tuple(self.page_shape[self.page_axes.index(a)] for a in "YX")
+
+
+def _file_version(path: str) -> Tuple[int, int]:
+    """The (modification time, size) of a file, to tell when it was replaced."""
+    stat = os.stat(path)
+    return stat.st_mtime_ns, stat.st_size
+
+
+def _plane_yx(series) -> Optional[Tuple[int, int]]:
+    """The image size of a series, or ``None`` if it has no Y and X axes."""
+    axes = series.axes.upper()
+    if "Y" not in axes or "X" not in axes:
+        return None
+    return series.shape[axes.index("Y")], series.shape[axes.index("X")]
+
+
+def _optional_file_version(path: Optional[str]) -> Optional[Tuple[int, int]]:
+    """The version of a file (see :func:`_file_version`), ``None`` if it does not exist."""
+    if path is None:
+        return None
+    try:
+        return _file_version(path)
+    except OSError:
+        return None
+
+
+def _experiment_config_path(stack_path: str) -> Optional[str]:
+    """
+    The ``config.ini`` the experiment holding the movie at ``stack_path``
+    (``<experiment>/<well>/<position>/movie/<file>``) would have, whether it
+    exists or not, or ``None`` when the path is too short to be in an experiment.
+    """
+
+    from celldetective.utils.experiment import extract_experiment_from_position
+
+    position = os.path.dirname(os.path.dirname(os.path.abspath(stack_path)))
+    experiment = extract_experiment_from_position(position)
+    if not experiment:
+        # Not three folders deep: a bare "config.ini" would be looked up in the
+        # working directory.
+        return None
+    return os.path.join(experiment, "config.ini")
+
+
+def _experiment_channel_count(stack_path: str) -> Optional[int]:
+    """
+    The number of channels the experiment declares for the movie at
+    ``stack_path`` (``<experiment>/<well>/<position>/movie/<file>``), counted
+    as the analysis loops count them, or ``None`` when the movie is not in an
+    experiment with a ``config.ini``, or its channels cannot be read.
+    """
+
+    from celldetective.utils.parsing import _extract_nbr_channels_from_config
+
+    config = _experiment_config_path(stack_path)
+    if config is None or not os.path.isfile(config):
+        return None
+    try:
+        n_channels = _extract_nbr_channels_from_config(config)
+    except Exception as e:
+        logger.debug(f"Could not read the channels of {config}: {e}")
+        return None
+    # No channel declared: unknown, not "no channel" (every C axis would be time).
+    return n_channels or None
+
+
+def _channels_ambiguous(axes: str) -> bool:
+    """Whether a ``C`` axis may be time (see :func:`_effective_axes`)."""
+    axes = axes.upper()
+    return "C" in axes and "T" not in axes and "Z" not in axes
+
+
+def _series_read_axes(series, plan: Optional["_PagePlan"], stack_path: str) -> str:
+    """
+    The axes to read ``series`` with: those of the page plan when it was built
+    from this series, else its own, with the channel rule of :func:`_effective_axes`.
+    """
+
+    if plan is not None and tuple(plan.series_shape) == tuple(series.shape):
+        return plan.axes
+    axes = series.axes.upper()
+    n_channels = (
+        _experiment_channel_count(stack_path) if _channels_ambiguous(axes) else None
+    )
+    return _effective_axes(axes, tuple(series.shape), n_channels)
+
+
+def _effective_axes(axes: str, shape: tuple, n_channels: Optional[int]) -> str:
+    """
+    The axes of a series, with a ``C`` axis read as time when the movie has
+    neither time nor Z.
+
+    ``tifffile`` writes a 3D OME-TIFF without axes as ``CYX``, so many
+    single-channel movies (those saved by earlier versions of celldetective
+    among them) carry their frames as channels. Without a time or Z axis, the
+    ``C`` axis is taken for time when its size differs from the number of
+    channels the experiment declares, or, outside an experiment, when it holds
+    more than 5 planes.
+
+    Parameters
+    ----------
+    axes : str
+        The axes of the series.
+    shape : tuple
+        Its shape.
+    n_channels : int or None
+        The number of channels of the experiment, if known.
+
+    Returns
+    -------
+    str
+        The axes to read the series with.
+    """
+
+    axes = axes.upper()
+    if not _channels_ambiguous(axes):
+        return axes
+    size = shape[axes.index("C")]
+    if n_channels is not None:
+        is_time = size != n_channels
+    else:
+        is_time = size > 5
+    return axes.replace("C", "T") if is_time else axes
+
+
+def _build_page_plan(tif: TiffFile, stack_path: str) -> Optional[_PagePlan]:
+    """
+    Read the page plan of a stack from its first series, or ``None`` if it has
+    no usable series.
+
+    What the loaders do not read is logged as a warning here, so once per
+    version of the file: the other positions of the file (series with the same
+    image size), the planes of a multi-file set whose file is missing (read as
+    zeros), the Z slices projected because the movie also has time, and the
+    extra axes of which only the first index is read.
+    """
+
+    if not tif.series:
+        return None
+    series = tif.series[0]
+    axes = series.axes.upper()
+    if "Y" not in axes or "X" not in axes:
+        return None
+    shape = tuple(series.shape)
+    # The experiment's channels are read, and the plan depends on its config.ini,
+    # only when a C axis may be time.
+    config_dep = None
+    n_channels = None
+    if _channels_ambiguous(axes):
+        config = _experiment_config_path(stack_path)
+        if config is not None:
+            config_dep = (config, _optional_file_version(config))
+            n_channels = _experiment_channel_count(stack_path)
+    effective = _effective_axes(axes, shape, n_channels)
+    if effective != axes:
+        logger.info(
+            f"{os.path.basename(stack_path)}: the {shape[axes.index('C')]} channels "
+            f"of the file, with no time axis, are read as frames."
+        )
+        axes = effective
+    plane_axes = "".join(a for a in axes if a not in _PAGE_AXES)
+    plane_shape = tuple(n for a, n in zip(axes, shape) if a not in _PAGE_AXES)
+    page_axes = "".join(a for a in axes if a in _PAGE_AXES)
+    page_shape = tuple(n for a, n in zip(axes, shape) if a in _PAGE_AXES)
+    n_planes = int(math.prod(plane_shape))
+
+    this = os.path.normcase(os.path.abspath(stack_path))
+    files = {this}
+    refs = None
+    missing = 0
+    contiguous = getattr(series, "dataoffset", None) is not None
+    if tif.is_ome or not contiguous:
+        # The series may take its planes from other files (multi-file OME and
+        # NDTiff sets), in another order than the file's (NDTiff), or skip some
+        # (missing files, an aborted acquisition, tiles that were not imaged).
+        pages = list(series.pages)
+        if len(pages) == n_planes:
+            refs = [
+                None
+                if p is None
+                else (
+                    os.path.normcase(os.path.abspath(p.parent.filehandle.path)),
+                    int(p.index),
+                )
+                for p in pages
+            ]
+            missing = sum(r is None for r in refs)
+            files.update(r[0] for r in refs if r is not None)
+            if not missing and all(r == (this, i) for i, r in enumerate(refs)):
+                refs = None
+
+    positions = np.arange(n_planes).reshape(plane_shape)
+    positions, _, dropped = _to_tzc(positions, plane_axes)
+    plan = _PagePlan(
+        np.asarray(positions),
+        refs,
+        files,
+        shape[axes.index("S")] if "S" in axes else 1,
+        page_axes,
+        page_shape,
+        series.dtype,
+        axes,
+        shape,
+        contiguous,
+    )
+    plan.config_dep = config_dep
+
+    name = os.path.basename(stack_path)
+    n_positions = 1 + sum(_plane_yx(s) == _plane_yx(series) for s in tif.series[1:])
+    if n_positions > 1:
+        logger.warning(
+            f"{name}: the file holds {n_positions} positions (series); only the "
+            f"first is read. Export one file per position."
+        )
+    if missing:
+        where = (
+            "in files that could not be read"
+            if tif.is_ome
+            else "not in the files (an acquisition stopped early, or tiles not imaged)"
+        )
+        logger.warning(
+            f"{name}: {missing} of the {n_planes} planes of the movie are {where}, "
+            f"and are read as zeros. Check that every file of a multi-file set is "
+            f"in the movie folder."
+        )
+    n_t, n_z, _ = plan.positions.shape
+    if n_t > 1 and n_z > 1:
+        logger.warning(
+            f"{name}: the movie has {n_t} time points of {n_z} Z slices; each time "
+            f"point is read as the maximum intensity projection of its slices."
+        )
+    for axis, size in dropped:
+        logger.warning(
+            f"{name}: axis {axis} of size {size} is not supported; only its first "
+            f"index is read."
+        )
+    return plan
+
+
+def _get_page_plan(
+    stack_path: str, tif: Optional[TiffFile] = None
+) -> Optional[_PagePlan]:
+    """
+    The page plan of a stack, built once per version of the file.
+
+    Parameters
+    ----------
+    stack_path : str
+        Path to the stack.
+    tif : TiffFile, optional
+        The stack, already open, to build the plan from without opening it again.
+    """
+
+    path = os.path.abspath(stack_path)
+    version = _file_version(path)
+    cached = _PAGE_PLANS.get(path)
+    if cached is not None and cached[0] == version:
+        dep = getattr(cached[1], "config_dep", None)
+        # A plan whose axes follow the channels of the experiment is rebuilt
+        # when its config.ini changes.
+        if dep is None or _optional_file_version(dep[0]) == dep[1]:
+            return cached[1]
+    try:
+        if tif is None:
+            with TiffFile(stack_path) as opened:
+                plan = _build_page_plan(opened, stack_path)
+        else:
+            plan = _build_page_plan(tif, stack_path)
+    except Exception as e:
+        plan = None
+        try:
+            # OME metadata tifffile cannot parse (e.g. the companion file of a
+            # multi-file set without plane counts): the pages, in order.
+            with TiffFile(stack_path, is_ome=False) as opened:
+                plan = _build_page_plan(opened, stack_path)
+            logger.warning(
+                f"{os.path.basename(stack_path)}: the metadata of the file cannot be "
+                f"read ({e}); its pages are read in order, as frames."
+            )
+        except Exception as e2:
+            logger.debug(f"No page plan for {stack_path}, pages read by index: {e2}")
+    _PAGE_PLANS.pop(path, None)
+    while len(_PAGE_PLANS) >= _MAX_PAGE_PLANS:
+        try:
+            _PAGE_PLANS.pop(next(iter(_PAGE_PLANS)), None)
+        except (StopIteration, RuntimeError):
+            break
+    _PAGE_PLANS[path] = (version, plan)
+    return plan
+
+
+def _read_pages(stack_path: str, img_nums: Union[int, List[int]]) -> np.ndarray:
+    """
+    Read pages by index from a TIFF file.
+
+    Reads with ``tifffile`` by ``key``, which indexes the pages of the file
+    itself (``imageio`` indexes the series of an OME-TIFF instead, which for a
+    file of a multi-file set starts with the planes of the other files, and
+    fails on OME metadata tifffile cannot parse). For a Fiji hyperstack over
+    4 GB, stored as one IFD followed by the pixels, the read by page index
+    fails past the first page and the pages are read from a memory map instead
+    (the page shape of such a file is cached, see ``_MEMMAP_PAGE_SHAPES``).
+    """
+
+    path = os.path.abspath(stack_path)
+    cached = _MEMMAP_PAGE_SHAPES.get(path)
+    if cached is not None:
+        # Only a file read by memory map before is stat-ed, to see it was not
+        # replaced since.
+        if cached[0] != _file_version(path):
+            del _MEMMAP_PAGE_SHAPES[path]
+            cached = None
+    if cached is not None:
+        return _read_pages_from_memmap(stack_path, img_nums, cached[1])
+    try:
+        return imread(stack_path, key=img_nums)
+    except IndexError:
+        with TiffFile(stack_path) as tif:
+            page_shape = tif.pages.first.shape
+        frames = _read_pages_from_memmap(stack_path, img_nums, page_shape)
+        _MEMMAP_PAGE_SHAPES[path] = (_file_version(path), page_shape)
+        return frames
+
+
+def _read_images(
+    stack_path: str, plan: _PagePlan, img_nums: Union[int, List[int]]
+) -> np.ndarray:
+    """
+    Read images by their number in the loops (see :class:`_PagePlan`).
+
+    Parameters
+    ----------
+    stack_path : str
+        The file the plan was built from.
+    plan : _PagePlan
+        Its page plan.
+    img_nums : int or list of int
+        Image numbers; ``-1`` gives a black image (a channel the movie lacks).
+
+    Returns
+    -------
+    ndarray
+        ``(Y, X)`` for a single number, ``(N, Y, X)`` for a list.
+
+    Raises
+    ------
+    IndexError
+        If a number is outside the movie.
+    """
+
+    single = not isinstance(img_nums, (list, tuple))
+    nums = [img_nums] if single else list(img_nums)
+
+    # (positions, sample) of the planes of each image: the Z slices of a time point.
+    wanted = []
+    for k in nums:
+        k = int(k)
+        if k == -1:
+            wanted.append(None)
+            continue
+        if k < 0 or k >= plan.n_frames * plan.n_channels:
+            raise IndexError(
+                f"image {k} is outside the movie ({plan.n_frames} frames of "
+                f"{plan.n_channels} channels)"
+            )
+        t, ch = divmod(k, plan.n_channels)
+        c, s = divmod(ch, plan.n_samples)
+        wanted.append(([int(p) for p in plan.positions[t, :, c]], s))
+
+    # Read every plane needed once, grouped by file. A plane of a missing file
+    # (reported when the plan was built) is left out, and read as zeros.
+    needed = sorted({p for w in wanted if w is not None for p in w[0]})
+    by_file: Dict[str, List[Tuple[int, int]]] = {}
+    for p in needed:
+        ref = (stack_path, p) if plan.refs is None else plan.refs[p]
+        if ref is not None:
+            by_file.setdefault(ref[0], []).append((p, ref[1]))
+    planes = {}
+    with _DECODE_LOCK:
+        for file, items in by_file.items():
+            data = np.asarray(_read_pages(file, [ifd for _, ifd in items]))
+            if data.ndim == len(plan.page_shape):
+                data = data[np.newaxis]
+            for (p, _), plane in zip(items, data):
+                planes[p] = plane
+
+    has_samples = "S" in plan.page_axes
+    to_yxs = [plan.page_axes.index(a) for a in ("YXS" if has_samples else "YX")]
+    black = np.zeros(plan.yx_shape, dtype=plan.dtype)
+    images = []
+    for w in wanted:
+        if w is None:
+            images.append(black)
+            continue
+        slices = []
+        for p in w[0]:
+            if p not in planes:
+                slices.append(black)
+                continue
+            plane = np.transpose(planes[p], to_yxs)
+            slices.append(plane[..., w[1]] if has_samples else plane)
+        images.append(np.maximum.reduce(slices))
+
+    return images[0] if single else np.stack(images)
 
 
 def locate_stack_lazy(position: str, prefix: str = "Aligned") -> Optional[Any]:
     """
     Lazily load the movie as a dask array shaped ``(T, Y, X, C)``.
 
-    Backed by a memory-mapped TIFF wrapped in a dask array, so only the frames
-    actually displayed are read from disk — dramatically reducing the time and
-    memory needed to open the viewer on large movies. Reuses
-    :func:`_reshape_series_to_tyxc`, so the axis handling is identical to the
-    eager loader.
-
-    Memory-mapping only works for uncompressed, contiguously stored TIFFs; for
-    anything else (or if dask is unavailable) this returns ``None`` and the
-    caller falls back to the eager :func:`locate_stack`.
+    Only the frames actually displayed are read from disk — dramatically
+    reducing the time and memory needed to open the viewer on large movies.
+    An uncompressed, contiguously stored TIFF is memory-mapped; any other
+    (compressed, written by Bio-Formats with an IFD between planes, or a
+    multi-file OME-TIFF set) is read frame by frame through the page plan of
+    :func:`load_frames`. The axis handling is identical to the eager loader.
 
     Parameters
     ----------
@@ -244,37 +782,48 @@ def locate_stack_lazy(position: str, prefix: str = "Aligned") -> Optional[Any]:
         (the caller should fall back to :func:`locate_stack`).
     """
 
-    if not position.endswith(os.sep):
-        position += os.sep
-
-    stack_path = glob(position + os.sep.join(["movie", movie_pattern(prefix)]))
-    if not stack_path:
+    stack_path = get_position_movie_path(position, prefix)
+    if stack_path is None:
         return None
-    file_path = stack_path[0].replace("\\", "/")
+    file_path = stack_path.replace("\\", "/")
 
     try:
         import dask.array as da
 
-        with TiffFile(file_path) as tif:
-            if not tif.series:
-                return None
-            axes = tif.series[0].axes.upper()
-            if "Y" not in axes or "X" not in axes:
-                return None
-
-        # memmap raises for compressed/non-contiguous TIFFs -> caught below.
-        mm = memmap(file_path)
-        if mm.ndim != len(axes):
-            # Unexpected layout; bail out to the eager path.
+        plan = _get_page_plan(file_path)
+        if plan is None:
             return None
 
-        # One chunk per leading-axis slice keeps per-frame reads lazy.
-        chunks = (1,) + tuple(mm.shape[1:]) if mm.ndim > 1 else mm.shape
-        arr = da.from_array(mm, chunks=chunks)
-        stack = _reshape_series_to_tyxc(arr, axes)
-        if stack.ndim != 4:
-            return None
-        return stack
+        if plan.contiguous:
+            try:
+                mm = memmap(file_path)
+                if tuple(mm.shape) == plan.series_shape:
+                    # One chunk per leading-axis slice keeps per-frame reads lazy.
+                    chunks = (1,) + tuple(mm.shape[1:]) if mm.ndim > 1 else mm.shape
+                    stack = _reshape_series_to_tyxc(
+                        da.from_array(mm, chunks=chunks), plan.axes
+                    )
+                    if stack.ndim == 4:
+                        return stack
+            except Exception as e:
+                logger.debug(f"No memory map of {file_path}, reading by frame: {e}")
+
+        n_channels = plan.n_channels
+
+        def read_frame(block_info=None):
+            t = block_info[None]["chunk-location"][0]
+            images = _read_images(
+                file_path, plan, list(range(t * n_channels, (t + 1) * n_channels))
+            )
+            return np.moveaxis(images, 0, -1)[np.newaxis]
+
+        y, x = plan.yx_shape
+        return da.map_blocks(
+            read_frame,
+            chunks=((1,) * plan.n_frames, (y,), (x,), (n_channels,)),
+            dtype=plan.dtype,
+            meta=np.empty((0, 0, 0, 0), dtype=plan.dtype),
+        )
     except Exception as e:
         logger.debug(f"Lazy stack loading unavailable, falling back to eager: {e}")
         return None
@@ -474,9 +1023,9 @@ def auto_load_number_of_frames(stack_path: str) -> Optional[int]:
     """
     Automatically determine the number of frames in a TIFF image stack.
 
-    This function extracts the number of frames (time slices) from the metadata of a TIFF file
-    or infers it from the stack dimensions when metadata is unavailable. It is robust to
-    variations in metadata structure and handles multi-channel images.
+    The frames are counted with the rule every loader uses (see :func:`_to_tzc`),
+    from the axes tifffile reads in the ImageJ or OME-TIFF metadata, or the shape of a
+    plain stack of pages.
 
     Parameters
     ----------
@@ -491,12 +1040,10 @@ def auto_load_number_of_frames(stack_path: str) -> Optional[int]:
 
     Notes
     -----
-    - The function attempts to extract the `frames` or `slices` attributes from the
-      TIFF metadata, specifically the `ImageDescription` tag.
-    - If metadata extraction fails, the function reads the image stack and infers
-      the number of frames based on the stack dimensions.
-    - Multi-channel stacks are handled by assuming the number of channels is specified
-      in the metadata under the `channels` attribute.
+    - The frame count is the ``T`` axis of the first series, else its Z slices, else
+      the pages of a plain stack. Channels are never taken for time.
+    - When tifffile cannot read a series, ``None`` is returned and the callers use the
+      frame count of the experiment.
 
     Examples
     --------
@@ -522,84 +1069,64 @@ def auto_load_number_of_frames(stack_path: str) -> Optional[int]:
         return None
 
     stack_path = stack_path.replace("\\", "/")
-    n_channels = 1
-    len_movie = None
+    plan = _get_page_plan(stack_path)
+    if plan is None:
+        logger.info("The stack length could not be detected.")
+        return None
 
-    with TiffFile(stack_path) as tif:
-        # --- Strategy 1: series metadata (works for OME-TIFF and ImageJ) ---
-        try:
-            if tif.series:
-                series = tif.series[0]
-                axes = series.axes.upper()
-                shape = series.shape
-                if "T" in axes:
-                    len_movie = shape[axes.index("T")]
-                # elif "Z" in axes and "C" in axes:
-                #     # No T but has Z and C: single timepoint
-                #     len_movie = 1
-                elif "Z" in axes:
-                    # Z without C: might be time or z-slices
-                    len_movie = shape[axes.index("Z")]
-                elif axes in ("YX", "CYX"):
-                    if "C" in axes and shape[axes.index("C")] > 5:
-                        len_movie = shape[axes.index("C")]
-                    else:
-                        len_movie = 1
-        except Exception as e:
-            logger.debug(f"Strategy 1 (series metadata) failed, falling back: {e}")
+    logger.info(f"Automatically detected stack length: {plan.n_frames}...")
+    return plan.n_frames
 
-        # --- Strategy 2: ImageJ tag parsing (existing logic) ---
-        if len_movie is None:
-            attr = []
-            try:
-                tif_tags = {}
-                for tag in tif.pages[0].tags.values():
-                    name, value = tag.name, tag.value
-                    tif_tags[name] = value
-                img_desc = tif_tags["ImageDescription"]
-                attr = img_desc.split("\n")
-                n_channels = int(
-                    attr[np.argmax([s.startswith("channels") for s in attr])].split(
-                        "="
-                    )[-1]
-                )
-            except Exception as e:
-                logger.debug(f"Could not parse channel count from ImageJ tags: {e}")
-            try:
-                nslices = int(
-                    attr[np.argmax([s.startswith("frames") for s in attr])].split("=")[
-                        -1
-                    ]
-                )
-                if nslices > 1:
-                    len_movie = nslices
-                else:
-                    raise ValueError("nslices <= 1, falling back to next strategy")
-            except Exception:
-                try:
-                    frames = int(
-                        attr[np.argmax([s.startswith("slices") for s in attr])].split(
-                            "="
-                        )[-1]
-                    )
-                    len_movie = frames
-                except Exception as e:
-                    logger.debug(f"Strategy 2 (ImageJ tag parsing) failed, falling back: {e}")
 
-    # --- Strategy 3: shape inference fallback ---
-    if len_movie is None:
-        stack = imread(stack_path)
-        len_movie = len(stack)
-        if len_movie == n_channels and stack.ndim == 3:
-            len_movie = 1
-        if stack.ndim == 2:
-            len_movie = 1
-        del stack
-    gc.collect()
+def _require_frames(
+    frames: Optional[np.ndarray], indices: Union[List[int], np.ndarray], file: str
+) -> np.ndarray:
+    """
+    Return ``frames``, or raise a clear error if :func:`load_frames` could not
+    read them (it logs the cause and returns ``None``).
 
-    logger.info(f"Automatically detected stack length: {len_movie}...")
+    Parameters
+    ----------
+    frames : ndarray or None
+        What :func:`load_frames` returned.
+    indices : list or ndarray
+        The image numbers asked for.
+    file : str
+        The stack they were read from.
 
-    return len_movie if "len_movie" in locals() else None
+    Returns
+    -------
+    ndarray
+        ``frames``.
+
+    Raises
+    ------
+    ValueError
+        If ``frames`` is ``None``.
+    """
+
+    if frames is None:
+        raise ValueError(
+            f"Could not read the images {np.asarray(indices).tolist()} of {file}. "
+            f"Check that the channels and the number of frames of the experiment "
+            f"match the movie."
+        )
+    return frames
+
+
+def _load_raw_frames(file: str, indices: Union[List[int], np.ndarray]) -> np.ndarray:
+    """
+    The frames ``indices`` of ``file`` as stored (no scaling, no normalization),
+    shape ``(Y, X, len(indices))``.
+
+    Raises
+    ------
+    ValueError
+        If the images cannot be read.
+    """
+
+    frames = load_frames(indices, file, scale=None, normalize_input=False)
+    return _require_frames(frames, indices, file)
 
 
 def _load_frames_to_segment(
@@ -626,6 +1153,11 @@ def _load_frames_to_segment(
     -------
     ndarray
         Loaded and preprocessed frames.
+
+    Raises
+    ------
+    ValueError
+        If the images cannot be read.
     """
 
     frames = load_frames(
@@ -635,6 +1167,7 @@ def _load_frames_to_segment(
         normalize_input=True,
         normalize_kwargs=normalize_kwargs,
     )
+    frames = _require_frames(frames, indices, file)
     frames = interpolate_nan_multichannel(frames)
 
     if np.any(indices == -1):
@@ -689,7 +1222,7 @@ def _read_pages_from_memmap(
     -------
     ndarray
         ``(Y, X)`` for a single index, ``(N, Y, X)`` for a list, as
-        ``imageio.imread(stack_path, key=img_nums)`` would return them.
+        ``tifffile.imread(stack_path, key=img_nums)`` would return them.
     """
 
     pages = memmap(stack_path).reshape((-1, *page_shape))
@@ -715,7 +1248,13 @@ def load_frames(
     Parameters
     ----------
     img_nums : int or list of int
-            The index (or indices) of the image frame(s) to load from the stack.
+            The number (or numbers) of the image(s) to load, as given by
+            :func:`_get_img_num_per_channel`: image ``t * n_channels + c`` is channel
+            ``c`` of frame ``t``. The images are read where the metadata stores them,
+            whatever the order of the pages, in the other files of a multi-file
+            OME-TIFF set, or as a sample of an RGB page; a frame of a movie with Z and
+            time is the maximum intensity projection of its slices, as in
+            :func:`locate_stack`.
     stack_path : str
             The file path to the stack from which frames are to be loaded.
     scale : float, optional
@@ -765,31 +1304,12 @@ def load_frames(
                 )
                 if isinstance(img_nums, np.ndarray):
                     img_nums = img_nums.tolist()
-                path = os.path.abspath(stack_path)
-                cached = _MEMMAP_PAGE_SHAPES.get(path)
-                if cached is not None:
-                    # Only a file read by memory map before is stat-ed, to see it was not
-                    # replaced since: the other stacks pay nothing per frame.
-                    stat = os.stat(path)
-                    if cached[0] != (stat.st_mtime_ns, stat.st_size):
-                        del _MEMMAP_PAGE_SHAPES[path]
-                        cached = None
-                if cached is not None:
-                    frames = _read_pages_from_memmap(stack_path, img_nums, cached[1])
+                plan = _get_page_plan(stack_path)
+                if plan is None or plan.identity:
+                    # Image k is page k of the file.
+                    frames = _read_pages(stack_path, img_nums)
                 else:
-                    try:
-                        frames = imageio.imread(stack_path, key=img_nums)
-                    except IndexError:
-                        with TiffFile(stack_path) as tif:
-                            page_shape = tif.pages.first.shape
-                        frames = _read_pages_from_memmap(
-                            stack_path, img_nums, page_shape
-                        )
-                        stat = os.stat(path)
-                        _MEMMAP_PAGE_SHAPES[path] = (
-                            (stat.st_mtime_ns, stat.st_size),
-                            page_shape,
-                        )
+                    frames = _read_images(stack_path, plan, img_nums)
     except Exception as e:
         logger.error(
             f"Error in loading the frame {img_nums}: {e}. Please check that the experiment channel information is consistent with the movie being read."

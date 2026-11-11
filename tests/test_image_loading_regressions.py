@@ -11,6 +11,7 @@ Pixel values tell which frame and channel they come from, so a read that
 returns the right shape but the wrong image still fails.
 """
 
+import logging
 import os
 import shutil
 import struct
@@ -286,6 +287,211 @@ class TestBioformatsOME(_TmpDirCase):
         np.testing.assert_array_equal(
             locate_stack(pos, prefix="Aligned"), _expected_tyxc()
         )
+
+
+def _loops_read(path, n_frames, n_channels):
+    """Every frame of ``path`` as the analysis loops read it, ``(T, Y, X, C)``."""
+    img_nums = _get_img_num_per_channel(list(range(n_channels)), n_frames, n_channels)
+    return np.stack(
+        [
+            load_frames(img_nums[:, t].tolist(), path, normalize_input=False)
+            for t in range(n_frames)
+        ]
+    )
+
+
+class TestReadersAgreeAfterFixes(_TmpDirCase):
+    """The readers fixed for the limitations of ``Feature-Image-loading``
+    (eager, lazy page by page, and the loops) give the same pixels, on the
+    layouts the old path read through its fallback too."""
+
+    def _all_agree(self, pos, path, expected):
+        stack = locate_stack(pos, prefix="Aligned")
+        np.testing.assert_array_equal(stack, expected)
+        lazy = locate_stack_lazy(pos, prefix="Aligned")
+        self.assertIsNotNone(lazy)
+        np.testing.assert_array_equal(np.asarray(lazy), expected)
+        n_frames = auto_load_number_of_frames(path)
+        self.assertEqual(n_frames, expected.shape[0])
+        np.testing.assert_array_equal(
+            _loops_read(path, n_frames, expected.shape[-1]), expected
+        )
+
+    def test_plain_tcyx_stack(self):
+        """A 4D TIFF without metadata (axes ``QQYX``) is time then channels,
+        as the old fallback read it."""
+        pos, movie = _make_position_dir(self.tmpdir, "plain_tcyx")
+        path = os.path.join(movie, "Aligned.tif")
+        imwrite(path, _tcyx(), photometric="minisblack")
+        self._all_agree(pos, path, _expected_tyxc())
+
+    def test_compressed_channel_first(self):
+        """Compressed and channel-first: lazy read page by page."""
+        pos, movie = _make_position_dir(self.tmpdir, "zlib_ctyx")
+        path = os.path.join(movie, "Aligned.ome.tif")
+        imwrite(
+            path,
+            np.moveaxis(_tcyx(), 1, 0),
+            ome=True,
+            metadata={"axes": "CTYX"},
+            compression="zlib",
+        )
+        self._all_agree(pos, path, _expected_tyxc())
+
+    def test_z_and_time_projected(self):
+        """Z and time: each time point is its maximum intensity projection,
+        for every reader."""
+        data = np.zeros((3, 4, H, W), dtype=np.uint16)
+        for t in range(3):
+            for z in range(4):
+                data[t, z] = 100 * t + (z * 7) % 4 + 1
+        pos, movie = _make_position_dir(self.tmpdir, "tzyx_mip")
+        path = os.path.join(movie, "Aligned.tif")
+        imwrite(path, data, imagej=True, metadata={"axes": "TZYX"})
+        self._all_agree(pos, path, data.max(axis=1)[..., np.newaxis])
+
+    def test_rgb_time_lapse_in_the_loops(self):
+        rgb = np.zeros((2, H, W, 3), dtype=np.uint8)
+        for t in range(2):
+            for c in range(3):
+                rgb[t, :, :, c] = 10 * t + c + 1
+        pos, movie = _make_position_dir(self.tmpdir, "rgbt_loops")
+        path = os.path.join(movie, "Aligned.tif")
+        imwrite(path, rgb, photometric="rgb")
+        self._all_agree(pos, path, rgb)
+
+    def test_multi_file_set(self):
+        """A multi-file set: the files match the prefix together without
+        being reported as several movies, and every reader reads them all."""
+        pos, movie = _make_position_dir(self.tmpdir, "bf_set")
+        files = write_bioformats_ome(
+            os.path.join(movie, "Aligned.ome.tif"),
+            [_tcyx()[:, :, np.newaxis]],
+            "XYZTC",
+            one_file_per_channel=True,
+        )
+        logger = logging.getLogger("celldetective")
+        records = []
+        handler = logging.Handler(level=logging.WARNING)
+        handler.emit = records.append
+        logger.addHandler(handler)
+        try:
+            self._all_agree(pos, sorted(files)[0], _expected_tyxc())
+        finally:
+            logger.removeHandler(handler)
+        self.assertEqual([r.getMessage() for r in records], [])
+
+    def _experiment(self, name, channels):
+        """An experiment folder declaring ``channels``, with one position."""
+        experiment = os.path.join(self.tmpdir, name)
+        os.makedirs(experiment, exist_ok=True)
+        with open(os.path.join(experiment, "config.ini"), "w") as f:
+            f.write(
+                "[MovieSettings]\nmovie_prefix = Aligned\n\n[Channels]\n"
+                + "".join(f"{c} = {i}\n" for i, c in enumerate(channels))
+            )
+        return _make_position_dir(os.path.join(experiment, "W1"), "100")
+
+    def test_channels_read_as_frames_in_an_experiment(self):
+        """``tifffile`` writes a 3D OME-TIFF without axes as ``CYX``: the
+        frames of a single-channel movie (as in the ``demo_ricm`` demo) are
+        frames when the experiment declares one channel, however few."""
+        frames = np.stack([np.full((H, W), t + 1, np.uint16) for t in range(4)])
+        pos, movie = self._experiment("one_channel", ["adhesion_channel"])
+        path = os.path.join(movie, "Aligned.ome.tif")
+        imwrite(path, frames, ome=True)
+        with TiffFile(path) as tif:
+            self.assertEqual(tif.series[0].axes, "CYX")
+        self._all_agree(pos, path, frames[..., np.newaxis])
+
+    def test_channels_kept_when_the_experiment_declares_them(self):
+        data = np.stack([np.full((H, W), c + 1, np.uint16) for c in range(3)])
+        pos, movie = self._experiment(
+            "three_channels", ["brightfield_channel", "fitc_channel", "cy5_channel"]
+        )
+        path = os.path.join(movie, "Aligned.ome.tif")
+        imwrite(path, data, ome=True)
+        self._all_agree(pos, path, np.moveaxis(data, 0, -1)[np.newaxis])
+
+    def test_many_channels_outside_an_experiment_are_frames(self):
+        """Without an experiment, more than 5 channels and no time are frames,
+        as before."""
+        frames = np.stack([np.full((H, W), t + 1, np.uint16) for t in range(8)])
+        pos, movie = _make_position_dir(self.tmpdir, "no_experiment_cyx8")
+        path = os.path.join(movie, "Aligned.ome.tif")
+        imwrite(path, frames, ome=True)
+        self._all_agree(pos, path, frames[..., np.newaxis])
+
+    def test_plain_stack_padded_with_singleton_axes(self):
+        """tifffile pads a plain array with generic axes of size 1 (``QQQYXQ``,
+        as in a lattice light-sheet export on Zenodo): they take no role, and
+        the planes are frames."""
+        frames = np.stack([np.full((H, W), t + 1, np.uint16) for t in range(6)])
+        pos, movie = _make_position_dir(self.tmpdir, "padded_plain")
+        path = os.path.join(movie, "Aligned.tif")
+        imwrite(path, frames.reshape(1, 1, 6, H, W, 1), photometric="minisblack")
+        with TiffFile(path) as tif:
+            self.assertEqual(tif.series[0].axes, "QQQYXQ")
+        self._all_agree(pos, path, frames[..., np.newaxis])
+
+    def test_unreadable_ome_metadata(self):
+        """OME metadata tifffile cannot parse (a file of a multi-file set on
+        Zenodo, old 2008 schema, raised 'OME series missing NumPlanes or
+        PlaneCount'): the pages are read in order, as frames. The failure is
+        simulated, the file itself is not redistributable as a fixture."""
+        from unittest import mock
+
+        frames = _tcyx()[:, :1, np.newaxis]  # (T, 1, 1, Y, X)
+        pos, movie = _make_position_dir(self.tmpdir, "ome_unparsable")
+        path = os.path.join(movie, "Aligned.ome.tif")
+        write_bioformats_ome(path, [frames], "XYZCT")
+
+        original = TiffFile.__dict__["series"]
+        read_series = getattr(original, "fget", None) or original.func
+
+        def series(tif):
+            if tif.is_ome:
+                raise ValueError("OME series missing NumPlanes or PlaneCount")
+            return read_series(tif)
+
+        with mock.patch.object(TiffFile, "series", property(series)):
+            self._all_agree(pos, path, frames[:, 0, 0, ..., np.newaxis])
+
+    def test_series_pages_out_of_file_order(self):
+        """A series whose planes are not the file's pages in order, with one
+        missing (a Micro-Manager NDTiff on Zenodo: tiles stored in acquisition
+        order, an aborted acquisition): every reader follows the series, and
+        the missing plane is zeros. The NDTiff layout is simulated over a plain
+        file, its index file cannot be written by tifffile."""
+        from unittest import mock
+
+        from tifffile import TiffPageSeries
+
+        frames = np.stack([np.full((H, W), 10 * (t + 1), np.uint16) for t in range(3)])
+        pos, movie = _make_position_dir(self.tmpdir, "ndtiff_order")
+        path = os.path.join(movie, "Aligned.tif")
+        imwrite(path, frames, photometric="minisblack")
+
+        def series(tif):
+            pages = [tif.pages[2], None, tif.pages[0]]
+            return [TiffPageSeries(pages, (3, H, W), frames.dtype, "TYX", kind="ndtiff")]
+
+        expected = np.stack([frames[2], np.zeros((H, W), np.uint16), frames[0]])
+        with mock.patch.object(TiffFile, "series", property(series)):
+            self._all_agree(pos, path, expected[..., np.newaxis])
+
+    def test_ome_tiff_extension_in_the_loops(self):
+        """The loops find a ``.tiff`` movie the way ``locate_stack`` does."""
+        from celldetective.utils.experiment import get_position_movie_path
+
+        pos, movie = _make_position_dir(self.tmpdir, "tiff_ext")
+        path = os.path.join(movie, "Aligned.ome.tiff")
+        imwrite(path, _tcyx(), ome=True, metadata={"axes": "TCYX"})
+        self.assertEqual(
+            os.path.abspath(get_position_movie_path(pos, "Aligned")),
+            os.path.abspath(path),
+        )
+        self._all_agree(pos, path, _expected_tyxc())
 
 
 if __name__ == "__main__":

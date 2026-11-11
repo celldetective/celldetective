@@ -17,6 +17,7 @@ from celldetective.utils.experiment import (
     extract_position_name,
     extract_experiment_channels,
     get_image_shape,
+    get_position_movie_path,
 )
 from celldetective.utils.data_cleaning import _mask_intensity_measurements
 from celldetective.utils.parsing import config_section_to_dict
@@ -162,11 +163,9 @@ else:
     sys.exit(1)
 
 # Do this if features or Haralick is not None, else don't need stack
-try:
-    file = glob(pos + os.sep.join(["movie", f"{movie_prefix}*.tif"]))[0]
-except IndexError:
+file = get_position_movie_path(pos, movie_prefix)
+if file is None:
     logger.warning("Movie could not be found. Check the prefix. If you intended to measure texture or tone, this will not be performed.")
-    file = None
     haralick_option = None
     features = drop_tonal_features(features)
 

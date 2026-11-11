@@ -9,12 +9,13 @@ from typing import List
 import json
 from celldetective.utils.image_loaders import (
     auto_load_number_of_frames,
-    load_frames,
     _get_img_num_per_channel,
+    _load_raw_frames,
 )
 from celldetective.utils.experiment import (
     extract_position_name,
     extract_experiment_channels,
+    get_position_movie_path,
 )
 from celldetective.segmentation import segment_frame_from_thresholds
 from celldetective.utils.parsing import (
@@ -23,7 +24,6 @@ from celldetective.utils.parsing import (
     _extract_nbr_channels_from_config,
 )
 from pathlib import Path, PurePath
-from glob import glob
 from shutil import rmtree
 from tqdm import tqdm
 import numpy as np
@@ -103,9 +103,8 @@ channel_names, channel_indices = extract_experiment_channels(expfolder)
 threshold_instructions.update({"channel_names": channel_names})
 
 # Try to find the file
-try:
-    file = glob(pos + f"movie/{movie_prefix}*.tif")[0]
-except IndexError:
+file = get_position_movie_path(pos, movie_prefix)
+if file is None:
     logger.error("Movie could not be found. Check the prefix.")
     sys.exit(1)
 
@@ -127,9 +126,7 @@ os.mkdir(os.sep.join([pos, label_folder]))
 logger.info("Labels folder successfully generated...")
 
 if equalize:
-    f_reference = load_frames(
-        img_num_channels[:, equalize_time], file, scale=None, normalize_input=False
-    )
+    f_reference = _load_raw_frames(file, img_num_channels[:, equalize_time])
     f_reference = f_reference[:, :, threshold_instructions["target_channel"]]
 else:
     f_reference = None
@@ -156,7 +153,7 @@ def segment_index(indices: List[int]) -> None:
     for t in tqdm(indices, desc="frame"):
 
         # Load channels at time t
-        f = load_frames(img_num_channels[:, t], file, scale=None, normalize_input=False)
+        f = _load_raw_frames(file, img_num_channels[:, t])
         mask = segment_frame_from_thresholds(f, **threshold_instructions)
         save_tiff_imagej_compatible(
             os.sep.join([pos, label_folder, f"{str(t).zfill(4)}.tif"]),

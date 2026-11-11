@@ -1,6 +1,5 @@
 import json
 import os
-from glob import glob
 from typing import Callable, Optional
 
 import numpy as np
@@ -47,7 +46,10 @@ from celldetective import (
     get_software_location,
 )
 from celldetective.utils.data_cleaning import rename_intensity_column
-from celldetective.utils.experiment import extract_experiment_channels
+from celldetective.utils.experiment import (
+    extract_experiment_channels,
+    get_position_movie_path,
+)
 from celldetective.utils.threshold_configs import remember_threshold_configs
 import logging
 
@@ -536,10 +538,7 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
         """
 
         if isinstance(self.pos, str):
-            movies = glob(
-                self.pos
-                + f"movie/{self.movie_prefix}*.tif"
-            )
+            stack_path = get_position_movie_path(self.pos, self.movie_prefix)
 
         else:
             generic_message(
@@ -549,14 +548,14 @@ class ThresholdConfigWizard(CelldetectiveMainWindow):
             self.close()
             return None
 
-        if len(movies) == 0:
+        if stack_path is None:
             generic_message(
                 "No movies are detected in the experiment folder. Cannot load an image to test Haralick."
             )
             self.img = None
             self.close()
         else:
-            self.stack_path = movies[0]
+            self.stack_path = stack_path
             self.channel_names, _ = extract_experiment_channels(self.exp_dir)
             self.channel_names = np.array(self.channel_names)
             self.nbr_channels = len(self.channel_names)

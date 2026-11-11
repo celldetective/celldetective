@@ -162,11 +162,22 @@ class TestZAndTime(_TmpDirCase):
 
 
 class TestManyChannelsWithoutTime(_TmpDirCase):
-    """IMG-3: with no time axis, more than 5 channels are taken for time."""
+    """IMG-3: with no time axis, more than 5 channels are taken for time.
+
+    A file alone cannot tell 6 channels from 6 frames that ``tifffile``
+    labelled channels (see ``TestChannelsReadAsFrames`` in the regression
+    tests), so the experiment declares its channels."""
 
     def test_six_channel_image_keeps_its_channels(self):
         data = np.stack([np.full((H, W), c + 1, dtype=np.uint16) for c in range(6)])
-        pos, movie = _make_position_dir(self.tmpdir, "cyx6")
+        experiment = os.path.join(self.tmpdir, "exp6")
+        os.makedirs(experiment, exist_ok=True)
+        with open(os.path.join(experiment, "config.ini"), "w") as f:
+            f.write(
+                "[MovieSettings]\nmovie_prefix = Aligned\n\n[Channels]\n"
+                + "".join(f"fluo_channel_{c} = {c}\n" for c in range(6))
+            )
+        pos, movie = _make_position_dir(os.path.join(experiment, "W1"), "cyx6")
         imwrite(
             os.path.join(movie, "Aligned.tif"),
             data,

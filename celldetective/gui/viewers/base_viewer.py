@@ -724,8 +724,8 @@ class StackVisualizer(CelldetectiveWidget):
             self.mode = "virtual"
             if not isinstance(self.stack_path, str):
                 raise TypeError("stack_path must be a string.")
-            if not self.stack_path.endswith(".tif"):
-                raise ValueError("stack_path must point to a .tif file.")
+            if not self.stack_path.lower().endswith((".tif", ".tiff")):
+                raise ValueError("stack_path must point to a .tif or .tiff file.")
             self.locate_image_virtual()
 
     def locate_image_virtual(self):
@@ -846,8 +846,8 @@ class StackVisualizer(CelldetectiveWidget):
 
         if not isinstance(self.stack_path, str):
             raise TypeError("stack_path must be a string.")
-        if not self.stack_path.endswith(".tif"):
-            raise ValueError("stack_path must point to a .tif file.")
+        if not self.stack_path.lower().endswith((".tif", ".tiff")):
+            raise ValueError("stack_path must point to a .tif or .tiff file.")
 
     def generate_figure_canvas(self):
         """Generate the figure canvas."""

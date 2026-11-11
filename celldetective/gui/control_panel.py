@@ -46,6 +46,7 @@ from celldetective.utils.experiment import (
     get_experiment_pharmaceutical_agents,
     get_experiment_populations,
     get_config,
+    get_position_movie_path,
 )
 from natsort import natsorted
 from glob import glob
@@ -418,14 +419,11 @@ class ControlPanel(CelldetectiveMainWindow):
         Load the first frame of the first movie found in the experiment folder as a sample.
         """
 
-        movies = glob(self.pos + os.sep.join(["movie", f"{self.movie_prefix}*.tif"]))
+        self.current_stack = get_position_movie_path(self.pos, self.movie_prefix)
 
-        if len(movies) == 0:
+        if self.current_stack is None:
             generic_message("Please select a position containing a movie...")
-            self.current_stack = None
             return None
-        else:
-            self.current_stack = movies[0]
 
     def view_current_stack(self):
         """

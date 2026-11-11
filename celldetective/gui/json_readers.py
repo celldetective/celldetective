@@ -458,12 +458,12 @@ class MoviePrefixField(CelldetectiveWidget):
         # The wording of a single position, of several otherwise.
         if total == 1:
             all_positions = any_position = each_position = "the position"
-            spread, which = "in the position", "which one"
+            spread = "in the position"
         else:
             all_positions = f"the {total} positions"
             any_position = f"any of {all_positions}"
             each_position = f"each of {all_positions}"
-            spread, which = f"over {total} positions", "which one of a position"
+            spread = f"over {total} positions"
 
         if not self.positions_of_movie:
             return f"No stack in the movie folder of {any_position}.", True
@@ -480,7 +480,8 @@ class MoviePrefixField(CelldetectiveWidget):
             )
         if stacks > positions:
             return (
-                f"{stacks} stacks {spread}: {which} is loaded is left to chance.",
+                f"{stacks} stacks {spread}: only the first in natural order is "
+                f"loaded (fine for the files of one multi-file OME-TIFF set).",
                 True,
             )
         return f"One stack in {each_position}.", False

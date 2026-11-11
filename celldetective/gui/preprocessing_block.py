@@ -1,6 +1,4 @@
 import json
-import os
-from glob import glob
 
 import numpy as np
 from PyQt5.QtCore import QSize, Qt
@@ -29,7 +27,10 @@ from celldetective.gui.layouts import (
     ProtocolDesignerLayout,
     RegistrationOptionsLayout,
 )
-from celldetective.utils.experiment import extract_experiment_channels
+from celldetective.utils.experiment import (
+    extract_experiment_channels,
+    get_position_movie_path,
+)
 from celldetective import get_logger
 
 logger = get_logger(__name__)
@@ -252,12 +253,11 @@ class PreprocessingPanel(ControlPanelBlock, Styles):
         """
 
         logger.info(f"{self.parent_window.pos}")
-        movies = glob(
-            self.parent_window.pos
-            + os.sep.join(["movie", f"{self.parent_window.movie_prefix}*.tif"])
+        stack_path = get_position_movie_path(
+            self.parent_window.pos, self.parent_window.movie_prefix
         )
 
-        if len(movies) == 0:
+        if stack_path is None:
             msgBox = QMessageBox()
             msgBox.setIcon(QMessageBox.Warning)
             msgBox.setText("Please select a position containing a movie...")
@@ -268,7 +268,7 @@ class PreprocessingPanel(ControlPanelBlock, Styles):
                 self.current_stack = None
                 return None
         else:
-            self.current_stack = movies[0]
+            self.current_stack = stack_path
 
     def help_background(self):
         """
