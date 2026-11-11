@@ -122,6 +122,7 @@ def auto_correct_masks(
     min_area: int = 9,
     fill_labels: bool = False,
     correct_anomalies: bool = True,
+    keep_labels: bool = False,
 ) -> np.ndarray:
     """
     Correct segmentation masks to ensure consistency and remove anomalies.
@@ -152,6 +153,14 @@ def auto_correct_masks(
             Split objects sharing a single label when their bounding box area is
             disproportionately larger than the object area (see ``bbox_factor``).
             The default is `True`.
+    keep_labels : bool, optional
+            Keep the label of every object instead of renumbering them from 1.
+            An object split by the anomaly correction keeps its label on its
+            largest piece, and the other pieces get new labels past the highest
+            one; an anomalous object left in one piece keeps its label. Removed
+            objects leave a gap. The tables find masks by their label, so this
+            keeps them valid for every object that was not edited. The default
+            is `False`.
 
     Returns
     -------
@@ -209,8 +218,17 @@ def auto_correct_masks(
 
                 lbl = masks == row.label
                 relabelled = label(lbl, connectivity=2)
-                relabelled[lbl] += max_lbl
-                corrected_lbl[lbl] = relabelled[lbl]
+                if keep_labels:
+                    pieces = np.bincount(relabelled[lbl])
+                    if np.count_nonzero(pieces) < 2:
+                        continue  # one piece (concave or diagonal): leave it
+                    largest = int(np.argmax(pieces))
+                    others = lbl & (relabelled != largest)
+                    _, renumbered = np.unique(relabelled[others], return_inverse=True)
+                    corrected_lbl[others] = renumbered.ravel() + max_lbl + 1
+                else:
+                    relabelled[lbl] += max_lbl
+                    corrected_lbl[lbl] = relabelled[lbl]
                 max_lbl = int(corrected_lbl.max())
 
     # Second routine: drop objects that are too small and renumber the
@@ -225,7 +243,7 @@ def auto_correct_masks(
     keep[0] = False  # background
     kept_labels = np.nonzero(keep)[0]
     lut = np.zeros(counts.size, dtype=int)
-    lut[kept_labels] = np.arange(1, kept_labels.size + 1)
+    lut[kept_labels] = kept_labels if keep_labels else np.arange(1, kept_labels.size + 1)
     clean_labels = lut[corrected_lbl].astype(int)
 
     if fill_labels:

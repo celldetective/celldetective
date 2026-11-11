@@ -99,6 +99,33 @@ class TestAutoCorrectMasks:
         assert len(np.unique(out[masks == 2])) == 1
         assert np.unique(out[masks == 2])[0] != 2
 
+    def test_keep_labels_leaves_an_unedited_diagonal_cell_alone(self):
+        masks = np.zeros((40, 40), dtype=int)
+        _square(masks, 2, 2, 6, 1)
+        for i in range(20):
+            masks[15 + i, 10 + i : 13 + i] = 2
+        _square(masks, 30, 30, 6, 3)
+        out = auto_correct_masks(masks, keep_labels=True)
+        np.testing.assert_array_equal(out, masks)
+
+    def test_keep_labels_splits_off_the_smaller_pieces_only(self):
+        masks = np.zeros((30, 30), dtype=int)
+        _square(masks, 1, 1, 6, 4)  # largest piece of label 4
+        _square(masks, 20, 20, 4, 4)  # a second, separate piece
+        _square(masks, 10, 10, 5, 7)
+        out = auto_correct_masks(masks, keep_labels=True)
+        assert (out[1:7, 1:7] == 4).all()
+        assert (out[10:15, 10:15] == 7).all()
+        split = np.unique(out[20:24, 20:24])
+        assert len(split) == 1 and split[0] > 7
+
+    def test_keep_labels_drops_small_objects_without_renumbering(self):
+        masks = np.zeros((20, 20), dtype=int)
+        _square(masks, 1, 1, 2, 3)  # 4 px, dropped
+        _square(masks, 10, 10, 4, 9)
+        out = auto_correct_masks(masks, keep_labels=True)
+        assert set(np.unique(out)) == {0, 9}
+
 
 class TestRelabelSegmentation:
 

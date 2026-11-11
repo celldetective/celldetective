@@ -270,6 +270,145 @@ class TestFramesToSave:
         assert nu.frames_to_save(labels, set(), folder) == [1]
 
 
+class TestWriteLabelFrames:
+
+    def test_only_the_given_frames_are_written_and_cells_keep_their_numbers(self, tmp_path):
+        from tifffile import imread
+
+        labels = np.zeros((3, 30, 30), dtype=np.int32)
+        labels[:, 2:8, 2:8] = 5
+        labels[:, 15:20, 15:20] = 9
+        labels[1, 25:27, 25:27] = 12  # 4 px: removed by the auto-fixes
+        written = []
+        n = nu.write_label_frames(
+            labels,
+            [1],
+            str(tmp_path) + os.sep,
+            {"correct_anomalies": True, "fill_labels": False, "min_area": 9},
+            written.append,
+        )
+        assert sorted(os.listdir(tmp_path)) == ["0001.tif"]
+        on_disk = imread(str(tmp_path / "0001.tif"))
+        assert set(np.unique(on_disk)) == {0, 5, 9}
+        # The viewer shows what was saved.
+        np.testing.assert_array_equal(labels[1], on_disk)
+        assert n == 2 and written == [1]
+
+    def test_numbers_past_int16_are_renumbered(self):
+        im = np.zeros((20, 20), dtype=np.int64)
+        im[2:8, 2:8] = 40_000
+        im[10:16, 10:16] = 3
+        out = nu.correct_saved_frame(im, {"min_area": 0})
+        assert set(np.unique(out)) == {0, 1, 2}
+
+
+class TestWriteFrameAnnotation:
+
+    @staticmethod
+    def _frame():
+        channels = [np.full((300, 400), 1.0), np.full((300, 400), 2.0)]
+        labels = np.zeros((300, 400), dtype=int)
+        labels[10:20, 10:20] = 1
+        return channels, labels
+
+    def test_the_whole_field_is_written_with_its_sidecar(self, tmp_path):
+        import json
+        from tifffile import imread
+
+        channels, labels = self._frame()
+        stems = nu.write_frame_annotation(
+            str(tmp_path), "exp_pos_0003", channels, labels, None, {"frame": 3}
+        )
+        assert stems == ["exp_pos_0003"]
+        assert imread(str(tmp_path / "exp_pos_0003.tif")).shape == (2, 300, 400)
+        lab = imread(str(tmp_path / "exp_pos_0003_labelled.tif"))
+        assert lab.dtype == np.int16 and lab.shape == (300, 400)
+        assert json.loads((tmp_path / "exp_pos_0003.json").read_text()) == {"frame": 3}
+
+    def test_a_small_crop_is_padded_to_exactly_256(self, tmp_path):
+        from tifffile import imread
+
+        channels, labels = self._frame()
+        stems = nu.write_frame_annotation(
+            str(tmp_path), "p", channels, labels, [(5, 106, 0, 255)], {}
+        )
+        assert stems == ["p_roi_5_106_0_255"]
+        img = imread(str(tmp_path / "p_roi_5_106_0_255.tif"))
+        lab = imread(str(tmp_path / "p_roi_5_106_0_255_labelled.tif"))
+        assert img.shape == (2, 256, 256) and lab.shape == (256, 256)
+        # The cell stays in the crop, shifted by the padding.
+        assert (lab == 1).sum() == 100
+
+    def test_a_large_crop_is_not_padded(self, tmp_path):
+        from tifffile import imread
+
+        channels, labels = self._frame()
+        nu.write_frame_annotation(str(tmp_path), "p", channels, labels, [(0, 280, 0, 300)], {})
+        assert imread(str(tmp_path / "p_roi_0_280_0_300.tif")).shape == (2, 280, 300)
+
+
+class TestTrackCorrections:
+
+    def test_undo_restores_the_masks_and_the_table(self):
+        labels, df = _two_cells()
+        masks, table = labels.copy(), df.copy()
+        history = nu.TrackCorrections()
+        out = history.apply(labels, df, 2, 2, 1)
+        assert not np.array_equal(labels, masks)
+        undone, frame = history.undo(labels)
+        np.testing.assert_array_equal(labels, masks)
+        pd.testing.assert_frame_equal(undone, table)
+        assert frame == 2 and history.is_clean
+        assert history.undo(labels) is None
+        assert len(out) == len(df)
+
+    def test_steps_are_undone_in_reverse_order(self):
+        labels, df = _two_cells()
+        masks = labels.copy()
+        history = nu.TrackCorrections()
+        df1 = history.apply(labels, df, 1, 2, 1)
+        after_first = labels.copy()
+        history.apply(labels, df1, 3, 1, 0)  # label 0: remove from frame 3
+        assert history.undo(labels)[0] is df1
+        np.testing.assert_array_equal(labels, after_first)
+        history.undo(labels)
+        np.testing.assert_array_equal(labels, masks)
+
+    def test_label_0_does_not_record_the_background(self):
+        labels, df = _two_cells()
+        history = nu.TrackCorrections()
+        history.apply(labels, df, 0, 2, 0)
+        changed = history._steps[0][1]
+        assert len(changed[0]) == (labels.shape[0]) * 16
+
+    def test_forgotten_steps_keep_the_viewer_dirty(self):
+        labels, df = _two_cells()
+        history = nu.TrackCorrections(max_steps=1)
+        df = history.apply(labels, df, 1, 2, 1)
+        history.apply(labels, df, 2, 1, 2)
+        history.undo(labels)
+        assert len(history) == 0 and not history.is_clean
+        history.clear()
+        assert history.is_clean
+
+    def test_added_detections_are_counted_in_the_exported_table(self):
+        labels, df = _two_cells()
+        labels[:, 16:19, 2:5] = 7  # an untracked mask, class_id 3 on disk
+        history = nu.TrackCorrections()
+        added = pd.DataFrame(
+            {"POSITION_X": [3.0], "POSITION_Y": [17.0], "class_id": [3], "FRAME": [1], "TRACK_ID": [7]}
+        )
+        out = history.apply(labels, df, 1, 7, 1, [added])
+        assert history.count_added(out) == 1
+        # Removed again by a later correction: no longer in the table.
+        out2 = history.apply(labels, out, 1, 1, 0)
+        assert history.count_added(out2) == 0
+        # Undoing the addition forgets it.
+        history.undo(labels)
+        history.undo(labels)
+        assert history.added == set()
+
+
 class TestAnnotationCrops:
 
     @staticmethod

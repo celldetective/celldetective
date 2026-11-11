@@ -76,7 +76,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     each exported as its bounding box. It used to read only rectangles drawn
     on the current frame in a layer named `Shapes`;
   - exporting corrected tracks says which event columns were computed before
-    the correction, and how many detections were added without measurements;
+    the correction, and how many detections in the saved table were added
+    without measurements (a detection added, then removed, is not counted);
+  - track corrections can be undone, one at a time back to the last export,
+    with the new *Undo the last correction* button or Ctrl+Z;
+  - *Save the modified labels* keeps the number of every cell on the frames it
+    writes: only the pieces split off a merged label get new numbers, and a
+    removed cell leaves a gap. `auto_correct_masks` takes `keep_labels=True`
+    for this. Exported annotations are still renumbered from 1;
+  - an annotation crop smaller than 256 pixels is padded to exactly 256 (an
+    odd shortfall gave 257).
   - the double-click question says what the click will do, including the two
     cases that are not a propagation: label 0 removes the cell from that frame
     on, and the cell's own track is split there.

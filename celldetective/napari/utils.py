@@ -311,6 +311,122 @@ def propagate_identity(
     return out
 
 
+class TrackCorrections:
+    """
+    The track corrections made since the last export, so they can be undone.
+
+    Each step keeps what it changed: the mask pixels it relabelled with their
+    former values, and the table as it was before (the step builds a new one, so
+    this costs no copy). It also keeps which detections were added to the table,
+    so the export can say how many of them it holds.
+
+    Parameters
+    ----------
+    max_steps : int, optional
+        How many corrections can be undone. Older ones are forgotten.
+    """
+
+    def __init__(self, max_steps: int = 50):
+        self.max_steps = max_steps
+        self._steps = []
+        self._forgotten = False
+        self.added = set()
+
+    def __len__(self) -> int:
+        return len(self._steps)
+
+    @property
+    def is_clean(self) -> bool:
+        """Whether the masks and table are back to their state at the last export."""
+        return not self._steps and not self._forgotten
+
+    def apply(
+        self,
+        labels: np.ndarray,
+        df: pd.DataFrame,
+        frame: int,
+        value_under: int,
+        target_track_id: int,
+        added_rows: Optional[List[pd.DataFrame]] = None,
+    ) -> pd.DataFrame:
+        """
+        Add `added_rows` to the table, then run :func:`propagate_identity`.
+
+        Parameters
+        ----------
+        labels : ndarray
+            The displayed labels (TYX). Modified in place.
+        df : pandas.DataFrame
+            The trajectory table, left unchanged.
+        frame, value_under, target_track_id
+            As for :func:`propagate_identity`.
+        added_rows : list of pandas.DataFrame, optional
+            Rows for untracked masks (:func:`_detection_rows`).
+
+        Returns
+        -------
+        pandas.DataFrame
+            The corrected table.
+        """
+        frame = int(frame)
+        later = labels[frame:]
+        # The pixels propagate_identity relabels; label 0 leaves background be.
+        moved = [value_under] + ([target_track_id] if target_track_id != 0 else [])
+        changed = np.nonzero(np.isin(later, moved))
+        before = later[changed]
+        added_before = set(self.added)
+
+        table = df
+        if added_rows:
+            table = pd.concat([df, *added_rows], ignore_index=True)
+            for rows in added_rows:
+                self.added.update(
+                    zip(rows["FRAME"].astype(int), rows["class_id"].astype(int))
+                )
+        out = propagate_identity(labels, table, frame, value_under, target_track_id)
+
+        self._steps.append((frame, changed, before, df, added_before))
+        if len(self._steps) > self.max_steps:
+            del self._steps[0]
+            self._forgotten = True
+        return out
+
+    def undo(self, labels: np.ndarray) -> Optional[Tuple[pd.DataFrame, int]]:
+        """
+        Undo the last correction.
+
+        Parameters
+        ----------
+        labels : ndarray
+            The displayed labels (TYX). Modified in place.
+
+        Returns
+        -------
+        tuple or None
+            The table as it was before the correction and the frame it was made
+            on, or None when there is nothing to undo.
+        """
+        if not self._steps:
+            return None
+        frame, changed, before, df, added_before = self._steps.pop()
+        labels[frame:][changed] = before
+        self.added = added_before
+        return df, frame
+
+    def count_added(self, df: pd.DataFrame) -> int:
+        """How many rows of `df` are detections added by a correction."""
+        if not self.added or not {"FRAME", "class_id"} <= set(df.columns):
+            return 0
+        keys = df[["FRAME", "class_id"]].dropna().astype(int)
+        return int(sum(key in self.added for key in zip(keys["FRAME"], keys["class_id"])))
+
+    def clear(self) -> None:
+        """Forget every step: called once the corrections are exported."""
+        self._steps.clear()
+        self._forgotten = False
+        self.added = set()
+
+
 def prepare_track_export(
     df: pd.DataFrame, img_shape: Tuple[int, int], post_processing: Dict[str, Any]
 ) -> pd.DataFrame:
@@ -477,11 +593,165 @@ def stale_tables_question(population: str, frames: List[int]) -> str:
     shown = ", ".join(str(t) for t in frames[:10]) + (", …" if len(frames) > 10 else "")
     return (
         f"This position already has a trajectory table for the {population}. "
-        f"Saving rewrites the masks of {len(frames)} edited frame(s) ({shown}) "
-        "and renumbers them, so on those frames the tracks and measurements will "
-        "no longer match the masks. Run tracking and the steps after it again "
-        "once the masks are saved.\n\nSave anyway?"
+        f"Saving rewrites the masks of {len(frames)} edited frame(s) ({shown}). "
+        "The cells keep their numbers, but on those frames the tracks and "
+        "measurements no longer match the cells you drew, erased or redrew, nor "
+        "any cell split by the auto-fixes. Run tracking and the steps after it "
+        "again once the masks are saved.\n\nSave anyway?"
     )
+
+
+_INT16_MAX = int(np.iinfo(np.int16).max)
+
+
+def correct_saved_frame(im: np.ndarray, correction_kwargs: Dict[str, Any]) -> np.ndarray:
+    """
+    The masks of an edited frame as *Save the modified labels* writes them.
+
+    The auto-fixes are applied, but every cell keeps its number: the tables find
+    masks by it, so only the cells that were edited, or split by the fixes, stop
+    matching them. A frame whose numbers would not fit the int16 files is
+    renumbered from 1 instead.
+
+    Parameters
+    ----------
+    im : ndarray
+        The frame's labels (YX).
+    correction_kwargs : dict
+        Keyword arguments for :func:`auto_correct_masks`.
+
+    Returns
+    -------
+    ndarray
+        The labels to save.
+    """
+    try:
+        out = auto_correct_masks(im, keep_labels=True, **correction_kwargs)
+    except Exception as e:
+        logger.warning(f"auto_correct_masks failed: {e}")
+        out = np.abs(np.asarray(im))
+    if out.size and int(out.max()) > _INT16_MAX:
+        logger.warning(
+            "Label values exceed the int16 range of the label files: "
+            "renumbering this frame from 1."
+        )
+        out = auto_correct_masks(out, correct_anomalies=False, min_area=0)
+    return out
+
+
+def write_label_frames(
+    labels: np.ndarray,
+    frames: List[int],
+    output_folder: str,
+    correction_kwargs: Dict[str, Any],
+    on_frame: Optional[Callable[[int], None]] = None,
+) -> int:
+    """
+    Write the given frames of the viewer's labels over the position's label files.
+
+    Each frame is corrected with :func:`correct_saved_frame` and written back
+    into `labels`, so the viewer shows what was saved.
+
+    Parameters
+    ----------
+    labels : ndarray
+        The labels in the viewer (TYX). Modified in place.
+    frames : list of int
+        The frames to write.
+    output_folder : str
+        The position's labels folder.
+    correction_kwargs : dict
+        Keyword arguments for :func:`auto_correct_masks`.
+    on_frame : callable, optional
+        Called with the number of frames written so far.
+
+    Returns
+    -------
+    int
+        The number of labelled objects, summed over the frames written.
+    """
+    n_objects = 0
+    for i, t in enumerate(tqdm(frames)):
+        im = correct_saved_frame(labels[t], correction_kwargs)
+        labels[t] = im.astype(labels.dtype)
+        save_tiff_imagej_compatible(
+            _label_file(output_folder, t), im.astype(np.int16), axes="YX"
+        )
+        n_objects += int((np.unique(im) != 0).sum())
+        if on_frame is not None:
+            on_frame(i + 1)
+    return n_objects
+
+
+def _pad_to(arr: np.ndarray, size: int) -> np.ndarray:
+    """Pad the last two axes of `arr` with zeros, evenly, to at least `size`."""
+    pad = []
+    for n in arr.shape[-2:]:
+        missing = max(0, size - n)
+        pad.append((missing // 2, missing - missing // 2))
+    return np.pad(arr, [(0, 0)] * (arr.ndim - 2) + pad, mode="constant")
+
+
+def write_frame_annotation(
+    annotation_folder: str,
+    prefix: str,
+    channels: List[np.ndarray],
+    labels: np.ndarray,
+    crops: Optional[List[Tuple[int, int, int, int]]],
+    info: Dict[str, Any],
+    min_size: int = 256,
+) -> List[str]:
+    """
+    Write a frame's annotation: the image, the masks and a JSON sidecar.
+
+    Parameters
+    ----------
+    annotation_folder : str
+        The experiment's ``annotations_<population>`` folder.
+    prefix : str
+        The file name stem, ``<experiment>_<position>_<frame>``.
+    channels : list of ndarray
+        The frame in each channel (YX).
+    labels : ndarray
+        The frame's masks (YX), already corrected.
+    crops : list of tuple of int, or None
+        ``(row_min, row_max, col_min, col_max)`` of each crop, as given by
+        :func:`annotation_crops`; None exports the whole field of view.
+    info : dict
+        The sidecar's content.
+    min_size : int, optional
+        A crop smaller than this on a side is padded with zeros to it. The whole
+        field is never padded.
+
+    Returns
+    -------
+    list of str
+        The stem of each annotation written, without extension.
+    """
+    image = np.asarray(channels)
+    labels = np.asarray(labels).astype(np.int16)
+    if crops is None:
+        pieces = [(prefix, image, labels)]
+    else:
+        pieces = []
+        for r0, r1, c0, c1 in crops:
+            img, lab = image[:, r0:r1, c0:c1], labels[r0:r1, c0:c1]
+            if min(lab.shape) < min_size:
+                logger.warning(
+                    f"Crop too small! Padding with zeros to reach {min_size}*{min_size} pixels..."
+                )
+                img, lab = _pad_to(img, min_size), _pad_to(lab, min_size)
+            pieces.append((f"{prefix}_roi_{r0}_{r1}_{c0}_{c1}", img, lab))
+
+    stems = []
+    for stem, img, lab in pieces:
+        base = os.path.join(annotation_folder, stem)
+        save_tiff_imagej_compatible(base + "_labelled.tif", lab, axes="YX")
+        save_tiff_imagej_compatible(base + ".tif", img, axes="CYX")
+        with open(base + ".json", "w") as f:
+            json.dump(info, f, indent=4)
+        stems.append(stem)
+    return stems
 
 
 class _UnsavedEditsGuard(QObject):
@@ -998,24 +1268,18 @@ def launch_napari_viewer(
         df.to_csv(shared_data["path"], index=False)
         logger.info("Track export done.")
         corrected = has_unsaved(viewer.layers["segmentation"])
-        added = shared_data.get("added", 0)
+        # Counted in what is written: an added detection that a later correction
+        # or the post-processing removed is not in the table.
+        added = history.count_added(df)
         clear_unsaved(viewer.layers["segmentation"])
-        shared_data["added"] = 0
+        history.clear()
 
         # Reflect the post-processed tracks in the viewer so the effect of the
         # chosen options is visible in place (dropped tracks disappear, gaps get
         # interpolated, etc.).
         shared_data["df"] = df
         try:
-            vertices, tracks, properties, graph = tracks_to_napari(
-                df, exclude_nans=True
-            )
-            viewer.layers["tracks"].data = tracks
-            viewer.layers["tracks"].properties = properties
-            viewer.layers["tracks"].graph = graph
-            viewer.layers["points"].data = vertices
-            viewer.layers["tracks"].refresh()
-            viewer.layers["points"].refresh()
+            show_tracks(df)
         except Exception as e:
             logger.warning(f"Could not refresh track layers after export: {e}")
 
@@ -1057,7 +1321,46 @@ def launch_napari_viewer(
         """Widget to trigger export."""
         return export_modifications()
 
+    history = TrackCorrections()
+
+    def show_tracks(df: pd.DataFrame) -> None:
+        """Redraw the tracks and points layers from a trajectory table."""
+        vertices, tracks, properties, graph = tracks_to_napari(df, exclude_nans=True)
+        viewer.layers["tracks"].data = tracks
+        viewer.layers["tracks"].properties = properties
+        viewer.layers["tracks"].graph = graph
+        viewer.layers["points"].data = vertices
+        viewer.layers["tracks"].refresh()
+        viewer.layers["points"].refresh()
+
+    def undo_correction(*_args) -> None:
+        """Undo the last double-click correction since the last export."""
+        seg = viewer.layers["segmentation"]
+        undone = history.undo(seg.data)
+        if undone is None:
+            viewer.status = "No track correction to undo since the last export."
+            return
+        df, frame = undone
+        shared_data["df"] = df
+        if history.is_clean:
+            clear_unsaved(seg)
+        seg.refresh()
+        show_tracks(df)
+        viewer.status = f"Undid the track correction made at frame {frame}."
+
+    @magicgui(call_button="Undo the last correction")
+    def undo_widget():
+        """Widget to undo the last track correction."""
+        undo_correction()
+
     export_table_widget.native.setStyleSheet(Styles().button_style_sheet)
+    undo_widget.native.setStyleSheet(Styles().button_style_sheet)
+    try:
+        # On the layer, where the double-clicks are made; it overrides the
+        # paint undo, which has nothing to undo while painting is locked.
+        labels_layer.bind_key("Control-Z", undo_correction, overwrite=True)
+    except Exception as e:
+        logger.debug(f"Could not bind Ctrl+Z to the track undo: {e}")
     post_processing_options.native.setStyleSheet(Styles().button_style_sheet)
 
     def label_changed(event: str) -> None:
@@ -1080,6 +1383,7 @@ def launch_napari_viewer(
     track_button_container = QWidget()
     track_button_layout = QVBoxLayout(track_button_container)
     track_button_layout.setSpacing(10)
+    track_button_layout.addWidget(undo_widget.native)
     track_button_layout.addWidget(post_processing_options.native)
     track_button_layout.addWidget(export_table_widget.native)
     viewer.window.add_dock_widget(track_button_container, area="right")
@@ -1170,27 +1474,13 @@ def launch_napari_viewer(
                 )
             )
 
-        if added:
-            df = pd.concat([df, *added], ignore_index=True)
-            shared_data["added"] = shared_data.get("added", 0) + sum(
-                len(rows) for rows in added
-            )
-
-        df = propagate_identity(segmentation, df, frame, value_under, target_track_id)
+        df = history.apply(
+            segmentation, df, frame, value_under, target_track_id, added
+        )
         mark_unsaved(viewer.layers["segmentation"], [frame])
 
-        vertices, tracks, properties, graph = tracks_to_napari(df, exclude_nans=True)
-
-        viewer.layers["tracks"].data = tracks
-        viewer.layers["tracks"].properties = properties
-        viewer.layers["tracks"].graph = graph
-
-        viewer.layers["points"].data = vertices
-
         viewer.layers["segmentation"].refresh()
-        viewer.layers["tracks"].refresh()
-        viewer.layers["points"].refresh()
-
+        show_tracks(df)
         shared_data["df"] = df
 
     guard_unsaved_close(
@@ -1636,25 +1926,14 @@ def launch_segmentation_viewer(
         pbar.setValue(0)
         QApplication.processEvents()
 
-        n_objects_total = 0
+        def _progress(n_written: int) -> None:
+            pbar.setValue(n_written)
+            QApplication.processEvents()
+
         try:
-            for i, t in enumerate(tqdm(frames)):
-                im = labels_layer[t]
-                try:
-                    im = auto_correct_masks(im, **_correction_kwargs())
-                except Exception as e:
-                    logger.warning(f"auto_correct_masks failed: {e}")
-
-                # Back into the viewer, so the auto-fixed masks are what is shown.
-                labels_layer[t] = im.astype(labels_layer.dtype)
-                save_tiff_imagej_compatible(
-                    _label_file(output_folder, t), im.astype(np.int16), axes="YX"
-                )
-                n_objects_total += int((np.unique(im) != 0).sum())
-
-                pbar.setValue(i + 1)
-                QApplication.processEvents()
-
+            n_objects_total = write_label_frames(
+                labels_layer, frames, output_folder, _correction_kwargs(), _progress
+            )
             layer.refresh()
             clear_unsaved(layer)
         finally:
@@ -1717,143 +1996,41 @@ def launch_segmentation_viewer(
         except Exception as e:
             logger.warning(f"auto_correct_masks failed: {e}")
 
-        fov_export = True
-
         n_shapes, bounds = annotation_crops(
             [layer for layer in viewer.layers if type(layer).__name__ == "Shapes"],
             t,
             tuple(labels_layer.shape[-2:]),
         )
         logger.info(f"Found {len(bounds)} ROIs...")
-        if n_shapes:
+        if n_shapes and not bounds:
             # A region applies to this frame, so a crop was meant: never fall
-            # back to the whole field, even for one outside the frame.
-            fov_export = False
-
-        for k, (xmin, xmax, ymin, ymax) in enumerate(bounds):
-            pad_to_256 = False
-            logger.debug(f"xmin={xmin};xmax={xmax};ymin={ymin};ymax={ymax}")
-            frame = viewer.layers["Image"].data[t][xmin:xmax, ymin:ymax]
-            if frame.shape[1] < 256 or frame.shape[0] < 256:
-                pad_to_256 = True
-                logger.warning(
-                    "Crop too small! Padding with zeros to reach 256*256 pixels..."
-                )
-                # continue
-            multichannel = [frame]
-            for i in range(len(channel_indices) - 1):
-                try:
-                    frame = viewer.layers[f"Image [{i + 1}]"].data[t][
-                        xmin:xmax, ymin:ymax
-                    ]
-                    multichannel.append(frame)
-                except Exception as e:
-                    logger.debug(f"Could not extract frame from layer Image [{i + 1}]: {e}")
-            multichannel = np.array(multichannel)
-            lab = labels_layer[xmin:xmax, ymin:ymax].astype(np.int16)
-            if pad_to_256:
-                shape = multichannel.shape
-                pad_length_x = max([0, 256 - multichannel.shape[1]])
-                if pad_length_x > 0 and pad_length_x % 2 == 1:
-                    pad_length_x += 1
-                pad_length_y = max([0, 256 - multichannel.shape[2]])
-                if pad_length_y > 0 and pad_length_y % 2 == 1:
-                    pad_length_y += 1
-                padded_image = np.array(
-                    [
-                        np.pad(
-                            im,
-                            (
-                                (pad_length_x // 2, pad_length_x // 2),
-                                (pad_length_y // 2, pad_length_y // 2),
-                            ),
-                            mode="constant",
-                        )
-                        for im in multichannel
-                    ]
-                )
-                padded_label = np.pad(
-                    lab,
-                    (
-                        (pad_length_x // 2, pad_length_x // 2),
-                        (pad_length_y // 2, pad_length_y // 2),
-                    ),
-                    mode="constant",
-                )
-                lab = padded_label
-                multichannel = padded_image
-
-            save_tiff_imagej_compatible(
-                annotation_folder
-                + f"{exp_name}_{position.split(os.sep)[-2]}_{str(t).zfill(4)}_roi_{xmin}_{xmax}_{ymin}_{ymax}_labelled.tif",
-                lab,
-                axes="YX",
-            )
-            save_tiff_imagej_compatible(
-                annotation_folder
-                + f"{exp_name}_{position.split(os.sep)[-2]}_{str(t).zfill(4)}_roi_{xmin}_{xmax}_{ymin}_{ymax}.tif",
-                multichannel,
-                axes="CYX",
-            )
-
-            info.update(
-                {
-                    "spatial_calibration": spatial_calibration,
-                    "channels": list(channel_names),
-                    "frame": t,
-                }
-            )
-
-            info_name = (
-                annotation_folder
-                + f"{exp_name}_{position.split(os.sep)[-2]}_{str(t).zfill(4)}_roi_{xmin}_{xmax}_{ymin}_{ymax}.json"
-            )
-            with open(info_name, "w") as f:
-                json.dump(info, f, indent=4)
-
-        if fov_export:
-            frame = viewer.layers["Image"].data[t]
-            multichannel = [frame]
-            for i in range(len(channel_indices) - 1):
-                try:
-                    frame = viewer.layers[f"Image [{i + 1}]"].data[t]
-                    multichannel.append(frame)
-                except Exception as e:
-                    logger.debug(f"Could not extract frame from layer Image [{i + 1}] at t={t}: {e}")
-            multichannel = np.array(multichannel)
-            save_tiff_imagej_compatible(
-                annotation_folder
-                + f"{exp_name}_{position.split(os.sep)[-2]}_{str(t).zfill(4)}_labelled.tif",
-                labels_layer,
-                axes="YX",
-            )
-            save_tiff_imagej_compatible(
-                annotation_folder
-                + f"{exp_name}_{position.split(os.sep)[-2]}_{str(t).zfill(4)}.tif",
-                multichannel,
-                axes="CYX",
-            )
-
-            info.update(
-                {
-                    "spatial_calibration": spatial_calibration,
-                    "channels": list(channel_names),
-                    "frame": t,
-                }
-            )
-
-            info_name = (
-                annotation_folder
-                + f"{exp_name}_{position.split(os.sep)[-2]}_{str(t).zfill(4)}.json"
-            )
-            with open(info_name, "w") as f:
-                json.dump(info, f, indent=4)
-
-        if not fov_export and not bounds:
-            # Every region on this frame was outside it: nothing was written,
-            # so the edits are still at stake on close.
+            # back to the whole field. Nothing is written, so the edits are
+            # still at stake on close.
             logger.warning("No annotation was exported: no region overlaps the frame.")
             return
+
+        channels = [viewer.layers["Image"].data[t]]
+        for i in range(len(channel_indices) - 1):
+            try:
+                channels.append(viewer.layers[f"Image [{i + 1}]"].data[t])
+            except Exception as e:
+                logger.debug(f"Could not extract frame from layer Image [{i + 1}]: {e}")
+
+        info.update(
+            {
+                "spatial_calibration": spatial_calibration,
+                "channels": list(channel_names),
+                "frame": t,
+            }
+        )
+        write_frame_annotation(
+            annotation_folder,
+            f"{exp_name}_{position.split(os.sep)[-2]}_{str(t).zfill(4)}",
+            channels,
+            labels_layer,
+            bounds if n_shapes else None,
+            info,
+        )
 
         # This frame's edits were made to be exported as an annotation: they are
         # not lost on close, and asking would push towards saving over the
