@@ -37,6 +37,7 @@ from celldetective.gui.base.threads import (
 from celldetective.gui.base.utils import center_window
 from celldetective.utils.image_loaders import (
     auto_load_number_of_frames,
+    check_movie_channels,
     _get_img_num_per_channel,
     load_frames,
 )
@@ -736,6 +737,7 @@ class StackVisualizer(CelldetectiveWidget):
         """Locate virtual images."""
         # Locate the stack of images if provided as a file
 
+        check_movie_channels(self.stack_path, self.n_channels, self.channel_names)
         self.stack_length = auto_load_number_of_frames(self.stack_path)
         self.mid_time = self.stack_length // 2
         self.current_time_index = 0

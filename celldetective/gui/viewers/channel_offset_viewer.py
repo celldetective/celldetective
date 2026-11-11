@@ -23,6 +23,7 @@ from celldetective.gui.viewers.base_viewer import StackVisualizer
 from celldetective.utils.contrast import contrast_limits, value_range
 from celldetective.utils.image_loaders import (
     auto_load_number_of_frames,
+    check_movie_channels,
     _get_img_num_per_channel,
 )
 from celldetective import get_logger
@@ -265,6 +266,7 @@ class ChannelOffsetViewer(StackVisualizer):
         from tifffile import imread
 
         # Locate the stack of images if provided as a file
+        check_movie_channels(self.stack_path, self.n_channels, self.channel_names)
         self.stack_length = auto_load_number_of_frames(self.stack_path)
         if self.stack_length is None:
             stack = imread(self.stack_path)

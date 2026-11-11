@@ -1085,6 +1085,52 @@ def auto_load_number_of_frames(stack_path: str) -> Optional[int]:
     return plan.n_frames
 
 
+def check_movie_channels(
+    stack_path: str,
+    n_channels: Optional[int],
+    channel_names: Optional[List[str]] = None,
+) -> None:
+    """
+    Check that a movie has the channels the experiment declares, before its
+    images are read as ``t * n_channels + c`` (see :func:`_get_img_num_per_channel`).
+
+    Parameters
+    ----------
+    stack_path : str
+        The movie.
+    n_channels : int or None
+        The number of channels of the experiment. ``None`` skips the check.
+    channel_names : list of str, optional
+        Their names, for the message.
+
+    Raises
+    ------
+    MovieChannelsMismatchError
+        If the experiment declares more channels than a frame of the movie has:
+        the images of its last frames would not exist.
+    """
+
+    from celldetective.exceptions import MovieChannelsMismatchError
+
+    if stack_path is None or n_channels is None:
+        return
+    plan = _get_page_plan(stack_path.replace("\\", "/"))
+    if plan is None or n_channels <= plan.n_channels:
+        return
+
+    def count(n, word):
+        return f"{n} {word}{'' if n == 1 else 's'}"
+
+    names = f" ({', '.join(map(str, channel_names))})" if channel_names else ""
+    raise MovieChannelsMismatchError(
+        f"The movie {os.path.basename(stack_path)} has "
+        f"{count(plan.n_channels, 'channel')} per frame "
+        f"({count(plan.n_frames, 'frame')}), but the experiment declares "
+        f"{count(n_channels, 'channel')}{names}.\n\n"
+        f"Make the channels of the experiment (its config.ini) match the movie."
+    )
+
+
 def _require_frames(
     frames: Optional[np.ndarray], indices: Union[List[int], np.ndarray], file: str
 ) -> np.ndarray:

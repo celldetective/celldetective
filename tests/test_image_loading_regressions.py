@@ -441,6 +441,28 @@ class TestReadersAgreeAfterFixes(_TmpDirCase):
             self.assertEqual(tif.series[0].axes, "CYX")
         self._all_agree(pos, path, frames[..., np.newaxis])
 
+    def test_more_channels_declared_than_the_movie_has(self):
+        """``demo_ricm`` in an experiment declaring a second channel: the check
+        names the counts and the channels, instead of the viewer failing on an
+        image past the end of the movie."""
+        from celldetective.exceptions import MovieChannelsMismatchError
+        from celldetective.utils.image_loaders import check_movie_channels
+
+        frames = np.stack([np.full((H, W), t + 1, np.uint16) for t in range(40)])
+        channels = ["adhesion_channel", "brightfield_channel"]
+        _, movie = self._experiment("ricm_two_channels", channels)
+        path = os.path.join(movie, "Aligned.ome.tif")
+        imwrite(path, frames, ome=True)
+
+        with self.assertRaises(MovieChannelsMismatchError) as caught:
+            check_movie_channels(path, 2, channels)
+        message = str(caught.exception)
+        self.assertIn("1 channel per frame (40 frames)", message)
+        self.assertIn("declares 2 channels (adhesion_channel, brightfield_channel)", message)
+        # Fewer channels than the movie has, or no count, are not refused.
+        check_movie_channels(path, 1)
+        check_movie_channels(path, None)
+
     def test_channels_kept_when_the_experiment_declares_them(self):
         data = np.stack([np.full((H, W), c + 1, np.uint16) for c in range(3)])
         pos, movie = self._experiment(

@@ -92,6 +92,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   acquisitions) read the same pixels in the loops and in napari as in the
   viewer: their planes are not stored in file order, and planes never
   acquired are read as zeros, with a warning.
+- Opening a movie in the viewer when the experiment declares more channels
+  than the movie has shows a message giving both counts, instead of an
+  uncaught `TypeError`.
 - Event annotator: creating a new event class crashed (`AttributeError`).
 - Annotators (event, interaction, phenotype):
   - submitting a cell whose class the options do not show (NaN) marked it for
