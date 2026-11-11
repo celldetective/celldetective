@@ -229,7 +229,7 @@ def record_undo(layer, atoms: Sequence[tuple]) -> None:
     atoms = [atom for atom in atoms if atom is not None]
     if not atoms:
         return
-    mark_unsaved(layer)
+    mark_unsaved(layer, edited_frames(atoms))
     try:
         n_axes = len(atoms[0][0])
         indices = tuple(
@@ -249,30 +249,60 @@ def record_undo(layer, atoms: Sequence[tuple]) -> None:
 UNSAVED_EDITS_KEY = "celldetective_unsaved_edits"
 
 
-# The flag lives in the layer's metadata, so a viewer, its panels and its save
-# buttons share it without holding references to one another.
+# The frames edited since the last save live in the layer's metadata, so a
+# viewer, its panels and its save buttons share them without holding references
+# to one another. Saving writes only those frames, and an annotation export
+# clears only its own.
 
 
-def mark_unsaved(layer) -> None:
-    """Record that a layer holds edits not yet written out."""
+def edited_frames(atoms: Sequence[tuple]) -> Set[int]:
+    """
+    The frames a list of napari history atoms touches.
+
+    Parameters
+    ----------
+    atoms : list of tuple
+        ``(indices, before, after)`` atoms, as napari's ``paint`` event and
+        :func:`history_atom` give them; None entries are ignored.
+
+    Returns
+    -------
+    set of int
+        The time indices of the edited pixels.
+    """
+    frames = set()
+    for atom in atoms:
+        if atom is not None and len(atom[0]):
+            frames.update(int(t) for t in np.unique(atom[0][0]))
+    return frames
+
+
+def mark_unsaved(layer, frames) -> None:
+    """Record that frames of a layer hold edits not yet written out."""
     # `record_undo` calls this for whatever it is given, layer-like stubs too.
     metadata = getattr(layer, "metadata", None)
     if metadata is not None:
-        metadata[UNSAVED_EDITS_KEY] = True
+        metadata[UNSAVED_EDITS_KEY] = unsaved_frames(layer) | {int(t) for t in frames}
 
 
-def clear_unsaved(layer) -> None:
-    """Record that the edits of a layer have been written out."""
-    layer.metadata[UNSAVED_EDITS_KEY] = False
+def clear_unsaved(layer, frames=None) -> None:
+    """Record that frames of a layer, or all of them, have been written out."""
+    remaining = set() if frames is None else unsaved_frames(layer) - set(frames)
+    layer.metadata[UNSAVED_EDITS_KEY] = remaining
+
+
+def unsaved_frames(layer) -> Set[int]:
+    """The frames of a layer edited since they were last written out."""
+    return set(layer.metadata.get(UNSAVED_EDITS_KEY, ()))
 
 
 def has_unsaved(layer) -> bool:
     """Whether a layer holds edits not yet written out."""
-    return bool(layer.metadata.get(UNSAVED_EDITS_KEY, False))
+    return bool(unsaved_frames(layer))
 
 
 def _on_paint(event) -> None:
-    mark_unsaved(event.source)
+    mark_unsaved(event.source, edited_frames(event.value))
 
 
 def track_unsaved_edits(layer) -> None:

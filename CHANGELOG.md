@@ -63,9 +63,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - closing a viewer with edits that were neither saved nor exported asks
     first, in the segmentation viewer, the track viewer and the annotation
     corrector;
-  - *Save the modified labels* on a position that already has tracks warns
-    that saving rewrites and renumbers the masks of every frame, so tracking and
-    the steps after it must be run again, and saves only if accepted;
+  - *Save the modified labels* writes only the frames edited since the last
+    save, by hand or from the panels, instead of rewriting and renumbering every
+    frame; the other frames keep the mask numbers the tables refer to. On a
+    position that already has tracks, it says which frames it will write and
+    saves only if accepted;
+  - exporting an annotation counts as saving that frame only: closing still
+    asks when other frames hold edits;
+  - the annotation export reads regions as the *Threshold* tab does:
+    rectangles, polygons and ellipses in any shapes layer (the *ROIs* layer
+    included), carried on from earlier frames or drawn in 2D for every frame,
+    each exported as its bounding box. It used to read only rectangles drawn
+    on the current frame in a layer named `Shapes`;
   - exporting corrected tracks says which event columns were computed before
     the correction, and how many detections were added without measurements;
   - the double-click question says what the click will do, including the two
@@ -172,6 +181,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   is reported in a message box instead of only in the console.
 
 ### Removed
+- `celldetective.utils.experiment`: `relabel_segmentation`,
+  `relabel_segmentation_lazy`, `tracks_to_napari`, `view_tracks_in_napari`,
+  `control_tracking_table` and `_view_on_napari`, unused copies of the
+  functions in `celldetective.utils.mask_cleaning` and `celldetective.napari.utils`.
+  The `relabel_segmentation` copy still gave an untracked mask an existing track
+  ID.
 - `celldetective.measure.write_first_detection_class`, an unused copy of
   `celldetective.tracking.write_first_detection_class` with another convention.
 

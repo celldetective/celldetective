@@ -30,11 +30,13 @@ from celldetective.utils.data_loaders import (
     load_tracking_data,
     position_table_path,
 )
+from celldetective.napari.threshold_segmentation import shapes_on_frame
 from celldetective.napari.frame_segmentation import (
     clear_unsaved,
     has_unsaved,
     mark_unsaved,
     track_unsaved_edits,
+    unsaved_frames,
 )
 from celldetective.utils.experiment import (
     extract_experiment_from_position,
@@ -378,18 +380,107 @@ def _roi_bounds(
     return row_min, row_max, col_min, col_max
 
 
+def annotation_crops(
+    shapes_layers: List[Any], frame_index: int, frame_shape: Tuple[int, int]
+) -> Tuple[int, List[Tuple[int, int, int, int]]]:
+    """
+    The crops an annotation export takes from the regions drawn on a frame.
+
+    The regions are read as the threshold panel reads them
+    (:func:`~celldetective.napari.threshold_segmentation.shapes_on_frame`):
+    rectangles, polygons and ellipses in any shapes layer, drawn on this frame or
+    carried on from the closest earlier frame that has some, or drawn in 2D for
+    every frame. Each crop is the shape's bounding box, clipped to the frame.
+
+    Parameters
+    ----------
+    shapes_layers : list of napari.layers.Shapes
+        The shapes layers of the viewer.
+    frame_index : int
+        The frame being exported.
+    frame_shape : tuple of int
+        The (Y, X) shape of the frame.
+
+    Returns
+    -------
+    n_shapes : int
+        How many shapes apply to the frame, including any outside it.
+    crops : list of tuple of int
+        ``(row_min, row_max, col_min, col_max)`` of each crop inside the frame.
+    """
+    n_shapes = 0
+    crops = []
+    for layer in shapes_layers:
+        shapes, _ = shapes_on_frame(layer, frame_index)
+        for _kind, yx in shapes:
+            n_shapes += 1
+            crop = _roi_bounds(yx, frame_shape)
+            if crop is None:
+                logger.warning(f"Skipping a region outside the frame: {yx.tolist()}")
+            else:
+                crops.append(crop)
+    return n_shapes, crops
+
+
 def _has_trajectory_table(position: str, population: str) -> bool:
     """Whether a population has been tracked at a position."""
     return os.path.exists(position_table_path(position, population))
 
 
-def stale_tables_question(population: str) -> str:
+def _label_file(output_folder: str, t: int) -> str:
+    return os.path.join(output_folder, f"{str(t).zfill(4)}.tif")
+
+
+def frames_to_save(labels: np.ndarray, edited, output_folder: str) -> List[int]:
+    """
+    The frames *Save the modified labels* has to write.
+
+    Only the frames edited since the last save, so that every other frame keeps
+    its masks and their numbers, which the tables refer to. An edited frame that
+    is back to what is on disk (an edit undone) is left alone too. A frame with
+    no file at all is always written.
+
+    Parameters
+    ----------
+    labels : ndarray
+        The labels in the viewer (TYX).
+    edited : iterable of int
+        The frames edited since the last save.
+    output_folder : str
+        The position's labels folder.
+
+    Returns
+    -------
+    list of int
+        The frames to write, in order.
+    """
+    edited = set(edited)
+    frames = []
+    for t in range(len(labels)):
+        path = _label_file(output_folder, t)
+        if not os.path.exists(path):
+            frames.append(t)
+        elif t in edited:
+            try:
+                on_disk = imread(path)
+            except Exception as e:
+                logger.debug(f"Could not read {path} to compare it: {e}")
+                frames.append(t)
+                continue
+            if on_disk.shape != labels[t].shape or not np.array_equal(on_disk, labels[t]):
+                frames.append(t)
+    return frames
+
+
+def stale_tables_question(population: str, frames: List[int]) -> str:
     """The warning shown before masks are saved over a tracked position."""
+    shown = ", ".join(str(t) for t in frames[:10]) + (", …" if len(frames) > 10 else "")
     return (
         f"This position already has a trajectory table for the {population}. "
-        "Saving rewrites the masks of every frame and renumbers them, so the "
-        "tracks and measurements will no longer match the masks. Run tracking "
-        "and the steps after it again once the masks are saved.\n\nSave anyway?"
+        f"Saving rewrites the masks of {len(frames)} edited frame(s) ({shown}) "
+        "and renumbers them, so on those frames the tracks and measurements will "
+        "no longer match the masks. Run tracking and the steps after it again "
+        "once the masks are saved.\n\nSave anyway?"
     )
 
 
@@ -1086,7 +1177,7 @@ def launch_napari_viewer(
             )
 
         df = propagate_identity(segmentation, df, frame, value_under, target_track_id)
-        mark_unsaved(viewer.layers["segmentation"])
+        mark_unsaved(viewer.layers["segmentation"], [frame])
 
         vertices, tracks, properties, graph = tracks_to_napari(df, exclude_nans=True)
 
@@ -1505,29 +1596,36 @@ def launch_segmentation_viewer(
         from PyQt5.QtWidgets import QApplication, QProgressDialog
         from PyQt5.QtCore import Qt
 
+        layer = viewer.layers["segmentation"]
+        labels_layer = layer.data
+        parent = viewer.window._qt_window
+        if not os.path.exists(output_folder):
+            os.mkdir(output_folder)
+
+        frames = frames_to_save(labels_layer, unsaved_frames(layer), output_folder)
+        if not frames:
+            clear_unsaved(layer)
+            QMessageBox.information(
+                parent,
+                "Save the modified labels",
+                "No frame was edited since the last save: nothing to write.",
+            )
+            return
+
         if _has_trajectory_table(position, population):
             answer = QMessageBox.question(
-                viewer.window._qt_window,
+                parent,
                 "Save the modified labels",
-                stale_tables_question(population),
+                stale_tables_question(population, frames),
                 QMessageBox.Yes | QMessageBox.No,
                 QMessageBox.No,
             )
             if answer != QMessageBox.Yes:
                 return
 
-        labels_layer = viewer.layers["segmentation"].data
-        if not os.path.exists(output_folder):
-            os.mkdir(output_folder)
-
-        n_total = len(labels_layer)
         # Saving can take a few seconds; show a modal, non-cancellable progress
         # bar and pump the event loop each frame so it stays responsive.
-        try:
-            parent = viewer.window._qt_window
-        except Exception:
-            parent = None
-        pbar = QProgressDialog("Saving the modified labels…", None, 0, n_total, parent)
+        pbar = QProgressDialog("Saving the modified labels…", None, 0, len(frames), parent)
         pbar.setWindowTitle("Saving")
         pbar.setWindowModality(Qt.WindowModal)
         pbar.setMinimumDuration(0)
@@ -1538,33 +1636,27 @@ def launch_segmentation_viewer(
         pbar.setValue(0)
         QApplication.processEvents()
 
-        corrected_stack = labels_layer.copy()
-        n_frames = 0
         n_objects_total = 0
         try:
-            for t, im in enumerate(tqdm(labels_layer)):
-
+            for i, t in enumerate(tqdm(frames)):
+                im = labels_layer[t]
                 try:
                     im = auto_correct_masks(im, **_correction_kwargs())
                 except Exception as e:
                     logger.warning(f"auto_correct_masks failed: {e}")
 
-                corrected_stack[t] = im.astype(corrected_stack.dtype)
+                # Back into the viewer, so the auto-fixed masks are what is shown.
+                labels_layer[t] = im.astype(labels_layer.dtype)
                 save_tiff_imagej_compatible(
-                    output_folder + f"{str(t).zfill(4)}.tif",
-                    im.astype(np.int16),
-                    axes="YX",
+                    _label_file(output_folder, t), im.astype(np.int16), axes="YX"
                 )
-                n_frames += 1
                 n_objects_total += int((np.unique(im) != 0).sum())
 
-                pbar.setValue(t + 1)
+                pbar.setValue(i + 1)
                 QApplication.processEvents()
 
-            # Reflect the auto-fixed masks back into the viewer so the result is visible
-            viewer.layers["segmentation"].data = corrected_stack
-            viewer.layers["segmentation"].refresh()
-            clear_unsaved(viewer.layers["segmentation"])
+            layer.refresh()
+            clear_unsaved(layer)
         finally:
             pbar.close()
 
@@ -1574,7 +1666,8 @@ def launch_segmentation_viewer(
             logger.info(f"population: {population}")
             logger.info(f"output_folder: {output_folder}")
             logger.info(
-                f"frames written: {n_frames}, labelled objects (summed over frames): {n_objects_total}"
+                f"frames written: {len(frames)} ({frames}), labelled objects "
+                f"(summed over frames): {n_objects_total}"
             )
 
     def export_annotation():
@@ -1626,104 +1719,97 @@ def launch_segmentation_viewer(
 
         fov_export = True
 
-        if "Shapes" in viewer.layers:
-            # Shape by shape: shapes with other vertex counts (a polygon next
-            # to the rectangles) would make a ragged array.
-            frame_shape = tuple(labels_layer.shape[-2:])
-            bounds = []
-            for sq in map(np.asarray, viewer.layers["Shapes"].data):
-                if len(sq) != 4 or sq.shape[-1] != 3 or sq[0, 0] != t:
-                    continue
-                # A rectangle drawn on this frame means a crop was meant: never
-                # fall back to the whole field, even for one outside it.
-                fov_export = False
-                roi = _roi_bounds(sq, frame_shape)
-                if roi is None:
-                    logger.warning(f"Skipping a rectangle outside the frame: {sq}")
-                else:
-                    bounds.append(roi)
-            logger.info(f"Found {len(bounds)} ROIs...")
+        n_shapes, bounds = annotation_crops(
+            [layer for layer in viewer.layers if type(layer).__name__ == "Shapes"],
+            t,
+            tuple(labels_layer.shape[-2:]),
+        )
+        logger.info(f"Found {len(bounds)} ROIs...")
+        if n_shapes:
+            # A region applies to this frame, so a crop was meant: never fall
+            # back to the whole field, even for one outside the frame.
+            fov_export = False
 
-            for k, (xmin, xmax, ymin, ymax) in enumerate(bounds):
-                pad_to_256 = False
-                logger.debug(f"xmin={xmin};xmax={xmax};ymin={ymin};ymax={ymax}")
-                frame = viewer.layers["Image"].data[t][xmin:xmax, ymin:ymax]
-                if frame.shape[1] < 256 or frame.shape[0] < 256:
-                    pad_to_256 = True
-                    logger.warning(
-                        "Crop too small! Padding with zeros to reach 256*256 pixels..."
-                    )
-                    # continue
-                multichannel = [frame]
-                for i in range(len(channel_indices) - 1):
-                    try:
-                        frame = viewer.layers[f"Image [{i + 1}]"].data[t][
-                            xmin:xmax, ymin:ymax
-                        ]
-                        multichannel.append(frame)
-                    except Exception as e:
-                        logger.debug(f"Could not extract frame from layer Image [{i + 1}]: {e}")
-                multichannel = np.array(multichannel)
-                lab = labels_layer[xmin:xmax, ymin:ymax].astype(np.int16)
-                if pad_to_256:
-                    shape = multichannel.shape
-                    pad_length_x = max([0, 256 - multichannel.shape[1]])
-                    if pad_length_x > 0 and pad_length_x % 2 == 1:
-                        pad_length_x += 1
-                    pad_length_y = max([0, 256 - multichannel.shape[2]])
-                    if pad_length_y > 0 and pad_length_y % 2 == 1:
-                        pad_length_y += 1
-                    padded_image = np.array(
-                        [
-                            np.pad(
-                                im,
-                                (
-                                    (pad_length_x // 2, pad_length_x // 2),
-                                    (pad_length_y // 2, pad_length_y // 2),
-                                ),
-                                mode="constant",
-                            )
-                            for im in multichannel
-                        ]
-                    )
-                    padded_label = np.pad(
-                        lab,
-                        (
-                            (pad_length_x // 2, pad_length_x // 2),
-                            (pad_length_y // 2, pad_length_y // 2),
-                        ),
-                        mode="constant",
-                    )
-                    lab = padded_label
-                    multichannel = padded_image
-
-                save_tiff_imagej_compatible(
-                    annotation_folder
-                    + f"{exp_name}_{position.split(os.sep)[-2]}_{str(t).zfill(4)}_roi_{xmin}_{xmax}_{ymin}_{ymax}_labelled.tif",
+        for k, (xmin, xmax, ymin, ymax) in enumerate(bounds):
+            pad_to_256 = False
+            logger.debug(f"xmin={xmin};xmax={xmax};ymin={ymin};ymax={ymax}")
+            frame = viewer.layers["Image"].data[t][xmin:xmax, ymin:ymax]
+            if frame.shape[1] < 256 or frame.shape[0] < 256:
+                pad_to_256 = True
+                logger.warning(
+                    "Crop too small! Padding with zeros to reach 256*256 pixels..."
+                )
+                # continue
+            multichannel = [frame]
+            for i in range(len(channel_indices) - 1):
+                try:
+                    frame = viewer.layers[f"Image [{i + 1}]"].data[t][
+                        xmin:xmax, ymin:ymax
+                    ]
+                    multichannel.append(frame)
+                except Exception as e:
+                    logger.debug(f"Could not extract frame from layer Image [{i + 1}]: {e}")
+            multichannel = np.array(multichannel)
+            lab = labels_layer[xmin:xmax, ymin:ymax].astype(np.int16)
+            if pad_to_256:
+                shape = multichannel.shape
+                pad_length_x = max([0, 256 - multichannel.shape[1]])
+                if pad_length_x > 0 and pad_length_x % 2 == 1:
+                    pad_length_x += 1
+                pad_length_y = max([0, 256 - multichannel.shape[2]])
+                if pad_length_y > 0 and pad_length_y % 2 == 1:
+                    pad_length_y += 1
+                padded_image = np.array(
+                    [
+                        np.pad(
+                            im,
+                            (
+                                (pad_length_x // 2, pad_length_x // 2),
+                                (pad_length_y // 2, pad_length_y // 2),
+                            ),
+                            mode="constant",
+                        )
+                        for im in multichannel
+                    ]
+                )
+                padded_label = np.pad(
                     lab,
-                    axes="YX",
+                    (
+                        (pad_length_x // 2, pad_length_x // 2),
+                        (pad_length_y // 2, pad_length_y // 2),
+                    ),
+                    mode="constant",
                 )
-                save_tiff_imagej_compatible(
-                    annotation_folder
-                    + f"{exp_name}_{position.split(os.sep)[-2]}_{str(t).zfill(4)}_roi_{xmin}_{xmax}_{ymin}_{ymax}.tif",
-                    multichannel,
-                    axes="CYX",
-                )
+                lab = padded_label
+                multichannel = padded_image
 
-                info.update(
-                    {
-                        "spatial_calibration": spatial_calibration,
-                        "channels": list(channel_names),
-                        "frame": t,
-                    }
-                )
+            save_tiff_imagej_compatible(
+                annotation_folder
+                + f"{exp_name}_{position.split(os.sep)[-2]}_{str(t).zfill(4)}_roi_{xmin}_{xmax}_{ymin}_{ymax}_labelled.tif",
+                lab,
+                axes="YX",
+            )
+            save_tiff_imagej_compatible(
+                annotation_folder
+                + f"{exp_name}_{position.split(os.sep)[-2]}_{str(t).zfill(4)}_roi_{xmin}_{xmax}_{ymin}_{ymax}.tif",
+                multichannel,
+                axes="CYX",
+            )
 
-                info_name = (
-                    annotation_folder
-                    + f"{exp_name}_{position.split(os.sep)[-2]}_{str(t).zfill(4)}_roi_{xmin}_{xmax}_{ymin}_{ymax}.json"
-                )
-                with open(info_name, "w") as f:
-                    json.dump(info, f, indent=4)
+            info.update(
+                {
+                    "spatial_calibration": spatial_calibration,
+                    "channels": list(channel_names),
+                    "frame": t,
+                }
+            )
+
+            info_name = (
+                annotation_folder
+                + f"{exp_name}_{position.split(os.sep)[-2]}_{str(t).zfill(4)}_roi_{xmin}_{xmax}_{ymin}_{ymax}.json"
+            )
+            with open(info_name, "w") as f:
+                json.dump(info, f, indent=4)
 
         if fov_export:
             frame = viewer.layers["Image"].data[t]
@@ -1764,14 +1850,15 @@ def launch_segmentation_viewer(
                 json.dump(info, f, indent=4)
 
         if not fov_export and not bounds:
-            # Every rectangle on this frame was outside it: nothing was written,
+            # Every region on this frame was outside it: nothing was written,
             # so the edits are still at stake on close.
-            logger.warning("No annotation was exported: no rectangle overlaps the frame.")
+            logger.warning("No annotation was exported: no region overlaps the frame.")
             return
 
-        # The edits were made to be exported as an annotation; they are not
-        # lost on close, and asking would push towards saving over the position.
-        clear_unsaved(viewer.layers["segmentation"])
+        # This frame's edits were made to be exported as an annotation: they are
+        # not lost on close, and asking would push towards saving over the
+        # position. Edits on other frames still are.
+        clear_unsaved(viewer.layers["segmentation"], [t])
         logger.info("Annotation export done.")
 
     @magicgui(call_button="Save the modified labels")

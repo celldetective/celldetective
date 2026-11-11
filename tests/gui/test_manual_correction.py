@@ -235,10 +235,83 @@ class TestStaleTables:
     def test_an_untracked_position_needs_no_warning(self, tmp_path):
         assert not nu._has_trajectory_table(str(tmp_path), "targets")
 
-    def test_the_question_names_the_population_and_the_remedy(self):
-        text = nu.stale_tables_question("effectors")
+    def test_the_question_names_the_population_the_frames_and_the_remedy(self):
+        text = nu.stale_tables_question("effectors", [3, 7])
         assert "effectors" in text
+        assert "2 edited frame(s) (3, 7)" in text
         assert "tracking" in text
+
+
+class TestFramesToSave:
+
+    @staticmethod
+    def _folder(tmp_path, labels, frames):
+        from tifffile import imwrite
+
+        for t in frames:
+            imwrite(str(tmp_path / f"{str(t).zfill(4)}.tif"), labels[t])
+        return str(tmp_path) + os.sep
+
+    def test_only_the_edited_frames_are_written(self, tmp_path):
+        labels = np.zeros((4, 8, 8), dtype=np.int16)
+        folder = self._folder(tmp_path, labels, range(4))
+        labels[2, 1, 1] = 5
+        assert nu.frames_to_save(labels, {2}, folder) == [2]
+
+    def test_an_edit_undone_is_not_written(self, tmp_path):
+        labels = np.zeros((3, 8, 8), dtype=np.int16)
+        folder = self._folder(tmp_path, labels, range(3))
+        # Flagged, but back to what is on disk.
+        assert nu.frames_to_save(labels, {1}, folder) == []
+
+    def test_a_frame_without_a_file_is_always_written(self, tmp_path):
+        labels = np.zeros((3, 8, 8), dtype=np.int16)
+        folder = self._folder(tmp_path, labels, [0, 2])
+        assert nu.frames_to_save(labels, set(), folder) == [1]
+
+
+class TestAnnotationCrops:
+
+    @staticmethod
+    def _layer(shapes, kinds=None):
+        data = [np.asarray(s, dtype=float) for s in shapes]
+        return SimpleNamespace(data=data, shape_type=kinds or ["rectangle"] * len(data))
+
+    @staticmethod
+    def _rect(t, r0, c0, r1, c1):
+        return [[t, r0, c0], [t, r0, c1], [t, r1, c1], [t, r1, c0]]
+
+    def test_a_rectangle_on_the_frame_is_a_crop(self):
+        layer = self._layer([self._rect(2, 10, 20, 50, 70)])
+        assert nu.annotation_crops([layer], 2, (100, 100)) == (1, [(10, 50, 20, 70)])
+
+    def test_regions_carry_on_from_an_earlier_frame(self):
+        layer = self._layer([self._rect(2, 10, 20, 50, 70)])
+        assert nu.annotation_crops([layer], 5, (100, 100))[1] == [(10, 50, 20, 70)]
+        assert nu.annotation_crops([layer], 1, (100, 100)) == (0, [])
+
+    def test_any_shapes_layer_counts_including_the_threshold_rois(self):
+        shapes = self._layer([self._rect(0, 0, 0, 10, 10)])
+        rois = self._layer([self._rect(0, 20, 20, 40, 40)])
+        rois.name = "ROIs"
+        assert nu.annotation_crops([shapes, rois], 0, (100, 100))[1] == [
+            (0, 10, 0, 10),
+            (20, 40, 20, 40),
+        ]
+
+    def test_a_polygon_gives_its_bounding_box_and_a_line_nothing(self):
+        polygon = [[0, 10, 10], [0, 30, 50], [0, 60, 20], [0, 40, 5], [0, 15, 2]]
+        line = [[0, 0, 0], [0, 90, 90]]
+        layer = self._layer([polygon, line], kinds=["polygon", "line"])
+        assert nu.annotation_crops([layer], 0, (100, 100)) == (1, [(10, 60, 2, 50)])
+
+    def test_a_2d_region_applies_to_every_frame(self):
+        layer = self._layer([[[10, 20], [10, 70], [50, 70], [50, 20]]])
+        assert nu.annotation_crops([layer], 9, (100, 100))[1] == [(10, 50, 20, 70)]
+
+    def test_a_region_outside_the_frame_is_counted_but_not_cropped(self):
+        layer = self._layer([self._rect(0, -50, -50, -10, -10)])
+        assert nu.annotation_crops([layer], 0, (100, 100)) == (1, [])
 
 
 class TestUnsavedFlag:
@@ -252,13 +325,19 @@ class TestUnsavedFlag:
     def test_a_new_layer_has_no_unsaved_edits(self):
         assert not fs.has_unsaved(self._layer())
 
-    def test_painting_marks_the_layer(self):
+    def test_painting_marks_the_frame_painted_on(self):
         layer = self._layer()
         fs.track_unsaved_edits(layer)
         layer.paint((1, 5, 5), 3)
-        assert fs.has_unsaved(layer)
+        assert fs.unsaved_frames(layer) == {1}
         fs.clear_unsaved(layer)
         assert not fs.has_unsaved(layer)
+
+    def test_clearing_one_frame_keeps_the_others(self):
+        layer = self._layer()
+        fs.mark_unsaved(layer, [0, 1])
+        fs.clear_unsaved(layer, [0])
+        assert fs.unsaved_frames(layer) == {1}
 
     def test_a_refresh_does_not_mark_the_layer(self):
         layer = self._layer()
@@ -268,16 +347,16 @@ class TestUnsavedFlag:
 
     def test_a_bulk_write_is_marked_explicitly(self):
         layer = self._layer()
-        fs.mark_unsaved(layer)
+        fs.mark_unsaved(layer, [1])
         assert fs.has_unsaved(layer)
 
-    def test_recording_an_undo_step_marks_the_layer(self):
+    def test_recording_an_undo_step_marks_its_frames(self):
         layer = self._layer()
-        before = layer.data[0].copy()
+        before = layer.data[1].copy()
         after = before.copy()
         after[2, 2] = 7
-        fs.record_undo(layer, [fs.history_atom(0, before, after)])
-        assert fs.has_unsaved(layer)
+        fs.record_undo(layer, [fs.history_atom(1, before, after)])
+        assert fs.unsaved_frames(layer) == {1}
 
     def test_an_empty_undo_step_does_not(self):
         layer = self._layer()
@@ -325,7 +404,7 @@ class TestGuardUnsavedClose:
         viewer, window = self._viewer(qtbot)
         layer = self._layer()
         nu.guard_unsaved_close(viewer, layer, "lose them?")
-        fs.mark_unsaved(layer)
+        fs.mark_unsaved(layer, [0])
         assert window.close()
 
     def test_the_guard_does_not_keep_the_layer_alive(self, qtbot, monkeypatch):
@@ -333,7 +412,7 @@ class TestGuardUnsavedClose:
         viewer, window = self._viewer(qtbot)
         layer = self._layer()
         nu.guard_unsaved_close(viewer, layer, "lose them?")
-        fs.mark_unsaved(layer)
+        fs.mark_unsaved(layer, [0])
         del layer
         gc.collect()
         assert window.close()
