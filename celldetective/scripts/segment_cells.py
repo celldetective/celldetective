@@ -14,7 +14,10 @@ from celldetective.utils.image_loaders import (
     _get_img_num_per_channel,
 )
 from celldetective.utils.mask_cleaning import _check_label_dims
-from celldetective.utils.experiment import extract_position_name
+from celldetective.utils.experiment import (
+    extract_position_name,
+    get_position_movie_path,
+)
 from celldetective.utils.stardist_utils import (
     _prep_stardist_model,
     _segment_image_with_stardist_model,
@@ -32,7 +35,6 @@ from celldetective.utils.parsing import (
     _extract_nbr_channels_from_config,
 )
 from pathlib import Path, PurePath
-from glob import glob
 from shutil import rmtree
 from tqdm import tqdm
 import numpy as np
@@ -138,9 +140,8 @@ spatial_calibration = float(config_section_to_dict(config, "MovieSettings")["pxt
 len_movie = float(config_section_to_dict(config, "MovieSettings")["len_movie"])
 
 # Try to find the file
-try:
-    file = glob(pos + f"movie/{movie_prefix}*.tif")[0]
-except IndexError:
+file = get_position_movie_path(pos, movie_prefix)
+if file is None:
     logger.error("Movie could not be found. Check the prefix.")
     sys.exit(1)
 

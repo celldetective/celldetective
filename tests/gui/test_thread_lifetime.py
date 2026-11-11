@@ -22,10 +22,12 @@ import unittest
 from PyQt5.QtCore import QMutex, QThread, QWaitCondition
 
 from celldetective.gui.base.threads import (
+    _DESTROY_HANDLERS,
     _LIVE_THREADS,
     start_tracked,
     stop_all_tracked_threads,
     stop_thread,
+    stop_when_destroyed,
     track_thread,
 )
 
@@ -109,6 +111,42 @@ class TestThreadLifetime(unittest.TestCase):
         """A widget may tear down before it ever got as far as starting."""
 
         self.assertTrue(stop_thread(track_thread(_ParkedThread())))
+
+    def test_the_destroyed_handler_stays_reachable_until_it_runs(self):
+        """
+        The handler of :func:`stop_when_destroyed` is held by the module, not
+        only by the connection, so a collection cannot clear it (or the
+        thread) before Qt emits ``destroyed``. A lambda connected directly was
+        called cleared by the collector ("missing 1 required positional
+        argument: 't'") in ``test_registration_roi_viewer.py`` on Windows with
+        Python 3.11. Once it has run, it stops the thread and drops out.
+        """
+
+        import sys
+
+        from PyQt5 import sip
+        from PyQt5.QtCore import QObject
+
+        errors = []
+        previous_hook = sys.excepthook
+        sys.excepthook = lambda *exc: errors.append(exc[1])
+        try:
+            thread = start_tracked(_ParkedThread())
+            owner = QObject()
+            stop_when_destroyed(owner, thread)
+            (handler,) = _DESTROY_HANDLERS
+            gc.collect()
+            self.assertIn(handler, _DESTROY_HANDLERS)
+            self.assertTrue(thread.isRunning())
+
+            sip.delete(owner)
+        finally:
+            sys.excepthook = previous_hook
+
+        self.assertEqual(errors, [])
+        self.assertTrue(thread.wait(5000))
+        self.assertFalse(thread.isRunning())
+        self.assertEqual(len(_DESTROY_HANDLERS), 0)
 
     def test_stop_all_clears_everything_running(self):
         threads = [start_tracked(_ParkedThread()) for _ in range(3)]

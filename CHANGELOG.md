@@ -59,8 +59,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   profile, so a fix in one window now reaches the others. Along the way:
   - the event annotator lists numeric signals only;
   - in an untracked phenotype table, a cell is selected by its ID and frame.
+- Image loading: a movie with both Z and time keeps its time points; each is
+  the maximum intensity projection of its slices (they were flattened into one
+  long time axis), with a warning. In a file with neither time nor Z, the
+  channels are read as frames when their number differs from the channels of
+  the experiment (the frames of a movie saved by tifffile without axes are
+  labelled channels), and kept as channels when it matches, however many (more
+  than 5 were always taken for time). Outside an experiment, the old rule
+  applies.
 
 ### Fixed
+- Image loading: segmentation, measurements, tracking and the Qt viewers read
+  each frame and channel where the file stores it, as napari does. This fixes
+  movies stored channel by channel (Bio-Formats `DimensionOrder` `XYZTC`), Z
+  with time, RGB time-lapses (X and colours were swapped), multi-file OME-TIFF
+  sets (only the first file was read) and plain TIFFs with more pages than
+  pixels on a side (read as one frame).
+- Movies named `.tiff` or `.ome.tiff` are found. When several movies match the
+  prefix, the first in natural order is used everywhere, with a warning (the
+  file system chose, and the loops and the viewer could disagree).
+- Opening a compressed movie, or any OME-TIFF written by Bio-Formats, in napari
+  reads it frame by frame instead of loading it whole into memory.
+- A warning names what is not read: the other positions of a multi-position
+  file and the missing files of a multi-file set (read as zeros).
+- Segmentation stops with a clear error when a frame cannot be read, instead of
+  an `AttributeError`.
+- A TIFF whose OME metadata cannot be parsed is read page by page, as frames,
+  with a warning, instead of failing to open.
+- A plain TIFF written by tifffile with padding axes of size 1 (e.g.
+  `(1, 1, 834, Y, X, 1)`) is read as 834 frames instead of its first plane.
+- Micro-Manager NDTiff movies (single and multi-file, Magellan tiles, aborted
+  acquisitions) read the same pixels in the loops and in napari as in the
+  viewer: their planes are not stored in file order, and planes never
+  acquired are read as zeros, with a warning.
+- Opening a movie in the viewer when the experiment declares more channels
+  than the movie has shows a message giving both counts, instead of an
+  uncaught `TypeError`.
 - Event annotator: creating a new event class crashed (`AttributeError`).
 - Annotators (event, interaction, phenotype):
   - submitting a cell whose class the options do not show (NaN) marked it for

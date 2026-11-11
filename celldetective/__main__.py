@@ -83,6 +83,9 @@ def main():
     )
 
     App = QApplication(sys.argv)
+    from celldetective.gui.base.components import show_user_errors
+
+    show_user_errors()
     App.setStyle(CelldetectiveStyle("Fusion"))
     App.setStyleSheet(TOOLTIP_STYLE + SCROLLBAR_STYLE)
 

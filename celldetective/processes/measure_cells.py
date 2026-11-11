@@ -10,7 +10,10 @@ from celldetective.utils.image_loaders import (
     load_frames,
     _get_img_num_per_channel,
 )
-from celldetective.utils.experiment import extract_experiment_channels
+from celldetective.utils.experiment import (
+    extract_experiment_channels,
+    get_position_movie_path,
+)
 from celldetective.utils.parsing import config_section_to_dict
 from celldetective.utils.data_cleaning import (
     _extract_coordinates_from_features,
@@ -313,12 +316,8 @@ class MeasurementProcess(Process):
             self.border_distances = None
             self.label_path = None
 
-        try:
-            self.file = glob(
-                self.pos + os.sep.join(["movie", f"{self.movie_prefix}*.tif"])
-            )[0]
-        except IndexError:
-            self.file = None
+        self.file = get_position_movie_path(self.pos, self.movie_prefix)
+        if self.file is None:
             self.haralick_option = None
             self.features = drop_tonal_features(self.features)
 

@@ -4,7 +4,6 @@ import time
 import os
 import json
 from pathlib import Path, PurePath
-from glob import glob
 from shutil import rmtree
 from tqdm import tqdm
 import numpy as np
@@ -17,12 +16,13 @@ from celldetective.log_manager import get_logger, positionlogger
 from celldetective.utils.experiment import (
     extract_position_name,
     extract_experiment_channels,
+    get_position_movie_path,
 )
 from celldetective.utils.image_loaders import (
     auto_load_number_of_frames,
     _get_img_num_per_channel,
     _load_frames_to_segment,
-    load_frames,
+    _load_raw_frames,
 )
 from celldetective.utils.image_transforms import _combined_scale_factor
 from celldetective.utils.mask_cleaning import _check_label_dims
@@ -227,10 +227,9 @@ class BaseSegmentProcess(Process):
     def detect_movie_length(self):
         """Detect the length of the movie."""
 
-        try:
-            self.file = glob(self.pos + f"movie/{self.movie_prefix}*.tif")[0]
-        except Exception as e:
-            self.abort_process(f"Movie could not be found ({e}). Check the prefix.")
+        self.file = get_position_movie_path(self.pos, self.movie_prefix)
+        if self.file is None:
+            self.abort_process("Movie could not be found. Check the prefix.")
 
         len_movie_auto = auto_load_number_of_frames(self.file)
         if len_movie_auto is not None:
@@ -675,11 +674,8 @@ class SegmentCellThresholdProcess(BaseSegmentProcess):
         for i in range(len(self.instructions)):
 
             if self.equalize[i]:
-                f_reference = load_frames(
-                    self.img_num_channels[:, self.equalize_time[i]],
-                    self.file,
-                    scale=None,
-                    normalize_input=False,
+                f_reference = _load_raw_frames(
+                    self.file, self.img_num_channels[:, self.equalize_time[i]]
                 )
                 f_reference = f_reference[:, :, self.instructions[i]["target_channel"]]
             else:
@@ -770,12 +766,7 @@ class SegmentCellThresholdProcess(BaseSegmentProcess):
                 # Load channels at time t
                 masks = []
                 for i in range(len(self.instructions)):
-                    f = load_frames(
-                        self.img_num_channels[:, t],
-                        self.file,
-                        scale=None,
-                        normalize_input=False,
-                    )
+                    f = _load_raw_frames(self.file, self.img_num_channels[:, t])
 
                     mask = segment_frame_from_thresholds(f, **self.instructions[i])
                     # print(f'Frame {t}; segment with {self.instructions[i]=}...')

@@ -34,7 +34,10 @@ from superqt.fonticon import icon
 from fonticon_mdi6 import MDI6
 from celldetective import get_software_location
 from celldetective.measure import compute_haralick_features
-from celldetective.utils.experiment import extract_experiment_channels
+from celldetective.utils.experiment import (
+    extract_experiment_channels,
+    find_position_movies,
+)
 from celldetective.utils.data_loaders import interpret_tracking_configuration
 import numpy as np
 import json
@@ -1055,16 +1058,10 @@ class SettingsTracking(CelldetectiveSettingsPanel):
         Load the first frame of the first movie found in the experiment folder as a sample.
         """
 
-        movies = glob(
-            self.parent_window.parent_window.exp_dir
-            + os.sep.join(
-                [
-                    "*",
-                    "*",
-                    "movie",
-                    self.parent_window.parent_window.movie_prefix + "*.tif",
-                ]
-            )
+        # Any position of any well: the position folder is globbed with the movie.
+        movies = find_position_movies(
+            os.path.join(self.parent_window.parent_window.exp_dir, "*", "*"),
+            self.parent_window.parent_window.movie_prefix,
         )
         if len(movies) == 0:
             msgBox = QMessageBox()

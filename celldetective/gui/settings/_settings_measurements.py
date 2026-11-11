@@ -29,7 +29,10 @@ from celldetective.gui.base.sliders import QLabeledDoubleSlider
 from superqt.fonticon import icon
 from fonticon_mdi6 import MDI6
 
-from celldetective.utils.experiment import extract_experiment_channels
+from celldetective.utils.experiment import (
+    extract_experiment_channels,
+    get_position_movie_path,
+)
 from celldetective.utils.image_loaders import auto_load_number_of_frames, load_frames
 
 import numpy as np
@@ -842,12 +845,11 @@ class SettingsMeasurements(CelldetectiveSettingsPanel):
         Load the first frame of the first movie found in the experiment folder as a sample.
         """
 
-        movies = glob(
-            self.parent_window.parent_window.pos
-            + os.sep.join(["movie", f"{self.parent_window.movie_prefix}*.tif"])
+        stack_path = get_position_movie_path(
+            self.parent_window.parent_window.pos, self.parent_window.movie_prefix
         )
 
-        if len(movies) == 0:
+        if stack_path is None:
             msgBox = QMessageBox()
             msgBox.setIcon(QMessageBox.Warning)
             msgBox.setText("Please select a position containing a movie...")
@@ -859,7 +861,7 @@ class SettingsMeasurements(CelldetectiveSettingsPanel):
                 self.test_frame = None
                 return None
         else:
-            self.current_stack = movies[0]
+            self.current_stack = stack_path
             self.stack_length = auto_load_number_of_frames(self.current_stack)
             self.mid_time = self.stack_length // 2
             indices = len(self.channel_names) * self.mid_time + np.arange(

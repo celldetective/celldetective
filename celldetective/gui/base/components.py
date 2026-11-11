@@ -264,6 +264,32 @@ def generic_message(message: str, msg_type: Optional[str] = "info") -> None:
     _ = message_box.exec()
 
 
+def show_user_errors() -> None:
+    """
+    Show an uncaught :class:`~celldetective.exceptions.UserFacingError` in a
+    message box, and log its message without a traceback. Any other exception
+    goes on to the previous hook.
+
+    An action of the GUI (opening a viewer, for one) can then stop on a problem
+    with the user's data by raising, wherever it is found.
+    """
+
+    import sys
+
+    from celldetective.exceptions import UserFacingError
+
+    previous = sys.excepthook
+
+    def hook(exc_type, exc_value, exc_traceback):
+        if isinstance(exc_value, UserFacingError):
+            logger.error(str(exc_value))
+            generic_message(str(exc_value), "warning")
+            return
+        previous(exc_type, exc_value, exc_traceback)
+
+    sys.excepthook = hook
+
+
 class CelldetectiveItemDelegate(QStyledItemDelegate):
     """
     Item delegate for the popups of the combo boxes and for the list widgets of
