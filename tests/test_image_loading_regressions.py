@@ -459,6 +459,10 @@ class TestReadersAgreeAfterFixes(_TmpDirCase):
         message = str(caught.exception)
         self.assertIn("1 channel per frame (40 frames)", message)
         self.assertIn("declares 2 channels (adhesion_channel, brightfield_channel)", message)
+        # The control panel passes the names as an array.
+        with self.assertRaises(MovieChannelsMismatchError) as caught:
+            check_movie_channels(path, 2, np.array(channels))
+        self.assertEqual(str(caught.exception), message)
         # Fewer channels than the movie has, or no count, are not refused.
         check_movie_channels(path, 1)
         check_movie_channels(path, None)

@@ -272,7 +272,8 @@ class TestStackVisualizerChannelMismatch:
             StackVisualizer(
                 stack_path=tif_dir["txy"],
                 n_channels=2,
-                channel_names=["RICM", "brightfield"],
+                # An array, as the control panel passes them.
+                channel_names=np.array(["RICM", "brightfield"]),
             )
         # The check comes before the loader thread is started.
         assert set(_LIVE_THREADS) == running

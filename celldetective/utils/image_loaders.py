@@ -1121,7 +1121,9 @@ def check_movie_channels(
     def count(n, word):
         return f"{n} {word}{'' if n == 1 else 's'}"
 
-    names = f" ({', '.join(map(str, channel_names))})" if channel_names else ""
+    # A list, or the array of names the control panel holds.
+    names = ", ".join(map(str, channel_names if channel_names is not None else []))
+    names = f" ({names})" if names else ""
     raise MovieChannelsMismatchError(
         f"The movie {os.path.basename(stack_path)} has "
         f"{count(plan.n_channels, 'channel')} per frame "
