@@ -29,7 +29,11 @@ from celldetective.gui.base.components import (
     ToolButton,
     generic_message,
 )
-from celldetective.gui.base.threads import start_tracked, stop_thread
+from celldetective.gui.base.threads import (
+    start_tracked,
+    stop_thread,
+    stop_when_destroyed,
+)
 from celldetective.gui.base.utils import center_window
 from celldetective.utils.image_loaders import (
     auto_load_number_of_frames,
@@ -749,11 +753,9 @@ class StackVisualizer(CelldetectiveWidget):
         # `closeEvent` finishing would otherwise let it be finalized mid-run --
         # which aborts the process rather than raising.
         start_tracked(self.loader_thread)
-        # `closeEvent` is the tidy path, but it does not run for a widget that is
-        # dropped or deleted by Qt. `destroyed` always does, and this handler
-        # holds only the thread, never `self`.
-        loader = self.loader_thread
-        self.destroyed.connect(lambda _=None, t=loader: stop_thread(t, timeout=2000))
+        # `closeEvent` is the tidy path; this also covers a widget dropped or
+        # deleted by Qt. The handler holds only the thread, never `self`.
+        stop_when_destroyed(self, self.loader_thread)
 
         self.init_frame = self.read_frame(self.target_channel, self.current_time_index)
         self.last_frame = self.read_frame(self.target_channel, self.stack_length - 1)
