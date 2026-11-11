@@ -27,6 +27,28 @@ from celldetective.utils.parsing import (
 logger = get_logger()
 
 
+def position_table_path(pos: str, population: str) -> str:
+    """
+    The path of the trajectory table of a population at a position.
+
+    Parameters
+    ----------
+    pos : str
+        The position directory, with or without a trailing separator.
+    population : str
+        The population name.
+
+    Returns
+    -------
+    str
+        The path to ``output/tables/trajectories_{population}.csv``, whether or
+        not the file exists.
+    """
+    if not pos.endswith(os.sep):
+        return os.sep.join([pos, "output", "tables", f"trajectories_{population}.csv"])
+    return pos + os.sep.join(["output", "tables", f"trajectories_{population}.csv"])
+
+
 def get_position_table(
     pos: str, population: str, return_path: bool = False
 ) -> Union[Optional[pd.DataFrame], Tuple[Optional[pd.DataFrame], str]]:
@@ -66,12 +88,7 @@ def get_position_table(
 
     """
 
-    if not pos.endswith(os.sep):
-        table = os.sep.join([pos, "output", "tables", f"trajectories_{population}.csv"])
-    else:
-        table = pos + os.sep.join(
-            ["output", "tables", f"trajectories_{population}.csv"]
-        )
+    table = position_table_path(pos, population)
 
     if os.path.exists(table):
         try:

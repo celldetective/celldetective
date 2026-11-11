@@ -59,6 +59,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   profile, so a fix in one window now reaches the others. Along the way:
   - the event annotator lists numeric signals only;
   - in an untracked phenotype table, a cell is selected by its ID and frame.
+- napari correction viewers:
+  - closing a viewer with edits that were neither saved nor exported asks
+    first, in the segmentation viewer, the track viewer and the annotation
+    corrector;
+  - *Save the modified labels* on a position that already has tracks warns
+    that saving rewrites and renumbers the masks of every frame, so tracking and
+    the steps after it must be run again, and saves only if accepted;
+  - exporting corrected tracks says which event columns were computed before
+    the correction, and how many detections were added without measurements;
+  - the double-click question says what the click will do, including the two
+    cases that are not a propagation: label 0 removes the cell from that frame
+    on, and the cell's own track is split there.
 
 ### Fixed
 - Event annotator: creating a new event class crashed (`AttributeError`).
@@ -144,6 +156,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   its first frame, could be left out of survival from its arrival. It is now an
   event at its arrival, a change faster than the time resolution, with a survival
   time of 0.
+- napari track viewer: a mask missing from the trajectory table was drawn with
+  the highest existing track ID, so it looked like part of that track and a
+  double-click on it moved that track's later masks. Untracked masks now get IDs
+  past every track in the table (`relabel_segmentation`).
+- napari track viewer: a double-click read the pixel next to the one clicked
+  about half the time, so near the edge of a mask it did nothing or picked the
+  neighbouring cell.
+- Annotation export from napari:
+  - a rectangle crossing the top or left edge of the frame exported an empty
+    or wrong crop, padded with zeros. Rectangles are clipped to the frame, and
+    one entirely outside it is skipped with a warning;
+  - a `Shapes` layer holding a polygon as well as rectangles failed to export.
+- *Plugins > Correct a segmentation annotation*: an image that cannot be opened
+  is reported in a message box instead of only in the console.
 
 ### Removed
 - `celldetective.measure.write_first_detection_class`, an unused copy of

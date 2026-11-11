@@ -214,7 +214,8 @@ def record_undo(layer, atoms: Sequence[tuple]) -> None:
     step rather than an error.
 
     Several atoms are pushed as one step, so one Ctrl+Z takes a whole run of
-    frames back rather than a frame at a time.
+    frames back rather than a frame at a time. Every bulk write goes through
+    here, so this is also where the layer is flagged as holding unsaved edits.
 
     Parameters
     ----------
@@ -228,6 +229,7 @@ def record_undo(layer, atoms: Sequence[tuple]) -> None:
     atoms = [atom for atom in atoms if atom is not None]
     if not atoms:
         return
+    mark_unsaved(layer)
     try:
         n_axes = len(atoms[0][0])
         indices = tuple(
@@ -242,6 +244,46 @@ def record_undo(layer, atoms: Sequence[tuple]) -> None:
         )
     except Exception as e:
         logger.debug(f"Could not record an undo step for the segmentation: {e}")
+
+
+UNSAVED_EDITS_KEY = "celldetective_unsaved_edits"
+
+
+# The flag lives in the layer's metadata, so a viewer, its panels and its save
+# buttons share it without holding references to one another.
+
+
+def mark_unsaved(layer) -> None:
+    """Record that a layer holds edits not yet written out."""
+    # `record_undo` calls this for whatever it is given, layer-like stubs too.
+    metadata = getattr(layer, "metadata", None)
+    if metadata is not None:
+        metadata[UNSAVED_EDITS_KEY] = True
+
+
+def clear_unsaved(layer) -> None:
+    """Record that the edits of a layer have been written out."""
+    layer.metadata[UNSAVED_EDITS_KEY] = False
+
+
+def has_unsaved(layer) -> bool:
+    """Whether a layer holds edits not yet written out."""
+    return bool(layer.metadata.get(UNSAVED_EDITS_KEY, False))
+
+
+def _on_paint(event) -> None:
+    mark_unsaved(event.source)
+
+
+def track_unsaved_edits(layer) -> None:
+    """
+    Flag the layer as edited whenever a napari tool paints on it.
+
+    napari emits ``paint`` for the brush, the eraser and the fill bucket, and not
+    when the viewer merely moves to another frame. The handler is module-level,
+    so the connection holds no reference to the layer.
+    """
+    layer.events.paint.connect(_on_paint)
 
 
 def labels_mismatch(stack, layer) -> Optional[str]:

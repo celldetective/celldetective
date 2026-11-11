@@ -430,6 +430,18 @@ class AppInitWindow(CelldetectiveMainWindow):
             logger.info(f"Opening {self.filename} in napari...")
             try:
                 correct_annotation(self.filename)
+            except Exception as e:
+                # Raised from a menu slot, an error would only reach the console.
+                logger.exception(f"Could not open {self.filename} for correction.")
+                # Before the message box, not only in `finally`: the modal
+                # progress dialog would otherwise sit on top of it.
+                progress_open.close()
+                QMessageBox.warning(
+                    self,
+                    "Could not open the annotation",
+                    f"{os.path.basename(self.filename)} could not be opened for "
+                    f"correction:\n\n{e}",
+                )
             finally:
                 progress_open.close()
         else:

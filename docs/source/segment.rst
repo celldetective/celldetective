@@ -206,6 +206,12 @@ Above these buttons, a set of options controls the automatic fixes applied to th
 
 The labels are always re-numbered consecutively from ``1`` on save to avoid encoding errors, regardless of these options.
 
+.. warning::
+
+    **Save the modified labels** rewrites the masks of every frame, not only the frames you edited, and renumbers them. The trajectory and measurement tables find each cell's mask by its number (``class_id``), so once the masks are saved, tables computed before no longer match them. If the position already has tracks, the viewer warns before saving: run tracking and the steps after it again once the masks are saved.
+
+Closing the viewer with edits that were neither saved nor exported as an annotation asks first.
+
 For a step-by-step annotation workflow, see :doc:`How to annotate for segmentation <how-to-guides/basics/annotate-for-segmentation>`.
 To train a model on your annotations, see :doc:`How to train a segmentation model <how-to-guides/advanced/train-a-segmentation-model-from-scratch>`.
 

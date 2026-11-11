@@ -253,7 +253,8 @@ def relabel_segmentation(
 
     The function reassigns the mask value for each cell with the associated `TRACK_ID`, if it exists
     in the trajectory table (`df`). If no track uses the cell mask, a new track with a single point
-    is generated on the fly (max of `TRACK_ID` values + i, for i=0 to N such cells). It supports
+    is generated on the fly (max of `TRACK_ID` values + i, for i=1 to N such cells), so it
+    never takes the identity of an existing track. It supports
     multithreaded processing for faster execution on large datasets.
 
     Parameters
@@ -319,6 +320,12 @@ def relabel_segmentation(
 
     n_threads = threads
     df = df.sort_values(by=[column_labels["track"], column_labels["frame"]])
+
+    # Taken before the rows without a mask are dropped: a track can exist in the
+    # table with no mask at all, and an untracked mask must not borrow its ID.
+    all_track_ids = df[column_labels["track"]].dropna().unique()
+    max_track_id = max(all_track_ids) if len(all_track_ids) else 0
+
     if exclude_nans:
         df = df.dropna(subset=[column_labels["label"]])
 
@@ -347,9 +354,6 @@ def relabel_segmentation(
         indices : list
             List of frame indices to process.
         """
-
-        all_track_ids = df[column_labels["track"]].dropna().unique()
-        max_track_id = max(all_track_ids) if len(all_track_ids) else 0
 
         # Check for cancellation
         if progress_callback:
@@ -386,8 +390,10 @@ def relabel_segmentation(
             labels_not_in_df = [lbl for lbl in labels_at_t if lbl not in identities]
             for lbl in labels_not_in_df:
                 with label_lock:  # Synchronize access to `shared_data["s"]`
-                    track_id = max_track_id + shared_data["s"]
+                    # Past the highest existing ID: starting at it would draw
+                    # this mask as part of that track.
                     shared_data["s"] += 1
+                    track_id = max_track_id + shared_data["s"]
                 tracks_at_t.append(track_id)
                 identities.append(lbl)
 

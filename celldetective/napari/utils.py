@@ -1,12 +1,14 @@
 import gc
 import json
 import os
+import weakref
 from pathlib import Path, PurePath
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import napari
 import numpy as np
 import pandas as pd
+from PyQt5.QtCore import QEvent, QObject
 from PyQt5.QtWidgets import QMessageBox, QWidget, QVBoxLayout
 from celldetective.utils.io import save_tiff_imagej_compatible
 from magicgui import magicgui
@@ -23,7 +25,17 @@ from celldetective.utils.image_loaders import (
     locate_stack_lazy,
     fix_missing_labels,
 )
-from celldetective.utils.data_loaders import get_position_table, load_tracking_data
+from celldetective.utils.data_loaders import (
+    get_position_table,
+    load_tracking_data,
+    position_table_path,
+)
+from celldetective.napari.frame_segmentation import (
+    clear_unsaved,
+    has_unsaved,
+    mark_unsaved,
+    track_unsaved_edits,
+)
 from celldetective.utils.experiment import (
     extract_experiment_from_position,
     _get_contrast_limits,
@@ -116,6 +128,335 @@ def _drop_fully_maskless_tracks(df: pd.DataFrame) -> pd.DataFrame:
             return df
         logger.info(f"Dropped {n_dropped} fully maskless (ghost) track(s).")
     return cleaned
+
+
+# Columns written by the event detection and the annotators, keyed on the track
+# they were computed for. The first-detection ones are recomputed on export.
+_RECOMPUTED_ON_EXPORT = {
+    "class_id",
+    "class_color",
+    "class_firstdetection",
+    "t_firstdetection",
+    "status_firstdetection",
+}
+
+
+def _event_columns(df: pd.DataFrame) -> List[str]:
+    """
+    The event columns of a trajectory table that a track correction leaves stale.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        Trajectory table.
+
+    Returns
+    -------
+    list of str
+        The ``class_*``, ``t_*`` and ``status_*`` columns, apart from the ones the
+        track export recomputes.
+    """
+    return [
+        c
+        for c in df.columns
+        if c.startswith(("class_", "t_", "status_")) and c not in _RECOMPUTED_ON_EXPORT
+    ]
+
+
+def _detection_rows(
+    original_label: np.ndarray, current_label: np.ndarray, value: int, frame: int
+) -> pd.DataFrame:
+    """
+    Table rows for the masks shown with a given value on one frame.
+
+    The viewer shows masks under their track ID; the table needs the label they
+    carry on disk (``class_id``) and their centroid.
+
+    Parameters
+    ----------
+    original_label : ndarray
+        The frame's labels as saved (YX).
+    current_label : ndarray
+        The same frame as displayed, relabelled with track IDs (YX).
+    value : int
+        The displayed value of the masks to describe; it becomes their TRACK_ID.
+    frame : int
+        The frame index.
+
+    Returns
+    -------
+    pandas.DataFrame
+        One row per mask, with POSITION_X, POSITION_Y, class_id, FRAME and
+        TRACK_ID.
+    """
+    original = np.where(current_label == value, original_label, 0)
+    props = pd.DataFrame(
+        regionprops_table(original, properties=["centroid", "label"])
+    )
+    rows = props.rename(
+        columns={
+            "centroid-1": "POSITION_X",
+            "centroid-0": "POSITION_Y",
+            "label": "class_id",
+        }
+    )[["POSITION_X", "POSITION_Y", "class_id"]].copy()
+    rows["FRAME"] = int(frame)
+    rows["TRACK_ID"] = value
+    return rows
+
+
+def propagation_question(target_track_id: int, value_under: int, frame: int) -> str:
+    """
+    The confirmation asked before a double-click changes track identities.
+
+    Spelled out for the two cases that are not a propagation, so the user knows
+    what the click is about to do.
+
+    Parameters
+    ----------
+    target_track_id : int
+        The label selected in the segmentation layer.
+    value_under : int
+        The track ID of the cell under the mouse.
+    frame : int
+        The frame clicked on.
+
+    Returns
+    -------
+    str
+        The question to show.
+    """
+    frame = int(frame)
+    if target_track_id == 0:
+        return (
+            f"The selected label is 0 (background). Remove the cell under the mouse, "
+            f"track {value_under}, from the table from frame {frame} to the end of "
+            "the movie?"
+        )
+    if target_track_id == value_under:
+        return (
+            f"The cell under the mouse is already track {value_under}. Split this "
+            f"track at frame {frame}, so that its detections from there on form a "
+            "new track?"
+        )
+    return (
+        f"Give track {target_track_id} to the cell under the mouse, track "
+        f"{value_under}, from frame {frame} to the end of the movie? The later "
+        f"detections of track {target_track_id} become a new track."
+    )
+
+
+def propagate_identity(
+    labels: np.ndarray,
+    df: pd.DataFrame,
+    frame: int,
+    value_under: int,
+    target_track_id: int,
+) -> pd.DataFrame:
+    """
+    Give a track's identity to another cell from one frame to the end of the movie.
+
+    From `frame` on, the masks and table rows of track `value_under` take the ID
+    `target_track_id`, and those `target_track_id` held there move to a new
+    track. A target of 0 removes `value_under` from the table from `frame` on
+    (its masks are hidden, not erased from disk); a target equal to
+    `value_under` splits that track at `frame`.
+
+    Parameters
+    ----------
+    labels : ndarray
+        The displayed labels (TYX), relabelled with track IDs. Modified in place.
+    df : pandas.DataFrame
+        The trajectory table, with TRACK_ID and FRAME.
+    frame : int
+        The frame clicked on.
+    value_under : int
+        The track ID of the cell clicked on.
+    target_track_id : int
+        The track ID to give it.
+
+    Returns
+    -------
+    pandas.DataFrame
+        The updated table, sorted by track and frame.
+    """
+    frame = int(frame)
+    new_id = int(np.amax(labels)) + 1
+    if df["TRACK_ID"].notna().any():
+        # Also past the table: a track can have rows but no mask on screen.
+        new_id = max(new_id, int(df["TRACK_ID"].max()) + 1)
+
+    for f in labels[frame:]:
+        if target_track_id != 0:
+            f[f == target_track_id] = new_id
+        f[f == value_under] = target_track_id
+
+    # Work on the ID column alone, then take the kept rows in sorted order in a
+    # single copy of the table: it can hold hundreds of measurement columns.
+    track = df["TRACK_ID"].to_numpy(dtype=float, copy=True)
+    frames = df["FRAME"].to_numpy()
+    later = frames >= frame
+    # In this order, as for the masks: with the clicked cell already on the
+    # target track, the first step moves it to the new ID, so the track splits.
+    if target_track_id != 0:
+        track[later & (track == target_track_id)] = new_id
+    track[later & (track == value_under)] = target_track_id
+
+    keep = np.flatnonzero(track != 0)
+    order = keep[np.lexsort((frames[keep], track[keep]))]
+    out = df.take(order)
+    out["TRACK_ID"] = track[order].astype(df["TRACK_ID"].dtype, copy=False)
+    return out
+
+
+def prepare_track_export(
+    df: pd.DataFrame, img_shape: Tuple[int, int], post_processing: Dict[str, Any]
+) -> pd.DataFrame:
+    """
+    Turn the corrected trajectory table into the one written to disk.
+
+    Recomputes the velocity and the first-detection columns, applies the track
+    post-processing, drops tracks left with no mask and pandas index leftovers.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        The corrected trajectory table.
+    img_shape : tuple of int
+        The (Y, X) shape of a frame, for the first-detection edge test.
+    post_processing : dict
+        Keyword arguments for :func:`celldetective.tracking.clean_trajectories`.
+
+    Returns
+    -------
+    pandas.DataFrame
+        The table to write.
+    """
+    from celldetective.tracking import write_first_detection_class, clean_trajectories
+    from celldetective.utils.maths import velocity_per_track
+
+    df = velocity_per_track(df, window_size=3, mode="bi")
+    df = write_first_detection_class(df, img_shape=img_shape)
+    logger.info(f"Applying the following track postprocessing: {post_processing}...")
+    df = clean_trajectories(df.copy(), **post_processing)
+    df = _drop_fully_maskless_tracks(df)
+    unnamed_cols = [c for c in list(df.columns) if c.startswith("Unnamed")]
+    return df.drop(unnamed_cols, axis=1)
+
+
+def _roi_bounds(
+    square: np.ndarray, shape: Tuple[int, int]
+) -> Optional[Tuple[int, int, int, int]]:
+    """
+    The pixel bounds of a rectangle drawn on a frame, clipped to the frame.
+
+    A rectangle may stick out of the image: napari keeps the corners where they
+    were drawn, negative or past the edge. Sliced as they are, negative bounds
+    count from the far end of the array and give an empty or wrong crop.
+
+    Parameters
+    ----------
+    square : ndarray
+        The rectangle's vertices, (n, 3) as (frame, row, column).
+    shape : tuple of int
+        The (Y, X) shape of the frame.
+
+    Returns
+    -------
+    tuple of int or None
+        ``(row_min, row_max, col_min, col_max)``, or None when the rectangle does
+        not overlap the frame.
+    """
+    rows = np.asarray(square)[:, -2]
+    cols = np.asarray(square)[:, -1]
+    row_min = int(max(0, rows.min()))
+    row_max = int(min(shape[0], rows.max()))
+    col_min = int(max(0, cols.min()))
+    col_max = int(min(shape[1], cols.max()))
+    if row_max <= row_min or col_max <= col_min:
+        return None
+    return row_min, row_max, col_min, col_max
+
+
+def _has_trajectory_table(position: str, population: str) -> bool:
+    """Whether a population has been tracked at a position."""
+    return os.path.exists(position_table_path(position, population))
+
+
+def stale_tables_question(population: str) -> str:
+    """The warning shown before masks are saved over a tracked position."""
+    return (
+        f"This position already has a trajectory table for the {population}. "
+        "Saving rewrites the masks of every frame and renumbers them, so the "
+        "tracks and measurements will no longer match the masks. Run tracking "
+        "and the steps after it again once the masks are saved.\n\nSave anyway?"
+    )
+
+
+class _UnsavedEditsGuard(QObject):
+    """
+    Ask before a viewer window closes while a layer holds unsaved edits.
+
+    The layer is held weakly: the filter lives as long as the Qt window, and a
+    strong reference would keep the layer, and the stack behind it, alive with it.
+    """
+
+    def __init__(self, window: QWidget, layer: "napari.layers.Layer", message: str):
+        super().__init__(window)
+        self._layer = weakref.ref(layer)
+        self._message = message
+
+    def eventFilter(self, watched, event) -> bool:
+        if event.type() == QEvent.Close:
+            layer = self._layer()
+            if layer is not None and has_unsaved(layer):
+                answer = QMessageBox.question(
+                    watched,
+                    "Unsaved edits",
+                    self._message,
+                    QMessageBox.Yes | QMessageBox.No,
+                    QMessageBox.No,
+                )
+                if answer != QMessageBox.Yes:
+                    event.ignore()
+                    return True
+        return super().eventFilter(watched, event)
+
+
+def guard_unsaved_close(
+    viewer: "napari.Viewer", layer: "napari.layers.Labels", message: str
+) -> Optional[QObject]:
+    """
+    Make the viewer window ask before closing while `layer` holds unsaved edits.
+
+    Painting on the layer flags it (:func:`track_unsaved_edits`); bulk writes and
+    track corrections call :func:`mark_unsaved`, and saving clears the flag.
+    Install it after the side panels: Qt runs the latest filter first, so a
+    declined close never reaches the panels' own close handling.
+
+    Parameters
+    ----------
+    viewer : napari.Viewer
+        The viewer to guard.
+    layer : napari.layers.Labels
+        The layer whose edits are at stake.
+    message : str
+        The question to ask, answered Yes to close anyway.
+
+    Returns
+    -------
+    QObject or None
+        The installed filter, or None when the window cannot be reached.
+    """
+    try:
+        window = viewer.window._qt_window
+    except Exception as e:
+        logger.debug(f"Could not reach the napari window to guard its close: {e}")
+        return None
+    track_unsaved_edits(layer)
+    guard = _UnsavedEditsGuard(window, layer, message)
+    window.installEventFilter(guard)
+    return guard
 
 
 def control_tracks(
@@ -556,33 +897,19 @@ def launch_napari_viewer(
     def export_modifications():
         """Export modified tracks, applying the chosen post-processing options."""
 
-        from celldetective.tracking import (
-            write_first_detection_class,
-            clean_trajectories,
-        )
-        from celldetective.utils.maths import velocity_per_track
-
-        df = shared_data["df"]
         position = shared_data["position"]
         population = shared_data["population"]
-        df = velocity_per_track(df, window_size=3, mode="bi")
-        df = write_first_detection_class(df, img_shape=labels[0].shape)
-
         post_processing_opts = _post_processing_kwargs()
-        logger.info(
-            f"Applying the following track postprocessing: {post_processing_opts}..."
+        df = prepare_track_export(
+            shared_data["df"], labels[0].shape, post_processing_opts
         )
-        df = clean_trajectories(df.copy(), **post_processing_opts)
-
-        # Remove any ghost tracks (no mask in any frame) created by corrections
-        # before writing the table.
-        df = _drop_fully_maskless_tracks(df)
-
-        unnamed_cols = [c for c in list(df.columns) if c.startswith("Unnamed")]
-        df = df.drop(unnamed_cols, axis=1)
         logger.debug(f"Columns after export: {list(df.columns)}")
         df.to_csv(shared_data["path"], index=False)
         logger.info("Track export done.")
+        corrected = has_unsaved(viewer.layers["segmentation"])
+        added = shared_data.get("added", 0)
+        clear_unsaved(viewer.layers["segmentation"])
+        shared_data["added"] = 0
 
         # Reflect the post-processed tracks in the viewer so the effect of the
         # chosen options is visible in place (dropped tracks disappear, gaps get
@@ -611,6 +938,28 @@ def launch_napari_viewer(
                 logger.info(f"tracks: {n_tracks}, detections: {len(df)}")
             except Exception as e:
                 logger.warning(f"Could not summarise track correction: {e}")
+
+        notes = []
+        stale = _event_columns(df) if corrected else []
+        if stale:
+            # These were computed per track before the identities changed: a
+            # corrected track now carries one cell's values on some rows and the
+            # other cell's on the rest.
+            shown = ", ".join(stale[:6]) + (", …" if len(stale) > 6 else "")
+            notes.append(
+                "The event columns were computed before this correction and no "
+                f"longer match the new tracks ({shown}). Run the event detection "
+                "again, and the neighborhoods if you use them."
+            )
+        if added:
+            notes.append(
+                f"{added} detection(s) were added to the tracks with a position "
+                "only. Run the measurements again to fill in their other columns."
+            )
+        if notes:
+            message = "The tracks were saved.\n\n" + "\n\n".join(notes)
+            logger.warning(message)
+            QMessageBox.information(viewer.window._qt_window, "Tracks saved", message)
 
     @magicgui(call_button="Export the modified\ntracks...")
     def export_table_widget():
@@ -666,11 +1015,15 @@ def launch_napari_viewer(
         position = shared_data["position"]
         population = shared_data["population"]
 
-        frame, x, y = event.position
+        # Rounded, not truncated: napari centres its pixels on integer
+        # coordinates, so truncating picks the neighbouring pixel half the time.
+        frame, row, col = (int(np.round(v)) for v in event.position)
         try:
-            value_under = viewer.layers["segmentation"].data[
-                int(frame), int(x), int(y)
-            ]  # labels[0,int(y),int(x)]
+            data = viewer.layers["segmentation"].data
+            # A negative index would wrap around to the far edge of the frame.
+            if min(frame, row, col) < 0:
+                return None
+            value_under = data[frame, row, col]
             if value_under == 0:
                 return None
         except Exception:
@@ -681,120 +1034,80 @@ def launch_napari_viewer(
 
         msgBox = QMessageBox()
         msgBox.setIcon(QMessageBox.Question)
-        msgBox.setText(
-            f"Do you want to propagate track {target_track_id} to the cell under the mouse, track {value_under}?"
-        )
-        msgBox.setWindowTitle("Info")
+        msgBox.setText(propagation_question(target_track_id, value_under, frame))
+        msgBox.setWindowTitle("Correct the tracks")
         msgBox.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
-        returnValue = msgBox.exec()
-        if returnValue == QMessageBox.No:
+        if msgBox.exec() != QMessageBox.Yes:
             return None
-        else:
 
-            if target_track_id not in df[
-                "TRACK_ID"
-            ].unique() and target_track_id in np.unique(
-                viewer.layers["segmentation"].data[shared_data["selected_frame"]]
-            ):
-                # the selected cell in frame -1 is not in the table... we can add it to DataFrame
-                current_labelm1 = viewer.layers["segmentation"].data[
-                    shared_data["selected_frame"]
-                ]
-                original_labelm1 = locate_labels(
-                    position,
-                    population=population,
-                    frames=shared_data["selected_frame"],
+        segmentation = viewer.layers["segmentation"].data
+        selected_frame = shared_data["selected_frame"]
+        known = set(df["TRACK_ID"].dropna().unique())
+        added = []
+        # Label 0 removes the clicked cell from the table: rows added for it, or
+        # for background, would be dropped again and only inflate the count.
+        removing = target_track_id == 0
+
+        if (
+            not removing
+            and target_track_id not in known
+            and selected_frame is not None
+            and (segmentation[selected_frame] == target_track_id).any()
+        ):
+            # The selected cell has no row in the table (an untracked mask):
+            # add it at the frame it was picked on.
+            added.append(
+                _detection_rows(
+                    locate_labels(position, population=population, frames=selected_frame),
+                    segmentation[selected_frame],
+                    target_track_id,
+                    selected_frame,
                 )
-                original_labelm1[current_labelm1 != target_track_id] = 0
-                props = regionprops_table(
-                    original_labelm1,
-                    intensity_image=None,
-                    properties=["centroid", "label"],
+            )
+            # An untracked mask's ID is unique to its detection: clicking the
+            # selected cell itself must not add it a second time.
+            known.add(target_track_id)
+
+        if not removing and value_under not in known:
+            # Same for the cell clicked on.
+            added.append(
+                _detection_rows(
+                    locate_labels(position, population=population, frames=frame),
+                    segmentation[frame],
+                    value_under,
+                    frame,
                 )
-                props = pd.DataFrame(props)
-                new_cell = props[["centroid-1", "centroid-0", "label"]].copy()
-                new_cell.rename(
-                    columns={
-                        "centroid-1": "POSITION_X",
-                        "centroid-0": "POSITION_Y",
-                        "label": "class_id",
-                    },
-                    inplace=True,
-                )
-                new_cell["FRAME"] = shared_data["selected_frame"]
-                new_cell["TRACK_ID"] = target_track_id
-                df = pd.concat([df, new_cell], ignore_index=True)
-
-            if value_under not in df["TRACK_ID"].unique():
-                # the cell to add is not currently part of DataFrame, need to add measurement
-
-                current_label = viewer.layers["segmentation"].data[int(frame)]
-                original_label = locate_labels(
-                    position, population=population, frames=int(frame)
-                )
-
-                new_datapoint = {
-                    "TRACK_ID": value_under,
-                    "FRAME": frame,
-                    "POSITION_X": np.nan,
-                    "POSITION_Y": np.nan,
-                    "class_id": np.nan,
-                }
-
-                original_label[current_label != value_under] = 0
-
-                props = regionprops_table(
-                    original_label,
-                    intensity_image=None,
-                    properties=["centroid", "label"],
-                )
-                props = pd.DataFrame(props)
-
-                new_cell = props[["centroid-1", "centroid-0", "label"]].copy()
-                new_cell.rename(
-                    columns={
-                        "centroid-1": "POSITION_X",
-                        "centroid-0": "POSITION_Y",
-                        "label": "class_id",
-                    },
-                    inplace=True,
-                )
-                new_cell["FRAME"] = int(frame)
-                new_cell["TRACK_ID"] = value_under
-                df = pd.concat([df, new_cell], ignore_index=True)
-
-            relabel = np.amax(viewer.layers["segmentation"].data) + 1
-            for f in viewer.layers["segmentation"].data[int(frame) :]:
-                if target_track_id != 0:
-                    f[np.where(f == target_track_id)] = relabel
-                f[np.where(f == value_under)] = target_track_id
-
-            if target_track_id != 0:
-                df.loc[
-                    (df["FRAME"] >= frame) & (df["TRACK_ID"] == target_track_id),
-                    "TRACK_ID",
-                ] = relabel
-            df.loc[
-                (df["FRAME"] >= frame) & (df["TRACK_ID"] == value_under), "TRACK_ID"
-            ] = target_track_id
-            df = df.loc[~(df["TRACK_ID"] == 0), :]
-            df = df.sort_values(by=["TRACK_ID", "FRAME"])
-
-            vertices, tracks, properties, graph = tracks_to_napari(
-                df, exclude_nans=True
             )
 
-            viewer.layers["tracks"].data = tracks
-            viewer.layers["tracks"].properties = properties
-            viewer.layers["tracks"].graph = graph
+        if added:
+            df = pd.concat([df, *added], ignore_index=True)
+            shared_data["added"] = shared_data.get("added", 0) + sum(
+                len(rows) for rows in added
+            )
 
-            viewer.layers["points"].data = vertices
+        df = propagate_identity(segmentation, df, frame, value_under, target_track_id)
+        mark_unsaved(viewer.layers["segmentation"])
 
-            viewer.layers["segmentation"].refresh()
-            viewer.layers["tracks"].refresh()
-            viewer.layers["points"].refresh()
+        vertices, tracks, properties, graph = tracks_to_napari(df, exclude_nans=True)
+
+        viewer.layers["tracks"].data = tracks
+        viewer.layers["tracks"].properties = properties
+        viewer.layers["tracks"].graph = graph
+
+        viewer.layers["points"].data = vertices
+
+        viewer.layers["segmentation"].refresh()
+        viewer.layers["tracks"].refresh()
+        viewer.layers["points"].refresh()
 
         shared_data["df"] = df
+
+    guard_unsaved_close(
+        viewer,
+        viewer.layers["segmentation"],
+        "The track corrections have not been exported. Close the viewer and "
+        "lose them?",
+    )
 
     viewer.show(block=block)
 
@@ -1192,6 +1505,17 @@ def launch_segmentation_viewer(
         from PyQt5.QtWidgets import QApplication, QProgressDialog
         from PyQt5.QtCore import Qt
 
+        if _has_trajectory_table(position, population):
+            answer = QMessageBox.question(
+                viewer.window._qt_window,
+                "Save the modified labels",
+                stale_tables_question(population),
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No,
+            )
+            if answer != QMessageBox.Yes:
+                return
+
         labels_layer = viewer.layers["segmentation"].data
         if not os.path.exists(output_folder):
             os.mkdir(output_folder)
@@ -1240,6 +1564,7 @@ def launch_segmentation_viewer(
             # Reflect the auto-fixed masks back into the viewer so the result is visible
             viewer.layers["segmentation"].data = corrected_stack
             viewer.layers["segmentation"].refresh()
+            clear_unsaved(viewer.layers["segmentation"])
         finally:
             pbar.close()
 
@@ -1302,33 +1627,25 @@ def launch_segmentation_viewer(
         fov_export = True
 
         if "Shapes" in viewer.layers:
-            squares = viewer.layers["Shapes"].data
-            test_in_frame = np.array(
-                [
-                    squares[i][0, 0] == t and len(squares[i]) == 4
-                    for i in range(len(squares))
-                ]
-            )
-            squares = np.array(squares)
-            squares = squares[test_in_frame]
-            nbr_squares = len(squares)
-            logger.info(f"Found {nbr_squares} ROIs...")
-            if nbr_squares > 0:
-                # deactivate field of view mode
+            # Shape by shape: shapes with other vertex counts (a polygon next
+            # to the rectangles) would make a ragged array.
+            frame_shape = tuple(labels_layer.shape[-2:])
+            bounds = []
+            for sq in map(np.asarray, viewer.layers["Shapes"].data):
+                if len(sq) != 4 or sq.shape[-1] != 3 or sq[0, 0] != t:
+                    continue
+                # A rectangle drawn on this frame means a crop was meant: never
+                # fall back to the whole field, even for one outside it.
                 fov_export = False
+                roi = _roi_bounds(sq, frame_shape)
+                if roi is None:
+                    logger.warning(f"Skipping a rectangle outside the frame: {sq}")
+                else:
+                    bounds.append(roi)
+            logger.info(f"Found {len(bounds)} ROIs...")
 
-            for k, sq in enumerate(squares):
-                logger.debug(f"ROI: {sq}")
+            for k, (xmin, xmax, ymin, ymax) in enumerate(bounds):
                 pad_to_256 = False
-
-                xmin = int(sq[0, 1])
-                xmax = int(sq[2, 1])
-                if xmax < xmin:
-                    xmax, xmin = xmin, xmax
-                ymin = int(sq[0, 2])
-                ymax = int(sq[1, 2])
-                if ymax < ymin:
-                    ymax, ymin = ymin, ymax
                 logger.debug(f"xmin={xmin};xmax={xmax};ymin={ymin};ymax={ymax}")
                 frame = viewer.layers["Image"].data[t][xmin:xmax, ymin:ymax]
                 if frame.shape[1] < 256 or frame.shape[0] < 256:
@@ -1446,6 +1763,15 @@ def launch_segmentation_viewer(
             with open(info_name, "w") as f:
                 json.dump(info, f, indent=4)
 
+        if not fov_export and not bounds:
+            # Every rectangle on this frame was outside it: nothing was written,
+            # so the edits are still at stake on close.
+            logger.warning("No annotation was exported: no rectangle overlaps the frame.")
+            return
+
+        # The edits were made to be exported as an annotation; they are not
+        # lost on close, and asking would push towards saving over the position.
+        clear_unsaved(viewer.layers["segmentation"])
         logger.info("Annotation export done.")
 
     @magicgui(call_button="Save the modified labels")
@@ -1536,6 +1862,14 @@ def launch_segmentation_viewer(
 
     label_widget_list = ["polygon_button", "transform_button"]
     lock_controls(viewer.layers["segmentation"], label_widget_list)
+
+    # After the panels, so that a declined close never reaches their own hook.
+    guard_unsaved_close(
+        viewer,
+        viewer.layers["segmentation"],
+        "The edited masks have been neither saved nor exported as an "
+        "annotation. Close the viewer and lose them?",
+    )
 
     viewer.show(block=block)
 
@@ -1704,6 +2038,7 @@ def correct_annotation(filename: str) -> None:
                 logger.warning(f"auto_correct_masks failed: {e}")
 
             save_tiff_imagej_compatible(existing_lbl, im.astype(np.int16), axes="YX")
+        clear_unsaved(viewer.layers["segmentation"])
         logger.info("The labels have been successfully rewritten.")
 
     @magicgui(call_button="Save the modified labels")
@@ -1791,6 +2126,13 @@ def correct_annotation(filename: str) -> None:
     viewer.window.add_dock_widget(button_container, area="right")
 
     save_widget.native.setStyleSheet(Styles().button_style_sheet)
+
+    guard_unsaved_close(
+        viewer,
+        viewer.layers["segmentation"],
+        "The edited annotation has not been saved. Close the viewer and lose "
+        "the edits?",
+    )
 
     viewer.show(block=False)
 
