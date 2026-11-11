@@ -476,6 +476,16 @@ def _effective_axes(axes: str, shape: tuple, n_channels: Optional[int]) -> str:
     return axes.replace("C", "T") if is_time else axes
 
 
+def _path_key(path: str) -> str:
+    """
+    One spelling of ``path`` for comparisons: absolute, links and Windows short
+    names (``RUNNER~1``) resolved, case folded where the file system ignores it.
+    tifffile opens the other files of a multi-file set by their real path.
+    """
+
+    return os.path.normcase(os.path.realpath(path))
+
+
 def _build_page_plan(tif: TiffFile, stack_path: str) -> Optional[_PagePlan]:
     """
     Read the page plan of a stack from its first series, or ``None`` if it has
@@ -517,7 +527,7 @@ def _build_page_plan(tif: TiffFile, stack_path: str) -> Optional[_PagePlan]:
     page_shape = tuple(n for a, n in zip(axes, shape) if a in _PAGE_AXES)
     n_planes = int(math.prod(plane_shape))
 
-    this = os.path.normcase(os.path.abspath(stack_path))
+    this = _path_key(stack_path)
     files = {this}
     refs = None
     missing = 0
@@ -531,10 +541,7 @@ def _build_page_plan(tif: TiffFile, stack_path: str) -> Optional[_PagePlan]:
             refs = [
                 None
                 if p is None
-                else (
-                    os.path.normcase(os.path.abspath(p.parent.filehandle.path)),
-                    int(p.index),
-                )
+                else (_path_key(p.parent.filehandle.path), int(p.index))
                 for p in pages
             ]
             missing = sum(r is None for r in refs)

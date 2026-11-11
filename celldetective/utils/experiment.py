@@ -1064,20 +1064,14 @@ def get_position_movie_path(pos: str, prefix: str = "") -> Optional[str]:
     stack_path = movies[0]
     if len(movies) > 1:
         # The files of one multi-file OME-TIFF set all match: they are one movie.
-        from celldetective.utils.image_loaders import _get_page_plan
+        from celldetective.utils.image_loaders import _get_page_plan, _path_key
 
         try:
             plan = _get_page_plan(stack_path)
         except OSError:
             plan = None
-        in_set = (
-            plan.files
-            if plan is not None
-            else {os.path.normcase(os.path.abspath(stack_path))}
-        )
-        others = [
-            m for m in movies[1:] if os.path.normcase(os.path.abspath(m)) not in in_set
-        ]
+        in_set = plan.files if plan is not None else {_path_key(stack_path)}
+        others = [m for m in movies[1:] if _path_key(m) not in in_set]
         key = (os.path.abspath(pos), prefix, tuple(movies))
         if others and key not in _AMBIGUOUS_REPORTED:
             _AMBIGUOUS_REPORTED.add(key)

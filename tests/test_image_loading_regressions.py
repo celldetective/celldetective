@@ -15,6 +15,7 @@ import logging
 import os
 import shutil
 import struct
+import sys
 import tempfile
 import unittest
 
@@ -377,6 +378,42 @@ class TestReadersAgreeAfterFixes(_TmpDirCase):
         logger.addHandler(handler)
         try:
             self._all_agree(pos, sorted(files)[0], _expected_tyxc())
+        finally:
+            logger.removeHandler(handler)
+        self.assertEqual([r.getMessage() for r in records], [])
+
+    @unittest.skipUnless(sys.platform == "win32", "Windows short names")
+    def test_multi_file_set_under_a_short_path(self):
+        """The same set reached through a Windows 8.3 short name (as the
+        temporary folder of the GitHub runners, ``RUNNER~1``): tifffile opens
+        the other files by their long name, and they are still one movie."""
+        import ctypes
+
+        from celldetective.utils.experiment import get_position_movie_path
+
+        long_dir = os.path.join(self.tmpdir, "long_folder_name_for_8dot3")
+        os.makedirs(long_dir, exist_ok=True)
+        buffer = ctypes.create_unicode_buffer(1024)
+        ctypes.windll.kernel32.GetShortPathNameW(long_dir, buffer, 1024)
+        if not buffer.value or os.path.basename(buffer.value) == os.path.basename(
+            long_dir
+        ):
+            self.skipTest("8.3 short names are disabled on this volume")
+        pos, movie = _make_position_dir(buffer.value, "bf_set_short")
+        write_bioformats_ome(
+            os.path.join(movie, "Aligned.ome.tif"),
+            [_tcyx()[:, :, np.newaxis]],
+            "XYZTC",
+            one_file_per_channel=True,
+        )
+        logger = logging.getLogger("celldetective")
+        records = []
+        handler = logging.Handler(level=logging.WARNING)
+        handler.emit = records.append
+        logger.addHandler(handler)
+        try:
+            path = get_position_movie_path(pos, "Aligned")
+            self._all_agree(pos, path, _expected_tyxc())
         finally:
             logger.removeHandler(handler)
         self.assertEqual([r.getMessage() for r in records], [])
