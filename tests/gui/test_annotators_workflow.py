@@ -35,6 +35,18 @@ def disable_logging():
         logging.disable(logging.NOTSET)
 
 
+@pytest.fixture(autouse=True)
+def discard_on_close(monkeypatch):
+    """Answer yes when an annotator asks before closing with unsaved annotations.
+
+    Autouse, so it is set up before the annotator fixtures and still in place
+    when they close their window.
+    """
+    from PyQt5.QtWidgets import QMessageBox
+
+    monkeypatch.setattr(QMessageBox, "question", lambda *a, **k: QMessageBox.Yes)
+
+
 @pytest.fixture
 def position(tmp_path):
     """

@@ -29,5 +29,5 @@ Reference keys: :term:`characteristic group`, :term:`phenotype`
 
 #. Once you have fully annotated the current frame for this characteristic group, press the :icon:`export,black` button at the bottom of the left side to export an annotation (in ``.npy`` format).
 
-#. To update the position table with the new group, press Save. There is no time propagation, so the phenotype of cells from other frames will be 0, if you do not annotate them.
+#. To update the position table with the new group, press Save. There is no time propagation, so the phenotype of cells from other frames will be 0, if you do not annotate them. Closing the annotator with annotations that were not saved asks first.
 

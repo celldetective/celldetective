@@ -504,6 +504,7 @@ class PairEventAnnotator(
             ),
             errors="ignore",
         )
+        self.mark_table_changed()
         self.relative_class_choice_cb.removeItem(
             self.relative_class_choice_cb.findText(class_to_delete)
         )
@@ -535,6 +536,7 @@ class PairEventAnnotator(
         ):
             return
 
+        self.mark_table_changed()
         fill_option = prefill_class(self.class_option_rb)
         rows = self.neighborhood_rows()
         self.df_relative.loc[rows, class_name] = fill_option

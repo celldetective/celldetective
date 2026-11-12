@@ -15,6 +15,7 @@ from types import SimpleNamespace
 import numpy as np
 import pandas as pd
 import pytest
+from PyQt5.QtCore import QEvent
 from PyQt5.QtWidgets import QMessageBox, QWidget
 
 from celldetective.napari import frame_segmentation as fs
@@ -558,3 +559,118 @@ class TestGuardUnsavedClose:
 
     def test_an_unreachable_window_is_not_an_error(self):
         assert nu.guard_unsaved_close(SimpleNamespace(), self._layer(), "x") is None
+
+    def test_a_close_from_viewer_close_is_not_asked(self, qtbot, monkeypatch):
+        # viewer.close() removes the layers before closing the window: declining
+        # then would leave a viewer with nothing in it.
+        asked = []
+        monkeypatch.setattr(
+            QMessageBox, "question", lambda *a, **k: asked.append(a) or QMessageBox.No
+        )
+        viewer, window = self._viewer(qtbot)
+        window._qt_viewer = SimpleNamespace(viewer=SimpleNamespace(layers=[]))
+        layer = self._layer()
+        nu.guard_unsaved_close(viewer, layer, "lose them?")
+        fs.mark_unsaved(layer, [0])
+        assert window.close()
+        assert not asked
+
+    def test_an_accepted_close_from_the_frame_is_not_asked_again_by_napari(
+        self, qtbot, monkeypatch
+    ):
+        asked, timers = [], []
+        monkeypatch.setattr(
+            QMessageBox, "question", lambda *a, **k: asked.append(a) or QMessageBox.Yes
+        )
+        monkeypatch.setattr(nu, "_napari_confirms_close", lambda: True)
+        monkeypatch.setattr(nu.QTimer, "singleShot", lambda ms, fn: timers.append(fn))
+        viewer, window = self._viewer(qtbot)
+        layer = self._layer()
+        guard = nu.guard_unsaved_close(viewer, layer, "lose them?")
+        fs.mark_unsaved(layer, [0])
+        ignored = []
+        event = SimpleNamespace(
+            type=lambda: QEvent.Close,
+            spontaneous=lambda: True,
+            ignore=lambda: ignored.append(True),
+        )
+        # The frame's close is replaced by one from code, which napari does not
+        # ask about; that one is let through without asking again.
+        assert guard.eventFilter(window, event)
+        assert ignored and timers == [window.close] and len(asked) == 1
+        assert window.close()
+        assert len(asked) == 1
+
+    def test_napari_menu_close_asks_once(self, qtbot, monkeypatch):
+        asked = []
+        monkeypatch.setattr(
+            QMessageBox, "question", lambda *a, **k: asked.append(a) or QMessageBox.Yes
+        )
+
+        class NapariWindow(QWidget):
+            _is_close_dialog = {False: True, True: True}
+
+            def __init__(self):
+                super().__init__()
+                self.calls = []
+
+            def close(self, quit_app=False, confirm_need=False):
+                self.calls.append((quit_app, confirm_need))
+                return super().close()
+
+        window = NapariWindow()
+        qtbot.addWidget(window)
+        viewer = SimpleNamespace(window=SimpleNamespace(_qt_window=window))
+        layer = self._layer()
+        nu.guard_unsaved_close(viewer, layer, "lose them?")
+
+        window.close(confirm_need=True)  # clean: napari's own question stands
+        assert window.calls == [(False, True)] and not asked
+
+        fs.mark_unsaved(layer, [0])
+        window.close(quit_app=True, confirm_need=True)
+        # Asked here, so napari is told not to ask.
+        assert window.calls[-1] == (True, False) and len(asked) == 1
+
+    def test_declining_at_the_menu_does_not_close(self, qtbot, monkeypatch):
+        monkeypatch.setattr(QMessageBox, "question", lambda *a, **k: QMessageBox.No)
+
+        class NapariWindow(QWidget):
+            _is_close_dialog = {False: True, True: True}
+            calls = []
+
+            def close(self, quit_app=False, confirm_need=False):
+                self.calls.append(confirm_need)
+                return super().close()
+
+        window = NapariWindow()
+        qtbot.addWidget(window)
+        layer = self._layer()
+        nu.guard_unsaved_close(
+            SimpleNamespace(window=SimpleNamespace(_qt_window=window)), layer, "x"
+        )
+        fs.mark_unsaved(layer, [0])
+        assert window.close(confirm_need=True) is None
+        assert window.calls == []
+
+
+class TestReportFailure:
+
+    def test_a_failure_is_shown_and_swallowed(self, monkeypatch):
+        shown = []
+        monkeypatch.setattr(
+            QMessageBox, "warning", lambda *a, **k: shown.append(a[1:3])
+        )
+
+        def fail():
+            raise OSError("disk full")
+
+        assert nu.report_failure(None, "Save the modified labels", fail) is None
+        assert shown[0][0] == "Save the modified labels"
+        assert "disk full" in shown[0][1]
+
+    def test_success_returns_the_result_without_a_box(self, monkeypatch):
+        shown = []
+        monkeypatch.setattr(QMessageBox, "warning", lambda *a, **k: shown.append(a))
+        assert nu.report_failure(None, "x", lambda: 3) == 3
+        assert not shown

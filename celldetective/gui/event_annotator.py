@@ -337,6 +337,7 @@ class EventAnnotator(EventAnnotationMixin, AnimationMixin, BaseAnnotator):
         ):
             return
 
+        self.mark_table_changed()
         fill_option = prefill_class(self.class_option_rb)
         self.df_tracks.loc[:, target_class] = fill_option
         self.df_tracks.loc[:, target_time] = -1
@@ -469,6 +470,10 @@ class EventAnnotator(EventAnnotationMixin, AnimationMixin, BaseAnnotator):
         event : QCloseEvent
             The close event.
         """
+        # Before anything is torn down, so that declining leaves a working window.
+        if not self.confirm_discard():
+            event.ignore()
+            return
         # If the stack is still loading in the background, stop and join the
         # loader thread before tearing anything down. Otherwise it keeps running
         # prepare_stack against this (being-destroyed) widget — racing on

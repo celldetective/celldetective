@@ -57,7 +57,7 @@ Annotate in the viewer
 
 #. Press the :icon:`export,black` button at the bottom of the left side to export a time-series dataset (in ``.npy`` format). Put the file in a folder containing all of your annotations specific to this event.
 
-#. Press the Save button to update the position table with the new event class and the values for each cell.
+#. Press the Save button to update the position table with the new event class and the values for each cell. Closing the annotator with annotations, or a class added or deleted, that were not saved asks first.
 
 Viewer Controls & Shortcuts
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~

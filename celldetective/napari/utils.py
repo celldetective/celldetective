@@ -8,7 +8,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 import napari
 import numpy as np
 import pandas as pd
-from PyQt5.QtCore import QEvent, QObject
+from PyQt5.QtCore import QEvent, QObject, QTimer
 from PyQt5.QtWidgets import QMessageBox, QWidget, QVBoxLayout
 from celldetective.utils.io import save_tiff_imagej_compatible
 from magicgui import magicgui
@@ -754,9 +754,63 @@ def write_frame_annotation(
     return stems
 
 
+def report_failure(parent: Optional[QWidget], title: str, action: Callable[[], Any]) -> Any:
+    """
+    Run a viewer button's action, and show a failure in a message box.
+
+    magicgui would otherwise raise it, out of sight of a user who did not start
+    napari from a terminal. Whatever was not written stays flagged as unsaved.
+
+    Parameters
+    ----------
+    parent : QWidget or None
+        The window the message box belongs to.
+    title : str
+        The button's action, used as the box title.
+    action : callable
+        The action to run.
+
+    Returns
+    -------
+    object
+        What `action` returned, or None when it failed.
+    """
+    try:
+        return action()
+    except Exception as e:
+        logger.exception(f"{title} failed")
+        QMessageBox.warning(
+            parent, title, f"{title} failed:\n\n{e}\n\nThe details are in the log."
+        )
+        return None
+
+
+def _napari_confirms_close() -> bool:
+    """Whether napari asks for its own confirmation before closing a window."""
+    try:
+        from napari.settings import get_settings
+
+        return bool(get_settings().application.confirm_close_window)
+    except Exception:
+        return False
+
+
+def _closed_from_code(window: QWidget) -> bool:
+    """
+    Whether `viewer.close()` is closing the window: it removes every layer first.
+
+    Asking then cannot help: declining would leave a viewer with no layers.
+    """
+    viewer = getattr(getattr(window, "_qt_viewer", None), "viewer", None)
+    return viewer is not None and len(viewer.layers) == 0
+
+
 class _UnsavedEditsGuard(QObject):
     """
     Ask before a viewer window closes while a layer holds unsaved edits.
+
+    It asks instead of napari's own close confirmation, not on top of it: a
+    close accepted here is not asked again.
 
     The layer is held weakly: the filter lives as long as the Qt window, and a
     strong reference would keep the layer, and the stack behind it, alive with it.
@@ -766,21 +820,45 @@ class _UnsavedEditsGuard(QObject):
         super().__init__(window)
         self._layer = weakref.ref(layer)
         self._message = message
+        self._confirmed = False
+
+    def ask(self, parent: QWidget) -> Optional[bool]:
+        """
+        Ask whether to lose the unsaved edits.
+
+        Returns
+        -------
+        bool or None
+            None when nothing was asked (no unsaved edit, or already accepted),
+            otherwise whether the user accepted to lose them.
+        """
+        if self._confirmed:
+            return None
+        layer = self._layer()
+        if layer is None or not has_unsaved(layer):
+            return None
+        answer = QMessageBox.question(
+            parent,
+            "Unsaved edits",
+            self._message,
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        self._confirmed = answer == QMessageBox.Yes
+        return self._confirmed
 
     def eventFilter(self, watched, event) -> bool:
-        if event.type() == QEvent.Close:
-            layer = self._layer()
-            if layer is not None and has_unsaved(layer):
-                answer = QMessageBox.question(
-                    watched,
-                    "Unsaved edits",
-                    self._message,
-                    QMessageBox.Yes | QMessageBox.No,
-                    QMessageBox.No,
-                )
-                if answer != QMessageBox.Yes:
-                    event.ignore()
-                    return True
+        if event.type() == QEvent.Close and not _closed_from_code(watched):
+            accepted = self.ask(watched)
+            if accepted is False:
+                event.ignore()
+                return True
+            if accepted and event.spontaneous() and _napari_confirms_close():
+                # napari would ask again for a close from the window frame.
+                # Close again from code, which it does not ask about.
+                event.ignore()
+                QTimer.singleShot(0, watched.close)
+                return True
         return super().eventFilter(watched, event)
 
 
@@ -817,6 +895,21 @@ def guard_unsaved_close(
     track_unsaved_edits(layer)
     guard = _UnsavedEditsGuard(window, layer, message)
     window.installEventFilter(guard)
+
+    if hasattr(window, "_is_close_dialog"):
+        # napari's File > Close Window and Exit ask before closing: ask
+        # instead of them when edits are at stake, rather than twice.
+        napari_close = window.close
+
+        def close(quit_app: bool = False, confirm_need: bool = False):
+            answer = guard.ask(window) if confirm_need else None
+            if answer is False:
+                return None
+            return napari_close(
+                quit_app=quit_app, confirm_need=confirm_need and answer is None
+            )
+
+        window.close = close
     return guard
 
 
@@ -1319,7 +1412,9 @@ def launch_napari_viewer(
     @magicgui(call_button="Export the modified\ntracks...")
     def export_table_widget():
         """Widget to trigger export."""
-        return export_modifications()
+        return report_failure(
+            viewer.window._qt_window, "Export the modified tracks", export_modifications
+        )
 
     history = TrackCorrections()
 
@@ -2048,12 +2143,16 @@ def launch_segmentation_viewer(
         function
             The export function.
         """
-        return export_labels()
+        return report_failure(
+            viewer.window._qt_window, "Save the modified labels", export_labels
+        )
 
     @magicgui(call_button="Export the annotation\nof the current frame")
     def export_widget():
         """Widget to trigger export."""
-        return export_annotation()
+        return report_failure(
+            viewer.window._qt_window, "Export the annotation", export_annotation
+        )
 
     if contrast_limits is None:
         contrast_limits = _get_contrast_limits(stack)
@@ -2315,7 +2414,9 @@ def correct_annotation(filename: str) -> None:
         function
             The export function.
         """
-        return export_labels()
+        return report_failure(
+            viewer.window._qt_window, "Save the modified labels", export_labels
+        )
 
     if filename.endswith("_labelled.tif"):
         filename = filename.replace("_labelled.tif", ".tif")

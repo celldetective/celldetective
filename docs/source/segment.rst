@@ -210,7 +210,7 @@ When the masks are saved, every cell keeps its number: a cell removed as too sma
 
     **Save the modified labels** writes only the frames edited since the last save (by hand or from the panel below); every other frame keeps its masks and their numbers. On the edited frames too, the cells keep their numbers, but the trajectory and measurement tables find each cell's mask by its number (``class_id``): a cell you drew, erased or redrew, or split by the automatic fixes, no longer matches the tables computed before. If the position already has tracks, the viewer says which frames it will write before saving: run tracking and the steps after it again once the masks are saved.
 
-Closing the viewer with edited frames that were neither saved nor exported as an annotation asks first.
+Closing the viewer with edited frames that were neither saved nor exported as an annotation asks first, in place of napari's own close confirmation. If saving or exporting fails, a message box says why and the edits stay marked as unsaved.
 
 For a step-by-step annotation workflow, see :doc:`How to annotate for segmentation <how-to-guides/basics/annotate-for-segmentation>`.
 To train a model on your annotations, see :doc:`How to train a segmentation model <how-to-guides/advanced/train-a-segmentation-model-from-scratch>`.

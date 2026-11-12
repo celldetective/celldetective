@@ -62,7 +62,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - napari correction viewers:
   - closing a viewer with edits that were neither saved nor exported asks
     first, in the segmentation viewer, the track viewer and the annotation
-    corrector;
+    corrector. It asks instead of napari's own close confirmation, so there is
+    one question, whether the window is closed from its frame or from the
+    *File* menu; `viewer.close()` called from code closes without asking;
+  - a failure of the save and export buttons of these viewers is shown in a
+    message box, instead of only in the log;
+  - the event, interaction and phenotype annotators ask before closing with
+    annotations, or a class added or deleted, that were not saved;
   - *Save the modified labels* writes only the frames edited since the last
     save, by hand or from the panels, instead of rewriting and renumbering every
     frame; the other frames keep the mask numbers the tables refer to. On a
