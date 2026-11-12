@@ -23,9 +23,17 @@ Reference keys: **tracking**
 
 #. Double click on the cell. Say yes to the pop-up to propagate the identity of the cell from the previous frame to the current frame. If the mask is associated with another track, time propagation will be performed automatically.
 
+   The change applies from this frame to the end of the movie: the cell clicked on takes the selected track from here on, and the later detections of the selected track become a new track. To fix two cells whose identities were swapped, double click twice: once to give the first track to the right cell, then, with the new track selected, once on the other cell. With label ``0`` selected, the double click removes the cell from the table from this frame on; on a cell of the selected track, it splits that track here. The pop-up says which of these will happen. The *Undo the last correction* button, or :kbd:`Ctrl+Z` with the segmentation layer selected, undoes the corrections one at a time, back to the last export.
+
 #. Optional: above the export button, tune the *track post-processing* options applied on save -- removing tracks that do not start at the beginning or do not end at the end, interpolating missed detections, sustaining the first/last position to the movie boundaries, interpolating missing values, and a minimum tracklength. These widgets are pre-filled from the position's tracking configuration, so by default they reproduce the pipeline you already set up. Leave everything unchecked (and the minimum tracklength at ``0``) to export the tracks exactly as corrected.
 
-#. Press the *Export the modified tracks...* button to save the changes in the position table. The post-processing is applied and the track and point layers refresh in place, so removed tracks disappear and interpolated/extrapolated positions appear immediately.
+#. Press the *Export the modified tracks...* button to save the changes in the position table. The post-processing is applied and the track and point layers refresh in place, so removed tracks disappear and interpolated/extrapolated positions appear immediately. Closing the viewer before exporting asks first, as the corrections would be lost.
+
+.. warning::
+
+    Correcting tracks changes the ``TRACK_ID`` of detections, and nothing else. Columns computed per track before the correction, such as event classes and times (``class_*``, ``t_*``, ``status_*``) and neighborhoods, still describe the old tracks, and a detection added to a track has a position but no measurements. The export says when this applies, and how many added detections the saved table holds: run the measurements, the event detection and the neighborhoods again afterwards.
+
+    Correct the segmentation before the tracks. Masks cannot be edited in this viewer, and saving corrected masks means tracking again, which replaces the corrected tracks.
 
 .. note::
 

@@ -198,13 +198,19 @@ With napari, segmentation mistakes can be corrected using the brush, eraser, and
 #. **Save the modified labels** — overwrite the masks in place.
 #. **Export the annotation of the current frame** — create an annotated pair (image + mask) to train a Deep Learning model on your data.
 
-Above these buttons, a set of options controls the automatic fixes applied to the masks when they are saved or exported:
+Above these buttons, a set of options controls the automatic fixes applied to the masks when they are saved or exported. They apply to the frames that are written: the frames edited since the last save, or the exported frame.
 
 *   **Split merged labels** — separate objects that mistakenly share a single label value (detected when an object's bounding box is much larger than the object itself). Enabled by default.
 *   **Remove small objects** — discard objects smaller than the **Min object area (px²)** threshold (default ``9``, i.e. 3×3 pixels). Enabled by default. Uncheck it (or set the area to ``0``) to keep every object regardless of size.
 *   **Fill holes in masks** — fill holes inside cell masks. Disabled by default.
 
-The labels are always re-numbered consecutively from ``1`` on save to avoid encoding errors, regardless of these options.
+When the masks are saved, every cell keeps its number: a cell removed as too small leaves a gap, and the pieces split off a merged label get new numbers. An exported annotation is renumbered consecutively from ``1``.
+
+.. warning::
+
+    **Save the modified labels** writes only the frames edited since the last save (by hand or from the panel below); every other frame keeps its masks and their numbers. On the edited frames too, the cells keep their numbers, but the trajectory and measurement tables find each cell's mask by its number (``class_id``): a cell you drew, erased or redrew, or split by the automatic fixes, no longer matches the tables computed before. If the position already has tracks, the viewer says which frames it will write before saving: run tracking and the steps after it again once the masks are saved.
+
+Closing the viewer with edited frames that were neither saved nor exported as an annotation asks first, in place of napari's own close confirmation. If saving or exporting fails, a message box says why and the edits stay marked as unsaved.
 
 For a step-by-step annotation workflow, see :doc:`How to annotate for segmentation <how-to-guides/basics/annotate-for-segmentation>`.
 To train a model on your annotations, see :doc:`How to train a segmentation model <how-to-guides/advanced/train-a-segmentation-model-from-scratch>`.

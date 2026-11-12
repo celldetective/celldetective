@@ -40,7 +40,11 @@ from tqdm import tqdm
 
 from celldetective import get_logger
 from celldetective.log_manager import positionlogger
-from celldetective.gui.base.components import CelldetectiveWidget, generic_message
+from celldetective.gui.base.components import (
+    CelldetectiveWidget,
+    ask_to_discard,
+    generic_message,
+)
 from celldetective.gui.base.figure_canvas import FigureCanvas
 from celldetective.gui.base.sliders import QLabeledDoubleRangeSlider, QLabeledSlider
 from celldetective.gui.base.styles import CELLDETECTIVE_BLUE
@@ -472,6 +476,11 @@ class AnnotatorMixin:
     # Widgets showing whether the plot is in log scale, or its features normalized.
     log_toggles = ()
     normalize_toggles = ()
+    # Unsaved state, read on close. Class defaults so a window closed before
+    # (or without) its __init__ has nothing unsaved.
+    annotation_log = ()
+    _table_changed = False
+    _discard_confirmed = False
 
     def load_annotator_config(self) -> None:
         """Load the display settings of the annotator, or their defaults."""
@@ -727,6 +736,35 @@ class AnnotatorMixin:
             for entry in self.annotation_log:
                 logger.info(f"modified {entry}")
         self.annotation_log = []
+        self._table_changed = False
+
+    def mark_table_changed(self) -> None:
+        """Record a change to the table that is not a cell annotation (a class added or deleted)."""
+        self._table_changed = True
+
+    def has_unsaved_annotations(self) -> bool:
+        """Whether the table was changed since it was last saved."""
+        return bool(self.annotation_log) or self._table_changed
+
+    def confirm_discard(self) -> bool:
+        """
+        Ask before closing with unsaved annotations.
+
+        Returns
+        -------
+        bool
+            True when the window may close: nothing unsaved, or the user accepted
+            to lose it. Asked once: a close already accepted is not asked again.
+        """
+        if self._discard_confirmed or not self.has_unsaved_annotations():
+            return True
+        self._discard_confirmed = ask_to_discard(
+            self,
+            "Unsaved annotations",
+            "The annotations made since the last save have not been saved. "
+            "Close the annotator and lose them?",
+        )
+        return self._discard_confirmed
 
     def release_resources(self) -> None:
         """
@@ -742,8 +780,11 @@ class AnnotatorMixin:
                 logger.debug(f"Could not close cell_fig: {e}")
 
     def closeEvent(self, event: QCloseEvent) -> None:
-        """Release the resources of the window, then close it."""
+        """Ask before losing unsaved annotations, release the resources of the window, then close it."""
 
+        if not self.confirm_discard():
+            event.ignore()
+            return
         self.release_resources()
         gc.collect()
         super().closeEvent(event)

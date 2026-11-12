@@ -36,6 +36,7 @@ from celldetective.napari.frame_segmentation import (
     _fit_to_layer_dtype,
     history_atom,
     labels_mismatch,
+    mark_unsaved,
     merge_labels,
     record_undo,
 )
@@ -253,17 +254,74 @@ def _shape_frame(vertices: np.ndarray) -> Optional[int]:
     return int(frames[0]) if len(frames) == 1 else None
 
 
+def shapes_layers(viewer: Any) -> List[Any]:
+    """The shapes layers of a viewer, which can serve as regions."""
+    # By name rather than by class: napari is imported lazily everywhere here,
+    # and anything shaped like a shapes layer will do.
+    try:
+        layers = list(viewer.layers)
+    except Exception:
+        return []
+    return [layer for layer in layers if type(layer).__name__ == "Shapes"]
+
+
+def shapes_on_frame(
+    layer, frame_index: int
+) -> Tuple[List[Tuple[str, np.ndarray]], Optional[int]]:
+    """
+    The closed shapes of a shapes layer that apply to one frame.
+
+    Rectangles, polygons and ellipses count; lines and paths enclose nothing and
+    are skipped. A 2D layer applies to every frame. On a layer with a time axis
+    the shapes drawn on this frame are taken -- or, when there are none, those
+    of the closest earlier frame that has some, so regions drawn once carry on
+    through the movie without being redrawn. The threshold panel and the
+    annotation export both read regions this way.
+
+    Parameters
+    ----------
+    layer : napari.layers.Shapes
+        The layer holding the regions of interest.
+    frame_index : int
+        The frame being processed.
+
+    Returns
+    -------
+    shapes : list of (str, ndarray)
+        The shape type and the (Y, X) vertices of each shape.
+    source_frame : int or None
+        The frame the shapes were drawn on, None for 2D shapes or when none apply.
+    """
+
+    shape_types = list(getattr(layer, "shape_type", []))
+    candidates = []
+    for i, vertices in enumerate(layer.data):
+        vertices = np.asarray(vertices, dtype=float)
+        if vertices.ndim != 2 or vertices.shape[1] < 2 or len(vertices) < 3:
+            continue
+        kind = shape_types[i] if i < len(shape_types) else "polygon"
+        if kind in ("line", "path"):
+            continue
+        candidates.append((_shape_frame(vertices), kind, vertices[:, -2:]))
+
+    # Shapes of the frame itself, else those of the closest earlier frame.
+    drawn_on = {f for f, _, _ in candidates if f is not None and f <= frame_index}
+    source_frame = max(drawn_on) if drawn_on else None
+    shapes = [
+        (kind, yx)
+        for frame, kind, yx in candidates
+        if frame is None or frame == source_frame
+    ]
+    return shapes, source_frame
+
+
 def shapes_region(
     layer, frame_index: int, shape: Tuple[int, int]
 ) -> Tuple[Optional[np.ndarray], int, Optional[int]]:
     """
     The area covered by a shapes layer on one frame.
 
-    Rectangles, polygons and ellipses count; lines and paths enclose nothing and
-    are skipped. A 2D layer applies to every frame. On a layer with a time axis
-    the shapes drawn on this frame are taken, as for the annotation export --
-    or, when there are none, those of the closest earlier frame that has some,
-    so regions drawn once carry on through the movie without being redrawn.
+    The shapes are those :func:`shapes_on_frame` finds for the frame.
 
     Parameters
     ----------
@@ -286,26 +344,11 @@ def shapes_region(
 
     from skimage.draw import polygon
 
-    shape_types = list(getattr(layer, "shape_type", []))
-    candidates = []
-    for i, vertices in enumerate(layer.data):
-        vertices = np.asarray(vertices, dtype=float)
-        if vertices.ndim != 2 or vertices.shape[1] < 2 or len(vertices) < 3:
-            continue
-        kind = shape_types[i] if i < len(shape_types) else "polygon"
-        if kind in ("line", "path"):
-            continue
-        candidates.append((_shape_frame(vertices), kind, vertices[:, -2:]))
-
-    # Shapes of the frame itself, else those of the closest earlier frame.
-    drawn_on = {f for f, _, _ in candidates if f is not None and f <= frame_index}
-    source_frame = max(drawn_on) if drawn_on else None
+    shapes, source_frame = shapes_on_frame(layer, frame_index)
 
     region = np.zeros(shape, dtype=bool)
     n_shapes = 0
-    for frame, kind, yx in candidates:
-        if frame is not None and frame != source_frame:
-            continue
+    for kind, yx in shapes:
         if kind == "ellipse" and len(yx) == 4:
             yx = _ellipse_vertices(yx)
         rr, cc = polygon(yx[:, 0], yx[:, 1], shape=shape)
@@ -660,13 +703,7 @@ class ThresholdSegmentationPanel(QWidget):
             logger.debug(f"Could not follow the viewer's layers: {e}")
 
     def _shapes_layers(self) -> List[Any]:
-        # By name rather than by class: napari is imported lazily everywhere here,
-        # and anything shaped like a shapes layer will do.
-        try:
-            layers = list(self.viewer.layers)
-        except Exception:
-            return []
-        return [layer for layer in layers if type(layer).__name__ == "Shapes"]
+        return shapes_layers(self.viewer)
 
     def _refresh_regions(self, *_: Any) -> None:
         """List the shapes layers as regions, keeping the current choice if it is still there."""
@@ -1056,6 +1093,9 @@ class ThresholdSegmentationPanel(QWidget):
         atom = history_atom(t, before, layer.data[t])
         if atom is not None:
             self._pending.setdefault("atoms", []).append(atom)
+            # Flagged now, not only when the run ends and its undo step is
+            # pushed: a save or a close during the run must see this frame.
+            mark_unsaved(layer, [t])
         self._pending["done"] = self._pending.get("done", 0) + 1
         layer.refresh()
 

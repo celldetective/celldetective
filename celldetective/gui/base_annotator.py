@@ -410,6 +410,7 @@ class BaseAnnotator(AnnotatorMixin, CelldetectiveMainWindow):
             columns=[class_to_delete, *event_columns(class_to_delete)],
             errors="ignore",
         )
+        self.mark_table_changed()
         self.class_choice_cb.removeItem(self.class_choice_cb.findText(class_to_delete))
 
     def normalize_features(self):

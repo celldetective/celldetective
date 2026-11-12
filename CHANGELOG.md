@@ -59,6 +59,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   profile, so a fix in one window now reaches the others. Along the way:
   - the event annotator lists numeric signals only;
   - in an untracked phenotype table, a cell is selected by its ID and frame.
+- napari correction viewers:
+  - closing a viewer with edits that were neither saved nor exported asks
+    first, in the segmentation viewer, the track viewer and the annotation
+    corrector. It asks instead of napari's own close confirmation, so there is
+    one question, whether the window is closed from its frame or from the
+    *File* menu; `viewer.close()` called from code closes without asking;
+  - a failure of the save and export buttons of these viewers is shown in a
+    message box, instead of only in the log;
+  - the event, interaction and phenotype annotators ask before closing with
+    annotations, or a class added or deleted, that were not saved;
+  - *Save the modified labels* writes only the frames edited since the last
+    save, by hand or from the panels, instead of rewriting and renumbering every
+    frame; the other frames keep the mask numbers the tables refer to. On a
+    position that already has tracks, it says which frames it will write and
+    saves only if accepted;
+  - exporting an annotation counts as saving that frame only: closing still
+    asks when other frames hold edits, and the next *Save the modified labels*
+    still writes the exported frame. An edit undone or redone after a save
+    counts as an edit;
+  - the annotation export reads regions as the *Threshold* tab does:
+    rectangles, polygons and ellipses in any shapes layer (the *ROIs* layer
+    included), carried on from earlier frames or drawn in 2D for every frame,
+    each exported as its bounding box. It used to read only rectangles drawn
+    on the current frame in a layer named `Shapes`;
+  - exporting corrected tracks says which event columns were computed before
+    the correction, and how many detections in the saved table were added
+    without measurements (a detection added, then removed, is not counted);
+  - track corrections can be undone, one at a time back to the last export,
+    with the new *Undo the last correction* button or Ctrl+Z;
+  - *Save the modified labels* keeps the number of every cell on the frames it
+    writes: only the pieces split off a merged label get new numbers, and a
+    removed cell leaves a gap. `auto_correct_masks` takes `keep_labels=True`
+    for this. Exported annotations are still renumbered from 1;
+  - an annotation crop smaller than 256 pixels is padded to exactly 256 (an
+    odd shortfall gave 257).
+  - the double-click question says what the click will do, including the two
+    cases that are not a propagation: label 0 removes the cell from that frame
+    on, and the cell's own track is split there;
+  - only one segmentation or track viewer can be open at a time: asking for
+    another, on the same position or not, says which one is open and brings it
+    to the front. Two viewers on a position could save over each other's
+    corrections. The annotation corrector is not concerned.
 - Image loading: a movie with both Z and time keeps its time points; each is
   the maximum intensity projection of its slices (they were flattened into one
   long time axis), with a warning. In a file with neither time nor Z, the
@@ -178,8 +220,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   its first frame, could be left out of survival from its arrival. It is now an
   event at its arrival, a change faster than the time resolution, with a survival
   time of 0.
+- napari track viewer: a mask missing from the trajectory table was drawn with
+  the highest existing track ID, so it looked like part of that track and a
+  double-click on it moved that track's later masks. Untracked masks now get IDs
+  past every track in the table (`relabel_segmentation`).
+- napari track viewer: a double-click read the pixel next to the one clicked
+  about half the time, so near the edge of a mask it did nothing or picked the
+  neighbouring cell.
+- Annotation export from napari:
+  - a rectangle crossing the top or left edge of the frame exported an empty
+    or wrong crop, padded with zeros. Rectangles are clipped to the frame, and
+    one entirely outside it is skipped with a warning;
+  - a `Shapes` layer holding a polygon as well as rectangles failed to export.
+- *Plugins > Correct a segmentation annotation*: an image that cannot be opened
+  is reported in a message box instead of only in the console.
 
 ### Removed
+- `celldetective.utils.experiment`: `relabel_segmentation`,
+  `relabel_segmentation_lazy`, `auto_correct_masks`, `load_tracking_data`,
+  `get_position_table`, `tracks_to_btrack`, `tracks_to_napari`,
+  `view_tracks_in_napari`, `control_tracking_table` and `_view_on_napari`,
+  unused copies of the functions in `celldetective.utils.mask_cleaning`,
+  `celldetective.utils.data_loaders`, `celldetective.utils.data_cleaning` and
+  `celldetective.napari.utils`; import them from there.
+  The `relabel_segmentation` copy still gave an untracked mask an existing track
+  ID.
 - `celldetective.measure.write_first_detection_class`, an unused copy of
   `celldetective.tracking.write_first_detection_class` with another convention.
 

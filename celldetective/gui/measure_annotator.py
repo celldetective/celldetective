@@ -804,6 +804,7 @@ class MeasureAnnotator(BaseAnnotator):
             return
 
         self.df_tracks.loc[:, self.target_class] = 0
+        self.mark_table_changed()
 
         self.update_class_cb()
 

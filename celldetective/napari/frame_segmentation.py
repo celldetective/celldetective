@@ -13,6 +13,7 @@ full-stack run.
 
 import json
 import os
+import weakref
 from collections import OrderedDict
 from typing import Any, Dict, List, Optional, Sequence, Set
 
@@ -214,7 +215,8 @@ def record_undo(layer, atoms: Sequence[tuple]) -> None:
     step rather than an error.
 
     Several atoms are pushed as one step, so one Ctrl+Z takes a whole run of
-    frames back rather than a frame at a time.
+    frames back rather than a frame at a time. Every bulk write goes through
+    here, so this is also where the layer is flagged as holding unsaved edits.
 
     Parameters
     ----------
@@ -228,6 +230,7 @@ def record_undo(layer, atoms: Sequence[tuple]) -> None:
     atoms = [atom for atom in atoms if atom is not None]
     if not atoms:
         return
+    mark_unsaved(layer, edited_frames(atoms))
     try:
         n_axes = len(atoms[0][0])
         indices = tuple(
@@ -242,6 +245,112 @@ def record_undo(layer, atoms: Sequence[tuple]) -> None:
         )
     except Exception as e:
         logger.debug(f"Could not record an undo step for the segmentation: {e}")
+
+
+UNSAVED_EDITS_KEY = "celldetective_unsaved_edits"
+
+
+# The frames edited since the last save live in the layer's metadata, so a
+# viewer, its panels and its save buttons share them without holding references
+# to one another. Saving writes only those frames, and an annotation export
+# clears only its own.
+
+
+def edited_frames(atoms: Sequence[tuple]) -> Set[int]:
+    """
+    The frames a list of napari history atoms touches.
+
+    Parameters
+    ----------
+    atoms : list of tuple
+        ``(indices, before, after)`` atoms, as napari's ``paint`` event and
+        :func:`history_atom` give them; None entries are ignored.
+
+    Returns
+    -------
+    set of int
+        The time indices of the edited pixels.
+    """
+    frames = set()
+    for atom in atoms:
+        if atom is None or not len(atom[0]):
+            continue
+        times = np.asarray(atom[0][0])
+        if times.size == 0:
+            continue
+        # Every distinct frame starts at least one run of equal values, so the
+        # run starts are enough: linear, with no sort of the (frame-ordered)
+        # pixels of a multi-frame write.
+        starts = np.flatnonzero(times[1:] != times[:-1]) + 1
+        frames.add(int(times[0]))
+        frames.update(int(t) for t in np.unique(times[starts]))
+    return frames
+
+
+def mark_unsaved(layer, frames) -> None:
+    """Record that frames of a layer hold edits not yet written out."""
+    # `record_undo` calls this for whatever it is given, layer-like stubs too.
+    metadata = getattr(layer, "metadata", None)
+    if metadata is not None:
+        metadata[UNSAVED_EDITS_KEY] = unsaved_frames(layer) | {int(t) for t in frames}
+
+
+def clear_unsaved(layer, frames=None) -> None:
+    """Record that frames of a layer, or all of them, have been written out."""
+    remaining = set() if frames is None else unsaved_frames(layer) - set(frames)
+    layer.metadata[UNSAVED_EDITS_KEY] = remaining
+
+
+def unsaved_frames(layer) -> Set[int]:
+    """The frames of a layer edited since they were last written out."""
+    return set(layer.metadata.get(UNSAVED_EDITS_KEY, ()))
+
+
+def has_unsaved(layer) -> bool:
+    """Whether a layer holds edits not yet written out."""
+    return bool(unsaved_frames(layer))
+
+
+def _on_paint(event) -> None:
+    mark_unsaved(event.source, edited_frames(event.value))
+
+
+def _flag_history_step(layer_ref, action: str, history: str) -> None:
+    """Make ``layer.<action>()`` flag the frames of the step it is about to replay."""
+    # The class's function, not the bound method: the wrapper, stored on the
+    # layer, must not hold the layer.
+    original = getattr(type(layer_ref()), action)
+
+    def replay(*args, **kwargs) -> Any:
+        layer = layer_ref()
+        if layer is None:
+            return None
+        steps = getattr(layer, history, None)
+        if steps:
+            mark_unsaved(layer, edited_frames(steps[-1]))
+        return original(layer, *args, **kwargs)
+
+    setattr(layer_ref(), action, replay)
+
+
+def track_unsaved_edits(layer) -> None:
+    """
+    Flag the layer as edited whenever a napari tool paints on it, or an edit is
+    undone or redone.
+
+    napari emits ``paint`` for the brush, the eraser and the fill bucket, and not
+    when the viewer merely moves to another frame. Its undo and redo emit
+    nothing, so they are wrapped to flag the frames they rewrite: an edit undone
+    after a save must be saved again. The paint handler is module-level, so the
+    connection holds no reference to the layer.
+    """
+    layer.events.paint.connect(_on_paint)
+    ref = weakref.ref(layer)
+    for action, history in (("undo", "_undo_history"), ("redo", "_redo_history")):
+        try:
+            _flag_history_step(ref, action, history)
+        except Exception as e:
+            logger.debug(f"Could not follow the {action} of the segmentation: {e}")
 
 
 def labels_mismatch(stack, layer) -> Optional[str]:
