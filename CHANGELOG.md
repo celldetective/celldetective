@@ -14,7 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     the synchronising time minus a baseline window before it), tested between
     wells with the KS test and Cliff's delta of the table explorer.
   Both pool the cells of each well, so they compare wells; the windows say so.
-  In Python: `celldetective.comparisons`.
+  In Python, without the GUI: `celldetective.comparisons` (`pairwise_logrank`,
+  `signal_responses`, `compare_responses`).
 - Synchronised signals: a "band" choice between "95% CI of the mean" (default,
   the uncertainty of the mean curve over its cells) and "spread across cells",
   the previous band: the SD around a mean, the median absolute deviation around
@@ -25,7 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   faster on Cliff's delta, computed once per pair. Grouped by a single column,
   the rows and columns show its value instead of a one-element tuple, ordered
   as the values sort (numerically for numbers). The `cliffs_delta` package is no
-  longer used.
+  longer a dependency.
 - A cell entering the field of view from the side has no first detection time
   (-1, still class 2). `status_firstdetection` says from which frame it is
   present. It is also left out of survival from the start of the movie, as it

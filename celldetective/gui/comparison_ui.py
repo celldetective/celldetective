@@ -7,7 +7,6 @@ shown like the tests of the table explorer, as pairwise matrices
 
 from typing import Any, Optional
 
-import numpy as np
 import pandas as pd
 from PyQt5.QtWidgets import QHBoxLayout, QLabel, QPushButton, QVBoxLayout
 
@@ -117,23 +116,16 @@ class SignalComparisonWidget(CelldetectiveWidget):
 
     def responses(self) -> pd.DataFrame:
         """One row per cell of the positions shown, with its response."""
-        from celldetective.comparisons import window_responses
+        from celldetective.comparisons import signal_responses
 
         _, _, key = self.plot_window.signal_keys()
-        baseline, response = self.window_in_frames("baseline"), self.window_in_frames("response")
         info = self.plot_window.df_pos_info
-        tables = []
-        for _, row in info.loc[info["select"].astype(bool)].iterrows():
-            signal = row["signal"]
-            if not isinstance(signal, dict):
-                continue
-            values = window_responses(signal[key], signal["timeline"], baseline, response)
-            values = values[np.isfinite(values)]  # cells not observed enough, and empty rows
-            tables.append(pd.DataFrame(dict(well_name=row["well_name"], pos_name=row["pos_name"], response=values)))
-        return pd.concat(tables, ignore_index=True) if tables else pd.DataFrame()
+        return signal_responses(info.loc[info["select"].astype(bool)], key,
+                                self.window_in_frames("baseline"), self.window_in_frames("response"))
 
     def run(self) -> None:
-        from celldetective.gui.tableUI import two_sample_test_table
+        from celldetective.comparisons import compare_responses
+        from celldetective.gui.tableUI import TWO_SAMPLE_TESTS, PivotTableUI
 
         problem = self.alignment_problem()
         if problem:
@@ -150,7 +142,8 @@ class SignalComparisonWidget(CelldetectiveWidget):
 
         self.cells = cells
         self.result_windows = [
-            two_sample_test_table(cells, "response", ["well_name"], method) for method in ("ks_2samp", "cliffs_delta")
+            PivotTableUI(pivot, title=TWO_SAMPLE_TESTS[method][0], mode=TWO_SAMPLE_TESTS[method][1])
+            for method, pivot in compare_responses(cells).items()
         ]
         for window in self.result_windows:
             window.show()

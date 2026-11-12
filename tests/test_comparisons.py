@@ -2,15 +2,19 @@
 synchronised signals."""
 
 import numpy as np
+import pandas as pd
 import pytest
 from lifelines import KaplanMeierFitter
 from lifelines.statistics import logrank_test
 
 from celldetective.comparisons import (
+    compare_responses,
     holm,
     pairwise_logrank,
+    signal_responses,
     window_responses,
 )
+from celldetective.utils import stats
 
 FOLLOW_UP = 100.0
 
@@ -99,3 +103,48 @@ def test_window_response_needs_enough_frames():
 def test_window_outside_the_timeline_is_refused():
     with pytest.raises(ValueError):
         window_responses(np.zeros((1, len(TIMELINE))), TIMELINE, (-100, -90), (0, 5))
+
+
+def _positions(rng, wells=("W1", "W2"), per_well=3, cells=10, step=2.0):
+    """Position rows as the signal window holds them; well w steps up by w * step."""
+    rows = []
+    for w, well in enumerate(wells):
+        for p in range(per_well):
+            m = rng.normal(0, 1, (cells, len(TIMELINE)))
+            m[:, TIMELINE >= 0] += step * w
+            rows.append(dict(well_name=well, pos_name=f"{well}-{p}", signal=dict(timeline=TIMELINE, matrix_event=m)))
+    return pd.DataFrame(rows)
+
+
+def test_signal_responses_pool_the_cells_of_each_position():
+    cells = signal_responses(_positions(np.random.default_rng(20)), "matrix_event", (-10, -1), (0, 9))
+    assert list(cells.columns) == ["well_name", "pos_name", "response"]
+    assert len(cells) == 2 * 3 * 10
+    means = cells.groupby("well_name")["response"].mean()
+    assert means["W2"] - means["W1"] == pytest.approx(2.0, abs=0.3)
+
+
+def test_signal_responses_skip_positions_without_signal_and_cells_not_observed():
+    positions = _positions(np.random.default_rng(21), wells=("W1",), per_well=2, cells=3)
+    positions.at[0, "signal"]["matrix_event"][0, :] = np.nan  # a cell never observed
+    positions.loc[len(positions)] = dict(well_name="W1", pos_name="empty", signal=None)
+    cells = signal_responses(positions, "matrix_event", (-10, -1), (0, 9))
+    assert len(cells) == 5 and "empty" not in set(cells["pos_name"])
+
+
+def test_signal_responses_of_no_position_is_an_empty_table():
+    cells = signal_responses(pd.DataFrame(columns=["well_name", "pos_name", "signal"]), "matrix_event",
+                             (-10, -1), (0, 9))
+    assert cells.empty and list(cells.columns) == ["well_name", "pos_name", "response"]
+
+
+def test_compare_responses_are_the_table_explorer_tests():
+    cells = signal_responses(_positions(np.random.default_rng(22)), "matrix_event", (-10, -1), (0, 9))
+    result = compare_responses(cells)
+    assert list(result) == ["ks_2samp", "cliffs_delta"]
+    for method, pivot in result.items():
+        expected = stats.test_2samp_generic(cells, feature="response", groupby_cols=["well_name"], method=method)
+        pd.testing.assert_frame_equal(pivot, expected)
+    # W2 responds more: its KS p-value against W1 is small, its Cliff's delta positive.
+    assert result["ks_2samp"].loc["W2", "W1"] < 0.001
+    assert result["cliffs_delta"].loc["W2", "W1"] > 0.5

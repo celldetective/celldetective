@@ -59,15 +59,18 @@ def test_survival_comparison_needs_two_wells(windows):
     windows.message.assert_called_once()
 
 
-def test_signal_comparison_reuses_the_table_explorer_tests(qtbot, windows):
-    widget = SignalComparisonWidget(_plot_window(np.random.default_rng(2)))
+def test_signal_comparison_shows_the_table_explorer_tests(qtbot, windows):
+    """The statistics are in celldetective.comparisons; the window reads the
+    positions shown and displays the matrices as the table explorer does."""
+    window = _plot_window(np.random.default_rng(2), wells=("W1", "W2", "W3"))
+    window.df_pos_info.loc[window.df_pos_info["well_name"] == "W3", "select"] = False
+    widget = SignalComparisonWidget(window)
     qtbot.addWidget(widget)
     assert [f.text() for f in widget.windows["baseline"]] == ["-10", "-1"]
     widget.run()
-    means = widget.cells.groupby("well_name")["response"].mean()
-    assert means["W2"] - means["W1"] == pytest.approx(2.0, abs=0.4)
-    modes = [c[1]["mode"] for c in windows.pivot.call_args_list]
-    assert modes == ["pvalue", "cliff"]
+    assert set(widget.cells["well_name"]) == {"W1", "W2"}
+    shown = [(list(c[0][0].index), c[1]["mode"]) for c in windows.pivot.call_args_list]
+    assert shown == [(["W1", "W2"], "pvalue"), (["W1", "W2"], "cliff")]
 
 
 def test_signal_comparison_refuses_cells_without_event_time(qtbot, windows):
