@@ -19,6 +19,7 @@ from PyQt5.QtCore import QEvent
 from PyQt5.QtWidgets import QMessageBox, QWidget
 
 from celldetective.napari import frame_segmentation as fs
+from celldetective.napari import open_viewers as ov
 from celldetective.napari import utils as nu
 
 
@@ -701,3 +702,61 @@ class TestReportFailure:
         monkeypatch.setattr(QMessageBox, "warning", lambda *a, **k: shown.append(a))
         assert nu.report_failure(None, "x", lambda: 3) == 3
         assert not shown
+
+
+class TestOneViewerOnThePositions:
+    """A second position viewer is refused while one is open (COR-7)."""
+
+    @pytest.fixture(autouse=True)
+    def no_registry_leak(self):
+        ov._current = None
+        yield
+        ov._current = None
+
+    @pytest.fixture
+    def shown(self, monkeypatch):
+        """Record the message boxes instead of showing them."""
+        messages = []
+        monkeypatch.setattr(
+            ov.QMessageBox,
+            "information",
+            lambda parent, title, text: messages.append(text),
+        )
+        return messages
+
+    def _window(self, qtbot):
+        window = QWidget()
+        qtbot.addWidget(window)
+        window.show()
+        return window
+
+    def test_nothing_open_lets_a_viewer_open(self, shown):
+        assert not ov.refuse_if_viewer_open(None, "/exp/W1/100/")
+        assert shown == []
+
+    def test_a_second_viewer_on_the_same_position_is_refused(self, qtbot, shown):
+        window = self._window(qtbot)
+        ov.register_viewer(window, "/exp/W1/100/", "target", "segmentation")
+        assert ov.refuse_if_viewer_open(None, "/exp/W1/100")
+        assert "position 100" in shown[0]
+        assert "same position" in shown[0]
+
+    def test_a_viewer_on_another_position_is_refused_too(self, qtbot, shown):
+        window = self._window(qtbot)
+        ov.register_viewer(window, "/exp/W1/100/", "target", "tracks")
+        assert ov.refuse_if_viewer_open(None, "/exp/W1/101/")
+        assert "Only one napari viewer" in shown[0]
+
+    def test_closing_the_viewer_frees_the_positions(self, qtbot, shown):
+        window = self._window(qtbot)
+        ov.register_viewer(window, "/exp/W1/100/", "target", "segmentation")
+        window.close()
+        assert ov.open_viewer() is None
+        assert not ov.refuse_if_viewer_open(None, "/exp/W1/100/")
+
+    def test_a_deleted_window_is_forgotten(self, qtbot):
+        window = QWidget()
+        window.show()
+        ov.register_viewer(window, "/exp/W1/100/", "target", "segmentation")
+        window.deleteLater()
+        qtbot.waitUntil(lambda: ov.open_viewer() is None, timeout=2000)

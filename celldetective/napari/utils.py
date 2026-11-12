@@ -48,8 +48,44 @@ from celldetective.log_manager import positionlogger
 from celldetective.gui.base.components import ask_to_discard
 from celldetective.gui.base.styles import Styles
 from celldetective.utils.event_status import event_columns
+from celldetective.napari.open_viewers import register_viewer, refuse_if_viewer_open
 
 logger = get_logger()
+
+
+def _new_position_viewer(
+    position: str, population: str, kind: str
+) -> Optional["napari.Viewer"]:
+    """
+    Open the viewer on a position, unless one is open already (open_viewers).
+
+    Every viewer on a position is created here, so none escapes the rule. The
+    GUI checks before loading too, but two loads started one after the other
+    both get here. The annotation corrector creates its viewer directly: it is
+    exempt. The viewer is recorded as open by :func:`_show_position_viewer`,
+    once it is built: a viewer whose setup failed must not block the next one.
+
+    Returns
+    -------
+    napari.Viewer or None
+        The new viewer, or None when it was refused.
+    """
+    if refuse_if_viewer_open(None, position):
+        return None
+    viewer = napari.Viewer()
+    try:
+        viewer.window._qt_window.setWindowIcon(Styles().celldetective_icon)
+    except Exception as e:
+        logger.debug(f"Could not set napari window icon: {e}")
+    return viewer
+
+
+def _show_position_viewer(
+    viewer: "napari.Viewer", block: bool, position: str, population: str, kind: str
+) -> None:
+    """Record a built position viewer as the open one, then show it."""
+    register_viewer(viewer.window._qt_window, position, population, kind)
+    viewer.show(block=block)
 
 
 def _layer_controls(viewer: "napari.Viewer", layer: "napari.layers.Layer"):
@@ -1273,7 +1309,7 @@ def launch_napari_viewer(
     flush_memory: bool = True,
     block: bool = True,
     progress_callback: Optional[Callable[[int], bool]] = None,
-) -> napari.Viewer:
+) -> None:
     """
     Launch the Napari viewer with the provided data.
 
@@ -1303,7 +1339,11 @@ def launch_napari_viewer(
         Callback for progress.
     """
 
-    viewer = napari.Viewer()
+    viewer = _new_position_viewer(
+        shared_data["position"], shared_data["population"], "tracks"
+    )
+    if viewer is None:
+        return None
 
     # Prevent default double-click to zoom behavior
     for cb in list(viewer.mouse_double_click_callbacks):
@@ -1708,7 +1748,13 @@ def launch_napari_viewer(
         unsaved=lambda: not history.is_clean,
     )
 
-    viewer.show(block=block)
+    _show_position_viewer(
+        viewer,
+        block,
+        shared_data["position"],
+        shared_data["population"],
+        "tracks",
+    )
 
     if flush_memory and block:
 
@@ -2301,9 +2347,6 @@ def launch_segmentation_viewer(
             viewer.window._qt_window, "Export the annotation", export_annotation
         )
 
-    if contrast_limits is None:
-        contrast_limits = _get_contrast_limits(stack)
-
     output_folder = position + f"labels_{population}{os.sep}"
     logger.info(f"Shape of the loaded image stack: {stack.shape}...")
     if progress_callback:
@@ -2312,11 +2355,11 @@ def launch_segmentation_viewer(
         except Exception:
             pass
 
-    viewer = napari.Viewer()
-    try:
-        viewer.window._qt_window.setWindowIcon(Styles().celldetective_icon)
-    except Exception as e:
-        logger.debug(f"Could not set napari window icon: {e}")
+    viewer = _new_position_viewer(position, population, "segmentation")
+    if viewer is None:
+        return None
+    if contrast_limits is None:
+        contrast_limits = _get_contrast_limits(stack)
     viewer.add_image(
         stack,
         channel_axis=-1,
@@ -2381,7 +2424,7 @@ def launch_segmentation_viewer(
         "annotation. Close the viewer and lose them?",
     )
 
-    viewer.show(block=block)
+    _show_position_viewer(viewer, block, position, population, "segmentation")
 
     if not block:
         # Non-blocking mode (launched from the GUI loader thread): show() returns

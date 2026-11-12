@@ -42,6 +42,7 @@ from glob import glob
 from celldetective import get_logger
 from celldetective.measure import _get_border_suffix
 from celldetective.gui.base.threads import start_tracked
+from celldetective.napari.open_viewers import refuse_if_viewer_open
 
 logger = get_logger("celldetective")
 
@@ -668,6 +669,9 @@ class ProcessPanel(ControlPanelBlock, Styles):
         If labels are missing, the user is asked if they want to create a new label directory.
         If labels exist, they are loaded into Napari for inspection.
         """
+        # An early exit, before loading: the launcher checks again.
+        if refuse_if_viewer_open(self, self.parent_window.pos):
+            return None
 
         if not os.path.exists(
             os.sep.join([self.parent_window.pos, f"labels_{self.mode}", os.sep])
@@ -1605,6 +1609,9 @@ class ProcessPanel(ControlPanelBlock, Styles):
         """
         Open the tracks in Napari for visualization.
         """
+        # An early exit, before loading: the launcher checks again.
+        if refuse_if_viewer_open(self, self.parent_window.pos):
+            return
 
         logger.info(
             f"View the tracks before post-processing for position {self.parent_window.pos} in napari..."
