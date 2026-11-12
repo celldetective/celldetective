@@ -1,8 +1,21 @@
 from typing import Optional, Union, List, Any
 
+import numpy as np
 import pandas as pd
-from cliffs_delta import cliffs_delta
 from scipy.stats import ks_2samp
+
+
+def cliffs_delta(a: np.ndarray, b: np.ndarray) -> float:
+    """
+    Cliff's delta of ``a`` against ``b``: P(a > b) - P(a < b), ties counting as neither.
+
+    The same value as ``cliffs_delta.cliffs_delta``, from a sorted search instead of a
+    Python loop.
+    """
+    a, b = np.asarray(a, dtype=float), np.sort(np.asarray(b, dtype=float))
+    smaller = np.searchsorted(b, a, side="left").sum()  # pairs with b < a
+    larger = (len(b) - np.searchsorted(b, a, side="right")).sum()  # pairs with b > a
+    return float((smaller - larger) / (len(a) * len(b)))
 
 
 def test_2samp_generic(
@@ -61,37 +74,24 @@ def test_2samp_generic(
     if feature is None:
         raise ValueError("Please set a feature to test...")
 
-    results = []
-
-    for lbl1, group1 in data.dropna(subset=[feature]).groupby(groupby_cols):
-        for lbl2, group2 in data.dropna(subset=[feature]).groupby(groupby_cols):
-
-            dist1 = group1[feature].values
-            dist2 = group2[feature].values
+    values = data[feature].dropna()
+    groups = {
+        # A single grouping column gives 1-tuples: show the value itself.
+        str(lbl[0] if isinstance(lbl, tuple) and len(lbl) == 1 else lbl): group.to_numpy()
+        for lbl, group in values.groupby([data.loc[values.index, c] for c in np.atleast_1d(groupby_cols)])
+    }
+    labels = list(groups)
+    pivot = pd.DataFrame(np.nan, index=labels, columns=labels)
+    for i, lbl1 in enumerate(labels):
+        for j, lbl2 in enumerate(labels):
             if method == "ks_2samp":
-                test = ks_2samp(
-                    list(dist1),
-                    list(dist2),
-                    alternative="less",
-                    mode="auto",
-                    *args,
-                    **kwargs,
-                )
-                val = test.pvalue
-            elif method == "cliffs_delta":
-                test = cliffs_delta(list(dist1), list(dist2), *args, **kwargs)
-                val = test[0]
-
-            results.append({"cdt1": lbl1, "cdt2": lbl2, "value": val})
-
-    results = pd.DataFrame(results)
-    results["cdt1"] = results["cdt1"].astype(str)
-    results["cdt2"] = results["cdt2"].astype(str)
-
-    pivot = results.pivot(index="cdt1", columns="cdt2", values="value")
-    pivot.reset_index(inplace=True)
-    pivot.columns.name = None
-    pivot.set_index("cdt1", drop=True, inplace=True)
-    pivot.index.name = None
-
+                # One-sided: the order of the pair matters, every cell is a test.
+                pivot.iloc[i, j] = ks_2samp(groups[lbl1], groups[lbl2], *args, alternative="less",
+                                            method="auto", **kwargs).pvalue
+            elif method == "cliffs_delta" and j >= i:
+                # Antisymmetric: the mirror cell is the opposite.
+                delta = cliffs_delta(groups[lbl1], groups[lbl2])
+                pivot.iloc[i, j], pivot.iloc[j, i] = delta, -delta
+            elif method not in ("ks_2samp", "cliffs_delta"):
+                raise ValueError(f"Unknown method {method!r}.")
     return pivot

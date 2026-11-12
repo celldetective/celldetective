@@ -3,7 +3,7 @@ Unit tests for plot widgets in celldetective.gui.
 
 Covers:
 - ConfigMeasurementsPlot (in celldetective.gui.plot_measurements)
-- GenericSignalPlotWidget (in celldetective.gui.generic_signal_plot)
+- SignalPlotWidget (in celldetective.gui.generic_signal_plot)
 """
 
 import pytest
@@ -14,7 +14,7 @@ from unittest.mock import MagicMock, patch
 from PyQt5.QtWidgets import QMainWindow, QWidget
 
 from celldetective.gui.plot_measurements import ConfigMeasurementsPlot
-from celldetective.gui.generic_signal_plot import GenericSignalPlotWidget
+from celldetective.gui.generic_signal_plot import SignalPlotWidget, SurvivalPlotWidget
 
 
 @pytest.fixture(autouse=True)
@@ -132,18 +132,18 @@ def dummy_dataframes():
 
 
 # =============================================================================
-# GenericSignalPlotWidget Tests
+# SignalPlotWidget Tests
 # =============================================================================
 
 
-class TestGenericSignalPlotWidget:
-    """Tests for GenericSignalPlotWidget."""
+class TestSignalPlotWidget:
+    """Tests for SignalPlotWidget."""
 
     def test_initialization(self, qtbot, mock_parent_window, dummy_dataframes):
         """Test initialization with dummy data."""
         df, df_pos, df_well = dummy_dataframes
 
-        widget = GenericSignalPlotWidget(
+        widget = SignalPlotWidget(
             df=df,
             df_pos_info=df_pos,
             df_well_info=df_well,
@@ -163,7 +163,7 @@ class TestGenericSignalPlotWidget:
         """Test that plot_signals runs without error."""
         df, df_pos, df_well = dummy_dataframes
 
-        widget = GenericSignalPlotWidget(
+        widget = SignalPlotWidget(
             df=df,
             df_pos_info=df_pos,
             df_well_info=df_well,
@@ -183,7 +183,7 @@ class TestGenericSignalPlotWidget:
         """Test UI buttons like legend, log scale."""
         df, df_pos, df_well = dummy_dataframes
 
-        widget = GenericSignalPlotWidget(
+        widget = SignalPlotWidget(
             df=df,
             df_pos_info=df_pos,
             df_well_info=df_well,
@@ -206,7 +206,7 @@ class TestGenericSignalPlotWidget:
         """Test rescaling functionality."""
         df, df_pos, df_well = dummy_dataframes
 
-        widget = GenericSignalPlotWidget(
+        widget = SignalPlotWidget(
             df=df,
             df_pos_info=df_pos,
             df_well_info=df_well,
@@ -219,6 +219,34 @@ class TestGenericSignalPlotWidget:
         widget.rescale_btn.click()
 
         assert widget.scaling_factor == 2.0
+
+    def test_signal_controls_belong_to_the_signal_plot(
+        self, qtbot, mock_parent_window, dummy_dataframes
+    ):
+        """The signal window has its own controls; the survival window has none of them."""
+        from lifelines import KaplanMeierFitter
+
+        df, df_pos, df_well = dummy_dataframes
+        signal = SignalPlotWidget(
+            df=df, df_pos_info=df_pos, df_well_info=df_well,
+            feature_selected="area", parent_window=mock_parent_window,
+        )
+        qtbot.addWidget(signal)
+        for name in ("cell_lines_btn", "class_selection_widget", "band_widget", "rescale_widget"):
+            assert hasattr(signal, name)
+        assert not hasattr(signal, "export_tabular_btn")
+
+        fit = KaplanMeierFitter().fit(np.random.default_rng(0).exponential(10, 30), np.ones(30))
+        survival = SurvivalPlotWidget(
+            df=df, df_pos_info=df_pos.assign(survival_fit=[fit]),
+            df_well_info=df_well.assign(survival_fit=[fit]),
+            feature_selected="area", parent_window=mock_parent_window,
+        )
+        qtbot.addWidget(survival)
+        assert hasattr(survival, "export_tabular_btn")
+        for name in ("cell_lines_btn", "class_selection_widget", "band_widget", "rescale_widget"):
+            assert not hasattr(survival, name)
+        assert survival.ax.get_ylabel() == "survival"
 
 
 # =============================================================================

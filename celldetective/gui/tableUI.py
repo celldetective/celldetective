@@ -419,6 +419,40 @@ class PivotTableUI(CelldetectiveWidget):
         )
 
 
+
+# The tests between groups of the table explorer: title and color code of each.
+TWO_SAMPLE_TESTS = {
+    "ks_2samp": ("p-value (1-sided KS test)", "pvalue"),
+    "cliffs_delta": ("Effect size (Cliff's Delta)", "cliff"),
+}
+
+
+def two_sample_test_table(
+    data: pd.DataFrame, feature: str, groupby_cols: List[str], method: str
+) -> "PivotTableUI":
+    """
+    Test a feature between every pair of groups and return the matrix window.
+
+    Parameters
+    ----------
+    data : pandas.DataFrame
+        One row per cell.
+    feature : str
+        The column to compare.
+    groupby_cols : list of str
+        The columns defining the groups.
+    method : str
+        A key of ``TWO_SAMPLE_TESTS``, passed to ``test_2samp_generic``.
+
+    Returns
+    -------
+    PivotTableUI
+        The matrix, not yet shown.
+    """
+    title, mode = TWO_SAMPLE_TESTS[method]
+    pivot = test_2samp_generic(data, feature=feature, groupby_cols=groupby_cols, method=method)
+    return PivotTableUI(pivot, title=title, mode=mode)
+
 class TableUI(CelldetectiveMainWindow):
 
     def __init__(
@@ -2006,12 +2040,7 @@ class TableUI(CelldetectiveMainWindow):
             return None
 
         groupby_cols, y = self.extract_groupby_cols()
-        pivot = test_2samp_generic(
-            self.data, feature=y, groupby_cols=groupby_cols, method="cliffs_delta"
-        )
-        self.effect_size_table = PivotTableUI(
-            pivot, title="Effect size (Cliff's Delta)", mode="cliff"
-        )
+        self.effect_size_table = two_sample_test_table(self.data, y, groupby_cols, "cliffs_delta")
         self.effect_size_table.show()
 
     def compute_pvalue(self) -> Optional[None]:
@@ -2027,12 +2056,7 @@ class TableUI(CelldetectiveMainWindow):
             return None
 
         groupby_cols, y = self.extract_groupby_cols()
-        pivot = test_2samp_generic(
-            self.data, feature=y, groupby_cols=groupby_cols, method="ks_2samp"
-        )
-        self.pval_table = PivotTableUI(
-            pivot, title="p-value (1-sided KS test)", mode="pvalue"
-        )
+        self.pval_table = two_sample_test_table(self.data, y, groupby_cols, "ks_2samp")
         self.pval_table.show()
 
     def set_proj_mode(self) -> None:

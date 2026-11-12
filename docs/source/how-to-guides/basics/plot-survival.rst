@@ -44,3 +44,23 @@ A window appears with the Kaplan-Meier survival curves.
 *   **Multiple wells**: Pooled curves per well for comparing conditions. Individual positions are shown without confidence intervals.
 
 Switch the **grouping** between wells, positions or both (7). The buttons above the plot (8) toggle the legend, the log scale and the confidence intervals, export the figure and tabulate the survival values. Add or remove positions/wells from the plot with their checkboxes (9).
+
+
+Compare the curves
+~~~~~~~~~~~~~~~~~~
+
+Overlapping bands are not a test: they can overlap while the curves differ, and
+separate bands can come from wells that differ for reasons other than their condition.
+Click the **compare** button (balance icon) above the plot to test the wells shown
+against each other. A matrix of **log-rank p-values** opens: one cell per pair of wells,
+testing whether they have the same survival, on their cells pooled. The p-values are adjusted
+(Holm) for the number of pairs, and colored as in the table explorer. Read the direction of a
+difference on the curves.
+
+.. note::
+
+   The tests count each cell as independent, so they compare **wells**. When each condition
+   has one well, a difference may come from the well itself (seeding, ratio, focus) rather
+   than its condition. To conclude on a condition, repeat the experiment and check that the
+   difference comes back.
+
