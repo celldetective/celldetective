@@ -57,9 +57,10 @@ The plot window displays the synchronized signals. You can interact with it usin
 
     *   **Legend**: Toggle legend visibility.
     *   **Log**: Toggle log-scale for Y-axis.
-    *   **CI**: Toggle 95% confidence intervals.
+    *   **CI**: Show or hide the band around the curves (see **Band** below).
     *   **Cell lines**: Toggle display of individual single-cell traces.
     *   **Export**: Save the figure or export tabular data.
+    *   **Compare** (balance icon): Test the wells against each other (see below).
 
 *   **Class of interest** (10): Filter the displayed curves by class:
 
@@ -70,3 +71,32 @@ The plot window displays the synchronized signals. You can interact with it usin
 *   **Rescale** (11): Set a **scaling factor** for the Y-axis and press **rescale**.
 *   **Single-cell signal alpha**: Adjust the transparency of individual cell traces.
 *   **Select position** (12): Choose which positions/wells to display, either **by name** (checkboxes) or **spatially** (clicking on the position map).
+
+*   **Band**: What the band around a curve shows:
+
+    *   ``95% CI of the mean`` (default): the uncertainty of the mean curve, counting each
+        cell as independent. Offered with the ``mean`` projection only.
+    *   ``spread across cells``: the SD around a mean, the median absolute deviation around a
+        median. It describes the cells: it does not shrink with more cells and is not an
+        uncertainty.
+
+Compare the wells
+~~~~~~~~~~~~~~~~~
+
+Click **Compare** to test whether the wells respond differently. Each cell gets a
+**response**: its mean over a window after the synchronizing time minus its mean over a
+baseline window before it (by default the 10 frames on each side, in minutes). Cells observed
+over less than half of either window are left out.
+
+Two matrices open, as for the tests of the table explorer: the one-sided KS test p-values
+and the effect sizes (Cliff's delta) of the responses between wells.
+
+Responses are only defined for cells aligned on their event: show the class ``event``, or
+synchronize on an absolute time to include all cells.
+
+.. note::
+
+   The tests count each cell as independent, so they compare **wells**. When each condition
+   has one well, a difference may come from the well rather than its condition: repeat the
+   experiment to conclude on a condition.
+

@@ -13,7 +13,7 @@ from PyQt5.QtGui import QDoubleValidator
 
 from celldetective.gui.base.components import generic_message
 from celldetective.gui.base.utils import center_window
-from celldetective.gui.generic_signal_plot import GenericSignalPlotWidget
+from celldetective.gui.generic_signal_plot import SignalPlotWidget
 from superqt import QColormapComboBox, QSearchableComboBox
 from celldetective.gui.base.sliders import QLabeledSlider
 from celldetective import (
@@ -486,7 +486,7 @@ class ConfigSignalPlot(CelldetectiveWidget):
             if self.open_widget:
                 self.interpret_pos_location()
                 try:
-                    self.plot_window = GenericSignalPlotWidget(
+                    self.plot_window = SignalPlotWidget(
                         parent_window=self,
                         df=self.df,
                         df_pos_info=self.df_pos_info,

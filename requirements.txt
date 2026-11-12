@@ -30,7 +30,6 @@ numpy==1.26.4
 pytest
 pytest-qt
 h5py
-cliffs_delta
 requests
 trackpy
 prettyprint
