@@ -122,3 +122,13 @@ def test_ci_band_needs_two_cells():
     lower, upper = signal_band([1.0, 2.0], [0.5, 0.0], np.array([5, 1]), BAND_CI)
     assert np.isfinite(lower[0]) and np.isnan(lower[1])
 
+
+
+def test_signal_windows_keep_their_end_frames_with_uneven_calibration(qtbot, windows):
+    # 10 s frames: -1 frame shows as -0.166667 min, which read back falls short of -1.
+    window = _plot_window(np.random.default_rng(6))
+    window.parent_window.FrameToMin = 1 / 6
+    widget = SignalComparisonWidget(window)
+    qtbot.addWidget(widget)
+    assert widget.window_in_frames("baseline") == (-10.0, -1.0)
+    assert widget.window_in_frames("response") == (0.0, 9.0)

@@ -46,6 +46,8 @@ def show_survival_comparison(plot_window: Any) -> Optional[CelldetectiveWidget]:
 
     pvalues = PivotTableUI(pairwise_logrank(fits), title="Log-rank p-value (Holm-adjusted)", mode="pvalue")
     pvalues.set_reading_guide(LOGRANK_GUIDE + "<br>" + WELLS_NOTE)
+    # Sized in the constructor for the KS guide this one replaces.
+    pvalues.adjust_window_size()
     pvalues.show()
     return pvalues
 
@@ -90,10 +92,19 @@ class SignalComparisonWidget(CelldetectiveWidget):
         center_window(self)
 
     def window_in_frames(self, name: str) -> tuple:
-        lo, hi = (f.value() / self.frame_to_min for f in self.windows[name])
+        lo, hi = (self.to_frames(f.value()) for f in self.windows[name])
         if hi < lo:
             raise ValueError(f"The {name} window ends before it starts.")
         return lo, hi
+
+    def to_frames(self, minutes: float) -> float:
+        """Minutes to frames, snapped to a whole frame when within rounding:
+        the fields show minutes to six significant digits, so a frame end read
+        back (e.g. -0.166667 min with 10 s frames) would otherwise fall just
+        short of its frame and leave it out of the window."""
+        frames = minutes / self.frame_to_min
+        nearest = round(frames)
+        return float(nearest) if abs(frames - nearest) < 1e-3 else frames
 
     def alignment_problem(self) -> str:
         """Cells without the event are drawn from the start of the movie, not

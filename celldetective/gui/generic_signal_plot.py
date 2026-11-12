@@ -748,13 +748,6 @@ class SignalPlotWidget(GenericSignalPlotWidget):
         self.show_cell_lines = False
         self.alpha_setting = 0.5
         self.target_class = [0]
-        # Read once: the signals were computed with these settings of the
-        # configuration window, which stays open and may change afterwards.
-        parent = kwargs.get("parent_window")
-        pool = getattr(parent, "pool_option_cb", None)
-        self.projection = pool.currentText() if pool is not None else "mean"
-        absolute = getattr(parent, "abs_time_checkbox", None)
-        self.absolute_time = absolute is not None and bool(absolute.isChecked())
         super().__init__(*args, **kwargs)
 
     def add_plot_buttons(self, hbox: QHBoxLayout) -> None:
@@ -771,6 +764,13 @@ class SignalPlotWidget(GenericSignalPlotWidget):
     def add_controls(self) -> None:
         """The class of cells shown, the band, the scaling factor and the
         transparency of the single-cell signals."""
+
+        # Read once: the signals were computed with these settings of the
+        # configuration window, which stays open and may change afterwards.
+        pool = getattr(self.parent_window, "pool_option_cb", None)
+        self.projection = pool.currentText() if pool is not None else "mean"
+        absolute = getattr(self.parent_window, "abs_time_checkbox", None)
+        self.absolute_time = absolute is not None and bool(absolute.isChecked())
 
         self.class_selection_widget = CelldetectiveWidget()
 
@@ -938,28 +938,16 @@ class SignalPlotWidget(GenericSignalPlotWidget):
                 self.df_pos_info["select"], "well_index"
             ].values
             for i in range(len(lines)):
-                if len(self.parent_window.well_indices) <= 1:
-                    self.plot_line(
-                        lines[i],
-                        colors[pos_indices[i]],
-                        pos_labels[i],
-                        mean_signal_type,
-                        std_signal=std_signal,
-                        ci_option=self.show_ci,
-                        cell_lines_option=self.show_cell_lines,
-                        matrix=matrix,
-                    )
-                else:
-                    self.plot_line(
-                        lines[i],
-                        well_color[well_index[i]],
-                        pos_labels[i],
-                        mean_signal_type,
-                        std_signal=std_signal,
-                        ci_option=self.show_ci,
-                        cell_lines_option=self.show_cell_lines,
-                        matrix=matrix,
-                    )
+                self.plot_line(
+                    lines[i],
+                    colors[pos_indices[i]] if len(self.parent_window.well_indices) <= 1 else well_color[well_index[i]],
+                    pos_labels[i],
+                    mean_signal_type,
+                    std_signal=std_signal,
+                    ci_option=self.show_ci,
+                    cell_lines_option=self.show_cell_lines,
+                    matrix=matrix,
+                )
             if self.legend_visible:
                 self.ax.legend(ncols=3, fontsize="x-small")
 
@@ -1103,9 +1091,14 @@ class SignalPlotWidget(GenericSignalPlotWidget):
 
             lower = None
             if ci_option and std_signal is not None:
-                # The number of cells at each time.
-                n = np.isfinite(line[matrix]).sum(axis=0) if matrix in line else None
-                lower, upper = signal_band(curve, line[std_signal], n, self.band_cb.currentText())
+                band = self.band_cb.currentText()
+                # The number of cells at each time, which only the interval needs.
+                n = (
+                    np.isfinite(line[matrix]).sum(axis=0)
+                    if band == BAND_CI and matrix in line
+                    else None
+                )
+                lower, upper = signal_band(curve, line[std_signal], n, band)
             if lower is not None:
                 self.ax.fill_between(
                     timeline,

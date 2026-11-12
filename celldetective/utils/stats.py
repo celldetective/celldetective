@@ -78,7 +78,10 @@ def test_2samp_generic(
     if method not in ("ks_2samp", "cliffs_delta"):
         raise ValueError(f"Unknown method {method!r}.")
 
-    cols = list(np.atleast_1d(groupby_cols))
+    # Kept as given: np.atleast_1d would turn mixed column names into strings.
+    cols = [groupby_cols] if isinstance(groupby_cols, str) else list(groupby_cols)
+    if not cols:
+        raise ValueError("Please set a valid groupby_cols...")
     # Grouped by one column, a group is labelled by its value; by several, by a tuple.
     grouped = data.dropna(subset=[feature]).groupby(cols[0] if len(cols) == 1 else cols)[feature]
     labels = [str(lbl) for lbl, _ in grouped]
@@ -91,7 +94,7 @@ def test_2samp_generic(
             # One-sided: the order of the pair matters, both cells are tests.
             for row, col in ((i, j), (j, i)):
                 matrix[row, col] = ks_2samp(samples[row], samples[col], *args, alternative="less",
-                                            method="auto", **kwargs).pvalue
+                                            **kwargs).pvalue
         else:
             # Antisymmetric: the mirror cell is the opposite.
             matrix[i, j] = cliffs_delta(samples[i], samples[j])
