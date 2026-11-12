@@ -220,6 +220,27 @@ class TestSignalPlotWidget:
 
         assert widget.scaling_factor == 2.0
 
+    def test_band_follows_the_projection_the_signals_were_computed_with(
+        self, qtbot, mock_parent_window, dummy_dataframes
+    ):
+        """A mean offers its 95% interval; a median only its spread, the MAD.
+        The projection is read when the window opens, not when it redraws."""
+        from celldetective.gui.generic_signal_plot import BAND_CI, BAND_SPREAD
+
+        df, df_pos, df_well = dummy_dataframes
+        bands = {}
+        for projection in ("mean", "median"):
+            mock_parent_window.pool_option_cb.currentText.return_value = projection
+            widget = SignalPlotWidget(
+                df=df, df_pos_info=df_pos, df_well_info=df_well,
+                feature_selected="area", parent_window=mock_parent_window,
+            )
+            qtbot.addWidget(widget)
+            bands[projection] = [widget.band_cb.itemText(i) for i in range(widget.band_cb.count())]
+        assert bands == {"mean": [BAND_CI, BAND_SPREAD], "median": [BAND_SPREAD]}
+        mock_parent_window.pool_option_cb.currentText.return_value = "mean"
+        assert widget.projection == "median"
+
     def test_signal_controls_belong_to_the_signal_plot(
         self, qtbot, mock_parent_window, dummy_dataframes
     ):

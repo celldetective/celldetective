@@ -2,7 +2,7 @@
 (celldetective.gui.comparison_ui), and of the band of the signal plot."""
 
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import numpy as np
 import pandas as pd
@@ -20,22 +20,21 @@ def _infos(rng, wells=("W1", "W2"), positions=3):
     pos_rows, well_rows = [], []
     for w, well in enumerate(wells):
         t = rng.exponential(50 * (w + 1), 120)
-        well_rows.append(dict(well_path=f"/exp/{well}/", well_name=well, select=True,
+        well_rows.append(dict(well_name=well, select=True,
                               survival_fit=KaplanMeierFitter().fit(np.minimum(t, 100), (t <= 100).astype(int))))
         for p in range(positions):
             m = rng.normal(0, 1, (10, len(TIMELINE)))
             m[:, TIMELINE >= 0] += 2.0 * w
-            pos_rows.append(dict(well_path=f"/exp/{well}/", well_name=well, pos_name=str(p), select=True,
+            pos_rows.append(dict(well_name=well, pos_name=str(p), select=True,
                                  signal=dict(timeline=TIMELINE, matrix_event=m, matrix_all=m, matrix_no_event=m)))
     return pd.DataFrame(pos_rows), pd.DataFrame(well_rows)
 
 
 def _plot_window(rng, target_class=(0,), absolute=False, **kwargs):
     pos_info, well_info = _infos(rng, **kwargs)
-    parent = SimpleNamespace(exp_dir="/exp/", FrameToMin=1.0,
-                             abs_time_checkbox=MagicMock(isChecked=MagicMock(return_value=absolute)))
-    window = SimpleNamespace(df_pos_info=pos_info, df_well_info=well_info, parent_window=parent,
-                             target_class=list(target_class), clock_label="time [min]")
+    window = SimpleNamespace(df_pos_info=pos_info, df_well_info=well_info,
+                             parent_window=SimpleNamespace(FrameToMin=1.0),
+                             target_class=list(target_class), absolute_time=absolute)
     window.signal_keys = lambda: SignalPlotWidget.signal_keys(window)
     return window
 
@@ -43,21 +42,20 @@ def _plot_window(rng, target_class=(0,), absolute=False, **kwargs):
 @pytest.fixture
 def windows():
     """The result windows, created but not shown."""
-    with patch("celldetective.gui.comparison_ui.generic_message") as message,             patch("celldetective.gui.tableUI.TableUI") as table,             patch("celldetective.gui.tableUI.PivotTableUI") as pivot:
-        yield SimpleNamespace(message=message, table=table, pivot=pivot)
+    with patch("celldetective.gui.comparison_ui.generic_message") as message,             patch("celldetective.gui.tableUI.PivotTableUI") as pivot:
+        yield SimpleNamespace(message=message, pivot=pivot)
 
 
 def test_survival_comparison_shows_log_rank(windows):
     shown = show_survival_comparison(_plot_window(np.random.default_rng(0)))
-    assert len(shown) == 1
+    assert shown is windows.pivot.return_value
     pivot = windows.pivot.call_args[0][0]
     assert list(pivot.index) == ["W1", "W2"] and pivot.loc["W1", "W2"] < 0.05
     assert windows.pivot.call_args[1]["mode"] == "pvalue"
-    windows.table.assert_not_called()
 
 
 def test_survival_comparison_needs_two_wells(windows):
-    assert show_survival_comparison(_plot_window(np.random.default_rng(1), wells=("W1",))) == []
+    assert show_survival_comparison(_plot_window(np.random.default_rng(1), wells=("W1",))) is None
     windows.message.assert_called_once()
 
 
@@ -70,7 +68,6 @@ def test_signal_comparison_reuses_the_table_explorer_tests(qtbot, windows):
     assert means["W2"] - means["W1"] == pytest.approx(2.0, abs=0.4)
     modes = [c[1]["mode"] for c in windows.pivot.call_args_list]
     assert modes == ["pvalue", "cliff"]
-    windows.table.assert_not_called()
 
 
 def test_signal_comparison_refuses_cells_without_event_time(qtbot, windows):
@@ -125,9 +122,3 @@ def test_ci_band_needs_two_cells():
     lower, upper = signal_band([1.0, 2.0], [0.5, 0.0], np.array([5, 1]), BAND_CI)
     assert np.isfinite(lower[0]) and np.isnan(lower[1])
 
-
-def test_band_around_a_median_is_the_mad():
-    """A median has no interval of the mean: its band is the spread stored
-    with it, the median absolute deviation."""
-    lower, upper = signal_band([1.0], [0.5], np.array([10]), BAND_CI, projection="median")
-    assert lower[0] == 0.5 and upper[0] == 1.5

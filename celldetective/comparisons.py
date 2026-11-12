@@ -52,11 +52,6 @@ def holm(p_values: Sequence[float]) -> np.ndarray:
 # ---------------------------------------------------------------------------
 
 
-def _weights(fit) -> np.ndarray:
-    weights = getattr(fit, "weights", None)
-    return np.ones(len(fit.durations)) if weights is None else np.asarray(weights, dtype=float)
-
-
 def pairwise_logrank(fits: Dict[str, object], adjust: bool = True) -> pd.DataFrame:
     """Log-rank test between every pair of groups, on their cells pooled.
 
@@ -67,21 +62,20 @@ def pairwise_logrank(fits: Dict[str, object], adjust: bool = True) -> pd.DataFra
     """
     from lifelines.statistics import logrank_test
 
-    labels = [str(g) for g in fits]
-    pivot = pd.DataFrame(np.nan, index=labels, columns=labels)
-    pairs, p_values = [], []
-    for (a, fa), (b, fb) in combinations(fits.items(), 2):
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")  # lifelines warns on fractional weights
-            result = logrank_test(fa.durations, fb.durations, fa.event_observed, fb.event_observed,
-                                  weights_A=_weights(fa), weights_B=_weights(fb))
-        pairs.append((str(a), str(b)))
-        p_values.append(result.p_value)
+    fitted = list(fits.values())
+    pairs = list(combinations(range(len(fitted)), 2))
+    p_values = [
+        logrank_test(fitted[i].durations, fitted[j].durations,
+                     fitted[i].event_observed, fitted[j].event_observed).p_value
+        for i, j in pairs
+    ]
     if adjust:
         p_values = holm(p_values)
-    for (a, b), p in zip(pairs, p_values):
-        pivot.loc[a, b] = pivot.loc[b, a] = p
-    return pivot
+    matrix = np.full((len(fitted), len(fitted)), np.nan)
+    for (i, j), p in zip(pairs, p_values):
+        matrix[i, j] = matrix[j, i] = p
+    labels = [str(g) for g in fits]
+    return pd.DataFrame(matrix, index=labels, columns=labels)
 
 
 # ---------------------------------------------------------------------------

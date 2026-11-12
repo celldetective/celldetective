@@ -419,7 +419,6 @@ class PivotTableUI(CelldetectiveWidget):
         )
 
 
-
 # The tests between groups of the table explorer: title and color code of each.
 TWO_SAMPLE_TESTS = {
     "ks_2samp": ("p-value (1-sided KS test)", "pvalue"),
@@ -452,6 +451,7 @@ def two_sample_test_table(
     title, mode = TWO_SAMPLE_TESTS[method]
     pivot = test_2samp_generic(data, feature=feature, groupby_cols=groupby_cols, method=method)
     return PivotTableUI(pivot, title=title, mode=mode)
+
 
 class TableUI(CelldetectiveMainWindow):
 

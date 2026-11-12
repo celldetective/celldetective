@@ -1,9 +1,7 @@
 from PyQt5.QtWidgets import (
-    QMessageBox,
     QGridLayout,
     QButtonGroup,
     QCheckBox,
-    QLineEdit,
     QVBoxLayout,
     QLabel,
     QHBoxLayout,
@@ -12,10 +10,9 @@ from PyQt5.QtWidgets import (
     QComboBox,
 )
 from PyQt5.QtCore import Qt, QSize
-from PyQt5.QtGui import QDoubleValidator
 from typing import Optional, List, Union, Tuple, Dict, Any
 
-from celldetective.gui.gui_utils import ExportPlotBtn, QuickSliderLayout
+from celldetective.gui.gui_utils import ExportPlotBtn, NumberLineEdit, QuickSliderLayout
 from celldetective.gui.base.figure_canvas import FigureCanvas
 from celldetective.gui.base.utils import center_window
 from celldetective.gui.tableUI import TableUI
@@ -52,7 +49,6 @@ def signal_band(
     spread: np.ndarray,
     n: Optional[np.ndarray],
     band: str,
-    projection: str = "mean",
 ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
     """The band around a signal curve: the spread of the cells, or the 95%
     interval of the mean.
@@ -66,10 +62,8 @@ def signal_band(
     n : ndarray or None
         The number of cells at each time; needed for the interval.
     band : str
-        ``BAND_SPREAD`` or ``BAND_CI``.
-    projection : str
-        "mean" or "median". A median has no interval of the mean: its band
-        is always the spread (the MAD).
+        ``BAND_SPREAD`` or ``BAND_CI``. A median has no interval of the mean:
+        its band is the spread, the median absolute deviation.
 
     Returns
     -------
@@ -77,7 +71,7 @@ def signal_band(
         None when there is no band to draw.
     """
     curve, spread = np.asarray(curve, dtype=float), np.asarray(spread, dtype=float)
-    if band == BAND_SPREAD or projection != "mean":
+    if band == BAND_SPREAD:
         return curve - spread, curve + spread
     if n is None:
         return None, None
@@ -754,7 +748,13 @@ class SignalPlotWidget(GenericSignalPlotWidget):
         self.show_cell_lines = False
         self.alpha_setting = 0.5
         self.target_class = [0]
-        self.float_validator = QDoubleValidator()
+        # Read once: the signals were computed with these settings of the
+        # configuration window, which stays open and may change afterwards.
+        parent = kwargs.get("parent_window")
+        pool = getattr(parent, "pool_option_cb", None)
+        self.projection = pool.currentText() if pool is not None else "mean"
+        absolute = getattr(parent, "abs_time_checkbox", None)
+        self.absolute_time = absolute is not None and bool(absolute.isChecked())
         super().__init__(*args, **kwargs)
 
     def add_plot_buttons(self, hbox: QHBoxLayout) -> None:
@@ -803,7 +803,7 @@ class SignalPlotWidget(GenericSignalPlotWidget):
         band_hbox = QHBoxLayout(self.band_widget)
         band_hbox.addWidget(QLabel("band: "), 25)
         self.band_cb = QComboBox()
-        if self.projection() == "mean":
+        if self.projection == "mean":
             self.band_cb.addItems([BAND_CI, BAND_SPREAD])
         else:
             # A median curve: its band is the median absolute deviation.
@@ -813,7 +813,7 @@ class SignalPlotWidget(GenericSignalPlotWidget):
             "Spread across cells: the SD around a mean, the median absolute deviation around a median. "
             "It describes the cells, not an uncertainty."
         )
-        self.band_cb.currentIndexChanged.connect(self.switch_band)
+        self.band_cb.currentIndexChanged.connect(lambda _: self.plot_signals(0))
         band_hbox.addWidget(self.band_cb, 75)
         self.layout.addWidget(self.band_widget)
 
@@ -824,8 +824,8 @@ class SignalPlotWidget(GenericSignalPlotWidget):
         self.rescale_widget.setLayout(scale_hbox)
 
         scale_hbox.addWidget(QLabel("scaling factor: "), 25)
-        self.scaling_factor_le = QLineEdit("1")
-        self.scaling_factor_le.setValidator(self.float_validator)
+        self.scaling_factor_le = NumberLineEdit("1", invalid="Please set a valid scaling factor.")
+        self.scaling_factor_le.OPTIONAL = False
         scale_hbox.addWidget(self.scaling_factor_le, 65)
 
         self.rescale_btn = QPushButton("rescale")
@@ -883,18 +883,9 @@ class SignalPlotWidget(GenericSignalPlotWidget):
         """
         Rescale the Y-axis based on the user input.
         """
-        new_scale = self.scaling_factor_le.text().replace(",", ".")
-        if new_scale == "":
-            msgBox = QMessageBox()
-            msgBox.setIcon(QMessageBox.Warning)
-            msgBox.setText("Please set a valid scaling factor...")
-            msgBox.setWindowTitle("Warning")
-            msgBox.setStandardButtons(QMessageBox.Ok)
-            returnValue = msgBox.exec()
-            if returnValue == QMessageBox.Ok:
-                return None
-        else:
-            self.scaling_factor = float(new_scale)
+        valid, value = self.scaling_factor_le.value_or_warn()
+        if valid:
+            self.scaling_factor = value
             self.plot_signals(0)
 
     def set_class_to_plot(self) -> None:
@@ -1112,12 +1103,9 @@ class SignalPlotWidget(GenericSignalPlotWidget):
 
             lower = None
             if ci_option and std_signal is not None:
-                # Cells per time, counted once per curve and kept with it.
-                n = line.get(f"n_{matrix}")
-                if n is None and matrix in line:
-                    n = line[f"n_{matrix}"] = np.isfinite(line[matrix]).sum(axis=0)
-                lower, upper = signal_band(curve, line[std_signal], n, self.band_cb.currentText(),
-                                           self.projection())
+                # The number of cells at each time.
+                n = np.isfinite(line[matrix]).sum(axis=0) if matrix in line else None
+                lower, upper = signal_band(curve, line[std_signal], n, self.band_cb.currentText())
             if lower is not None:
                 self.ax.fill_between(
                     timeline,
@@ -1131,28 +1119,16 @@ class SignalPlotWidget(GenericSignalPlotWidget):
                 mat = line[matrix]
                 for i in range(mat.shape[0]):
                     self.ax.plot(
-                        line["timeline"] * self.parent_window.FrameToMin,
+                        timeline,
                         mat[i, :] * self.scaling_factor,
                         color=color,
                         alpha=self.alpha_setting,
                     )
 
-    def projection(self) -> str:
-        """The projection of the cells into a curve: mean or median."""
-        cb = getattr(self.parent_window, "pool_option_cb", None)
-        return cb.currentText() if cb is not None else "mean"
-
     def signal_keys(self) -> Tuple[str, str, str]:
         """The keys of the mean, SD and matrix of the class shown."""
         suffix = {(0, 1): "all", (0,): "event"}.get(tuple(self.target_class), "no_event")
         return f"mean_{suffix}", f"std_{suffix}", f"matrix_{suffix}"
-
-    def switch_band(self) -> None:
-        """Redraw with the band chosen."""
-        try:
-            self.plot_signals(0)
-        except Exception as e:
-            logger.debug(f"Error plotting signals: {e}")
 
     def open_comparison(self) -> None:
         """Open the window comparing the curves with a test."""
@@ -1193,7 +1169,7 @@ class SurvivalPlotWidget(GenericSignalPlotWidget):
         """Test the survival curves shown against each other."""
         from celldetective.gui.comparison_ui import show_survival_comparison
 
-        self.comparison_windows = show_survival_comparison(self)
+        self.comparison_window = show_survival_comparison(self)
 
     def switch_to_log(self) -> None:
         """

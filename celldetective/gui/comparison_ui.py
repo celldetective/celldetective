@@ -5,15 +5,15 @@ shown like the tests of the table explorer, as pairwise matrices
 (:class:`celldetective.gui.tableUI.PivotTableUI`).
 """
 
-from typing import Any, List
+from typing import Any, Optional
 
 import numpy as np
 import pandas as pd
-from PyQt5.QtGui import QDoubleValidator
-from PyQt5.QtWidgets import QHBoxLayout, QLabel, QLineEdit, QPushButton, QVBoxLayout
+from PyQt5.QtWidgets import QHBoxLayout, QLabel, QPushButton, QVBoxLayout
 
 from celldetective.gui.base.components import CelldetectiveWidget, generic_message, hint_label
 from celldetective.gui.base.utils import center_window
+from celldetective.gui.gui_utils import NumberLineEdit
 
 WELLS_NOTE = (
     "The cells of a well are pooled, so these tests compare wells. With one well per "
@@ -27,9 +27,9 @@ LOGRANK_GUIDE = (
 )
 
 
-def show_survival_comparison(plot_window: Any) -> List[CelldetectiveWidget]:
+def show_survival_comparison(plot_window: Any) -> Optional[CelldetectiveWidget]:
     """Compare the survival of the wells shown with a matrix of log-rank
-    p-values. Returns the window, in a list (empty if nothing to compare)."""
+    p-values. Returns the window, or None if there is nothing to compare."""
     from celldetective.comparisons import pairwise_logrank
     from celldetective.gui.tableUI import PivotTableUI
 
@@ -42,12 +42,12 @@ def show_survival_comparison(plot_window: Any) -> List[CelldetectiveWidget]:
     }
     if len(fits) < 2:
         generic_message("Show at least two wells with a survival curve to compare them.")
-        return []
+        return None
 
     pvalues = PivotTableUI(pairwise_logrank(fits), title="Log-rank p-value (Holm-adjusted)", mode="pvalue")
     pvalues.set_reading_guide(LOGRANK_GUIDE + "<br>" + WELLS_NOTE)
     pvalues.show()
-    return [pvalues]
+    return pvalues
 
 
 class SignalComparisonWidget(CelldetectiveWidget):
@@ -63,7 +63,6 @@ class SignalComparisonWidget(CelldetectiveWidget):
         self.setWindowTitle("Compare signals")
         self.setMinimumWidth(420)
         layout = QVBoxLayout(self)
-        validator = QDoubleValidator()
 
         self.windows = {}
         for name, (lo, hi) in (("baseline", (-10, -1)), ("response", (0, 9))):
@@ -71,9 +70,12 @@ class SignalComparisonWidget(CelldetectiveWidget):
             hbox.addWidget(QLabel(f"{name} [min]: "), 30)
             fields = []
             for value in (lo, hi):
-                field = QLineEdit(f"{value * self.frame_to_min:g}")
-                field.setValidator(validator)
-                field.setToolTip(f"The {name} window relative to the synchronising time, both ends included.")
+                field = NumberLineEdit(
+                    f"{value * self.frame_to_min:g}",
+                    tooltip=f"The {name} window relative to the synchronising time, both ends included.",
+                    invalid=f"The {name} window needs a number at both ends.",
+                )
+                field.OPTIONAL = False
                 hbox.addWidget(field, 35)
                 fields.append(field)
             self.windows[name] = fields
@@ -88,7 +90,7 @@ class SignalComparisonWidget(CelldetectiveWidget):
         center_window(self)
 
     def window_in_frames(self, name: str) -> tuple:
-        lo, hi = (float(f.text().replace(",", ".")) / self.frame_to_min for f in self.windows[name])
+        lo, hi = (f.value() / self.frame_to_min for f in self.windows[name])
         if hi < lo:
             raise ValueError(f"The {name} window ends before it starts.")
         return lo, hi
@@ -97,9 +99,7 @@ class SignalComparisonWidget(CelldetectiveWidget):
         """Cells without the event are drawn from the start of the movie, not
         from an event: a window around the synchronising time means nothing
         for them unless all cells share an absolute time."""
-        parent = self.plot_window.parent_window
-        absolute = hasattr(parent, "abs_time_checkbox") and parent.abs_time_checkbox.isChecked()
-        if not absolute and list(self.plot_window.target_class) != [0]:
+        if not self.plot_window.absolute_time and list(self.plot_window.target_class) != [0]:
             return ("Cells without the event have no event time and are aligned on the start of the "
                     "movie. Show the class 'event', or synchronise on an absolute time, to compare responses.")
         return ""

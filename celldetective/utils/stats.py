@@ -1,3 +1,4 @@
+from itertools import combinations
 from typing import Optional, Union, List, Any
 
 import numpy as np
@@ -74,24 +75,25 @@ def test_2samp_generic(
     if feature is None:
         raise ValueError("Please set a feature to test...")
 
-    values = data[feature].dropna()
-    groups = {
-        # A single grouping column gives 1-tuples: show the value itself.
-        str(lbl[0] if isinstance(lbl, tuple) and len(lbl) == 1 else lbl): group.to_numpy()
-        for lbl, group in values.groupby([data.loc[values.index, c] for c in np.atleast_1d(groupby_cols)])
-    }
-    labels = list(groups)
-    pivot = pd.DataFrame(np.nan, index=labels, columns=labels)
-    for i, lbl1 in enumerate(labels):
-        for j, lbl2 in enumerate(labels):
-            if method == "ks_2samp":
-                # One-sided: the order of the pair matters, every cell is a test.
-                pivot.iloc[i, j] = ks_2samp(groups[lbl1], groups[lbl2], *args, alternative="less",
+    if method not in ("ks_2samp", "cliffs_delta"):
+        raise ValueError(f"Unknown method {method!r}.")
+
+    cols = list(np.atleast_1d(groupby_cols))
+    # Grouped by one column, a group is labelled by its value; by several, by a tuple.
+    grouped = data.dropna(subset=[feature]).groupby(cols[0] if len(cols) == 1 else cols)[feature]
+    labels = [str(lbl) for lbl, _ in grouped]
+    samples = [group.to_numpy() for _, group in grouped]
+
+    # The diagonal compares a group with itself: KS p-value 1, Cliff's delta 0.
+    matrix = np.eye(len(samples)) if method == "ks_2samp" else np.zeros((len(samples), len(samples)))
+    for i, j in combinations(range(len(samples)), 2):
+        if method == "ks_2samp":
+            # One-sided: the order of the pair matters, both cells are tests.
+            for row, col in ((i, j), (j, i)):
+                matrix[row, col] = ks_2samp(samples[row], samples[col], *args, alternative="less",
                                             method="auto", **kwargs).pvalue
-            elif method == "cliffs_delta" and j >= i:
-                # Antisymmetric: the mirror cell is the opposite.
-                delta = cliffs_delta(groups[lbl1], groups[lbl2])
-                pivot.iloc[i, j], pivot.iloc[j, i] = delta, -delta
-            elif method not in ("ks_2samp", "cliffs_delta"):
-                raise ValueError(f"Unknown method {method!r}.")
-    return pivot
+        else:
+            # Antisymmetric: the mirror cell is the opposite.
+            matrix[i, j] = cliffs_delta(samples[i], samples[j])
+            matrix[j, i] = -matrix[i, j]
+    return pd.DataFrame(matrix, index=labels, columns=labels)

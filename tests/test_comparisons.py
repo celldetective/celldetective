@@ -61,7 +61,9 @@ def test_pairwise_logrank_adjusts_for_the_pairs():
     rng = np.random.default_rng(5)
     fits = _well_fits(rng, {"A": 0.01, "B": 0.011, "C": 0.012})
     raw, adjusted = pairwise_logrank(fits, adjust=False), pairwise_logrank(fits)
-    assert (adjusted.fillna(0).to_numpy() >= raw.fillna(0).to_numpy() - 1e-12).all()
+    pairs = [("A", "B"), ("A", "C"), ("B", "C")]
+    assert np.allclose([adjusted.loc[p] for p in pairs], holm([raw.loc[p] for p in pairs]))
+    assert (adjusted.to_numpy() == adjusted.to_numpy().T)[~np.eye(3, dtype=bool)].all()
 
 
 def test_pairwise_logrank_is_calibrated_and_has_power():
