@@ -194,6 +194,10 @@ class TestEventColumns:
         df = pd.DataFrame(columns=["class_color", "class_death"])
         assert nu._event_columns(df) == ["class_death"]
 
+    def test_the_unnamed_event_and_its_t0_are_listed(self):
+        df = pd.DataFrame(columns=["class", "t0", "status", "t_track_length"])
+        assert nu._event_columns(df) == ["class", "t0", "status"]
+
 
 class TestRoiBounds:
 
@@ -356,11 +360,11 @@ class TestTrackCorrections:
         history = nu.TrackCorrections()
         out = history.apply(labels, df, 2, 2, 1)
         assert not np.array_equal(labels, masks)
-        undone, frame = history.undo(labels)
+        undone, frame = history.undo(labels, out)
         np.testing.assert_array_equal(labels, masks)
         pd.testing.assert_frame_equal(undone, table)
         assert frame == 2 and history.is_clean
-        assert history.undo(labels) is None
+        assert history.undo(labels, undone) is None
         assert len(out) == len(df)
 
     def test_steps_are_undone_in_reverse_order(self):
@@ -369,25 +373,33 @@ class TestTrackCorrections:
         history = nu.TrackCorrections()
         df1 = history.apply(labels, df, 1, 2, 1)
         after_first = labels.copy()
-        history.apply(labels, df1, 3, 1, 0)  # label 0: remove from frame 3
-        assert history.undo(labels)[0] is df1
+        df2 = history.apply(labels, df1, 3, 1, 0)  # label 0: remove from frame 3
+        undone, _ = history.undo(labels, df2)
+        pd.testing.assert_frame_equal(undone, df1)
         np.testing.assert_array_equal(labels, after_first)
-        history.undo(labels)
+        undone, _ = history.undo(labels, undone)
+        pd.testing.assert_frame_equal(undone, df)
         np.testing.assert_array_equal(labels, masks)
+
+    def test_a_table_other_than_the_last_one_is_refused(self):
+        labels, df = _two_cells()
+        history = nu.TrackCorrections()
+        history.apply(labels, df, 2, 2, 0)
+        with pytest.raises(ValueError):
+            history.undo(labels, df.iloc[:1])
 
     def test_label_0_does_not_record_the_background(self):
         labels, df = _two_cells()
         history = nu.TrackCorrections()
         history.apply(labels, df, 0, 2, 0)
-        changed = history._steps[0][1]
-        assert len(changed[0]) == (labels.shape[0]) * 16
+        assert len(history._steps[0].changed) == labels.shape[0] * 16
 
     def test_forgotten_steps_keep_the_viewer_dirty(self):
         labels, df = _two_cells()
         history = nu.TrackCorrections(max_steps=1)
         df = history.apply(labels, df, 1, 2, 1)
-        history.apply(labels, df, 2, 1, 2)
-        history.undo(labels)
+        df = history.apply(labels, df, 2, 1, 2)
+        history.undo(labels, df)
         assert len(history) == 0 and not history.is_clean
         history.clear()
         assert history.is_clean
@@ -395,6 +407,7 @@ class TestTrackCorrections:
     def test_added_detections_are_counted_in_the_exported_table(self):
         labels, df = _two_cells()
         labels[:, 16:19, 2:5] = 7  # an untracked mask, class_id 3 on disk
+        masks, table = labels.copy(), df.copy()
         history = nu.TrackCorrections()
         added = pd.DataFrame(
             {"POSITION_X": [3.0], "POSITION_Y": [17.0], "class_id": [3], "FRAME": [1], "TRACK_ID": [7]}
@@ -404,9 +417,12 @@ class TestTrackCorrections:
         # Removed again by a later correction: no longer in the table.
         out2 = history.apply(labels, out, 1, 1, 0)
         assert history.count_added(out2) == 0
-        # Undoing the addition forgets it.
-        history.undo(labels)
-        history.undo(labels)
+        # Undoing the addition forgets it, and gives back the table as it was.
+        undone, _ = history.undo(labels, out2)
+        pd.testing.assert_frame_equal(undone, out)
+        undone, _ = history.undo(labels, undone)
+        pd.testing.assert_frame_equal(undone, table)
+        np.testing.assert_array_equal(labels, masks)
         assert history.added == set()
 
 

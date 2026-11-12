@@ -3,7 +3,7 @@ import json
 import os
 import weakref
 from pathlib import Path, PurePath
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, NamedTuple, Optional, Tuple, Union
 
 import napari
 import numpy as np
@@ -30,11 +30,10 @@ from celldetective.utils.data_loaders import (
     load_tracking_data,
     position_table_path,
 )
-from celldetective.napari.threshold_segmentation import shapes_on_frame
+from celldetective.napari.threshold_segmentation import shapes_layers, shapes_on_frame
 from celldetective.napari.frame_segmentation import (
     clear_unsaved,
     has_unsaved,
-    mark_unsaved,
     track_unsaved_edits,
     unsaved_frames,
 )
@@ -50,7 +49,9 @@ from celldetective.utils.experiment import (
 from celldetective.utils.parsing import config_section_to_dict
 from celldetective import get_logger
 from celldetective.log_manager import positionlogger
+from celldetective.gui.base.components import ask_to_discard
 from celldetective.gui.base.styles import Styles
+from celldetective.utils.event_status import event_columns
 
 logger = get_logger()
 
@@ -155,14 +156,24 @@ def _event_columns(df: pd.DataFrame) -> List[str]:
     Returns
     -------
     list of str
-        The ``class_*``, ``t_*`` and ``status_*`` columns, apart from the ones the
-        track export recomputes.
+        Each event class column with its time and status columns
+        (:func:`~celldetective.utils.event_status.event_columns`), apart from the
+        ones the track export recomputes.
     """
+    classes = [
+        c for c in df.columns if c.startswith("class") and c not in _RECOMPUTED_ON_EXPORT
+    ]
     return [
         c
-        for c in df.columns
-        if c.startswith(("class_", "t_", "status_")) and c not in _RECOMPUTED_ON_EXPORT
+        for cls in classes
+        for c in (cls, *event_columns(cls))
+        if c in df.columns and c not in _RECOMPUTED_ON_EXPORT
     ]
+
+
+def _shorten(items: List[Any], n: int) -> str:
+    """The first `n` items, comma-separated, with an ellipsis when there are more."""
+    return ", ".join(str(i) for i in items[:n]) + (", …" if len(items) > n else "")
 
 
 def _detection_rows(
@@ -282,16 +293,60 @@ def propagate_identity(
     pandas.DataFrame
         The updated table, sorted by track and frame.
     """
+    return _propagate(labels, df, frame, value_under, target_track_id)[0]
+
+
+def _relabel_masks(
+    later: np.ndarray, value_under: int, target_track_id: int, new_id: int
+) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Relabel the masks of :func:`propagate_identity` in place.
+
+    Returns
+    -------
+    tuple of ndarray
+        The flat indices of the pixels changed in `later`, and their former values.
+    """
+    if target_track_id == 0:
+        # Label 0 leaves the background be.
+        moved = later == value_under
+    else:
+        moved = np.isin(later, [value_under, target_track_id])
+    changed = np.flatnonzero(moved)
+    del moved
+    before = later.flat[changed]
+    after = np.full_like(before, target_track_id)
+    if target_track_id != 0:
+        # With the clicked cell already on the target track, it moves to the new
+        # ID: the track splits.
+        after[before == target_track_id] = new_id
+    later.flat[changed] = after
+    return changed, before
+
+
+def _propagate(
+    labels: np.ndarray,
+    df: pd.DataFrame,
+    frame: int,
+    value_under: int,
+    target_track_id: int,
+) -> Tuple[pd.DataFrame, np.ndarray, np.ndarray, np.ndarray]:
+    """
+    :func:`propagate_identity`, also returning what undoing it needs.
+
+    Returns
+    -------
+    tuple
+        The updated table, the positions in `df` of its rows, and the flat indices
+        in ``labels[frame:]`` of the pixels changed with their former values.
+    """
     frame = int(frame)
     new_id = int(np.amax(labels)) + 1
     if df["TRACK_ID"].notna().any():
         # Also past the table: a track can have rows but no mask on screen.
         new_id = max(new_id, int(df["TRACK_ID"].max()) + 1)
 
-    for f in labels[frame:]:
-        if target_track_id != 0:
-            f[f == target_track_id] = new_id
-        f[f == value_under] = target_track_id
+    changed, before = _relabel_masks(labels[frame:], value_under, target_track_id, new_id)
 
     # Work on the ID column alone, then take the kept rows in sorted order in a
     # single copy of the table: it can hold hundreds of measurement columns.
@@ -308,17 +363,33 @@ def propagate_identity(
     order = keep[np.lexsort((frames[keep], track[keep]))]
     out = df.take(order)
     out["TRACK_ID"] = track[order].astype(df["TRACK_ID"].dtype, copy=False)
-    return out
+    return out, order, changed, before
+
+
+class _TrackStep(NamedTuple):
+    """What one track correction changed, enough to rebuild the state before it."""
+
+    frame: int
+    changed: np.ndarray  # flat indices in labels[frame:]
+    before: np.ndarray  # their former values
+    order: np.ndarray  # positions in the step's table of the rows it kept
+    dropped: pd.DataFrame  # the rows it removed (moved to label 0)
+    track: np.ndarray  # the step's table's TRACK_ID column
+    index: pd.Index  # the table before the step: its index, columns, dtypes
+    columns: pd.Index
+    dtypes: pd.Series
+    added_before: set
 
 
 class TrackCorrections:
     """
     The track corrections made since the last export, so they can be undone.
 
-    Each step keeps what it changed: the mask pixels it relabelled with their
-    former values, and the table as it was before (the step builds a new one, so
-    this costs no copy). It also keeps which detections were added to the table,
-    so the export can say how many of them it holds.
+    Each step keeps only what it changed: the mask pixels it relabelled with
+    their former values, the former track IDs, the order it put the rows in and
+    the rows it removed. The table, which can hold hundreds of measurement
+    columns, is not copied. It also keeps which detections were added to the
+    table, so the export can say how many of them it holds.
 
     Parameters
     ----------
@@ -369,11 +440,6 @@ class TrackCorrections:
             The corrected table.
         """
         frame = int(frame)
-        later = labels[frame:]
-        # The pixels propagate_identity relabels; label 0 leaves background be.
-        moved = [value_under] + ([target_track_id] if target_track_id != 0 else [])
-        changed = np.nonzero(np.isin(later, moved))
-        before = later[changed]
         added_before = set(self.added)
 
         table = df
@@ -383,15 +449,33 @@ class TrackCorrections:
                 self.added.update(
                     zip(rows["FRAME"].astype(int), rows["class_id"].astype(int))
                 )
-        out = propagate_identity(labels, table, frame, value_under, target_track_id)
+        out, order, changed, before = _propagate(
+            labels, table, frame, value_under, target_track_id
+        )
+        dropped = np.setdiff1d(np.arange(len(table)), order, assume_unique=True)
 
-        self._steps.append((frame, changed, before, df, added_before))
+        self._steps.append(
+            _TrackStep(
+                frame=frame,
+                changed=changed,
+                before=before,
+                order=order,
+                dropped=table.take(dropped),
+                track=table["TRACK_ID"].to_numpy(copy=True),
+                index=df.index,
+                columns=df.columns,
+                dtypes=df.dtypes,
+                added_before=added_before,
+            )
+        )
         if len(self._steps) > self.max_steps:
             del self._steps[0]
             self._forgotten = True
         return out
 
-    def undo(self, labels: np.ndarray) -> Optional[Tuple[pd.DataFrame, int]]:
+    def undo(
+        self, labels: np.ndarray, df: pd.DataFrame
+    ) -> Optional[Tuple[pd.DataFrame, int]]:
         """
         Undo the last correction.
 
@@ -399,6 +483,8 @@ class TrackCorrections:
         ----------
         labels : ndarray
             The displayed labels (TYX). Modified in place.
+        df : pandas.DataFrame
+            The table the last correction returned, left unchanged.
 
         Returns
         -------
@@ -408,17 +494,38 @@ class TrackCorrections:
         """
         if not self._steps:
             return None
-        frame, changed, before, df, added_before = self._steps.pop()
-        labels[frame:][changed] = before
-        self.added = added_before
-        return df, frame
+        step = self._steps[-1]
+        if len(df) != len(step.order):
+            raise ValueError("The table is not the one the last correction returned.")
+        self._steps.pop()
+        labels[step.frame :].flat[step.changed] = step.before
+        self.added = step.added_before
+
+        # Back in the order of the step's table, whose first rows are the table
+        # before the step; the rest are the detections it added.
+        rows = np.concatenate([step.order, np.setdiff1d(
+            np.arange(len(step.track)), step.order, assume_unique=True
+        )])
+        parts = pd.concat([df, step.dropped]) if len(step.dropped) else df
+        n = len(step.index)
+        restored = parts.take(np.argsort(rows, kind="stable")[:n])[step.columns]
+        restored["TRACK_ID"] = step.track[:n]
+        restored.index = step.index
+        changed_dtypes = {
+            c: t for c, t in step.dtypes.items() if restored[c].dtype != t
+        }
+        if changed_dtypes:
+            restored = restored.astype(changed_dtypes)
+        return restored, step.frame
 
     def count_added(self, df: pd.DataFrame) -> int:
         """How many rows of `df` are detections added by a correction."""
         if not self.added or not {"FRAME", "class_id"} <= set(df.columns):
             return 0
         keys = df[["FRAME", "class_id"]].dropna().astype(int)
-        return int(sum(key in self.added for key in zip(keys["FRAME"], keys["class_id"])))
+        if keys.empty:
+            return 0
+        return int(pd.MultiIndex.from_frame(keys).isin(list(self.added)).sum())
 
     def clear(self) -> None:
         """Forget every step: called once the corrections are exported."""
@@ -583,14 +690,14 @@ def frames_to_save(labels: np.ndarray, edited, output_folder: str) -> List[int]:
                 logger.debug(f"Could not read {path} to compare it: {e}")
                 frames.append(t)
                 continue
-            if on_disk.shape != labels[t].shape or not np.array_equal(on_disk, labels[t]):
+            if not np.array_equal(on_disk, labels[t]):
                 frames.append(t)
     return frames
 
 
 def stale_tables_question(population: str, frames: List[int]) -> str:
     """The warning shown before masks are saved over a tracked position."""
-    shown = ", ".join(str(t) for t in frames[:10]) + (", …" if len(frames) > 10 else "")
+    shown = _shorten(frames, 10)
     return (
         f"This position already has a trajectory table for the {population}. "
         f"Saving rewrites the masks of {len(frames)} edited frame(s) ({shown}). "
@@ -812,13 +919,20 @@ class _UnsavedEditsGuard(QObject):
     It asks instead of napari's own close confirmation, not on top of it: a
     close accepted here is not asked again.
 
-    The layer is held weakly: the filter lives as long as the Qt window, and a
-    strong reference would keep the layer, and the stack behind it, alive with it.
+    Parameters
+    ----------
+    window : QWidget
+        The viewer window, which owns the filter.
+    unsaved : callable
+        Whether there are unsaved edits. The filter lives as long as the window:
+        it should not hold the layer, and the stack behind it, strongly.
+    message : str
+        The question to ask, answered Yes to close anyway.
     """
 
-    def __init__(self, window: QWidget, layer: "napari.layers.Layer", message: str):
+    def __init__(self, window: QWidget, unsaved: Callable[[], bool], message: str):
         super().__init__(window)
-        self._layer = weakref.ref(layer)
+        self._unsaved = unsaved
         self._message = message
         self._confirmed = False
 
@@ -832,19 +946,9 @@ class _UnsavedEditsGuard(QObject):
             None when nothing was asked (no unsaved edit, or already accepted),
             otherwise whether the user accepted to lose them.
         """
-        if self._confirmed:
+        if self._confirmed or not self._unsaved():
             return None
-        layer = self._layer()
-        if layer is None or not has_unsaved(layer):
-            return None
-        answer = QMessageBox.question(
-            parent,
-            "Unsaved edits",
-            self._message,
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No,
-        )
-        self._confirmed = answer == QMessageBox.Yes
+        self._confirmed = ask_to_discard(parent, "Unsaved edits", self._message)
         return self._confirmed
 
     def eventFilter(self, watched, event) -> bool:
@@ -863,24 +967,30 @@ class _UnsavedEditsGuard(QObject):
 
 
 def guard_unsaved_close(
-    viewer: "napari.Viewer", layer: "napari.layers.Labels", message: str
+    viewer: "napari.Viewer",
+    layer: Optional["napari.layers.Labels"],
+    message: str,
+    unsaved: Optional[Callable[[], bool]] = None,
 ) -> Optional[QObject]:
     """
-    Make the viewer window ask before closing while `layer` holds unsaved edits.
+    Make the viewer window ask before closing while edits are unsaved.
 
-    Painting on the layer flags it (:func:`track_unsaved_edits`); bulk writes and
-    track corrections call :func:`mark_unsaved`, and saving clears the flag.
-    Install it after the side panels: Qt runs the latest filter first, so a
-    declined close never reaches the panels' own close handling.
+    By default, the edits are those flagged on `layer`: painting flags it
+    (:func:`track_unsaved_edits`), bulk writes call :func:`mark_unsaved`, and
+    saving clears the flag. Install it after the side panels: Qt runs the latest
+    filter first, so a declined close never reaches the panels' own close
+    handling.
 
     Parameters
     ----------
     viewer : napari.Viewer
         The viewer to guard.
-    layer : napari.layers.Labels
-        The layer whose edits are at stake.
+    layer : napari.layers.Labels or None
+        The layer whose edits are at stake, unused when `unsaved` is given.
     message : str
         The question to ask, answered Yes to close anyway.
+    unsaved : callable, optional
+        Whether there are unsaved edits, in place of the layer's flag.
 
     Returns
     -------
@@ -892,8 +1002,15 @@ def guard_unsaved_close(
     except Exception as e:
         logger.debug(f"Could not reach the napari window to guard its close: {e}")
         return None
-    track_unsaved_edits(layer)
-    guard = _UnsavedEditsGuard(window, layer, message)
+    if unsaved is None:
+        track_unsaved_edits(layer)
+        ref = weakref.ref(layer)
+
+        def unsaved() -> bool:
+            held = ref()
+            return held is not None and has_unsaved(held)
+
+    guard = _UnsavedEditsGuard(window, unsaved, message)
     window.installEventFilter(guard)
 
     if hasattr(window, "_is_close_dialog"):
@@ -1360,11 +1477,10 @@ def launch_napari_viewer(
         logger.debug(f"Columns after export: {list(df.columns)}")
         df.to_csv(shared_data["path"], index=False)
         logger.info("Track export done.")
-        corrected = has_unsaved(viewer.layers["segmentation"])
+        corrected = not history.is_clean
         # Counted in what is written: an added detection that a later correction
         # or the post-processing removed is not in the table.
         added = history.count_added(df)
-        clear_unsaved(viewer.layers["segmentation"])
         history.clear()
 
         # Reflect the post-processed tracks in the viewer so the effect of the
@@ -1393,7 +1509,7 @@ def launch_napari_viewer(
             # These were computed per track before the identities changed: a
             # corrected track now carries one cell's values on some rows and the
             # other cell's on the rest.
-            shown = ", ".join(stale[:6]) + (", …" if len(stale) > 6 else "")
+            shown = _shorten(stale, 6)
             notes.append(
                 "The event columns were computed before this correction and no "
                 f"longer match the new tracks ({shown}). Run the event detection "
@@ -1431,14 +1547,12 @@ def launch_napari_viewer(
     def undo_correction(*_args) -> None:
         """Undo the last double-click correction since the last export."""
         seg = viewer.layers["segmentation"]
-        undone = history.undo(seg.data)
+        undone = history.undo(seg.data, shared_data["df"])
         if undone is None:
             viewer.status = "No track correction to undo since the last export."
             return
         df, frame = undone
         shared_data["df"] = df
-        if history.is_clean:
-            clear_unsaved(seg)
         seg.refresh()
         show_tracks(df)
         viewer.status = f"Undid the track correction made at frame {frame}."
@@ -1572,7 +1686,6 @@ def launch_napari_viewer(
         df = history.apply(
             segmentation, df, frame, value_under, target_track_id, added
         )
-        mark_unsaved(viewer.layers["segmentation"], [frame])
 
         viewer.layers["segmentation"].refresh()
         show_tracks(df)
@@ -1580,9 +1693,10 @@ def launch_napari_viewer(
 
     guard_unsaved_close(
         viewer,
-        viewer.layers["segmentation"],
+        None,
         "The track corrections have not been exported. Close the viewer and "
         "lose them?",
+        unsaved=lambda: not history.is_clean,
     )
 
     viewer.show(block=block)
@@ -2092,7 +2206,7 @@ def launch_segmentation_viewer(
             logger.warning(f"auto_correct_masks failed: {e}")
 
         n_shapes, bounds = annotation_crops(
-            [layer for layer in viewer.layers if type(layer).__name__ == "Shapes"],
+            shapes_layers(viewer),
             t,
             tuple(labels_layer.shape[-2:]),
         )

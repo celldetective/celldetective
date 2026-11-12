@@ -40,7 +40,11 @@ from tqdm import tqdm
 
 from celldetective import get_logger
 from celldetective.log_manager import positionlogger
-from celldetective.gui.base.components import CelldetectiveWidget, generic_message
+from celldetective.gui.base.components import (
+    CelldetectiveWidget,
+    ask_to_discard,
+    generic_message,
+)
 from celldetective.gui.base.figure_canvas import FigureCanvas
 from celldetective.gui.base.sliders import QLabeledDoubleRangeSlider, QLabeledSlider
 from celldetective.gui.base.styles import CELLDETECTIVE_BLUE
@@ -754,15 +758,12 @@ class AnnotatorMixin:
         """
         if self._discard_confirmed or not self.has_unsaved_annotations():
             return True
-        answer = QMessageBox.question(
+        self._discard_confirmed = ask_to_discard(
             self,
             "Unsaved annotations",
             "The annotations made since the last save have not been saved. "
             "Close the annotator and lose them?",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No,
         )
-        self._discard_confirmed = answer == QMessageBox.Yes
         return self._discard_confirmed
 
     def release_resources(self) -> None:

@@ -238,6 +238,30 @@ def set_disabled_reason(widget: QWidget, reason: str) -> _DisabledReason:
     return _DisabledReason(widget, reason)
 
 
+def ask_to_discard(parent: Optional[QWidget], title: str, message: str) -> bool:
+    """
+    Ask whether to lose unsaved work, defaulting to No.
+
+    Parameters
+    ----------
+    parent : QWidget or None
+        The window the question belongs to.
+    title : str
+        The box title.
+    message : str
+        The question, answered Yes to lose the work.
+
+    Returns
+    -------
+    bool
+        Whether the user accepted to lose it.
+    """
+    answer = QMessageBox.question(
+        parent, title, message, QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+    )
+    return answer == QMessageBox.Yes
+
+
 def generic_message(message: str, msg_type: Optional[str] = "info") -> None:
     """
     Show a generic message box.

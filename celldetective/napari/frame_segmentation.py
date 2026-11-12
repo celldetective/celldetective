@@ -273,7 +273,10 @@ def edited_frames(atoms: Sequence[tuple]) -> Set[int]:
     frames = set()
     for atom in atoms:
         if atom is not None and len(atom[0]):
-            frames.update(int(t) for t in np.unique(atom[0][0]))
+            times = atom[0][0]
+            first, last = int(times.min()), int(times.max())
+            # A bulk write's atom covers one frame: no need to sort its pixels.
+            frames.update((first,) if first == last else (int(t) for t in np.unique(times)))
     return frames
 
 

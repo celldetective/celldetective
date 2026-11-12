@@ -253,6 +253,17 @@ def _shape_frame(vertices: np.ndarray) -> Optional[int]:
     return int(frames[0]) if len(frames) == 1 else None
 
 
+def shapes_layers(viewer: Any) -> List[Any]:
+    """The shapes layers of a viewer, which can serve as regions."""
+    # By name rather than by class: napari is imported lazily everywhere here,
+    # and anything shaped like a shapes layer will do.
+    try:
+        layers = list(viewer.layers)
+    except Exception:
+        return []
+    return [layer for layer in layers if type(layer).__name__ == "Shapes"]
+
+
 def shapes_on_frame(
     layer, frame_index: int
 ) -> Tuple[List[Tuple[str, np.ndarray]], Optional[int]]:
@@ -691,13 +702,7 @@ class ThresholdSegmentationPanel(QWidget):
             logger.debug(f"Could not follow the viewer's layers: {e}")
 
     def _shapes_layers(self) -> List[Any]:
-        # By name rather than by class: napari is imported lazily everywhere here,
-        # and anything shaped like a shapes layer will do.
-        try:
-            layers = list(self.viewer.layers)
-        except Exception:
-            return []
-        return [layer for layer in layers if type(layer).__name__ == "Shapes"]
+        return shapes_layers(self.viewer)
 
     def _refresh_regions(self, *_: Any) -> None:
         """List the shapes layers as regions, keeping the current choice if it is still there."""

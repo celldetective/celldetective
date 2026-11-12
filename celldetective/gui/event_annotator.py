@@ -7,7 +7,7 @@ from PyQt5.QtWidgets import (
 )
 from celldetective.gui.interactive_timeseries_viewer import InteractiveEventViewer
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
-from PyQt5.QtGui import QKeySequence, QCloseEvent
+from PyQt5.QtGui import QKeySequence
 
 import numpy as np
 from matplotlib.cm import tab10
@@ -461,19 +461,8 @@ class EventAnnotator(EventAnnotationMixin, AnimationMixin, BaseAnnotator):
         ]
         self.tracks = [cells["TRACK_ID"].to_numpy() for cells in frames]
 
-    def closeEvent(self, event: QCloseEvent) -> None:
-        """
-        Handle close event.
-
-        Parameters
-        ----------
-        event : QCloseEvent
-            The close event.
-        """
-        # Before anything is torn down, so that declining leaves a working window.
-        if not self.confirm_discard():
-            event.ignore()
-            return
+    def release_resources(self) -> None:
+        """Stop the stack loader, then free the rest of the window."""
         # If the stack is still loading in the background, stop and join the
         # loader thread before tearing anything down. Otherwise it keeps running
         # prepare_stack against this (being-destroyed) widget — racing on
@@ -503,7 +492,7 @@ class EventAnnotator(EventAnnotationMixin, AnimationMixin, BaseAnnotator):
                 logger.debug(f"Could not close loading dialog: {e}")
             self._progress_dialog = None
 
-        super().closeEvent(event)
+        super().release_resources()
 
     def looped_animation(self):
         """Show the movie with the cells marked, playing in a loop."""
