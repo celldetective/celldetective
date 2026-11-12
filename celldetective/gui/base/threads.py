@@ -22,6 +22,7 @@ cannot be collected mid-run no matter what happens to its owner, and
 :func:`stop_thread` gives every teardown path the same stop-then-join sequence.
 """
 
+import weakref
 from typing import Any, Iterable, Optional
 
 from PyQt5.QtCore import Qt, QThread
@@ -35,6 +36,14 @@ logger = get_logger(__name__)
 #: by the number of threads actually in flight rather than growing over a
 #: session.
 _LIVE_THREADS = set()
+
+#: The handlers of :func:`stop_when_destroyed`, until they run. Held here and not
+#: only by the connection: a widget freed by the cyclic garbage collector is freed
+#: with its connected lambdas, and the collector clears every function in such a
+#: cycle first (Python 3.11 blanks its name and defaults). Qt then emits
+#: ``destroyed`` into the cleared function, which fails with "missing 1 required
+#: positional argument".
+_DESTROY_HANDLERS = set()
 
 
 def track_thread(thread: QThread) -> QThread:
@@ -63,6 +72,39 @@ def track_thread(thread: QThread) -> QThread:
         lambda t=thread: _LIVE_THREADS.discard(t), Qt.DirectConnection
     )
     return thread
+
+
+def stop_when_destroyed(obj: Any, thread: QThread, timeout: int = 2000) -> None:
+    """
+    Stop `thread` when `obj` is destroyed, however it goes away.
+
+    ``closeEvent`` is the tidy path, but it does not run for a widget that is
+    dropped or deleted by Qt; ``destroyed`` always does. The handler is kept
+    reachable until it has run (see ``_DESTROY_HANDLERS``), so the garbage
+    collector cannot clear it before Qt calls it. It holds the thread weakly.
+
+    Parameters
+    ----------
+    obj : QObject
+        The object whose destruction stops the thread, usually the widget that
+        owns it.
+    thread : QThread
+        The thread to stop.
+    timeout : int, optional
+        How long to wait for the thread to finish, in milliseconds. Default is
+        2000.
+    """
+
+    # Weak: a running thread is already held by `_LIVE_THREADS`, and a finished
+    # one must stay free to go, as it would without this handler.
+    thread_ref = weakref.ref(thread)
+
+    def handler(*_: Any) -> None:
+        _DESTROY_HANDLERS.discard(handler)
+        stop_thread(thread_ref(), timeout=timeout)
+
+    _DESTROY_HANDLERS.add(handler)
+    obj.destroyed.connect(handler)
 
 
 def start_tracked(thread: QThread) -> QThread:

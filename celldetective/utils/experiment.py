@@ -27,6 +27,7 @@ logger = get_logger(__name__)
 
 
 import gc
+import pandas as pd
 
 if TYPE_CHECKING:  # pragma: no cover - import only for the type annotations
     import dask.array as da
@@ -959,13 +960,74 @@ def movie_pattern(prefix: str = "") -> str:
     return prefix + "*.tif"
 
 
+def movie_patterns(prefix: str = "") -> List[str]:
+    """
+    Give the patterns selecting the movies of a position, from its prefix.
+
+    A movie is a ``.tif`` or a ``.tiff`` file, so ``.ome.tif`` and
+    ``.ome.tiff`` (the Bio-Formats default) are found as well. Every lookup of
+    a movie by its prefix goes through these patterns, so that what is counted
+    is what is loaded.
+
+    Parameters
+    ----------
+    prefix : str, optional
+            The movie prefix. Defaults to an empty string, which takes any
+            stack.
+
+    Returns
+    -------
+    list of str
+            The patterns, to glob in a movie folder or to match a name against
+            with ``fnmatch``.
+
+    Examples
+    --------
+    >>> movie_patterns('Alexa488_')
+    ['Alexa488_*.tif', 'Alexa488_*.tiff']
+
+    """
+
+    return [movie_pattern(prefix), movie_pattern(prefix) + "f"]
+
+
+def find_position_movies(pos: str, prefix: str = "") -> List[str]:
+    """
+    List the movies of a position matching a prefix, in natural order.
+
+    Parameters
+    ----------
+    pos : str
+            The position folder, holding a ``movie`` subfolder.
+    prefix : str, optional
+            The movie prefix. Defaults to an empty string.
+
+    Returns
+    -------
+    list of str
+            The matching files, naturally sorted, so that the same one comes
+            first on every file system.
+
+    """
+
+    movies = []
+    for pattern in movie_patterns(prefix):
+        movies += glob(os.path.join(pos, "movie", pattern))
+    return natsorted(movies)
+
+
+# The lookups already reported as ambiguous, so that each is reported once.
+_AMBIGUOUS_REPORTED = set()
+
+
 def get_position_movie_path(pos: str, prefix: str = "") -> Optional[str]:
     """
     Get the path of the movie file for a given position.
 
     This function constructs the path to a movie file within a given position directory.
-    It searches for TIFF files that match the specified prefix. If multiple matching files
-    are found, the first one is returned.
+    It searches for ``.tif`` and ``.tiff`` files that match the specified prefix. If
+    several match, the first in natural order is returned, with a warning, unless they
+    are the files of one multi-file OME-TIFF set.
 
     Parameters
     ----------
@@ -995,13 +1057,31 @@ def get_position_movie_path(pos: str, prefix: str = "") -> Optional[str]:
 
     """
 
-    if not pos.endswith(os.sep):
-        pos += os.sep
-    movies = glob(pos + os.sep.join(["movie", movie_pattern(prefix)]))
-    if len(movies) > 0:
-        stack_path = movies[0]
-    else:
-        stack_path = None
+    movies = find_position_movies(pos, prefix)
+    if not movies:
+        return None
+
+    stack_path = movies[0]
+    if len(movies) > 1:
+        # The files of one multi-file OME-TIFF set all match: they are one movie.
+        from celldetective.utils.image_loaders import _get_page_plan, _path_key
+
+        try:
+            plan = _get_page_plan(stack_path)
+        except OSError:
+            plan = None
+        in_set = plan.files if plan is not None else {_path_key(stack_path)}
+        others = [m for m in movies[1:] if _path_key(m) not in in_set]
+        key = (os.path.abspath(pos), prefix, tuple(movies))
+        if others and key not in _AMBIGUOUS_REPORTED:
+            _AMBIGUOUS_REPORTED.add(key)
+            logger.warning(
+                f"{len(others) + 1} movies match the prefix '{prefix}' in "
+                f"{os.path.join(pos, 'movie')}: "
+                f"{', '.join(os.path.basename(m) for m in movies)}. "
+                f"Using {os.path.basename(stack_path)}; give a prefix that "
+                f"selects a single movie."
+            )
 
     return stack_path
 
@@ -1093,7 +1173,7 @@ def list_movies_per_position(experiment: Union[str, Path]) -> Dict[str, List[str
     movies = {}
     for well in get_experiment_wells(str(experiment)):
         for pos in get_positions_in_well(well):
-            stacks = glob(os.path.join(pos, "movie", movie_pattern()))
+            stacks = find_position_movies(pos)
             movies[pos] = sorted(os.path.basename(s) for s in stacks)
 
     return movies
@@ -1153,11 +1233,11 @@ def count_movies_matching_prefix(
 
     # The names are matched against the pattern the software globs rather than
     # compared to the prefix, so that what is counted here is what would be
-    # loaded (see movie_pattern).
-    matched = [
-        positions_of_movie[name]
-        for name in fnmatch.filter(positions_of_movie, movie_pattern(prefix))
-    ]
+    # loaded (see movie_patterns).
+    names = set()
+    for pattern in movie_patterns(prefix):
+        names.update(fnmatch.filter(positions_of_movie, pattern))
+    matched = [positions_of_movie[name] for name in names]
     return len(set().union(*matched)), sum(len(positions) for positions in matched)
 
 
@@ -1431,6 +1511,10 @@ def auto_load_number_of_frames(stack_path: str) -> Optional[int]:
     """
     Automatically load the number of frames from a stack.
 
+    Kept for backward compatibility: delegates to
+    :func:`celldetective.utils.image_loaders.auto_load_number_of_frames`, so
+    that the frame count is the same everywhere.
+
     Parameters
     ----------
     stack_path : str
@@ -1439,75 +1523,25 @@ def auto_load_number_of_frames(stack_path: str) -> Optional[int]:
     Returns
     -------
     int or None
-        Number of frames, or None if failed.
+        Number of frames.
     """
-    from tifffile import imread, TiffFile
+    from celldetective.utils.image_loaders import (
+        auto_load_number_of_frames as _auto_load_number_of_frames,
+    )
 
-    if stack_path is None:
-        return None
-
-    stack_path = stack_path.replace("\\", "/")
-    n_channels = 1
-
-    with TiffFile(stack_path) as tif:
-        try:
-            tif_tags = {}
-            for tag in tif.pages[0].tags.values():
-                name, value = tag.name, tag.value
-                tif_tags[name] = value
-            img_desc = tif_tags["ImageDescription"]
-            attr = img_desc.split("\n")
-            n_channels = int(
-                attr[np.argmax([s.startswith("channels") for s in attr])].split("=")[-1]
-            )
-        except Exception as e:
-            logger.debug(f"Could not parse channel count from TIFF tags, defaulting to 1: {e}")
-        try:
-            nslices = int(
-                attr[np.argmax([s.startswith("frames") for s in attr])].split("=")[-1]
-            )
-            if nslices > 1:
-                len_movie = nslices
-            else:
-                raise ValueError("Single slice detected")
-        except (ValueError, IndexError, TypeError):
-            try:
-                frames = int(
-                    attr[np.argmax([s.startswith("slices") for s in attr])].split("=")[
-                        -1
-                    ]
-                )
-                len_movie = frames
-            except (ValueError, IndexError, TypeError):
-                pass
-
-    try:
-        del tif
-        del tif_tags
-        del img_desc
-    except NameError:
-        pass
-
-    if "len_movie" not in locals():
-        stack = imread(stack_path)
-        len_movie = len(stack)
-        if len_movie == n_channels and stack.ndim == 3:
-            len_movie = 1
-        if stack.ndim == 2:
-            len_movie = 1
-        del stack
-    gc.collect()
-
-    logger.info(f"Automatically detected stack length: {len_movie}...")
-
-    return len_movie if "len_movie" in locals() else None
+    return _auto_load_number_of_frames(stack_path)
 
 
 def locate_stack(
     position: str, prefix: str = "Aligned", lazy: bool = False
 ) -> Union[np.ndarray, da.Array]:
     """
-    Locate and load an image stack.
+    Locate and load an image stack, shaped ``(T, Y, X, C)``.
+
+    Kept for backward compatibility: delegates to
+    :func:`celldetective.utils.image_loaders.locate_stack` and
+    :func:`celldetective.utils.image_loaders.locate_stack_lazy`, so that the
+    movie is read the same way everywhere.
 
     Parameters
     ----------
@@ -1516,65 +1550,20 @@ def locate_stack(
     prefix : str, optional
         Prefix of the stack file. Default is "Aligned".
     lazy : bool, optional
-        If True, load lazily using dask. Default is False.
+        If True, load lazily using dask when the file allows it. Default is False.
 
     Returns
     -------
     ndarray or dask.array.Array
         Loaded stack.
     """
-    from tifffile import imread, memmap
-    import dask.array as da
-
-    if not position.endswith(os.sep):
-        position += os.sep
-
-    stack_path = glob(position + os.sep.join(["movie", movie_pattern(prefix)]))
-    if not stack_path:
-        raise FileNotFoundError(f"No movie with prefix {prefix} found...")
+    from celldetective.utils import image_loaders
 
     if lazy:
-        try:
-            stack = da.from_array(
-                memmap(stack_path[0].replace("\\", "/")), chunks=(1, None, None)
-            )
-        except ValueError:
-            logger.debug("Lazy memmap failed, falling back to eager load.")
-            stack = imread(stack_path[0].replace("\\", "/"))
-    else:
-        stack = imread(stack_path[0].replace("\\", "/"))
-
-    stack_length = auto_load_number_of_frames(stack_path[0])
-
-    if stack.ndim == 4:
-        if lazy:
-            stack = da.moveaxis(stack, 1, -1)
-        else:
-            stack = np.moveaxis(stack, 1, -1)
-    elif stack.ndim == 3:
-        if min(stack.shape) != stack_length:
-            channel_axis = np.argmin(stack.shape)
-            if channel_axis != (stack.ndim - 1):
-                if lazy:
-                    stack = da.moveaxis(stack, channel_axis, -1)
-                else:
-                    stack = np.moveaxis(stack, channel_axis, -1)
-            if lazy:
-                stack = stack[None, :, :, :]
-            else:
-                stack = stack[np.newaxis, :, :, :]
-        else:
-            if lazy:
-                stack = stack[:, :, :, None]
-            else:
-                stack = stack[:, :, :, np.newaxis]
-    elif stack.ndim == 2:
-        if lazy:
-            stack = stack[None, :, :, None]
-        else:
-            stack = stack[np.newaxis, :, :, np.newaxis]
-
-    return stack
+        stack = image_loaders.locate_stack_lazy(position, prefix=prefix)
+        if stack is not None:
+            return stack
+    return image_loaders.locate_stack(position, prefix=prefix)
 
 
 def locate_labels(

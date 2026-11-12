@@ -29,10 +29,15 @@ from celldetective.gui.base.components import (
     ToolButton,
     generic_message,
 )
-from celldetective.gui.base.threads import start_tracked, stop_thread
+from celldetective.gui.base.threads import (
+    start_tracked,
+    stop_thread,
+    stop_when_destroyed,
+)
 from celldetective.gui.base.utils import center_window
 from celldetective.utils.image_loaders import (
     auto_load_number_of_frames,
+    check_movie_channels,
     _get_img_num_per_channel,
     load_frames,
 )
@@ -724,14 +729,15 @@ class StackVisualizer(CelldetectiveWidget):
             self.mode = "virtual"
             if not isinstance(self.stack_path, str):
                 raise TypeError("stack_path must be a string.")
-            if not self.stack_path.endswith(".tif"):
-                raise ValueError("stack_path must point to a .tif file.")
+            if not self.stack_path.lower().endswith((".tif", ".tiff")):
+                raise ValueError("stack_path must point to a .tif or .tiff file.")
             self.locate_image_virtual()
 
     def locate_image_virtual(self):
         """Locate virtual images."""
         # Locate the stack of images if provided as a file
 
+        check_movie_channels(self.stack_path, self.n_channels, self.channel_names)
         self.stack_length = auto_load_number_of_frames(self.stack_path)
         self.mid_time = self.stack_length // 2
         self.current_time_index = 0
@@ -749,11 +755,9 @@ class StackVisualizer(CelldetectiveWidget):
         # `closeEvent` finishing would otherwise let it be finalized mid-run --
         # which aborts the process rather than raising.
         start_tracked(self.loader_thread)
-        # `closeEvent` is the tidy path, but it does not run for a widget that is
-        # dropped or deleted by Qt. `destroyed` always does, and this handler
-        # holds only the thread, never `self`.
-        loader = self.loader_thread
-        self.destroyed.connect(lambda _=None, t=loader: stop_thread(t, timeout=2000))
+        # `closeEvent` is the tidy path; this also covers a widget dropped or
+        # deleted by Qt. The handler holds only the thread, never `self`.
+        stop_when_destroyed(self, self.loader_thread)
 
         self.init_frame = self.read_frame(self.target_channel, self.current_time_index)
         self.last_frame = self.read_frame(self.target_channel, self.stack_length - 1)
@@ -846,8 +850,8 @@ class StackVisualizer(CelldetectiveWidget):
 
         if not isinstance(self.stack_path, str):
             raise TypeError("stack_path must be a string.")
-        if not self.stack_path.endswith(".tif"):
-            raise ValueError("stack_path must point to a .tif file.")
+        if not self.stack_path.lower().endswith((".tif", ".tiff")):
+            raise ValueError("stack_path must point to a .tif or .tiff file.")
 
     def generate_figure_canvas(self):
         """Generate the figure canvas."""

@@ -253,3 +253,27 @@ class TestStackVisualizerOME:
         assert viewer.mode == "virtual"
         assert viewer.stack_length == N_FRAMES
         assert viewer.n_channels == N_CHANNELS
+
+
+# ---------------------------------------------------------------------------
+# A movie with fewer channels than declared
+# ---------------------------------------------------------------------------
+
+
+class TestStackVisualizerChannelMismatch:
+    """More channels declared than the movie has: a clear error, nothing started."""
+
+    def test_refuses_before_reading_and_names_the_counts(self, qtbot, tif_dir):
+        from celldetective.exceptions import MovieChannelsMismatchError
+        from celldetective.gui.base.threads import _LIVE_THREADS
+
+        running = set(_LIVE_THREADS)
+        with pytest.raises(MovieChannelsMismatchError, match="1 channel per frame"):
+            StackVisualizer(
+                stack_path=tif_dir["txy"],
+                n_channels=2,
+                # An array, as the control panel passes them.
+                channel_names=np.array(["RICM", "brightfield"]),
+            )
+        # The check comes before the loader thread is started.
+        assert set(_LIVE_THREADS) == running

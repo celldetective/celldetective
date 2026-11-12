@@ -20,7 +20,11 @@ from celldetective.log_manager import get_logger, positionlogger
 
 from celldetective.utils.data_cleaning import _mask_intensity_measurements
 from celldetective.utils.data_loaders import interpret_tracking_configuration
-from celldetective.utils.experiment import extract_experiment_channels, get_image_shape
+from celldetective.utils.experiment import (
+    extract_experiment_channels,
+    get_image_shape,
+    get_position_movie_path,
+)
 from celldetective.utils.image_loaders import (
     _get_img_num_per_channel,
     auto_load_number_of_frames,
@@ -237,10 +241,8 @@ class TrackingProcess(Process):
                 "No segmented frames have been found. Please run segmentation first."
             )
 
-        try:
-            self.file = glob(self.pos + f"movie/{self.movie_prefix}*.tif")[0]
-        except IndexError:
-            self.file = None
+        self.file = get_position_movie_path(self.pos, self.movie_prefix)
+        if self.file is None:
             self.haralick_option = None
             self.features = drop_tonal_features(self.features)
             logger.warning("Movie could not be found. Check the prefix.")

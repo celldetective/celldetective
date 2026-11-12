@@ -508,3 +508,34 @@ class TestBrowseButton:
         source = inspect.getsource(importlib.import_module(module))
 
         assert f"self.{attribute} = BrowseButton(" in source
+
+
+# =============================================================================
+# show_user_errors
+# =============================================================================
+
+
+class TestShowUserErrors:
+    """An uncaught error meant for the user is a message box; others go on."""
+
+    def test_user_errors_are_shown_and_others_passed_on(self, monkeypatch):
+        import sys
+
+        from celldetective.exceptions import MovieChannelsMismatchError
+        from celldetective.gui.base import components
+
+        passed_on, shown = [], []
+        monkeypatch.setattr(sys, "excepthook", lambda *exc: passed_on.append(exc[1]))
+        monkeypatch.setattr(
+            components, "generic_message", lambda text, kind: shown.append(text)
+        )
+        components.show_user_errors()
+
+        sys.excepthook(
+            MovieChannelsMismatchError, MovieChannelsMismatchError("check"), None
+        )
+        other = RuntimeError("bug")
+        sys.excepthook(RuntimeError, other, None)
+
+        assert shown == ["check"]
+        assert passed_on == [other]
