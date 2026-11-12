@@ -30,13 +30,9 @@ from celldetective.utils.data_loaders import (
     load_tracking_data,
     position_table_path,
 )
-from celldetective.napari.threshold_segmentation import shapes_layers, shapes_on_frame
-from celldetective.napari.frame_segmentation import (
-    clear_unsaved,
-    has_unsaved,
-    track_unsaved_edits,
-    unsaved_frames,
-)
+# The single-frame panel modules (frame_segmentation, threshold_segmentation)
+# are imported where they are used, so that one failing to import cannot stop
+# the viewers from opening (see _frame_segmentation_tabs).
 from celldetective.utils.experiment import (
     extract_experiment_from_position,
     _get_contrast_limits,
@@ -631,6 +627,8 @@ def annotation_crops(
     crops : list of tuple of int
         ``(row_min, row_max, col_min, col_max)`` of each crop inside the frame.
     """
+    from celldetective.napari.threshold_segmentation import shapes_on_frame
+
     n_shapes = 0
     crops = []
     for layer in shapes_layers:
@@ -1003,6 +1001,11 @@ def guard_unsaved_close(
         logger.debug(f"Could not reach the napari window to guard its close: {e}")
         return None
     if unsaved is None:
+        from celldetective.napari.frame_segmentation import (
+            has_unsaved,
+            track_unsaved_edits,
+        )
+
         track_unsaved_edits(layer)
         ref = weakref.ref(layer)
 
@@ -1560,14 +1563,20 @@ def launch_napari_viewer(
     @magicgui(call_button="Undo the last correction")
     def undo_widget():
         """Widget to undo the last track correction."""
-        undo_correction()
+        report_undo_correction()
+
+    def report_undo_correction(*_args) -> None:
+        """:func:`undo_correction`, with a failure shown in a message box."""
+        report_failure(
+            viewer.window._qt_window, "Undo the last correction", undo_correction
+        )
 
     export_table_widget.native.setStyleSheet(Styles().button_style_sheet)
     undo_widget.native.setStyleSheet(Styles().button_style_sheet)
     try:
         # On the layer, where the double-clicks are made; it overrides the
         # paint undo, which has nothing to undo while painting is locked.
-        labels_layer.bind_key("Control-Z", undo_correction, overwrite=True)
+        labels_layer.bind_key("Control-Z", report_undo_correction, overwrite=True)
     except Exception as e:
         logger.debug(f"Could not bind Ctrl+Z to the track undo: {e}")
     post_processing_options.native.setStyleSheet(Styles().button_style_sheet)
@@ -2090,10 +2099,18 @@ def launch_segmentation_viewer(
             ),
         }
 
+    # Frames whose edits were exported as an annotation: no longer at stake on
+    # close, but still to be written by the next save of the position's masks.
+    annotated_frames = set()
+
     def export_labels():
         """Export corrected labels."""
         from PyQt5.QtWidgets import QApplication, QProgressDialog
         from PyQt5.QtCore import Qt
+        from celldetective.napari.frame_segmentation import (
+            clear_unsaved,
+            unsaved_frames,
+        )
 
         layer = viewer.layers["segmentation"]
         labels_layer = layer.data
@@ -2101,9 +2118,12 @@ def launch_segmentation_viewer(
         if not os.path.exists(output_folder):
             os.mkdir(output_folder)
 
-        frames = frames_to_save(labels_layer, unsaved_frames(layer), output_folder)
+        frames = frames_to_save(
+            labels_layer, unsaved_frames(layer) | annotated_frames, output_folder
+        )
         if not frames:
             clear_unsaved(layer)
+            annotated_frames.clear()
             QMessageBox.information(
                 parent,
                 "Save the modified labels",
@@ -2145,6 +2165,7 @@ def launch_segmentation_viewer(
             )
             layer.refresh()
             clear_unsaved(layer)
+            annotated_frames.clear()
         finally:
             pbar.close()
 
@@ -2205,6 +2226,9 @@ def launch_segmentation_viewer(
         except Exception as e:
             logger.warning(f"auto_correct_masks failed: {e}")
 
+        from celldetective.napari.frame_segmentation import clear_unsaved
+        from celldetective.napari.threshold_segmentation import shapes_layers
+
         n_shapes, bounds = annotation_crops(
             shapes_layers(viewer),
             t,
@@ -2215,7 +2239,14 @@ def launch_segmentation_viewer(
             # A region applies to this frame, so a crop was meant: never fall
             # back to the whole field. Nothing is written, so the edits are
             # still at stake on close.
-            logger.warning("No annotation was exported: no region overlaps the frame.")
+            message = (
+                f"No annotation was exported: none of the {n_shapes} region(s) "
+                f"that apply to frame {t} overlaps the image."
+            )
+            logger.warning(message)
+            QMessageBox.warning(
+                viewer.window._qt_window, "Export the annotation", message
+            )
             return
 
         channels = [viewer.layers["Image"].data[t]]
@@ -2243,7 +2274,9 @@ def launch_segmentation_viewer(
 
         # This frame's edits were made to be exported as an annotation: they are
         # not lost on close, and asking would push towards saving over the
-        # position. Edits on other frames still are.
+        # position. Edits on other frames still are. The next save of the
+        # position's masks still writes this frame.
+        annotated_frames.add(int(t))
         clear_unsaved(viewer.layers["segmentation"], [t])
         logger.info("Annotation export done.")
 
@@ -2515,6 +2548,8 @@ def correct_annotation(filename: str) -> None:
                 logger.warning(f"auto_correct_masks failed: {e}")
 
             save_tiff_imagej_compatible(existing_lbl, im.astype(np.int16), axes="YX")
+        from celldetective.napari.frame_segmentation import clear_unsaved
+
         clear_unsaved(viewer.layers["segmentation"])
         logger.info("The labels have been successfully rewritten.")
 

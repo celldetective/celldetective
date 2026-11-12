@@ -36,6 +36,7 @@ from celldetective.napari.frame_segmentation import (
     _fit_to_layer_dtype,
     history_atom,
     labels_mismatch,
+    mark_unsaved,
     merge_labels,
     record_undo,
 )
@@ -1092,6 +1093,9 @@ class ThresholdSegmentationPanel(QWidget):
         atom = history_atom(t, before, layer.data[t])
         if atom is not None:
             self._pending.setdefault("atoms", []).append(atom)
+            # Flagged now, not only when the run ends and its undo step is
+            # pushed: a save or a close during the run must see this frame.
+            mark_unsaved(layer, [t])
         self._pending["done"] = self._pending.get("done", 0) + 1
         layer.refresh()
 

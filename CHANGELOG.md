@@ -75,7 +75,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     position that already has tracks, it says which frames it will write and
     saves only if accepted;
   - exporting an annotation counts as saving that frame only: closing still
-    asks when other frames hold edits;
+    asks when other frames hold edits, and the next *Save the modified labels*
+    still writes the exported frame. An edit undone or redone after a save
+    counts as an edit;
   - the annotation export reads regions as the *Threshold* tab does:
     rectangles, polygons and ellipses in any shapes layer (the *ROIs* layer
     included), carried on from earlier frames or drawn in 2D for every frame,
@@ -197,9 +199,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 - `celldetective.utils.experiment`: `relabel_segmentation`,
-  `relabel_segmentation_lazy`, `tracks_to_napari`, `view_tracks_in_napari`,
-  `control_tracking_table` and `_view_on_napari`, unused copies of the
-  functions in `celldetective.utils.mask_cleaning` and `celldetective.napari.utils`.
+  `relabel_segmentation_lazy`, `auto_correct_masks`, `load_tracking_data`,
+  `get_position_table`, `tracks_to_btrack`, `tracks_to_napari`,
+  `view_tracks_in_napari`, `control_tracking_table` and `_view_on_napari`,
+  unused copies of the functions in `celldetective.utils.mask_cleaning`,
+  `celldetective.utils.data_loaders`, `celldetective.utils.data_cleaning` and
+  `celldetective.napari.utils`; import them from there.
   The `relabel_segmentation` copy still gave an untracked mask an existing track
   ID.
 - `celldetective.measure.write_first_detection_class`, an unused copy of

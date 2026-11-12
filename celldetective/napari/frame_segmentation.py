@@ -13,6 +13,7 @@ full-stack run.
 
 import json
 import os
+import weakref
 from collections import OrderedDict
 from typing import Any, Dict, List, Optional, Sequence, Set
 
@@ -272,11 +273,17 @@ def edited_frames(atoms: Sequence[tuple]) -> Set[int]:
     """
     frames = set()
     for atom in atoms:
-        if atom is not None and len(atom[0]):
-            times = atom[0][0]
-            first, last = int(times.min()), int(times.max())
-            # A bulk write's atom covers one frame: no need to sort its pixels.
-            frames.update((first,) if first == last else (int(t) for t in np.unique(times)))
+        if atom is None or not len(atom[0]):
+            continue
+        times = np.asarray(atom[0][0])
+        if times.size == 0:
+            continue
+        # Every distinct frame starts at least one run of equal values, so the
+        # run starts are enough: linear, with no sort of the (frame-ordered)
+        # pixels of a multi-frame write.
+        starts = np.flatnonzero(times[1:] != times[:-1]) + 1
+        frames.add(int(times[0]))
+        frames.update(int(t) for t in np.unique(times[starts]))
     return frames
 
 
@@ -308,15 +315,42 @@ def _on_paint(event) -> None:
     mark_unsaved(event.source, edited_frames(event.value))
 
 
+def _flag_history_step(layer_ref, action: str, history: str) -> None:
+    """Make ``layer.<action>()`` flag the frames of the step it is about to replay."""
+    # The class's function, not the bound method: the wrapper, stored on the
+    # layer, must not hold the layer.
+    original = getattr(type(layer_ref()), action)
+
+    def replay(*args, **kwargs) -> Any:
+        layer = layer_ref()
+        if layer is None:
+            return None
+        steps = getattr(layer, history, None)
+        if steps:
+            mark_unsaved(layer, edited_frames(steps[-1]))
+        return original(layer, *args, **kwargs)
+
+    setattr(layer_ref(), action, replay)
+
+
 def track_unsaved_edits(layer) -> None:
     """
-    Flag the layer as edited whenever a napari tool paints on it.
+    Flag the layer as edited whenever a napari tool paints on it, or an edit is
+    undone or redone.
 
     napari emits ``paint`` for the brush, the eraser and the fill bucket, and not
-    when the viewer merely moves to another frame. The handler is module-level,
-    so the connection holds no reference to the layer.
+    when the viewer merely moves to another frame. Its undo and redo emit
+    nothing, so they are wrapped to flag the frames they rewrite: an edit undone
+    after a save must be saved again. The paint handler is module-level, so the
+    connection holds no reference to the layer.
     """
     layer.events.paint.connect(_on_paint)
+    ref = weakref.ref(layer)
+    for action, history in (("undo", "_undo_history"), ("redo", "_redo_history")):
+        try:
+            _flag_history_step(ref, action, history)
+        except Exception as e:
+            logger.debug(f"Could not follow the {action} of the segmentation: {e}")
 
 
 def labels_mismatch(stack, layer) -> Optional[str]:

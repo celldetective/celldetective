@@ -495,6 +495,17 @@ class TestUnsavedFlag:
         fs.clear_unsaved(layer, [0])
         assert fs.unsaved_frames(layer) == {1}
 
+    def test_an_edit_undone_or_redone_after_a_save_is_marked(self):
+        layer = self._layer()
+        fs.track_unsaved_edits(layer)
+        layer.paint((1, 5, 5), 3)
+        fs.clear_unsaved(layer)
+        layer.undo()
+        assert fs.unsaved_frames(layer) == {1}
+        fs.clear_unsaved(layer)
+        layer.redo()
+        assert fs.unsaved_frames(layer) == {1}
+
     def test_a_refresh_does_not_mark_the_layer(self):
         layer = self._layer()
         fs.track_unsaved_edits(layer)
