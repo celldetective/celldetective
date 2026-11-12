@@ -247,6 +247,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ID.
 - `celldetective.measure.write_first_detection_class`, an unused copy of
   `celldetective.tracking.write_first_detection_class` with another convention.
+- `celldetective/gui/plot_measurements.py` (`ConfigMeasurementsPlot`), a window
+  no button had opened since its button was removed in `b76ec479`.
 
 ## [1.6.5] - 2026-10-05
 
