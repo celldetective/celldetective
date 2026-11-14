@@ -249,6 +249,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   channel axis, RGB, Micro-Manager and multi-file sets are read, and the
   warnings; it no longer says Micro-Manager stacks are deinterlaced, nor that
   Bio-Formats exports read faster.
+- Segmentation with several threshold pipelines merges their masks without
+  StarDist. On an install without it, only the mask of the first pipeline was
+  kept, with a warning in the console. The objects are paired as StarDist
+  paired them, so masks merged with StarDist are unchanged.
 
 ### Removed
 - `celldetective.utils.experiment`: `relabel_segmentation`,

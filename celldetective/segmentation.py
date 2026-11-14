@@ -1289,20 +1289,115 @@ def train_segmentation_model(config: str, use_gpu: bool = True) -> None:
         raise RuntimeError(f"Segmentation model training failed (exit code {result.returncode}).")
 
 
+def _match_instances(
+    reference: np.ndarray, other: np.ndarray, thresh: float = 0.5
+) -> List[Tuple[int, int, float]]:
+    """
+    Pair the overlapping objects of two label images one to one by IoU, as
+    ``stardist.matching.matching`` does (``criterion="iou"``,
+    ``report_matches=True``), so that merging does not need StarDist: pairs of
+    IoU at least ``thresh`` come first and the IoU breaks ties. The pairs are
+    returned as ``(label in reference, label in other, IoU)``; objects that
+    overlap nothing are not paired (StarDist pairs them at an IoU of 0).
+
+    Only the overlapping pairs are stored, and the assignment is solved for
+    each group of objects that overlap one another, which gives the same
+    optimum as one assignment over every pair of objects, at a fraction of
+    its memory and time when the masks hold many objects.
+    """
+
+    from scipy.optimize import linear_sum_assignment
+    from scipy.sparse import coo_matrix
+    from scipy.sparse.csgraph import connected_components
+
+    reference = np.asarray(reference)
+    other = np.asarray(other)
+    if reference.shape != other.shape:
+        raise ValueError(
+            f"The label images have different shapes: {reference.shape} and {other.shape}."
+        )
+    ids_ref, inv_ref = np.unique(reference, return_inverse=True)
+    ids_other, inv_other = np.unique(other, return_inverse=True)
+    inv_ref, inv_other = inv_ref.ravel(), inv_other.ravel()
+    n_ref, n_other = len(ids_ref), len(ids_other)
+    area_ref = np.bincount(inv_ref, minlength=n_ref)
+    area_other = np.bincount(inv_other, minlength=n_other)
+
+    both = (reference.ravel() != 0) & (other.ravel() != 0)
+    codes, overlap = np.unique(
+        inv_ref[both].astype(np.int64) * n_other + inv_other[both],
+        return_counts=True,
+    )
+    if len(codes) == 0:
+        return []
+    rows, cols = np.divmod(codes, n_other)
+    # In float32, as StarDist computes it, so that near ties resolve the same way.
+    iou = (overlap / (area_ref[rows] + area_other[cols] - overlap)).astype(np.float32)
+
+    # Groups of objects that overlap one another: no pair spans two groups.
+    graph = coo_matrix(
+        (np.ones(len(codes)), (rows, n_ref + cols)), shape=(n_ref + n_other,) * 2
+    )
+    _, component = connected_components(graph, directed=False)
+    edge_component = component[rows]
+    n_edges = np.bincount(edge_component)
+
+    # An object overlapping a single object, which overlaps it only: one pair.
+    single = n_edges[edge_component] == 1
+    pairs = [
+        (int(ids_ref[r]), int(ids_other[c]), float(s))
+        for r, c, s in zip(rows[single], cols[single], iou[single])
+    ]
+
+    shared = np.flatnonzero(~single)
+    shared = shared[np.argsort(edge_component[shared], kind="stable")]
+    splits = np.flatnonzero(np.diff(edge_component[shared])) + 1
+    for edges in np.split(shared, splits) if len(shared) else []:
+        group_rows, r_index = np.unique(rows[edges], return_inverse=True)
+        group_cols, c_index = np.unique(cols[edges], return_inverse=True)
+        block = np.zeros((len(group_rows), len(group_cols)), dtype=np.float32)
+        block[r_index, c_index] = iou[edges]
+        costs = -(block >= thresh).astype(float) - block / (2 * min(block.shape))
+        for r, c in zip(*linear_sum_assignment(costs)):
+            if block[r, c] > 0:
+                pairs.append(
+                    (
+                        int(ids_ref[group_rows[r]]),
+                        int(ids_other[group_cols[c]]),
+                        float(block[r, c]),
+                    )
+                )
+    return pairs
+
+
+def _union_box(first: Tuple[slice, ...], second: Tuple[slice, ...]) -> Tuple[slice, ...]:
+    """The bounding box of two boxes from ``scipy.ndimage.find_objects``."""
+    return tuple(
+        slice(min(a.start, b.start), max(a.stop, b.stop)) for a, b in zip(first, second)
+    )
+
+
+_MERGE_MODES = {"OR": np.logical_or, "AND": np.logical_and, "XOR": np.logical_xor}
+
+
 def merge_instance_segmentation(
     labels: List[np.ndarray], iou_matching_threshold: float = 0.05, mode: str = "OR"
 ) -> np.ndarray:
     """
     Merges multiple instance segmentation masks into a single mask.
 
+    The objects of each mask are paired with those merged so far (see
+    :func:`_match_instances`). A pair of IoU above ``iou_matching_threshold``
+    becomes one object, combined by ``mode``; the other objects are added.
+
     Parameters
     ----------
     labels : list of ndarray
-        List of label images to merging.
+        The label images to merge. They are not modified.
     iou_matching_threshold : float, optional
-        IoU threshold for matching instances. Default is 0.05.
+        IoU above which two objects are the same. Default is 0.05.
     mode : str, optional
-        Merging mode for overlapping instances ('OR', 'AND', 'XOR'). Default is 'OR'.
+        How a pair is combined: 'OR', 'AND' or 'XOR'. Default is 'OR'.
 
     Returns
     -------
@@ -1310,68 +1405,37 @@ def merge_instance_segmentation(
         Merged label image.
     """
 
-    label_reference = labels[0]
-    try:
-        from stardist.matching import matching
-    except ImportError:
-        logger.warning(
-            "StarDist not installed. Cannot perform instance matching/merging..."
-        )
-        return label_reference
+    from scipy.ndimage import find_objects
 
-    for i in range(1, len(labels)):
+    if mode not in _MERGE_MODES:
+        raise ValueError(f"mode must be one of {sorted(_MERGE_MODES)}, got {mode!r}.")
+    combine = _MERGE_MODES[mode]
 
-        label_to_merge = labels[i]
-        pairs = matching(
-            label_reference,
-            label_to_merge,
-            thresh=0.5,
-            criterion="iou",
-            report_matches=True,
-        ).matched_pairs
-        scores = matching(
-            label_reference,
-            label_to_merge,
-            thresh=0.5,
-            criterion="iou",
-            report_matches=True,
-        ).matched_scores
+    # In int64: find_objects needs integer labels, and the labels added from
+    # each mask are offset past those merged so far, which may not fit uint16.
+    merged = np.asarray(labels[0]).astype(np.int64, copy=False)
+    for other in labels[1:]:
+        other = np.asarray(other).astype(np.int64, copy=False)
+        pairs = [
+            (a, b)
+            for a, b, iou in _match_instances(merged, other)
+            if iou > iou_matching_threshold
+        ]
+        result = np.array(merged, copy=True)
+        if pairs:
+            # Object a of merged and b of other lie in their bounding boxes, so
+            # each pair is combined within the union of the two.
+            boxes_merged, boxes_other = find_objects(merged), find_objects(other)
+            for a, b in pairs:
+                box = _union_box(boxes_merged[a - 1], boxes_other[b - 1])
+                crop = result[box]
+                crop[crop == a] = 0
+                crop[combine(merged[box] == a, other[box] == b)] = a
+        added = (other != 0) & ~np.isin(other, [b for _, b in pairs])
+        result[added] = other[added] + int(np.amax(merged))
+        merged = result
 
-        accepted_pairs = []
-        for k, p in enumerate(pairs):
-            s = scores[k]
-            if s > iou_matching_threshold:
-                accepted_pairs.append(p)
-
-        merge = np.copy(label_reference)
-
-        for p in accepted_pairs:
-            merge[np.where(merge == p[0])] = 0.0
-            cdt1 = label_reference == p[0]
-            cdt2 = label_to_merge == p[1]
-            if mode == "OR":
-                cdt = np.logical_or(cdt1, cdt2)
-            elif mode == "AND":
-                cdt = np.logical_and(cdt1, cdt2)
-            elif mode == "XOR":
-                cdt = np.logical_xor(cdt1, cdt2)
-            loc_i, loc_j = np.where(cdt)
-            merge[loc_i, loc_j] = p[0]
-
-        cells_to_ignore = [p[1] for p in accepted_pairs]
-        for c in cells_to_ignore:
-            label_to_merge[label_to_merge == c] = 0
-
-        label_to_merge[label_to_merge != 0] = label_to_merge[label_to_merge != 0] + int(
-            np.amax(label_reference)
-        )
-        merge[label_to_merge != 0] = label_to_merge[label_to_merge != 0]
-
-        label_reference = merge
-
-    merge = auto_correct_masks(merge)
-
-    return merge
+    return auto_correct_masks(merged)
 
 
 if __name__ == "__main__":
