@@ -32,3 +32,7 @@ class UserFacingError(Exception):
 
 class MovieChannelsMismatchError(UserFacingError, ValueError):
     """The experiment declares more channels than a movie has per frame."""
+
+
+class MovieUnreadableError(UserFacingError, ValueError):
+    """A movie has no frame that the loaders can read."""

@@ -1026,7 +1026,9 @@ def locate_stack_and_labels(
     return stack, labels
 
 
-def auto_load_number_of_frames(stack_path: str) -> Optional[int]:
+def auto_load_number_of_frames(
+    stack_path: str, n_channels: Optional[int] = None
+) -> Optional[int]:
     """
     Automatically determine the number of frames in a TIFF image stack.
 
@@ -1038,37 +1040,29 @@ def auto_load_number_of_frames(stack_path: str) -> Optional[int]:
     ----------
     stack_path : str
             Path to the TIFF image stack file.
+    n_channels : int, optional
+            The number of channels per frame, for a file whose dimensions tifffile
+            cannot read. Default: the channels of the experiment holding the file,
+            else 1.
 
     Returns
     -------
     int or None
             The number of frames in the image stack. Returns `None` if the path is `None`
-            or the frame count cannot be determined.
+            or the file cannot be opened as a TIFF, or has fewer pages than channels.
 
     Notes
     -----
     - The frame count is the ``T`` axis of the first series, else its Z slices, else
       the pages of a plain stack. Channels are never taken for time.
-    - When tifffile cannot read a series, ``None`` is returned and the callers use the
-      frame count of the experiment.
+    - When tifffile cannot read the dimensions, :func:`load_frames` reads image ``k``
+      as page ``k``, so the frame count is the number of pages divided by the
+      number of channels, with a warning.
 
     Examples
     --------
-    Automatically detect the number of frames in a TIFF stack:
-
     >>> frames = auto_load_number_of_frames("experiment_stack.tif")
     Automatically detected stack length: 120...
-
-    Handle a single-frame TIFF:
-
-    >>> frames = auto_load_number_of_frames("single_frame_stack.tif")
-    Automatically detected stack length: 1...
-
-    Handle invalid or missing paths gracefully:
-
-    >>> frames = auto_load_number_of_frames("stack.tif")
-    >>> print(frames)
-    None
 
     """
 
@@ -1077,12 +1071,54 @@ def auto_load_number_of_frames(stack_path: str) -> Optional[int]:
 
     stack_path = stack_path.replace("\\", "/")
     plan = _get_page_plan(stack_path)
-    if plan is None:
-        logger.info("The stack length could not be detected.")
-        return None
+    if plan is not None:
+        logger.info(f"Automatically detected stack length: {plan.n_frames}...")
+        return plan.n_frames
 
-    logger.info(f"Automatically detected stack length: {plan.n_frames}...")
-    return plan.n_frames
+    if n_channels is None:
+        n_channels = _experiment_channel_count(stack_path)
+    n_channels = max(int(n_channels or 1), 1)
+    try:
+        with TiffFile(stack_path, is_ome=False) as tif:
+            n_pages = len(tif.pages)
+    except Exception as e:
+        logger.info(f"The stack length could not be detected: {e}")
+        return None
+    if n_pages < n_channels:
+        logger.info(
+            f"The stack length could not be detected: {n_pages} page(s) for "
+            f"{n_channels} channel(s)."
+        )
+        return None
+    logger.warning(
+        f"{os.path.basename(stack_path)}: tifffile cannot read the dimensions of the "
+        f"movie; its {n_pages} pages are read in order, {n_channels} channel(s) per frame."
+    )
+    return n_pages // n_channels
+
+
+def count_movie_frames(stack_path: str, n_channels: Optional[int]) -> int:
+    """
+    The number of frames of a movie (see :func:`auto_load_number_of_frames`),
+    for a window that cannot go on without it.
+
+    Raises
+    ------
+    MovieUnreadableError
+        If the file cannot be opened as a TIFF, or has fewer pages than channels.
+    """
+
+    from celldetective.exceptions import MovieUnreadableError
+
+    n_frames = auto_load_number_of_frames(stack_path, n_channels)
+    if n_frames is None:
+        raise MovieUnreadableError(
+            f"The movie {os.path.basename(stack_path)} cannot be read: it does not "
+            f"open as a TIFF, or has fewer pages than the experiment has channels.\n\n"
+            f"Check the channels of the experiment, or re-save the movie as a TIFF "
+            f"stack, for example with ImageJ (File > Save As > Tiff...)."
+        )
+    return n_frames
 
 
 def check_movie_channels(
@@ -1289,7 +1325,7 @@ def load_frames(
     stack_path: str,
     scale: Optional[float] = None,
     normalize_input: bool = True,
-    dtype: type = np.float64,
+    dtype: Optional[type] = None,
     normalize_kwargs: Dict[str, Any] = {"percentiles": (0.0, 99.99)},
 ) -> Optional[np.ndarray]:
     """
@@ -1318,7 +1354,8 @@ def load_frames(
             Whether to normalize the loaded frames. If True, normalization is applied according to
             `normalize_kwargs` (default is True).
     dtype : data-type, optional
-            The desired data-type for the output frames (default is float).
+            The data type to cast the frames to. Default: the data type of the
+            frames as read (float if they are rescaled or normalized).
     normalize_kwargs : dict, optional
             Keyword arguments to pass to the normalization function (default is {"percentiles": (0., 99.99)}).
 
@@ -1343,9 +1380,9 @@ def load_frames(
 
     Examples
     --------
-    >>> frames = load_frames([0, 1, 2], '/path/to/stack.tif', scale=0.5, normalize_input=True, dtype=np.uint8)
-    # Loads the first three frames from '/path/to/stack.tif', normalizes them, rescales by a factor of 0.5,
-    # and converts them to uint8 data type.
+    >>> frames = load_frames([0, 1, 2], '/path/to/stack.tif', scale=0.5, normalize_input=True, dtype=np.float32)
+    # Loads the first three images from '/path/to/stack.tif', rescales them by a factor of 0.5,
+    # normalizes them, and casts them to float32.
 
     """
 
@@ -1392,7 +1429,9 @@ def load_frames(
     # Return the pixels as they are on disk. Consumers that cannot handle a uniform
     # frame (segmentation models, contrast sliders) guard for it themselves; faking
     # contrast here would leak into exported movies, measurements and blank-frame checks.
-    return frames  # .astype(dtype)
+    if dtype is not None:
+        frames = frames.astype(dtype, copy=False)
+    return frames
 
 
 def _rearrange_multichannel_frame(

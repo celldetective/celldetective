@@ -109,6 +109,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   labelled channels), and kept as channels when it matches, however many (more
   than 5 were always taken for time). Outside an experiment, the old rule
   applies.
+- `tifffile` (>= 2024.8.30) and `dask` (>= 2024.8.0) are declared as
+  dependencies. They decide how every movie is read and were only installed
+  through other packages, at any version.
+- `load_frames` applies its `dtype` argument, which was accepted and ignored.
+  It now defaults to `None`, which keeps the type on disk, as before.
 
 ### Fixed
 - Image loading: segmentation, measurements, tracking and the Qt viewers read
@@ -234,6 +239,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - a `Shapes` layer holding a polygon as well as rectangles failed to export.
 - *Plugins > Correct a segmentation annotation*: an image that cannot be opened
   is reported in a message box instead of only in the console.
+
+- A movie whose dimensions tifffile cannot read no longer makes the stack
+  viewers and the measurement settings fail with a `TypeError`, and the batch
+  steps no longer use the frame count of the experiment for it: its pages are
+  counted as frames of the experiment's channels, as they are read, with a
+  warning. A file that cannot be opened is reported in a message box.
+- *Supported file formats* (reference): describes how Z-stacks over time, the
+  channel axis, RGB, Micro-Manager and multi-file sets are read, and the
+  warnings; it no longer says Micro-Manager stacks are deinterlaced, nor that
+  Bio-Formats exports read faster.
 
 ### Removed
 - `celldetective.utils.experiment`: `relabel_segmentation`,

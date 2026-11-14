@@ -33,7 +33,7 @@ from celldetective.utils.experiment import (
     extract_experiment_channels,
     get_position_movie_path,
 )
-from celldetective.utils.image_loaders import auto_load_number_of_frames, load_frames
+from celldetective.utils.image_loaders import count_movie_frames, load_frames
 
 import numpy as np
 import json
@@ -862,7 +862,10 @@ class SettingsMeasurements(CelldetectiveSettingsPanel):
                 return None
         else:
             self.current_stack = stack_path
-            self.stack_length = auto_load_number_of_frames(self.current_stack)
+            self.test_frame = None
+            self.stack_length = count_movie_frames(
+                self.current_stack, len(self.channel_names)
+            )
             self.mid_time = self.stack_length // 2
             indices = len(self.channel_names) * self.mid_time + np.arange(
                 len(self.channel_names)

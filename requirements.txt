@@ -10,6 +10,8 @@ scikit-learn
 btrack>=0.7,<0.8
 
 napari<0.6.0
+tifffile>=2024.8.30  # Reads every movie's axes and pages; oldest version CI tests (Python 3.9)
+dask>=2024.8.0  # Lazy movie loading in napari (locate_stack_lazy)
 tqdm
 mahotas
 fonticon-materialdesignicons6

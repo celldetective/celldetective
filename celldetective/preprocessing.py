@@ -908,7 +908,7 @@ def apply_background_to_stack(
     """
 
     if stack_length is None:
-        stack_length = auto_load_number_of_frames(stack_path)
+        stack_length = auto_load_number_of_frames(stack_path, nbr_channels)
         if stack_length is None:
             logger.error("stack length not provided")
             return None
@@ -1521,7 +1521,7 @@ def fit_and_apply_model_background_to_stack(
 
     from tqdm import tqdm
 
-    stack_length_auto = auto_load_number_of_frames(stack_path)
+    stack_length_auto = auto_load_number_of_frames(stack_path, nbr_channels)
     if stack_length_auto is None and stack_length is None:
         logger.error("Stack length not provided...")
         return None
@@ -1888,7 +1888,7 @@ def correct_channel_offset_single_stack(
     from tqdm import tqdm
     from scipy.ndimage import shift
 
-    stack_length_auto = auto_load_number_of_frames(stack_path)
+    stack_length_auto = auto_load_number_of_frames(stack_path, nbr_channels)
     if stack_length_auto is None and stack_length is None:
         logger.error("Stack length not provided...")
         return None
@@ -2166,7 +2166,7 @@ def register_single_stack(
             f"The upsampling factor must be at least 1, got {upsample_factor}."
         )
 
-    stack_length_auto = auto_load_number_of_frames(stack_path)
+    stack_length_auto = auto_load_number_of_frames(stack_path, nbr_channels)
     if stack_length_auto is None and stack_length is None:
         logger.error("Stack length not provided...")
         return None

@@ -392,5 +392,44 @@ class TestBioformatsMultiPosition(_TmpDirCase):
         )
 
 
+class TestNoFrameCount(_TmpDirCase):
+    """IMG-12: a file tifffile cannot describe has no frame count, and the
+    viewers that divide it by 2 raise a ``TypeError``."""
+
+    def test_pages_are_counted_as_load_frames_reads_them(self):
+        from unittest import mock
+
+        from celldetective.utils.image_loaders import count_movie_frames
+
+        _, movie = _make_position_dir(self.tmpdir, "no_plan")
+        path = os.path.join(movie, "Aligned.tif")
+        # Six pages whose value is their index: three frames of two channels.
+        imwrite(
+            path,
+            np.arange(6, dtype=np.uint16)[:, None, None]
+            * np.ones((1, H, W), np.uint16),
+        )
+        with mock.patch(
+            "celldetective.utils.image_loaders._get_page_plan", return_value=None
+        ):
+            # Every caller gets the count load_frames reads, not only the viewers.
+            n_frames = auto_load_number_of_frames(path, 2)
+            self.assertEqual(count_movie_frames(path, 2), n_frames)
+            last = load_frames([2 * n_frames - 1], path, normalize_input=False)
+        self.assertEqual(n_frames, 3)
+        self.assertEqual(last[0, 0, 0], 5, "the count and load_frames disagree")
+
+    def test_unreadable_file_gives_a_clear_error(self):
+        from celldetective.exceptions import MovieUnreadableError
+        from celldetective.utils.image_loaders import count_movie_frames
+
+        _, movie = _make_position_dir(self.tmpdir, "not_a_tiff")
+        path = os.path.join(movie, "Aligned.tif")
+        with open(path, "wb") as f:
+            f.write(b"not a TIFF file")
+        with self.assertRaises(MovieUnreadableError):
+            count_movie_frames(path, 1)
+
+
 if __name__ == "__main__":
     unittest.main()

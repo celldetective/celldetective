@@ -220,6 +220,26 @@ class TestMovieLookup(_TmpDirCase):
         self.assertEqual(locate_stack(pos, prefix="Raw")[0, 0, 0, 0], 2)
 
 
+class TestLoadFramesDtype(_TmpDirCase):
+    """``load_frames`` keeps the type on disk unless a ``dtype`` is asked for
+    (Decision-0009), and applies that ``dtype`` when it is."""
+
+    def test_dtype(self):
+        _, movie = _make_position_dir(self.tmpdir, "dtype")
+        path = os.path.join(movie, "Aligned.tif")
+        imwrite(
+            path,
+            np.full((2, H, W), 7, np.uint16),
+            imagej=True,
+            metadata={"axes": "TYX"},
+        )
+        on_disk = load_frames([1], path, normalize_input=False)
+        cast = load_frames([1], path, normalize_input=False, dtype=np.float32)
+        self.assertEqual(on_disk.dtype, np.uint16)
+        self.assertEqual(cast.dtype, np.float32)
+        np.testing.assert_array_equal(cast, on_disk)
+
+
 class TestSingleIFDCache(_TmpDirCase):
     """A hyperstack saved by Fiji past 4 GB (one IFD) is read by memory map;
     the page shape is remembered, and forgotten when the file is replaced."""
