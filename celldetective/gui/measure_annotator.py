@@ -12,7 +12,6 @@ from matplotlib.axes import Axes
 from typing import List, Optional, Union, Any
 import numpy as np
 import pandas as pd
-import os
 from matplotlib.cm import tab10
 from celldetective.gui.base.sliders import QLabeledDoubleSlider
 from superqt.fonticon import icon
@@ -31,7 +30,6 @@ from celldetective.gui.annotator_common import (
     save_dataset,
     set_toggle_icon,
     split_by_frame,
-    warn,
 )
 from celldetective.gui.base_annotator import BaseAnnotator
 from celldetective.gui.viewers.contour_viewer import CellEdgeVisualizer
@@ -140,6 +138,9 @@ class AnnotatorStackVisualizer(CellEdgeVisualizer):
 
 class MeasureAnnotator(BaseAnnotator):
 
+    # Measurement writes the table too: tracks are not needed.
+    missing_table_hint = "Measure or track the {mode} first."
+
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """
         Initialize the MeasureAnnotator.
@@ -192,10 +193,7 @@ class MeasureAnnotator(BaseAnnotator):
         Locate the tracks.
         """
 
-        if not os.path.exists(self.trajectories_path):
-            warn("The trajectories cannot be detected.")
-            self.proceed = False
-            self.close()
+        if self._table_missing():
             return
 
         self.annotation_log = []

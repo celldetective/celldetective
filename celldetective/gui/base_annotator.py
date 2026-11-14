@@ -47,6 +47,9 @@ logger = get_logger(__name__)
 
 class BaseAnnotator(AnnotatorMixin, CelldetectiveMainWindow):
 
+    # What to do when the population table is missing (see _table_missing).
+    missing_table_hint = "Track the {mode} first."
+
     def __init__(
         self, parent_window: Optional[QMainWindow] = None, read_config: bool = True
     ) -> None:
@@ -332,13 +335,27 @@ class BaseAnnotator(AnnotatorMixin, CelldetectiveMainWindow):
             self.proceed = False
             self.close()
 
+    def _table_missing(self) -> bool:
+        """
+        Whether the population table is missing, in which case the user is told
+        and the window closes.
+        """
+
+        if os.path.exists(self.trajectories_path):
+            return False
+        warn(
+            f"No table of {self.mode} in this position "
+            f"({os.path.basename(self.trajectories_path)}). "
+            + self.missing_table_hint.format(mode=self.mode)
+        )
+        self.proceed = False
+        self.close()
+        return True
+
     def locate_tracks(self):
         """Locate the trajectories file."""
 
-        if not os.path.exists(self.trajectories_path):
-            warn("The trajectories cannot be detected.")
-            self.proceed = False
-            self.close()
+        if self._table_missing():
             return
 
         # Reset the per-position record of manual modifications
