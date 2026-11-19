@@ -1,20 +1,18 @@
 from PyQt5.QtWidgets import (
-    QMessageBox,
     QGridLayout,
     QButtonGroup,
     QCheckBox,
-    QLineEdit,
     QVBoxLayout,
     QLabel,
     QHBoxLayout,
     QPushButton,
     QRadioButton,
+    QComboBox,
 )
 from PyQt5.QtCore import Qt, QSize
-from PyQt5.QtGui import QDoubleValidator
 from typing import Optional, List, Union, Tuple, Dict, Any
 
-from celldetective.gui.gui_utils import ExportPlotBtn, QuickSliderLayout
+from celldetective.gui.gui_utils import ExportPlotBtn, NumberLineEdit, QuickSliderLayout
 from celldetective.gui.base.figure_canvas import FigureCanvas
 from celldetective.gui.base.utils import center_window
 from celldetective.gui.tableUI import TableUI
@@ -24,6 +22,7 @@ from superqt.fonticon import icon
 from celldetective.gui.base.sliders import QLabeledSlider, QLabeledDoubleSlider
 from fonticon_mdi6 import MDI6
 import numpy as np
+from scipy import stats
 import json
 import os
 import matplotlib.pyplot as plt
@@ -39,6 +38,49 @@ import pandas as pd
 from lifelines.utils import qth_survival_times
 
 logger = get_logger(__name__)
+
+
+BAND_CI = "95% CI of the mean"
+BAND_SPREAD = "spread across cells"
+
+
+def signal_band(
+    curve: np.ndarray,
+    spread: np.ndarray,
+    n: Optional[np.ndarray],
+    band: str,
+) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
+    """The band around a signal curve: the spread of the cells, or the 95%
+    interval of the mean.
+
+    Parameters
+    ----------
+    curve, spread : ndarray
+        The curve and the spread of the cells at each time, as
+        ``celldetective.signals.columnwise_mean`` gives them: the mean and the
+        SD (``ddof=0``), or the median and the median absolute deviation.
+    n : ndarray or None
+        The number of cells at each time; needed for the interval.
+    band : str
+        ``BAND_SPREAD`` or ``BAND_CI``. A median has no interval of the mean:
+        its band is the spread, the median absolute deviation.
+
+    Returns
+    -------
+    lower, upper : ndarray or None
+        None when there is no band to draw.
+    """
+    curve, spread = np.asarray(curve, dtype=float), np.asarray(spread, dtype=float)
+    if band == BAND_SPREAD:
+        return curve - spread, curve + spread
+    if n is None:
+        return None, None
+    n = np.asarray(n, dtype=float)
+    half = np.full(curve.shape, np.nan)
+    ok = n >= 2
+    # sd / sqrt(n - 1) with the SD of ddof 0 is the standard error of the mean.
+    half[ok] = stats.t.ppf(0.975, n[ok] - 1) * spread[ok] / np.sqrt(n[ok] - 1)
+    return curve - half, curve + half
 
 
 class GenericSignalPlotWidget(CelldetectiveWidget):
@@ -81,11 +123,7 @@ class GenericSignalPlotWidget(CelldetectiveWidget):
 
         self.show_ci = False
         self.legend_visible = True
-        self.show_cell_lines = False
-        self.alpha_setting = 0.5
         self.scaling_factor = 1
-        self.target_class = [0]
-        self.float_validator = QDoubleValidator()
 
         cmap_lbl = self.parent_window.cbs[-1].currentText()
         self.cmap = getattr(mcm, cmap_lbl)
@@ -184,12 +222,7 @@ class GenericSignalPlotWidget(CelldetectiveWidget):
         self.ci_btn.setToolTip("Show or hide confidence intervals.")
         plot_buttons_hbox.addWidget(self.ci_btn, 5, alignment=Qt.AlignRight)
 
-        self.cell_lines_btn = QPushButton("")
-        self.cell_lines_btn.setIcon(icon(MDI6.view_headline, color="black"))
-        self.cell_lines_btn.setStyleSheet(self.button_select_all)
-        self.cell_lines_btn.setToolTip("Show or hide individual cell signals.")
-        self.cell_lines_btn.setIconSize(QSize(20, 20))
-        plot_buttons_hbox.addWidget(self.cell_lines_btn, 5, alignment=Qt.AlignRight)
+        self.add_plot_buttons(plot_buttons_hbox)
 
         self.fig, self.ax = plt.subplots(1, 1, figsize=(4, 3))
         self.plot_widget = FigureCanvas(self.fig, title="", interactive=True)
@@ -201,13 +234,13 @@ class GenericSignalPlotWidget(CelldetectiveWidget):
         plot_buttons_hbox.addWidget(self.export_btn, 5, alignment=Qt.AlignRight)
         self.layout.addLayout(plot_buttons_hbox)
 
-        self.export_tabular_btn = QPushButton("")
-        self.export_tabular_btn.setIcon(icon(MDI6.table, color="black"))
-        self.export_tabular_btn.setStyleSheet(self.button_select_all)
-        self.export_tabular_btn.setToolTip("Tabulate survival values.")
-        self.export_tabular_btn.setIconSize(QSize(20, 20))
-        plot_buttons_hbox.addWidget(self.export_tabular_btn, 5, alignment=Qt.AlignRight)
-        self.export_tabular_btn.hide()
+        self.compare_btn = QPushButton("")
+        self.compare_btn.setIcon(icon(MDI6.scale_balance, color="black"))
+        self.compare_btn.setStyleSheet(self.button_select_all)
+        self.compare_btn.setToolTip("Compare the curves with a test.")
+        self.compare_btn.setIconSize(QSize(20, 20))
+        plot_buttons_hbox.addWidget(self.compare_btn, 5, alignment=Qt.AlignRight)
+        self.compare_btn.clicked.connect(self.open_comparison)
 
         self.ax.set_prop_cycle(
             "color",
@@ -227,73 +260,8 @@ class GenericSignalPlotWidget(CelldetectiveWidget):
         self.legend_btn.clicked.connect(self.show_hide_legend)
         self.log_btn.clicked.connect(self.switch_to_log)
         self.ci_btn.clicked.connect(self.switch_ci)
-        self.cell_lines_btn.clicked.connect(self.switch_cell_lines)
 
-        self.class_selection_widget = CelldetectiveWidget()
-
-        self.class_selection_lbl = QLabel("class of interest:")
-        class_hbox = QHBoxLayout()
-        self.class_selection_widget.setLayout(class_hbox)
-        class_hbox.addWidget(self.class_selection_lbl, 25, alignment=Qt.AlignLeft)
-
-        class_subhbox = QHBoxLayout()
-        class_hbox.addLayout(class_subhbox, 75)
-
-        self.all_btn = QRadioButton("*")
-        self.event_btn = QRadioButton("event")
-        self.event_btn.setChecked(True)
-        self.no_event_btn = QRadioButton("no event")
-        self.class_btn_group = QButtonGroup()
-        for btn in [self.all_btn, self.event_btn, self.no_event_btn]:
-            self.class_btn_group.addButton(btn)
-
-        self.class_btn_group.buttonClicked[int].connect(self.set_class_to_plot)
-
-        class_subhbox.addWidget(self.all_btn, 33, alignment=Qt.AlignCenter)
-        class_subhbox.addWidget(self.event_btn, 33, alignment=Qt.AlignCenter)
-        class_subhbox.addWidget(self.no_event_btn, 33, alignment=Qt.AlignCenter)
-
-        self.layout.addWidget(self.class_selection_widget)  # Layout(class_hbox)
-
-        # Rescale
-        self.rescale_widget = CelldetectiveWidget()
-
-        scale_hbox = QHBoxLayout()
-        self.rescale_widget.setLayout(scale_hbox)
-
-        scale_hbox.addWidget(QLabel("scaling factor: "), 25)
-        self.scaling_factor_le = QLineEdit("1")
-        self.scaling_factor_le.setValidator(self.float_validator)
-        scale_hbox.addWidget(self.scaling_factor_le, 65)
-
-        self.rescale_btn = QPushButton("rescale")
-        self.rescale_btn.setStyleSheet(self.button_style_sheet_2)
-        self.rescale_btn.clicked.connect(self.rescale_y_axis)
-        scale_hbox.addWidget(self.rescale_btn, 10)
-        # self.layout.addLayout(scale_hbox)
-        self.layout.addWidget(self.rescale_widget)
-
-        # Rescale
-        self.cell_lines_alpha_wdg = CelldetectiveWidget()
-        alpha_hbox = QHBoxLayout()
-
-        self.alpha_slider = QLabeledDoubleSlider()
-        alpha_hbox = QuickSliderLayout(
-            label="single-cell\nsignal alpha: ",
-            slider=self.alpha_slider,
-            slider_initial_value=self.alpha_setting,
-            slider_range=(0, 1),
-            decimal_option=True,
-            precision=5,
-        )
-        self.alpha_slider.valueChanged.connect(self.submit_alpha)
-        self.cell_lines_alpha_wdg.setLayout(alpha_hbox)
-
-        # self.submit_alpha_btn = QPushButton('submit')
-        # self.submit_alpha_btn.setStyleSheet(self.button_style_sheet_2)
-        # self.submit_alpha_btn.clicked.connect(self.submit_alpha)
-        # alpha_hbox.addWidget(self.submit_alpha_btn, 10)
-        self.layout.addWidget(self.cell_lines_alpha_wdg)
+        self.add_controls()
 
         self.select_option = [QRadioButton() for i in range(2)]
         self.select_label = ["by name", "spatially"]
@@ -348,46 +316,6 @@ class GenericSignalPlotWidget(CelldetectiveWidget):
         self.generate_pos_selection_widget()
         self.select_btn_group.buttons()[0].click()
 
-    def submit_alpha(self, value: Union[float, int]) -> Optional[None]:
-        """
-        Update the alpha value for single-cell lines.
-
-        Parameters
-        ----------
-        value : float
-            The alpha value.
-        """
-
-        alpha = value
-        try:
-            alpha = float(alpha)
-        except (ValueError, TypeError):
-            return None
-        if alpha > 1.0:
-            alpha = 1.0
-        elif alpha < 0.0:
-            alpha = 0.0
-        self.alpha_setting = alpha
-        self.plot_signals(0)
-
-    def rescale_y_axis(self) -> Optional[None]:
-        """
-        Rescale the Y-axis based on the user input.
-        """
-        new_scale = self.scaling_factor_le.text().replace(",", ".")
-        if new_scale == "":
-            msgBox = QMessageBox()
-            msgBox.setIcon(QMessageBox.Warning)
-            msgBox.setText("Please set a valid scaling factor...")
-            msgBox.setWindowTitle("Warning")
-            msgBox.setStandardButtons(QMessageBox.Ok)
-            returnValue = msgBox.exec()
-            if returnValue == QMessageBox.Ok:
-                return None
-        else:
-            self.scaling_factor = float(new_scale)
-            self.plot_signals(0)
-
     def switch_selection_mode(self, id: int) -> None:
         """
         Switch the selection mode between 'by name' and 'spatially'.
@@ -409,20 +337,6 @@ class GenericSignalPlotWidget(CelldetectiveWidget):
             if self.spatial_available:
                 self.position_scatter.show()
             self.line_choice_widget.hide()
-
-    def set_class_to_plot(self) -> None:
-        """
-        Set the class of cells to plot (events, no events, or all).
-        """
-
-        if self.all_btn.isChecked():
-            self.target_class = [0, 1]
-        elif self.event_btn.isChecked():
-            self.target_class = [0]
-        else:
-            self.target_class = [1]
-
-        self.plot_signals(0)
 
     def generate_pos_selection_widget(self) -> None:
         """
@@ -768,6 +682,226 @@ class GenericSignalPlotWidget(CelldetectiveWidget):
         # self.ax.autoscale()
         self.plot_widget.canvas.draw_idle()
 
+    def add_plot_buttons(self, hbox: QHBoxLayout) -> None:
+        """Add the buttons of a kind of plot to the toolbar. None here."""
+
+    def add_controls(self) -> None:
+        """Add the controls of a kind of plot under it. None here."""
+
+    def plot_signals(self, id: int) -> None:
+        """Draw the curves; each kind of plot defines how."""
+        raise NotImplementedError
+
+    def open_comparison(self) -> None:
+        """Open the test between the curves; each kind of plot defines it."""
+        raise NotImplementedError
+
+    def switch_ci(self) -> None:
+        """
+        Toggle the visibility of confidence intervals or standard deviation.
+        """
+
+        # Show the confidence interval / STD
+
+        if self.show_ci:
+            self.ci_btn.setIcon(icon(MDI6.arrow_expand_horizontal, color="black"))
+        else:
+            self.ci_btn.setIcon(
+                icon(MDI6.arrow_expand_horizontal, color=self.help_color)
+            )
+        self.show_ci = not self.show_ci
+        try:
+            self.plot_signals(0)
+        except Exception as e:
+            logger.debug(f"Error plotting signals: {e}")
+
+    def select_lines(self) -> None:
+        """
+        Update the selection of lines (wells or positions) based on user checkboxes.
+        """
+
+        if len(self.parent_window.well_indices) > 1:
+            for i in range(len(self.well_display_options)):
+                self.df_well_info.loc[
+                    self.df_well_info["well_index"] == i, "select"
+                ] = self.well_display_options[i].isChecked()
+                self.df_pos_info.loc[self.df_pos_info["well_index"] == i, "select"] = (
+                    self.well_display_options[i].isChecked()
+                )
+        else:
+            for i in range(len(self.pos_display_options)):
+                self.df_pos_info.loc[self.df_pos_info["pos_index"] == i, "select"] = (
+                    self.pos_display_options[i].isChecked()
+                )
+
+        if self.spatial_available:
+            self.sc.set_color(self.select_color(self.df_pos_info["select"].values))
+            self.position_scatter.canvas.draw_idle()
+        self.plot_signals(0)
+
+
+class SignalPlotWidget(GenericSignalPlotWidget):
+    """Mean signals of the cells synchronised on an event, with their band,
+    the class of cells shown, the single-cell signals and a scaling factor."""
+
+    def __init__(self, *args: Any, **kwargs: Any):
+        self.show_cell_lines = False
+        self.alpha_setting = 0.5
+        self.target_class = [0]
+        super().__init__(*args, **kwargs)
+
+    def add_plot_buttons(self, hbox: QHBoxLayout) -> None:
+        """The button showing the signal of each cell."""
+
+        self.cell_lines_btn = QPushButton("")
+        self.cell_lines_btn.setIcon(icon(MDI6.view_headline, color="black"))
+        self.cell_lines_btn.setStyleSheet(self.button_select_all)
+        self.cell_lines_btn.setToolTip("Show or hide individual cell signals.")
+        self.cell_lines_btn.setIconSize(QSize(20, 20))
+        hbox.addWidget(self.cell_lines_btn, 5, alignment=Qt.AlignRight)
+        self.cell_lines_btn.clicked.connect(self.switch_cell_lines)
+
+    def add_controls(self) -> None:
+        """The class of cells shown, the band, the scaling factor and the
+        transparency of the single-cell signals."""
+
+        # Read once: the signals were computed with these settings of the
+        # configuration window, which stays open and may change afterwards.
+        pool = getattr(self.parent_window, "pool_option_cb", None)
+        self.projection = pool.currentText() if pool is not None else "mean"
+        absolute = getattr(self.parent_window, "abs_time_checkbox", None)
+        self.absolute_time = absolute is not None and bool(absolute.isChecked())
+
+        self.class_selection_widget = CelldetectiveWidget()
+
+        self.class_selection_lbl = QLabel("class of interest:")
+        class_hbox = QHBoxLayout()
+        self.class_selection_widget.setLayout(class_hbox)
+        class_hbox.addWidget(self.class_selection_lbl, 25, alignment=Qt.AlignLeft)
+
+        class_subhbox = QHBoxLayout()
+        class_hbox.addLayout(class_subhbox, 75)
+
+        self.all_btn = QRadioButton("*")
+        self.event_btn = QRadioButton("event")
+        self.event_btn.setChecked(True)
+        self.no_event_btn = QRadioButton("no event")
+        self.class_btn_group = QButtonGroup()
+        for btn in [self.all_btn, self.event_btn, self.no_event_btn]:
+            self.class_btn_group.addButton(btn)
+
+        self.class_btn_group.buttonClicked[int].connect(self.set_class_to_plot)
+
+        class_subhbox.addWidget(self.all_btn, 33, alignment=Qt.AlignCenter)
+        class_subhbox.addWidget(self.event_btn, 33, alignment=Qt.AlignCenter)
+        class_subhbox.addWidget(self.no_event_btn, 33, alignment=Qt.AlignCenter)
+
+        self.layout.addWidget(self.class_selection_widget)  # Layout(class_hbox)
+
+        # What the band around a curve shows.
+        self.band_widget = CelldetectiveWidget()
+        band_hbox = QHBoxLayout(self.band_widget)
+        band_hbox.addWidget(QLabel("band: "), 25)
+        self.band_cb = QComboBox()
+        if self.projection == "mean":
+            self.band_cb.addItems([BAND_CI, BAND_SPREAD])
+        else:
+            # A median curve: its band is the median absolute deviation.
+            self.band_cb.addItems([BAND_SPREAD])
+        self.band_cb.setToolTip(
+            "95% CI of the mean: the uncertainty of the mean curve, counting each cell as independent.\n"
+            "Spread across cells: the SD around a mean, the median absolute deviation around a median. "
+            "It describes the cells, not an uncertainty."
+        )
+        self.band_cb.currentIndexChanged.connect(lambda _: self.plot_signals(0))
+        band_hbox.addWidget(self.band_cb, 75)
+        self.layout.addWidget(self.band_widget)
+
+        # Rescale
+        self.rescale_widget = CelldetectiveWidget()
+
+        scale_hbox = QHBoxLayout()
+        self.rescale_widget.setLayout(scale_hbox)
+
+        scale_hbox.addWidget(QLabel("scaling factor: "), 25)
+        self.scaling_factor_le = NumberLineEdit("1", invalid="Please set a valid scaling factor.")
+        self.scaling_factor_le.OPTIONAL = False
+        scale_hbox.addWidget(self.scaling_factor_le, 65)
+
+        self.rescale_btn = QPushButton("rescale")
+        self.rescale_btn.setStyleSheet(self.button_style_sheet_2)
+        self.rescale_btn.clicked.connect(self.rescale_y_axis)
+        scale_hbox.addWidget(self.rescale_btn, 10)
+        # self.layout.addLayout(scale_hbox)
+        self.layout.addWidget(self.rescale_widget)
+
+        # Rescale
+        self.cell_lines_alpha_wdg = CelldetectiveWidget()
+        alpha_hbox = QHBoxLayout()
+
+        self.alpha_slider = QLabeledDoubleSlider()
+        alpha_hbox = QuickSliderLayout(
+            label="single-cell\nsignal alpha: ",
+            slider=self.alpha_slider,
+            slider_initial_value=self.alpha_setting,
+            slider_range=(0, 1),
+            decimal_option=True,
+            precision=5,
+        )
+        self.alpha_slider.valueChanged.connect(self.submit_alpha)
+        self.cell_lines_alpha_wdg.setLayout(alpha_hbox)
+
+        # self.submit_alpha_btn = QPushButton('submit')
+        # self.submit_alpha_btn.setStyleSheet(self.button_style_sheet_2)
+        # self.submit_alpha_btn.clicked.connect(self.submit_alpha)
+        # alpha_hbox.addWidget(self.submit_alpha_btn, 10)
+        self.layout.addWidget(self.cell_lines_alpha_wdg)
+
+    def submit_alpha(self, value: Union[float, int]) -> Optional[None]:
+        """
+        Update the alpha value for single-cell lines.
+
+        Parameters
+        ----------
+        value : float
+            The alpha value.
+        """
+
+        alpha = value
+        try:
+            alpha = float(alpha)
+        except (ValueError, TypeError):
+            return None
+        if alpha > 1.0:
+            alpha = 1.0
+        elif alpha < 0.0:
+            alpha = 0.0
+        self.alpha_setting = alpha
+        self.plot_signals(0)
+
+    def rescale_y_axis(self) -> Optional[None]:
+        """
+        Rescale the Y-axis based on the user input.
+        """
+        valid, value = self.scaling_factor_le.value_or_warn()
+        if valid:
+            self.scaling_factor = value
+            self.plot_signals(0)
+
+    def set_class_to_plot(self) -> None:
+        """
+        Set the class of cells to plot (events, no events, or all).
+        """
+
+        if self.all_btn.isChecked():
+            self.target_class = [0, 1]
+        elif self.event_btn.isChecked():
+            self.target_class = [0]
+        else:
+            self.target_class = [1]
+
+        self.plot_signals(0)
+
     def plot_signals(self, id: int) -> None:
         """
         Plot the signals based on the selected mode and options.
@@ -782,18 +916,7 @@ class GenericSignalPlotWidget(CelldetectiveWidget):
             if self.plot_options[i].isChecked():
                 self.plot_mode = self.radio_labels[i]
 
-        if self.target_class == [0, 1]:
-            mean_signal_type = "mean_all"
-            std_signal = "std_all"
-            matrix = "matrix_all"
-        elif self.target_class == [0]:
-            mean_signal_type = "mean_event"
-            std_signal = "std_event"
-            matrix = "matrix_event"
-        else:
-            mean_signal_type = "mean_no_event"
-            std_signal = "std_no_event"
-            matrix = "matrix_no_event"
+        mean_signal_type, std_signal, matrix = self.signal_keys()
 
         colors = np.array(
             [self.cmap(i / len(self.df_pos_info)) for i in range(len(self.df_pos_info))]
@@ -815,28 +938,16 @@ class GenericSignalPlotWidget(CelldetectiveWidget):
                 self.df_pos_info["select"], "well_index"
             ].values
             for i in range(len(lines)):
-                if len(self.parent_window.well_indices) <= 1:
-                    self.plot_line(
-                        lines[i],
-                        colors[pos_indices[i]],
-                        pos_labels[i],
-                        mean_signal_type,
-                        std_signal=std_signal,
-                        ci_option=self.show_ci,
-                        cell_lines_option=self.show_cell_lines,
-                        matrix=matrix,
-                    )
-                else:
-                    self.plot_line(
-                        lines[i],
-                        well_color[well_index[i]],
-                        pos_labels[i],
-                        mean_signal_type,
-                        std_signal=std_signal,
-                        ci_option=self.show_ci,
-                        cell_lines_option=self.show_cell_lines,
-                        matrix=matrix,
-                    )
+                self.plot_line(
+                    lines[i],
+                    colors[pos_indices[i]] if len(self.parent_window.well_indices) <= 1 else well_color[well_index[i]],
+                    pos_labels[i],
+                    mean_signal_type,
+                    std_signal=std_signal,
+                    ci_option=self.show_ci,
+                    cell_lines_option=self.show_cell_lines,
+                    matrix=matrix,
+                )
             if self.legend_visible:
                 self.ax.legend(ncols=3, fontsize="x-small")
 
@@ -850,28 +961,16 @@ class GenericSignalPlotWidget(CelldetectiveWidget):
                 self.df_well_info["select"], "well_name"
             ].values
             for i in range(len(lines)):
-                if len(self.parent_window.well_indices) <= 1:
-                    self.plot_line(
-                        lines[i],
-                        "k",
-                        well_labels[i],
-                        mean_signal_type,
-                        std_signal=std_signal,
-                        ci_option=self.show_ci,
-                        cell_lines_option=self.show_cell_lines,
-                        matrix=matrix,
-                    )
-                else:
-                    self.plot_line(
-                        lines[i],
-                        well_color[well_index[i]],
-                        well_labels[i],
-                        mean_signal_type,
-                        std_signal=std_signal,
-                        ci_option=self.show_ci,
-                        cell_lines_option=self.show_cell_lines,
-                        matrix=matrix,
-                    )
+                self.plot_line(
+                    lines[i],
+                    "k" if len(self.parent_window.well_indices) <= 1 else well_color[well_index[i]],
+                    well_labels[i],
+                    mean_signal_type,
+                    std_signal=std_signal,
+                    ci_option=self.show_ci,
+                    cell_lines_option=self.show_cell_lines,
+                    matrix=matrix,
+                )
             if self.legend_visible:
                 self.ax.legend(ncols=2, fontsize="x-small")
 
@@ -985,32 +1084,26 @@ class GenericSignalPlotWidget(CelldetectiveWidget):
         """
 
         # Plot a signal
-        if line == line:
-            self.ax.plot(
-                line["timeline"] * self.parent_window.FrameToMin,
-                line[mean_signal_type] * self.scaling_factor,
-                color=color,
-                label=label,
-            )
+        if isinstance(line, dict):
+            timeline = line["timeline"] * self.parent_window.FrameToMin
+            curve = np.asarray(line[mean_signal_type], dtype=float)
+            self.ax.plot(timeline, curve * self.scaling_factor, color=color, label=label)
 
+            lower = None
             if ci_option and std_signal is not None:
-
+                band = self.band_cb.currentText()
+                # The number of cells at each time, which only the interval needs.
+                n = (
+                    np.isfinite(line[matrix]).sum(axis=0)
+                    if band == BAND_CI and matrix in line
+                    else None
+                )
+                lower, upper = signal_band(curve, line[std_signal], n, band)
+            if lower is not None:
                 self.ax.fill_between(
-                    line["timeline"] * self.parent_window.FrameToMin,
-                    [
-                        a - b
-                        for a, b in zip(
-                            line[mean_signal_type] * self.scaling_factor,
-                            line[std_signal] * self.scaling_factor,
-                        )
-                    ],
-                    [
-                        a + b
-                        for a, b in zip(
-                            line[mean_signal_type] * self.scaling_factor,
-                            line[std_signal] * self.scaling_factor,
-                        )
-                    ],
+                    timeline,
+                    lower * self.scaling_factor,
+                    upper * self.scaling_factor,
                     color=color,
                     alpha=alpha_ci,
                 )
@@ -1019,30 +1112,23 @@ class GenericSignalPlotWidget(CelldetectiveWidget):
                 mat = line[matrix]
                 for i in range(mat.shape[0]):
                     self.ax.plot(
-                        line["timeline"] * self.parent_window.FrameToMin,
+                        timeline,
                         mat[i, :] * self.scaling_factor,
                         color=color,
                         alpha=self.alpha_setting,
                     )
 
-    def switch_ci(self) -> None:
-        """
-        Toggle the visibility of confidence intervals or standard deviation.
-        """
+    def signal_keys(self) -> Tuple[str, str, str]:
+        """The keys of the mean, SD and matrix of the class shown."""
+        suffix = {(0, 1): "all", (0,): "event"}.get(tuple(self.target_class), "no_event")
+        return f"mean_{suffix}", f"std_{suffix}", f"matrix_{suffix}"
 
-        # Show the confidence interval / STD
+    def open_comparison(self) -> None:
+        """Open the window comparing the curves with a test."""
+        from celldetective.gui.comparison_ui import SignalComparisonWidget
 
-        if self.show_ci:
-            self.ci_btn.setIcon(icon(MDI6.arrow_expand_horizontal, color="black"))
-        else:
-            self.ci_btn.setIcon(
-                icon(MDI6.arrow_expand_horizontal, color=self.help_color)
-            )
-        self.show_ci = not self.show_ci
-        try:
-            self.plot_signals(0)
-        except Exception as e:
-            logger.debug(f"Error plotting signals: {e}")
+        self.comparison_window = SignalComparisonWidget(self)
+        self.comparison_window.show()
 
     def switch_cell_lines(self) -> None:
         """
@@ -1058,52 +1144,25 @@ class GenericSignalPlotWidget(CelldetectiveWidget):
         self.show_cell_lines = not self.show_cell_lines
         self.plot_signals(0)
 
-    def select_lines(self) -> None:
-        """
-        Update the selection of lines (wells or positions) based on user checkboxes.
-        """
-
-        if len(self.parent_window.well_indices) > 1:
-            for i in range(len(self.well_display_options)):
-                self.df_well_info.loc[
-                    self.df_well_info["well_index"] == i, "select"
-                ] = self.well_display_options[i].isChecked()
-                self.df_pos_info.loc[self.df_pos_info["well_index"] == i, "select"] = (
-                    self.well_display_options[i].isChecked()
-                )
-        else:
-            for i in range(len(self.pos_display_options)):
-                self.df_pos_info.loc[self.df_pos_info["pos_index"] == i, "select"] = (
-                    self.pos_display_options[i].isChecked()
-                )
-
-        if self.spatial_available:
-            self.sc.set_color(self.select_color(self.df_pos_info["select"].values))
-            self.position_scatter.canvas.draw_idle()
-        self.plot_signals(0)
-
 
 class SurvivalPlotWidget(GenericSignalPlotWidget):
+    """Kaplan-Meier survival curves of the wells and positions shown."""
 
-    def __init__(self, *args: Any, **kwargs: Any):
-        """
-        Initialize the SurvivalPlotWidget.
-
-        Parameters
-        ----------
-        *args : tuple
-            Positional arguments passed to GenericSignalPlotWidget.
-        **kwargs : dict
-            Keyword arguments passed to GenericSignalPlotWidget.
-        """
-
-        super(SurvivalPlotWidget, self).__init__(*args, **kwargs)
-        self.cell_lines_btn.hide()
-        self.class_selection_widget.hide()
-        self.rescale_widget.hide()
-        self.cell_lines_alpha_wdg.hide()
-        self.export_tabular_btn.show()
+    def add_plot_buttons(self, hbox: QHBoxLayout) -> None:
+        """The button tabulating the survival values."""
+        self.export_tabular_btn = QPushButton("")
+        self.export_tabular_btn.setIcon(icon(MDI6.table, color="black"))
+        self.export_tabular_btn.setStyleSheet(self.button_select_all)
+        self.export_tabular_btn.setToolTip("Tabulate survival values.")
+        self.export_tabular_btn.setIconSize(QSize(20, 20))
+        hbox.addWidget(self.export_tabular_btn, 5, alignment=Qt.AlignRight)
         self.export_tabular_btn.clicked.connect(self.set_table_options)
+
+    def open_comparison(self) -> None:
+        """Test the survival curves shown against each other."""
+        from celldetective.gui.comparison_ui import show_survival_comparison
+
+        self.comparison_window = show_survival_comparison(self)
 
     def switch_to_log(self) -> None:
         """
