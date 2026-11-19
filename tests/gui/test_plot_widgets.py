@@ -2,7 +2,6 @@
 Unit tests for plot widgets in celldetective.gui.
 
 Covers:
-- ConfigMeasurementsPlot (in celldetective.gui.plot_measurements)
 - GenericSignalPlotWidget (in celldetective.gui.generic_signal_plot)
 """
 
@@ -13,7 +12,6 @@ import logging
 from unittest.mock import MagicMock, patch
 from PyQt5.QtWidgets import QMainWindow, QWidget
 
-from celldetective.gui.plot_measurements import ConfigMeasurementsPlot
 from celldetective.gui.generic_signal_plot import GenericSignalPlotWidget
 
 
@@ -30,9 +28,9 @@ def disable_logging():
 
 @pytest.fixture
 def mock_parent_window():
-    """Mock the complex parent window hierarchy required by ConfigMeasurementsPlot."""
+    """Mock the parent window hierarchy required by GenericSignalPlotWidget."""
     # Hierarchy: self.parent_window.parent_window.parent_window...
-    # ConfigMeasurementsPlot uses:
+    # It uses:
     # self.parent_window.exp_dir
     # self.parent_window.parent_window.wells
     # self.parent_window.parent_window.FrameToMin
@@ -64,7 +62,7 @@ def mock_parent_window():
     middle_window.FrameToMin = 5.0
     middle_window.exp_dir = "C:/fake/exp/dir/"
 
-    # For GenericSignalPlotWidget, parent_window represents the ConfigMeasurementsPlot or similar
+    # For GenericSignalPlotWidget, parent_window represents the window that opens it
     # It accesses parent_window.cbs[-1].currentText() for cmap
     cmap_cb = MagicMock()
     cmap_cb.currentText.return_value = "viridis"
@@ -219,117 +217,3 @@ class TestGenericSignalPlotWidget:
         widget.rescale_btn.click()
 
         assert widget.scaling_factor == 2.0
-
-
-# =============================================================================
-# ConfigMeasurementsPlot Tests
-# =============================================================================
-
-
-class TestConfigMeasurementsPlot:
-    """Tests for ConfigMeasurementsPlot."""
-
-    @patch("celldetective.gui.plot_measurements._extract_labels_from_config")
-    def test_initialization(self, mock_extract, qtbot, mock_parent_window):
-        """Test initialization."""
-        mock_extract.return_value = ["well1", "well2"]
-
-        # ConfigMeasurementsPlot expects parent_window to have parent_window...
-        # Our mock_parent_window has parent_window (Main).
-        # And accessing parent_window.parent_window.well_list works.
-
-        widget = ConfigMeasurementsPlot(parent_window=mock_parent_window)
-        qtbot.addWidget(widget)
-        widget.show()
-
-        assert widget.windowTitle() == "Configure signal plot"
-        assert widget.cbs[0].count() > 0  # Populations
-
-    @patch("celldetective.gui.plot_measurements._extract_labels_from_config")
-    @patch("celldetective.gui.plot_measurements.glob")
-    @patch("celldetective.gui.plot_measurements.pd.read_csv")
-    def test_population_change_updates_classes(
-        self, mock_read_csv, mock_glob, mock_extract, qtbot, mock_parent_window
-    ):
-        """Test that changing population finds available tables and updates classes."""
-        mock_extract.return_value = ["well1"]
-        mock_glob.return_value = ["fake_table.csv"]
-
-        # Mock reading csv header
-        mock_df = pd.DataFrame(
-            columns=["TRACK_ID", "class_positive", "group_treatment"]
-        )
-        mock_read_csv.return_value = mock_df
-
-        widget = ConfigMeasurementsPlot(parent_window=mock_parent_window)
-        qtbot.addWidget(widget)
-
-        # Trigger set_classes_and_times (called on init, but lets call explicitly or via signal)
-        widget.set_classes_and_times()
-
-        # Check if classes combobox (index 1) has items
-        # It should find "class_positive"
-        # The code filters columns starting with "class_"
-        # mock_df columns: class_positive -> yes
-
-        # widget.cbs[1] is classes conf
-        items = [widget.cbs[1].itemText(i) for i in range(widget.cbs[1].count())]
-        assert "class_positive" in items
-
-    @patch("celldetective.gui.plot_measurements._extract_labels_from_config")
-    @patch("celldetective.gui.plot_measurements.load_experiment_tables")
-    def test_process_signal_opens_dialog(
-        self, mock_load, mock_extract, qtbot, mock_parent_window
-    ):
-        """Test process_signal loads tables and asks for feature."""
-        mock_extract.return_value = ["well1"]
-
-        # Mock load_experiment_tables returning DF
-        df = pd.DataFrame(
-            {
-                "area": [1, 2],
-                "intensity": [3, 4],
-                "well_name": ["w1", "w1"],
-                "FRAME": [0, 1],
-            }
-        )
-
-        # Signal data must be a dict-like object with specific keys
-        signal_data = {
-            "timeline": np.arange(10),
-            "mean_all": np.random.rand(10),
-            "std_all": np.random.rand(10),
-            "mean_event": np.random.rand(10),
-            "std_event": np.random.rand(10),
-            "mean_no_event": np.random.rand(10),
-            "std_no_event": np.random.rand(10),
-        }
-
-        df_pos = pd.DataFrame(
-            {
-                "well_path": ["p1"],
-                "well_index": [0],
-                "well_name": ["w1"],
-                "well_number": [1],
-                "well_alias": ["a1"],
-                "stack_path": ["s1"],
-                "pos_name": ["pos1"],
-                "pos_path": ["path/to/pos1"],
-                "select": [True],
-                "x": [100.0],
-                "y": [100.0],
-                "metadata_tag": ["Pos1"],
-                "pos_index": [0],
-                "signal": [signal_data],  # Signal is a dict
-            }
-        )
-        mock_load.return_value = (df, df_pos)
-
-        widget = ConfigMeasurementsPlot(parent_window=mock_parent_window)
-        qtbot.addWidget(widget)
-
-        # We need to mock ask_for_features to verify it's called
-        with patch.object(widget, "ask_for_features") as mock_ask:
-            widget.process_signal()
-            assert mock_load.called
-            assert mock_ask.called
